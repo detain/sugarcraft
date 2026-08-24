@@ -14113,3 +14113,186 @@ ps -eo comm,args --no-headers | awk '$1=="php" && /-S /' | wc -l
 
 **STEP:** use the `ps` form in the invariant block, and treat "1 orphan, no lane running" as the
 suspicious reading it always was rather than the expected one.
+
+---
+
+### Ea54-1 — E396 refuted: closing E368 sites 2 and 4 is NOT a constructor change
+
+**Recorded 2026-08-24 by round-54 lane a.** Severity: prescription refuted (and the fix shipped).
+**Measured, PHP 8.3.6.**
+
+E396 stated that `PosixBackend::size()`'s first arm and `PosixBackend::enableRawMode()` could only be
+closed one of two ways: (a) carry the descriptor alongside the stream through `__construct()`, or
+(b) resolve `STDIN`/`STDOUT`/`STDERR` to 0/1/2 **and refuse an injected stream** — and that either
+"changes `PosixBackend::__construct()`, which `SugarCraft\Core\Util\Tty` and every `new Tty(null, …)` call
+site reach".
+
+**There is a third answer and it changes no signature.** The process's own descriptor table is readable:
+`/proc/self/fd` on Linux, `/dev/fd` on Darwin and FreeBSD. Matching `fstat($stream)`'s `st_dev` + `st_ino`
+against those entries recovers a genuine descriptor for an ARBITRARY stream, so option (b)'s "refuse an
+injected stream" is unnecessary — and `PosixBackendTest` really does inject one
+(`new PosixBackend($ptySlaveHandle)`).
+
+Shipped as `PosixBackend::descriptorForStream($stream, ?string $fdDirectory = null)`, two arms:
+identity against the three standard constants, then the table walk.
+
+**Who closes it: nobody.** Unlike round 53's `openDeviceDescriptor()`, this OPENS NOTHING — every
+descriptor it returns is one the process already holds. That is a strictly better property than the fix it
+sits beside, and it is why E396's "the descriptor must outlive the call" difficulty dissolved rather than
+being solved.
+
+**Both arms are load-bearing, and that was measured, not assumed.** MEASURED, PHP 8.3.6, in a CLI process
+whose stdout and stderr were redirected onto one pipe: descriptors 1 and 2 had IDENTICAL `st_dev`+`st_ino`,
+so the walk alone answers 1 for `STDERR`. Arm 1 is also what survives a container with `/proc` unmounted.
+It is pinned by pointing arm 2 at an empty directory — the same `@internal` seam idiom, and for the same
+reason, as `openDeviceDescriptor()`'s `$device`.
+
+**End-to-end pins, both deterministic.** `size()` on an injected pty slave whose window size was set to
+137x43 by `stty`, with `COLUMNS`/`LINES` pinned to 11x7 — 11x7 is exactly where the old body landed,
+because `SizeIoctl::query()` opens with `posix_isatty($fd)` and throws for a resource id, so arm 1 threw
+and the env arm answered. And `enableRawMode()` on the same handle, read back with `stty -F <slave> -a`.
+
+**Predicted and observed:** the census red E396 promised ("if someone fixes the assignment above the sink,
+the classification changes to `VARIABLE` and the census fails until the judgement is rewritten") fired
+exactly as written. That row-as-guard worked.
+
+**KNOWN LIMITATION, measured, not a defect for these two sinks.** Arm 2 identifies a descriptor naming the
+SAME DEVICE as the stream, not necessarily the stream's own — MEASURED, two `fopen()`s of one path gave
+descriptors 4 and 5 with identical dev+ino, and one pty slave path opened by both `fopen()` and libc gave
+5 and 6. `tcgetattr`/`tcsetattr`/`TIOCGWINSZ` all act on the TERMINAL, so every descriptor on one terminal
+answers identically. It would matter only if the sibling descriptor were closed while the stream stayed
+open. The lowest match is preferred and that preference is pinned (mutation m5 survived until it was).
+
+---
+
+### Ea54-2 — E404's population is 28, not 20, and the eight-site gap is its own alphabet again
+
+**Recorded 2026-08-24 by round-54 lane a.** Severity: measurement + instrument. **The generator is
+committed: `DescriptorSinkScanner::methodSinks()` / `sinksFromCdef()`.**
+
+E404 put the method-shaped population at 20, from a grep whose symbol alternation was
+`open|close|ioctl|fcntl|read|write|dup|dup2`. Re-derived by parsing candy-pty's own
+`Libc::cdef()` for every declaration whose FIRST parameter is `int fd`:
+
+  - `read`, `write` and `dup2` **are not declared in that cdef at all** — three imaginary symbols;
+  - `grantpt`, `unlockpt`, `ptsname_r`, `tcgetattr` and `tcsetattr` **are** fd-first and were absent from
+    the alternation — five missing symbols, and 8 further call sites.
+
+20 + 8 = 28, which is exactly the gap. **The entry whose entire subject is that hand-written lists of this
+family are incomplete carried a hand-written list that was incomplete in both directions.** So the roster
+is now DERIVED and `testTheMethodSinkRosterIsDerivedFromTheCdef()` pushes a synthetic cdef carrying the
+near-misses (path-first `open`, `pid`-first `waitpid`, pointer-first `openpty`, nullary `setsid`,
+`void *`-first `cfmakeraw`, and an fd-first-looking declaration inside a block comment) through the same
+parser.
+
+**And the receiver is not matched on at all.** E404's step said "matched as
+`T_OBJECT_OPERATOR`/`T_DOUBLE_COLON` + name", which is right, and the arm goes further: ANY receiver.
+E404's own corrected grep needed four alternatives (`Libc::lib()`, `$libc`, `self::libc()`, `libc()`) and
+had already lost four sites to a missing one. A scanner that has no opinion about the receiver cannot lose
+a fifth. Mutation m16 plants a sink behind a receiver spelling nothing in the tree uses
+(`$registry->handles()->dup($someFd)`) and the census reds.
+
+**A smaller correction to E404.** It recorded `candy-pty/src/ControllingTerminal.php`'s mention of the
+symbol as "a doc-comment reference, not a call", and discounted it. That file has BOTH: the doc-comment,
+and a live `$libc->ioctl($fd, $tioCSctty, null)` one screen below it, which the entry did not count. Token
+scanning does not have that problem — `T_DOC_COMMENT` is never tokenised into a call.
+
+**All 28 are correct**, verified by reading each first argument back to its origin: constructor `int $fd`
+parameters, `posix_openpt()` return values, `$libc->open()` return values, and one `openpty()` `int[1]`
+out-parameter. There is no 29th defect behind the blind spot; the value of the rows is that a new method
+sink now has to be judged instead of being invisible.
+
+**And one of them is in `candy-wish`** — `Transport/InProcessTransport.php`'s `$libc->ioctl(0, …)`, correct,
+in a library no scoping of this census had ever looked at. That is `presentLibraries()` globbing `*/src`
+earning its keep for the second round running.
+
+---
+
+### Ea54-3 — the descriptor walk needs `clearstatcache()`, and an in-process test of that is fragile
+
+**Recorded 2026-08-24 by round-54 lane a.** Severity: correctness (fixed) + harness. **Measured,
+PHP 8.3.6.**
+
+`stat()` results are cached by PATH, and `/proc/self/fd/4` is a path whose TARGET changes when descriptor
+4 is closed and reopened. MEASURED: with descriptor 4 on one temp file and its stat warmed, the file
+closed and a second temp file opened onto the same descriptor, the uncleared `stat()` still reported the
+FIRST file's inode. `size()` runs on every SIGWINCH in a process that opens and closes files, so this is
+live, not theoretical.
+
+**The first attempt to pin it destroyed its own window.** The test's own discriminators called
+`clearstatcache(); stat(...)` to establish that the descriptor had been reused, which refreshed the cache
+the assertion depended on being stale — mutation m7 SURVIVED. Rewritten with `readlink()`, which MEASURED
+is not served from the stat cache, it killed under `--filter` and then **failed at whole-suite scope**,
+because PHP's stat cache is also evicted by an intervening stat of ANY other path (MEASURED: an
+`is_file()` on an unrelated path evicts it; `tempnam()`, `fopen()` and `touch()` do not), and PHPUnit's own
+machinery stats paths.
+
+The shipped pin uses the `$fdDirectory` seam: a one-entry fixture table symlinked at the real one, so the
+entry's target changes on descriptor reuse **with no filesystem operation at all** — which matters because
+MEASURED, `unlink()` and `rename()` both flush the cache outright, so repointing a symlink the ordinary
+way destroys the state under test. Both readings are taken before any assertion, because an assertion is a
+method call and the window is only as wide as it looks.
+
+**The generalisable part**: a test whose subject is a CACHE cannot use cache-perturbing calls to establish
+its own preconditions, and "it kills under `--filter`" is not the same claim as "it kills".
+
+---
+
+### Ea54-4 — `PosixBackendTest`'s stty-fallback test is skipped, by a gate built on the very defect
+
+**Recorded 2026-08-24 by round-54 lane a.** Severity: dead guard. **DEFERRED — not fixed, see below.**
+
+`PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()` is the only test in the tree that exercised
+`enableRawMode()` through candy-pty's `stty` termios backend on a real pty. MEASURED on this box,
+PHP 8.3.6: it is SKIPPED. Its skip gate reads
+
+```php
+$testFd = fopen('php://memory', 'r+');
+$fd = (int) $testFd;                 // the RESOURCE ID
+fclose($testFd);
+if (!is_readable('/dev/fd/' . $fd) && !is_link('/dev/fd/' . $fd)) { skip; }
+```
+
+— i.e. it asks whether `/dev/fd/<resource id>` exists, and a resource id (18 in the observed run) names no
+descriptor, so the answer is always no and the test always skips. **The gate is itself an instance of the
+defect family the test sits inside.**
+
+**STEP**: the gate should probe a real descriptor — `descriptorForStream()` now returns one — after which
+the test would actually run and would exercise E368 site 4 through the `stty` backend, which the
+FFI-backed pin shipped this round does not cover. **NOT DONE THIS ROUND** because that test reads from a
+pty master against a 2-second deadline while a `/bin/cat` child echoes, and turning a
+never-executed timing-dependent test on in a round that is already three items deep is how a lane hands
+the next merge a flake. It needs a round that can watch it run twenty times.
+
+---
+
+### Ea54-5 — the standing cross-lane census hazard is now wider than E400 recorded
+
+**Recorded 2026-08-24 by round-54 lane a.** Severity: merge hazard. **Stated, not fixable.**
+
+E400 recorded that `DescriptorSinkArgumentCensusTest` reads every library's `src/`, so a sibling lane
+adding a descriptor sink anywhere reds **candy-core**, a package it never touched. Two things widen that
+this round:
+
+  1. the METHOD spelling is now matched, so a one-argument `->close($x)`, `->ioctl($x)`, `->dup($x)`,
+     `->fcntl($x)`, `->tcgetattr($x)`, `->tcsetattr($x)`, `->grantpt($x)`, `->unlockpt($x)` or
+     `->ptsname_r($x)` **on any receiver at all** now reds it. A nullary `->close()` does not — 56 of those
+     exist and every symbol in the roster is declared with at least one parameter, so a nullary call of
+     that name is provably a different method;
+  2. the symbol roster is derived from `SugarCraft\Pty\Libc::cdef()`, so **an fd-first declaration added in
+     candy-pty reds candy-core** with no candy-core change on either side.
+
+The failure text now says all of this and names the resolution, because the person who hits it will be
+resolving a merge and looking at a red package they never opened.
+
+---
+
+### Ea54-6 — candy-pty's assertion count is not stable across takes
+
+**Recorded 2026-08-24 by round-54 lane a.** Severity: measurement hygiene.
+
+The round-54 brief gave candy-pty's floor as `606 / 1476 / 16 skipped / 1 warning / rc 0`. MEASURED on this
+box at `606a131c`, PHP 8.3.6, four takes: **1477, 1476, 1476, 1476** — tests, skips, warnings and rc
+identical every time. 1476 is right as the usual value and the brief is not wrong, but the assertion count
+is not a constant, and a lane that measures once and sees 1477 should not conclude it broke something.
+The `+1` was not chased down; whichever test it is, it has an environment-dependent assertion in it.
