@@ -562,8 +562,10 @@ final class RequirementDirectiveProvenanceTest extends TestCase
      * The names of every `isRequires*` predicate PHPUnit's own metadata class
      * declares, DERIVED rather than listed.
      *
-     * A list written here would cover the eight kinds that exist today and
-     * silently miss the ninth. Reflecting the class means a requirement kind
+     * A list written here would cover the kinds that exist at the moment it was
+     * typed and silently miss the next one — and the count itself is a fact
+     * about a vendored dependency, so writing it down here would rot on a
+     * PHPUnit bump for no gain. Reflecting the class means a requirement kind
      * PHPUnit adds is covered by this guard on the day the dependency is
      * bumped, with no edit and no round in between.
      *
