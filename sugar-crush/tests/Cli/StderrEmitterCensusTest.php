@@ -556,22 +556,38 @@ final class StderrEmitterCensusTest extends TestCase
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
     {
-        self::assertSame(self::DIRECT_SITES, self::census('direct'), self::message('fwrite(STDERR, …)'));
+        self::assertSame(
+            self::DIRECT_SITES,
+            self::census('direct'),
+            self::message('fwrite(STDERR, …)', self::DIRECT_SITES, self::census('direct')),
+        );
     }
 
     public function testTheIndirectStderrHandleRosterIsUnchanged(): void
     {
-        self::assertSame(self::INDIRECT_SITES, self::census('indirect'), self::message('captured STDERR handle'));
+        self::assertSame(
+            self::INDIRECT_SITES,
+            self::census('indirect'),
+            self::message('captured STDERR handle', self::INDIRECT_SITES, self::census('indirect')),
+        );
     }
 
     public function testTheErrorLogRosterIsUnchanged(): void
     {
-        self::assertSame(self::ERROR_LOG_SITES, self::census('error_log'), self::message('error_log()'));
+        self::assertSame(
+            self::ERROR_LOG_SITES,
+            self::census('error_log'),
+            self::message('error_log()', self::ERROR_LOG_SITES, self::census('error_log')),
+        );
     }
 
     public function testTheSugarcrushMessageShapeRosterIsUnchanged(): void
     {
-        self::assertSame(self::MESSAGE_SHAPES, self::census('shape'), self::message('`sugarcrush: ` message'));
+        self::assertSame(
+            self::MESSAGE_SHAPES,
+            self::census('shape'),
+            self::message('`sugarcrush: ` message', self::MESSAGE_SHAPES, self::census('shape')),
+        );
     }
 
     public function testTheRuntimeNoticeSeamRosterIsUnchanged(): void
@@ -579,7 +595,7 @@ final class StderrEmitterCensusTest extends TestCase
         self::assertSame(
             self::RUNTIME_NOTICE_SITES,
             self::census('runtime_notice'),
-            self::message('RuntimeNoticeSink::warn()'),
+            self::message('RuntimeNoticeSink::warn()', self::RUNTIME_NOTICE_SITES, self::census('runtime_notice')),
         );
     }
 
@@ -1049,7 +1065,7 @@ final class StderrEmitterCensusTest extends TestCase
         self::assertSame(
             self::PREFIXED_WRITER_SITES,
             self::census('prefixed'),
-            self::message('warnPermissionConfig*()'),
+            self::message('warnPermissionConfig*()', self::PREFIXED_WRITER_SITES, self::census('prefixed')),
         );
     }
 
@@ -2020,13 +2036,101 @@ final class StderrEmitterCensusTest extends TestCase
 
     // ── the scanners ─────────────────────────────────────────────────────
 
-    private static function message(string $channel): string
+    /**
+     * The failure text for a roster assertion, with the per-file delta spelled
+     * out rather than left to PHPUnit's array diff.
+     *
+     * WRITTEN FOR A READER WHO DID NOT CAUSE THE FAILURE. This census counts
+     * what OTHER lanes write: it pins exact per-file cardinalities across
+     * `src/`, so a lane that adds or removes one stderr write reds it at merge
+     * — which is the design, and round 48 is the round that proved an exact
+     * cardinality is what makes a shared census safe to merge. The person who
+     * sees the red is therefore usually the person MERGING five branches, not
+     * the person who moved the number. An array diff makes them read two maps
+     * and spot the differing key; this names the file, what the roster claims
+     * and what the scan actually found, so the resolution is a one-line edit
+     * with nothing re-derived.
+     *
+     * DERIVED, NEVER WRITTEN DOWN (rule 18): both sides come from the same call
+     * the assertion is making, so no cardinality here can go stale.
+     *
+     * ITS OWN CORRECTNESS IS TESTED, and it has to be, because a failure
+     * message's generator is the one piece of a green suite that never runs. A
+     * `message()` returning `''` would be invisible for as long as the census
+     * stayed green and would then be missing at exactly the moment it is
+     * needed. {@see testTheRosterFailureMessageNamesEveryFileThatMovedAndBothCounts()}
+     * runs it on known input.
+     *
+     * @param array<string, int> $expected the roster
+     * @param array<string, int> $actual   what the scan found
+     */
+    private static function message(string $channel, array $expected = [], array $actual = []): string
     {
+        $moved = [];
+        foreach (array_keys($expected + $actual) as $file) {
+            $was = $expected[$file] ?? null;
+            $now = $actual[$file] ?? null;
+            if ($was === $now) {
+                continue;
+            }
+
+            $moved[] = sprintf(
+                '  %s: the roster says %s, the scan counts %s',
+                $file,
+                $was === null ? 'nothing' : (string) $was,
+                $now === null ? 'nothing' : (string) $now,
+            );
+        }
+        sort($moved);
+
+        $delta = $moved === [] ? '' : "\n\nWHAT MOVED, per file:\n" . implode("\n", $moved) . "\n";
+
         return "The roster of {$channel} sites in src/ and bin/ moved. That is not automatically wrong — but "
             . 'a new stderr write in this application needs a decision: does it belong on '
             . 'Bootstrap::warnPermissionConfigInTranscript()\'s transcript seam (it names something the '
             . 'session can no longer DO), on stderr alone (the user\'s config is malformed but the session '
-            . 'is intact), or nowhere (it is debug output). Make the decision, then update the roster.';
+            . 'is intact), or nowhere (it is debug output). Make the decision, then update the roster.'
+            . $delta;
+    }
+
+    /**
+     * {@see message()} names every file whose count moved, in both directions,
+     * and stays quiet about the ones that did not.
+     *
+     * THE QUIET HALF IS AN ABSENCE ASSERTION and would prove nothing on its own
+     * — a dead `message()` mentions no file at all, so "it does not mention the
+     * unchanged one" passes (E228, rule 15). Its positive component is the
+     * three assertions above it, on the same call, in this test.
+     */
+    public function testTheRosterFailureMessageNamesEveryFileThatMovedAndBothCounts(): void
+    {
+        $message = self::message(
+            'error_log()',
+            ['src/Bumped.php' => 2, 'src/Gone.php' => 1, 'src/Unchanged.php' => 3],
+            ['src/Bumped.php' => 5, 'src/Arrived.php' => 1, 'src/Unchanged.php' => 3],
+        );
+
+        self::assertStringContainsString(
+            'src/Bumped.php: the roster says 2, the scan counts 5',
+            $message,
+            'a file whose count moved is no longer named with both numbers',
+        );
+        self::assertStringContainsString(
+            'src/Gone.php: the roster says 1, the scan counts nothing',
+            $message,
+            'a file the roster names and the scan no longer finds is not reported as a removal',
+        );
+        self::assertStringContainsString(
+            'src/Arrived.php: the roster says nothing, the scan counts 1',
+            $message,
+            'a file the scan found and no roster names is not reported as an arrival — which is the '
+                . 'direction a sibling lane adding an emitter fails in',
+        );
+        self::assertStringNotContainsString(
+            'src/Unchanged.php',
+            $message,
+            'the delta lists a file that did not move, so a real one-file change would arrive buried',
+        );
     }
 
     /** @return array<string, int> file => count, files with zero omitted */
