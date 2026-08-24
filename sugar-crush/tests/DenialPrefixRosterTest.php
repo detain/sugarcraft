@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Agents\TaskBlockedException;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
@@ -86,8 +87,8 @@ final class DenialPrefixRosterTest extends TestCase
      * very producer E236 removed. A leading space did the same. The lookbehind
      * costs nothing that was being caught: re-run over the whole of `src/`,
      * both alphabets name the SAME three files
-     * ({@see self::testTheLeafIsTheOnlyFileInTheFamilyThatSpellsADenialPrefix()}
-     * lists them), and all five family rows are unmoved.
+     * ({@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException()}
+     * names the two that are left after E246 took the third), and no row moved.
      *
      * `(?<![A-Za-z])` and not a bare unanchored match: without it `Refused:`
      * inside `PermissionRefused:` would count, which is one identifier and not
@@ -367,9 +368,9 @@ final class DenialPrefixRosterTest extends TestCase
         // a DECORATED literal — the frame is present, but something precedes
         // it — which is exactly how this tree's own refusal note was written.
         // MEASURED as a SURVIVING mutation on PHP 8.3.6: src/Chat.php's
-        // pre-E236 line re-introduced verbatim left FAMILY_SPELLINGS' row for
-        // that file green on 0, so the guard could not see the one producer
-        // its own entry is named after. Assembled from parts so this file is
+        // pre-E236 line re-introduced verbatim left the whole-src map's row
+        // for that file absent, so the guard could not see the one producer it
+        // is named after. Assembled from parts so this file is
         // never matched by its own scan set.
         foreach ([
             'an underscore-wrapped note, which is how Chat spelled its refusal'
@@ -383,7 +384,7 @@ final class DenialPrefixRosterTest extends TestCase
                 [$expected],
                 self::denialLiteralsIn('<?php $d = ' . $fixture . ';'),
                 "the scanner cannot see {$why}, so a producer that decorates its prefix is invisible to "
-                . 'every zero in FAMILY_SPELLINGS',
+                . 'the whole-src map in this file',
             );
         }
 
@@ -444,76 +445,185 @@ final class DenialPrefixRosterTest extends TestCase
         );
     }
 
-    // ── one spelling, in one file ────────────────────────────────────────
+    // ── one spelling, in one file, across the whole of src/ ──────────────
 
     /**
-     * THE FILES IN THE DENIAL FAMILY THAT MUST SPELL NOTHING, and the one that
-     * must spell everything.
+     * THE ONE DENIAL-SHAPED LITERAL IN `src/` THAT IS NOT ON THE ROSTER, and
+     * the class it belongs to.
      *
-     * Named files rather than a walk of `src/`, and that is a measurement
-     * rather than timidity. Running {@see denialLiteralsIn()} over the whole
-     * of `src/` on PHP 8.3.6 returns hits in exactly THREE files: the two this
-     * map already accounts for (`src/Runtime.php`, whose three constants the
-     * tests above cover, and the leaf) and one more —
-     * `src/Agents/TaskBlockedException.php`, whose `'Task creation blocked: '`
-     * is an exception message and matches the vocabulary's `block(ed)?` term.
-     * It is not a tool-result prefix and is not on any roster, so a whole-tree
-     * scan would red this guard on a string that is entirely correct. The
-     * value here is per-file and not a total, so a lane adding a file to
-     * `src/` cannot move it (E-rule 18).
+     * Keyed by path and valued by the class whose being a {@see \Throwable}
+     * is what EARNS the exclusion — see
+     * {@see self::testTheOneOffRosterShapeInSrcIsAThrowableMessageAndNotAFourthKind()},
+     * which is where the earning happens. A path listed here with no
+     * mechanically checkable reason would be the "a comment saying this one is
+     * different" that E247 explicitly rejects.
      *
-     * @var array<string, int>
+     * @var array<string, class-string<\Throwable>>
      */
-    private const FAMILY_SPELLINGS = [
-        // The leaf. Three cases, three backing values, and nothing else.
-        'src/Permissions/DenialKind.php' => 3,
-        // The TUI model. Was three hand-rolled producers plus a roster of
-        // three literals; is now zero (E236/E239).
-        'src/Chat.php' => 0,
-        // The two classifiers. Both were already zero before E239 and this
-        // pins that they stay that way: a consumer that spells a prefix is a
-        // consumer that has stopped agreeing with the roster.
-        'src/Renderer.php' => 0,
-        'src/Cli/NonInteractive.php' => 0,
-        'src/Cli/HeadlessPermissionPrompt.php' => 0,
+    private const OFF_ROSTER_THROWABLE_SHAPES = [
+        'src/Agents/TaskBlockedException.php' => TaskBlockedException::class,
     ];
 
     /**
-     * EVERY DENIAL PREFIX IN THE FAMILY IS SPELLED IN `DenialKind` AND NOWHERE
-     * ELSE (E239).
+     * EVERY DENIAL PREFIX IN `src/` IS SPELLED IN `DenialKind`, WITH ONE
+     * EARNED EXCEPTION (E239, E246, E247).
      *
-     * THE POSITIVE ROW IS THE CONTROL, AND IT IS NOT A SEPARATE FIXTURE. Four
-     * of the five expectations below are ZERO, and a zero is what a dead
-     * scanner returns too — the shape that let round 48 ship a comment fixture
-     * proving nothing. The `DenialKind.php` row runs through the identical
-     * path (same `file_get_contents`, same {@see denialLiteralsIn()}) and
-     * expects THREE, so a scanner that stopped matching, a path that stopped
-     * resolving, or a token kind that stopped being read all red this test on
-     * that row before the four zeros can lie.
+     * IT USED TO BE FIVE NAMED FILES AND THAT WAS THE WRONG SHAPE OF GUARD.
+     * WHAT IT SAID: a `FAMILY_SPELLINGS` map of five paths with an expected
+     * count each — the leaf at 3 and four consumers at 0 — defended on the
+     * grounds that "named files rather than a walk of `src/`" was a
+     * measurement rather than timidity, because a whole-tree scan turns up
+     * `src/Agents/TaskBlockedException.php` and would red the guard on a
+     * string that is entirely correct. WHAT IS TRUE NOW: that is an argument
+     * for classifying the one straggler, not for not looking. A per-file map
+     * cannot see a SIXTH file — the shape the guard exists to catch is a
+     * producer inventing a prefix, and a producer is free to be in a file
+     * nobody thought to list. Re-derived on PHP 8.3.6 at round 49: the walk
+     * finds hits in TWO files now that E246 took the last copy out of
+     * `src/Runtime.php`, and both are named below.
      *
-     * The positive row asserts the VALUES and not merely the count, because a
-     * scanner returning three of the wrong strings would satisfy a count.
+     * WHY THE OLD DOC-BLOCK STILL EARNS ITS PLACE: the measurement in it — that
+     * `TaskBlockedException` matches the vocabulary and is not a denial — is
+     * the whole content of E247 and is still true. What changed is that it is
+     * now earned by a test rather than asserted in prose.
+     *
+     * THE ASSERTION IS THE WHOLE MAP, not a per-file count, and it carries its
+     * own known-positive (rules 15 and 25). Four of the five old rows expected
+     * ZERO and a zero is also what a dead scanner returns; a map whose
+     * expected value names two files and four exact strings cannot be
+     * satisfied by an instrument that has stopped matching, stopped resolving
+     * paths or stopped reading a token kind.
      */
-    public function testTheLeafIsTheOnlyFileInTheFamilyThatSpellsADenialPrefix(): void
+    public function testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException(): void
     {
-        foreach (self::FAMILY_SPELLINGS as $relative => $expected) {
-            $found = self::denialLiteralsIn(self::sourceOf($relative));
+        $expected = [
+            'src/Agents/TaskBlockedException.php' => ['Task creation blocked: '],
+            'src/Permissions/DenialKind.php' => DenialKind::prefixes(),
+        ];
 
-            self::assertCount(
-                $expected,
-                $found,
-                "{$relative} spells " . \count($found) . ' denial-shaped literal(s) and should spell '
-                . "{$expected}: " . var_export($found, true) . '. Every prefix belongs to a '
-                . 'DenialKind case; a second spelling is a second definition, and the one that drifts '
-                . 'renders a BLOCKED call as an ordinary tool ERROR on both surfaces',
+        self::assertSame(
+            $expected,
+            self::denialLiteralsAcrossSrc(),
+            'src/ spells a denial-shaped literal somewhere other than the two files that have earned one. '
+            . 'Every tool-result prefix belongs to a DenialKind case; a second spelling is a second '
+            . 'definition, and the one that drifts renders a BLOCKED call as an ordinary tool ERROR on '
+            . 'both surfaces. If the new hit is not a tool-result prefix at all, it needs the mechanical '
+            . 'exclusion OFF_ROSTER_THROWABLE_SHAPES carries, not a row added here',
+        );
+
+        // AND THE FOUR FILES THE OLD MAP NAMED, called out by name so their
+        // absence from the map above is a stated claim rather than something a
+        // reader has to notice. These are the roster's two classifiers and the
+        // two surfaces that render its answer; a prefix appearing in any of
+        // them is a consumer that has stopped agreeing with the roster.
+        foreach ([
+            'src/Chat.php',
+            'src/Renderer.php',
+            'src/Cli/NonInteractive.php',
+            'src/Cli/HeadlessPermissionPrompt.php',
+            'src/Runtime.php',
+        ] as $consumer) {
+            self::assertArrayNotHasKey($consumer, self::denialLiteralsAcrossSrc(), "{$consumer} spells a "
+                . 'denial prefix. It is a reader of the roster, not an author of one');
+        }
+    }
+
+    /**
+     * E247's VERDICT: `Task creation blocked:` IS A COINCIDENCE OF WORDING AND
+     * NOT A FOURTH DENIAL KIND — and the discriminator is mechanical.
+     *
+     * THE EVIDENCE, in the order it decides the question.
+     *
+     * FIRST, WHAT A DenialKind IS. Each case is the text a TOOL RESULT opens
+     * with — {@see DenialKind::classify()} is handed `$result->content()` by
+     * {@see \SugarCraft\Crush\Permissions\ToolRefusal::fromEvent()} and
+     * `$result->error` by {@see Chat::isDeniedResult()}, and both answers
+     * decide how ONE TOOL CALL is drawn and reported. A fourth kind would have
+     * to be a fourth way a tool call is stopped before it runs.
+     *
+     * SECOND, WHAT THIS ONE IS. It is the default constructor message of a
+     * {@see \Throwable}, raised when a `TaskCreated` hook blocks the
+     * insertion of a row into an agent team's task list
+     * ({@see \SugarCraft\Crush\Agents\TaskList::addTask()}). It is not a
+     * tool call, it does not pass through
+     * {@see \SugarCraft\Crush\Runtime::gate()}, and nothing turns it into a
+     * `ToolResult`. Asserted rather than asserted-in-prose: the class is a
+     * `\Throwable` subclass, and no file in `src/` both names it and names
+     * `ToolResult` — which is the one edit that would make its message a
+     * tool-result opener and so a real fourth kind.
+     *
+     * THIRD, WHAT WOULD HAPPEN IF IT DID REACH A CLASSIFIER, because that is
+     * the half a "they are just different" comment cannot answer. It would
+     * classify as NOT a denial and render as an ordinary tool error — which is
+     * the CORRECT treatment, since a blocked task insertion is not a refused
+     * tool call and the three remedies the roster distinguishes (change the
+     * hook, answer differently, attach an approver) are none of them the
+     * remedy for it.
+     *
+     * THE KNOWN-POSITIVE IS IN THE SAME TEST (rule 15). The third assertion is
+     * an emptiness claim over a scanner, so a synthetic source that DOES both
+     * things is pushed through the identical helper and must come back named.
+     */
+    public function testTheOneOffRosterShapeInSrcIsAThrowableMessageAndNotAFourthKind(): void
+    {
+        foreach (self::OFF_ROSTER_THROWABLE_SHAPES as $relative => $class) {
+            self::assertTrue(
+                is_subclass_of($class, \Throwable::class),
+                "{$class} is excluded from the roster because it is a Throwable, and it is not one",
+            );
+
+            // The literal really is in that file and really is off-roster.
+            $found = self::denialLiteralsIn(self::sourceOf($relative));
+            self::assertNotSame([], $found, "{$relative} no longer spells the shape this exclusion is for, "
+                . 'so the exclusion is stale and should be deleted rather than carried');
+            foreach ($found as $literal) {
+                self::assertNotContains(
+                    rtrim($literal),
+                    DenialKind::prefixes(),
+                    "{$relative} spells a real roster entry; that is not an exception, it is a copy",
+                );
+                self::assertNull(
+                    DenialKind::classify($literal),
+                    "{$literal} classifies as a denial, so if it ever reached a tool result it would be "
+                    . 'drawn struck through. It is an exception message and must not',
+                );
+            }
+
+            // AND NOTHING IN src/ TURNS IT INTO A TOOL RESULT. This is the
+            // discriminator: the exclusion holds because the string cannot
+            // reach a classifier, and the day some caller catches this and
+            // returns ToolResult::error($e->getMessage()) is the day it
+            // becomes a real fourth kind.
+            self::assertSame(
+                [],
+                self::filesNamingBoth($class, 'ToolResult'),
+                "{$class} is now named in a file that also builds a ToolResult, so its message can reach "
+                . 'DenialKind::classify() as a tool-result opener. Either it is a fourth denial kind and '
+                . 'belongs on the roster, or it needs re-wording off the vocabulary',
             );
         }
 
+        // KNOWN-POSITIVE FOR THE DISCRIMINATOR ITSELF. Without this the
+        // emptiness above is also what a scanner that matches nothing returns.
         self::assertSame(
-            DenialKind::prefixes(),
-            self::denialLiteralsIn(self::sourceOf('src/Permissions/DenialKind.php')),
-            'the three literals in the leaf are no longer the three case values the leaf exposes, so the '
-            . 'zero expectations above were checked by a scanner that is looking at the wrong thing',
+            ['probe.php'],
+            self::filesNamingBothIn(
+                ['probe.php' => '<?php throw new TaskBlockedException(); return ToolResult::error("x");'],
+                TaskBlockedException::class,
+                'ToolResult',
+            ),
+            'the co-occurrence scanner cannot see a file that names both symbols, so its empty answer '
+            . 'above says nothing at all',
+        );
+        self::assertSame(
+            [],
+            self::filesNamingBothIn(
+                ['probe.php' => '<?php throw new TaskBlockedException();'],
+                TaskBlockedException::class,
+                'ToolResult',
+            ),
+            'the co-occurrence scanner reports a file naming only ONE of the two symbols, so it would red '
+            . 'this guard against every correct tree',
         );
     }
 
@@ -608,7 +718,7 @@ final class DenialPrefixRosterTest extends TestCase
      * Throws rather than returning `''` (rule 14). An unreadable file is a
      * question this guard cannot answer, and `''` scans to zero literals —
      * indistinguishable from the clean result four of the five
-     * {@see self::FAMILY_SPELLINGS} rows expect.
+     * {@see self::denialLiteralsAcrossSrc()} expects of every file it walks.
      */
     private static function sourceOf(string $relative): string
     {
@@ -619,6 +729,122 @@ final class DenialPrefixRosterTest extends TestCase
         }
 
         return $source;
+    }
+
+    /**
+     * Every denial-shaped literal in `src/`, as repo-relative path => literals,
+     * with files that spell none omitted and the keys sorted.
+     *
+     * A WALK AND NOT A LIST, which is the difference between "the five files
+     * we thought of spell nothing" and "nothing in `src/` spells one". The
+     * caller compares the WHOLE map, so a new file is a red rather than a
+     * silent addition.
+     *
+     * @return array<string, list<string>>
+     */
+    private static function denialLiteralsAcrossSrc(): array
+    {
+        $root = \dirname(__DIR__);
+        $out = [];
+        foreach (self::phpFilesUnder($root . '/src') as $path) {
+            $found = self::denialLiteralsIn(self::sourceOf(substr($path, \strlen($root) + 1)));
+            if ($found !== []) {
+                $out[substr($path, \strlen($root) + 1)] = $found;
+            }
+        }
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * Every `.php` file under $directory, sorted, or a loud failure.
+     *
+     * Throws on an unreadable directory rather than yielding nothing
+     * (rule 14): an empty walk scans to an empty map, which is exactly what
+     * {@see denialLiteralsAcrossSrc()}'s caller would read as "the tree is
+     * clean".
+     *
+     * @return list<string>
+     */
+    private static function phpFilesUnder(string $directory): array
+    {
+        if (!is_dir($directory)) {
+            throw new \RuntimeException("{$directory} is not a directory; this guard cannot answer for it");
+        }
+
+        $files = [];
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($walk as $entry) {
+            if ($entry instanceof \SplFileInfo && $entry->getExtension() === 'php') {
+                $files[] = $entry->getPathname();
+            }
+        }
+
+        if ($files === []) {
+            throw new \RuntimeException("{$directory} holds no PHP files; this guard is scanning nothing");
+        }
+
+        sort($files);
+
+        return $files;
+    }
+
+    /**
+     * Repo-relative paths under `src/` whose text names BOTH $class (by its
+     * short name) and $symbol.
+     *
+     * The SHORT name, because that is how a `use`d class is written at every
+     * call site; matching the FQN would miss the ordinary case entirely.
+     *
+     * @param class-string $class
+     *
+     * @return list<string>
+     */
+    private static function filesNamingBoth(string $class, string $symbol): array
+    {
+        $root = \dirname(__DIR__);
+        $sources = [];
+        foreach (self::phpFilesUnder($root . '/src') as $path) {
+            $relative = substr($path, \strlen($root) + 1);
+            $sources[$relative] = self::sourceOf($relative);
+        }
+
+        return self::filesNamingBothIn($sources, $class, $symbol);
+    }
+
+    /**
+     * The co-occurrence scan itself, over sources supplied by the caller.
+     *
+     * Split out from {@see filesNamingBoth()} so the guard's known-positive
+     * fixture goes through the IDENTICAL matcher rather than through a second
+     * one written to agree with it (rule 15). The declaring file is skipped:
+     * `src/Agents/TaskBlockedException.php` names its own class by definition,
+     * and a class that mentions itself is not a call site.
+     *
+     * @param array<string, string> $sources path => text
+     * @param class-string $class
+     *
+     * @return list<string>
+     */
+    private static function filesNamingBothIn(array $sources, string $class, string $symbol): array
+    {
+        $short = ($pos = strrpos($class, '\\')) === false ? $class : substr($class, $pos + 1);
+        $declaring = 'src/' . str_replace('\\', '/', substr($class, \strlen('SugarCraft\\Crush\\'))) . '.php';
+
+        $out = [];
+        foreach ($sources as $relative => $text) {
+            if ($relative === $declaring) {
+                continue;
+            }
+            if (str_contains($text, $short) && str_contains($text, $symbol)) {
+                $out[] = $relative;
+            }
+        }
+
+        return $out;
     }
 
     /**
