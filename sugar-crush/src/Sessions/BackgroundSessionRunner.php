@@ -367,14 +367,23 @@ final class BackgroundSessionRunner
      * gap re-opened at a different address.
      *
      * WHAT IS ON STDERR ANYWAY, said plainly so this reads as a choice rather
-     * than an oversight: an ASK refused with no terminal already writes
-     * "sugarcrush: refused <tool>." from
-     * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt::__invoke()},
-     * into that sidecar. So the ASK case produces two records in two files and
-     * the DENY case — which reaches no approver at all — produces exactly this
-     * one. Suppressing either would need this class to know what some approver
-     * built four frames away inside {@see Bootstrap::backend()} had already
-     * announced, which is a coupling that does not exist.
+     * than an oversight — and CORRECTED, because the first version of this
+     * paragraph named the wrong branch and the wrong bytes. WHAT IT SAID: "an
+     * ASK refused with no terminal already writes `sugarcrush: refused <tool>.`
+     * from {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt::__invoke()}".
+     * WHAT IS TRUE: that string is the branch where a person WAS asked, on a
+     * terminal, and answered no — which is not a shape a daemon has. The
+     * no-terminal branch writes `HeadlessPermissionPrompt::refusal()` instead:
+     * a six-line block opening "sugarcrush: a tool call needs your permission,
+     * and stdin is not a terminal, so there is nobody to ask — refusing it."
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: what it is FOR is the channel,
+     * not the wording. That block goes to the prompt's `$err`, which defaults
+     * to `\STDERR`, which for a spawned daemon IS the sidecar — so the ASK
+     * case does produce two records in two files, and the DENY case, which
+     * reaches no approver at all, produces exactly this one. Suppressing
+     * either would need this class to know what some approver built four
+     * frames away inside {@see Bootstrap::backend()} had already announced,
+     * which is a coupling that does not exist.
      *
      * `oneLine()` IS NOT COSMETIC HERE. The buffer is a line protocol:
      * {@see BackgroundSupervisor::restoreOutput()} decides line by line, and
