@@ -11128,7 +11128,7 @@ cannot read as a clean one, and three copies of that arm is three places for it 
 
 ---
 
-### Ea51-1 — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file
+### E334 — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: brief accuracy, on the item's whole subject.
 **Measured by `find`.**
@@ -11153,7 +11153,7 @@ times, unchanged.
 
 ---
 
-### Ea51-2 — the flag repair produced two 60-second RISKY aborts in one full run of two, and the replacement produced none
+### E335 — the flag repair produced two 60-second RISKY aborts in one full run of two, and the replacement produced none
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: evidence, NOT mechanism. **Measured, PHP 8.3.6, two
 takes, and it did not reproduce.**
@@ -11182,7 +11182,7 @@ a rate.
 
 ---
 
-### Ea51-3 — `TtyDetect::isAtty()` casts a stream to `(int)` and treats the result as a file descriptor
+### E336 — `TtyDetect::isAtty()` casts a stream to `(int)` and treats the result as a file descriptor
 
 **Recorded 2026-08-24 by round-51 lane a.** Severity: correctness, latent. **Measured, PHP 8.3.6.
 Out of lane — `candy-core/src/Util/TtyDetect.php` belongs to no lane this round. Reported, not fixed.**
@@ -11213,7 +11213,7 @@ on a closed resource, so an `is_resource()` guard has to come first — which `i
 
 ---
 
-### Ea51-4 — RETRACTED BEFORE IT SHIPPED: the two `composer.lock` files are NOT committed, and `ls` cannot tell
+### E337 — RETRACTED BEFORE IT SHIPPED: the two `composer.lock` files are NOT committed, and `ls` cannot tell
 
 **Recorded and refuted 2026-08-24 by round-51 lane a, in that order.** Severity: none — there is no defect.
 Kept as a methodology instance, because the refutation came from the entry's own stated generator.
@@ -11242,7 +11242,7 @@ feels obvious.
 
 ---
 
-### Ea51-5 — the fd-0 replacement made `NonInteractive::readStdinIfPiped()` a latent `TypeError`, and guarding only the call the reviewer named would move the throw rather than remove it
+### E338 — the fd-0 replacement made `NonInteractive::readStdinIfPiped()` a latent `TypeError`, and guarding only the call the reviewer named would move the throw rather than remove it
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, latent — introduced by this
 lane's own change. **Measured, PHP 8.3.6. Out of lane — `sugar-crush/src/Cli/NonInteractive.php` is a `src/`
@@ -11274,14 +11274,14 @@ consumes it, so the null-answering shape needs its two callers checked, not just
 
 ---
 
-### Ea51-6 — `EnvDetect::isConsoleStdin()` is an unguarded `stream_isatty(STDIN)` with no caller anywhere
+### E339 — `EnvDetect::isConsoleStdin()` is an unguarded `stream_isatty(STDIN)` with no caller anywhere
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, dormant. **Measured,
 PHP 8.3.6. Out of lane — `candy-core/src/Util/Tty/EnvDetect.php` belongs to no lane this round. Reported,
 not fixed, and NOT to be removed.**
 
 `SugarCraft\Core\Util\Tty\EnvDetect::isConsoleStdin()` is a bare `return stream_isatty(STDIN);`. After
-E296's option (a) that call throws inside the suite (see Ea51-5 for the measurement). It is dormant rather
+E296's option (a) that call throws inside the suite (see E338 for the measurement). It is dormant rather
 than live: grepped across `sugar-crush`'s `src`, `bin` and `tests` and across `src`/`bin` of every sibling
 in the 18-lib closure, the only occurrence of the name is its own declaration — `Tty::backend()` reaches
 `isWsl()`, `isMintty()` and `isCygwin()` from the same class but never this one.
@@ -11296,7 +11296,7 @@ introduce a throw; or wire it, if the Windows console path is being taken up. Ei
 
 ---
 
-### Ea51-7 — `Program::runExec()`'s closed-stream guard now falls back to a closed stream
+### E340 — `Program::runExec()`'s closed-stream guard now falls back to a closed stream
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, dormant. **Measured,
 PHP 8.3.6. Out of lane — `candy-core/src/Program.php` belongs to no lane this round. Reported, not fixed.**
@@ -11321,7 +11321,7 @@ constant whose liveness is exactly what the guard already doubted. The same reas
 
 ---
 
-### Ea51-8 — `Detect::stdinFd()` can now answer null into a `@param resource` at `candy-core`
+### E341 — `Detect::stdinFd()` can now answer null into a `@param resource` at `candy-core`
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass), confirming the reviewer's NOTE.** Severity:
 documentation/type accuracy, not a defect. **Verified by symbol. Out of lane — `candy-core/src/Util/TtyDetect.php`.**
@@ -11333,12 +11333,12 @@ runtime behaviour is correct and unchanged — `isAtty()` opens with `is_resourc
 there is nothing to fix in the code. The doc-block is simply now narrower than the call sites.
 
 **Step.** Widen `TtyDetect::isAtty()`'s `@param` to `resource|null`. Cheap, and it stops a future static-
-analysis pass reporting a false positive on a correct call. Related to Ea51-3, which wants the same method
+analysis pass reporting a false positive on a correct call. Related to E336, which wants the same method
 changed for a different reason; do both together.
 
 ---
 
-### Ea51-9 — E319's inverted `O_NONBLOCK` prose is live in three files, and the counts previously recorded for it were half right
+### E342 — E319's inverted `O_NONBLOCK` prose is live in three files, and the counts previously recorded for it were half right
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: documentation, misleading.
 **Counts re-derived by `grep -n O_NONBLOCK` per file at this lane's HEAD. Out of lane — none of the three
@@ -11375,7 +11375,7 @@ inside their own history paragraphs, and a pattern sweep cannot tell an offender
 
 ---
 
-### Ea51-10 — the stderr census resolves a descriptor spec only within the enclosing function, and nothing says so at the call sites that depend on it
+### E343 — the stderr census resolves a descriptor spec only within the enclosing function, and nothing says so at the call sites that depend on it
 
 **Recorded 2026-08-24 by round-51 lane a (fix pass), found while refuting a doc-block claim.** Severity:
 guard sharpness, latent. **Measured by pushing known-answer sources through
@@ -11408,7 +11408,7 @@ be standing.
 **Step.** Either resolve class-constant and property specs too (they are as literal as a local), or have the
 `unclassified` failure message name the scope bound explicitly, so the reader is told why a spec they can
 plainly read came back unreadable.
-### Eb51-1 — E328's recorded mechanism does not reproduce: the hazard was reachability, not a race
+### E344 — E328's recorded mechanism does not reproduce: the hazard was reachability, not a race
 
 **Recorded 2026-08-24 by round-51 lane b, which fixed E328.** Severity: correction of a fixed entry.
 **Measured**, PHP 8.3.6, generator in the round's scratchpad (`probe_append.php`).
@@ -11432,7 +11432,7 @@ for locking, which was already there, and left the reachability untouched.
 
 ---
 
-### Eb51-2 — the hardened audit write fails SILENTLY, and the alternative costs one stderr write per tool call
+### E345 — the hardened audit write fails SILENTLY, and the alternative costs one stderr write per tool call
 
 **Recorded 2026-08-24 by round-51 lane b.** Severity: observability. Not fixed, deliberately.
 
@@ -11462,7 +11462,7 @@ consumer — check before designing, it may have none.
 
 ---
 
-### Eb51-3 — E307 is still open: `BackgroundSessionRunner::noticeRefusal()` drops `->kind`, and it was out of lane
+### E346 — E307 is still open: `BackgroundSessionRunner::noticeRefusal()` drops `->kind`, and it was out of lane
 
 **Recorded 2026-08-24 by round-51 lane b.** Severity: as E307. Not fixed — `src/Sessions/` was not in
 this lane's file list and the split was strict.
@@ -11483,7 +11483,7 @@ on the `[session:` prefix, so a token after the marker is safe against the line 
 
 ---
 
-### Eb51-4 — E306's stated gap was arm-distinguishing, and naming the kind cannot close it
+### E347 — E306's stated gap was arm-distinguishing, and naming the kind cannot close it
 
 **Recorded 2026-08-24 by round-51 lane b, which implemented E306.** Severity: premise correction.
 **Measured** — asserted by a test rather than argued.
@@ -11516,7 +11516,7 @@ line — a decision about the published vocabulary, not a formatting change.
 
 ---
 
-### Eb51-5 — E308 closed the catch; a tool callback returning a `ToolResult` can still assert a refusal
+### E348 — E308 closed the catch; a tool callback returning a `ToolResult` can still assert a refusal
 
 **Recorded 2026-08-24 by round-51 lane b, which fixed E308.** Severity: stated bound, probably intended
 behaviour. Not fixed.
@@ -11538,7 +11538,7 @@ the reason), or a typed field on `ToolResult` so a refusal is declared rather th
 
 ---
 
-### Eb51-6 — E324's five sites are still argument-less, and there is now a measured collision figure for the family
+### E349 — E324's five sites are still argument-less, and there is now a measured collision figure for the family
 
 **Recorded 2026-08-24 by round-51 lane b, which fixed E329's four.** Severity: as E324. Not fixed —
 `src/Workflows/` was out of this lane's list and E324 is its own entry.
@@ -11558,7 +11558,7 @@ call sites.
 
 ---
 
-### Eb51-7 — two stated bounds on the new audit-log guard, both derived rather than narrated
+### E350 — two stated bounds on the new audit-log guard, both derived rather than narrated
 
 **Recorded 2026-08-24 by round-51 lane b.** Severity: stated bounds. No action wanted today.
 
@@ -11597,7 +11597,7 @@ everybody and a wrong one.
 
 ---
 
-### Eb51-8 — the suite creates and populates the REAL production audit directory, and nothing removes it
+### E351 — the suite creates and populates the REAL production audit directory, and nothing removes it
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 10.** Severity: cross-process
 hygiene. Not fixed — the fix is a wiring change on `HookManager::registerBuiltIns()`, out of this lane.
@@ -11623,7 +11623,7 @@ production directory is not created during a suite run.
 
 ---
 
-### Eb51-9 — `uniqid(…, true)` puts a `.` into a tool-call id that goes on the wire
+### E352 — `uniqid(…, true)` puts a `.` into a tool-call id that goes on the wire
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 11.** Severity: stated bound,
 low risk. Not fixed.
@@ -11644,7 +11644,7 @@ gives the same entropy with no period.
 
 ---
 
-### Eb51-10 — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
+### E353 — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
 
 **Recorded 2026-08-24 by round-49 lane b's fix agent.** Severity: documentation drift. Partly mitigated.
 
@@ -11662,7 +11662,7 @@ built-in registration order).
 and still has the property the row claims — and not a golden-file comparison, which would red on every
 prose edit.
 
-### Ec49-1 — a per-file assertion in several censuses makes the suite's assertion total a function of the file COUNT
+### E354 — a per-file assertion in several censuses makes the suite's assertion total a function of the file COUNT
 
 **Recorded 2026-08-24 by round-49 lane c; CORRECTED the same day by the same lane after review.**
 Severity: measurement hygiene, and it voided this lane's own first baseline.
@@ -11712,7 +11712,7 @@ count.
 
 ---
 
-### Ec49-2 — three of `ReflectionLineSliceReaderCensusTest`'s offender arms were unpinned, and the sweep E322 asked for found them
+### E355 — three of `ReflectionLineSliceReaderCensusTest`'s offender arms were unpinned, and the sweep E322 asked for found them
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: guard coverage. **Measured, PHP 8.3.6. FIXED this
 round.**
@@ -11747,7 +11747,7 @@ was not one.
 
 ---
 
-### Ec49-3 — consolidating a helper exposes which consumers were never testing half of it
+### E356 — consolidating a helper exposes which consumers were never testing half of it
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: the round's transferable lesson. **Measured, PHP
 8.3.6. FIXED this round.**
@@ -11775,7 +11775,7 @@ in a round that owns `tests/Config/`, or record the two shapes as deliberate and
 
 ---
 
-### Ec49-4 — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
+### E357 — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: latent, and a narrower version of E332.
 
@@ -11795,7 +11795,7 @@ edit hiding in a refactor.
 
 ---
 
-### Ec49-5 — E319's own figures are wrong in two places, derived rather than quoted
+### E358 — E319's own figures are wrong in two places, derived rather than quoted
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: entry accuracy. **Measured, PHP 8.3.6, by
 `tests/Support/NonBlockingVocabularyTest`, which derives it on every run.**
@@ -11807,7 +11807,7 @@ correction stands.
 was wrong.** It said of `tests/SuiteChildStdinIsolationTest.php`'s two sites that one is CONSISTENT —
 `assertTrue($meta['blocked'])` beside a sentence naming the clearing verb, "which is the correct
 pairing". It is not the correct pairing, and E319 was RIGHT to list that file. The site is the tree's
-only AFFIRMATIVELY-phrased message, `rank()` graded affirmative messages backwards (see Ec49-7), and this
+only AFFIRMATIVELY-phrased message, `rank()` graded affirmative messages backwards (see E360), and this
 entry faithfully reported what the broken scanner returned. Deriving a figure instead of quoting one
 protects against a stale figure; it does not protect against a wrong instrument, and this is what that
 looks like from the inside.
@@ -11827,7 +11827,7 @@ its rows deleted, in the same commit as the repair.
 
 ---
 
-### Ec49-6 — the static-path scanner's four stated holes are closed, and the residual is now five different shapes
+### E359 — the static-path scanner's four stated holes are closed, and the residual is now five different shapes
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: coverage, closed. **Measured, PHP 8.3.6. FIXED this
 round** (E330).
@@ -11866,7 +11866,7 @@ a quantifier.
 
 ---
 
-### Ec49-7 — a known-answer table can have every row in one grammatical shape, and the shape it omits is the one the code gets backwards
+### E360 — a known-answer table can have every row in one grammatical shape, and the shape it omits is the one the code gets backwards
 
 **Recorded 2026-08-24 by round-49 lane c, from its own reviewer's BLOCKING finding.** Severity:
 correctness of a guard. **FIXED this round.**
@@ -11907,7 +11907,7 @@ deletion of that file's `INVERTED_ROSTER` row. Either alone reds the census. Tha
 
 ---
 
-### Ec49-8 — a doc-block that NAMES a PHPUnit annotation IS that annotation, and it skipped the test written to stop skipping
+### E361 — a doc-block that NAMES a PHPUnit annotation IS that annotation, and it skipped the test written to stop skipping
 
 **Recorded 2026-08-24 by round-49 lane c, against itself.** Severity: trap, cost about four minutes.
 **Measured, PHP 8.3.6, PHPUnit 10.5.64. FIXED before it shipped.**
@@ -11931,7 +11931,7 @@ this produced, and is derivable from PHPUnit's own result output rather than fro
 
 ---
 
-### Ec49-10 — `BootstrapSkillSkipsTest` goes RISKY, not red, under parallel-lane load, and the diff in flight gets the blame
+### E362 — `BootstrapSkillSkipsTest` goes RISKY, not red, under parallel-lane load, and the diff in flight gets the blame
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: measurement hygiene / flake attribution.
 **Observed once in five runs of `tests/Support tests/Cli tests/Config` at PHP 8.3.6, with four sibling
@@ -11961,7 +11961,7 @@ to anything.**
 
 ---
 
-### Ec49-9 — a false-positive guard is unpinned by construction, and this suite has at least one
+### E363 — a false-positive guard is unpinned by construction, and this suite has at least one
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: coverage. **FIXED this round for the one instance
 found; the rule is the deliverable.**
@@ -11978,7 +11978,7 @@ to be synthetic, and that is correct rather than a compromise: it is the only in
 the guard from its absence.
 
 **Step.** When a mutation survives, classify the branch before acting: an OFFENDER-PRODUCING branch that
-survives is a coverage hole in the census (Ec49-2's rule); a FALSE-POSITIVE guard that survives needs a
+survives is a coverage hole in the census (E355's rule); a FALSE-POSITIVE guard that survives needs a
 synthetic fixture and must not be deleted (rule 6). The two look identical in a mutation table and want
 opposite responses.
 
