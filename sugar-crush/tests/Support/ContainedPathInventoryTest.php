@@ -144,6 +144,8 @@ use SugarCraft\Crush\Support\ContainedPath;
  */
 final class ContainedPathInventoryTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
+
     /**
      * The functions a path-against-boundary prefix compare can be written with.
      *
@@ -703,7 +705,7 @@ final class ContainedPathInventoryTest extends TestCase
      */
     private function routedCallsIn(string $code): array
     {
-        $tokens = $this->significantTokens($code);
+        $tokens = self::significantTokens($code);
         $calls = [];
 
         foreach ($tokens as $i => $token) {
@@ -1264,7 +1266,7 @@ final class ContainedPathInventoryTest extends TestCase
      */
     private function handSpelledComparesIn(string $code): array
     {
-        $tokens = $this->significantTokens($code);
+        $tokens = self::significantTokens($code);
         $found = [];
 
         foreach ($tokens as $i => $token) {
@@ -1432,31 +1434,6 @@ final class ContainedPathInventoryTest extends TestCase
         }
 
         return false;
-    }
-
-    /**
-     * $code's tokens with whitespace and comments dropped.
-     *
-     * Comments are dropped rather than skipped per line because a doc-comment
-     * `{@see ContainedPath::within()}` is a cross-reference, not a call site,
-     * and counting those is what inflated an earlier hand count.
-     *
-     * @return list<array{0: int, 1: string, 2: int}|string>
-     */
-    private function significantTokens(string $code): array
-    {
-        $tokens = [];
-        foreach (token_get_all($code) as $token) {
-            if (\is_array($token)
-                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
-            ) {
-                continue;
-            }
-
-            $tokens[] = $token;
-        }
-
-        return $tokens;
     }
 
     /** @param array{0: int, 1: string, 2: int}|string|null $token */

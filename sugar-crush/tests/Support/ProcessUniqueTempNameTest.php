@@ -58,6 +58,9 @@ use PHPUnit\Framework\TestCase;
  */
 final class ProcessUniqueTempNameTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
+    use RefusesAnUnreadableSourceTrait;
+
     /**
      * Directories scanned by both censuses, plus the one entry-point script.
      *
@@ -617,46 +620,6 @@ final class ProcessUniqueTempNameTest extends TestCase
         self::assertSame([], self::staticTempPathWrites(
             "<?php\n\$p = sys_get_temp_dir() . '/fixed.log';\nself::assertSame(\$p, \$hook->path());\n",
         ), 'a fixed path that is only compared, never written, was reported');
-    }
-
-    /**
-     * RULE 14 AT THE READ IS ALSO PINNED, because a robustness arm nothing
-     * exercises is a robustness arm nobody notices the loss of.
-     *
-     * The alternative — `(string) file_get_contents()` — turns an unreadable
-     * file into an empty one, an empty one into "no hits", and "no hits" into a
-     * clean census. Three silent steps, and every count in this file would then
-     * be a statement about how many files the process happened to be allowed to
-     * open. Reverting {@see readOrFail()} to the cast is a mutation nothing
-     * else here can kill: no real source in the tree is unreadable, so the arm
-     * has no natural input. This is that input.
-     */
-    public function testTheReadRefusesAFileItCannotOpenInsteadOfReadingItAsEmpty(): void
-    {
-        $absent = \dirname(__DIR__, 2) . '/tests/Support/no_such_file_'
-            . \getmypid() . '_' . \bin2hex(\random_bytes(6)) . '.php';
-
-        self::assertFileDoesNotExist($absent);
-
-        // The PHP-level warning from the failed open is the point of the
-        // fixture and is not the thing under test; this suite runs with
-        // failOnWarning, so it is swallowed HERE rather than with an `@` in
-        // readOrFail(), where it would also swallow the diagnosis on a real
-        // unreadable source.
-        $previous = \set_error_handler(static fn (): bool => true);
-        $refused  = false;
-
-        try {
-            self::readOrFail($absent);
-        } catch (\PHPUnit\Framework\AssertionFailedError) {
-            $refused = true;
-        } finally {
-            \set_error_handler($previous);
-        }
-
-        self::assertTrue($refused, 'the read returned instead of refusing a file it could not '
-            . 'open, so an unreadable source now reaches every scanner in this file as empty '
-            . 'text and is reported as a clean one');
     }
 
     // =========================================================================
@@ -1608,39 +1571,6 @@ final class ProcessUniqueTempNameTest extends TestCase
         }
 
         return 0;
-    }
-
-    /**
-     * $source without whitespace or comments.
-     *
-     * @return list<array{int,string,int}|string>
-     */
-    private static function significantTokens(string $source): array
-    {
-        $out = [];
-        foreach (\token_get_all($source) as $token) {
-            if (\is_array($token)
-                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
-                continue;
-            }
-            $out[] = $token;
-        }
-
-        return $out;
-    }
-
-    /**
-     * RULE 14 AT THE READ, not only at the parse. `(string) file_get_contents()`
-     * turns an unreadable file into an empty one, an empty file into "no hits",
-     * and "no hits" into a clean census — three silent steps from a permission
-     * bit to a green suite.
-     */
-    private static function readOrFail(string $path): string
-    {
-        $text = file_get_contents($path);
-        self::assertIsString($text, $path . ' is unreadable, so the census over it is void');
-
-        return $text;
     }
 
     /**

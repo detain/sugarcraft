@@ -38,6 +38,8 @@ use SugarCraft\Crush\Support\HomeDirectory;
  */
 final class HomeDirectoryPathReaderInventoryTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
+
     /** Where the list being checked lives. */
     private const CLASS_FILE = 'src/Support/HomeDirectory.php';
 
@@ -244,7 +246,7 @@ HomeDirectory::path();
      */
     private function indirectPathCalls(string $code): array
     {
-        $tokens = $this->significantTokens($code);
+        $tokens = self::significantTokens($code);
         $found = [];
 
         foreach ($tokens as $i => $token) {
@@ -362,7 +364,7 @@ HomeDirectory::path();
     private function countCalls(string $code, string $needle): int
     {
         $executable = '';
-        foreach ($this->significantTokens($code) as $token) {
+        foreach (self::significantTokens($code) as $token) {
             $executable .= \is_array($token) ? $token[1] : $token;
         }
 
@@ -390,20 +392,4 @@ HomeDirectory::path();
         return $files;
     }
 
-    /** @return list<array{0: int, 1: string, 2: int}|string> */
-    private function significantTokens(string $code): array
-    {
-        $tokens = [];
-        foreach (token_get_all($code) as $token) {
-            if (\is_array($token)
-                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
-            ) {
-                continue;
-            }
-
-            $tokens[] = $token;
-        }
-
-        return $tokens;
-    }
 }
