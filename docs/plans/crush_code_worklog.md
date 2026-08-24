@@ -11068,7 +11068,75 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
-## ROUND 51 — IN FLIGHT (base `a85fcfd6`, THREE lanes, run `wf_b02481db-f95`)
+## ROUND 51 — CLOSED (`8629df24`, floor `9730 / 143168 / 1 skipped / rc 0`, THREE lanes)
+
+### THE CLOSE
+
+**Floor `9730 / 143168 / 1 skipped / rc 0`** (merges `8bc556ed` a, `0cd0846e` b, `88dcc3ec` c; renumber
+`5c40e5b1`-era commit; roster retirement; E364). **candy-mosaic separately: `457 / 7744 / rc 0`**, up from
+451 — lane a's six new tests, and the first round where a lane's work spanned two libraries.
+18/18 symlinks, `check-path-repos` rc 0, config md5 unchanged, zero tracked per-lib locks, all three lane
+HEADs ancestors of master. Backlog **333 → 364**, round-51 ids **E334–E363**, plus E364.
+
+**Tests predicted EXACTLY for the ninth consecutive round**: 9661 + (1+27+41) = 9730.
+
+### 🔴 THE ASSERTION LOWER BOUND WAS VIOLATED FOR THE FIRST TIME, AND THE CAUSE WAS THE SUPERVISOR
+
+Predicted at least `143171`; measured `143168`. **Three below.** Not lane arithmetic — the merge-time
+resolution DELETED two roster rows, and deleting data rows removes the assertions they generate. Filed as
+**E364**: the additive bound is a lower bound *given a monotonic merge*, and a resolution that deletes
+roster or fixture data breaks it downward. **That is the guard working, not a defect.** The standing fix
+is to recompute the expectation from the lane deltas minus whatever the resolution removed, before
+reporting any violation.
+
+### 🔴 THE THIRD CROSS-LANE CATCH IN THREE ROUNDS — AND THE FIRST ONE A LANE PREDICTED
+
+Lane c's `NonBlockingVocabularyTest` rostered one inverted and one unrankable O_NONBLOCK sentence in
+`tests/SuiteChildStdinIsolationTest.php` — **a file lane a owns.** Lane a fixed both sentences, so the
+census red at the merge exactly as designed, and its failure message carried the resolution:
+
+> *"IF THEY HAVE BEEN FIXED THIS IS THE SUCCESS CASE and the row must be DELETED — every rostered file is
+> owned by another lane, so this reds at a merge rather than at an edit of this file, and the answer is a
+> data edit here, not a weaker check."*
+
+The row's own `why` had already said the repair *"must land WITH this row's deletion or the census reds at
+the merge."* **A guard that knows it will red at merge, says why, and tells the merger which of the two
+possible fixes is the correct one is a step beyond a guard that merely catches things.** Rounds 49 and 50
+produced guards that caught siblings; this one anticipated the catch.
+
+⚠️ **Deleting both rows EMPTIED `UNREADABLE_ROSTER`** — an absence assertion with no positive input, which
+is the dead-instrument shape this tree keeps producing. Not accepted on green: disabling
+`negatesTheVerb()` reds the file with **14 failures** from known-answer fixtures independent of the
+rosters. The classifier is pinned by FIXTURE rather than by the real sites, so an empty roster is safe
+here. Had it not been, the answer would have been a control fixture, never keeping a stale row.
+
+### THE SHARED FILE THAT AUTO-MERGED, AND WHY IT COMPOSED
+
+Lanes b and c both edited `tests/Support/ProcessUniqueTempNameTest.php` and git merged it with **no
+conflict**. Their changes were complementary: lane b re-pointed `STATIC_TEMP_PATH_INVENTORY` because
+**E328's production fix removed the only real `src/` site**, replacing it with a purpose-built control
+fixture; lane c added the extracted traits and widened the alphabet to `proc_open`,
+`stream_socket_server` and `stream_socket_client`. Mutation-verified at the merge: giving the control
+fixture real entropy reds it with two failures.
+
+**Lane b's reasoning on that swap is the transferable part** — an absence census whose only positive input
+can be *fixed away by improving production code* is a dead instrument waiting to happen, so the control
+belongs in the fixture tree where nobody can close it by accident.
+
+### THE PARAMETERISED ROUND NUMBER WORKED TWO TIMES IN THREE
+
+Lanes a and b filed under `Ea51-`/`Eb51-` as the new `COMMON` instructs. **Lane c filed under `Ec49-`
+anyway** — almost certainly copying the convention from the entries surrounding its own in the file it was
+appending to. Harmless a second time only because rounds 49's and 50's provisional ids had both been
+renumbered away. **The instruction is not sufficient on its own; a lane infers convention from context.
+The merge check is what has to catch it, and now does.**
+
+### AND A CORRECTION TO THE SUPERVISOR'S BRIEF
+
+Lane a was assigned `candy-palette/src/Probe/Detect.php` for E318. **`Detect` lives in `candy-mosaic`.**
+The lane found the right file, worked it, and flagged it as out-of-lane rather than silently following the
+wrong path.
+
 
 **Launched 2026-08-24.** Base floor `9661 / 142165 / 1 skipped / rc 0` observed at `a85fcfd6` — identical
 to round 50's close, since only documentation moved between them, and **clean, with no 60s aborts: E333

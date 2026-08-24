@@ -1094,6 +1094,13 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 51 — CLOSED (8629df24). Floor 9730 / 143168 / 1 skipped / rc 0; candy-mosaic 457 / 7744 / rc 0**
+— three lanes (E296 implemented at last, production defects, guard consolidation), 364 backlog
+entries, ids E334–E364. Tests predicted exactly for the ninth consecutive round. The third
+cross-lane catch in three rounds, and the first a lane PREDICTED: its failure message named
+which of the two possible merge resolutions was correct. The assertion lower bound was violated
+for the first time — by a merge-time row deletion, not by lane arithmetic (E364).
+
 **ROUND 50 — CLOSED (674cdf7b). Floor 9661 / 142165 / 1 skipped / rc 0** — three lanes
 (denial-roster completion, the fd-0/Tty family, scanner alphabets), 327 backlog entries, ids
 E304–E333. Tests predicted exactly for the eighth consecutive round; zero cross-lane file
