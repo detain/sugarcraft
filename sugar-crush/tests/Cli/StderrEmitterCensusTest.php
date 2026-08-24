@@ -1601,17 +1601,47 @@ final class StderrEmitterCensusTest extends TestCase
      *    exact temptation {@see scan()}'s own doc-block spends a paragraph
      *    talking a reader out of. They are load-bearing; they are just not
      *    load-bearing for the reason a reader would assume.
-     *  - THE FOUR BARE CONTROLS at the bottom, `<?php echo 1;` on each channel.
-     *    These kill only a scanner that counts something in a source with
-     *    nothing in it (measured: one that increments per significant token
-     *    answers 4). They cannot kill a dead scanner and are not asked to —
-     *    thirty-odd rows here expect a non-zero count, so a dead {@see scan()}
-     *    reds this provider on its own. That was measured too, by blinding
-     *    {@see scan()}: thirty-two rows go red.
+     *  - THE BARE CONTROLS, `<?php echo 1;` on a channel that must find nothing
+     *    in it. These kill only a scanner that counts something in a source
+     *    with nothing in it (measured: one that increments per significant
+     *    token answers 4 — that fixture's significant-token count is a
+     *    property of the fixture and does not move). They cannot kill a dead
+     *    scanner and are not asked to, because most of this provider expects a
+     *    non-zero count and a dead {@see scan()} therefore reds it on its own.
+     *
+     * AND THE SENTENCE THAT USED TO CARRY THAT LAST CLAIM WAS ALREADY WRONG
+     * WHEN IT WAS COMMITTED — inside the very commit that swept this provider
+     * for fixtures crediting themselves with mutations they survive. WHAT IT
+     * SAID: "THE FOUR BARE CONTROLS at the bottom, `<?php echo 1;` on each
+     * channel … That was measured too, by blinding {@see scan()}: thirty-two
+     * rows go red."
+     * WHAT IS TRUE NOW, MEASURED at round 49 by inserting `return 0;` at the
+     * top of {@see scan()} and running this class (PHP 8.3.6): THIRTY-FIVE
+     * rows go red, not thirty-two. Thirty-two was the count BEFORE the same
+     * commit added three non-zero rows to this provider, and nothing
+     * re-derived it afterwards. The other two numerals were wrong in the same
+     * way: this provider carries five `<?php echo 1;` rows and not four, and
+     * they sit on five of its seven channel spellings and not on each — there
+     * is none on `indirect` and none on `shape`.
+     * WHY THE CLAIM STILL EARNS ITS PLACE: it is the entire reason the bare
+     * controls are allowed to have no positive component of their own, so it
+     * has to be true, and a numeral in a doc-block is the one form of it that
+     * nothing keeps honest (rule 18). It is now carried by a generator
+     * instead: {@see testEveryChannelInThisProviderHasARowADeadScanWouldRed()}
+     * asserts the property the number was standing in for, per channel, which
+     * is strictly stronger than any single total and cannot go stale when a row
+     * is added.
      *
      * THE ONE HOLE THE SWEEP FOUND was the comment strip in
      * {@see significantTokens()} — no row killed its removal, on any channel.
-     * The three rows added for it are marked in place.
+     * The rows added for it are marked in place. There are FOUR of them and
+     * all four red when the strip goes, which is one more than the sentence
+     * here used to claim: the fourth is `and that write is still not indirect`,
+     * and it is the interesting one, because it fails in the OPPOSITE
+     * direction. It expects 0 at head and answers 1 with the comment strip
+     * gone — an unstripped comment displaces `STDERR` out of the first
+     * argument position, so channel 2 starts counting a direct write as a
+     * captured handle. MEASURED, PHP 8.3.6, round 49.
      *
      * @return iterable<string, array{0: string, 1: string, 2: int}>
      */
@@ -1884,6 +1914,83 @@ final class StderrEmitterCensusTest extends TestCase
     }
 
     /**
+     * Every channel spelling {@see scannerCases()} uses carries at least one
+     * row a DEAD {@see scan()} would red.
+     *
+     * THIS IS THE GENERATOR FOR A SENTENCE THAT USED TO BE A NUMERAL. The
+     * provider's doc-block licenses its bare `<?php echo 1;` controls to have
+     * no positive component of their own, and the licence rests entirely on
+     * "a dead scan() reds this provider anyway". That was written down as a
+     * count of rows, the count was wrong the day it was committed, and a count
+     * is the wrong shape for the claim regardless: what has to be true is not
+     * that some total of rows reds, it is that NO CHANNEL is left where every
+     * row expects 0 — because on such a channel a dead scanner is green, and
+     * that is exactly the failure E228 is about.
+     *
+     * PER CHANNEL AND NOT IN TOTAL, which is the strengthening. A provider
+     * could hold a hundred non-zero rows on `direct` and still have every
+     * `shape` row expecting 0; the total would look reassuring and the `shape`
+     * scanner would be untested against death. The per-channel form cannot be
+     * satisfied that way, and it does not move when a row is added.
+     *
+     * `prefixed:<entryPoint>` IS FOLDED ONTO `prefixed` deliberately. It is not
+     * a separate channel, it is a filtered view of that one — see
+     * {@see scan()}, which parses the suffix and then runs the `prefixed`
+     * branch — so requiring each suffix spelling to carry its own non-zero row
+     * would red on a legitimate negative row for one entry point. The
+     * suffixed form has its own dedicated guard for the failure that matters
+     * to it, {@see testTheScannerRedsOnAnEntryPointItCannotAnswerFor()}.
+     *
+     * ITS OWN KNOWN-POSITIVE CONTROL, and it needs one for the reason rule 15
+     * exists: the per-channel assertion is `assertArrayHasKey`, and a bucketer
+     * that put every row in the non-zero bucket would satisfy it on every
+     * channel while reading nothing. So this first asserts that both buckets
+     * are populated AND that two rows whose expected values are known landed
+     * on the correct side of the split.
+     */
+    public function testEveryChannelInThisProviderHasARowADeadScanWouldRed(): void
+    {
+        $withANonZeroRow = [];
+        $zeroOnly = [];
+        foreach (self::scannerCases() as $label => [$channel, , $expected]) {
+            $base = str_starts_with($channel, 'prefixed:') ? 'prefixed' : $channel;
+            if ($expected === 0) {
+                $zeroOnly[$base][] = $label;
+
+                continue;
+            }
+
+            $withANonZeroRow[$base][] = $label;
+        }
+
+        // THE CONTROL. Two rows this file spells out a few hundred lines up,
+        // one of each kind, asserted to be on the side the split should have
+        // put them. A bucketer that ignored $expected passes the loop below
+        // and fails here.
+        self::assertContains(
+            'a direct write',
+            $withANonZeroRow['direct'] ?? [],
+            'the split no longer reads the expected value: a row expecting 1 is not in the non-zero bucket',
+        );
+        self::assertContains(
+            'a direct write is not indirect',
+            $zeroOnly['indirect'] ?? [],
+            'the split no longer reads the expected value: a row expecting 0 is not in the zero bucket',
+        );
+
+        foreach (array_keys($zeroOnly + $withANonZeroRow) as $channel) {
+            self::assertArrayHasKey(
+                $channel,
+                $withANonZeroRow,
+                "every row on channel '{$channel}' expects 0, so a dead scan() returning 0 would leave all "
+                    . 'of them green and nothing here would notice. Add a row on this channel whose expected '
+                    . 'value only a live scanner can produce; do not rely on another channel\'s rows to '
+                    . 'cover it.',
+            );
+        }
+    }
+
+    /**
      * A file the roster names but the tree does not have is a FAILURE.
      *
      * WHAT THIS SAID, and it contradicted itself inside one sentence: "deleting
@@ -1894,8 +2001,10 @@ final class StderrEmitterCensusTest extends TestCase
      * key from {@see census()} and leaves it in the roster, so
      * `assertSame(<roster>, <census>)` reds on its own — the clause immediately
      * after the dash says exactly that, and the claim before the dash is the
-     * false one. This test is REDUNDANT with the four roster assertions, in
-     * both directions.
+     * false one. This test is REDUNDANT with the roster assertions, in
+     * both directions — the numeral that stood where "the" now does said four
+     * and the rosters have since grown past it, which is the same rot this
+     * file is about.
      * WHY IT STILL EARNS ITS PLACE: the message. A roster assertion failing on
      * a deleted file prints an array diff and leaves the reader to notice that
      * one key is a path that no longer exists; this prints the path and says
