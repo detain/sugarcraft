@@ -52,6 +52,19 @@ final class StdioMcpServerStderrDrainTest extends TestCase
     private const SAFE_BYTES = 1000;
 
     /**
+     * The pipe capacity measured in this class's doc-block, as a number the
+     * assertions can do arithmetic with rather than a figure in prose.
+     *
+     * Only ONE assertion depends on its exact value —
+     * {@see testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr()}'s
+     * blocked-child proof — and it depends on it as an UPPER bound: a host with
+     * a larger pipe would make that proof unsound, and the assertion reds there
+     * rather than passing on reasoning that no longer holds. Such a host also
+     * breaks {@see WEDGE_BYTES}, so the whole file is already invalid on it.
+     */
+    private const MEASURED_PIPE_CAPACITY_BYTES = 65536;
+
+    /**
      * A `tools/call` argument big enough to overfill the parent's OWN stdin pipe
      * — measured above the same 65536-byte capacity. An MCP tool handed a file's
      * contents reaches this size routinely.
@@ -229,6 +242,35 @@ final class StdioMcpServerStderrDrainTest extends TestCase
      *
      * Observed from a child process holding the clock, for the same reason the
      * `callTool()` row is: unfixed, this hangs forever rather than slowly.
+     *
+     * THE `usleep()` IN THE PROBE IS NOT THE EVIDENCE, and this row used to rest
+     * on it entirely. If the child had not yet reached its unprompted stderr
+     * write when the oversized call began, it would have been sitting in
+     * `fgets()`, the write would have completed trivially, and this row would
+     * have degraded SILENTLY into the control beside it — the same vacuity the
+     * fixture change one commit earlier had to fix. So the probe now reports how
+     * many stderr bytes the parent has absorbed either side of the call, and the
+     * two assertions below are a CONJUNCTION — neither is the proof alone:
+     *
+     *   (1) the post-call figure is pinned to the cap, so the child wrote MORE
+     *       than a pipeful and therefore blocked on `write()` at some point. On
+     *       its own this says nothing about WHEN.
+     *   (2) with C the pipe capacity and B the bytes absorbed when the call
+     *       began, the child can only have FINISHED its flood if
+     *       WEDGE_BYTES - B <= C, i.e. B >= WEDGE_BYTES - C. B below that
+     *       threshold rules out "already finished". On its own it is ALSO what
+     *       a fixture that never flooded at all would report, which is why (1)
+     *       has to be there.
+     *
+     * Together: the child wrote past the capacity, and had not got through the
+     * flood when the oversized write began — so it was parked in `write()`,
+     * ignoring its stdin, for the duration of that write.
+     *
+     * MEASURED, three consecutive takes, PHP 8.3.6 / Linux 6.8: B = 0 every
+     * time against a threshold of 34464, and the post-call figure pinned to the
+     * cap every time. (B is not stable in the control row — 1000, 0, 0 — because
+     * a flood that fits in the pipe can be picked up by the handshake's own
+     * trailing read; that row asserts only the post-call figure.)
      */
     public function testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(): void
     {
@@ -256,6 +298,27 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             ),
         );
         $this->assertStringContainsString('BIGCALLED:pong', $out);
+
+        $blockedThreshold = self::WEDGE_BYTES - self::MEASURED_PIPE_CAPACITY_BYTES;
+        $this->assertLessThan(
+            $blockedThreshold,
+            $this->reportedBytes($out, 'TAILBEFORE'),
+            sprintf(
+                'the parent had already absorbed enough stderr (>= %d of the child\'s %d bytes) '
+                . 'for the child to have FINISHED its flood before the oversized write began, so '
+                . 'this row cannot vouch for a blocked child and is only re-running the control '
+                . 'beside it. Output: %s',
+                $blockedThreshold,
+                self::WEDGE_BYTES,
+                trim($out),
+            ),
+        );
+        $this->assertSame(
+            $this->maxStderrBytes(),
+            $this->reportedBytes($out, 'TAILAFTER'),
+            'the exchange did not absorb the whole flood, so the drain under test did not run '
+            . 'to completion during the oversized write. Output: ' . trim($out)
+        );
     }
 
     /**
@@ -278,6 +341,17 @@ final class StdioMcpServerStderrDrainTest extends TestCase
 
         $this->assertSame(0, $rc, 'the probe itself is broken: ' . trim($out));
         $this->assertStringContainsString('BIGCALLED:pong', $out);
+
+        // The control has to be a control OF something: a fixture that had
+        // stopped writing stderr altogether would pass this row for a reason
+        // that says nothing about the pipe capacity. SAFE_BYTES exactly,
+        // because a flood below the cap is never truncated.
+        $this->assertSame(
+            self::SAFE_BYTES,
+            $this->reportedBytes($out, 'TAILAFTER'),
+            'the quiet fixture did not write its stderr, so this row is not a control for the '
+            . 'flooding one. Output: ' . trim($out)
+        );
     }
 
     // =========================================================================
@@ -517,6 +591,26 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         return [$timedOut ? -1 : $rc, $out, $elapsed];
     }
 
+    /**
+     * Pull one `LABEL:<int>` line out of a probe's stdout.
+     *
+     * FAILS rather than returning a sentinel when the label is missing or is
+     * not followed by digits: a reader that answered 0 for "the probe never
+     * said" would turn a broken probe into a passing blocked-child proof, which
+     * is the exact shape of hole this readout exists to close.
+     */
+    private function reportedBytes(string $out, string $label): int
+    {
+        $this->assertSame(
+            1,
+            preg_match('/^' . preg_quote($label, '/') . ':(\d+)$/m', $out, $m),
+            "the probe did not report a $label:<int> line, so its byte accounting cannot be "
+            . 'read at all. Output: ' . trim($out)
+        );
+
+        return (int) $m[1];
+    }
+
     private function stderrTailOf(StdioMcpServer $server): string
     {
         $property = new \ReflectionProperty($server, 'stderrTail');
@@ -641,7 +735,15 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         // write() — 300ms, the same settle used by the generator in
         // StdioMcpServer::writeLine()'s doc-block.
         usleep(300000);
+        // HOW MANY STDERR BYTES THIS PARENT HAS ABSORBED, reported either side
+        // of the oversized call. It is what lets the caller PROVE the child was
+        // blocked instead of trusting the settle above — see the assertions in
+        // testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(). Read by
+        // reflection, and read BEFORE stop(), which clears the buffer.
+        $tail = new ReflectionProperty($server, 'stderrTail');
+        echo 'TAILBEFORE:', strlen((string) $tail->getValue($server)), "\n";
         $raw = $server->callTool('ping', ['blob' => str_repeat('x', %d)]);
+        echo 'TAILAFTER:', strlen((string) $tail->getValue($server)), "\n";
         $server->stop();
         echo 'BIGCALLED:', $raw['content'][0]['text'] ?? '(nothing)', "\n";
         PHP;
