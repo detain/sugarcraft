@@ -1049,13 +1049,21 @@ final class ChildStderrCaptureTest extends TestCase
      * does assert `!inScope($prefix)` per row, so it covers the first loop
      * below. But that file's `OUT_OF_SCOPE` is EMPTY - the commit that adopted
      * `Backend/` deleted its last row - so the loop runs zero times and the
-     * assertion has never executed against anything. And it has no equivalent
-     * of the SECOND loop at all: nothing there refuses a SCOPE entry that is a
-     * prefix OF a row's key. That file is honest about the emptiness (its own
-     * doc-block rewrites the claim its known-positive used to rest on) and
-     * covers itself with a synthetic positive plus a jointly-total test, so
-     * this is a gap in symmetry rather than in safety - but the day a row goes
-     * back into that map, the reverse direction is not there.
+     * assertion has never executed against anything.
+     *
+     * WHAT THIS SAID NEXT: "and it has no equivalent of the SECOND loop at all
+     * ... the day a row goes back into that map, the reverse direction is not
+     * there". WHAT IS TRUE NOW: it has one -
+     * {@see ForkedChildReaperAdoptionTest::testNeitherMapClaimsADirectoryTheOtherAlreadyClaims()},
+     * added in the change-set that corrected this paragraph, running both
+     * directions through one predicate with synthetic positives because its own
+     * map is legitimately empty and a real-tree control there proves nothing.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the finding was the reason the
+     * check exists, and the mechanism it names - `str_starts_with()` is
+     * directional, so `inScope()` can only ask whether a ROW sits inside a
+     * SCOPE entry and never the reverse - is what BOTH files' second direction
+     * is for. Delete the paragraph and the next reader deletes one of the two
+     * loops as a duplicate of the other.
      */
     public function testScopeAndOutOfScopeDoNotClaimTheSameDirectory(): void
     {
