@@ -9,10 +9,10 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
 /**
- * No `proc_open()` child in `src/` may outlive the call that spawned it while
- * its descriptor spec declines to say anything about fd 3 and above.
+ * No `proc_open()` child in `src/` may outlive the call that spawned it
+ * without a row here saying why that is acceptable.
  *
- * WHY THE PAIR AND NOT EITHER HALF. `proc_open()` remaps only the fds its spec
+ * WHY LIFETIME AND NOT THE SPEC. `proc_open()` remaps only the fds its spec
  * names; the child inherits every other descriptor the parent had open. For a
  * child closed where it was spawned that lasts microseconds. For an MCP
  * server, a language server or a session daemon it lasts as long as the child
@@ -20,6 +20,21 @@ use RecursiveIteratorIterator;
  * the caller's stdout on fd 4, so `vendor/bin/phpunit | tail` blocked forever
  * on an EOF that never came, after a green run. Two measurements were lost to
  * it, one of 11.5 hours.
+ *
+ * WHAT THIS HEADLINE USED TO SAY, and it is the round's finding rather than a
+ * tidy-up: "...while its descriptor spec declines to say anything about fd 3
+ * and above". WHAT IS TRUE NOW, measured by
+ * {@see testNamingAHighFdDoesNotStopTheInheritance()} rather than reasoned
+ * about: a spec that DOES say something about fd 3 is not safer in any
+ * respect. proc_open() replaces the descriptors named and inherits the rest,
+ * so naming fd 3 moves one descriptor and leaves fd 4 upwards untouched, and
+ * the parent's fd numbering is a runtime property no source-level spec can
+ * enumerate. The old headline described a condition this guard skipped on,
+ * which made "append one array element" a complete and undetectable way to
+ * delete any row below. WHY THE SPEC IS STILL READ AT ALL: an UNREADABLE spec
+ * is still a real finding of its own
+ * ({@see testNoDescriptorSpecInSrcIsUnreadable()}), and what a spec does name
+ * is useful detail on a failure. It is detail, never an exemption.
  *
  * NO COUNT IS ASSERTED ANYWHERE IN THIS FILE, deliberately. E366's HIGH list
  * was five sites on the day it was written, and the round that acted on it had
@@ -195,12 +210,53 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * Without it a scanner that flags unconditionally would satisfy every
      * assertion above by reporting the whole tree, and reddening correct code
      * is how the next real offender buys its exemption.
+     *
+     * WHAT THIS FIXTURE USED TO BE, because the swap is the whole finding: a
+     * long-lived spawn whose spec named `3 => ['file', '/dev/null', 'r']`,
+     * asserted NOT exposed under the sentence "a spec that names fd 3 is
+     * handled". WHAT IS TRUE NOW: that source is
+     * {@see KNOWN_POSITIVE_HIGH_FD} and is asserted EXPOSED, because naming
+     * fd 3 replaces fd 3 and leaves fd 4 upwards inherited - measured in
+     * {@see testNamingAHighFdDoesNotStopTheInheritance()}. WHY A NEGATIVE
+     * STILL EARNS ITS PLACE: the polarity argument above is unaffected and
+     * still needs a case that is genuinely fine. A child drained and
+     * `proc_close()`d in the function that spawned it is that case, and it is
+     * the ONLY shape this guard has ever had a real reason to pass - the
+     * inheritance window is the body of one function rather than the life of
+     * a daemon.
      */
     private const KNOWN_NEGATIVE = <<<'PHP'
         <?php
         class Fixture {
-            private $process;
             public function knownNegative(array $pipes): void {
+                $process = @proc_open(['srv'], [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ], $pipes);
+                proc_close($process);
+            }
+        }
+        PHP;
+
+    /**
+     * The spec that used to buy an exemption, and now buys a finding.
+     *
+     * THIS IS THE HOLE THE ROUND CLOSED, kept executable rather than described.
+     * `exposedIn()` skipped every site whose spec named an fd of 3 or above,
+     * so the cheapest way to make any row here disappear was to append one
+     * element to an array - no reaping, no closing, no change to what the child
+     * inherits. The guard's own failure text recommended it, first of two
+     * resolutions, in capitals.
+     *
+     * Its counterpart {@see KNOWN_NEGATIVE} is what keeps this from being a
+     * scanner that simply flags everything.
+     */
+    private const KNOWN_POSITIVE_HIGH_FD = <<<'PHP'
+        <?php
+        class Fixture {
+            private $process;
+            public function highFdNamed(array $pipes): void {
                 $this->process = @proc_open(['srv'], [
                     0 => ['pipe', 'r'],
                     1 => ['pipe', 'w'],
@@ -267,7 +323,19 @@ final class DescriptorInheritanceGuardTest extends TestCase
         self::assertSame(
             [],
             $this->exposedIn(self::KNOWN_NEGATIVE),
-            'A spec that names fd 3 is handled; flagging it would red correct code.',
+            'A child closed in the function that spawned it is not exposed; flagging it would '
+                . 'red correct code, and reddening correct code is how the next real offender '
+                . 'buys its exemption.',
+        );
+        self::assertSame(
+            ['highFdNamed'],
+            \array_column($this->exposedIn(self::KNOWN_POSITIVE_HIGH_FD), 'function'),
+            'NAMING A HIGH FD MUST NOT BUY AN EXEMPTION. proc_open() replaces the descriptors '
+                . 'its spec names and inherits every one it does not, so a spec naming fd 3 '
+                . 'leaves fd 4 upwards exactly as exposed as before - measured in '
+                . 'testNamingAHighFdDoesNotStopTheInheritance(). If this returns [] the escape '
+                . 'hatch is back and every row in ACCOUNTED_FOR can be deleted by appending one '
+                . 'array element that changes nothing.',
         );
 
         // THE ALLOWANCE IS SPENT ONE SITE AT A TIME, pushed through the SAME
@@ -308,11 +376,30 @@ final class DescriptorInheritanceGuardTest extends TestCase
             nothing about fd 3 and above, so it inherits every descriptor this
             process had open at spawn - E365's shape.
 
-            TWO WAYS TO RESOLVE THIS, AND BOTH ARE FINE:
+            ⚠️ NAMING FDS IN THE SPEC IS NOT A RESOLUTION, and this message used
+            to say it was - in capitals, as the first of two. proc_open() REPLACES
+            the descriptors its spec names and inherits every one it does not, so
+            appending `3 => ['file', '/dev/null', 'r']` swaps fd 3 in the child and
+            leaves fd 4 upwards precisely as inherited as they were. Measured, not
+            argued: testNamingAHighFdDoesNotStopTheInheritance() in this file
+            spawns real children and shows a parent handle surviving the "fixed"
+            spec. Until this round that spec ALSO silenced this guard, which made
+            it the cheapest way to delete a row without changing anything.
 
-              1. NAME THE FDS in the spec so the child cannot inherit them, and
-                 this row disappears on its own.
-              2. ADD A ROW to ACCOUNTED_FOR with the reason it is acceptable, or
+            THREE WAYS TO RESOLVE THIS:
+
+              1. REAP THE CHILD in the function that spawned it - proc_close(), or
+                 a helper rostered in ChildLifetimeScanner::CLOSING_HELPERS. This
+                 does not stop the inheritance; it BOUNDS it to one function body
+                 instead of the life of a daemon, and that is the whole difference
+                 E365 turned on. The row disappears on its own.
+              2. DO NOT HOLD AN INHERITABLE DESCRIPTOR ACROSS THE SPAWN. Measured
+                 on PHP 8.3.6 / Linux 6.8.0-138-generic: proc_open()'s own pipe
+                 parent-ends already carry O_CLOEXEC and cannot leak into a later
+                 child, but a plain fopen() handle, a stream_socket_pair() and the
+                 CLI's own script fd are all inheritable. If the long-lived child
+                 must exist, the fix lives at whatever is holding those open.
+              3. ADD A ROW to ACCOUNTED_FOR with the reason it is acceptable, or
                  RAISE THE COUNT on the row that is already there. A DATA EDIT IN
                  THIS FILE - not a reason to relax the check, and not a reason to
                  make the scanner quieter.
@@ -508,6 +595,154 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * Naming a high fd replaces THAT fd and inherits every other one.
+     *
+     * THE ONE CLAIM IN THIS FILE THAT IS NOT ABOUT SOURCE TEXT. Everything
+     * else here reads tokens and believes what the roster says; this spawns
+     * real children and asks the kernel. It exists because the resolution this
+     * guard used to recommend first - "NAME THE FDS in the spec so the child
+     * cannot inherit them, and this row disappears on its own" - is false, and
+     * a false prescription inside a failure message is worse than no message:
+     * it is a green button that deletes the finding and leaves the defect.
+     *
+     * THE GENERATOR, so the figure is a measurement and not a memory. A marker
+     * file is opened AFTER a dummy, which is what guarantees it cannot land on
+     * fd 3 - the one descriptor the "named" spec below replaces - so the
+     * comparison is not a coin flip on whatever PHPUnit happens to have open.
+     * Identity is `fstat()`'s dev+ino pair rather than a path or an fd number,
+     * because the child is asked whether it can reach the same FILE, which is
+     * the property that matters. The child probes fds 3..40 through
+     * `php://fd/N`, which is POSIX and does not need procfs. Three specs are
+     * compared: bare, one high fd named, and every fd 3..40 named.
+     *
+     * MEASURED at PHP 8.3.6 on Linux 6.8.0-138-generic, three consecutive
+     * takes, identical each time: bare VISIBLE / one named VISIBLE / all named
+     * gone. CI runs this package on ubuntu-latest at 8.3 and 8.4 only
+     * (`scripts/affected-libs.php` puts sugar-crush in neither WINDOWS_LIBS nor
+     * MACOS_LIBS), and the property under test is POSIX descriptor inheritance
+     * across `execve`, not a PHP-version behaviour - so 8.4 is not a claim
+     * being made from an untested box, it is the same kernel call.
+     *
+     * THE THIRD CASE IS NOT A RECOMMENDATION. Naming every fd 3..40 does close
+     * the marker, and that is exactly why it is here: it shows the mechanism is
+     * "replace by number", so the only spec that could be trusted is one that
+     * enumerates every descriptor the process holds at the instant of the
+     * spawn. That set is a runtime property. A spec written in source cannot
+     * know it, which is the reason resolution 1 was never available.
+     */
+    public function testNamingAHighFdDoesNotStopTheInheritance(): void
+    {
+        // Opened FIRST so the marker cannot be the fd the "named" spec below
+        // replaces. Without this the whole comparison is luck.
+        $dummy = \fopen('/dev/null', 'r');
+        self::assertIsResource($dummy, 'the probe cannot be set up without a spare descriptor.');
+
+        $marker = (string) \tempnam(\sys_get_temp_dir(), 'sc_r54c_inherit_' . \getmypid() . '_');
+        $handle = \fopen($marker, 'r');
+        self::assertIsResource($handle);
+
+        $stat = \fstat($handle);
+        self::assertIsArray($stat);
+        $identity = $stat['dev'] . ':' . $stat['ino'];
+
+        try {
+            $withBareSpec = $this->descriptorsVisibleToAChild([]);
+            $withHighFdNamed = $this->descriptorsVisibleToAChild([3]);
+            $withEveryFdNamed = $this->descriptorsVisibleToAChild(\range(3, 40));
+        } finally {
+            \fclose($handle);
+            \fclose($dummy);
+            \unlink($marker);
+        }
+
+        self::assertContains(
+            $identity,
+            $withBareSpec,
+            'The premise itself failed: a child spawned with a bare 0,1,2 spec could not reach '
+                . 'a file this process holds open. Nothing below means anything if this fails - '
+                . 'either the probe is broken or descriptors stopped being inherited, and the '
+                . 'second would retire this entire guard.',
+        );
+
+        self::assertContains(
+            $identity,
+            $withHighFdNamed,
+            'THE REFUTATION. Naming fd 3 in the spec was this guard\'s first recommended fix '
+                . 'and an automatic exemption from it. The marker is open at fd 4 or above, and '
+                . 'the child can still reach it, so naming fd 3 changed nothing except which '
+                . 'file sits on fd 3. If this ever fails, proc_open has started closing '
+                . 'unnamed descriptors - re-measure before believing it, and then this guard '
+                . 'gets much smaller.',
+        );
+
+        self::assertNotContains(
+            $identity,
+            $withEveryFdNamed,
+            'The positive control for the mechanism: naming fd 3 through 40 DOES take the '
+                . 'marker away, which is what proves the two assertions above are about "the '
+                . 'spec did not name that fd" rather than about a probe that cannot see '
+                . 'anything.',
+        );
+    }
+
+    /**
+     * `dev:ino` of every descriptor a child can reach at fd 3 and above.
+     *
+     * The child opens `php://fd/N` rather than listing procfs so the probe
+     * holds on any POSIX box, and reports `fstat()` identity rather than fd
+     * numbers because the caller is asking "can it reach this FILE", to which
+     * the number is irrelevant. Opening a descriptor allocates one, so the
+     * list is deduplicated and read for membership only, never counted.
+     *
+     * THE SPEC IS BUILT HERE FROM A LITERAL RATHER THAN TAKEN AS ONE, and the
+     * caller passes only the high fds to name. Taking the whole spec as a
+     * parameter is what a reader would write first, and
+     * {@see ChildStderrCaptureTest} reds on it - correctly: with the spec
+     * arriving as an argument, no scanner can see where fd 2 goes, and
+     * "unclassified" is that guard refusing to call an unreadable spec a pass.
+     * Naming fd 2 in a literal on the line above the spawn keeps it readable
+     * to an instrument, and the loop that follows can only ADD descriptors at
+     * 3 and above.
+     *
+     * @param list<int> $highFds fd numbers to point at /dev/null in the child
+     * @return list<string>
+     */
+    private function descriptorsVisibleToAChild(array $highFds): array
+    {
+        $probe = <<<'CHILD'
+            $seen = [];
+            for ($n = 3; $n <= 40; $n++) {
+                $f = @fopen('php://fd/' . $n, 'r');
+                if ($f === false) { continue; }
+                $s = @fstat($f);
+                if (is_array($s)) { $seen[] = $s['dev'] . ':' . $s['ino']; }
+                @fclose($f);
+            }
+            echo implode(" ", array_unique($seen));
+            CHILD;
+
+        $spec = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        foreach ($highFds as $fd) {
+            $spec[$fd] = ['null'];
+        }
+
+        $pipes = [];
+        $process = \proc_open([\PHP_BINARY, '-r', $probe], $spec, $pipes);
+        self::assertIsResource($process, 'the descriptor probe could not be spawned.');
+
+        \fclose($pipes[0]);
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($process);
+
+        self::assertSame('', \trim($err), 'the descriptor probe wrote to stderr: ' . $err);
+
+        return \array_values(\array_filter(\explode(' ', \trim($out))));
+    }
+
+    /**
      * The exposed spawns in one source that its licences do not cover.
      *
      * ONE FUNCTION FOR THE FIXTURE AND FOR THE TREE, which is the whole point:
@@ -541,7 +776,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             }
 
             $over[] = $detailed
-                ? $key . ': ' . $site['lifetime'] . ' - ' . $site['reason']
+                ? $key . ': ' . $site['lifetime'] . ' (' . $site['namedFds'] . ') - ' . $site['reason']
                 : $key;
         }
 
@@ -549,9 +784,35 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
-     * Sites whose child outlives the call with no fd 3+ named.
+     * Sites whose child outlives the call, whatever the spec names.
      *
-     * @return list<array{function:string,lifetime:string,reason:string}>
+     * WHAT THIS USED TO DO, AND WHY IT NO LONGER DOES IT. It skipped any site
+     * whose spec named an fd of 3 or above - `if ($site['highFds'] !== [])
+     * continue;` - on the belief, written into this file's failure text as the
+     * FIRST recommended resolution and into a fixture named KNOWN_NEGATIVE,
+     * that naming fd 3 stops the child inheriting.
+     *
+     * WHAT IS TRUE NOW, measured rather than reasoned - the generator is
+     * {@see testNamingAHighFdDoesNotStopTheInheritance()}, which spawns real
+     * children on every run of this suite: `proc_open()` REPLACES the
+     * descriptors its spec names and says nothing whatever about the ones it
+     * does not. A parent handle sitting at fd 4 is inherited byte-identically
+     * whether or not the spec names fd 3. Naming ONE high fd therefore bought
+     * no safety at all - it bought an exit from this guard. That is the worst
+     * trade available: the exit is one array element away for anyone who wants
+     * a row to stop failing, it leaves the leak exactly where it was, and
+     * unlike an ACCOUNTED_FOR row it leaves no record that anything was ever
+     * wrong.
+     *
+     * WHY THE PAIR STILL EARNS ITS PLACE. The two-part question the class
+     * doc-block poses - does the child outlive the call, and what does the
+     * spec say about fd 3+ - is still the right question, and the first part
+     * is unchanged. Only the second part's ANSWER was wrong: what the spec
+     * says about fd 3+ is diagnostic detail about one descriptor, never a
+     * clean bill of health for the rest. So `highFds` is still computed and is
+     * now REPORTED on the finding instead of cancelling it.
+     *
+     * @return list<array{function:string,lifetime:string,reason:string,namedFds:string}>
      */
     private function exposedIn(string $source): array
     {
@@ -561,14 +822,14 @@ final class DescriptorInheritanceGuardTest extends TestCase
             if ($site['lifetime'] === ChildLifetimeScanner::LIFETIME_SHORT) {
                 continue;
             }
-            if ($site['highFds'] !== []) {
-                continue;
-            }
 
             $exposed[] = [
                 'function' => $site['function'],
                 'lifetime' => $site['lifetime'],
                 'reason' => $site['reason'],
+                'namedFds' => $site['fds'] === null
+                    ? 'spec unreadable'
+                    : 'spec names fd ' . \implode(', ', $site['fds']),
             ];
         }
 
