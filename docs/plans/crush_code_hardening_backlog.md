@@ -10546,3 +10546,144 @@ measured the result" and "we replaced the descriptor and a library quietly chang
 closed resource directly rather than through a thrown probe. Worth a candy-mosaic PR of its own.
 
 ---
+
+---
+
+### Eb49-9 — the O_NONBLOCK vocabulary is INVERTED across the suite, and the code is right in every case
+
+**Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: mechanism prose, tree-wide.
+**MEASURED, PHP 8.3.6, three takes**, reading `/proc/self/fdinfo/0` either side of the call with fd 0 a pipe:
+flag clear at startup → **SET** by `stream_set_blocking($s, false)` → **clear** again after
+`stream_set_blocking($s, true)`.
+
+So `tests/bootstrap.php`'s `stream_set_blocking(\STDIN, false)` **SETS** `O_NONBLOCK`, and that set flag IS
+the fd-0 repair. `PosixBackend::restore()`'s `@stream_set_blocking($this->stream, true)` **CLEARS** it, and
+that clearing is what erases the repair.
+
+**Fixed in this lane** (`tests/TtyStreamArgumentCensusTest.php`,
+`tests/SuiteChildStdinPrependResidualTest.php`). **Still inverted, and OUT OF THIS LANE'S FILE LIST** —
+each verified against the code beside it, where an `assertFalse($meta['blocked'])` after `enableRawMode()`
+(the flag SET) carries a message saying "did not clear O_NONBLOCK", and an `assertTrue($meta['blocked'])`
+after `restore()` (the flag CLEARED) carries "did not put O_NONBLOCK back":
+
+ - `sugar-crush/tests/Support/ForkedChildTest.php` (×2)
+ - `sugar-crush/tests/ChatTest.php` (×2)
+ - `sugar-crush/tests/Backend/EngineBackendTest.php` (×2)
+ - `sugar-crush/tests/SuiteChildStdinIsolationTest.php` (×2)
+ - `sugar-crush/tests/bootstrap.php` — its measured table uses "clear" to mean *non-blocking*, the
+   opposite of the flag sense used two paragraphs earlier
+
+**Step.** One supervisor-level sweep after the merge, in three-part form. The convention that works:
+`O_NONBLOCK` is only ever *set* or *cleared*; the descriptor is only ever *blocking* or *non-blocking*.
+**Do not blanket-regex it** (rule 26): the two files that now DESCRIBE the inversion must keep the wrong
+wording inside their own three-part history paragraphs.
+
+**Why this is worth an entry rather than a silent sweep.** Every measurement in every one of these files
+is correct. Only the sentences are backwards, which is the version of this failure that survives
+re-reading — and the reader who "corrects" the code to match the prose deletes the repair.
+
+---
+
+### Eb49-10 — four THIRD-PARTY vendor packages name descriptor 0, and one is inside PHPUnit's own tree
+
+**Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: E296 input, currently benign.
+**Generator:** `StdinConstantReaderCensusTest::fd0References()` (verbatim copy) over every
+`sugar-crush/vendor/**.php` outside `vendor/sugarcraft/` and outside any `tests/`|`Tests/` path — 8,247
+files, PHP 8.3.6.
+
+    sebastian/environment/src/Console.php                                    => STDIN
+    phpunit/phpunit/src/TextUI/.../GenerateConfigurationCommand.php          => STDIN
+    mtdowling/jmespath.php/bin/jp.php                                        => STDIN
+    symfony/yaml/Command/LintCommand.php                                     => php://stdin
+
+**The first one is in the runner's own dependency tree.** `Console::getNumberOfColumns()` is
+`$this->isInteractive(defined('STDIN') ? STDIN : self::STDIN)`, and `defined('STDIN')` stays **true**
+after `fclose(\STDIN)` (measured 3/3, PHP 8.3.6: `defined()` true, `is_resource()` false), so under
+option (a) it is handed a CLOSED resource.
+
+**And it is safe, which is the half worth writing down.** `isInteractive()` opens with
+`is_resource($fileDescriptor)`; a closed handle takes the int branch, reaches `@posix_isatty()`, and
+degrades to "not interactive" — an 80-column answer, not a break. Observed: the full-suite run with the
+descriptor replacement applied produced no error from it.
+
+**Why these are NOT in the census's asserted set.** `vendor/` is gitignored and composer-managed. A
+roster over content this repository does not version reds on an unrelated upstream bump and trains the
+next reader to widen it away. They are recorded here, and named in the census doc-block with this
+generator, instead.
+
+**Step.** No code change. If option (a) ever ships, re-read the `sebastian/environment` call first.
+
+---
+
+### Eb49-11 — the `?? STDIN` resolved ONE FRAME UP is invisible to the Tty census by construction
+
+**Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: guard coverage, latent.
+**Partially FIXED this round**; the general case is not.
+
+**What was found.** The census's headline claimed nothing in the tree builds a raw-mode backend over the
+process's own descriptor 0 with an injected `Termios`. Verified by symbol, `candy-core/src/Program.php`
+is `$this->input = $options->input ?? STDIN;` and then `new Tty($this->input, $options->termios)`, so
+`new Program($m, new ProgramOptions(termios: $t))` with no `input:` is exactly that hazard — and the
+census reads `new Tty(expression, …)` there and waves it through, correctly, because the `?? STDIN`
+already happened. `ProgramOptions::$termios` is documented in candy-core as a **test seam**.
+
+**Fixed:** a third arm asserting no `ProgramOptions` names `termios` without also naming `input`, over
+the package and every sibling `src`. The join is decidable because both fields travel in one constructor
+call. Measured, PHP 8.3.6: five constructions in scope, none an offender.
+
+**NOT fixed, and this is the entry's point.** `Program` is today's INSTANCE of the shape, not the shape.
+Any `?? STDIN` resolved a frame above the construction and passed along as a variable stays invisible.
+The general guard is: flag a construction whose first argument is a variable assigned from a `?? STDIN`
+in the same constructor. Not built — it needs intra-procedural dataflow, which the token walk does not
+have.
+
+**Step.** Either build that, or accept the `expression` bucket as a permanent residual and say so where
+the headline is, rather than where the bucket is.
+
+---
+
+### Eb49-12 — A GUARD'S CLASSIFICATION BRANCHES ARE NOT PINNED BY ITS SCANNER'S FIXTURES
+
+**Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: this is the round's transferable lesson.
+**Found by mutation, FIXED this round in `tests/TtyStreamArgumentCensusTest.php`.**
+
+**What happened.** A new census arm had three branches: report an unreadable argument list, report a
+positional one, report the hazardous named shape. Rule-16 mutation of the FIX — replace the positional
+branch with `false &&` — left the whole census **green: 35 tests, 40 assertions, OK.**
+
+**Why.** The file had good known-answer fixtures, and every one of them tested the SCANNER
+(`programOptionsConstructions()` returns `positional => true`). Nothing tested what the ARM did with that
+report. The two halves look like one guard and are pinned separately.
+
+**And it was already there.** The same mutation pointed at the two arms that shipped a round earlier —
+dropping their `unparsed` offender branch, in BOTH — also left the suite green (41 tests, 46 assertions,
+OK). The rule-14 branch whose entire purpose is that "I could not read it" is not spelled like "it was
+fine" was itself spelled like nothing at all.
+
+**The repair, and it generalises.** Split classification into a pure function taking one scanner result
+and returning an offender line or null, then give it its own fixture table with BOTH polarities — rows
+that must produce an offender and rows that must produce null. Neither half alone is evidence: without
+the null rows a classifier that reports everything passes; without the offender rows, one that reports
+nothing.
+
+**Step.** Apply the same check to every other census/roster guard in `sugar-crush/tests/`: for each
+branch that appends to an offender list, mutate it to `false &&` and confirm something goes red. A guard
+whose scanner is well-tested is where this hides, because the fixture table looks thorough.
+
+---
+
+### Eb49-13 — `SuiteChildStdinIsolationTest`'s failure message still prices option (a) at 107 errors
+
+**Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: doc accuracy on the decision E296 turns
+on. **Out of this lane's file list** — `sugar-crush/tests/SuiteChildStdinIsolationTest.php` is lane e's.
+
+Its `testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking` reads
+`tests/bootstrap.php closed the \STDIN constant; SugarCraft\Mosaic\Detect reads it unguarded and 107
+tests error out when it is gone`. Observed verbatim in the option-(a) probe run. That figure predates
+E302 (`1a2caebb`, an ancestor of this tree) and is retired — see Eb49-0 and the two doc-blocks this lane
+rewrote. The assertion itself is correct and should stay; only its reason is stale.
+
+**Step.** Rewrite the message in three-part form when that file is next touched. If option (a) ships, the
+assertion is inverted rather than deleted, with its reason.
+
+---

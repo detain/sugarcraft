@@ -294,6 +294,21 @@ final class TtyStreamArgumentCensusTest extends TestCase
      * constructions (so it is not dead) and none is an offender. The count is
      * not written down — it is upstream's to change, and `$seen` is derived.
      *
+     * WHERE THIS ARM'S ALPHABET ACCEPTANCE ACTUALLY LIVES, because it is not
+     * here and a reader should not have to find that out by mutating. This
+     * arm's `$seen > 0` control cannot catch a NARROWING of
+     * {@see HAZARD_CLASSES}: candy-core builds a `Tty` as well as two
+     * `PosixBackend`s, so with the alphabet cut to `['Tty']` the walk still
+     * sees a construction and this arm stays green. MEASURED both ways, PHP
+     * 8.3.6, at the commit that wrote this paragraph: that narrowing filtered
+     * to this method alone SURVIVES; filtered to the whole class it is KILLED,
+     * by three of the `PosixBackend` rows in
+     * {@see testTheScannerAnswersCorrectlyOnFixturesWhoseAnswerIsKnown()}. The
+     * alphabet is pinned by fixtures that spell both names literally, and the
+     * two arms share it — which is the right place for it, since a roster of
+     * hazard classes derived from a `vendor/` directory this repository does
+     * not version would red on an unrelated upstream refactor.
+     *
      * `src` only, and `bin` deliberately not: a sibling's `bin` script is a
      * separate process with its own descriptor 0, so it cannot erase this
      * runner's flag. A sibling's `tests` never execute here at all.
