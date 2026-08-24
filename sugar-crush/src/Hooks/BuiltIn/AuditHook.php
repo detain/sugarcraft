@@ -14,9 +14,11 @@ use SugarCraft\Crush\Hooks\HookResult;
  * what it was given, and the first 200 bytes of what it produced.
  *
  * THE DEFAULT PATH IS THE PRODUCTION PATH, WHICH IS WHY IT GETS THIS MUCH
- * ATTENTION. {@see \SugarCraft\Crush\Hooks\HookManager::__construct()}
- * registers `new BuiltIn\AuditHook()` with no argument, so every ordinary run
- * of this application writes every tool call it makes to whatever
+ * ATTENTION. {@see \SugarCraft\Crush\Hooks\HookManager::registerBuiltIns()}
+ * registers `new BuiltIn\AuditHook()` with no argument, and
+ * `Cli\Bootstrap::hooks()` (private) and
+ * {@see \SugarCraft\Crush\Backend\EngineBackend} both call it — so an
+ * ordinary run writes every tool call it makes to whatever
  * {@see defaultLogFile()} answers. It is not a fallback nothing reaches.
  */
 final readonly class AuditHook implements HookInterface
