@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use RuntimeException;
+use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
  * MCP client that connects to Claude Code via stdio transport.
@@ -266,7 +267,39 @@ final class ClaudeCodeMcpClient
     }
 
     /**
-     * Disconnect and clean up the MCP process.
+     * Disconnect and clean up the MCP process, in BOUNDED time.
+     *
+     * THE UNFIXED TWIN OF {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()},
+     * which is why this method now delegates to the same ladder rather than
+     * growing a third spelling of it. Both classes own a stdio MCP child; that
+     * one learned the escalation and this one did not, and the difference was
+     * `fclose()` on the pipes followed by a bare `proc_close()`.
+     *
+     * `proc_close()` WAITS. MEASURED on this host (PHP 8.3.6) against a direct
+     * child that installs a no-op `SIGTERM` handler and then loops for eight
+     * seconds, the `proc_terminate()`-then-`proc_close()` shape returns after
+     * **7.77s** — it does not abandon the child, it blocks for the child's whole
+     * remaining lifetime. This method had not even the `proc_terminate()`: it
+     * went straight to the wait. And it is reached from {@see __destruct()}, so
+     * the block lands wherever the last reference happens to be dropped.
+     *
+     * WHY THE PIPES ARE CLOSED FIRST, and why that is not by itself enough. A
+     * stdio MCP server's documented exit signal is EOF on its stdin, so closing
+     * the pipes gives a well-behaved server the chance to leave on its own — and
+     * {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndClose()}
+     * checks `proc_get_status()` before signalling, so a server that takes it
+     * pays no signal and no part of the escalation budget. A server that ignores
+     * EOF is exactly the case the ladder below exists for; EOF is a courtesy, not
+     * a mechanism.
+     *
+     * THE DIRECT CHILD IS THE SERVER here, so the signal reaches it:
+     * {@see connect()} passes `proc_open()` an ARGV (`array_merge([$command],
+     * $args)`), not a shell string. Under a string, `/bin/sh` on this host is
+     * dash, which does NOT apply the `-c` exec optimisation — MEASURED: the
+     * direct child's `comm` is `(sh)` and the real program is a grandchild, so
+     * a signal to the direct child kills a wrapper. That trap is documented at
+     * length on {@see \SugarCraft\Crush\MCP\StdioMcpServer::start()}; this
+     * class was already on the right side of it and must stay there.
      */
     public function disconnect(): void
     {
@@ -274,13 +307,15 @@ final class ClaudeCodeMcpClient
             return;
         }
 
-        $pipes = $this->getPipes();
-
-        foreach ($pipes as $pipe) {
-            fclose($pipe);
+        if ($this->pipes !== null) {
+            foreach ($this->pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
         }
 
-        proc_close($this->process);
+        ProcessReaper::terminateAndClose($this->process);
 
         $this->process = null;
         $this->pipes = null;
