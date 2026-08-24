@@ -13101,3 +13101,88 @@ box" and its reviewer found **0** and flagged the discrepancy. Both are correct.
 claim, and the backlog should not record it as one.
 
 ---
+
+### Eb53-1 — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: medium (duplication, not a live defect).
+
+E366's fix added `sugar-crush/src/Support/ProcessReaper.php` — one bounded
+SIGTERM → poll → signal 9 → `proc_close()` ladder — and put all four of this round's teardown sites on it
+(`ClaudeCodeMcpClient::disconnect()`, `LspConnection::stopProcess()`,
+`ClaudeCodeProvider`'s stream teardown, `BackgroundSupervisor`'s accept-failure path).
+
+**Two older copies were deliberately left in place**: `MCP/StdioMcpServer::stop()` and
+`Backend/StreamingCommandBackend::terminateAndReap()`. Each carries its own private `waitForExit()` and its
+own copy of the three budget constants. Both are correct today and both are tested
+(`tests/MCP/StdioMcpServerShutdownTest`), and neither file was in lane b's round-53 file list, so migrating
+them would have been an out-of-lane edit on a path with no defect on it. The reason to do it later is drift:
+three copies of a budget constant is how one of them ends up different.
+
+**Acceptance for whoever takes it**: after migration, mutate `ProcessReaper::TERMINATE_GRACE_SECONDS` and
+confirm BOTH suites move. If only one does, a private copy survived the migration.
+
+---
+
+### Eb53-2 — `spawnSession()`'s explicit launcher reap is legibility, not a leak fix, and its deletion survives
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: informational. **This is a recorded SURVIVING mutation,
+written down so nobody re-derives it as a hole.**
+
+`BackgroundSupervisor::spawnSession()` now ends with `ProcessReaper::reapIfExited($proc)`. Deleting that
+line does **not** leak a zombie and the round-53 test suite does not pretend it does: `$proc` goes out of
+scope at the end of the method, and — measured on this host, PHP 8.3.6 — PHP's `proc_open()` resource
+destructor reaps an already-exited child instantly (`Z` → `GONE`, no observable window) and abandons a
+still-running one in 0.000s. Mutation `M9-no-explicit-reap` therefore **SURVIVED**, deliberately.
+
+What the explicit call buys is a defined budget and a place to hang the reasoning, and what the tests DO
+pin is that the reaper used there is the **non-signalling** one: swapping `reapIfExited()` for
+`terminateAndClose()` is killed, because signalling a launcher that is mid-`fork()` would kill the process
+in the act of creating the session.
+
+**Do not "fix" the survivor by asserting on zombies.** The honest pin already exists
+(`testSpawnSessionLeavesNoZombieChildBehind`) and it passes with or without the call, which is why the
+class doc-block says so out loud.
+
+---
+
+### Eb53-3 — a `src/` file-count census is now load-bearing in two places and five lanes are editing `src/`
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: process / merge hazard.
+
+`tests/Tools/BuiltInToolCorpusTest.php` asserts exact cardinalities over `src/` (files, concrete classes,
+top-level declarations) and additionally asserts that `src/Context/RepoMapBlock.php`'s doc-block **restates
+two of them**. Adding one file to `src/` therefore reds four assertions across two files, one of which is
+production source. Lane b hit this by adding `src/Support/ProcessReaper.php`; **lane a's brief also creates
+files under `src/Permissions/`**, so the same three literals will be wrong again at merge, and they can
+merge textually clean while being arithmetically wrong (rule 32).
+
+The bump is applied with a ⚠️ note on the census doc-block naming the correct resolution: re-derive all
+three from the merged tree and check that `declarations − files` still equals the secondary-declaration
+total, which is the one assertion there that a wrong pair of literals cannot satisfy by accident.
+
+**The deeper question for a later round** (deliberately NOT done here — it is a rewrite of a guard lane b
+does not own): the file and declaration counts are pure cardinalities and rule 18 says a cardinality
+measured over `src/` should be derived by a test rather than written into prose. The *invariant* that
+census defends — no secondary declaration is a dispatchable tool — is already asserted separately and is
+immune to the count. Consider whether the three literals earn their maintenance cost at all, or whether the
+`RepoMapBlock` restatement should quote a range rather than an integer.
+
+---
+
+### Eb53-4 — the copied-helper drift guard caught a defect inside the change that added the copies
+
+**Recorded 2026-08-24, round 53 lane b.** Severity: informational. **Evidence that the guard pays for itself.**
+
+Round 53's items 1, 2 and 4 added three shutdown test files that each carry a byte-identical copy of
+`pidFile()` and `selfReportedPid()`. The literals had already drifted before the commits landed —
+`/server.pid` against `/child.pid`, "the fixture server never reported its pid" against "the fixture
+child …" — and `selfReportedPid()` took a `ClaudeCodeMcpClient` in one copy and nothing in the other two,
+with the parameter **unused**. `DuplicatedTestHelperDriftTest` reported all of it on the lane's first
+baseline, including the signature-only divergence its own doc-block explains no other check can see.
+
+Resolved by making the copies agree rather than by recording an accepted divergence. Worth noting for the
+next reviewer: **the copies are still copies.** The guard's own advice offers extraction as an option, and
+four files in this package now share these helpers. Extraction would land them in `tests/Support/`, which
+round 53 assigns to another lane, so it is deferred rather than declined.
+
+---
