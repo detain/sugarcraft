@@ -968,11 +968,21 @@ final class NonInteractive
      * line is not machine-readable", and that naming the kind here would let
      * stderr tell "a person typed n" from "there was nobody at the keyboard".
      * WHAT IS TRUE, and it is checked rather than argued —
-     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} asserts
-     * the two arms' observer lines are BYTE-IDENTICAL: both arms produce a
-     * {@see DenialKind::Refused}, so their token is the same word and this
-     * line still cannot say which arm ran. Adding it did not close that gap
-     * and was never going to.
+     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()}
+     * asserts the two arms' observer lines are BYTE-IDENTICAL: both arms
+     * produce a {@see DenialKind::Refused}, so their token is the same word
+     * and this line still cannot say which arm ran. Adding it did not close
+     * that gap and was never going to.
+     *
+     * THAT CITATION WAS OVERSTATED WHEN IT LANDED, and is named here because
+     * the sentence is load-bearing — it is the whole of why E306's premise was
+     * refuted rather than implemented. The test asserted equality of the two
+     * arms' `observerBytes`, i.e. of two INTS: equal LENGTH, which two
+     * different reasons of the same size satisfy. It now compares the strings
+     * themselves and keeps the length figures beside them, so "byte-identical"
+     * is what is measured and not merely what was concluded. The conclusion
+     * did not move — the strings are in fact identical — but a reader checking
+     * the claim would have found an assertion that could not support it.
      *
      * WHY IT EARNS ITS PLACE ANYWAY: the gap it DOES close is the first of
      * E306's two, which is the one with a consumer. Under

@@ -11158,6 +11158,14 @@ token is the same word.** `RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseA
 asserts the two arms' observer lines are byte-identical, and it still passes after the change — which is
 the measurement.
 
+> **Correction, same round.** When this entry was written that test compared the two arms'
+> `observerBytes`, i.e. two INTS — equal LENGTH, not equal bytes, which two different reasons of the
+> same size would have satisfied. The citation was therefore weaker than the claim it was carrying, and
+> this claim is the whole of why E306's premise was refuted rather than implemented. The test now
+> compares the strings themselves and keeps the length figures beside them. **The conclusion did not
+> move** — the strings are in fact identical, confirmed by the corrected assertion passing — but the
+> evidence for it was not what this entry said it was.
+
 **What the change DID close is E306's first gap**, and that one has a consumer: under
 `--output-format text` stdout carries nothing about refusals by design, so stderr is the whole machine
 surface, and it published the classification only as a prefix inside the reason — the exact
@@ -11218,14 +11226,35 @@ call sites.
 
 (a) **The ownership arm is vacuous for a root process.** `AuditHook::directoryIsOurs()` refuses a
 directory this euid does not own; a suite or a daemon running as root owns everything, so a mutation
-deleting the uid comparison survives on that box. `AuditHookTest::testADirectoryThisUserDoesNotOwnIsRefused()`
-DERIVES its expectation from the temp root's real owner rather than hard-coding `false`, so it is honest
-in both worlds and says so — it is not a hole that can be closed, only one that must not be forgotten.
+deleting the uid comparison survives on that box. It is not a hole that can be closed, only one that
+must not be forgotten.
+
+> **Amended, same round.** The test named here took the temp root as its input and derived its
+> expectation from that root's real owner. Once the accept path also began refusing on mode, that input
+> stopped isolating the ownership arm at all: `/tmp` is 1777, so the MODE arm refuses it whatever its
+> owner is, and a mutation deleting the uid comparison would have survived it under every uid rather
+> than only under root. `testADirectoryThisUserDoesNotOwnIsRefused()` now derives its input instead of
+> its expectation — the first directory on a short candidate list that is foreign-owned AND already
+> tight enough to clear the mode arm (`/root` on this box) — and carries a positive control for the
+> root case, where the list comes back empty. **The bound itself is unchanged; what changed is that the
+> arm now has an input only it can refuse.**
 
 (b) **A build without ext-posix shares one directory.** With no `posix_geteuid()` the scope falls back to
-a literal, so every such user on one box lands in `sugar-crush-audit-noposix`. The 0700 creation and the
-ownership refusal still hold, so the failure mode is the SECOND user losing their audit log rather than
-the second user reading the first's. The alternatives were worse: `getmyuid()` answers the script file's
-owner, which for a shared installation is one answer for everybody and a wrong one.
+a literal, so every such user on one box lands in `sugar-crush-audit-noposix`. The failure mode is the
+SECOND user losing their audit log rather than the second user reading the first's. The alternatives were
+worse: `getmyuid()` answers the script file's owner, which for a shared installation is one answer for
+everybody and a wrong one.
+
+> **Correction, same round: the mechanism stated here was inverted.** This entry said "the 0700 creation
+> and the OWNERSHIP REFUSAL still hold" on such a build, copying a sentence from
+> `AuditHook::defaultLogDirectory()`'s doc-block. There is no ownership refusal on that build:
+> `directoryIsOurs()` has no uid to compare and SKIPS the comparison — a fact stated forty lines further
+> down the same file, in the opposite direction. What actually holds is the MODE. The second user
+> reaches a real, non-symlink, mode-clean directory, is ACCEPTED by the guard, and then fails on the
+> kernel's own permission check inside `file_put_contents()`. The outcome is the one recorded above, so
+> the entry's conclusion survives — but a reader acting on the old mechanism would have gone hunting for
+> a uid comparison to harden and found none. Both the doc-block and this entry now say the same true
+> thing, and the fallback arm has a test (`directoryFor()`) rather than only a paragraph: renaming the
+> literal was a mutation the entire `AuditHook` suite survived when this entry was filed, and now kills.
 
 ---
