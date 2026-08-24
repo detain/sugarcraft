@@ -15,15 +15,36 @@ final class McpMessage
     private const JSONRPC_VERSION = '2.0';
 
     /**
+     * `$result` IS `mixed`, NOT `?array`, AND THE WIDENING IS THE FIX FOR A CRASH.
+     *
+     * JSON-RPC 2.0 says only that `result` is "determined by the method
+     * invoked" — it is any JSON value, and the MCP spec inherits that. This
+     * parameter was typed `?array`, so every reply whose `result` decodes to a
+     * PHP scalar threw out of {@see parse()} before the object existed.
+     * MEASURED on this host (PHP 8.3.6) by feeding
+     * `{"jsonrpc":"2.0","id":1,"result":<v>}` to `parse()`:
+     *
+     *     true  false  "s"  5  1.5   ->  TypeError, argument #4 ($result)
+     *     []    {"a":1}              ->  parsed
+     *     null                       ->  null (rejected; see parse())
+     *
+     * A `TypeError` is not a swallowed warning — `@` does not suppress it — and
+     * it did not stop at the one message. {@see \SugarCraft\Crush\MCP\McpClient}
+     * catches `\RuntimeException` around `start()`, expressly so that "a single
+     * unreachable/misbehaving server must not abort loading the rest"; a
+     * `TypeError` is neither caught there nor a `RuntimeException`, so ONE server
+     * answering `initialize` with a non-object `result` took down the whole MCP
+     * subsystem for the session.
+     *
      * @param array<string, mixed>|null $params
-     * @param array<string, mixed>|null $result
+     * @param mixed $result any JSON value the peer may put in `result`
      * @param array<string, mixed>|null $error
      */
     private function __construct(
         public readonly ?string $id,
         public readonly ?string $method,
         public readonly ?array $params,
-        public readonly ?array $result,
+        public readonly mixed $result,
         public readonly ?array $error,
         public readonly bool $isNotification,
     ) {}
@@ -49,6 +70,27 @@ final class McpMessage
         $isNotification = $method !== null && !array_key_exists('id', $decoded);
 
         // If method is null but error is set, this is an error response — id may be absent
+        //
+        // `$result === null` IS THE REJECTION AND IT SWALLOWS ONE LEGAL MESSAGE:
+        // `{"jsonrpc":"2.0","id":"1","result":null}` is a conforming JSON-RPC
+        // success response and this returns null for it. That is deliberate, not
+        // an oversight of the widening above. With `method`, `error` AND `result`
+        // all null there is no discriminator left in the decoded array — the
+        // message is indistinguishable from `{"jsonrpc":"2.0"}` and from a reply
+        // whose `result` key is simply absent, and this class carries no
+        // "was the key present" sentinel to tell them apart.
+        //
+        // WHAT IT COSTS, measured rather than assumed: a null-`result` reply to
+        // `tools/call` leaves {@see \SugarCraft\Crush\MCP\StdioMcpServer::readResponse()}
+        // returning null, so `callTool()` answers `['error' => 'Tool call
+        // failed']` — a wrong answer, but a GRACEFUL one that stays inside the
+        // tool result. The scalars fixed above were an uncaught `TypeError` that
+        // escaped the MCP subsystem entirely. Closing this one properly needs a
+        // paired `bool $resultSet` sentinel (the convention this repo already
+        // uses for nullable state) threaded through `toJson()` and
+        // `StdioMcpServer`'s two `result === null` tests; it is recorded as a
+        // follow-up rather than bolted on here, because a half-threaded sentinel
+        // is worse than a documented rejection.
         if ($method === null && $error === null && $result === null) {
             return null;
         }
@@ -100,9 +142,10 @@ final class McpMessage
     /**
      * Create a JSON-RPC 2.0 success response.
      *
-     * @param array<string, mixed>|null $result
+     * @param mixed $result any JSON value — see the constructor for why this is
+     *        not `?array`
      */
-    public static function success(string $id, $result): self
+    public static function success(string $id, mixed $result): self
     {
         return new self(
             id: $id,

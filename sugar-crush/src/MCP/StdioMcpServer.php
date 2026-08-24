@@ -293,6 +293,28 @@ final class StdioMcpServer implements McpServer
             return ['error' => 'Tool call failed'];
         }
 
+        // A NON-ARRAY `result` IS WRAPPED, NOT RETURNED, and this branch exists
+        // because {@see \SugarCraft\Crush\McpMessage}'s `$result` is `mixed`.
+        // It was `?array`, which made a reply of `"result": true` a `TypeError`
+        // inside `parse()`; widening it moved the same crash here, onto this
+        // method's own `: array` return type, where it would have been a fresh
+        // uncaught throw rather than a fix.
+        //
+        // The MCP spec does say a `tools/call` result is an object with
+        // `content`, so a scalar here IS a misbehaving server — but the answer
+        // to a misbehaving server is a tool result the model can read, not an
+        // exception. The `{type: text}` shape is the one
+        // {@see \SugarCraft\Crush\Tools\McpToolBridge::renderContent()} already
+        // renders verbatim, so the scalar reaches the model as its own text.
+        if (!is_array($response->result)) {
+            return ['content' => [[
+                'type' => 'text',
+                'text' => is_string($response->result)
+                    ? $response->result
+                    : (json_encode($response->result) ?: ''),
+            ]]];
+        }
+
         return $response->result;
     }
 
