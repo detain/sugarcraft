@@ -520,7 +520,7 @@ anything from a file and ahead of the permission gate:
 |---|---|---|
 | `ProtectFilesHook` | `PreToolUse` on `^(Bash\|Edit\|Write\|Read)$` | denies secret and policy files — see [`PERMISSIONS.md`](PERMISSIONS.md#the-hooks-that-outrank-the-gate) |
 | `ConfirmRemoveHook` | `PreToolUse` | denies obvious destructive shell (`rm -rf`, `find … -delete`, …) |
-| `AuditHook` | `PostToolUse`, matcher `.*` | appends every call to `sys_get_temp_dir()/sugar-crush-audit.log` |
+| `AuditHook` | `PostToolUse`, matcher `.*` | appends every call to whatever `AuditHook::defaultLogFile()` answers — a fixed leaf inside a per-user directory the hook creates `0700` and refuses to use if it is not its own |
 
 Two more exist and are **not** registered by default:
 

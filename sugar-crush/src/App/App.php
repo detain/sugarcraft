@@ -500,7 +500,9 @@ final class App implements Model
         );
 
         $subAgent = new SubAgent(
-            id: uniqid('skill_fork_'),
+            // E329, same family as AgentManager's SubAgent id: a constant
+            // literal prefix contributes no cross-process entropy at all.
+            id: uniqid('skill_fork_' . getmypid() . '_', true),
             agent: $agent,
             task: $task,
         );

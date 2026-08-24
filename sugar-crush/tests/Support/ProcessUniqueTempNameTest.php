@@ -46,8 +46,20 @@ use PHPUnit\Framework\TestCase;
  * and reported success. Rule 11: when a census reports zero, ask what its
  * alphabet cannot say. Both shapes now have a scanner here, and each scanner is
  * proved alive by something OTHER than a green tree — see
- * {@see STATIC_TEMP_PATH_INVENTORY}, whose single row is a real site in `src/`
- * that the second scanner must keep finding.
+ * {@see STATIC_TEMP_PATH_INVENTORY}, whose single row is a file in scope that
+ * the second scanner must keep finding.
+ *
+ * WHAT THAT SENTENCE SAID: the row was "a real site in `src/`", namely
+ * `AuditHook`'s production default. WHAT IS TRUE NOW: E328 fixed that default
+ * — it is a per-user directory the process creates 0700 — so `src/` has no
+ * fixed shared temp path left, and an absence census with no positive input is
+ * exactly the dead instrument rule 15 is about. The row is now
+ * `tests/Support/Fixtures/StaticTempPathWalkControl.php`, a file written to be
+ * found. WHY THE ARRANGEMENT STILL EARNS ITS PLACE, unchanged in form: the
+ * claim being defended was never "a real site exists" — it was "the walk over
+ * real files still reaches the matcher", and a purpose-built file in scope
+ * carries that claim better than a production site, because nobody can close
+ * it by improving production code.
  *
  * ⚠️ THIS FILE MUST SURVIVE A BLANKET REWRITE OF THE PATTERN IT DESCRIBES.
  * The 2026-08-23 sweep that fixed those 91 call sites also ate this test's own
@@ -90,9 +102,22 @@ final class ProcessUniqueTempNameTest extends TestCase
      * spared by a guard whose own stated subject describes them exactly, and
      * ONE OF THEM BUILDS A SubAgent ID IN THE SAME SHAPE the WorkflowEngine row
      * below spends six hundred words on. The predicate is now "no more-entropy
-     * flag" and those four are rostered. WHY THE ROSTER STILL EARNS ITS PLACE
-     * UNCHANGED IN FORM: the argument that a site is safe is a claim about the
-     * tree, and the tree is still asked in both directions.
+     * flag" and those four were rostered.
+     *
+     * AND THEN THEY WERE FIXED (E329), which is why four rows are gone from
+     * here rather than rewritten: `src/Agents/AgentManager.php`,
+     * `src/App/App.php`, `src/Hooks/ScriptHook.php` and
+     * `src/Providers/ClaudeCodeProvider.php` now spell the call with the pid in
+     * the prefix and the more-entropy flag set, so the scanner spares them on
+     * their own tokens and a row for any of them would fail
+     * {@see testEveryEntropylessInventoryRowStillDescribesTheSitesItClaims()}.
+     * The WorkflowEngine row is deliberately left standing — it is E324, a
+     * different entry with a different argument, and it is also what keeps this
+     * channel's real-tree walk honest.
+     *
+     * WHY THE ROSTER STILL EARNS ITS PLACE UNCHANGED IN FORM: the argument that
+     * a site is safe is a claim about the tree, and the tree is still asked in
+     * both directions.
      *
      * @var array<string,array{sites:int,why:string}>
      */
@@ -117,58 +142,6 @@ final class ProcessUniqueTempNameTest extends TestCase
                 . 'lane (tests only) and is recorded as a deferred finding rather than done '
                 . 'here.',
         ],
-        'src/Agents/AgentManager.php' => [
-            'sites' => 1,
-            'why' =>
-                'THE SAME SHAPE AS THE WorkflowEngine ROW ABOVE, AND IT WAS INVISIBLE TO THIS '
-                . 'GUARD UNTIL THE PREDICATE STOPPED MEANING "no arguments". `uniqid(\'subagent_\')` '
-                . 'builds a SubAgent id, and a literal prefix adds no cross-process entropy '
-                . 'whatever — same 13-hex microtime suffix, measured on PHP 8.3.6. TRACED, not '
-                . 'assumed: the id reaches disk through AgentWorkerPool::resultFile() and '
-                . 'progressFile(), both `$this->resultDir . "/" . hash("sha256", $agentId)`, and '
-                . '`$resultDir` is makeResultDirPath() — `sys_get_temp_dir() . "/sc_pool_" . '
-                . 'getmypid() . "_" . bin2hex(random_bytes(8))`. The DIRECTORY carries the pid '
-                . 'and 64 bits, so two processes cannot meet on that path. What is left is '
-                . 'intra-process uniqueness, which the microtime does give. Same conclusion and '
-                . 'same caveat as WorkflowEngine: the safety is a property of the enclosing '
-                . 'directory, one edit away from being untrue, and the fix is out of a '
-                . 'tests-only lane. Recorded as a deferred finding.',
-        ],
-        'src/App/App.php' => [
-            'sites' => 1,
-            'why' =>
-                'THE THIRD INSTANCE OF THE SubAgent-ID SHAPE. `uniqid(\'skill_fork_\')` names a '
-                . 'skill-fork SubAgent, and the id reaches the same AgentWorkerPool result and '
-                . 'progress paths under the same pid+64-bit directory, so the same measured '
-                . 'argument applies unchanged. Rostered together with AgentManager rather than '
-                . 'argued separately BECAUSE THEY ARE ONE FAMILY: the day makeResultDirPath() '
-                . 'stops carrying entropy, all three rows go live at once, and three rows saying '
-                . 'so is what makes that visible.',
-        ],
-        'src/Hooks/ScriptHook.php' => [
-            'sites' => 1,
-            'why' =>
-                'NOT A PATH AT ALL, TRACED RATHER THAN ASSUMED. `uniqid(\'hook_\')` is the LAST '
-                . 'fallback for a hook\'s display NAME when the config supplies neither a name '
-                . 'nor a command. The hook payload file this class does write is built by '
-                . '`@tempnam(sys_get_temp_dir(), ToolIpcFiles::HOOK_PAYLOAD_PREFIX)` at a '
-                . 'different site, and tempnam() is what guarantees that name, not this one. A '
-                . 'collision here would give two hooks the same label in a listing. FIX IT '
-                . 'ANYWAY WHEN THE FAMILY IS FIXED — the cost is a flag — but it is not the '
-                . 'hazard the other rows describe, and saying it is would be the kind of '
-                . 'inherited sentence this file exists to stop.',
-        ],
-        'src/Providers/ClaudeCodeProvider.php' => [
-            'sites' => 1,
-            'why' =>
-                'ALSO NOT A PATH, TRACED. `uniqid(\'tool_\')` fills in a tool call\'s id when the '
-                . 'provider\'s payload omits one. The `sc_runtime_tool_*` and `sc_chat_tool_*` '
-                . 'files that this tree really does race on are named by '
-                . 'ToolIpcFiles::reserve(), not by a tool-call id, so this value never reaches '
-                . 'a filename. The exposure is a duplicate id WITHIN one response, which the '
-                . 'microtime already prevents. Rostered rather than fixed for the same '
-                . 'lane reason as the rest, and it belongs in the same edit.',
-        ],
     ];
 
     /**
@@ -187,20 +160,38 @@ final class ProcessUniqueTempNameTest extends TestCase
      * @var array<string,array{sites:int,why:string}>
      */
     private const STATIC_TEMP_PATH_INVENTORY = [
-        'src/Hooks/BuiltIn/AuditHook.php' => [
+        'tests/Support/Fixtures/StaticTempPathWalkControl.php' => [
             'sites' => 1,
             'why' =>
-                'THE SITE E298 WAS ABOUT, AND IN PRODUCTION IT IS THE INTENDED BEHAVIOUR. '
-                . 'The default log file is one fixed name on the machine\'s temp dir, and an '
-                . 'audit log that moves every run is not an audit log — a caller who wants a '
-                . 'private one passes it in. What was wrong was never this line: it was a TEST '
-                . 'that drove the production default, wrote it and then unlinked it, so two '
-                . 'concurrent suites raced on it and both deleted the real log of anything '
-                . 'else on the box. That test now asserts the default is CONSTRUCTED and does '
-                . 'its writing at a pid+entropy path. '
-                . 'KEEP THIS ROW EVEN IF THE HOOK MOVES: it is the only real-tree input that '
-                . 'proves the static-path scanner still walks, and the day it stops matching '
-                . 'is the day this whole census goes quiet.',
+                'THIS ROW IS NOT AN EXEMPTION. It is the scanner\'s real-tree control, and the '
+                . 'file exists for no other reason: nothing calls it, the class is abstract so '
+                . 'it cannot be instantiated and its one method is private, and the body spells '
+                . 'the exact shape E298 took — a fully static temp path bound in one statement '
+                . 'and written in another. (ABSTRACT AND NOT A PRIVATE CONSTRUCTOR, which is '
+                . 'how this row first described it: an empty private __construct() {} is '
+                . 'byte-identical to every other empty one under tests/, so '
+                . 'DuplicatedTestHelperDriftTest read the file as a copied helper that had '
+                . 'drifted. The fixture says so too; this row is the copy that did not get '
+                . 'updated with it.) '
+                . 'WHAT THIS ROW SAID BEFORE: src/Hooks/BuiltIn/AuditHook.php, whose production '
+                . 'default was one fixed name on the world-writable temp root, kept because "an '
+                . 'audit log that moves every run is not an audit log" and a caller who wants a '
+                . 'private one passes it in. WHAT IS TRUE NOW (E328): that argument survived and '
+                . 'the path did not. The leaf is still fixed, so tail -f still works across '
+                . 'runs, but it now sits inside a directory scoped to the effective uid which '
+                . 'the hook creates 0700 and refuses to use when it is not its own — because '
+                . 'the hazard was never two sugarcrush processes racing (measured on PHP 8.3.6: '
+                . '8 processes x 200 appends x 9000 bytes under FILE_APPEND|LOCK_EX, three '
+                . 'takes, 1600 intact lines every time and no truncation) but every OTHER user '
+                . 'on the box being able to plant a symlink at that name and to read a log '
+                . 'carrying tool arguments and 200 bytes of every tool output, which under the '
+                . 'ordinary umask 0002 was created mode 0664. WHY A PURPOSE-BUILT FILE RATHER '
+                . 'THAN THE NEXT REAL SITE: the previous row could be — and was — closed by '
+                . 'somebody fixing production code, which is the one event that silently '
+                . 'removes an absence census\'s only positive input. This one cannot be. '
+                . 'DELETING IT IS NOT A FIX FOR ANYTHING: the ten synthetic fixtures in '
+                . 'assertTheStaticPathScannerIsAlive() prove the MATCHER works and say nothing '
+                . 'about whether filesInScope() still enumerates anything.',
         ],
     ];
 
@@ -590,11 +581,22 @@ final class ProcessUniqueTempNameTest extends TestCase
      * Every fixture here was written by running the shape past the scanner and
      * checking the answer against the tree, not the other way round. Two of
      * them exist because the scanner FAILED them first: the defaulted shape
-     * (`$x ?? <static path>`) is the exact spelling of the one real site in the
-     * tree and an earlier version reported zero over the whole repository
+     * (`$x ?? <static path>`) is how the site that prompted this walk spelled
+     * itself, and an earlier version reported zero over the whole repository
      * because a `??` put a variable in the expression; and the bind-then-write
      * shape is the only one E298 ever took, so a scanner that could see the
      * inline argument alone would have reported a clean tree.
+     *
+     * THE TENSE HAS BEEN CORRECTED THROUGHOUT AND THE FIXTURES HAVE NOT
+     * MOVED. Three sentences in this file called the defaulted shape "the
+     * tree's only real site", present tense. E328 fixed that site, and an
+     * absence census whose fixtures are justified by a site that no longer
+     * exists invites the next reader to delete them as obsolete. They are not:
+     * a fixture earns its place by the shape it can catch coming BACK, not by
+     * a production line that happens to have it today. See
+     * {@see STATIC_TEMP_PATH_INVENTORY} for the same argument about the walk's
+     * one real-tree input, which is why that one had to be REPLACED rather
+     * than merely re-worded.
      */
     public function testTheStaticPathScannerSeesTheShapeE298TookAndSparesEntropicPaths(): void
     {
@@ -898,8 +900,10 @@ final class ProcessUniqueTempNameTest extends TestCase
      * ONE BINDING AND NOT A DATAFLOW ANALYSIS, stated so nobody mistakes the
      * bound for an answer. `$x = <static temp path>;` anywhere in the file, and
      * `$x` as an argument to a mutating call anywhere in the file, is enough:
-     * the only real site in the tree assigns in a constructor and writes in a
-     * method, so a scope-local rule would miss it. The cost is that a name
+     * the site this rule was written against assigned in a constructor and
+     * wrote in a method (E328 has since fixed it, and the walk's real-tree
+     * input is now {@see STATIC_TEMP_PATH_INVENTORY}'s purpose-built fixture),
+     * so a scope-local rule would have missed it. The cost is that a name
      * rebound between the two is followed anyway — a false positive, which is
      * loud, rather than a false negative, which is not.
      *
@@ -991,11 +995,16 @@ final class ProcessUniqueTempNameTest extends TestCase
     /**
      * Whether any `??`/`?:` branch of tokens[$from..$to] is a static temp path.
      *
-     * THE DEFAULTED SHAPE IS THE ONLY ONE THE TREE ACTUALLY HAS, and an earlier
-     * version of this walk reported ZERO over the whole repository because
+     * THE DEFAULTED SHAPE IS THE ONE THIS WALK WAS BUILT FOR, and an earlier
+     * version of it reported ZERO over the whole repository because
      * `$given ?? sys_get_temp_dir() . '/fixed.log'` contains a variable and so
-     * was read as dynamic. A scanner that cannot see the one real instance of
-     * the shape it was built for is a scanner that reports a clean tree.
+     * was read as dynamic. A scanner that cannot see the shape it was built
+     * for is a scanner that reports a clean tree.
+     *
+     * (That sentence used to open "THE ONLY ONE THE TREE ACTUALLY HAS".
+     * Present tense, and E328 removed the site. The branch handling stays
+     * exactly as it was: `??` is an ordinary way to spell a default, so the
+     * shape returns whenever somebody writes the next one.)
      *
      * @param list<array{int,string,int}|string> $tokens
      */
@@ -1327,14 +1336,28 @@ final class ProcessUniqueTempNameTest extends TestCase
             "<?php\n\$p = sys_get_temp_dir() . '/fixed.log';\nunlink(\$p);\n",
         ), 'the static-path scanner cannot follow a path bound before it is written');
 
-        // Defaulted, through a property — the shape of the one real site.
+        // Defaulted, through a property.
+        //
+        // WHAT THIS SAID: "the shape of the one real site", and below, "which
+        // is the tree's only real site". WHAT IS TRUE NOW: E328 removed that
+        // site — `AuditHook`'s default is a per-user directory the process
+        // creates and re-checks — so no production file has this shape any
+        // more, and the class doc-block and the inventory row were both
+        // rewritten to say so while these two sentences were not. WHY THE
+        // FIXTURE STILL EARNS ITS PLACE, and it earns it more than the others
+        // do: this is the shape the scanner FAILED first, because a `??` puts
+        // a variable in the expression and an earlier version reported zero
+        // over the whole repository on account of it. A regression here is
+        // silent — it reports a clean tree — and the shape is an ordinary way
+        // to spell a default, so it will come back.
         self::assertSame([5], self::staticTempPathWrites(
             "<?php\nclass A {\n"
             . "  public function __construct(?string \$f = null) { \$this->log = \$f ?? sys_get_temp_dir() . '/fixed.log'; }\n"
             . "  public function w(): void {\n"
             . "    file_put_contents(\$this->log, 'x');\n"
             . "  }\n}\n",
-        ), 'the static-path scanner cannot follow a defaulted property, which is the tree\'s only real site');
+        ), 'the static-path scanner cannot follow a defaulted property — the shape it failed first, '
+            . 'because a ?? puts a variable in the expression, and the failure mode is a clean tree');
 
         // A CONSTRUCTOR, because the incident this census narrates was one.
         self::assertSame([2], self::staticTempPathWrites(

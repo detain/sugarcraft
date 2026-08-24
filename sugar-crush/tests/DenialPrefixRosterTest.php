@@ -873,6 +873,157 @@ final class DenialPrefixRosterTest extends TestCase
     }
 
     /**
+     * EVERY ALIAS OF THE ROSTER SAYS SO TO A TOOL, NOT ONLY TO A READER
+     * (E304).
+     *
+     * The tree publishes FOUR public constants for THREE kinds:
+     * `Chat::DENIED_ERROR_PREFIXES` and `Runtime`'s three `DENIAL_*`. All four
+     * derive from {@see DenialKind} in a constant expression, so they cannot
+     * drift — and all four were described as deprecated in prose alone. An
+     * embedder grepping for the tag found nothing; a static analyser saw four
+     * supported symbols. This asserts BOTH halves at once, and the pairing is
+     * the point: a tag can be added to something that has quietly become a
+     * fourth copy, and a copy can be kept honest while the tag says the
+     * opposite of what the paragraph beside it says.
+     *
+     * CONTINUATION MARKERS ARE FLATTENED BEFORE MATCHING. A doc-block wraps at
+     * 80 columns with ` * ` on every continuation, so a phrase is never those
+     * bytes in a row in the raw comment; matching the raw text is how an
+     * assertion about prose passes for the wrong reason.
+     */
+    public function testEveryDeprecatedRosterAliasCarriesTheTagAndStillDerivesFromTheEnum(): void
+    {
+        $aliases = [
+            Chat::class . '::DENIED_ERROR_PREFIXES' => [Chat::class, 'DENIED_ERROR_PREFIXES', DenialKind::prefixes()],
+            Runtime::class . '::DENIAL_HOOK' => [Runtime::class, 'DENIAL_HOOK', DenialKind::Hook->value],
+            Runtime::class . '::DENIAL_REFUSED' => [Runtime::class, 'DENIAL_REFUSED', DenialKind::Refused->value],
+            Runtime::class . '::DENIAL_UNANSWERED' => [Runtime::class, 'DENIAL_UNANSWERED', DenialKind::Unanswered->value],
+        ];
+
+        foreach ($aliases as $label => [$class, $name, $expected]) {
+            $constant = new \ReflectionClassConstant($class, $name);
+
+            self::assertSame($expected, $constant->getValue(), $label
+                . ' no longer holds what DenialKind says it holds. It is declared as a constant '
+                . 'expression over the enum precisely so this cannot happen, so a failure here '
+                . 'means somebody re-spelled it as a literal — which is the fourth copy the '
+                . 'enum was extracted to remove.');
+
+            $doc = self::flattenDocComment($constant->getDocComment());
+
+            self::assertStringContainsString('@deprecated', $doc, $label
+                . ' is a deprecated alias whose deprecation lives only in prose. An embedder '
+                . 'grepping for the tag finds nothing and a static analyser sees a supported '
+                . 'symbol. Add the tag; do not delete the paragraph.');
+            self::assertStringContainsString('SugarCraft\\Crush\\Permissions\\DenialKind', $doc, $label
+                . ' is tagged deprecated without saying what to use instead, which tells an '
+                . 'embedder to stop and not where to go.');
+        }
+
+        // THE KNOWN-NEGATIVE, IN THE SAME TEST (rule 15). Every assertion
+        // above is "this doc-comment contains a string", which a reader that
+        // had started returning the whole FILE would satisfy for any constant
+        // at all. A public const on one of the same classes that is NOT
+        // deprecated must come back without the tag.
+        self::assertStringNotContainsString(
+            '@deprecated',
+            self::flattenDocComment((new \ReflectionClassConstant(Chat::class, 'INTERRUPTED_TOOL_CALL'))->getDocComment()),
+            'the doc-comment reader answers the same thing for a constant that is not '
+                . 'deprecated, so the four assertions above are statements about the reader '
+                . 'rather than about the tags',
+        );
+    }
+
+    /**
+     * THE FLATTENER'S OWN FIXTURE, because nothing else in this file exercises
+     * it — and its justification was wrong in both halves.
+     *
+     * WHAT THAT JUSTIFICATION SAID: "Without this, `<the alias's FQCN>` split
+     * across a wrap is not present as those bytes and the assertion fails."
+     * Both measurements below are PHP 8.3.6, round 49.
+     *
+     * FIRST, IT IS NOT LOAD-BEARING AT THIS SITE. All four `@deprecated` tags
+     * put the name on one line, so neutering the helper to
+     * `return (string) $doc;` left this whole file green — 15 tests, 109
+     * assertions, rc 0. The helper was defending against a hazard none of its
+     * callers actually present.
+     *
+     * SECOND, AND WORSE, IT CANNOT DO THE THING IT NAMED. The helper collapses
+     * runs of whitespace to ONE SPACE, so a fully-qualified name broken
+     * mid-token by a wrap comes back with a space where the break was and is
+     * still not present as those bytes. What it genuinely repairs is a
+     * MULTI-WORD PHRASE straddling a continuation, where one space is the
+     * right answer. Rule 8: a mechanism stated in a comment and inverted in
+     * fact at the one case the comment picks out.
+     *
+     * WHY IT IS PINNED RATHER THAN DELETED. The phrase case is real and is one
+     * re-wrap away — an `@deprecated` clause that grows by three words pushes
+     * its prose past 80 columns — and it fails as an assertion about prose
+     * failing for a reason that has nothing to do with the prose, which is the
+     * failure most likely to be "fixed" by weakening the assertion. The LIMIT
+     * is pinned beside the capability so nobody relies on the half that does
+     * not work.
+     */
+    public function testTheDocCommentFlattenerJoinsAWrappedPhraseAndCannotJoinASplitName(): void
+    {
+        // BUILT BY CONCATENATION AND NEVER SPELLED WHOLE (rule 26). A blanket
+        // rewrite of the alias's fully-qualified name — exactly the sweep a
+        // rename would be — must not be able to reach into this fixture and
+        // repair it into passing.
+        $namespace = 'SugarCraft\\Crush\\Permissions';
+        $shortName = 'DenialKind';
+        $qualified = $namespace . '\\' . $shortName;
+
+        // WHAT IT REPAIRS. This is the assertion that kills a neutered helper.
+        $wrappedPhrase = "/**\n * @deprecated Use the enum case named\n *             {$shortName} instead.\n */";
+        self::assertStringNotContainsString('named ' . $shortName, $wrappedPhrase,
+            'the fixture is not actually wrapped, so the next assertion would pass without the helper');
+        self::assertStringContainsString('named ' . $shortName, self::flattenDocComment($wrappedPhrase),
+            'the flattener no longer joins a phrase split across a continuation, which is the one '
+            . 'thing it is for');
+
+        // WHAT IT DOES NOT REPAIR, pinned so the limit is a fact rather than a
+        // caveat somebody can read past.
+        $splitName = "/**\n * @deprecated Use \\{$namespace}\\\n *             {$shortName} instead.\n */";
+        self::assertStringNotContainsString($qualified, self::flattenDocComment($splitName),
+            'the flattener now joins a name broken mid-token. That is an improvement, and the '
+            . "helper's doc-block and this test both say it cannot — rewrite them");
+
+        // AND THE SHAPE THE FOUR REAL TAGS HAVE, which is why the assertions in
+        // testEveryDeprecatedRosterAliasCarriesTheTagAndStillDerivesFromTheEnum()
+        // pass at all: the name is never wrapped in the first place.
+        $oneLine = "/**\n * @deprecated Use \\{$qualified}::Hook\n *             instead.\n */";
+        self::assertStringContainsString($qualified, self::flattenDocComment($oneLine),
+            'the flattener has started damaging a name that arrives intact');
+
+        self::assertSame('', self::flattenDocComment(false),
+            'a constant with no doc-comment at all no longer flattens to the empty string, so the '
+            . 'assertions elsewhere in this file may be reading a literal "false"');
+    }
+
+    /**
+     * A doc-comment as one line of prose: the leading ` * ` of every
+     * continuation removed, and runs of whitespace collapsed.
+     *
+     * Rule 17, and the justification that used to sit here was wrong twice
+     * over — see
+     * {@see testTheDocCommentFlattenerJoinsAWrappedPhraseAndCannotJoinASplitName()},
+     * which carries both measurements and is what stops this helper from
+     * being deleted as dead or trusted for the case it cannot handle. In
+     * short: it repairs a multi-word PHRASE broken by a wrap, and it does NOT
+     * repair a fully-qualified NAME broken mid-token, because collapsing
+     * whitespace to one space leaves a space where the break was.
+     */
+    private static function flattenDocComment(string|false $doc): string
+    {
+        if ($doc === false) {
+            return '';
+        }
+
+        return (string) preg_replace('/\s+/', ' ', (string) preg_replace('/^\s*\*\s?/m', '', $doc));
+    }
+
+    /**
      * AND THE TOKEN THE `refusals` DOCUMENT CARRIES IS THE ONE THREE-WORD
      * VOCABULARY A CONSUMER OUTSIDE PHP MATCHES ON (E250).
      *

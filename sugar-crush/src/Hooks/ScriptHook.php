@@ -384,7 +384,13 @@ final readonly class ScriptHook implements BoundedHookInterface
         $timeout = $config['timeout'] ?? null;
 
         return new self(
-            name: is_string($name) && $name !== '' ? $name : ($config['command'] ?? uniqid('hook_')),
+            // E329. This one is a display NAME rather than a path — the hook
+            // payload file is tempnam()-generated elsewhere in this class — so a
+            // collision costs two hooks one label, not a shared file. Fixed with
+            // the family because the cost is a flag and leaving one site spelling
+            // the old shape is how the shape comes back.
+            name: is_string($name) && $name !== '' ? $name
+                : ($config['command'] ?? uniqid('hook_' . getmypid() . '_', true)),
             event: $event,
             matcher: $config['matcher'] ?? '.*',
             command: $config['command'] ?? '',

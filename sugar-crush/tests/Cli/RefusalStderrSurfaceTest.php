@@ -202,19 +202,21 @@ final class RefusalStderrSurfaceTest extends TestCase
         $notice = new \ReflectionMethod(NonInteractive::class, 'refusalNotice');
         $notice->setAccessible(true);
 
-        $measured = [];
+        $measured  = [];
+        $observers = [];
         foreach (['terminal' => true, 'no-tty' => false] as $arm => $interactive) {
             [$promptText, $refusal] = $this->refuse(interactive: $interactive);
             self::assertNotNull($refusal, "the {$arm} arm produced no refusal for the observer to report");
 
-            $observer = (string) $notice->invoke(null, $refusal['tool'], $refusal['reason']);
+            $observer = (string) $notice->invoke(null, $refusal['tool'], $refusal['kind'], $refusal['reason']);
 
             // THE DOUBLING ITSELF, per arm, before any number is compared.
             self::assertNotSame('', $promptText, "the {$arm} arm's prompt wrote nothing, so there is no "
                 . 'pair here and the figures below are measuring one producer');
             self::assertNotSame('', $observer, "the {$arm} arm's observer line is empty");
 
-            $measured[$arm] = [
+            $observers[$arm] = $observer;
+            $measured[$arm]  = [
                 'promptBytes' => \strlen($promptText),
                 'promptLines' => substr_count($promptText, "\n"),
                 'observerBytes' => \strlen($observer),
@@ -224,16 +226,32 @@ final class RefusalStderrSurfaceTest extends TestCase
             ];
         }
 
-        // AND THE OBSERVER CANNOT TELL THE ARMS APART, at the byte level.
-        // Asserted from the measurement rather than restated, so it cannot
-        // drift away from the exact figures below. FIRST, and that ordering is
-        // the fix rather than a tidy: see the class of assertion each one is
-        // in this method's doc-block.
+        // AND THE OBSERVER CANNOT TELL THE ARMS APART. Asserted from the
+        // measurement rather than restated, so it cannot drift away from the
+        // exact figures below. FIRST, and that ordering is the fix rather than
+        // a tidy: see the class of assertion each one is in this method's
+        // doc-block.
+        //
+        // THE BYTES, NOT THEIR COUNT, AND THAT IS A CORRECTION. This was a
+        // single assertSame over `observerBytes` — two INTS — while three
+        // places in the tree (this file, `NonInteractive::noticeRefusal()`'s
+        // doc-block, and the backlog entry refuting E306's premise) cited it as
+        // establishing that the two arms' lines are BYTE-IDENTICAL. Equal
+        // length is not equal bytes: two arms whose reasons differed but
+        // happened to be the same length passed it, which is precisely the
+        // outcome the citation was relied on to exclude. The length comparison
+        // is kept below as part of the figures.
+        self::assertSame(
+            $observers['terminal'],
+            $observers['no-tty'],
+            'the observer line now differs between the two arms, which is the fact this file exists to '
+            . "deny. If that is deliberate, the prompt's terse line may finally be droppable",
+        );
         self::assertSame(
             $measured['terminal']['observerBytes'],
             $measured['no-tty']['observerBytes'],
-            'the observer line now differs between the two arms, which is the fact this file exists to '
-            . "deny. If that is deliberate, the prompt's terse line may finally be droppable",
+            'the two observer lines are equal as strings and unequal in length, which is impossible — '
+            . 'suspect the measurement above rather than the code under it',
         );
         self::assertGreaterThan(
             $measured['terminal']['totalLines'],
@@ -246,13 +264,13 @@ final class RefusalStderrSurfaceTest extends TestCase
             [
                 'terminal' => [
                     'promptBytes' => 189, 'promptLines' => 7,
-                    'observerBytes' => 77, 'observerLines' => 1,
-                    'totalBytes' => 266, 'totalLines' => 8,
+                    'observerBytes' => 87, 'observerLines' => 1,
+                    'totalBytes' => 276, 'totalLines' => 8,
                 ],
                 'no-tty' => [
                     'promptBytes' => 449, 'promptLines' => 8,
-                    'observerBytes' => 77, 'observerLines' => 1,
-                    'totalBytes' => 526, 'totalLines' => 9,
+                    'observerBytes' => 87, 'observerLines' => 1,
+                    'totalBytes' => 536, 'totalLines' => 9,
                 ],
             ],
             $measured,

@@ -238,7 +238,7 @@ final class NonInteractive
             $refusal = self::refusalFrom($event);
             if ($refusal !== null) {
                 $refusals[] = $refusal;
-                self::noticeRefusal($refusal['tool'], $refusal['reason']);
+                self::noticeRefusal($refusal['tool'], $refusal['kind'], $refusal['reason']);
             }
         };
 
@@ -963,14 +963,47 @@ final class NonInteractive
      * suites happen to drive a refusal, and a cardinality in prose is stale
      * the next time one is added.
      *
+     * IT NOW CARRIES THE KIND AS A TOKEN, AND THE REASON IS NOT THE ONE E306
+     * GAVE (E306). WHAT THAT ENTRY SAID: that "the terse arm-distinguishing
+     * line is not machine-readable", and that naming the kind here would let
+     * stderr tell "a person typed n" from "there was nobody at the keyboard".
+     * WHAT IS TRUE, and it is checked rather than argued —
+     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()}
+     * asserts the two arms' observer lines are BYTE-IDENTICAL: both arms
+     * produce a {@see DenialKind::Refused}, so their token is the same word
+     * and this line still cannot say which arm ran. Adding it did not close
+     * that gap and was never going to.
+     *
+     * THAT CITATION WAS OVERSTATED WHEN IT LANDED, and is named here because
+     * the sentence is load-bearing — it is the whole of why E306's premise was
+     * refuted rather than implemented. The test asserted equality of the two
+     * arms' `observerBytes`, i.e. of two INTS: equal LENGTH, which two
+     * different reasons of the same size satisfy. It now compares the strings
+     * themselves and keeps the length figures beside them, so "byte-identical"
+     * is what is measured and not merely what was concluded. The conclusion
+     * did not move — the strings are in fact identical — but a reader checking
+     * the claim would have found an assertion that could not support it.
+     *
+     * WHY IT EARNS ITS PLACE ANYWAY: the gap it DOES close is the first of
+     * E306's two, which is the one with a consumer. Under
+     * `--output-format json` a refusal reaches a machine as the `kind` field
+     * of a `refusals` entry; under `--output-format text` stdout carries
+     * nothing about refusals at all by design, so stderr is the whole surface
+     * — and it offered the classification only as a PREFIX inside the reason,
+     * i.e. as the exact `str_starts_with` against published prose that
+     * {@see DenialKind::token()} exists so a consumer never has to write. The
+     * two formats now hand out the same three words.
+     *
      * @param string $tool The runtime tool name, as the model called it.
+     * @param string $kind {@see DenialKind::token()} — `hook`, `refused` or
+     *   `unanswered`. The stable machine key, deliberately not the prefix.
      * @param string $reason The finished result text, which opens with one of
-     *   {@see DenialKind}'s three prefixes — so the line already says WHICH of
-     *   the three this was.
+     *   {@see DenialKind}'s three prefixes — so the line says WHICH of the
+     *   three twice over, once for a person and once for a script.
      */
-    private static function noticeRefusal(string $tool, string $reason): void
+    private static function noticeRefusal(string $tool, string $kind, string $reason): void
     {
-        \fwrite(\STDERR, self::refusalNotice($tool, $reason));
+        \fwrite(\STDERR, self::refusalNotice($tool, $kind, $reason));
     }
 
     /**
@@ -992,9 +1025,9 @@ final class NonInteractive
      * emitter: {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}
      * counts writes to fd 2 per file and this change does not move that count.
      */
-    private static function refusalNotice(string $tool, string $reason): string
+    private static function refusalNotice(string $tool, string $kind, string $reason): string
     {
-        return "sugarcrush: {$tool} was not run - {$reason}\n";
+        return "sugarcrush: [{$kind}] {$tool} was not run - {$reason}\n";
     }
 
     /**

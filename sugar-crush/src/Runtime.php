@@ -140,6 +140,16 @@ final class Runtime
      * the TUI model" is the constraint that decided the roster lives in
      * `src/Permissions/` and not on `Chat`, and without it the next reader
      * moves the enum somewhere more convenient and re-creates the cost.
+     *
+     * THE TAG BELOW IS THE HALF THAT WAS MISSING (E304). The paragraph above
+     * has called these deprecated since E246, and prose is not a signal: an
+     * embedder grepping for the tag found nothing, and a static analyser saw
+     * four fully supported symbols for three kinds. The tag says the same
+     * thing to a tool.
+     *
+     * @deprecated Use \SugarCraft\Crush\Permissions\DenialKind::Hook
+     *             instead. This alias derives from that case and is kept only
+     *             so an embedder reading it does not break.
      */
     public const DENIAL_HOOK = DenialKind::Hook->value;
 
@@ -147,6 +157,10 @@ final class Runtime
      * An ASK an attached approver answered with anything other than a literal
      * `true` — the user's own decision, made about this call. See
      * {@see DENIAL_HOOK} for why these three are aliases.
+     *
+     * @deprecated Use \SugarCraft\Crush\Permissions\DenialKind::Refused
+     *             instead. This alias derives from that case and is kept only
+     *             so an embedder reading it does not break.
      */
     public const DENIAL_REFUSED = DenialKind::Refused->value;
 
@@ -155,6 +169,10 @@ final class Runtime
      * refused this call; there was nobody to ask. See {@see settleAsk()}'s
      * fail-closed arm, and note this is the shape a background daemon and any
      * embedder that forgot `withPermissionApprover()` both produce.
+     *
+     * @deprecated Use \SugarCraft\Crush\Permissions\DenialKind::Unanswered
+     *             instead. This alias derives from that case and is kept only
+     *             so an embedder reading it does not break.
      */
     public const DENIAL_UNANSWERED = DenialKind::Unanswered->value;
 

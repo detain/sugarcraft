@@ -175,7 +175,12 @@ final class AgentManager
         $gate = $this->createPermissionGate($mode);
 
         $subAgent = new SubAgent(
-            id: uniqid('subagent_'),
+            // E329: the literal prefix is a NAMESPACE, not an entropy source —
+            // uniqid('a') and uniqid('b') at one instant differ only in those
+            // bytes and carry the same 13-hex microtime. The pid and the
+            // more-entropy flag are what make two processes' ids distinct; the
+            // id reaches disk through AgentWorkerPool::resultFile().
+            id: uniqid('subagent_' . getmypid() . '_', true),
             agent: $agent,
             task: $task,
             permissionGate: $gate,

@@ -267,7 +267,11 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
 
         return array_map(function ($tc) {
             return ToolCall::fromArray([
-                'id' => $tc['id'] ?? uniqid('tool_'),
+                // E329. A fallback for a payload that omitted the id; it never
+                // reaches a filename (ToolIpcFiles::reserve() names those), so the
+                // exposure is a duplicate id within one response. Fixed with the
+                // family — the literal prefix was never the entropy.
+                'id' => $tc['id'] ?? uniqid('tool_' . getmypid() . '_', true),
                 'name' => $tc['name'] ?? $tc['function']['name'] ?? '',
                 'arguments' => is_string($tc['arguments'] ?? null)
                     ? json_decode($tc['arguments'], true) ?? []

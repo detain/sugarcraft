@@ -11408,3 +11408,258 @@ be standing.
 **Step.** Either resolve class-constant and property specs too (they are as literal as a local), or have the
 `unclassified` failure message name the scope bound explicitly, so the reader is told why a spec they can
 plainly read came back unreadable.
+### Eb51-1 — E328's recorded mechanism does not reproduce: the hazard was reachability, not a race
+
+**Recorded 2026-08-24 by round-51 lane b, which fixed E328.** Severity: correction of a fixed entry.
+**Measured**, PHP 8.3.6, generator in the round's scratchpad (`probe_append.php`).
+
+E328 said two `sugarcrush` processes on one box "write and truncate each other's audit log
+(interleaved, and a partial write from either can split a record)". Neither half reproduces.
+`AuditHook::execute()` writes with `FILE_APPEND | LOCK_EX`: `FILE_APPEND` never truncates, and `LOCK_EX`
+serialises cooperating writers. **Measured**: 8 concurrent processes × 200 records × 9000 bytes each
+(past `PIPE_BUF` and past one page), three takes — 1600 intact lines every time, byte total exact, zero
+split or interleaved records.
+
+**What WAS true, and is what the fix closed.** The leaf was one name in a world-writable directory, so
+(a) any other local user could pre-create it as a symlink and have the hook append through it, and (b)
+the file the hook creates is mode 0664 under the ordinary umask 0002 — **measured** — i.e. every other
+user on the box could READ a log carrying every tool's arguments and the first 200 bytes of its output.
+The default is now `sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, the directory created
+0700 and refused when it is a symlink, a non-directory, or not owned by this euid.
+
+**Why this matters beyond bookkeeping.** A reader who trusted the recorded mechanism would have reached
+for locking, which was already there, and left the reachability untouched.
+
+---
+
+### Eb51-2 — the hardened audit write fails SILENTLY, and the alternative costs one stderr write per tool call
+
+**Recorded 2026-08-24 by round-51 lane b.** Severity: observability. Not fixed, deliberately.
+
+`AuditHook::append()` answers `false` and returns when the directory is not this euid's or the leaf is a
+symlink, and `execute()` discards that answer. An operator whose audit directory has been squatted
+therefore learns nothing until they look. The reasoning for swallowing it is in the method's doc-block:
+this is a `PostToolUse` hook, the tool has already run, a `HookResult::deny()` would be a lie about a
+call that happened, and throwing would take down a run over a log line.
+
+**What is left is a notice, and it is not free.** `AuditHook` writes to fd 2 nowhere today, so a notice
+adds a file to `StderrEmitterCensusTest`'s per-file map — and on a squatted box it is one line per tool
+call for the whole run, which is the shape that trains an operator to ignore stderr.
+
+**Step.** Either a once-per-process notice (a static latch, which is process state on a class that has
+none) or a `HookResult::allow('<message>')` carrying the failure, IF a `PostToolUse` allow message has a
+consumer — check before designing, it may have none.
+
+> **Raised in value, same round.** `directoryIsOurs()` now also refuses a directory whose mode lets
+> anybody else in, and that arm has a failure mode the other two do not: it fires on a directory the
+> operator created THEMSELVES, by hand, with an ordinary `mkdir -p` under umask 0022 — no attacker, no
+> squatting, nothing visibly wrong. The symlink and foreign-owner arms only fire when something is
+> genuinely amiss and an operator has a reason to go looking. This one turns a perfectly reasonable
+> setup step into an audit log that silently never appears, and the remedy (`chmod 700`) is invisible
+> from the symptom. **A notice matters more now than when this entry was filed**, and the once-per-
+> process latch is the shape that fits: the mode does not change mid-run, so one line is the whole of
+> what needs saying.
+
+---
+
+### Eb51-3 — E307 is still open: `BackgroundSessionRunner::noticeRefusal()` drops `->kind`, and it was out of lane
+
+**Recorded 2026-08-24 by round-51 lane b.** Severity: as E307. Not fixed — `src/Sessions/` was not in
+this lane's file list and the split was strict.
+
+`Permissions\ToolRefusal::fromEvent()` answers with a `DenialKind`. As of this round it has TWO consumers
+rather than one — `NonInteractive::refusalFrom()` carries it out as the document's `kind`, and
+`NonInteractive::noticeRefusal()` now puts `token()` on the stderr line (E306) — so E307's headline
+("exactly one consumer") is no longer accurate. The daemon's sidecar log is still the surface that drops
+it, and it is still the surface with no operator watching.
+
+**The patch, ready to apply.** In `BackgroundSessionRunner::noticeRefusal()`, the record is built as
+`REFUSAL_RECORD . ' ' . $refusal->tool . ' was not run - ' . $this->oneLine($refusal->reason)`. Insert
+`'[' . $refusal->kind->token() . '] '` after the record marker, matching the shape
+`NonInteractive::refusalNotice()` now uses. `BackgroundSupervisor::restoreOutput()` decides line by line
+on the `[session:` prefix, so a token after the marker is safe against the line protocol.
+`tests/Sessions/BackgroundSessionRunnerTest.php` asserts the record's shape at five sites (search
+`was not run`) and each needs the token inserted.
+
+---
+
+### Eb51-4 — E306's stated gap was arm-distinguishing, and naming the kind cannot close it
+
+**Recorded 2026-08-24 by round-51 lane b, which implemented E306.** Severity: premise correction.
+**Measured** — asserted by a test rather than argued.
+
+E306 offered the stderr line's second gap as: `RefusalStderrSurfaceTest` pins that BOTH
+`HeadlessPermissionPrompt` arms produce a `Permission denied:` reason, "so stderr cannot distinguish 'a
+person typed n' from 'there was nobody at the keyboard'", and proposed naming the kind on that line.
+**Naming the kind cannot distinguish those two arms, because both are `DenialKind::Refused` and their
+token is the same word.** `RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()`
+asserts the two arms' observer lines are byte-identical, and it still passes after the change — which is
+the measurement.
+
+> **Correction, same round.** When this entry was written that test compared the two arms'
+> `observerBytes`, i.e. two INTS — equal LENGTH, not equal bytes, which two different reasons of the
+> same size would have satisfied. The citation was therefore weaker than the claim it was carrying, and
+> this claim is the whole of why E306's premise was refuted rather than implemented. The test now
+> compares the strings themselves and keeps the length figures beside them. **The conclusion did not
+> move** — the strings are in fact identical, confirmed by the corrected assertion passing — but the
+> evidence for it was not what this entry said it was.
+
+**What the change DID close is E306's first gap**, and that one has a consumer: under
+`--output-format text` stdout carries nothing about refusals by design, so stderr is the whole machine
+surface, and it published the classification only as a prefix inside the reason — the exact
+`str_starts_with` against published prose that `DenialKind::token()` exists so a consumer never has to
+write. Both formats now hand out the same three words.
+
+**What is still open for the ARM question.** The distinction lives in `HeadlessPermissionPrompt`'s own
+prose and nowhere machine-readable. Closing it needs a fourth kind, or a second field on the prompt's
+line — a decision about the published vocabulary, not a formatting change.
+
+---
+
+### Eb51-5 — E308 closed the catch; a tool callback returning a `ToolResult` can still assert a refusal
+
+**Recorded 2026-08-24 by round-51 lane b, which fixed E308.** Severity: stated bound, probably intended
+behaviour. Not fixed.
+
+E308's forgery route was `Chat::invokeTool()`'s `catch (\Throwable $e)` putting `$e->getMessage()` where
+`isDeniedResult()` reads. That is closed — the text now opens with `Error: <tool> failed with <class>:`,
+which is on no roster. **The pass-through branch above it is not closed and was not in scope**: a
+callback that returns a `ToolResult` directly has its `error` field carried through verbatim, so a tool
+can hand back `ToolResult::error($name, 'Permission denied: …')` and be drawn struck through and listed
+in a `refusals` array.
+
+**Why that is probably right rather than a hole.** A callback CHOOSING that text is making a claim about
+its own call — an MCP tool whose server refused really did have the call blocked — where an exception
+message is not a claim about anything. But it is the difference between a bound that was reasoned about
+and one nobody noticed, and nothing in the tree says which this is.
+
+**Step.** Decide and pin it: either a test asserting a callback-authored roster prefix IS honoured (with
+the reason), or a typed field on `ToolResult` so a refusal is declared rather than spelled.
+
+---
+
+### Eb51-6 — E324's five sites are still argument-less, and there is now a measured collision figure for the family
+
+**Recorded 2026-08-24 by round-51 lane b, which fixed E329's four.** Severity: as E324. Not fixed —
+`src/Workflows/` was out of this lane's list and E324 is its own entry.
+
+E329's four literal-prefix sites now spell `uniqid($prefix . getmypid() . '_', true)`. E324's five in
+`src/Workflows/WorkflowEngine.php` still spell the bare call, and its `NO_ENTROPY_FLAG_INVENTORY` row is
+now the ONLY one — which also makes it the only real-tree positive keeping that channel's walk honest,
+so whoever fixes it must give the channel another one (E328's fix took the other channel's, and the
+replacement is `tests/Support/Fixtures/StaticTempPathWalkControl.php`; do the same).
+
+**The figure E324 did not have.** Generator in the round's scratchpad (`probe_uniqid.php`): 40 processes
+released at one wall-clock barrier, 25 ids each, three takes, PHP 8.3.6. The literal-prefix form emitted
+1000 ids and 241–270 DISTINCT values — 730–759 collisions. The replacement emitted 1000 and collided 0
+times, all three takes. E324's containment argument (the pid+64-bit enclosing directory) is what stands
+between that and a real path collision, and it is a property of `makeResultDirPath()` rather than of the
+call sites.
+
+---
+
+### Eb51-7 — two stated bounds on the new audit-log guard, both derived rather than narrated
+
+**Recorded 2026-08-24 by round-51 lane b.** Severity: stated bounds. No action wanted today.
+
+(a) **The ownership arm is vacuous for a root process.** `AuditHook::directoryIsOurs()` refuses a
+directory this euid does not own; a suite or a daemon running as root owns everything, so a mutation
+deleting the uid comparison survives on that box. It is not a hole that can be closed, only one that
+must not be forgotten.
+
+> **Amended, same round.** The test named here took the temp root as its input and derived its
+> expectation from that root's real owner. Once the accept path also began refusing on mode, that input
+> stopped isolating the ownership arm at all: `/tmp` is 1777, so the MODE arm refuses it whatever its
+> owner is, and a mutation deleting the uid comparison would have survived it under every uid rather
+> than only under root. `testADirectoryThisUserDoesNotOwnIsRefused()` now derives its input instead of
+> its expectation — the first directory on a short candidate list that is foreign-owned AND already
+> tight enough to clear the mode arm (`/root` on this box) — and carries a positive control for the
+> root case, where the list comes back empty. **The bound itself is unchanged; what changed is that the
+> arm now has an input only it can refuse.**
+
+(b) **A build without ext-posix shares one directory.** With no `posix_geteuid()` the scope falls back to
+a literal, so every such user on one box lands in `sugar-crush-audit-noposix`. The failure mode is the
+SECOND user losing their audit log rather than the second user reading the first's. The alternatives were
+worse: `getmyuid()` answers the script file's owner, which for a shared installation is one answer for
+everybody and a wrong one.
+
+> **Correction, same round: the mechanism stated here was inverted.** This entry said "the 0700 creation
+> and the OWNERSHIP REFUSAL still hold" on such a build, copying a sentence from
+> `AuditHook::defaultLogDirectory()`'s doc-block. There is no ownership refusal on that build:
+> `directoryIsOurs()` has no uid to compare and SKIPS the comparison — a fact stated forty lines further
+> down the same file, in the opposite direction. What actually holds is the MODE. The second user
+> reaches a real, non-symlink, mode-clean directory, is ACCEPTED by the guard, and then fails on the
+> kernel's own permission check inside `file_put_contents()`. The outcome is the one recorded above, so
+> the entry's conclusion survives — but a reader acting on the old mechanism would have gone hunting for
+> a uid comparison to harden and found none. Both the doc-block and this entry now say the same true
+> thing, and the fallback arm has a test (`directoryFor()`) rather than only a paragraph: renaming the
+> literal was a mutation the entire `AuditHook` suite survived when this entry was filed, and now kills.
+
+---
+
+### Eb51-8 — the suite creates and populates the REAL production audit directory, and nothing removes it
+
+**Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 10.** Severity: cross-process
+hygiene. Not fixed — the fix is a wiring change on `HookManager::registerBuiltIns()`, out of this lane.
+
+**Observed on this box during the round.** `/tmp/sugar-crush-audit-1000/` created 09:13, `drwx------`,
+its `audit.log` grown to 6808 bytes by 09:39 — written by the suite, not by any real `sugarcrush`. E328
+is a clear improvement on the shared world-readable leaf it replaced (which was still growing at
+`/tmp/sugar-crush-audit.log` from the lanes sitting at the pre-E328 commit), but the suite still drives
+`new AuditHook()` at the production default through `registerBuiltIns()`.
+
+**`TMPDIR` cannot move it, MEASURED (PHP 8.3.6):** `putenv('TMPDIR=…')` then `sys_get_temp_dir()` still
+answers `/tmp`, because PHP resolves and caches it once per process. This is the same fact
+`ToolIpcFiles::sweep()`'s doc-block records for its own `$dir` parameter, and the same remedy applies —
+a seam the suite can point at.
+
+**Why it is not merely untidy.** `AuditHookTest` was rewritten (E298) specifically to stop driving writes
+at the production default, and it no longer does; the leak is now from every OTHER suite that reaches
+`registerBuiltIns()`. So the guard that exists covers the one file that already behaves.
+
+**Step.** Give `registerBuiltIns()` (or `AuditHook`'s default) the same test-only directory seam
+`ToolIpcFiles::sweep()` has, spent once from `tests/bootstrap.php`. Pin it with a test asserting the
+production directory is not created during a suite run.
+
+---
+
+### Eb51-9 — `uniqid(…, true)` puts a `.` into a tool-call id that goes on the wire
+
+**Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 11.** Severity: stated bound,
+low risk. Not fixed.
+
+E329's fix gives `ClaudeCodeProvider`'s fallback id the shape `tool_<pid>_<13hex>.<8hex>` — the
+more-entropy flag appends a period and eight more hex digits. That value is echoed back to the provider
+as `tool_call_id`. The other three E329 sites name local files, where a period is unremarkable; this one
+names a protocol field, and nobody weighed its character set when the flag was added.
+
+**Why it is probably fine and is recorded anyway.** It is the FALLBACK id — reached only when the
+provider did not supply one — and a period is legal in every id field surveyed. But "legal in the fields
+we happen to have looked at" is not the same as a decision, and a downstream consumer that splits on `.`
+would fail intermittently, on the fallback path only, which is the hardest kind of bug to reproduce.
+
+**Step.** Either state the bound in the call site's comment (cheapest, and honest), or spell the id from
+an alphabet chosen for the wire — `bin2hex(random_bytes(…))` already used by `ToolIpcFiles::reserve()`
+gives the same entropy with no period.
+
+---
+
+### Eb51-10 — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
+
+**Recorded 2026-08-24 by round-49 lane b's fix agent.** Severity: documentation drift. Partly mitigated.
+
+E328 changed a user-facing default and `HOOKS.md`'s built-in table went on documenting the old path for
+a full round. Grepped `tests/` for the filename: the only hits are `ScriptHook`/`Bootstrap` guards, none
+of which reads this table. **Nothing in the tree can notice when a row here stops being true.**
+
+**What was done rather than left.** The `AuditHook` row now cites `AuditHook::defaultLogFile()` instead
+of restating the literal, so that row cannot rot on the path VALUE. The other rows still restate
+behaviour in prose, and the document has three more tables of the same kind (events, precedence, the
+built-in registration order).
+
+**Step.** Decide whether this document is worth a guard at all. If it is, the cheap version is the shape
+`ProcessUniqueTempNameTest` uses for its inventories — an assertion that each named symbol still exists
+and still has the property the row claims — and not a golden-file comparison, which would red on every
+prose edit.
+
+---
