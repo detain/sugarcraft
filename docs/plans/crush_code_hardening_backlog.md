@@ -12013,3 +12013,117 @@ opposite responses.
 ---
 
 ---
+
+### Ea52-1 — `PosixBackend` has the SAME resource-id-as-descriptor defect as E336, at two sites
+
+**Recorded 2026-08-24 by round-52 lane a.** Severity: correctness, latent. **Measured, PHP 8.3.6. Out of
+lane — `candy-core/src/Util/Tty/PosixBackend.php` is not on this lane's file list. Reported, not fixed.**
+
+E336 is fixed in `TtyDetect::isAtty()`, but it was never the only instance. A token-stream census over the
+`src/` directory of all 58 libs (generator below) finds exactly three sites that cast a stream resource to
+`int` and then use the result as a file descriptor. One was `TtyDetect`. The other two are both in
+`PosixBackend`:
+
+  - `size()` — `$fd = (int) $this->stream;` then `SizeIoctl::query($fd)`
+  - `enableRawMode()` — `$fd = (int) $this->stream;` then `TermiosFactory::open($fd)`
+
+Same mechanism, same measurement: `(int)` on a stream is its RESOURCE ID. Both are latent for the same
+reason `TtyDetect` was — in an ordinary terminal descriptors 0, 1 and 2 are the same device, so `TIOCGWINSZ`
+on the wrong one returns the right size — and both stop being latent in a process that opened streams before
+asking. `enableRawMode()` is the worse of the two: it puts an unrelated descriptor into raw mode and then
+restores a snapshot taken from it.
+
+`candy-serve/src/StatsServer.php` also casts a stream to `int`, and is NOT an instance: it uses the value as
+an array key for handle identity, which is exactly what a resource id is for. Any sweep of this pattern has
+to keep that one (rule 26).
+
+**Generator**, PHP 8.3.6, whole-population walk, no sampling: `token_get_all()` over every `.php` under
+`*/src`, collect every `T_INT_CAST`, record the next significant token, and report every hit rather than
+only the ones that match a shape (rule 14). 1042 int-casts across 58 libs; the three above are the ones whose
+operand is a stream.
+
+**Step.** Give both sites the same treatment `TtyDetect::isAtty()` got where the question allows it —
+`size()` cannot, because `ioctl` genuinely needs a descriptor number. For `size()` the honest options are to
+carry the descriptor alongside the stream, or to keep the `stty`/`tput` fallback as the primary. For
+`enableRawMode()` the descriptor is needed too, so the same applies. Do not "fix" it by deleting the
+`(int)` — the call needs a number, and the defect is that it is the wrong number.
+
+---
+
+### Ea52-2 — three doc-block rows in `StdinConstantReaderCensusTest` describe defects this round closed
+
+**Recorded 2026-08-24 by round-52 lane a.** Severity: stale justification. **Out of lane —
+`sugar-crush/tests/StdinConstantReaderCensusTest.php` is on no lane's list this round. Reported, not
+edited.**
+
+That file's class doc-block carries a judged row per entry in its roster, and this round's fixes make three
+of them describe a tree that no longer exists. The roster assertion itself stays GREEN (verified by running
+it) because the roster is a set of file paths and none of those changed — this is prose drift, not a red.
+
+  - `candy-core/src/Util/Tty/EnvDetect.php` — says "WOULD THROW, AND IS DORMANT". Still dormant; no longer
+    throws. `isConsoleStdin()` now opens `if (!\defined('STDIN') || !\is_resource(\STDIN)) { return false; }`.
+  - `candy-core/src/Program.php` — says "GUARDED, BUT ITS GUARD'S FALLBACK IS NOW ITSELF DEAD". The fallback
+    is no longer a constant: resolution is own-handle → constant → `/dev/null` file spec, via
+    `Program::childDescriptor()`.
+  - `candy-core/src/Util/RawMode.php` — says both its methods "gate on `TtyDetect::isAtty()`, which opens
+    with `is_resource($stream)` and returns false". Still true, and the sentence after it about the
+    fd→Termios route is not: `isAtty()` no longer reaches candy-pty at all.
+
+**Step.** Rewrite the three rows in the three-part form (rule 7) — WHAT IT SAID / WHAT IS TRUE NOW / WHY THE
+ROW STAYS. Do not delete them; the roster's own instructions say the judgement belongs in the doc-block, and
+a row with no judgement is a row the next reader adds blind.
+
+---
+
+### Ea52-3 — two family members degrade rather than throw, and nothing pins that they still do
+
+**Recorded 2026-08-24 by round-52 lane a.** Severity: unpinned invariant. **Verified by symbol. Out of lane
+— `candy-core/src/Util/Tty.php` and `candy-core/src/Util/Tty/WindowsBackend.php`.**
+
+The closed-descriptor-0 guard shipped this round
+(`candy-core/tests/Util/ClosedDescriptorZeroFamilyTest`) drives four members inside a child that has closed
+its own descriptor 0. Two more members exist and are NOT in it:
+
+  - `Tty::__construct()` is `self::backend($stream ?? \STDIN, $termios)`. On this box that reaches
+    `PosixBackend`, whose `isTty()` is `is_resource($this->stream) && stream_isatty($this->stream)` — the
+    liveness test is the LEFT operand, so the throwing call is short-circuited away. Correct today, and
+    correct by an accident of operand order that nothing asserts.
+  - `WindowsBackend::__construct()` has the same `?? \STDIN`, and its `isTty()` guards explicitly. It is
+    unreachable on Linux and in CI (`scripts/affected-libs.php` puts no Windows runner on these suites), so
+    a claim about its live behaviour would be reasoning rather than measurement.
+
+**Why they were left out rather than forgotten.** Both are constructors, and constructing them in the probe
+child would test the constructor rather than the descriptor question; `PosixBackend`'s short-circuit is the
+thing worth pinning, and it wants a test of `isTty()` with a dead stream, not a third child process.
+
+**Step.** Add `PosixBackend::isTty()` with a closed stream to the family probe — one line, and it pins the
+operand order. Leave `WindowsBackend` unjudged for Windows on purpose and say so where the row is added.
+
+---
+
+### Ea52-4 — `pgrep -f <pattern>` matches the shell that is running the measurement
+
+**Recorded 2026-08-24 by round-52 lane a.** Severity: methodology. **Measured, PHP 8.3.6 / bash, three
+takes.**
+
+While measuring whether a fix stopped a process leak, the counter was
+`comm -13 <(before) <(pgrep -f "mosaic-ssrf")`. It reported exactly ONE surviving process on every run,
+consistently, after a change that had in fact eliminated all of them — and the survivor was gone by the time
+`ps` was asked about it. The pattern string appears in the command line of the very shell invoking `pgrep`,
+so `pgrep -f` matched the measurement's own wrapper. A consistent, reproducible, non-zero answer, entirely
+manufactured by the instrument.
+
+It is the round-44 `grep -c`-on-binary-output shape one step further along: not a false zero this time but a
+false ONE, which is worse, because a false one looks like a partial fix and invites a second round of work
+on a fix that was already complete.
+
+**The fix that worked**, and the general form: put the pattern in a SCRIPT FILE and call the script, so the
+caller's command line never contains it — and match on `pgrep -x <exact comm>` plus a `/proc/<pid>/cmdline`
+test rather than on `-f`. Build the pattern by concatenation inside the script if the script's own name could
+match. This is rule 26 ("a blanket textual pass corrupts the prose that describes the pattern") applied to a
+process table instead of a source tree.
+
+**Step.** None as a code change. Worth citing the next time a lane counts processes, ports or open
+descriptors from bash.
+
+---
