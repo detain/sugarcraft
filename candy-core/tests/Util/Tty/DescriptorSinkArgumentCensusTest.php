@@ -753,6 +753,161 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
     }
 
     /**
+     * A CAST HIDDEN IN A PROPERTY OR AN ARRAY ELEMENT is traced back too, not
+     * only one hidden in a local.
+     *
+     * The trace-back exists because three of the six sites in the original
+     * defect family parked the cast a line or two above the sink -- "the same
+     * defect with a line break in it", in the scanner's own words. It then
+     * only spoke one spelling. MEASURED through the shipped scanner, PHP
+     * 8.3.6, on three sources differing in nothing but where the cast was
+     * parked: `$fd` traced back and classified INT_CAST_VIA_VARIABLE, while
+     * `$this->fd` and `$tty[0]` both came back as the benign VARIABLE, in
+     * silence.
+     *
+     * That is not an abstract gap. Rows in {@see self::ROSTER} are spelled
+     * `$this->fd` and `$this->anchorSlaveFd`, and this census leans on the
+     * KIND to catch a site whose spelling is unchanged but whose meaning
+     * moved. For a property spelling the kind could not move at all. The
+     * ARRAY spelling is the one the FIRST census of this family died of.
+     *
+     * @dataProvider hiddenCastSpellings
+     */
+    public function testACastHiddenBehindAnyAssignableSpellingIsTracedBack(
+        string $spelling,
+        string $assignment,
+    ): void {
+        $fn = DescriptorSinkScanner::FUNCTION_SINKS[0];
+
+        self::assertSame(
+            [DescriptorSinkScanner::INT_CAST_VIA_VARIABLE],
+            array_column(
+                DescriptorSinkScanner::scanSource(
+                    "<?php\n" . $assignment . "\n" . $fn . '(' . $spelling . ");\n",
+                ),
+                'kind',
+            ),
+            'a cast parked in ' . $spelling . ' was not traced back, so it classifies as the '
+                . 'benign shape and no judgement is ever demanded for it',
+        );
+    }
+
+    /** @return iterable<string, array{string, string}> */
+    public static function hiddenCastSpellings(): iterable
+    {
+        yield 'a local'          => ['$fd', '$fd = (int) $stream;'];
+        yield 'a property'       => ['$this->fd', '$this->fd = (int) $stream;'];
+        yield 'an array element' => ['$tty[0]', '$tty[0] = (int) $stream;'];
+        yield 'a static property' => ['self::$fd', 'self::$fd = (int) $stream;'];
+        yield 'a nested property' => ['$this->pty->fd', '$this->pty->fd = (int) $stream;'];
+        yield 'intval in a property' => ['$this->fd', '$this->fd = intval($stream);'];
+    }
+
+    /**
+     * THE NEGATIVE POLARITY of the test above: the widened trace-back did not
+     * buy its reach by calling everything a hidden cast.
+     *
+     * A trace-back that answered INT_CAST_VIA_VARIABLE for every accessor
+     * chain would pass every case in the provider above and would be useless
+     * -- it would classify all 28 method rows in the roster as defective and
+     * force the kind column to a constant.
+     */
+    public function testAnAssignmentThatIsNotACastIsStillTheBenignShape(): void
+    {
+        $fn = DescriptorSinkScanner::FUNCTION_SINKS[0];
+
+        foreach ([
+            'a property assigned a genuine descriptor' => ['$this->fd', '$this->fd = $libc->posix_openpt($flags);'],
+            'a property assigned an int literal'       => ['$this->fd', '$this->fd = 0;'],
+            'a property never assigned at all'         => ['$this->fd', '$unrelated = (int) $stream;'],
+            'a DIFFERENT property carrying the cast'   => ['$this->fd', '$this->other = (int) $stream;'],
+            'an array element with another index'      => ['$tty[0]', '$tty[1] = (int) $stream;'],
+            'a DIFFERENT static property'              => ['self::$fd', 'self::$other = (int) $stream;'],
+            'the same name on another class'           => ['self::$fd', 'Other::$fd = (int) $stream;'],
+        ] as $because => [$spelling, $assignment]) {
+            self::assertSame(
+                [DescriptorSinkScanner::VARIABLE],
+                array_column(
+                    DescriptorSinkScanner::scanSource(
+                        "<?php\n" . $assignment . "\n" . $fn . '(' . $spelling . ");\n",
+                    ),
+                    'kind',
+                ),
+                $because . ' was reported as a hidden cast, so the trace-back is matching the '
+                    . 'wrong assignment and the kind column says nothing',
+            );
+        }
+    }
+
+    /**
+     * THE DORMANT BRANCH of the trace-back's shape test, pinned so a future
+     * widening cannot make it live in silence.
+     *
+     * {@see DescriptorSinkScanner::renderedLeftHandSideEndingAt()} refuses a
+     * chain that {@see DescriptorSinkScanner::classify()} does not call
+     * VARIABLE, and a bare `FOO` is CONSTANT. That refusal is unreachable
+     * today for one reason only: scanSource() asks for a trace-back solely
+     * when the ARGUMENT classified VARIABLE, and a lone name never does.
+     *
+     * SCOPE OF WHAT THIS PINS, stated plainly because it is narrow: this test
+     * does NOT kill a mutation of the shape test -- delete that refusal and
+     * `FOO` still comes back CONSTANT, because the gate upstream stopped it
+     * first. What it kills is a mutation of THE GATE. Widen scanSource() to
+     * trace a CONSTANT argument and this goes red, which is precisely the
+     * change that would make the dormant refusal load-bearing and send the
+     * reader back to the doc-block explaining it.
+     */
+    public function testABareConstantIsNeverTracedBack(): void
+    {
+        $fn = DescriptorSinkScanner::FUNCTION_SINKS[0];
+
+        self::assertSame(
+            [DescriptorSinkScanner::CONSTANT],
+            array_column(
+                DescriptorSinkScanner::scanSource(
+                    "<?php\nFOO = (int) \$stream;\n" . $fn . "(FOO);\n",
+                ),
+                'kind',
+            ),
+            'a bare constant argument was traced back to an assignment. The trace-back is '
+                . 'reached only for a VARIABLE argument, so either that gate widened or the '
+                . 'shape test in renderedLeftHandSideEndingAt() no longer refuses a name -- '
+                . 'read its doc-block before changing either.',
+        );
+    }
+
+    /**
+     * A spelling the widened trace-back still cannot reach answers LOUDLY.
+     *
+     * `static::$fd` breaks the accessor chain on `T_STATIC`, which is not an
+     * accessor token. The scanner does NOT quietly call that the benign
+     * VARIABLE shape -- it reports UNCLASSIFIED, so the census demands a
+     * judgement rather than passing over it. MEASURED, PHP 8.3.6: `self` is a
+     * `T_STRING` and rides the chain, `static` is a `T_STATIC` and does not.
+     *
+     * This is the guard-must-go-red-on-what-it-cannot-parse rule applied to
+     * the one gap the widening left, so the gap is a recorded answer instead
+     * of a silent hole.
+     */
+    public function testASpellingTheChainCannotWalkIsUnclassifiedNotBenign(): void
+    {
+        $fn = DescriptorSinkScanner::FUNCTION_SINKS[0];
+
+        self::assertSame(
+            [DescriptorSinkScanner::UNCLASSIFIED],
+            array_column(
+                DescriptorSinkScanner::scanSource(
+                    "<?php\nstatic::\$fd = (int) \$stream;\n" . $fn . "(static::\$fd);\n",
+                ),
+                'kind',
+            ),
+            'a spelling the accessor walk cannot express was reported as something other than '
+                . 'UNCLASSIFIED. A shape this scanner cannot parse must be reported, never '
+                . 'absorbed into the benign VARIABLE bucket.',
+        );
+    }
+
+    /**
      * A cdef declaration the parser CANNOT classify is a failure, not a skip.
      *
      * The counterpart to the derivation control above, and the half that

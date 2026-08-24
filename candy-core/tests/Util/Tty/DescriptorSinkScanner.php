@@ -375,10 +375,11 @@ final class DescriptorSinkScanner
             }
 
             $kind = self::classify($argument);
-            if ($kind === self::VARIABLE && \count($argument) === 1) {
-                /** @var array{0:int,1:string,2:int} $only */
-                $only = $argument[0];
-                $assigned = self::lastAssignmentTo($tokens, $i, $only[1]);
+            if ($kind === self::VARIABLE) {
+                // Keyed on the RENDERED spelling, not on a lone variable
+                // token, so `$this->fd` and `$tty[0]` are traced back too --
+                // see lastAssignmentTo() for what only speaking `$x` cost.
+                $assigned = self::lastAssignmentTo($tokens, $i, self::render($argument));
                 if ($assigned !== null
                     && \in_array(self::classify($assigned), [self::INT_CAST, self::INTVAL], true)
                 ) {
@@ -703,8 +704,8 @@ final class DescriptorSinkScanner
     }
 
     /**
-     * The right-hand side of the most recent assignment to $name before
-     * $before, or null.
+     * The right-hand side of the most recent assignment to the target
+     * SPELLING before $before, or null.
      *
      * Deliberately a plain backwards walk over the whole file rather than a
      * scope-aware one: a false POSITIVE here costs a roster row and a
@@ -712,20 +713,45 @@ final class DescriptorSinkScanner
      * unexamined cast, which is the thing this class exists to stop
      * happening twice.
      *
+     * ## Why the target is a rendered spelling and not a variable name
+     *
+     * WHAT THIS USED TO DO: match a single `T_VARIABLE` token by name, which
+     * meant the trace-back only ever ran for an argument that was a lone
+     * `$x`. WHAT IS TRUE NOW: MEASURED through the shipped scanner, PHP
+     * 8.3.6, three sources differing only in where the cast was parked --
+     *
+     *   `$fd = (int) $stream;`        then the sink  -> INT_CAST_VIA_VARIABLE
+     *   `$this->fd = (int) $stream;`  then the sink  -> VARIABLE (silent)
+     *   `$tty[0] = (int) $stream;`    then the sink  -> VARIABLE (silent)
+     *
+     * -- so a cast parked in a PROPERTY or an ARRAY ELEMENT classified as the
+     * benign shape. That is the same defect with a line break in it, which is
+     * this class's own phrase for why the trace-back exists, and the array
+     * spelling is the one the FIRST census of this family died of. It also
+     * mattered for the shape the tree actually uses: rows in the census are
+     * spelled `$this->fd` and `$this->anchorSlaveFd`, and for those the
+     * recorded KIND -- the thing that catches a site whose spelling is
+     * unchanged but whose meaning moved -- could not move at all.
+     *
+     * WHY THE OLD NARROWNESS EARNS A MENTION: matching one token is cheap and
+     * cannot mis-bracket anything, and that is a real property this walk
+     * gives up. The compensating rule is above: a false positive here is a
+     * roster row, and a false negative is the defect.
+     *
      * @param  list<array{0:int,1:string,2:int}|string> $tokens
+     * @param  string                                   $target rendered, e.g. `$this->fd`
      * @return list<array{0:int,1:string,2:int}|string>|null
      */
-    private static function lastAssignmentTo(array $tokens, int $before, string $name): ?array
+    private static function lastAssignmentTo(array $tokens, int $before, string $target): ?array
     {
         for ($i = $before - 1; $i >= 0; $i--) {
-            $tok = $tokens[$i];
-            if (!\is_array($tok) || $tok[0] !== \T_VARIABLE || $tok[1] !== $name) {
+            if ($tokens[$i] !== '=') {
                 continue;
             }
-            $eq = self::nextSignificant($tokens, $i + 1);
-            if ($eq === null || $tokens[$eq] !== '=') {
+            if (self::renderedLeftHandSideEndingAt($tokens, $i - 1) !== $target) {
                 continue;
             }
+            $eq = $i;
 
             $rhs   = [];
             $depth = 0;
@@ -748,6 +774,73 @@ final class DescriptorSinkScanner
         }
 
         return null;
+    }
+
+    /**
+     * The accessor chain immediately to the LEFT of an `=`, rendered.
+     *
+     * Walks back over the tokens an accessor chain may be made of and stops
+     * at the first one that is not. `$this->fd` comes back as `$this->fd`;
+     * `$tty[0]` as `$tty[0]`; a `list($a, $b) =` destructuring stops on its
+     * comma and comes back as something that matches no argument spelling,
+     * which is the intended answer rather than a special case.
+     *
+     * ## Why the shape test is {@see self::classify()} and not a rule of its own
+     *
+     * WHAT THIS USED TO SAY: "a chain must be rooted in a variable to be an
+     * assignable spelling. Without this, a bare `FOO = 1` const-ish shape
+     * would render as a name and could collide with a CONSTANT argument."
+     *
+     * WHAT IS TRUE NOW: the collision it names cannot happen, and MEASURING
+     * it is what showed that. PHP 8.3.6, through the shipped scanner, source
+     * `FOO = (int) $stream;` followed by a sink call on `FOO`: the reported
+     * kind is CONSTANT. It is CONSTANT with this function deleted too. A
+     * lone name classifies as CONSTANT on the ARGUMENT side, and scanSource()
+     * only ever calls the trace-back when the argument classified VARIABLE,
+     * so a constant argument does not reach this function to be collided
+     * with. The root test also rejected `self::$fd`, which the argument side
+     * DOES call VARIABLE -- so the two sides disagreed about what a traceable
+     * spelling is, and the disagreement was silent in the direction that
+     * costs a false negative.
+     *
+     * WHY THE RULE STILL EARNS ITS PLACE: something must still refuse a chain
+     * this function mis-bracketed, and the honest form of "is this a spelling
+     * the census would trace?" is the question the argument side already
+     * answers. Asking classify() makes the two sides the SAME test by
+     * construction: whatever spelling can be traced back is exactly whatever
+     * spelling can be an argument, and neither can drift without the other.
+     * A bare `FOO` is still refused here -- classify() calls it CONSTANT --
+     * so the old rule's intent survives; only its hand-rolled second opinion
+     * is gone.
+     *
+     * The constant branch is therefore DORMANT, not dead: it is unreachable
+     * only because of the caller's gate, and
+     * {@see DescriptorSinkArgumentCensusTest::testABareConstantIsNeverTracedBack()}
+     * pins that gate so a future widening of it has to come back here.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function renderedLeftHandSideEndingAt(array $tokens, int $from): string
+    {
+        $chain = [];
+        for ($i = $from; $i >= 0; $i--) {
+            $tok = $tokens[$i];
+            if (\is_array($tok) && \in_array($tok[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+            if (!self::isAccessorToken($tok)) {
+                break;
+            }
+            array_unshift($chain, $tok);
+        }
+
+        // The SAME question the argument side asks -- see the doc-block for
+        // why this is classify() and not a rule of its own.
+        if ($chain === [] || self::classify($chain) !== self::VARIABLE) {
+            return '';
+        }
+
+        return self::render($chain);
     }
 
     /**
