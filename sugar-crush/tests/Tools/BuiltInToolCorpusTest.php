@@ -351,9 +351,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(292, $files, 'php files under src/');
+        $this->assertSame(294, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 241, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
+            ['concrete' => 243, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -443,8 +443,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(292, count($files), 'php files under src/');
-        $this->assertSame(311, $declarations, 'top-level declarations in them');
+        $this->assertSame(294, count($files), 'php files under src/');
+        $this->assertSame(313, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

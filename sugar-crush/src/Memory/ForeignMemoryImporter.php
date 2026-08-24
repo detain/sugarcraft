@@ -6,10 +6,10 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Memory;
 
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\Frontmatter;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Skills\SkillSource;
-use Symfony\Component\Yaml\Yaml;
 
 /**
  * Imports memory/scratchpad files written by OTHER coding CLIs into
@@ -164,7 +164,7 @@ final class ForeignMemoryImporter
             }
 
             try {
-                $meta = Yaml::parse($m[1]);
+                $meta = Frontmatter::parse($m[1]);
             } catch (\Throwable $e) {
                 // One unparseable foreign file must not abort the import of
                 // every other entry in the directory.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Memory;
 
 use SugarCraft\Crush\Agents\MemoryScope;
+use SugarCraft\Crush\Support\Frontmatter;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -510,7 +511,7 @@ final class MemoryStore
 
         try {
             /** @var array{id: string, type: string, tags: array<string>, scope: string, createdAt: string, modifiedAt: string} $meta */
-            $meta = Yaml::parse($parts[1]);
+            $meta = Frontmatter::parse($parts[1]);
 
             return MemoryEntry::new(
                 type: $meta['type'],

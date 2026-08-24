@@ -6,8 +6,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Skills;
 
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\Frontmatter;
 use SugarCraft\Crush\Support\HomeDirectory;
-use Symfony\Component\Yaml\Yaml;
 
 /**
  * Loads skills in three stages:
@@ -636,7 +636,7 @@ final class SkillLoader
 
         // Parse frontmatter only (stage 1 - don't load body)
         if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches)) {
-            $frontmatter = Yaml::parse($matches[1]);
+            $frontmatter = Frontmatter::parse($matches[1]);
         } else {
             $frontmatter = [];
         }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Skills;
 
-use Symfony\Component\Yaml\Yaml;
+use SugarCraft\Crush\Support\Frontmatter;
 
 /**
  * A skill loaded from a SKILL.md file.
@@ -62,7 +62,7 @@ final readonly class Skill
         if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
             $frontmatter = $matches[1];
             $body = substr($content, strlen($matches[0]));
-            $meta = Yaml::parse($frontmatter);
+            $meta = Frontmatter::parse($frontmatter);
         } else {
             $meta = [];
             $body = $content;

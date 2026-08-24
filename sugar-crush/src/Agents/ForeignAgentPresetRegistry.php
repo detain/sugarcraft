@@ -6,10 +6,11 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\EnumSpelling;
+use SugarCraft\Crush\Support\Frontmatter;
 use SugarCraft\Crush\Support\HomeDirectory;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Skills\SkillSource;
-use Symfony\Component\Yaml\Yaml;
 
 /**
  * Discovers agent definitions written for OTHER coding CLIs -- Claude Code's
@@ -448,14 +449,14 @@ final class ForeignAgentPresetRegistry
     /**
      * Read and parse a preset file's YAML frontmatter block.
      *
-     * Deliberately duplicates the read/regex/Yaml::parse body of
-     * {@see AgentPresetRegistry::parsePresetFile()}: that method is private and
-     * fused to arrayToPreset(), so sharing it would mean adding a public
-     * frontmatter utility to a registry class that has no other static API.
-     * The same block also lives in {@see \SugarCraft\Crush\Skills\SkillLoader}
-     * and {@see \SugarCraft\Crush\Skills\Skill::parse()}, so the honest fix is
-     * one repo-wide frontmatter reader those four call -- a refactor well
-     * outside a foreign-preset import. Left duplicated until that lands.
+     * The read/regex half still duplicates {@see AgentPresetRegistry::parsePresetFile()}
+     * -- that method is private and fused to arrayToPreset(), so sharing it
+     * would mean adding a public frontmatter utility to a registry class that
+     * has no other static API. The PARSE half no longer does: the repo-wide
+     * reader this comment used to ask for landed as
+     * {@see \SugarCraft\Crush\Support\Frontmatter}, and every frontmatter
+     * site (here, AgentPresetRegistry, SkillLoader, Skill::parse(), CommandSpec,
+     * ForeignMemoryImporter, MemoryStore) now goes through it.
      *
      * Returns the parsed frontmatter AND the markdown after it, because in both
      * foreign dialects the body is where the agent's prompt is written.
@@ -473,7 +474,7 @@ final class ForeignAgentPresetRegistry
             throw new \RuntimeException("No YAML frontmatter found in: {$file}");
         }
 
-        $data = Yaml::parse($matches[1]);
+        $data = Frontmatter::parse($matches[1]);
         if (!is_array($data)) {
             throw new \RuntimeException("Invalid YAML frontmatter in: {$file}");
         }
@@ -762,7 +763,7 @@ final class ForeignAgentPresetRegistry
      *
      * The camelCase retry exists because Claude Code spells its permissionMode
      * values `acceptEdits`/`bypassPermissions` while sugar-crush's
-     * {@see PermissionMode} is kebab-case. Lowercasing alone leaves `accepteedits`
+     * {@see PermissionMode} is kebab-case. Lowercasing alone leaves `acceptedits`
      * unmatched, and this class's whole contract is that lossy mappings are
      * reported rather than dropped -- a silent fall-back to
      * PermissionMode::Default on the one Claude field spelled differently would
@@ -770,19 +771,19 @@ final class ForeignAgentPresetRegistry
      * lowercase lookup is tried first so a value that is already kebab (or has
      * no case boundary, like `xhigh`) never reaches the split.
      *
+     * The retry itself now lives in {@see EnumSpelling}: the NATIVE reader
+     * next door, {@see AgentPresetRegistry}, was resolving the same fields
+     * with a hand-written `match` that knew only the kebab spelling and
+     * silently defaulted the rest, so the logic argued for here had to stop
+     * being private to this class. This method stays as the name the mapping
+     * code reads by.
+     *
      * @template T of \BackedEnum
      * @param  class-string<T> $enum
      * @return T|null
      */
     private function enum(string $enum, mixed $value): ?\BackedEnum
     {
-        if (!is_string($value) && !is_int($value)) {
-            return null;
-        }
-
-        $raw = (string) $value;
-
-        return $enum::tryFrom(strtolower($raw))
-            ?? $enum::tryFrom(strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $raw)));
+        return EnumSpelling::resolve($enum, $value);
     }
 }

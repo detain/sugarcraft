@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Commands;
 
 use Symfony\Component\Yaml\Exception\ParseException;
-use Symfony\Component\Yaml\Yaml;
 use SugarCraft\Crush\Palette\PaletteAction;
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\Frontmatter;
 
 /**
  * Metadata for one command, used by BOTH command surfaces - the "/" popup
@@ -279,7 +279,7 @@ final class CommandSpec
 
         if (preg_match(self::FRONTMATTER_PATTERN, $content, $matches) === 1) {
             try {
-                $meta = Yaml::parse($matches[1]);
+                $meta = Frontmatter::parse($matches[1]);
             } catch (ParseException $e) {
                 throw new \InvalidArgumentException("Malformed frontmatter in $path: {$e->getMessage()}", 0, $e);
             }

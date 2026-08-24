@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
-use Symfony\Component\Yaml\Yaml;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Support\ContainedPath;
+use SugarCraft\Crush\Support\EnumSpelling;
+use SugarCraft\Crush\Support\Frontmatter;
 
 /**
  * Registry for loading and resolving agent presets from the filesystem.
@@ -363,7 +364,7 @@ final class AgentPresetRegistry
             throw new \RuntimeException("No YAML frontmatter found in: {$filePath}");
         }
 
-        $data = Yaml::parse($matches[1]);
+        $data = Frontmatter::parse($matches[1]);
         if (!is_array($data)) {
             throw new \RuntimeException("Invalid YAML frontmatter in: {$filePath}");
         }
@@ -425,36 +426,38 @@ final class AgentPresetRegistry
         return $body === '' ? null : $body;
     }
 
+    /**
+     * Each of the four resolvers below used to be a hand-written
+     * `match (strtolower($value))` that restated its enum's own backed values
+     * and swallowed everything else into a silent default. Two things were
+     * wrong with that, and only the second one bit:
+     *
+     *  - It duplicated the enum. Adding a case meant remembering to add an arm.
+     *  - It knew ONE spelling. `permissionMode: acceptEdits` -- Claude Code's
+     *    spelling of `accept-edits`, and what `.sugar-crush/agents/coder.md`
+     *    in this very repository declares -- matched no arm and resolved to
+     *    {@see PermissionMode::Default}, with nothing logged. The preset had
+     *    been losing its permission mode for as long as it had existed.
+     *
+     * {@see EnumSpelling::resolve()} is the sibling reader's camel-to-kebab
+     * retry, extracted so both readers share one answer. The `?? Default`
+     * tails keep each field's documented fall-back exactly where it was: what
+     * changed is which spellings reach the enum, not what an unknown value
+     * does.
+     */
     private function parsePermissionMode(string $value): PermissionMode
     {
-        return match (strtolower($value)) {
-            'accept-edits' => PermissionMode::AcceptEdits,
-            'plan' => PermissionMode::Plan,
-            'auto' => PermissionMode::Auto,
-            'dont-ask' => PermissionMode::DontAsk,
-            'bypass-permissions' => PermissionMode::BypassPermissions,
-            default => PermissionMode::Default,
-        };
+        return EnumSpelling::resolve(PermissionMode::class, $value) ?? PermissionMode::Default;
     }
 
     private function parseMemoryScope(string $value): MemoryScope
     {
-        return match (strtolower($value)) {
-            'project' => MemoryScope::Project,
-            'local' => MemoryScope::Local,
-            default => MemoryScope::User,
-        };
+        return EnumSpelling::resolve(MemoryScope::class, $value) ?? MemoryScope::User;
     }
 
     private function parseEffort(string $value): Effort
     {
-        return match (strtolower($value)) {
-            'low' => Effort::Low,
-            'high' => Effort::High,
-            'xhigh' => Effort::XHigh,
-            'max' => Effort::Max,
-            default => Effort::Medium,
-        };
+        return EnumSpelling::resolve(Effort::class, $value) ?? Effort::Medium;
     }
 
     private function parseIsolation(?string $value): ?Isolation
@@ -463,10 +466,6 @@ final class AgentPresetRegistry
             return null;
         }
 
-        return match (strtolower($value)) {
-            'worktree' => Isolation::Worktree,
-            'none' => Isolation::None,
-            default => null,
-        };
+        return EnumSpelling::resolve(Isolation::class, $value);
     }
 }
