@@ -115,9 +115,20 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      *
      * A spelling that occurs TWICE in one file gets ` #2`, ` #3` on the second
      * and later occurrences -- see {@see self::indexByKey()} for what happened
-     * before it did. No row needs one today (13 sites, 13 distinct spellings),
-     * and a row that grows one is telling you a same-spelled sibling appeared
-     * beside it.
+     * before it did.
+     *
+     * WHAT THIS USED TO SAY: "no row needs one today (13 sites, 13 distinct
+     * spellings)". WHAT IS TRUE NOW: both halves are false. The census grew
+     * the METHOD spelling of its own sinks and the population roughly tripled;
+     * ordinals are ordinary here, and several rows below carry one. WHY THE
+     * PARAGRAPH STILL EARNS ITS PLACE: the mechanism it describes is the point
+     * -- a row that GROWS an ordinal is telling you a same-spelled sibling
+     * appeared beside it, and that is the signal to read, whether or not any
+     * row happens to carry one on the day you are reading.
+     *
+     * No count is written here on purpose. This roster is the count, it moves
+     * whenever a sibling lane lands a descriptor sink, and a number in prose
+     * is stale the moment it is true.
      *
      * The KIND is held separately because one spelling can carry two shapes:
      * `query($fd)` is `INT_CAST_VIA_VARIABLE` while the cast sits in the
@@ -422,10 +433,19 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
                 . "one already rostered -- it needs its own judgement, not a shrug.\n"
                 . "\nIF YOU ARE RESOLVING A MERGE AND DID NOT TOUCH candy-core: that is\n"
                 . "expected and it is not a mistake. This census walks EVERY library's src/,\n"
-                . "so a descriptor sink added anywhere in the monorepo reds candy-core. A key\n"
-                . "beginning `->` is the METHOD spelling, i.e. a call on candy-pty's libc FFI\n"
-                . "handle; its symbol roster is derived from Libc::cdef(), so a new fd-first\n"
-                . "declaration THERE also lands here. Add the row; do not delete the site.\n"
+                . "so a descriptor sink added anywhere in the monorepo reds candy-core.\n"
+                . "\nA key beginning `->` is the METHOD spelling: a call SPELLED as a method\n"
+                . "whose name matches a libc symbol from Libc::cdef(). The scanner forms no\n"
+                . "opinion about the receiver -- deliberately, because enumerating receiver\n"
+                . "spellings is how the previous attempt missed four live sites. So FIRST\n"
+                . "DECIDE WHETHER THIS IS A LIBC CALL AT ALL. A one-argument ->close(\$x) on a\n"
+                . "stream wrapper, a socket object or your own handle class is reported here\n"
+                . "too, and it is NOT a descriptor sink. If that is your case, the row still\n"
+                . "belongs -- write the judgement as 'not a libc call, <what it really is>'.\n"
+                . "Do not write a row that calls it an FFI descriptor because this message\n"
+                . "mentioned FFI. A wrong judgement in the roster is worse than the red.\n"
+                . "\nLibc::cdef() is also the symbol roster's source, so a new fd-first\n"
+                . "declaration THERE lands here too. Add the row; do not delete the site.\n"
                 . $this->describe($found, $unjudged),
         );
 
@@ -1082,10 +1102,20 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      * keeps its own kind.
      *
      * A pin for {@see self::indexByKey()}, driven with hand-built hits rather
-     * than with the tree: the tree has 13 sites and 13 distinct spellings, so
-     * it cannot exercise this at all, and it must not have to. A defect that
-     * only appears once a second same-spelled sibling lands would otherwise be
-     * pinned by nothing until the day it bit someone.
+     * than with the tree.
+     *
+     * WHAT THIS USED TO SAY: "the tree has 13 sites and 13 distinct spellings,
+     * so it cannot exercise this at all". WHAT IS TRUE NOW: the opposite. The
+     * tree does exercise it -- rows in {@see self::ROSTER} carry ordinals --
+     * and the sentence was already false when the METHOD spelling landed.
+     *
+     * WHY THE FIXTURE STILL EARNS ITS PLACE, which is the part the old reason
+     * got backwards: being exercised BY THE TREE is not the same as being
+     * pinned. Tree coverage here is incidental and revocable -- it lasts
+     * exactly as long as some library happens to spell two sinks the same way
+     * in one file, and it vanishes on a refactor nobody connects to this test.
+     * A hand-built pair holds the behaviour still regardless, and it fails
+     * pointing at indexByKey() rather than at whichever library moved.
      *
      * The second row asserts the ORDINAL, and the first asserts that the
      * earlier hit was not overwritten by the later one -- which is the half
