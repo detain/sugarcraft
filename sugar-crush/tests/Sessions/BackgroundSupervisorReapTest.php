@@ -967,6 +967,20 @@ final class BackgroundSupervisorReapTest extends TestCase
         $this->reportedPids[] = $controlPid;
 
         try {
+            // BOTH POLARITIES OF isAlive(), because only one of them is checked
+            // by the zombie assertion downstream and a control that checks one
+            // is half a control. MEASURED: with `isAlive()` stubbed to always
+            // answer TRUE the test dies here (the filter would then miss every
+            // real zombie); with it stubbed to always answer FALSE it SURVIVED
+            // everything else in this method — that direction over-reports
+            // rather than under-reports, so it is the benign one, but a scanner
+            // that calls this process dead is still a broken scanner.
+            $this->assertTrue(
+                $this->isAlive(getmypid()),
+                'isAlive() reports THIS RUNNING PROCESS as not alive, so it is answering a '
+                . 'constant rather than reading /proc and the zombie filter below is noise'
+            );
+
             $deadline = microtime(true) + 5.0;
             while (microtime(true) < $deadline && $this->isAlive($controlPid)) {
                 usleep(2000);
