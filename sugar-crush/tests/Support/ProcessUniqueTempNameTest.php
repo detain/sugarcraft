@@ -1370,6 +1370,21 @@ final class ProcessUniqueTempNameTest extends TestCase
             "<?php\n\$d = sys_get_temp_dir();\n\$e = \$d;\nrmdir(\$e);\n",
         ), 'the classification did not survive a plain rebinding, so a chain of bindings is '
             . 'either not followed or not carried faithfully');
+
+        // EVERY ARGUMENT, NOT ONLY THE FIRST. `rename()` and `symlink()` put
+        // the path that gets CREATED second, and the walk this replaced covered
+        // them by sweeping the whole argument list for a bound name — so
+        // classifying only the first argument would have been a capability
+        // quietly lost in a change that reads as a tightening. The mutation
+        // that restricted the walk to argument one SURVIVED until this ran.
+        self::assertSame([2], self::staticTempPathWrites(
+            "<?php\nrename(\$tmp, sys_get_temp_dir() . '/fixed.log');\n",
+        ), 'a fixed shared path in rename()\'s SECOND argument — the name that actually gets '
+            . 'created — was not reported');
+
+        self::assertSame([3], self::staticTempPathWrites(
+            "<?php\n\$p = sys_get_temp_dir() . '/fixed.link';\nsymlink(\$target, \$p);\n",
+        ), 'a bound fixed path in symlink()\'s second argument was not reported');
     }
 
     /**
