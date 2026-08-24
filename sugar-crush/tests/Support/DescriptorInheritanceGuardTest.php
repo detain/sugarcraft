@@ -272,6 +272,26 @@ final class DescriptorInheritanceGuardTest extends TestCase
      *
      * @var array<string, array{count:int, reason:string}>
      */
+    /**
+     * The highest fd the child probe looks at, single-sourced.
+     *
+     * IT IS IN A CONSTANT BECAUSE IT APPEARS IN FOUR PLACES and one of them is
+     * a failure message. The child's loop, the "name every fd" spec, and the
+     * two messages that tell a reader what was and was not searched all have
+     * to mean the same number; spelled four times, the message is the one that
+     * rots, and a message naming the wrong window sends the next reader after
+     * the wrong cause. Rule 4's shape, one level down from line numbers.
+     *
+     * WHY 40 AND NOT MORE. The probe OPENS a descriptor per fd it tests, so
+     * the ceiling is also a cost. Sampled during a full suite run the process
+     * held nothing above the teens, so 40 is roughly double the observed high
+     * water mark - loose enough not to be luck, cheap enough to run per test.
+     * If the marker ever lands above it the first assertion below reds, which
+     * is why that message names the window rather than only the two causes it
+     * used to offer.
+     */
+    private const PROBE_FD_CEILING = 40;
+
     private const ACCOUNTED_FOR_IN_LIBS = [
         'candy-core/WorkerPool.php::spawnWorker' => [
             'count' => 1,
@@ -1005,14 +1025,15 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * it is a green button that deletes the finding and leaves the defect.
      *
      * THE GENERATOR, so the figure is a measurement and not a memory. A marker
-     * file is opened AFTER a dummy, which is what guarantees it cannot land on
-     * fd 3 - the one descriptor the "named" spec below replaces - so the
+     * file is opened AFTER a spacer, which is what guarantees it cannot land
+     * on fd 3 - the one descriptor the "named" spec below replaces - so the
      * comparison is not a coin flip on whatever PHPUnit happens to have open.
      * Identity is `fstat()`'s dev+ino pair rather than a path or an fd number,
      * because the child is asked whether it can reach the same FILE, which is
-     * the property that matters. The child probes fds 3..40 through
-     * `php://fd/N`, which is POSIX and does not need procfs. Three specs are
-     * compared: bare, one high fd named, and every fd 3..40 named.
+     * the property that matters. The child probes fd 3 up to
+     * {@see PROBE_FD_CEILING} through `php://fd/N`, which is POSIX and does
+     * not need procfs. Three specs are compared: bare, one high fd named, and
+     * every fd in that window named.
      *
      * MEASURED at PHP 8.3.6 on Linux 6.8.0-138-generic, three consecutive
      * takes, identical each time: bare VISIBLE / one named VISIBLE / all named
@@ -1022,7 +1043,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * across `execve`, not a PHP-version behaviour - so 8.4 is not a claim
      * being made from an untested box, it is the same kernel call.
      *
-     * THE THIRD CASE IS NOT A RECOMMENDATION. Naming every fd 3..40 does close
+     * THE THIRD CASE IS NOT A RECOMMENDATION. Naming the whole window does close
      * the marker, and that is exactly why it is here: it shows the mechanism is
      * "replace by number", so the only spec that could be trusted is one that
      * enumerates every descriptor the process holds at the instant of the
@@ -1033,8 +1054,26 @@ final class DescriptorInheritanceGuardTest extends TestCase
     {
         // Opened FIRST so the marker cannot be the fd the "named" spec below
         // replaces. Without this the whole comparison is luck.
-        $dummy = \fopen('/dev/null', 'r');
-        self::assertIsResource($dummy, 'the probe cannot be set up without a spare descriptor.');
+        //
+        // WHAT THIS USED TO OPEN: `/dev/null`. WHAT IS TRUE NOW: it opens a
+        // real file, because /dev/null is also what the "named" spec puts on
+        // the child's fd 3, and that collision is only invisible here by an
+        // accident of how the suite is launched. WHY THE CHANGE EARNS ITS
+        // PLACE - MEASURED, PHP 8.3.6 on Linux 6.8.0-138-generic, all four
+        // cells: the CLI pins the running script at fd 3 when invoked as
+        // `php <file>` (which is what `vendor/bin/phpunit` is) and does NOT
+        // when invoked as `php -r`. So under phpunit the spacer lands on fd 4
+        // and everything below holds; under any runner with no script fd the
+        // spacer takes fd 3 itself, the bare child and the named child BOTH
+        // see /dev/null there, and the "did the spec take effect" control
+        // below reds with a message blaming the comparison rather than the
+        // descriptor the spacer took. A spacer that is not /dev/null cannot
+        // collide with the spec's /dev/null wherever it lands, so the control
+        // stops depending on the launcher. The refutation itself was never at
+        // risk in either world - only this control was.
+        $spacerPath = (string) \tempnam(\sys_get_temp_dir(), 'sc_r54c_spacer_' . \getmypid() . '_');
+        $spacer = \fopen($spacerPath, 'r');
+        self::assertIsResource($spacer, 'the probe cannot be set up without a spare descriptor.');
 
         $marker = (string) \tempnam(\sys_get_temp_dir(), 'sc_r54c_inherit_' . \getmypid() . '_');
         $handle = \fopen($marker, 'r');
@@ -1044,18 +1083,39 @@ final class DescriptorInheritanceGuardTest extends TestCase
         self::assertIsArray($stat);
         $identity = $stat['dev'] . ':' . $stat['ino'];
 
-        $nullStat = \fstat($dummy);
+        // Stat'd BY PATH rather than read off the spacer, which no longer
+        // points at it. This is the identity the named spec is expected to
+        // put on the child's fd 3.
+        $nullStat = \stat('/dev/null');
         self::assertIsArray($nullStat);
         $devNull = $nullStat['dev'] . ':' . $nullStat['ino'];
+
+        $spacerStat = \fstat($spacer);
+        self::assertIsArray($spacerStat);
+
+        // THE PIN ON THE PARAGRAPH ABOVE, and the only assertion here that
+        // reds if somebody "simplifies" the spacer back to /dev/null. It is
+        // not about descriptors at all - it is about the two identities the
+        // fd-3 control compares being distinguishable in the first place.
+        self::assertNotSame(
+            $devNull,
+            $spacerStat['dev'] . ':' . $spacerStat['ino'],
+            'the spacer is /dev/null, which is also what the named spec puts on the child\'s '
+                . 'fd 3. On a runner whose fd 3 is free at this point the spacer takes fd 3, and '
+                . 'the fd-3 control below then compares /dev/null with /dev/null and reds for a '
+                . 'reason that has nothing to do with descriptor inheritance. Open the spacer on '
+                . 'any real file instead.',
+        );
 
         try {
             $withBareSpec = $this->descriptorsVisibleToAChild([]);
             $withHighFdNamed = $this->descriptorsVisibleToAChild([3]);
-            $withEveryFdNamed = $this->descriptorsVisibleToAChild(\range(3, 40));
+            $withEveryFdNamed = $this->descriptorsVisibleToAChild(\range(3, self::PROBE_FD_CEILING));
         } finally {
             \fclose($handle);
-            \fclose($dummy);
+            \fclose($spacer);
             \unlink($marker);
+            \unlink($spacerPath);
         }
 
         // THE CONTROL FOR THE CONTROL. Without it the refutation below is
@@ -1082,9 +1142,13 @@ final class DescriptorInheritanceGuardTest extends TestCase
             $identity,
             $withBareSpec,
             'The premise itself failed: a child spawned with a bare 0,1,2 spec could not reach '
-                . 'a file this process holds open. Nothing below means anything if this fails - '
-                . 'either the probe is broken or descriptors stopped being inherited, and the '
-                . 'second would retire this entire guard.',
+                . 'a file this process holds open. Nothing below means anything if this fails. '
+                . 'THREE causes, and the cheapest to check is listed first because it is not a '
+                . 'defect at all: (1) the marker landed above fd '
+                . self::PROBE_FD_CEILING . ', which is the whole window the child searches, so '
+                . 'it was never looked for - raise PROBE_FD_CEILING and re-run before reading '
+                . 'this as anything; (2) the probe is broken; (3) descriptors stopped being '
+                . 'inherited across execve, and that one would retire this entire guard.',
         );
 
         self::assertContains(
@@ -1101,7 +1165,8 @@ final class DescriptorInheritanceGuardTest extends TestCase
         self::assertNotContains(
             $identity,
             $withEveryFdNamed,
-            'The positive control for the mechanism: naming fd 3 through 40 DOES take the '
+            'The positive control for the mechanism: naming fd 3 through '
+                . self::PROBE_FD_CEILING . ' DOES take the '
                 . 'marker away, which is what proves the two assertions above are about "the '
                 . 'spec did not name that fd" rather than about a probe that cannot see '
                 . 'anything.',
@@ -1134,7 +1199,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
     {
         $probe = <<<'CHILD'
             $seen = [];
-            for ($n = 3; $n <= 40; $n++) {
+            for ($n = 3; $n <= __CEILING__; $n++) {
                 $f = @fopen('php://fd/' . $n, 'r');
                 if ($f === false) { continue; }
                 $s = @fstat($f);
@@ -1143,6 +1208,20 @@ final class DescriptorInheritanceGuardTest extends TestCase
             }
             echo implode(" ", $seen);
             CHILD;
+
+        // The nowdoc above cannot interpolate - its body spells $n, $f and $s,
+        // which a heredoc would expand - so the ceiling is substituted, and
+        // the substitution is CHECKED. A placeholder that silently failed to
+        // match would leave the child scanning a literal that no longer
+        // exists, and a probe that scans nothing reports "not inherited",
+        // which is this guard's one dangerous answer.
+        $probe = \str_replace('__CEILING__', (string) self::PROBE_FD_CEILING, $probe);
+        self::assertStringNotContainsString(
+            '__CEILING__',
+            $probe,
+            'the probe ceiling was not substituted into the child source, so the child would '
+                . 'scan a window that does not parse. Every verdict below would be vacuous.',
+        );
 
         $spec = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         foreach ($highFds as $fd) {
