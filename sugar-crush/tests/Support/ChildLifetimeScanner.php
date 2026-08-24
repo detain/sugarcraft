@@ -145,7 +145,7 @@ final class ChildLifetimeScanner
             }
 
             $open = self::next($tokens, $i);
-            if ($open === null || self::text($tokens[$open]) !== '(') {
+            if ($open === null || self::tokenText($tokens[$open]) !== '(') {
                 $unresolved[] = [
                     'line' => $token[2],
                     'function' => self::functionName($functions, $i),
@@ -205,7 +205,7 @@ final class ChildLifetimeScanner
             return [self::LIFETIME_LONG, 'the handle is returned directly'];
         }
 
-        if ($prev === null || self::text($tokens[$prev]) !== '=') {
+        if ($prev === null || self::tokenText($tokens[$prev]) !== '=') {
             return [
                 self::LIFETIME_UNCLASSIFIED,
                 'the result is neither returned nor assigned to anything this scanner can name',
@@ -300,7 +300,7 @@ final class ChildLifetimeScanner
 
             // `$this->handles[] = $handle;` / `self::$live = $handle;`
             $equals = self::prev($tokens, $i);
-            if ($equals !== null && self::text($tokens[$equals]) === '=') {
+            if ($equals !== null && self::tokenText($tokens[$equals]) === '=') {
                 $target = self::assignmentTarget($tokens, $equals, 0);
                 if ($target !== null && (\str_contains($target, '->') || \str_contains($target, '::'))) {
                     return [self::LIFETIME_LONG, 'the handle in ' . $variable . ' is stored in ' . $target];
@@ -353,7 +353,7 @@ final class ChildLifetimeScanner
     private static function isProcCloseArgument(array $tokens, int $at): bool
     {
         $paren = self::prev($tokens, $at);
-        if ($paren === null || self::text($tokens[$paren]) !== '(') {
+        if ($paren === null || self::tokenText($tokens[$paren]) !== '(') {
             return false;
         }
 
@@ -394,7 +394,7 @@ final class ChildLifetimeScanner
 
         $literal = null;
 
-        if (self::text($tokens[$first]) === '[' || (\is_array($tokens[$first]) && $tokens[$first][0] === \T_ARRAY)) {
+        if (self::tokenText($tokens[$first]) === '[' || (\is_array($tokens[$first]) && $tokens[$first][0] === \T_ARRAY)) {
             $literal = self::codeText($tokens, $from, $to);
         } elseif (\is_array($tokens[$first]) && $tokens[$first][0] === \T_VARIABLE) {
             $enclosing = TokenFunctionRanges::enclosing($functions, $at);
@@ -502,7 +502,7 @@ final class ChildLifetimeScanner
                 continue;
             }
             $equals = self::next($tokens, $nameAt);
-            if ($equals === null || self::text($tokens[$equals]) !== '=') {
+            if ($equals === null || self::tokenText($tokens[$equals]) !== '=') {
                 continue;
             }
 
@@ -525,7 +525,7 @@ final class ChildLifetimeScanner
                 continue;
             }
             $equals = self::next($tokens, $i);
-            if ($equals === null || self::text($tokens[$equals]) !== '=') {
+            if ($equals === null || self::tokenText($tokens[$equals]) !== '=') {
                 continue;
             }
 
@@ -585,7 +585,7 @@ final class ChildLifetimeScanner
                 continue;
             }
 
-            $parts[] = self::text($token);
+            $parts[] = self::tokenText($token);
         }
 
         $target = \trim(\implode('', \array_reverse($parts)));
@@ -650,11 +650,11 @@ final class ChildLifetimeScanner
                 continue;
             }
 
-            if (self::text($token) === '[') {
+            if (self::tokenText($token) === '[') {
                 $start = $i + 1;
             } elseif (\is_array($token) && $token[0] === \T_ARRAY) {
                 $next = self::next($tokens, $i);
-                if ($next === null || self::text($tokens[$next]) !== '(') {
+                if ($next === null || self::tokenText($tokens[$next]) !== '(') {
                     return null;
                 }
                 $start = $next + 1;
@@ -672,7 +672,7 @@ final class ChildLifetimeScanner
         $depth = 0;
 
         for ($i = $start; $i < $count; $i++) {
-            $text = self::text($tokens[$i]);
+            $text = self::tokenText($tokens[$i]);
 
             if ($depth === 0 && ($text === ']' || $text === ')')) {
                 $current = \trim($current);
@@ -725,14 +725,27 @@ final class ChildLifetimeScanner
             if (\is_array($tokens[$i]) && \in_array($tokens[$i][0], [\T_COMMENT, \T_DOC_COMMENT], true)) {
                 continue;
             }
-            $out .= self::text($tokens[$i]);
+            $out .= self::tokenText($tokens[$i]);
         }
 
         return $out;
     }
 
-    /** @param array{0:int,1:string,2:int}|string $token */
-    private static function text(array|string $token): string
+    /**
+     * NAMED TO MATCH {@see ChildStderrCaptureScanner}, not to taste.
+     *
+     * `codeText()` above is byte-identical to that class's, and
+     * {@see DuplicatedTestHelperDriftTest} exists to catch a private helper
+     * copied between two files and then fixed in only one - which it detects
+     * as two bodies agreeing except for a single token. Calling this one
+     * `text()` made the two `codeText()` bodies differ by exactly that one
+     * token and the guard red, correctly: a one-token difference between
+     * copies is indistinguishable from a half-applied fix. Renaming it back
+     * re-arms that detector.
+     *
+     * @param array{0:int,1:string,2:int}|string $token
+     */
+    private static function tokenText(array|string $token): string
     {
         return \is_array($token) ? $token[1] : $token;
     }
