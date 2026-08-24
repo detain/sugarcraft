@@ -103,13 +103,18 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
     private const ROSTER = [
         // ---- candy-core -------------------------------------------------
         'candy-core/src/Util/Tty/PosixBackend.php::SizeIoctl::query($fd)' => [
-            DescriptorSinkScanner::INT_CAST_VIA_VARIABLE,
-            'OPEN, KNOWN, LATENT. size()\'s first arm; two lines up it does '
-            . '`$fd = (int) $this->stream`. Usually-right by accident: $this->stream defaults '
-            . 'to STDIN, whose resource id is 1 and whose descriptor is 0, and both name the '
-            . 'same device in an ordinary terminal. Closing it needs the descriptor carried '
-            . 'alongside the stream, which the constructor does not do -- a wider change than '
-            . 'the /dev/tty arm needed, and deliberately not bundled with it.',
+            DescriptorSinkScanner::VARIABLE,
+            'CORRECT. size()\'s first arm. WHAT THIS ROW USED TO SAY: "OPEN, KNOWN, LATENT ... '
+            . 'two lines up it does `$fd = (int) $this->stream` ... closing it needs the '
+            . 'descriptor carried alongside the stream, which the constructor does not do". '
+            . 'WHAT IS TRUE NOW: the assignment is `$fd = self::descriptorForStream($this->'
+            . 'stream)`, which resolves a GENUINE descriptor -- by identity for the three '
+            . 'standard streams, otherwise by matching st_dev+st_ino against the process\'s own '
+            . 'descriptor table -- and no constructor signature changed. WHY THE OLD ROW STILL '
+            . 'EARNS ITS PLACE HERE: it recorded that a constructor change was the only way, '
+            . 'and that is the sentence a future reader would otherwise re-derive. It was '
+            . 'incomplete, not wrong: a descriptor can also be recovered from the process '
+            . 'itself. Pinned end to end by PosixBackendStreamDescriptorTest.',
         ],
         'candy-core/src/Util/Tty/PosixBackend.php::SizeIoctl::query($ttyFd)' => [
             DescriptorSinkScanner::VARIABLE,
@@ -119,9 +124,12 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'rather than latent -- see PosixBackendTerminalDescriptorTest.',
         ],
         'candy-core/src/Util/Tty/PosixBackend.php::TermiosFactory::open($fd)' => [
-            DescriptorSinkScanner::INT_CAST_VIA_VARIABLE,
-            'OPEN, KNOWN, LATENT. enableRawMode(); `$fd = (int) $this->stream` two lines up. '
-            . 'Same mechanism and same wider fix as the size() first-arm row above.',
+            DescriptorSinkScanner::VARIABLE,
+            'CORRECT. enableRawMode(). Was `$fd = (int) $this->stream` two lines up; same '
+            . 'mechanism and same fix as the size() first-arm row above, and the same '
+            . 'correction to the reasoning that deferred it. A null answer now skips raw mode '
+            . 'rather than applying it to a number that names nothing, which is what a '
+            . '`php://memory` stream produced before.',
         ],
         'candy-core/src/Util/Tty/PosixBackend.php::TermiosFactory::open(0)' => [
             DescriptorSinkScanner::LITERAL_INT,
@@ -437,12 +445,49 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         $found = $this->scanLibraries();
         self::assertNotSame([], $found, 'the census found no descriptor sinks anywhere in the tree');
 
-        // And at least one site of each polarity, so neither a scanner stuck
-        // on "everything is a cast" nor one stuck on "everything is fine"
-        // passes.
+        // And more than one kind, so neither a scanner stuck on "everything
+        // is a cast" nor one stuck on "everything is fine" passes.
+        //
+        // WHAT THIS USED TO ASSERT: that the TREE contained at least one
+        // LITERAL_INT and at least one INT_CAST_VIA_VARIABLE.
+        //
+        // WHAT IS TRUE NOW: the two INT_CAST_VIA_VARIABLE sites were the last
+        // ones in the monorepo and this round closed them, so that assertion
+        // became unsatisfiable -- it asserted the continued existence of the
+        // very defect the census exists to drive out. A guard whose green
+        // depends on a defect surviving is a guard that punishes the fix.
+        //
+        // WHY THE REASONING STILL EARNS ITS PLACE: "one site of each polarity"
+        // is right, and it is why this is not just `assertNotSame([], $found)`
+        // one line up. What was wrong was sourcing BOTH polarities from the
+        // tree. The negative polarity is now sourced from a fixture, where it
+        // is a property of the classifier and cannot be legislated away by
+        // someone fixing a call site; the tree still has to show at least two
+        // distinct kinds, which is the part only the tree can say.
         $kinds = array_column($found, 'kind');
         self::assertContains(DescriptorSinkScanner::LITERAL_INT, $kinds);
-        self::assertContains(DescriptorSinkScanner::INT_CAST_VIA_VARIABLE, $kinds);
+        self::assertGreaterThan(
+            1,
+            \count(array_unique($kinds)),
+            'every descriptor site in the tree classified the same way; a classifier stuck on '
+                . 'one answer would look exactly like this',
+        );
+
+        // The negative polarity, from a fixture rather than from the tree.
+        // Built from the scanner's own constants so the literal call text
+        // never appears in this file -- see the control test's doc-block.
+        $fn = DescriptorSinkScanner::FUNCTION_SINKS[0];
+        self::assertSame(
+            [DescriptorSinkScanner::INT_CAST_VIA_VARIABLE],
+            array_column(
+                DescriptorSinkScanner::scanSource(
+                    "<?php\n" . '$fd = (int) $this->stream;' . "\n" . $fn . "(\$fd);\n",
+                ),
+                'kind',
+            ),
+            'the scanner can no longer see a cast hidden in the assignment above a sink, so '
+                . 'its silence about the tree is a property of the instrument',
+        );
     }
 
     /**

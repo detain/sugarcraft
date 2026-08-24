@@ -98,8 +98,14 @@ final class PosixBackend implements Backend
         // the wrong (often halved) height. Env remains the fallback for the
         // no-tty case where the ioctl can't run.
         if ($this->isTty()) {
-            $fd = (int) $this->stream;
-            if ($fd >= 0) {
+            // WHAT THIS USED TO SAY: `$fd = (int) $this->stream;` and then
+            // `if ($fd >= 0)`. That cast is the stream's RESOURCE ID, not
+            // its descriptor, and the `>= 0` guard could never fail for one
+            // -- a resource id is always positive -- so it read as a check
+            // and was not one. See descriptorForStream() for the
+            // measurement and for why this needed no constructor change.
+            $fd = self::descriptorForStream($this->stream);
+            if ($fd !== null) {
                 try {
                     $result = SizeIoctl::query($fd);
                     // Validate: kernel returns 0 for unset fields on some emulators
@@ -301,6 +307,162 @@ final class PosixBackend implements Backend
         }
     }
 
+
+    /**
+     * The three standard streams and the descriptors POSIX fixes them to.
+     *
+     * Held as names rather than as the constants themselves because
+     * `defined('STDIN')` STAYS TRUE after the handle is closed while
+     * `is_resource()` goes false -- see the closed-descriptor-0 family in
+     * {@see \SugarCraft\Core\Util\TtyDetect}'s doc-block. A table of live
+     * resources built at class-load time would carry a dead handle here.
+     *
+     * @var array<string,int>
+     */
+    private const STANDARD_DESCRIPTORS = ['STDIN' => 0, 'STDOUT' => 1, 'STDERR' => 2];
+
+    /**
+     * The GENUINE file descriptor behind a PHP stream, or null.
+     *
+     * ## What this replaces, and why it is not a constructor change
+     *
+     * WHAT THE TWO CALL SITES BELOW USED TO SAY: `$fd = (int) $this->stream`,
+     * one to two lines above {@see SizeIoctl::query()} and
+     * {@see TermiosFactory::open()}. An `(int)` cast of a PHP stream yields
+     * its RESOURCE ID, which is a different number from its descriptor.
+     * MEASURED, PHP 8.3.6, fresh CLI process, three takes: `(int) STDIN` is
+     * 1, `(int) STDOUT` is 2, `(int) STDERR` is 3, over descriptors 0, 1
+     * and 2. Both sites were latent rather than broken only because
+     * `$this->stream` defaults to `STDIN` and 0 and 1 name the same device
+     * in an ordinary terminal.
+     *
+     * WHAT IS TRUE NOW, AND WHERE THE EARLIER REASONING WAS INCOMPLETE: the
+     * backlog recorded that the only two available fixes were to carry the
+     * descriptor through {@see __construct()} or to resolve the three
+     * standard streams and REFUSE an injected one -- i.e. that closing these
+     * two sites had to change this class's constructor and every
+     * `new Tty(...)` call site with it. There is a third answer, and it
+     * changes no signature: the process's OWN descriptor table is readable,
+     * so a stream can be matched to a descriptor by device and inode. That
+     * is what the second arm below does, and it is why an injected stream --
+     * `new PosixBackend($ptySlaveHandle)`, which
+     * {@see \SugarCraft\Core\Tests\Util\Tty\PosixBackendTest} really does --
+     * keeps working instead of being refused.
+     *
+     * ## The two arms, and why BOTH earn their place
+     *
+     *  1. IDENTITY against `STDIN`/`STDOUT`/`STDERR`. Exact, and it needs no
+     *     filesystem at all, so it survives a container with no `/proc`
+     *     mounted. It is also not merely a fast path: MEASURED on this box,
+     *     PHP 8.3.6, in a CLI process whose stdout and stderr were both
+     *     redirected onto one pipe (`php probe.php 2>&1 | cat`), `fstat()`
+     *     gave descriptors 1 and 2 IDENTICAL dev+ino, so arm 2 on its own
+     *     answers 1 for `STDERR`. Arm 1 is what makes the answer canonical,
+     *     and the guard pins it by handing arm 2 an empty directory.
+     *  2. The descriptor table (`/proc/self/fd` on Linux, `/dev/fd` on
+     *     Darwin and FreeBSD), matched on `st_dev` + `st_ino`.
+     *
+     * ## What this hands back, and who closes it
+     *
+     * NOTHING IS OPENED HERE, so unlike {@see openDeviceDescriptor()} there
+     * is no paired close and nothing can leak: every descriptor this returns
+     * is one the process already holds. The caller must not close it.
+     *
+     * The honest limitation is the other way round. Arm 2 identifies a
+     * descriptor naming the SAME DEVICE as $stream, not necessarily
+     * $stream's own -- MEASURED, PHP 8.3.6: two `fopen()`s of one path
+     * produced descriptors 4 and 5 with identical dev+ino, and one pty slave
+     * path opened by both `fopen()` and libc produced 5 and 6. For the two
+     * sinks this feeds that is not a defect: `tcgetattr`/`tcsetattr` and
+     * `TIOCGWINSZ` all act on the TERMINAL, not on the description, so every
+     * descriptor open on one terminal gives one answer. It would matter if
+     * the sibling descriptor were closed while $stream stayed open; the
+     * lowest match is preferred because a long-lived standard descriptor is
+     * the likeliest to outlive the object.
+     *
+     * @internal Public and static only so the guard can drive it directly
+     *           and point arm 2 at a directory of its own -- the same seam,
+     *           and for the same reason, as {@see openDeviceDescriptor()}'s
+     *           `$device`. Nothing outside this class may call it.
+     *
+     * @param  resource|mixed $stream
+     * @param  string|null    $fdDirectory the descriptor table to walk;
+     *                                     null selects the platform's
+     * @return int|null       a descriptor the caller must NOT close, or null
+     *                        when the stream is dead, has no descriptor
+     *                        (`php://memory` and friends), or the platform
+     *                        exposes no descriptor table
+     */
+    public static function descriptorForStream($stream, ?string $fdDirectory = null): ?int
+    {
+        if (!\is_resource($stream)) {
+            return null;
+        }
+
+        foreach (self::STANDARD_DESCRIPTORS as $name => $descriptor) {
+            if (\defined($name) && \is_resource(\constant($name)) && \constant($name) === $stream) {
+                return $descriptor;
+            }
+        }
+
+        $directory = $fdDirectory ?? self::descriptorTable();
+        if ($directory === null) {
+            return null;
+        }
+
+        $target = @fstat($stream);
+        if (!\is_array($target)) {
+            return null;
+        }
+
+        // The stat cache is keyed by path, and `/proc/self/fd/1` is a path
+        // whose TARGET changes when the process redirects. size() runs on
+        // every SIGWINCH, so a cached answer here would outlive the thing it
+        // described.
+        clearstatcache();
+
+        $candidates = [];
+        foreach ((array) @scandir($directory) as $entry) {
+            if (!\ctype_digit((string) $entry)) {
+                continue;
+            }
+            $stat = @stat($directory . '/' . $entry);
+            if (!\is_array($stat)) {
+                continue;
+            }
+            if ($stat['dev'] === $target['dev'] && $stat['ino'] === $target['ino']) {
+                $candidates[] = (int) $entry;
+            }
+        }
+
+        if ($candidates === []) {
+            return null;
+        }
+        sort($candidates);
+
+        return $candidates[0];
+    }
+
+    /**
+     * The platform's per-process descriptor table, or null.
+     *
+     * Linux publishes `/proc/self/fd`; Darwin and FreeBSD publish
+     * `/dev/fd` (on FreeBSD only when fdescfs is mounted, which is why this
+     * probes rather than switching on `PHP_OS_FAMILY`). A host that exposes
+     * neither -- a container with `/proc` unmounted is the realistic one --
+     * loses arm 2 and keeps arm 1.
+     */
+    private static function descriptorTable(): ?string
+    {
+        foreach (['/proc/self/fd', '/dev/fd'] as $candidate) {
+            if (is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     public function enableRawMode(): void
     {
         if ($this->termios !== null) {
@@ -313,8 +475,14 @@ final class PosixBackend implements Backend
             if (!$this->isTty()) {
                 return;
             }
-            $fd = (int) $this->stream;
-            if ($fd < 0) {
+            // WHAT THIS USED TO SAY: `$fd = (int) $this->stream;` guarded
+            // by `if ($fd < 0)`. Same resource-id cast as size()'s first
+            // arm, and the same never-taken guard. A null answer here means
+            // no descriptor could be resolved, which is a real outcome --
+            // a `php://memory` stream has none at all -- so raw mode is
+            // skipped rather than applied to a number that names nothing.
+            $fd = self::descriptorForStream($this->stream);
+            if ($fd === null) {
                 return;
             }
             $this->termios = TermiosFactory::open($fd);
