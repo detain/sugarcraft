@@ -11129,7 +11129,13 @@ arm is not "is this branch fixtured" but "does this branch produce anything on t
 if the answer is no, nothing but a table can pin it.
 
 **Step.** The same sweep over the guards no lane held this round: `tests/Cli/`, `tests/Config/`,
-`tests/Diagnostics/`, and `TtyStreamArgumentCensusTest`'s two arms that lane b did NOT extract.
+`tests/Diagnostics/`. **NOT `TtyStreamArgumentCensusTest`** — this entry's first draft named its two
+`constants[]` arms as unextracted and therefore suspect, which was an assertion and not a measurement.
+Measured before shipping the sentence: gating BOTH on `false` is KILLED (46 tests, 51 assertions,
+1 failure, filtered to that file). Lane b's repair covers them; only the `offenders[]` halves go through
+`ttyOffender()`/`optionsOffender()`, and the `constants[]` halves are pinned by the exact-roster
+assertion beneath them instead. Recorded because the *shape* looked exactly like the finding above and
+was not one.
 
 ---
 
