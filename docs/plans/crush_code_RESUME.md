@@ -22,6 +22,43 @@ lane for a dirty tree AND for commits its report omits (E168, E190); **inspect b
 `git branch`/`git reflog` before believing a lane lost work; **never edit `COMMON` while the run is
 resumable**.
 
+### 🔴 MASTER MOVED WHILE ROUND 52 WAS IN FLIGHT — THE MERGE ARITHMETIC HAS THREE TERMS NOW
+
+Two out-of-band fixes landed on `master` ON TOP of the commit the lanes branched from. **The lanes are
+still based at `b9abd2fb` and their deltas are relative to THAT**, so the merged floor is
+`b9abd2fb` + lane deltas + these, not base + lane deltas. Do not report an additive-prediction
+violation without subtracting these first (E364's lesson, one level up).
+
+| commit | what | sugar-crush | candy-mosaic |
+|---|---|---|---|
+| `b9abd2fb` | the lanes' base | 9730 / 143168 / 1 | 457 / 7744 / 6 |
+| `a921b834` | lenient frontmatter parser | **9781 / 143427 / 1** (+51 / +259) | — |
+| `e7c777b9` | E365 `php -S` leak fix + guard | — | **459 / 7753 / 6** (+2 / +9) |
+
+**candy-core is unchanged at `799 / 7210 / 25 / rc 0`** — measured at `b9abd2fb` and again mid-sweep.
+All three packages' base floors are now on record, which rule 28 needs for lane a.
+
+**`a921b834` — frontmatter.** Six SKILL.md files (four ours, two the user's own, outside this repo) were
+rejected by `Yaml::parse()` for `description: … : …` — an unquoted plain scalar with a colon, which is
+what the whole agent-tool ecosystem writes and what Claude Code reads without complaint. All seven
+frontmatter sites now route through `sugar-crush/src/Support/Frontmatter.php`: strict YAML first, and only
+on `ParseException` are offending plain scalars quoted and re-parsed, so lists/nesting/block scalars keep
+full semantics and a genuinely malformed file still fails hard. `HookConfig` deliberately stays strict —
+it parses a config file the USER wrote, where the error is actionable by its author. Also fixed:
+`AgentPresetRegistry` matched kebab-case only and silently mapped `acceptEdits` → `PermissionMode::Default`,
+which `.sugar-crush/agents/coder.md` (tracked, shipped) triggers today. The data file was left alone on
+purpose — editing it would have hidden the parser defect.
+
+**`e7c777b9` — E365.** See the backlog entry. The part that matters for THIS file: **`phpunit | anything`
+against candy-mosaic used to hang forever after a green run**, because an orphaned `php -S` held the
+caller's stdout on an inherited fd 4. Two supervisor measurements were lost to it, one of 38 minutes and
+one of **11.5 hours** — the latter was round 51's mutation control, which had in fact PASSED and sat
+unread. **Redirect to a FILE, not a pipe, when measuring anything that spawns children.**
+
+**Backlog 364 → 367.** E365 (fixed + guarded), E366 (the monorepo `proc_open` sweep — finding only),
+E367 (`ClaudeCodeProvider` reads `$pipes[2]` after fclosing it — finding only, and **lane b has that file
+open**). **Renumber round 52's lane ids from E368**, not E365.
+
 ### THE LANES
 
 - **a — candy-core + candy-mosaic fd defects. 🔴 MOSTLY OUTSIDE sugar-crush, and it owes THREE suites'

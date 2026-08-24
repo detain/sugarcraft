@@ -12089,3 +12089,110 @@ in the descriptor spec) is a `proc_open` sweep away in other libs; see the sweep
 Anything that spawns a child which can outlive the call inherits phpunit's stdout the same way.
 
 ---
+
+### E366 — the `proc_open` sweep E365 asked for: the fd-inheritance half is monorepo-wide, the ORPHANING is not
+
+**Recorded 2026-08-24.** Severity: hygiene, plus a handle-leak-into-third-party-subprocess concern.
+**FINDING ONLY — deliberately not fixed** (functionality before hardening; the finding is what must not
+be lost). Follows E365, which fixed the one lib where both halves fired at once.
+
+Two questions, answered separately, because conflating them is how E365 hid for so long.
+
+**Q1: does any other lib leak processes?** Measured, not reasoned about. Thirteen libs' suites run
+individually, orphan census (`ppid==1`, matching php/ffmpeg/git/ssh) sampled before and after each:
+
+| lib | suite | new orphans |
+|---|---|---|
+| candy-serve | 344 / 718 | 0 |
+| candy-wish | 193 / 485 | 0 |
+| candy-shell | 333 / 691 | 0 |
+| candy-freeze | 315 / 619 | 0 |
+| candy-testing | 129 / 230 | 0 |
+| candy-core | 799 / 7210 | 0 |
+| sugar-reel | 352 / 2423 | 0 |
+| sugar-dash | 5853 / 9154 | 0 |
+| sugar-spark | 205 / 659 | 0 |
+| sugar-skate | 206 / 427 | 0 |
+| sugar-tick | 144 / 349 | 0 |
+| sugar-stash | 218 / 606 | 0 |
+
+Every one rc 0. **The six reporting PHPUnit's `OK (…)` form had ZERO skips**, which is the part that makes
+this evidence rather than an absence: a lib can post zero orphans because its spawning tests gated
+themselves out, and that is not what happened here. **Answer: no. The orphaning was candy-mosaic-specific.**
+
+⚠️ **`candy-mosaic`'s own row in that sweep is void** — E365's fix (`e7c777b9`) landed while the sweep was
+in flight, so the row measured already-fixed code. The pre-fix evidence is the separate direct
+measurement in E365 (0 servers before a run, 4 after, reproduced).
+
+⚠️ **NOT COVERED, and neither is an all-clear.** `candy-pty` was excluded on purpose: its suite spawns
+PTYs through FFI and this project already knows `timeout` does not reliably kill a hung PTY child, so
+testing it needs a pid-scoped watchdog and three lanes were mid-round. `sugar-crush` was excluded as
+lane-owned and too much load during a measurement window — and it has by far the most sites, ~40.
+
+**Q2: is the fd-inheritance half local?** No. **No `proc_open()` descriptor spec anywhere in the monorepo
+names an fd above 2** — verified twice, independently, from both directions. So every child inherits the
+parent's fd 3+; it is harmless only because everywhere else the child is reaped promptly. Long-lived
+children ranked by exposure:
+
+**HIGH — long-lived child, only 0/1/2, and teardown that does not wait:**
+- `sugar-dash/src/Plugin/ExternalModule.php:152` — persistent third-party plugin daemon, **no
+  `proc_terminate()` at all**; `__destruct()` does a bare `proc_close()`. Worst of the set.
+- `sugar-crush/src/ClaudeCodeMcpClient.php:105` — third-party stdio MCP server; `disconnect()` is fclose
+  + bare `proc_close()`. The unfixed twin of `MCP/StdioMcpServer.php`, which already has SIGTERM → poll →
+  SIGKILL.
+- `sugar-crush/src/LSP/LspConnection.php:60` — language server; `stopProcess()` terminates and
+  immediately closes. No `__destruct()`.
+- `sugar-crush/src/Sessions/BackgroundSupervisor.php:188` — STRING command (the dash mismatch is
+  acknowledged in its own comment at :226); deliberately double-forks; the happy path never reaps.
+- `sugar-reel/src/AudioPlayer.php:79` — ffplay/mpv; `stop()`/`pause()`/`resume()` all terminate-then-close
+  with no wait. No `__destruct()`.
+
+**MEDIUM:** `sugar-reel/src/Decode/FfmpegDecoder.php:160` · `candy-core/src/WorkerPool.php:286` ·
+`sugar-crush/src/Agents/ProcessExecutor.php:426` (split personality — `escalateAndKill()` is correct,
+`cancel()`/`cancelAll()` are not) · `sugar-crush/src/Providers/ClaudeCodeProvider.php:109` +
+`ClaudeCodeInvocation.php:109` (no deadline at all) · `candy-core/src/Program.php:792`.
+
+**LOW / already correct:** candy-serve's five sites are one-shot and drained (no timeout, string commands)
+· candy-pty is clean judged on its own PTY terms · `sugar-stash/src/Process.php` is correct · several
+sugar-crush sites are already hardened reference implementations.
+
+**The user-facing shape of this, stated plainly:** sugar-crush's MCP servers, language servers and
+sugar-dash's plugin binaries are long-lived THIRD-PARTY children that inherit whatever descriptors the
+host had open at spawn. They are reaped correctly enough today that nothing hangs, so this is a
+handle-leak-into-untrusted-subprocess concern, not a live outage.
+
+**Best-in-tree pattern the HIGHs should adopt** — `sugar-crush/tests/Integration/BinSugarcrushDispatchTest.php:1999`:
+`armWatchdog()` arms a detached watchdog WITH pid-reuse checking *before* calling `proc_terminate(9)`,
+precisely because `proc_close()` waits.
+
+**The mechanical repair, and why it beats fixing five call sites by hand.**
+`sugar-crush/tests/Support/ChildStderrCaptureScanner.php` is ALREADY a static scanner over `proc_open()`
+descriptor-spec shapes. Extending it to flag "long-lived child + nothing said about fd ≥ 3" makes E365
+non-recurring instead of fixing today's five and meeting the sixth next year. **Do this before the hand
+fixes.**
+
+---
+
+### E367 — `ClaudeCodeProvider` reads `$pipes[2]` after fclosing it
+
+**Recorded 2026-08-24.** Severity: correctness (silent loss of a child's stderr).
+**FINDING ONLY — not fixed.** Found incidentally during E366's sweep, unrelated to descriptors.
+
+`sugar-crush/src/Providers/ClaudeCodeProvider.php` fcloses `$pipes[2]` at :155 and then reads it at :160
+(verified at `e7c777b9`; line numbers rot — grep `pipes\[2\]`). A read from a closed stream yields
+nothing, so the throw immediately below it always reads
+
+```
+Claude Code exited with code N:
+```
+
+with the reason blank — precisely on the failure path where the child's stderr is the only diagnostic
+there is.
+
+⚠️ **Round 52's lane b has this file open.** Reconcile at the merge before touching it.
+
+**Do not fix by reordering alone.** Establish first, by measurement, whether any caller currently depends
+on the empty-string result — a provider error path that has always returned `''` may have a test pinning
+that. Rule 15/25 applies: a fixture whose expected value is what a dead instrument returns proves nothing.
+
+---
