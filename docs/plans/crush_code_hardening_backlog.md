@@ -8725,3 +8725,33 @@ written into a backlog entry is round-specific and reads as durable — the seco
 entry has been skipped by the lane it names.
 
 ---
+### Ea49-7 — three `src/`-wide cardinalities are literals in a test nobody owns, and one is restated in `src/`
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: process. **Measured; it fired.**
+
+**What.** Adding ONE file to `src/` (`src/Permissions/DenialKind.php`, E239's leaf) reddened
+`tests/Tools/BuiltInToolCorpusTest.php` on three assertions —
+`assertSame(290, $files)`, the `['concrete' => 240, 'enum' => 26, …]` kind map, and
+`assertSame(290, count($files)) / assertSame(309, $declarations)` — and that test in turn asserts that
+`src/Context/RepoMapBlock.php`'s prose restates both figures, so the bump reached a `src/` file too. Five
+literals, in two files, neither of them in round 49's ownership map at all. Lane a made the minimal edit
+and reported it as a forced out-of-lane edit (E191's rule).
+
+This is E-rule 18 firing exactly as written, and it is worth noting that the file already KNOWS: its own
+doc-block says "a cardinality in prose is stale the next time one is added" in one paragraph and carries
+`290`, `309`, `240` and `26` as literals in the next. The narrative paragraph in
+`testTheSecondaryDeclarationCensus()` still quotes `288 .php files, 307 top-level declarations`, which was
+already two rounds stale before this round touched anything — asserted nowhere, so nothing caught it.
+
+**Step.** Two options, and the second is cheaper than it looks. (a) Keep the assertions and accept that
+every lane adding a `src/` file edits this test — but then say so at the top of the file, because today a
+lane discovers it from a red at the end of a four-minute run. (b) Keep the INVARIANTS the file is
+actually about — `testEverySourceFileDeclaresItsPsr4Symbol()` (pinned at zero, derived),
+`testNoSecondaryDeclarationIsADispatchableTool()`, and the per-file secondary map, which names files
+rather than counting them — and drop the three totals, which measure only how big the tree is. The
+`RepoMapBlock` restatement can stay asserted against the DERIVED figure without any literal in the test.
+Note that dropping them removes the only thing that would notice a file appearing in `src/` unnoticed, so
+if that is wanted it should be a named-file roster (the shape round 49's `DenialPrefixRosterTest` used for
+the same reason) rather than a total.
+
+---
