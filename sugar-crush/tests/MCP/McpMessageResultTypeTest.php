@@ -68,6 +68,21 @@ final class McpMessageResultTypeTest extends TestCase
      * exception" while destroying the payload, and the payload is the whole
      * point of the field.
      *
+     * ZERO IS A ROW BECAUSE THIS ALPHABET WAS ONCE WRITTEN TO THE SHAPES
+     * ALREADY KNOWN. Its first cut held three non-zero numbers and no zero, and
+     * a falsy-coalescing bug in the {@see StdioMcpServer::callTool()} consumer
+     * that erased exactly `0` therefore passed every row. A number alphabet
+     * without a zero cannot see a falsiness defect; see
+     * {@see testAZeroResultReachesTheModelAsZeroAndNotAsEmptyText()}.
+     *
+     * FLOAT ZERO IS DELIBERATELY NOT A ROW HERE, and the reason is JSON's own
+     * number model rather than anything this package does: `json_encode(0.0)`
+     * is `"0"` on PHP 8.3.6 with the default `serialize_precision=-1`, so the
+     * round-trip consumer below would legitimately get `int(0)` back and an
+     * `assertSame()` against `0.0` would fail on a correct encoder. Float zero
+     * is covered where it can actually occur — off the wire, through
+     * `json_decode()` — in the dedicated test named above.
+     *
      * @return iterable<string, array{0: string, 1: mixed}>
      */
     public static function legalResultTypes(): iterable
@@ -76,6 +91,7 @@ final class McpMessageResultTypeTest extends TestCase
         yield 'boolean false' => ['false', false];
         yield 'integer' => ['5', 5];
         yield 'negative integer' => ['-17', -17];
+        yield 'zero' => ['0', 0];
         yield 'float' => ['1.5', 1.5];
         yield 'string' => ['"pong"', 'pong'];
         yield 'empty string' => ['""', ''];
@@ -227,6 +243,63 @@ final class McpMessageResultTypeTest extends TestCase
     }
 
     /**
+     * ZERO IS THE ONE SCALAR A FALSY TEST ERASES, and this pins both spellings
+     * of it end to end.
+     *
+     * The wrap above first read
+     * `json_encode($response->result) ?: ''`. `json_encode(0)` is the string
+     * `"0"`, which is FALSY in PHP, so `?:` replaced a legal `"result": 0` with
+     * an empty string and the tool result reached the model carrying nothing.
+     * `0.0` went the same way, because `json_encode(0.0)` is also `"0"`. Every
+     * other scalar survived, which is precisely why the first alphabet — three
+     * non-zero numbers, no zero — could not see it.
+     *
+     * BOTH SPELLINGS, and they are genuinely different paths rather than the
+     * same one twice: `json_decode()` yields `int(0)` for the literal `0` and
+     * `float(0)` for the literal `0.0`, and only the second exercises
+     * `json_encode()`'s float branch. The fixture server emits the float case
+     * as raw text for the reason given in its own comment.
+     *
+     * THE NON-EMPTY CONTROL is the `number` row: a wrap mutated to return `''`
+     * unconditionally would satisfy an assertion that only ever looked at zero.
+     */
+    public function testAZeroResultReachesTheModelAsZeroAndNotAsEmptyText(): void
+    {
+        $server = new StdioMcpServer(
+            name: 'scalar',
+            command: PHP_BINARY,
+            args: [$this->tempDir . '/scalar.php'],
+            env: [],
+            startTimeoutSeconds: 5.0,
+        );
+
+        $server->start();
+
+        try {
+            $this->assertSame(
+                ['content' => [['type' => 'text', 'text' => '0']]],
+                $server->callTool('zero', []),
+                'an integer 0 result must reach the model as "0"; an empty text here means a '
+                . 'falsy test (`json_encode($r) ?: \'\'`) has eaten the payload',
+            );
+            $this->assertSame(
+                ['content' => [['type' => 'text', 'text' => '0']]],
+                $server->callTool('zerofloat', []),
+                'a float 0.0 result must reach the model as "0" for the same reason',
+            );
+            // THE CONTROL: a wrap that returned '' for everything would pass
+            // both rows above.
+            $this->assertSame(
+                ['content' => [['type' => 'text', 'text' => '42']]],
+                $server->callTool('number', []),
+                'the non-zero control must still carry its own digits',
+            );
+        } finally {
+            $server->stop();
+        }
+    }
+
+    /**
      * The handshake survives it too. `start()` reads `initialize`'s reply
      * through the same `parse()`, and its failure is not caught as a
      * `RuntimeException` anywhere above it — see this class's doc-block.
@@ -280,9 +353,21 @@ final class McpMessageResultTypeTest extends TestCase
                     'inputSchema' => ['type' => 'object', 'properties' => [], 'required' => []],
                 ]]];
             } else {
-                $result = match ((string) ($msg['params']['name'] ?? '')) {
+                $name = (string) ($msg['params']['name'] ?? '');
+                if ($name === 'zerofloat') {
+                    // RAW TEXT, not json_encode(): the encoder renders 0.0 as
+                    // "0", so a float zero cannot be put on the wire through
+                    // it at all. json_decode() is the only side of the pair
+                    // that distinguishes 0.0 from 0, so the literal is spelled
+                    // by hand to make the parent receive a genuine float.
+                    echo '{"jsonrpc":"2.0","id":', json_encode((string) $msg['id']), ',"result":0.0}', "\n";
+                    flush();
+                    continue;
+                }
+                $result = match ($name) {
                     'boolean' => true,
                     'number' => 42,
+                    'zero' => 0,
                     'string' => 'plain text',
                     default => ['content' => [['type' => 'text', 'text' => 'pong']], 'isError' => false],
                 };

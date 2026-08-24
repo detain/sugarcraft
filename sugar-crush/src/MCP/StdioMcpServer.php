@@ -369,11 +369,27 @@ final class StdioMcpServer implements McpServer
         // {@see \SugarCraft\Crush\Tools\McpToolBridge::renderContent()} already
         // renders verbatim, so the scalar reaches the model as its own text.
         if (!is_array($response->result)) {
+            // `?:` HERE WOULD DESTROY A ZERO, which is the very coercion this
+            // branch exists to prevent, one layer down. `json_encode(0)` is the
+            // STRING `"0"` — falsy in PHP — so `json_encode($r) ?: ''` turned a
+            // legal `"result": 0` into an EMPTY tool result while every other
+            // scalar came through intact. MEASURED against a real server child
+            // before the fix: `0` and `0.0` both arrived at the model as `''`,
+            // `5` and `false` as `'5'` and `'false'`.
+            //
+            // The `=== false` arm is a RETURN-TYPE FORMALITY, not a live path:
+            // `null` is answered above, arrays and strings take the other
+            // branches, so all this call can ever see is a bool, an int or a
+            // float from `json_decode()`, and `json_encode()` cannot fail on
+            // those. It is spelled explicitly anyway because `text` is declared
+            // `string` and `json_encode()` is declared `string|false`.
+            $encoded = json_encode($response->result);
+
             return ['content' => [[
                 'type' => 'text',
                 'text' => is_string($response->result)
                     ? $response->result
-                    : (json_encode($response->result) ?: ''),
+                    : ($encoded === false ? '' : $encoded),
             ]]];
         }
 
