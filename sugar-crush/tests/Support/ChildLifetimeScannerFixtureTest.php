@@ -957,6 +957,102 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
     }
 
+    /**
+     * `closedBy` names the roster row a short verdict rests on, or nothing.
+     *
+     * THE FIELD HAS NO PIN OF ITS OWN IN THIS FILE, which is the gap this
+     * closes. It was added so E425 - a promotion bought by a
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} row, with nothing written
+     * down anywhere a reviewer reads - leaves a receipt. Every assertion about
+     * it so far lives in a CONSUMER of the scanner. That is the wrong place
+     * for the only test of a field on this class's public contract: a consumer
+     * can be rewritten, retargeted or deleted for reasons that have nothing to
+     * do with the scanner, and the field would then be unpinned without a
+     * single test changing colour.
+     *
+     * ⚠️ BOTH POLARITIES, and the second is the dangerous one. Stamping too
+     * LITTLE loses the receipt and reopens E425. Stamping too MUCH - marking a
+     * literal `proc_close()` as helper-closed - inflates the receipt roster
+     * with sites that need no provenance, and a roster full of noise is one
+     * nobody reads. `proc_close()` is the language ending the child and is
+     * nobody's claim about another file; only a roster key is.
+     */
+    public function testAShortVerdictRecordsWhetherARosterRowBoughtIt(): void
+    {
+        $viaHelper = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Crush\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::terminateAndClose($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $viaHelper[0]['lifetime']);
+        self::assertSame(
+            'processreaper::terminateandclose',
+            $viaHelper[0]['closedBy'],
+            'a short verdict bought by a CLOSING_HELPERS row must name the row that bought it. '
+                . 'Unstamped, the promotion is indistinguishable from a literal proc_close() and '
+                . 'the receipt roster that exists to catch a wrong row has nothing to count.',
+        );
+        self::assertArrayHasKey(
+            (string) $viaHelper[0]['closedBy'],
+            ChildLifetimeScanner::CLOSING_HELPERS,
+            'closedBy must be a key INTO the roster, not prose about it. A consumer looks the '
+                . 'value up; a value that does not resolve is a receipt for a row nobody can find.',
+        );
+
+        $viaLanguage = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                proc_close($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $viaLanguage[0]['lifetime']);
+        self::assertNull(
+            $viaLanguage[0]['closedBy'],
+            'proc_close() is the language closing the child, not a claim about a method in '
+                . 'another file. Stamping it would put every ordinary short-lived spawn on the '
+                . 'receipt roster, and a roster that lists everything distinguishes nothing.',
+        );
+    }
+
+    /**
+     * The stamp is not merely present - it tracks the roster.
+     *
+     * Rule 25: the pair above asserts one exact string and one null, and BOTH
+     * survive a scanner that hard-codes those two answers by class name rather
+     * than reading {@see ChildLifetimeScanner::CLOSING_HELPERS} at all. This
+     * drives the same shape through a method the roster does NOT list, where
+     * the correct answer is not "some other key" but no short verdict at all -
+     * so a stamp that is really a hard-coded constant has nowhere to hide.
+     */
+    public function testAnUnrosteredCloserBuysNoVerdictAndLeavesNoReceipt(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Crush\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::tidyUpEventually($h);
+            }
+            PHP);
+
+        self::assertSame(
+            ChildLifetimeScanner::LIFETIME_UNCLASSIFIED,
+            $sites[0]['lifetime'],
+            'an unrostered method on a rostered class must not close a child. The roster is '
+                . 'keyed Class::method precisely so the class half cannot vouch for the rest.',
+        );
+        self::assertNull(
+            $sites[0]['closedBy'],
+            'no roster row bought this verdict, so there is nothing to receipt.',
+        );
+    }
+
     private function sitesIn(string $source): array
     {
         return ChildLifetimeScanner::scan($source)['sites'];
