@@ -1353,6 +1353,23 @@ final class ProcessUniqueTempNameTest extends TestCase
             "<?php\n\$d = sys_get_temp_dir();\nfile_put_contents(\$d . '/fixed.log', 'x');\n",
         ), 'a bare temp-root binding followed by a FIXED leaf at the write site is the hazard '
             . 'and must still be reported — sparing the root must not spare the file');
+
+        // ...AND THIS IS THE CASE THAT ACTUALLY SEPARATES THE TWO. The pair
+        // above does not: an entropic write site is refused on its own tokens
+        // whatever the binding was classified as, so a mutation collapsing
+        // PATH_TEMP_ROOT into PATH_FIXED_FILE SURVIVED them both. The binding's
+        // classification is only ever observable when the bound name is the
+        // WHOLE path — `mkdir($d)` on the temp directory itself, which is not a
+        // shared-file hazard and must not be reported as one.
+        self::assertSame([], self::staticTempPathWrites(
+            "<?php\n\$d = sys_get_temp_dir();\nmkdir(\$d);\n",
+        ), 'the temp DIRECTORY itself, bound and then written whole, was reported as a fixed '
+            . 'shared file path. A directory is not the hazard; the fixed leaf inside it is.');
+
+        self::assertSame([], self::staticTempPathWrites(
+            "<?php\n\$d = sys_get_temp_dir();\n\$e = \$d;\nrmdir(\$e);\n",
+        ), 'the classification did not survive a plain rebinding, so a chain of bindings is '
+            . 'either not followed or not carried faithfully');
     }
 
     /**
