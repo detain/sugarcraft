@@ -33,8 +33,9 @@ use SugarCraft\Crush\Tools\ToolResult;
  * in a `--output-format json` document's `refusals` array by
  * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()}) or an ordinary
  * tool ERROR (a call that ran and failed, which the model is expected to act
- * on). The producer does not READ that roster and deliberately does not — see
- * {@see Runtime::DENIAL_HOOK}'s doc-block for the measured reason.
+ * on). The producer READS that roster now — {@see Runtime::gate()} holds a
+ * {@see DenialKind} and renders it once — which is the end of a three-round
+ * arc this doc-block records rather than erases.
  *
  * THE ROSTER MOVED, AND HALF THE REASON THIS FILE EXISTS WENT WITH IT (E239).
  * WHAT THIS DOC-BLOCK SAID: that the roster is `Chat::DENIED_ERROR_PREFIXES`,
@@ -45,18 +46,33 @@ use SugarCraft\Crush\Tools\ToolResult;
  * longer applies to it — `Chat::DENIED_ERROR_PREFIXES` is a projection of the
  * enum, and {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()}
  * already classifies against the enum instead (MEASURED, PHP 8.3.6: that path
- * no longer loads `Chat` at all). WHY THIS FILE STILL EARNS ITS PLACE:
- * `src/Runtime.php` was owned by a different concurrent lane when the leaf
- * landed, so `Runtime`'s three `DENIAL_*` constants are STILL three string
- * literals and still a copy. Until they are re-pointed at the enum's cases,
- * this file is the only thing making that copy loud. The day they are, the
- * membership test below becomes a tautology and should be deleted with them —
- * not before.
+ * no longer loads `Chat` at all).
+ *
+ * AND THEN THE COPY WENT TOO (E246), WHICH THIS DOC-BLOCK HAD PRESCRIBED A
+ * DELETION FOR AND THE PRESCRIPTION WAS WRONG. WHAT IT SAID: that
+ * `Runtime`'s three `DENIAL_*` constants are still three string literals, so
+ * until they are re-pointed at the enum's cases "this file is the only thing
+ * making that copy loud", and "the day they are, the membership test below
+ * becomes a tautology and should be deleted with them — not before". WHAT IS
+ * TRUE NOW: they are re-pointed, and
+ * {@see self::testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()} is NOT a
+ * tautology. MEASURED on PHP 8.3.6 at round 49: substituting
+ * `public const DENIAL_HOOK = 'Nope:';` leaves
+ * {@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException()}
+ * GREEN — the walk matches a denial-shaped literal and `Nope:` carries no
+ * denial term, so the widest guard in this file cannot see it — while the
+ * membership test KILLS it. The two guards cover different holes: the walk
+ * catches a second spelling that LOOKS like a denial, and the membership test
+ * catches a constant that has stopped being one. WHY THE PRESCRIPTION STILL
+ * EARNS ITS PLACE: it is the reason this paragraph checked before deleting,
+ * and a reviewer reading only the first half would have taken it.
  *
  * WHAT IS LEFT WHEN A PRODUCER DOES NOT READ ITS ROSTER is a copy that can
  * drift, and the drift is silent in the worst direction: a prefix
  * `Runtime` invents that the roster does not carry renders a BLOCKED call as a
- * failed one on both surfaces. This file is the coupling, made loud.
+ * failed one on both surfaces. That is the failure this file was built for and
+ * the reason it survives the copy's removal: `DENIAL_*` is `public const` on a
+ * class an embedder reads, so re-literalising one is a one-line edit.
  *
  * It is deliberately not in `tests/Cli` or `tests/Hooks`: the contract spans
  * `Runtime` (producer), `Chat` (roster + classifier) and `NonInteractive`
@@ -652,9 +668,9 @@ final class DenialPrefixRosterTest extends TestCase
      * assertion written as `DenialKind::Hook->token()` moves with the
      * implementation and pins nothing: MEASURED on PHP 8.3.6 by substituting
      * `return $this->name;` — with only the derived assertions in place that
-     * mutation SURVIVED the whole of this file and
-     * {@see NonInteractiveRefusalDocumentTest}, emitting `Hook` where the
-     * documented contract says `hook`. The three strings below are the
+     * mutation SURVIVED the whole of this file and the whole of
+     * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveRefusalDocumentTest},
+     * emitting `Hook` where the documented contract says `hook`. The three strings below are the
      * contract `README.md` publishes for the `kind` field of a `refusals`
      * entry; a fourth denial kind SHOULD red this test, because it is a
      * change to a document other people parse.

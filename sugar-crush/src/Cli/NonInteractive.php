@@ -1070,13 +1070,17 @@ final class NonInteractive
      *
      * THE CLASSIFICATION IS NO LONGER SPELLED HERE EITHER (E292). WHAT THIS
      * METHOD USED TO BE: an `instanceof ToolFinished`, an `isError()` guard
-     * and a {@see DenialKind::classify()} call — the same eight lines
+     * and a {@see DenialKind::classify()} call —
      * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::noticeRefusal()}
-     * spelled a second time in another file, where the duplicate reached the
-     * roster through `Chat` and so paid for the TUI model this path exists to
-     * avoid. WHAT IS TRUE NOW: {@see ToolRefusal::fromEvent()} owns the shape
-     * and both callers ask it. This method is the `refusals`-entry projection
-     * of the answer and nothing else.
+     * asked the same three questions in another file. Not the same LINES,
+     * which is the part that mattered: its copy walked
+     * `Chat::DENIED_ERROR_PREFIXES` with a `foreach` and a `str_starts_with`,
+     * so the two decisions were spelled differently AND reached the roster
+     * through different classes — and when E239 moved the roster off `Chat`,
+     * only one of them was re-pointed. WHAT IS TRUE NOW:
+     * {@see ToolRefusal::fromEvent()} owns the shape and both callers ask it.
+     * This method is the `refusals`-entry projection of the answer and nothing
+     * else.
      *
      * @return array{tool: string, kind: string, reason: string}|null
      */
