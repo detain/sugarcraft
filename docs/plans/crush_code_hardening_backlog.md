@@ -13102,7 +13102,7 @@ claim, and the backlog should not record it as one.
 
 ---
 
-### Ea53-1 — E368's step for site 3 is not implementable as written, and the reason generalises
+### E395 — E368's step for site 3 is not implementable as written, and the reason generalises
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: prescription refuted. **Measured, PHP 8.3.6.**
 
@@ -13137,7 +13137,7 @@ throughout.
 
 ---
 
-### Ea53-2 — sites 2 and 4 are still open, and closing them is a constructor change
+### E396 — sites 2 and 4 are still open, and closing them is a constructor change
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: correctness, latent. **Deliberately deferred;
 judged in the census roster rather than left unrecorded.**
@@ -13161,7 +13161,7 @@ the classification changes to `VARIABLE` and the census fails until the judgemen
 
 ---
 
-### Ea53-3 — the `finally` that closes the `/dev/tty` descriptor is not behaviourally pinnable here
+### E397 — the `finally` that closes the `/dev/tty` descriptor is not behaviourally pinnable here
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: unpinned invariant. **Stated because the gap is
 structural, not because the guard was skipped.**
@@ -13186,7 +13186,7 @@ for a two-line `finally`.
 
 ---
 
-### Ea53-4 — `PosixBackendRestoreLastTest` asserts almost nothing, and one of its two tests is `assertTrue(true)`
+### E398 — `PosixBackendRestoreLastTest` asserts almost nothing, and one of its two tests is `assertTrue(true)`
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: dead guard. **Verified by symbol. Not edited — the
 file is pre-existing and the new coverage was added alongside rather than folded into it.**
@@ -13210,7 +13210,7 @@ does not expose (`struct termios` is opaque there); `stty -F <pts> -a` is the av
 
 ---
 
-### Ea53-5 — a census's alphabet trap caught in the act, one level down
+### E399 — a census's alphabet trap caught in the act, one level down
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: instrument. **Found while building the replacement
 census for E368, before it was ever trusted.**
@@ -13233,7 +13233,7 @@ removing them reds it (mutation M11).
 
 ---
 
-### Ea53-6 — E368's population re-derived tree-wide with the corrected instrument: closed but for sites 2 and 4
+### E400 — E368's population re-derived tree-wide with the corrected instrument: closed but for sites 2 and 4
 
 **Recorded 2026-08-24 by round-53 lane a.** Severity: measurement. **The generator is committed this time
 — that is the point of the entry.**
@@ -13250,7 +13250,7 @@ trust those two numbers — re-derive them; the census is set-equality on a judg
 no count is load-bearing.* Of the 13:
 
   - **2 remain defect-shaped**, both `INT_CAST_VIA_VARIABLE` in `candy-core`'s `PosixBackend` — E368 sites
-    2 and 4, deferred with reasons in Ea53-2 and judged in the roster.
+    2 and 4, deferred with reasons in E396 and judged in the roster.
   - **3 were the sites fixed this round** (E368 sites 3, 5, 6), now `VARIABLE` off a real descriptor,
     `LITERAL_INT` and `LITERAL_INT`.
   - **8 were already correct.** Five match E368's carve-out list. **Two do not appear in it at all** —
@@ -13266,13 +13266,13 @@ no count is load-bearing.* Of the 13:
 searched on operand shape; this one searches on the sink and reports anything it cannot classify.
 
 **CORRECTION (round 53, fix pass) — "tree-wide" means two narrower things than it sounds.** First, in the
-FUNCTION spelling only; Ea53-10 covers the method spelling. Second, **in `<lib>/src` only**:
+FUNCTION spelling only; E404 covers the method spelling. Second, **in `<lib>/src` only**:
 `presentLibraries()` globs `*/src` and nothing else, so `bin/`, `examples/`, `tools/`, `scripts/` and the
 repo-root `bin`/`tools`/`scripts` are outside it. MEASURED, this lane's worktree, PHP 8.3.6 —
 `grep -rEn 'posix_isatty|posix_ttyname|SizeIoctl::query|TermiosFactory::open' --include=*.php bin tools
 scripts */bin */examples */tools` returns **0 matches**, so the claim happens to hold today; it is not
 guarded, and a descriptor sink added to a `bin/` script would not red anything. Widening the glob is
-cheap; the reason not to do it in this round is Ea53-10's merge hazard, unchanged.
+cheap; the reason not to do it in this round is E404's merge hazard, unchanged.
 
 **AND A STANDING CROSS-LANE HAZARD, recorded because it will fire on somebody.** This census reads
 **every** library's `src/`, `sugar-crush/src` included. It lives in candy-core. So a sibling lane that
@@ -13289,13 +13289,13 @@ census would have looked at.
 
 ---
 
-### Ea53-7 — the replacement census had the alphabet trap AGAIN, one level further down
+### E401 — the replacement census had the alphabet trap AGAIN, one level further down
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument. **Found and fixed
 this round; recorded because it is the third recurrence of one pattern inside work written to fix that
 pattern.**
 
-Ea53-5 recorded the alphabet trap caught inside the scanner. The scanner's **control fixture** had it too.
+E399 recorded the alphabet trap caught inside the scanner. The scanner's **control fixture** had it too.
 
 `DescriptorSinkScanner::classify()` has TWO returns that answer `UNCLASSIFIED` for a shape it has no word
 for: one inside the accessor-chain walk, and a terminal fallthrough at the end of the method. The fixture
@@ -13343,7 +13343,7 @@ and the count includes the ones that are not in the classifier.
 
 ---
 
-### Ea53-8 — the census's absence assertion passed on its own against a dead scanner
+### E402 — the census's absence assertion passed on its own against a dead scanner
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: dead-guard shape. **Fixed this
 round.**
@@ -13381,7 +13381,7 @@ kill it filtered to that one method.
 
 ---
 
-### Ea53-9 — a resource id is not a measurement, and this family's own older doc-block already said so
+### E403 — a resource id is not a measurement, and this family's own older doc-block already said so
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: false precision in shipped
 prose. **Corrected this round in three places.**
@@ -13403,7 +13403,7 @@ invariant, name their harness, and explicitly tell the reader not to take an id 
 
 ---
 
-### Ea53-10 — the descriptor census is blind to the METHOD-CALL spelling of its own sinks
+### E404 — the descriptor census is blind to the METHOD-CALL spelling of its own sinks
 
 **Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument blind spot, **no
 defect behind it today**. **Deliberately deferred — see the merge hazard at the bottom.**
@@ -13422,7 +13422,7 @@ method-shaped call sites tree-wide. `fcntl` has **two**, both in
 
 **Both are currently CORRECT** (`$masterFd` and `$slaveFd` come from `posix_openpt()` and the
 `grantpt`/`unlockpt` path, i.e. real descriptors, no cast anywhere). So this is a hole in the instrument,
-not a seventh defect, and Ea53-6's "no seventh instance exists tree-wide" survives it — but that claim
+not a seventh defect, and E400's "no seventh instance exists tree-wide" survives it — but that claim
 should be read as *"no seventh instance in the function spelling"*, which is narrower than it sounds.
 
 Widening further, the same `Libc` binding exposes `open`/`close`/`ioctl`/`read`/`write`, all fd-taking:
@@ -13483,7 +13483,7 @@ unstated correction is not re-derivable, which was the entire complaint against 
 
 ---
 
-### Ea53-11 — the census de-duplicated its own sites, so an unjudged one hid behind a judged one
+### E405 — the census de-duplicated its own sites, so an unjudged one hid behind a judged one
 
 **Recorded 2026-08-24 by round-53 lane a (fix pass).** Severity: dead-guard shape in the one property the
 census exists to have. **Fixed this round.**
@@ -13520,7 +13520,7 @@ a colliding key does not announce itself — it silently produces the smaller, g
 
 ---
 
-### Ea53-12 — a test file's FFI gate tested for the extension being loaded, which is not the condition that matters
+### E406 — a test file's FFI gate tested for the extension being loaded, which is not the condition that matters
 
 **Recorded 2026-08-24 by round-53 lane a (fix pass).** Severity: red tests for contributors, invisible in
 CI. **Fixed this round.**
@@ -13558,7 +13558,7 @@ true and is why the helper takes a device path.
 
 ---
 
-### Eb53-1 — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
+### E407 — the two remaining hand-rolled signal-escalation ladders are still not migrated to `ProcessReaper`
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: medium (duplication, not a live defect).
 
@@ -13579,7 +13579,7 @@ confirm BOTH suites move. If only one does, a private copy survived the migratio
 
 ---
 
-### Eb53-2 — `spawnSession()`'s explicit launcher reap is legibility, not a leak fix, and its deletion survives
+### E408 — `spawnSession()`'s explicit launcher reap is legibility, not a leak fix, and its deletion survives
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: informational. **This is a recorded SURVIVING mutation,
 written down so nobody re-derives it as a hole.**
@@ -13601,7 +13601,7 @@ class doc-block says so out loud.
 
 ---
 
-### Eb53-3 — a `src/` file-count census is now load-bearing in two places and five lanes are editing `src/`
+### E409 — a `src/` file-count census is now load-bearing in two places and five lanes are editing `src/`
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: process / merge hazard.
 
@@ -13625,7 +13625,7 @@ immune to the count. Consider whether the three literals earn their maintenance 
 
 ---
 
-### Eb53-4 — the copied-helper drift guard caught a defect inside the change that added the copies
+### E410 — the copied-helper drift guard caught a defect inside the change that added the copies
 
 **Recorded 2026-08-24, round 53 lane b.** Severity: informational. **Evidence that the guard pays for itself.**
 
@@ -13643,7 +13643,7 @@ round 53 assigns to another lane, so it is deferred rather than declined.
 
 ---
 
-### Eb53-5 — `MCP/StdioMcpServer` has the identical undrained-stderr wedge, and is OUT OF LANE
+### E411 — `MCP/StdioMcpServer` has the identical undrained-stderr wedge, and is OUT OF LANE
 
 **Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: functional, latent. **Reported, deliberately not fixed — the file belongs to another lane.**
 
@@ -13677,7 +13677,7 @@ arrived**, never that the call was quick; a timing bound is satisfied by the bro
 
 ---
 
-### Eb53-6 — `McpMessage::parse()` raises a TypeError on a JSON-RPC reply whose `result` is not an object
+### E412 — `McpMessage::parse()` raises a TypeError on a JSON-RPC reply whose `result` is not an object
 
 **Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: robustness. **Found incidentally; `src/McpMessage.php` is out of lane.**
 
@@ -13686,7 +13686,7 @@ through with no shape check. A server answering `{"jsonrpc":"2.0","id":"1","resu
 2.0, where `result` is any value — therefore raises
 `TypeError: McpMessage::__construct(): Argument #4 ($result) must be of type ?array, string given`.
 
-Observed while building a fixture for Eb53-5's sibling fix: the fixture answered with a string `result` and
+Observed while building a fixture for E411's sibling fix: the fixture answered with a string `result` and
 the client threw. Every other malformed input `parse()` meets is answered with `null`; this one is an
 uncaught throw out of `readMessages()`, i.e. a third-party MCP server can crash the client with a
 well-formed reply.
@@ -13697,7 +13697,7 @@ string, int, bool, null — plus the array case as the known-positive control.
 
 ---
 
-### Eb53-7 — `BackgroundSupervisorReapTest` moves the suite's skip count off 1 on any non-Linux runner
+### E413 — `BackgroundSupervisorReapTest` moves the suite's skip count off 1 on any non-Linux runner
 
 **Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: CI hygiene. **Not a defect today; filed so a future runner change does not read as a regression.**
 
@@ -13711,7 +13711,7 @@ reason that is not a defect.
 No action while `sugar-crush` is Linux-only in CI. **Trigger:** if `sugar-crush` is ever added to
 `MACOS_LIBS` or `WINDOWS_LIBS` in `ci.yml`, the skip-count invariant must be expressed per-platform first.
 
-### Ec53-1 — E366's mechanical repair is built: a lifetime scanner over `proc_open()`, and it found E366's own HIGH by machine
+### E414 — E366's mechanical repair is built: a lifetime scanner over `proc_open()`, and it found E366's own HIGH by machine
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: hygiene, mechanised. **BUILT + GUARDED this round.**
 Measured on PHP 8.3.6, `sugar-crush/src` only.
@@ -13734,7 +13734,7 @@ scanner cannot satisfy.
 
 ---
 
-### Ec53-2 — the textual presence of `proc_close()` is not evidence that a child was reaped
+### E415 — the textual presence of `proc_close()` is not evidence that a child was reaped
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: instrument correctness. **FOUND AGAINST THE TREE,
 AND IT WAS THE FIRST IMPLEMENTATION'S OWN DEFECT.**
@@ -13760,7 +13760,7 @@ Both shapes are pinned in `ChildLifetimeScannerFixtureTest`, each in its own rig
 
 ---
 
-### Ec53-3 — my brief and the round's ownership map disagree about who owns `ChildStderrCaptureScanner.php`
+### E416 — my brief and the round's ownership map disagree about who owns `ChildStderrCaptureScanner.php`
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: process / merge hazard. **NOT A CODE FINDING.**
 
@@ -13777,7 +13777,7 @@ that match no other lane's glob (`ChildLifetimeScanner.php`, `ChildLifetimeScann
 are still where the bulk of the work lives. But the question is not open — **lane d was never launched.**
 `/home/sites/` holds `crush-lane-a`, `crush-lane-b` and `crush-lane-c` and no `crush-lane-d`, so
 `ChildStderrCapture*.php` had no second claimant this round and lane c's own YOUR-FILES line governs.
-Lane c then did edit `ChildStderrCaptureScanner.php`, for Ec53-7.
+Lane c then did edit `ChildStderrCaptureScanner.php`, for E420.
 
 **WHY THIS STILL EARNS ITS PLACE:** the brief was internally inconsistent whether or not the lane it
 assigned the file to existed, and the next round's map is written from this one. The step below is
@@ -13787,7 +13787,7 @@ other claimant is actually running before paying the cost of avoiding it.
 
 ---
 
-### Ec53-4 — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
+### E417 — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: handle-leak-into-subprocess. **FINDING ONLY —
 deliberately not fixed** (functionality before hardening; lane c changes no `src/`).
@@ -13804,7 +13804,7 @@ SIGKILL teardown.
 
 ---
 
-### Ec53-5 — DEFERRED: the guard's scope is `sugar-crush/src` and nothing else
+### E418 — DEFERRED: the guard's scope is `sugar-crush/src` and nothing else
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: coverage. Named so a green run is not misread.
 
@@ -13817,7 +13817,7 @@ a sugar-crush test-support class so pointing another lib at it means promoting i
 
 ---
 
-### Ec53-6 — DEFERRED: the scanner will not follow a handle through an array member
+### E419 — DEFERRED: the scanner will not follow a handle through an array member
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: instrument coverage. Reported, not hidden.
 
@@ -13835,7 +13835,7 @@ site in the tree at once, and the honest `unclassified` costs a roster row rathe
 
 ---
 
-### Ec53-7 — a MIXED `proc_open()` descriptor spec was answered `inherited`, and two of its three spellings put a pipe on fd 2
+### E420 — a MIXED `proc_open()` descriptor spec was answered `inherited`, and two of its three spellings put a pipe on fd 2
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: instrument correctness. **FIXED** in
 `tests/Support/ChildStderrCaptureScanner.php`.
@@ -13879,7 +13879,7 @@ pinned four positional spellings and one all-keyed spelling, and had no way to s
 
 ---
 
-### Ec53-8 — the scanner called a bounded reaper "nothing happens to this handle", and would have reddened the lane that added it
+### E421 — the scanner called a bounded reaper "nothing happens to this handle", and would have reddened the lane that added it
 
 **Recorded 2026-08-24 by round-53 lane c.** Severity: invented finding / merge hazard. **FIXED** in
 `tests/Support/ChildLifetimeScanner.php`. **Cross-lane — read the merge instruction below.**
@@ -13912,7 +13912,7 @@ as short-lived."* WHAT IS TRUE NOW, and it was already true when the sentence wa
 - `reapIfExited()` does **not** reap unconditionally. Read off its source: it waits WITHOUT signalling and,
   when the child is still running at the end of the budget, `return null`s with the handle untouched. It
   was nevertheless rostered in `CLOSING_HELPERS`, under that constant's own warning that a row there "is a
-  claim that the helper really closes" — see Ec53-9.
+  claim that the helper really closes" — see E422.
 - So "the scanner reads it as short-lived" was correct, and that was the **bug**, not the fix.
   `exposedIn()` drops every short site without a trace, so following instruction 1 would have removed
   E366's HIGH from the guard entirely: not reported and exempted — gone.
@@ -13945,7 +13945,7 @@ edit written down in advance.
 
 ---
 
-### Ec53-9 — a best-effort reaper was rostered as a close, and it deleted E366's own HIGH from the guard
+### E422 — a best-effort reaper was rostered as a close, and it deleted E366's own HIGH from the guard
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: **BLOCKING — guard hole in the
 hiding polarity.** **FIXED** in `tests/Support/ChildLifetimeScanner.php`.
@@ -13981,7 +13981,7 @@ a reader to judge a method in another package from its name; a second list lets 
 
 ---
 
-### Ec53-10 — an exemption keyed by function was a licence for the function, not for the spawn
+### E423 — an exemption keyed by function was a licence for the function, not for the spawn
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: **BLOCKING — the guard's headline
 invariant did not hold.** **FIXED** in `tests/Support/DescriptorInheritanceGuardTest.php`.
@@ -14009,12 +14009,12 @@ Staleness now compares counts rather than membership, so a row is wrong in both 
 
 ---
 
-### Ec53-11 — DEFERRED: no fixture pins what a `CLOSING_HELPERS` row MEANS, and a syntactic check cannot supply one
+### E424 — DEFERRED: no fixture pins what a `CLOSING_HELPERS` row MEANS, and a syntactic check cannot supply one
 
-**Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: residual of Ec53-9. Reported, not
+**Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: residual of E422. Reported, not
 hidden.
 
-Ec53-9's fixtures make every roster row non-deletable and pin its polarity. They do **not** prove that the
+E422's fixtures make every roster row non-deletable and pin its polarity. They do **not** prove that the
 named helper really closes on every path — that is a fact about a method in `src/`, in another package,
 and it cannot be settled from a synthetic string. The review's prescription was a per-row semantic
 fixture. **Measured against the tree, a purely syntactic version of that check cannot work**, and this is
@@ -14038,12 +14038,12 @@ backwards.
 
 ---
 
-### Ec53-12 — DEFERRED: `exposedIn()` drops `LIFETIME_SHORT` silently, which is the entire attack surface of `CLOSING_HELPERS`
+### E425 — DEFERRED: `exposedIn()` drops `LIFETIME_SHORT` silently, which is the entire attack surface of `CLOSING_HELPERS`
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: guard observability. Reported, not
 hidden.
 
-Ec53-9 was findable only because someone read a roster row against its helper's source. The mechanism that
+E422 was findable only because someone read a roster row against its helper's source. The mechanism that
 made it costly is structural and is still there: `DescriptorInheritanceGuardTest::exposedIn()` `continue`s
 past every `LIFETIME_SHORT` site, so any future roster row that is wrong in the `reapIfExited` direction
 removes a site from the guard **with no trace anywhere in the output**. There is no assertion, anywhere,
@@ -14059,12 +14059,12 @@ Not done this round: it is a new assertion over `src/` in a round where two othe
 
 ---
 
-### Ec53-13 — DEFERRED: `ForkedChildExitScanner`'s roster may share Ec53-10's key-collision shape
+### E426 — DEFERRED: `ForkedChildExitScanner`'s roster may share E423's key-collision shape
 
 **Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: unknown, one grep to find out.
 Reported, not hidden.
 
-Ec53-10 was a boolean-keyed exemption roster absorbing multiple sites per key. `ChildStderrCaptureTest`
+E423 was a boolean-keyed exemption roster absorbing multiple sites per key. `ChildStderrCaptureTest`
 was checked and is fine (it carries counts). `ForkedChildExitScanner` and its guard are in this package,
 walk the same family of syntax, and were not examined — they are outside this round's diff and in no
 lane's file list. The question is one grep: is any exemption roster there keyed by file or by function
