@@ -348,6 +348,30 @@ final class BackgroundSupervisorReapTest extends TestCase
         $opaque = "<?php\nfunction spawn(\$whatever) {\n"
             . '    ' . $open . '($whatever, [], $pipes);' . "\n}\n";
 
+        // THE ALPHABET THIS FIXTURE COULD NOT EXPRESS UNTIL NOW. Every case
+        // above spells the call bare and assigns the command exactly once,
+        // which is the shape the production site happens to have — so the
+        // fixture confirmed the scanner on the inputs it was already known to
+        // handle and said nothing about the two it silently mis-answered.
+        // Both were found by running the scanner directly, and both answered
+        // in the PASSING direction, which is the only direction that matters.
+        $fqAlone = "<?php\nfunction spawn() {\n"
+            . '    \\' . $open . "('sh -c whatever', [], \$pipes);\n}\n";
+
+        $fqBesideArgv = "<?php\nfunction spawn() {\n"
+            . '    ' . $open . "([PHP_BINARY, '-r', 'x'], [], \$pipes);\n"
+            . '    \\' . $open . "('sh -c whatever', [], \$other);\n}\n";
+
+        $conditional = "<?php\nfunction spawn(\$useShell) {\n"
+            . "    if (\$useShell) {\n        \$cmd = 'sh -c whatever';\n"
+            . "    } else {\n        \$cmd = [PHP_BINARY, '-r', 'x'];\n    }\n"
+            . '    ' . $open . '($cmd, [], $pipes);' . "\n}\n";
+
+        $conditionalSwapped = "<?php\nfunction spawn(\$useShell) {\n"
+            . "    if (\$useShell) {\n        \$cmd = [PHP_BINARY, '-r', 'x'];\n"
+            . "    } else {\n        \$cmd = 'sh -c whatever';\n    }\n"
+            . '    ' . $open . '($cmd, [], $pipes);' . "\n}\n";
+
         $this->assertSame('string', self::procOpenCommandShape($shellString, 'spawn'));
         $this->assertSame('array', self::procOpenCommandShape($argv, 'spawn'));
         $this->assertSame('array', self::procOpenCommandShape($inline, 'spawn'));
@@ -362,6 +386,33 @@ final class BackgroundSupervisorReapTest extends TestCase
             self::procOpenCommandShape($argv, 'someOtherMethod'),
             'the scanner must be scoped to the named method, or an argv anywhere in the file would '
             . 'answer for a shell string in spawnSession()'
+        );
+
+        $this->assertSame(
+            'string',
+            self::procOpenCommandShape($fqAlone, 'spawn'),
+            'a fully-qualified spawn is INVISIBLE to the scanner, not merely unresolved: it '
+            . 'answered "absent" here, and "absent" is what the production pin accepts for a '
+            . 'method it cannot find. See isCallTo() — the lexer emits one T_NAME_FULLY_QUALIFIED'
+        );
+        $this->assertSame(
+            'string',
+            self::procOpenCommandShape($fqBesideArgv, 'spawn'),
+            'a fully-qualified shell-string spawn hid behind a bare argv one and the method '
+            . 'reported "array" — the exact "cannot hide behind the fixed one" claim this '
+            . 'scanner makes about itself'
+        );
+        $this->assertSame(
+            'string',
+            self::procOpenCommandShape($conditional, 'spawn'),
+            'a command assigned a shell string in one branch and an argv in another must collapse '
+            . 'to the worst shape; resolving only the nearest assignment answered "array" here'
+        );
+        $this->assertSame(
+            'string',
+            self::procOpenCommandShape($conditionalSwapped, 'spawn'),
+            'the same two branches in the opposite order must give the same verdict — a scanner '
+            . 'whose answer tracks source order is reporting layout, not risk'
         );
     }
 
@@ -583,8 +634,24 @@ final class BackgroundSupervisorReapTest extends TestCase
      * reported as `array` is a hole exactly the shape of the defect this pins.
      *
      * Multiple `proc_open()` calls in one method collapse to the WORST shape
-     * present (`unknown` over `string` over `array`), so adding a second,
-     * shell-string spawn beside a fixed one cannot hide behind the fixed one.
+     * present (`unknown` over `string` over `array`), and so do multiple
+     * assignments to the variable a call is given.
+     *
+     * ⚠️ WHAT THIS PARAGRAPH USED TO CLAIM, AND WHY IT NOW READS DIFFERENTLY
+     * (kept rather than quietly corrected, because the bound is the useful
+     * part). IT SAID: "so adding a second, shell-string spawn beside a fixed
+     * one cannot hide behind the fixed one" — flat, with no conditions. WHAT
+     * IS TRUE NOW: that was false twice over when written, and both holes were
+     * MEASURED by running this scanner directly rather than reading it. A
+     * second spawn written `\proc_open(...)` was not seen at all, because the
+     * lexer emits the fully-qualified name as one `T_NAME_FULLY_QUALIFIED`
+     * token ({@see isCallTo()}); and a command variable assigned in two
+     * branches was resolved to whichever branch came last in the source
+     * ({@see assignmentsWithin()}). WHY THE CLAIM STILL EARNS ITS PLACE: the
+     * collapse is what makes this a guard rather than a spot check, and with
+     * both holes closed the sentence is true for a bare or fully-qualified
+     * call and for a variable with several reaching assignments. It is still
+     * not dataflow analysis, and {@see assignmentsWithin()} states that bound.
      */
     private static function procOpenCommandShape(string $source, string $method): string
     {
@@ -602,8 +669,7 @@ final class BackgroundSupervisorReapTest extends TestCase
 
         $shapes = [];
         for ($i = $range['from']; $i <= $range['to']; $i++) {
-            $token = $tokens[$i];
-            if (!is_array($token) || $token[0] !== T_STRING || $token[1] !== 'proc_open') {
+            if (!self::isCallTo($tokens[$i], 'proc_open')) {
                 continue;
             }
             // A method call `$x->proc_open(` or a definition is not the
@@ -661,33 +727,67 @@ final class BackgroundSupervisorReapTest extends TestCase
         if ($text === '"') {
             return 'string';
         }
-        if (is_array($token) && $token[0] === T_STRING
-            && in_array($token[1], ['sprintf', 'implode', 'vsprintf', 'escapeshellcmd'], true)) {
-            return 'string';
+        foreach (['sprintf', 'implode', 'vsprintf', 'escapeshellcmd'] as $stringy) {
+            if (self::isCallTo($token, $stringy)) {
+                return 'string';
+            }
         }
         if (is_array($token) && $token[0] === T_VARIABLE && $mayFollow) {
-            $assigned = self::nearestAssignmentWithin($tokens, $at, $token[1], $range);
-            if ($assigned === null) {
+            $assigned = self::assignmentsWithin($tokens, $at, $token[1], $range);
+            if ($assigned === []) {
                 return 'unknown';
             }
 
-            return self::classifyOperand($tokens, $assigned, $range, false);
+            // EVERY assignment, collapsed to the worst — see assignmentsWithin().
+            $shapes = array_map(
+                fn (int $rhs): string => self::classifyOperand($tokens, $rhs, $range, false),
+                $assigned
+            );
+            foreach (['unknown', 'string', 'array'] as $worst) {
+                if (in_array($worst, $shapes, true)) {
+                    return $worst;
+                }
+            }
+
+            return 'unknown';
         }
 
         return 'unknown';
     }
 
     /**
-     * The index of the first significant token on the right-hand side of the
-     * nearest `$name =` at or before $before, bounded below by the enclosing
-     * function's opening brace so an assignment in an EARLIER method can never
-     * answer for a call in a later one.
+     * The right-hand side of EVERY `$name =` at or before $before, bounded
+     * below by the enclosing function's opening brace so an assignment in an
+     * EARLIER method can never answer for a call in a later one.
      *
-     * @param list<array{0:int,1:string,2:int}|string> $tokens
-     * @param array{name:string,from:int,to:int}       $range
+     * ⚠️ EVERY ASSIGNMENT, NOT THE NEAREST, AND THAT IS THE WHOLE POINT. This
+     * used to return the textually nearest one and stop, which reads a
+     * two-branch conditional as whichever branch happens to be written LAST.
+     * MEASURED by running the scanner directly: with `$c` assigned a shell
+     * string in the `if` and an argv in the `else`, it answered `array` — the
+     * PASSING answer for source where half the paths spawn through a shell;
+     * with the branches swapped it answered `string`. The verdict tracked
+     * source order, not risk. A conditional fallback is the most plausible way
+     * a shell string comes back to a fixed call site, so the branch this
+     * cannot see is the branch that matters.
+     *
+     * The caller collapses the results to the worst shape present, so a call
+     * site is only `array` when EVERY reaching assignment is an array literal.
+     *
+     * SCOPE, stated because a reader will otherwise over-read it: this is
+     * still not dataflow analysis. It does not know which branches are
+     * mutually exclusive, does not follow a loop's back edge, and stops at
+     * assignments lexically before the call. Its bias is toward `unknown` and
+     * `string`, both of which are FAILING answers — it can cost a false red,
+     * never a false green.
+     *
+     * @param  list<array{0:int,1:string,2:int}|string> $tokens
+     * @param  array{name:string,from:int,to:int}       $range
+     * @return list<int>
      */
-    private static function nearestAssignmentWithin(array $tokens, int $before, string $name, array $range): ?int
+    private static function assignmentsWithin(array $tokens, int $before, string $name, array $range): array
     {
+        $found = [];
         for ($i = $before - 1; $i > $range['from']; $i--) {
             $token = $tokens[$i];
             if (!is_array($token) || $token[0] !== T_VARIABLE || $token[1] !== $name) {
@@ -697,11 +797,50 @@ final class BackgroundSupervisorReapTest extends TestCase
             if ($eq === null || self::text($tokens[$eq]) !== '=') {
                 continue;
             }
-
-            return self::nextSignificant($tokens, $eq);
+            $rhs = self::nextSignificant($tokens, $eq);
+            if ($rhs !== null) {
+                $found[] = $rhs;
+            }
         }
 
-        return null;
+        return $found;
+    }
+
+    /**
+     * Is this token a call to the global function $name, written either bare or
+     * fully qualified?
+     *
+     * ⚠️ THE FULLY-QUALIFIED FORM IS A DIFFERENT TOKEN, NOT TWO TOKENS. Since
+     * PHP 8.0 the lexer emits `\proc_open` as ONE `T_NAME_FULLY_QUALIFIED`
+     * whose text INCLUDES the backslash — not `T_NS_SEPARATOR` followed by
+     * `T_STRING` — VERIFIED against `token_get_all()` on this host, PHP 8.3.6.
+     * The scanner used to test `T_STRING && text === 'proc_open'`, so a leading
+     * backslash did not make it answer `unknown`, it made the call INVISIBLE:
+     * a method containing nothing but `\proc_open('shell string', ...)` was
+     * reported `absent`, and a shell-string spawn added beside a good argv one
+     * was reported `array`. Both MEASURED by running this scanner directly.
+     *
+     * That is not a theoretical spelling in this package:
+     * {@see \SugarCraft\Crush\Support\ProcessReaper} writes every builtin fully
+     * qualified (`\proc_close`, `\proc_terminate`, `\proc_get_status`), so a
+     * future editor normalising a spawn site to the same house style is the
+     * likely way this reappears.
+     *
+     * @param array{0:int,1:string,2:int}|string $token
+     */
+    private static function isCallTo(array|string $token, string $name): bool
+    {
+        if (!is_array($token)) {
+            return false;
+        }
+        if ($token[0] === T_STRING) {
+            return $token[1] === $name;
+        }
+        if (defined('T_NAME_FULLY_QUALIFIED') && $token[0] === T_NAME_FULLY_QUALIFIED) {
+            return $token[1] === '\\' . $name;
+        }
+
+        return false;
     }
 
     /** @param list<array{0:int,1:string,2:int}|string> $tokens */
