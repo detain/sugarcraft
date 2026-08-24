@@ -130,14 +130,16 @@ final class SuiteChildStdinIsolationTest extends TestCase
      * understood: `9513 tests, 1 failure`, this assertion, green when its own
      * file ran alone.
      *
-     * Every such site in the tree was given an explicit stream —
-     * {@see \SugarCraft\Crush\Tests\Backend\EngineBackendTest} and
-     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest} — and each now
+     * Every such site in the tree was given an explicit stream, and each now
      * asserts the flag moves on the stream it PASSED, so a revert is red
-     * there. No count is quoted, because a count over `tests/` is stale the
-     * next time one is added; the generator is
-     * `grep -rn 'new Tty(' src/ tests/ bin/` and every hit whose first
-     * argument is `null` is one.
+     * there. THREE WERE FOUND BY A GREP AND A FOURTH WAS NOT — a grep for
+     * `new Tty(` cannot express the fully-qualified spelling
+     * `tests/ChatTest.php` uses, and THIS ASSERTION is what caught it, on a
+     * full run with the other three already fixed. The census is therefore no
+     * longer a grep:
+     * {@see \SugarCraft\Crush\Tests\TtyStreamArgumentCensusTest} walks the
+     * token stream, so a spelling cannot hide a site, and it fails on an
+     * argument list it cannot read rather than skipping it.
      *
      * SO THIS ASSERTION IS DELIBERATELY ORDER-DEPENDENT, which is normally the
      * worst thing a guard can be and is the right thing here: it is the only

@@ -265,26 +265,33 @@ NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
  *
  * WHAT REFUTED ATTEMPT 2 THE FIRST TIME, and why it does not any more. A flag
  * can be cleared by anything holding the same description, and this suite had
- * three such sites: `new Tty(null, $injectedTermios)`. `Tty::__construct()` is
+ * such sites: `new Tty(null, $injectedTermios)`. `Tty::__construct()` is
  * `self::backend($stream ?? STDIN, $termios)`, so a null stream wraps THIS
  * process's fd 0, and the injected-Termios branch of
  * `PosixBackend::enableRawMode()` skips its own `isTty()` guard — so its
  * trailing `@stream_set_blocking($this->stream, false)` and `restore()`'s
- * matching `(…, true)` both landed on descriptor 0. MEASURED, three takes,
- * that seam driven directly: clear after the flag is set, still clear after
- * `enableRawMode()`, BLOCKED AGAIN after `restore()` — 3/3; with an explicit
- * stream instead of null, fd 0's flag never moves — 3/3. It cost a full run:
- * a guard asserting the flag passed with its own file alone and failed at
- * `9513 tests, 1 failure` in a full run, because `restore()` had run first.
+ * matching `(…, true)` both landed on descriptor 0. MEASURED, PHP 8.3.6, three
+ * takes each, that seam driven directly in a child whose fd 0 is a pipe: with
+ * `null`, clear once the flag is set, still clear after `enableRawMode()`,
+ * BLOCKED AGAIN after `restore()` — 3/3; with an explicit stream, fd 0's flag
+ * never moves — 3/3; with NO `Termios` at all, also never moves — 3/3, because
+ * `enableRawMode()` returns at `!isTty()` before it reaches the flag. That
+ * third row is why the shape is null-stream AND injected-Termios rather than
+ * either alone.
  *
- * Those sites were given explicit streams — `tests/Backend/EngineBackendTest`
- * and `tests/Support/ForkedChildTest`, the latter a FORKING file whose
- * children inherit the same `Tty`, and both now assert the flag moves on the
- * stream they passed rather than on the runner's. So the description is no
- * longer written by anything in the run. No count is quoted here on purpose;
- * the generator is `grep -rn 'new Tty(' src/ tests/ bin/`, and every hit whose
- * first argument is `null` is one. The next one anyone writes re-arms this,
- * and the guard below is what says so.
+ * Every such site was given an explicit stream, and each now asserts the flag
+ * moves on the stream it PASSED rather than on the runner's, so a revert is red
+ * where it happens. THREE WERE FOUND BY A GREP AND A FOURTH WAS NOT, which is
+ * the part worth carrying: `grep -rn 'new Tty(' src/ tests/ bin/` cannot
+ * express `new \SugarCraft\Core\Util\Tty(null, …)`, which is how
+ * `tests/ChatTest.php` spells it — and the full run went red at the guard
+ * below with the other three already repaired. So the census is no longer
+ * prose. {@see \SugarCraft\Crush\Tests\TtyStreamArgumentCensusTest} walks the
+ * token stream, where the spelling cannot hide a site; it FAILS on an argument
+ * list it cannot read to its close rather than skipping it; and it carries
+ * known-answer fixtures for both spellings, so an empty result is evidence
+ * rather than the silence of a dead scanner. No count is quoted here, because
+ * a count over `tests/` is stale the next time one is added.
  *
  * WHAT THIS COSTS, stated because it is invisible until something steps on it:
  *
