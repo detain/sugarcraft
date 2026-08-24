@@ -989,6 +989,56 @@ final class ProcessUniqueTempNameTest extends TestCase
      *
      * @return list<int> 1-indexed lines, sorted, unique
      */
+    /**
+     * The namespace this file declares, or '' for the global one.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function namespaceOf(array $tokens): string
+    {
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_NAMESPACE) {
+                continue;
+            }
+            $name = $tokens[$i + 1] ?? null;
+            if (\is_array($name) && \in_array($name[0], [\T_STRING, \T_NAME_QUALIFIED], true)) {
+                return $name[1];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Every name this file writes after `extends`, as a lookup.
+     *
+     * The KEY is the trailing segment, because that is the spelling under which
+     * a class in the same file was registered: `extends \Ns\A` and `extends A`
+     * name the same declaration when both live here.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     *
+     * @return array<string,true>
+     */
+    private static function extendedNames(array $tokens): array
+    {
+        $found = [];
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_EXTENDS) {
+                continue;
+            }
+            $name = $tokens[$i + 1] ?? null;
+            if (!\is_array($name)
+                || !\in_array($name[0], [\T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED], true)) {
+                continue;
+            }
+            $segments = explode('\\', $name[1]);
+            $found[(string) end($segments)] = true;
+        }
+
+        return $found;
+    }
+
     private static function staticTempPathWrites(string $source): array
     {
         $tokens = self::significantTokens($source);
@@ -997,6 +1047,15 @@ final class ProcessUniqueTempNameTest extends TestCase
         $roots = [];
         $paths = [];
         $depth = 0;
+
+        // THE FILE'S NAMESPACE AND ITS `extends` EDGES, BOTH NEEDED BEFORE THE
+        // FIRST CONSTANT IS REGISTERED. The namespace decides the fully
+        // qualified spelling of every class below it, and `parent::` can only
+        // be attached to a class whose name something in this file extends —
+        // which may be written AFTER the class it names, so it cannot be
+        // collected in the same forward pass.
+        $namespace = self::namespaceOf($tokens);
+        $extended  = self::extendedNames($tokens);
 
         // CONSTANTS FIRST, BINDINGS SECOND, and the order is load-bearing: a
         // field assigned `self::LOG_PATH` in a constructor can only be
@@ -1032,7 +1091,23 @@ final class ProcessUniqueTempNameTest extends TestCase
                 continue;
             }
 
-            foreach (['self', 'static', $class] as $receiver) {
+            $receivers = ['self', 'static', $class];
+            if ($class !== null && $namespace !== '') {
+                $receivers[] = $namespace . '\\' . $class;
+            }
+            if ($class !== null && isset($extended[$class])) {
+                // `parent::` is relative to the SUBCLASS, and this map is
+                // whole-file rather than scope-aware by construction (see the
+                // one-binding paragraph above). Registering the name means a
+                // second class in the same file writing `parent::P` resolves —
+                // and, if two classes in one file both had a `P`, that a
+                // subclass of the wrong one would resolve too. That is a false
+                // POSITIVE, which is loud, in a scanner whose stated trade is
+                // exactly that.
+                $receivers[] = 'parent';
+            }
+
+            foreach ($receivers as $receiver) {
                 if ($receiver === null) {
                     continue;
                 }
@@ -1354,10 +1429,25 @@ final class ProcessUniqueTempNameTest extends TestCase
             // `self::LOG_PATH` was outside the alphabet by construction: the
             // name carries no path and the walk had nowhere to look it up.
             // The pre-pass in {@see staticTempPathWrites()} registers each
-            // constant under EVERY spelling it can be reached by within the
+            // constant under the spellings it can be reached by within the
             // file, so the lookup here is a plain key in the same two maps a
             // bound variable uses — a constant IS a binding that cannot be
             // rebound, so it needs no machinery of its own.
+            //
+            // ⚠️ AND "the spellings" IS A LIST, NOT A QUANTIFIER. This sentence
+            // said EVERY spelling reachable within the file, and it registered
+            // three: `self::`, `static::` and the bare declaring-class name.
+            // `\Ns\A::LOG_PATH` and `parent::LOG_PATH` both answered `[]`, and
+            // both are now registered — the namespace-qualified name whenever
+            // the file declares a namespace, and `parent` whenever something in
+            // the file extends the declaring class. FIVE, and the list is
+            // written out because a quantifier cannot be checked by reading.
+            // The spellings still outside it are named in
+            // {@see testTheStaticPathScannerSaysWhatItCannotSee()} and derived
+            // there rather than promised here — chiefly a RELATIVE qualified
+            // name (`Sub\A::P` inside `namespace Ns;` resolves to `Ns\Sub\A`,
+            // which this pre-pass has no import table to follow) and any parent
+            // class declared in another file.
             if (\is_array($token)
                 && \in_array($token[0], [\T_STRING, \T_NAME_FULLY_QUALIFIED, \T_STATIC], true)
                 && isset($tokens[$j + 2])
@@ -1652,6 +1742,21 @@ final class ProcessUniqueTempNameTest extends TestCase
                 "<?php\n\$fs->write('/tmp/fixed.log');\n",
             'an interpolating double-quoted string' =>
                 "<?php\n\$n = 'fixed';\nfile_put_contents(\"/tmp/{\$n}.log\", 'x');\n",
+            // THE THREE CLASS-CONSTANT SPELLINGS STILL OUTSIDE THE PRE-PASS,
+            // derived rather than promised. Each needs something the pre-pass
+            // does not have: an import table (the first and the third) or a
+            // second file (the second). The row on classifyStaticPath() names
+            // the five it DOES register; these are why that is a list and not
+            // the word "every", which is what it used to say.
+            'a RELATIVE qualified class name, which needs the file\'s import table' =>
+                "<?php\nnamespace Ns;\nfinal class A { const P = '/tmp/fixed.log'; }\n"
+                . "function f() { file_put_contents(Sub\\A::P, 'x'); }\n",
+            'a class name reached through a `use … as` alias' =>
+                "<?php\nnamespace Ns;\nuse Ns\\A as Z;\nfinal class A { const P = '/tmp/fixed.log'; }\n"
+                . "function f() { file_put_contents(Z::P, 'x'); }\n",
+            'parent:: where the parent class is declared in ANOTHER file' =>
+                "<?php\nfinal class B extends Other {\n"
+                . "  public function w(): void { file_put_contents(parent::P, 'x'); }\n}\n",
         ];
 
         foreach ($missed as $why => $source) {
@@ -1712,6 +1817,20 @@ final class ProcessUniqueTempNameTest extends TestCase
                 ["<?php\nstream_socket_server('unix:///tmp/fixed.sock');\n", [2]],
             'a proc_open() cwd' =>
                 ["<?php\nproc_open('ls', [], \$pipes, '/tmp/fixed-dir');\n", [2]],
+            // THE TWO SPELLINGS THE PRE-PASS DID NOT REGISTER, and the comment
+            // beside it claimed it registered EVERY one reachable within the
+            // file. It registered `self::`, `static::` and the bare class name.
+            // Measured through the real scanner: both of these answered `[]`
+            // before the pre-pass learned the namespace and the `extends`
+            // edges, and neither was on the "cannot see" list either — so the
+            // DERIVED bound was incomplete in the same direction as the prose.
+            'the same constant reached by its fully qualified name' =>
+                ["<?php\nnamespace Ns;\nfinal class A {\n  private const LOG_PATH = '/tmp/fixed.log';\n"
+                    . "  public function w(): void { file_put_contents(\\Ns\\A::LOG_PATH, 'x'); }\n}\n", [5]],
+            'a constant reached by parent:: from a subclass in the same file' =>
+                ["<?php\nclass A {\n  protected const LOG_PATH = '/tmp/fixed.log';\n}\n"
+                    . "final class B extends A {\n"
+                    . "  public function w(): void { file_put_contents(parent::LOG_PATH, 'x'); }\n}\n", [6]],
         ];
 
         foreach ($seen as $why => [$source, $expected]) {
