@@ -78,6 +78,57 @@ confirmation; stop only for a decision that is genuinely theirs.**
 6. **Launch round 55**, then update `crush_code_worklog.md`, this file, and the backlog so the session
    can be compacted safely.
 
+### 🔧 THE MACHINE REBOOTED MID-ROUND — WHAT WAS LOST, WHAT WAS NOT, AND HOW IT WAS RECOVERED
+
+**2026-08-24 ~22:54, the host rebooted with round 54 at 7 of 9 agents.** Recorded here because the
+recovery turned up two harness facts that will recur.
+
+**Where the round actually was**, read off `journal.jsonl` (which lives under `~/.claude` and therefore
+survived) rather than guessed:
+
+| lane | implement | review | fix |
+|---|---|---|---|
+| a — descriptor-census | ✅ cached | ✅ cached | ❌ killed at ~21 min |
+| b — sugar-crush runtime | ✅ cached | ✅ cached | ✅ **COMPLETE** |
+| c — close-the-inheritance | ✅ cached | ✅ cached | ❌ killed at ~23 min |
+
+**Lane b's finished figures, from the cached structured result** — `9985 / 144465 / 1 / rc 0` at
+`e99eb5cd`, 17 new test methods in the diff, `figuresAgree: true`, closure 18, no out-of-lane files,
+5 deferred findings. That is +39 tests and +196 assertions on the `9946 / 144269` base.
+
+**SURVIVED:** every lane commit (a=11, b=8, c=8 above `606a131c`), the round-54 script, and the whole
+workflow journal + per-agent transcripts under `~/.claude`.
+
+🔴 **DID NOT SURVIVE: all of `/tmp`.** That took the supervisor's scratchpad — including the staged
+`composer-sweep.sh` — and all three lanes' `r54{a,b,c}` scratchpads. **Anything a round needs across a
+reboot must live under `~/.claude` or in git, never in a scratchpad.** The sweep script was rebuilt
+from the worklog; a lane's scratch notes cannot be.
+
+🔴 **`resumeFromRunId` DOES NOT WORK USEFULLY ON A `pipeline()` RUN — do not reach for it again.**
+Resuming replays the *longest unchanged prefix of `agent()` calls*, but under `pipeline()` the call
+ORDER is set by completion times, so the recorded order (impl×3, then review_b, review_a, review_c, …)
+cannot be reproduced. MEASURED: the resume replayed the three implements from cache and then started
+**three review agents** — including lane b's, whose fix had already landed — which would have re-reviewed
+trees that had since moved past the state the reviewer prompt describes. It was stopped after ~90s.
+
+**THE RECOVERY THAT WORKED, and the shape to reuse:** rebuild the missing prompts *from the script
+itself* rather than by hand. `crush-round-54.js` was read as text, truncated at its `phase('Implement')`
+line, `export const meta` rewritten to `const meta`, and `require()`d — which yields the real
+`fixPrompt`, `LANES`, `COMMON` and `BASE`. Feeding it the cached review and implement reports pulled out
+of the journal regenerates each lane's fix prompt byte-identically to what the pipeline would have
+passed. Those two prompts, plus a per-lane recovery preamble and the same `FIGURES` schema, were emitted
+into `crush-round-54-recover.js` (durable scripts dir) and launched as a two-agent `parallel()`.
+Lane b was left strictly untouched.
+
+**Lane a's 21 minutes of uncommitted work was preserved, not committed.** It widens the census
+trace-back so a cast parked in `$this->fd` or `$tty[0]` is traced back and not only a lone `$fd` — but
+it was RED in exactly one place (`self::$fd` → `VARIABLE`, because the new
+`renderedLeftHandSideEndingAt()` requires a `T_VARIABLE` root), so committing it would have put a red
+commit on the lane. Instead: `git stash create` + `git update-ref refs/rescue/r54a-mid-edit`, which
+snapshots it into git while leaving the working tree exactly as the killed agent left it. The recovery
+preamble hands the agent the measurement and the choice — admit the static spelling without admitting
+constants, or retract the provider row — and cites rule 31 so it picks one whole.
+
 ### AT THE MERGE
 
 Merge a→b→c. **Renumber from E429.** Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
