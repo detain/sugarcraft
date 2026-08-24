@@ -248,7 +248,15 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'one token, and they no longer do - the copies were consolidated, one was '
                 . 'deleted, or the divergence grew past the bound. Delete the row. An accepted '
                 . 'divergence that has been overtaken is how a helper silently stops being '
-                . 'compared.',
+                . 'compared. '
+                . 'AND IF YOU DID NOT TOUCH EITHER FILE, THIS IS STILL NOT A BUG. Ownership in '
+                . 'this repo is by directory and a copied helper is not, so the two files a row '
+                . 'names routinely sit in two different lanes: whichever lane edits one of them '
+                . 'lands the change, and the row reds for whoever merges. Check `git log -p` for '
+                . 'the helper in both files before assuming a defect - the fix is a DATA edit '
+                . 'here (delete the row, or rewrite its reason for the divergence that is left), '
+                . 'not a change to either helper. That the red arrives at all is the whole point '
+                . 'of the map.',
         );
     }
 
