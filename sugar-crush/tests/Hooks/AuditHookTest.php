@@ -109,9 +109,19 @@ final class AuditHookTest extends TestCase
      * the name is the production default, so the suite deleted the audit log of
      * any real `sugarcrush` on the same box, and of any sibling lane's suite.
      *
-     * A shared-name hazard is not a `uniqid` hazard, which is why the round-49
-     * pre-round sweep could not see it: that sweep's alphabet was the token
-     * for that call, and this path has no entropy source at all (rule 11).
+     * A shared-name hazard is not an entropy-flag hazard, which is why the
+     * round-49 pre-round sweep could not see it: that sweep's alphabet was the
+     * name of that one call, and this path has no entropy source at all
+     * (rule 11).
+     *
+     * NEITHER SENTENCE SPELLS THAT CALL, and that is deliberate rather than
+     * coy. The sweep in question was TEXTUAL, and a textual sweep cannot tell
+     * an offender from a description of one — the same pass ate a guard's own
+     * fixture and mangled the doc-block justifying it (rule 26). MEASURED, so
+     * this is a choice and not a requirement: the census scanner drops
+     * `T_DOC_COMMENT`, so a mention here is invisible to it — a synthetic
+     * doc-comment carrying the name reports nothing while a real flagless call
+     * in the same check reports its line.
      *
      * WHAT THIS ASSERTED: the literal `sugar-crush-audit.log` on the temp root.
      * WHAT IS TRUE NOW (E328): the leaf is the same idea — a fixed name, so
