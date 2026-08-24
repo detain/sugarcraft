@@ -10254,7 +10254,7 @@ believed on the strength of its output rather than on the strength of a known-an
 
 ---
 
-## Ea49-1 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
+### Ea49-1 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
 
 `Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` / `DENIAL_UNANSWERED` and
 `Chat::DENIED_ERROR_PREFIXES` are now aliases that DERIVE from
@@ -10270,7 +10270,7 @@ attached, and this round's mandate was to remove the copies rather than to sched
 
 ---
 
-## Ea49-2 — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
+### Ea49-2 — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
 
 **Status: closed by the round-49 fix pass** (`DenialPrefixRosterTest::testTheRostersBackingValuesAreTheThreePublishedPrefixes()`).
 Kept rather than deleted because the mechanism is the useful part and the original entry got two things
@@ -10306,7 +10306,7 @@ reason.
 
 ---
 
-## Ea49-3 — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
+### Ea49-3 — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
 
 Round 49 gave every `refusals` entry in the `--output-format json` document a `kind` field
 (`hook` / `refused` / `unanswered`, from `DenialKind::token()`), which is the seam where the enum
@@ -10328,7 +10328,7 @@ the change is visible.
 
 ---
 
-## Ea49-4 — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
+### Ea49-4 — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
 
 `Permissions\ToolRefusal::fromEvent()` answers with a `DenialKind`. `NonInteractive::refusalFrom()`
 carries it out as the document's `kind`; `BackgroundSessionRunner::noticeRefusal()` takes `->tool` and
@@ -10344,7 +10344,7 @@ wants its own step rather than riding on a roster refactor.
 
 ---
 
-## Ea49-5 — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
+### Ea49-5 — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
 
 `Chat::invokeTool()`'s `catch (\Throwable $e)` returns
 `ToolResult::error($name, $e->getMessage(), $toolCall->id)` — the message VERBATIM, with no prefix of
@@ -10371,7 +10371,7 @@ wanting its own step and its own golden-file pass — and functionality comes be
 
 ---
 
-## Ea49-6 — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
+### Ea49-6 — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
 
 Round 49 widened it twice (round-49 implement pass: the `^` anchor and the `[a-z]+` verb; round-49 fix
 pass: `declined`, `prohibited`, `vetoed`, `barred`, plus a case-variant rule and per-frame judging). Both
