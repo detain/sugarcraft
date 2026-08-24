@@ -362,6 +362,11 @@ final class PosixBackend implements Backend
      *  2. The descriptor table (`/proc/self/fd` on Linux, `/dev/fd` on
      *     Darwin and FreeBSD), matched on `st_dev` + `st_ino`.
      *
+     * Arm 1 answering first is also what keeps the cost out of the hot path:
+     * `size()` runs on every SIGWINCH, and `$this->stream` defaults to
+     * `STDIN`, so the common case is three identity comparisons and no
+     * filesystem access at all. Only an INJECTED stream reaches the walk.
+     *
      * ## What this hands back, and who closes it
      *
      * NOTHING IS OPENED HERE, so unlike {@see openDeviceDescriptor()} there

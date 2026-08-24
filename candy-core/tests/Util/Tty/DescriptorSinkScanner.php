@@ -379,10 +379,15 @@ final class DescriptorSinkScanner
      *
      * ## Arity, and why a zero-argument call is not "unparseable"
      *
-     * `->close()` with no arguments occurs 56 times in this monorepo and is
-     * never libc's `close`: every symbol in {@see methodSinks()} is DECLARED
-     * with at least one parameter, so a nullary call of that name is a
-     * different method that shares a word. Skipping it is therefore a
+     * A nullary `->close()` is one of the commonest calls in this tree -- a
+     * stream wrapper, a pty handle, a recorder -- and is never libc's
+     * `close`: every symbol in {@see methodSinks()} is DECLARED with at least
+     * one parameter, so a nullary call of that name is a different method
+     * that shares a word. (A count is deliberately not quoted here. It would
+     * be a property of one worktree and it would rot. The generator is a
+     * `grep -rEn` for a nullary arrow-call of the name over every library's
+     * source directory; it is not spelled out as a literal command here
+     * because the glob for that would close this doc-comment.) Skipping it is therefore a
      * CLASSIFICATION -- the parse succeeded and said "not this" -- and not
      * the silent shrug this class exists to refuse. The shrug would be
      * dropping a call whose argument could not be read; that still comes back
