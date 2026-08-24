@@ -173,10 +173,40 @@ use SugarCraft\Crush\Tools\ToolCall;
  * WHY THE WHOLE ENTRY STILL EARNS ITS PLACE: the routing question it answers —
  * that these four stay on stderr rather than moving to the transcript seam — is
  * unchanged and independent of where the refusal line ended up. What changed is
- * only the last sentence's forecast. Note the one visible consequence, recorded
- * so it does not read as a bug: an ASK refused at a terminal now produces two
- * stderr lines, this class's terse "refused <tool>." and the observer's fuller
- * one. {@see NonInteractive::noticeRefusal()} says why neither is suppressed.
+ * only the last sentence's forecast.
+ *
+ * ## The pair of lines, and why the terse one stays (E240)
+ *
+ * WHAT THE PARAGRAPH ABOVE USED TO END WITH: "an ASK refused at a terminal now
+ * produces two stderr lines, this class's terse `refused <tool>.` and the
+ * observer's fuller one", recorded so it does not read as a bug, with
+ * {@see NonInteractive::noticeRefusal()} carrying the argument against
+ * suppressing either. The backlog entry that recorded it offered a cheap
+ * removal: drop shape 4 now that the observer says more.
+ *
+ * WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 49 by driving a real
+ * {@see \SugarCraft\Crush\Backend\EngineBackend} turn through a gate that
+ * ASKs, once per arm, in a child process with fd 2 on a plain file:
+ *
+ *  - THE DOUBLING IS NOT TTY-ONLY. The no-tty arm doubles as well — shape 2's
+ *    eight-line block plus the observer's line, 526 bytes over 9 lines,
+ *    against the terminal arm's 266 over 8. So removing shape 4 would take
+ *    the doubling out of one of the two arms that have it, not out of the
+ *    behaviour.
+ *  - AND THE OBSERVER'S LINE CANNOT TELL THE ARMS APART. Both end in a reason
+ *    opening `Permission denied:`
+ *    ({@see \SugarCraft\Crush\Permissions\DenialKind::Refused}), because in
+ *    both an approver was attached and answered no — what differs is WHY, and
+ *    the observer, reading a
+ *    {@see \SugarCraft\Crush\Events\ToolFinished}, never sees it. This
+ *    class's own text is therefore the ONLY thing on stderr separating "a
+ *    person typed n" from "there was nobody at the keyboard", two problems
+ *    with two different remedies.
+ *
+ * SO THE PAIR STAYS, and shape 4 is not a duplicate of the observer's line but
+ * the narrower half of a pair that is jointly exhaustive.
+ * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins both
+ * measurements, so the removal is not re-proposed from the entry's text alone.
  */
 final class HeadlessPermissionPrompt
 {
@@ -212,10 +242,49 @@ final class HeadlessPermissionPrompt
      *        \SugarCraft\Crush\Hooks\BuiltIn\PermissionGateHook::execute()}),
      *        but a custom hook's `ask()` does not, and the remedy line needs
      *        it either way.
-     * @param resource|null $in  Answer stream; defaults to `STDIN`.
+     * @param resource|null $in  Answer stream; defaults to
+     *        {@see NonInteractive::stdinDefault()} — the real `\STDIN` in
+     *        production, and the process-wide pin under test. See the
+     *        SECOND HALF OF E212's HAZARD FAMILY note below.
      * @param resource|null $err Question stream; defaults to `STDERR`.
      * @param bool|null $interactive Overrides the `stream_isatty()` probe.
      *        Null — the production value — probes $in.
+     *
+     *        THE SECOND HALF OF E212's HAZARD FAMILY, AND WHY THE FIX IS A
+     *        DELEGATION RATHER THAN A SECOND PIN (E243). This parameter used
+     *        to default to the `\STDIN` constant, and
+     *        {@see Bootstrap::withConsolePermissionPrompt()} constructs this
+     *        class as `new HeadlessPermissionPrompt($gate->mode())` with no
+     *        `$in` at all — so an approver attached that way read whatever
+     *        descriptor 0 the runner inherited, which is the exact shape E212
+     *        removed from {@see NonInteractive::readStdinIfPiped()}.
+     *
+     *        THE BOUND IS NARROWER THAN E212's AND IT IS STILL WORTH CLOSING.
+     *        `\fgets($this->in)` sits behind {@see isInteractive()}, which is
+     *        `\is_resource() && \stream_isatty()`; a held-open pipe is not a
+     *        tty, so this could never hang the way E212's
+     *        `stream_get_contents()` could. What it COULD do is block for a
+     *        human answer whenever the suite is run from a real terminal.
+     *
+     *        MEASURED at round 49 rather than assumed, because the entry left
+     *        it open: exactly one test invokes a `Bootstrap`-constructed
+     *        approver
+     *        ({@see \SugarCraft\Crush\Tests\Cli\ConsolePermissionApproverWiringTest::testTheAttachedClosureRefusesRatherThanReturningAHardCodedGrant()}),
+     *        and it rebinds both streams by reflection first — so the block
+     *        was latent, not live. It is closed anyway, because "no test
+     *        reaches it today" is a property of the test suite and the
+     *        defaulting is a property of the class.
+     *
+     *        NO SECOND PIN, DELIBERATELY. `NonInteractive` already owns a
+     *        process-wide `stdinDefault()` seam that `tests/bootstrap.php`
+     *        installs once, and the two classes are the same `-p` console
+     *        family — this one's whole doc-block is about that path. A second
+     *        static would need its own bootstrap call, in a file another lane
+     *        owns, and would give the suite two ways to be half-pinned.
+     *        Production is untouched either way: nothing in `src/` or `bin/`
+     *        calls `pinStdinDefault()`, which
+     *        {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveStdinPinTest}
+     *        pins, so this resolves to the real `\STDIN` in a shipped run.
      *
      *        This exists because no in-memory stream can EVER be a tty:
      *        `stream_isatty()` on `php://memory` or `php://temp` is false by
@@ -231,7 +300,7 @@ final class HeadlessPermissionPrompt
         $err = null,
         private readonly ?bool $interactive = null,
     ) {
-        $this->in = $in ?? \STDIN;
+        $this->in = $in ?? NonInteractive::stdinDefault();
         $this->err = $err ?? \STDERR;
     }
 

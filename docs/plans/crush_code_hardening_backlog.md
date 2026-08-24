@@ -8592,3 +8592,286 @@ has no generator to catch it.
 
 ---
 
+### Ea49-1 — `Runtime`'s three `DENIAL_*` constants are the last copy of the roster
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: design (the remainder of E239). **Measured.**
+
+**What.** E239 is done on the `Chat` side: `src/Permissions/DenialKind.php` is a dependency-free backed
+enum whose three cases carry the three prefixes, `Chat::DENIED_ERROR_PREFIXES` is a projection of it,
+`Chat::isDeniedResult()` delegates to `DenialKind::classify()`, all three of `Chat`'s hand-rolled
+producers build their reason with `DenialKind::reason()`, and `NonInteractive::refusalFrom()` classifies
+against the enum instead of the TUI model — MEASURED on PHP 8.3.6, `class_exists(Chat::class, false)`
+after one classification went from false-then-TRUE to false-then-false.
+
+`src/Runtime.php` was another lane's file this round, so `Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` /
+`DENIAL_UNANSWERED` are still three string literals and still a copy. The autoload objection that
+justified the copy no longer applies: the enum has no `use` statements and loads nothing.
+
+**Step.** Re-point the three constants at the enum's cases (`= DenialKind::Hook->value`, which is a valid
+constant expression on PHP 8.3.6 — verified — and has been since 8.2). Then
+`DenialPrefixRosterTest::testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()` and
+`testTheClassifierRecognisesEachPrefixAndStillRefusesAPlainError()` become tautologies and should be
+DELETED with the change rather than left green; the file's class doc-block says so in as many words.
+`testRuntimeSpellsNoDenialPrefixOutsideItsConstants()` and the new
+`testTheLeafIsTheOnlyFileInTheFamilyThatSpellsADenialPrefix()` both stay — they are about second
+spellings, not about the copy.
+
+---
+
+### Ea49-2 — the denial vocabulary matches a string in `src/Agents/TaskBlockedException.php`
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: guard scoping. **Measured, PHP 8.3.6.**
+
+**What.** `DenialPrefixRosterTest::denialLiteralsIn()`'s frame-plus-vocabulary alphabet matches
+`'Task creation blocked: '` in `src/Agents/TaskBlockedException.php` (the `block(ed)?` term). Running the
+shipped scanner over the whole of `src/` returns that file alongside `Runtime.php` and
+`Permissions/DenialKind.php` and nothing else — so a guard scoped to `src/` rather than to a named file
+roster would red on it. That is why round 49's new guard uses a named `FAMILY_SPELLINGS` map (which also
+keeps it immune to a sibling lane adding a file, E-rule 18) rather than a tree walk.
+
+**Not established.** Whether that message can ever become the `content()` of an errored `ToolResult` —
+i.e. whether a `Task`-shaped tool catches `TaskBlockedException` and reports its message. If it can, it is
+a fourth refusal shape that is on NO roster, and `Chat::isDeniedResult()` would render it as an ordinary
+tool ERROR: struck-through state lost, missing from the `--output-format json` `refusals` array. That is
+exactly the failure mode E236 describes, in a file nobody has looked at for it. `src/Agents/TaskList.php`
+is the only thrower (one site, measured).
+
+**Step.** Trace whether the exception's message reaches a `ToolResult`. If it does, give it a
+`DenialKind` case; if it does not, say so in a doc-block on the exception so the next person running a
+denial scan over `src/` does not have to re-derive it.
+
+---
+
+### Ea49-3 — E238's mirror claim no longer reproduces
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: process (backlog correction). **Measured.**
+
+**What.** E238 records two surviving mutations, and only the first still survives. MEASURED at
+`db90e768` on PHP 8.3.6 through round 49's harness:
+
+| mutation | test | verdict |
+|---|---|---|
+| `gate()`'s `$prefix = self::DENIAL_HOOK;` → literal `'Hook refused:'` | `RuntimeTest::testExecuteToolCallsYieldsErrorWhenHookDenies` | **SURVIVED** (reproduces; now fixed) |
+| `gate()`'s `self::DENIAL_UNANSWERED` → literal `'Permission blocked:'` | `RuntimeTest::testAskWithNoApproverFailsClosedAndSaysPermissionWasRequired` | **KILLED** |
+
+The mirror is dead because round 48's own E210 fix removed the words "Permission required" from
+`settleAsk()`'s message — it now returns `HookResult::deny("no approver is attached to this run: …")`, so
+the test's `assertStringContainsString('Permission required', …)` depends entirely on the prefix `gate()`
+adds. The entry was written before that landed and describes the tree as it then was.
+
+**Step.** None — recorded so the entry's second paragraph is not acted on. The general point is the one
+worth keeping: a surviving-mutation table is a measurement with a commit attached, and E238's first row
+carries no sha.
+
+---
+
+### Ea49-4 — E240's "at a terminal" is the smaller half; the no-tty arm doubles too
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: cosmetic / decision recorded. **Measured, PHP 8.3.6.**
+
+**What.** E240 records that an ASK refused **at a terminal** writes two stderr lines and offers a cheap
+removal (drop `HeadlessPermissionPrompt`'s terse `sugarcrush: refused <tool>.`). MEASURED by driving a real
+`EngineBackend` turn through a gate that ASKs, once per arm, in a child process with fd 2 on a plain file:
+
+| arm | bytes on fd 2 | lines | producers |
+|---|---|---|---|
+| tty, answered `n` | 266 | 8 | the 6-line question block, `sugarcrush: refused Bash.`, the observer's line |
+| no tty | 526 | 9 | the 8-line refusal block, the observer's line |
+| plain hook DENY | 66 | 1 | the observer's line only |
+
+Two corrections. The doubling is **not** tty-only, so the prescribed removal would take it out of one of
+the two arms that have it rather than out of the behaviour. And — the decisive one — the observer's line
+**cannot tell the two arms apart**: both end in a reason opening `DenialKind::Refused`
+(`Permission denied:`), because in both an approver was attached and answered no. The prompt's own text is
+the only thing on stderr separating "a person typed n" from "there was nobody at the keyboard".
+
+**Step.** None — the pair STAYS, and this is why. Both measurements are pinned by
+`tests/Cli/RefusalStderrSurfaceTest.php` (with a hook-DENY row as its known-positive control), and the
+justification is rewritten in three-part form on `HeadlessPermissionPrompt`'s class doc-block and on
+`NonInteractive::noticeRefusal()`. Reopening it needs a new measurement, not the entry's text.
+
+---
+
+### Ea49-5 — `DenialKind` is a TYPE that nothing yet consumes as one
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: design (the rest of E210). **Not measured; structural.**
+
+**What.** E239's Step notes that an enum "would also give the three kinds a TYPE rather than a string
+prefix, closing E210 properly at the event rather than in the text". The enum now exists and every
+producer and consumer in `Chat` and `NonInteractive` goes through it — but every one of them still crosses
+the wire as a STRING. `Events\ToolFinished` carries a `ToolResult` whose `content()` is the finished reason;
+`NonInteractive::refusalFrom()` re-derives the kind by `str_starts_with` on the way out; the
+`--output-format json` `refusals` array publishes `{tool, reason}` with the kind embedded in prose.
+
+**Step.** Carry the `DenialKind` on the event (or on the refusal entry) so a consumer switches on a case
+rather than re-parsing a prefix, and add it to the JSON document as its own key. Note the compatibility
+cost before doing it: the `refusals` array's shape is published and
+`NonInteractiveRefusalDocumentTest` pins it, so the kind should be an ADDED key, never a re-shaped
+`reason`. Blocked on nothing; it was simply out of round 49's item list.
+
+---
+
+### Ea49-6 — `E245` names lane a as the owner of a file round 49 assigned to lane c
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: process. **Not a code defect.**
+
+**What.** E245 ("`StderrEmitterCensusTest`'s method name states a cardinality its body no longer carries")
+says "Owner: whoever holds `tests/Cli/StderrEmitterCensusTest.php` — lane a's file". In round 49's
+ownership map that file is **lane c's**, and lane a's test set does not include it. The rename was
+therefore not done in round 49 either, for the same reason lane c did not do it in round 48.
+
+**Step.** None beyond doing the rename in whatever round owns the file. Recorded because an ownership note
+written into a backlog entry is round-specific and reads as durable — the second time in two rounds this
+entry has been skipped by the lane it names.
+
+---
+### Ea49-7 — three `src/`-wide cardinalities are literals in a test nobody owns, and one is restated in `src/`
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: process. **Measured; it fired.**
+
+**What.** Adding ONE file to `src/` (`src/Permissions/DenialKind.php`, E239's leaf) reddened
+`tests/Tools/BuiltInToolCorpusTest.php` on three assertions —
+`assertSame(290, $files)`, the `['concrete' => 240, 'enum' => 26, …]` kind map, and
+`assertSame(290, count($files)) / assertSame(309, $declarations)` — and that test in turn asserts that
+`src/Context/RepoMapBlock.php`'s prose restates both figures, so the bump reached a `src/` file too. Five
+literals, in two files, neither of them in round 49's ownership map at all. Lane a made the minimal edit
+and reported it as a forced out-of-lane edit (E191's rule).
+
+This is E-rule 18 firing exactly as written, and it is worth noting that the file already KNOWS: its own
+doc-block says "a cardinality in prose is stale the next time one is added" in one paragraph and carries
+`290`, `309`, `240` and `26` as literals in the next. The narrative paragraph in
+`testTheSecondaryDeclarationCensus()` still quotes `288 .php files, 307 top-level declarations`, which was
+already two rounds stale before this round touched anything — asserted nowhere, so nothing caught it.
+
+**Step.** Two options, and the second is cheaper than it looks. (a) Keep the assertions and accept that
+every lane adding a `src/` file edits this test — but then say so at the top of the file, because today a
+lane discovers it from a red at the end of a four-minute run. (b) Keep the INVARIANTS the file is
+actually about — `testEverySourceFileDeclaresItsPsr4Symbol()` (pinned at zero, derived),
+`testNoSecondaryDeclarationIsADispatchableTool()`, and the per-file secondary map, which names files
+rather than counting them — and drop the three totals, which measure only how big the tree is. The
+`RepoMapBlock` restatement can stay asserted against the DERIVED figure without any literal in the test.
+Note that dropping them removes the only thing that would notice a file appearing in `src/` unnoticed, so
+if that is wanted it should be a named-file roster (the shape round 49's `DenialPrefixRosterTest` used for
+the same reason) rather than a total.
+
+---
+### Ea49-8 — E223's premise is wrong: the in-tree hosted shell already arms the seam
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: process (entry correction). **Measured.**
+
+**What.** E223 says `Chat::init()` "is called by `SugarCraft\Core\Program`, and only by it", and that a
+`Chat` driven by an embedder — "the hosted-pane shape `Chat::withSize()`'s doc-block describes" —
+therefore never arms the mid-session seam's watcher. MEASURED by grepping `src/` and `bin/` for the call:
+there are **two** in-tree callers, and the second one is that very shape.
+`SugarCraft\Crush\App\App::init()` batches `$this->chat?->init()` with its own OSC 11 query, and
+`App::delegateToChat()` returns `Chat::update()`'s Cmd through every branch untouched — so the shell that
+hosts the chat pane already discharges both halves of the obligation.
+
+Round 49 wrote the same false sentence into a fresh doc-block before checking it, and caught it only on a
+deliberate re-derivation pass. That is the third round running in which a mechanism claim was written down
+with confidence and was inverted in fact (E-rule 8).
+
+**The residue is real but smaller than the entry states**, and it is now written down and pinned:
+
+  - A THIRD-PARTY embedder outside this tree still owns the pumping, which is what `Chat::init()`'s
+    doc-block now says.
+  - `App`'s forwarding was asserted by NOTHING. Deleting `$this->chat?->init()` from that batch leaves a
+    shell that starts, paints and silently never arms the seam; `Cmd::batch()` drops nulls, so there is no
+    error either. `tests/Chat/HostedRuntimeNoticeWakeTest::testTheHostedShellForwardsTheChatsStartupCmd()`
+    now pins it — and walks the `BatchMsg` by hand, because `Cmd::batch()` does not RUN its children: it
+    returns a Cmd yielding a sentinel that `Program::runCmd()` explodes. A host embedding `App` rather
+    than `Chat` therefore has a second obligation the entry never mentions.
+
+**Step.** None on `Chat`/`App`. If a hosted-embedder guide is ever written, the `BatchMsg` fan-out belongs
+in it beside the two `init()`/`update()` obligations.
+
+---
+
+### Ea49-9 — the denial-literal scanner's `^` anchor could not see this tree's own refusal note
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
+
+**What.** `DenialPrefixRosterTest::FAMILY_SPELLINGS` asserts `'src/Chat.php' => 0` — no denial prefix
+spelled outside the leaf. `DENIAL_SHAPE` was `/^[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/`, anchored at the
+start of the literal. `Chat::answerPermission()`'s refusal note was written
+`Message::system("_Permission denied: {$name} was not run._")`, whose `T_ENCAPSED_AND_WHITESPACE` run
+opens with `_`, so the frame never matched it.
+
+MEASURED on PHP 8.3.6 by re-introducing that exact line and running the guard: **SURVIVED**, green on
+`0`. The guard could not see the one producer its own row is named after. A leading space and a frame
+following a sentence were invisible for the same reason.
+
+The doc-block above it asserted "the scan over that file is now exactly the six real spellings". Counted
+at `db90e768`, `src/Chat.php` carried **seven** denial spellings outside comments; the scan saw six. The
+rounding was in the direction that makes an incomplete guard read as an exhaustive one, and it is why the
+hole stood for a round.
+
+**Fixed** in `de2394bb`: the frame is `(?<![A-Za-z])`-guarded instead of `^`-anchored; three
+known-positive fixtures cover the decorated shapes; the completeness sentence is rewritten in the
+three-part form. Acceptance MEASURED by mutating the FIX — the same re-introduction is now **KILLED**.
+Cost of the widening, measured over the whole of `src/`: both alphabets name the same three files and the
+same seven literals, and all five family rows are unmoved.
+
+**Step.** None. Recorded because rule 11 keeps producing this shape: the alphabet was written to match the
+cases already known, and the case it could not express was the one in the tree.
+
+---
+
+### Ea49-10 — `RefusalStderrSurfaceTest`'s hook-DENY row asserted `''` with no instrument attached
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
+
+**What.** `testAPlainHookDenyNeverReachesThePromptAndStillReachesTheObserver` asserts the prompt wrote
+nothing. Its helper attached the approver only when the verdict was `ask`, so on the deny arm no
+`HeadlessPermissionPrompt` was ever constructed: `''` was what the ABSENCE of the instrument returned.
+The failure message additionally claimed the DENY "went through the approver", which was false — there
+was no approver. Rule 25 exactly, and the row was itself written as the file's rule-15 control.
+
+MEASURED on PHP 8.3.6: with `approver()` mutated to write to its `$err` unconditionally, the pre-fix
+version was **SURVIVED** (green, 3 tests / 22 assertions); with the approver attached on both arms it is
+**KILLED** on that row.
+
+**Fixed** in `e8045036`: the approver is attached unconditionally, so the empty string now says the gate
+returns on the DENY before `settleAsk()` is reached.
+
+**Step.** None.
+
+---
+
+### Ea49-11 — E240's byte/line figures live only in two doc-blocks and no test derives them
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process. **Partly measured.**
+
+**What.** `HeadlessPermissionPrompt`'s and `RefusalStderrSurfaceTest`'s doc-blocks both carry "526 bytes
+over 9 lines" for the no-tty arm and "266 over 8" for the terminal arm, MEASURED in a child process with
+fd 2 on a plain file. The shipped test uses `php://memory` handles and asserts neither figure, so the
+generator is described but not runnable, and the numbers will rot silently the first time either message
+is reworded. The adjacent structural claim WAS re-derived this round and holds: `refusal()` emits exactly
+eight `\n`, so "eight-line refusal block" is correct.
+
+**Step.** Either derive the two figures in the test (which needs the child-process harness
+`NonInteractiveRefusalDocumentTest` already pays for) or reduce them to the structural claim that is
+checkable — "the no-tty arm writes strictly more than the terminal arm, and both are doubled by the
+observer's line".
+
+---
+
+### Ea49-12 — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process (merge arithmetic). **Measured.**
+
+**What.** Round 49 lane a added 14 test methods and the suite total moved by 15 (9499 → 9514, MEASURED by
+`--list-tests` at both revisions). The fifteenth is
+`Integration\BinSugarcrushWiringTest::testNoRootResolvingSiteFallsBackToBareGetcwd`, whose
+`@dataProvider crushSourceFiles` yields one case per file under `src/`. The usual
+`grep -c '^+ *yield '` cross-check closes nothing here, because the provider walks a directory rather
+than spelling cases in the diff.
+
+Combined with Ea49-7, ONE new `src/` file therefore costs a lane: +1 suite test, three literal
+cardinalities in `tests/Tools/BuiltInToolCorpusTest.php`, and two restated figures in
+`src/Context/RepoMapBlock.php` — five edits in two files, neither in any lane's ownership map.
+
+**Step.** Worth stating at the top of `BuiltInToolCorpusTest` alongside Ea49-7's option (a), so a lane
+adding a `src/` file learns the cost before a four-minute run tells it.
+
+---

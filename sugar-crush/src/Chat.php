@@ -35,6 +35,7 @@ use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
 use SugarCraft\Crush\Permissions\PermissionPromptStage;
@@ -1097,6 +1098,37 @@ final class Chat implements Model
      * reason: {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
      * is destructive, so a second listening `Chat` would take rows out from
      * under the real transcript.
+     *
+     * ## A HOST THAT DRIVES `update()` ITSELF OWNS THE PUMPING (E223)
+     *
+     * TWO CALLERS IN THIS TREE, AND THE SECOND ONE IS THE HOSTED SHAPE —
+     * CHECKED RATHER THAN ASSUMED, because the obvious sentence ("only
+     * `Program` calls this") is false. `SugarCraft\Core\Program::run()` calls
+     * it on the active model, and {@see \SugarCraft\Crush\App\App::init()}
+     * FORWARDS it: the shell batches its own OSC 11 query with
+     * `$this->chat?->init()`, and passes the Cmd `Chat::update()` returns
+     * straight through untouched. So the in-tree hosted pane already
+     * discharges both parts below, and the gap E223 records belongs to an
+     * embedder OUTSIDE this tree that drives `update()` itself. Such a host
+     * gets the seam's idle wake-up only if it does what those two do, in two
+     * parts:
+     *
+     *  1. CALL THIS AND RUN WHAT IT HANDS BACK. The return is the arming
+     *     `Cmd`; a host that never runs it never installs the watcher, and the
+     *     seam is back to "the notice waits for whatever `Msg` arrives next",
+     *     which on an idle session is the user's next keystroke.
+     *  2. KEEP RUNNING THE Cmd `update()` RETURNS. Handling a
+     *     {@see RuntimeNoticePumpMsg} drains the inbox AND hands back a
+     *     RE-arm; drop it and the seam delivers one notice per session.
+     *
+     * NOT EXPOSED AS ITS OWN ACCESSOR, deliberately. Everything above is
+     * already reachable through the `Model` contract, and a second public door
+     * onto the same `Cmd` would be a second thing to keep in step with
+     * whatever `init()` grows next. The gap E223 records is a missing
+     * SENTENCE, not a missing capability, and
+     * {@see \SugarCraft\Crush\Tests\Chat\HostedRuntimeNoticeWakeTest} pins
+     * the whole loop running with no `Program` anywhere — including the
+     * dormancy, which a doc-block on its own leaves unasserted.
      */
     public function init(): ?\Closure
     {
@@ -2352,7 +2384,7 @@ final class Chat implements Model
                 'history' => [
                     ...$this->history,
                     $request->assistantMessage,
-                    Message::system("_Permission denied: {$request->toolCall->name} was not run._"),
+                    Message::system('_' . DenialKind::Refused->reason("{$request->toolCall->name} was not run.") . '_'),
                     // The refusal also has to exist as a RESULT, not only as
                     // a system note (crush_feat.md §1 E7): the assistant
                     // message above carries the tool call, so leaving it
@@ -2362,7 +2394,7 @@ final class Chat implements Model
                     // {@see Renderer::renderToolResults()} draws.
                     Message::assistant('')->withToolResults([ToolResult::error(
                         $request->toolCall->name,
-                        "Permission denied: {$request->toolCall->name} was not run.",
+                        DenialKind::Refused->reason("{$request->toolCall->name} was not run."),
                         $request->toolCall->id,
                     )]),
                 ],
@@ -3245,7 +3277,7 @@ final class Chat implements Model
                 // call is reported as unapproved instead of being run.
                 $denied ??= ToolResult::error(
                     $toolCall->name,
-                    "Permission required: {$toolCall->name} was not approved.",
+                    DenialKind::Unanswered->reason("{$toolCall->name} was not approved."),
                     $toolCall->id,
                 );
             }
@@ -3355,7 +3387,7 @@ final class Chat implements Model
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
             return [
                 $toolCall,
-                ToolResult::error($toolCall->name, "Hook denied: {$hookResult->message}", $toolCall->id),
+                ToolResult::error($toolCall->name, DenialKind::Hook->reason($hookResult->message), $toolCall->id),
                 null,
                 null,
             ];
@@ -5073,12 +5105,26 @@ final class Chat implements Model
      * here through {@see ToolResult::fromEngineResult()}, so an engine-path
      * denial renders identically to a Chat-path one.
      *
+     * THE THREE STRINGS ARE NO LONGER SPELLED HERE (E239). WHAT THIS SAID:
+     * three quoted literals, and the paragraph above naming the producers that
+     * each wrote their own copy. WHAT IS TRUE NOW: the roster is
+     * {@see DenialKind}, a leaf enum in `src/Permissions/` with no
+     * dependencies, and all three producers named above build their reason
+     * through {@see DenialKind::reason()} — so this constant is a projection
+     * of that enum rather than a fourth place a prefix is written down. WHY
+     * THIS CONSTANT STILL EARNS ITS PLACE: it is the shape two consumers
+     * already read ({@see \SugarCraft\Crush\Renderer::renderToolResults()}
+     * through {@see isDeniedResult()}, and
+     * {@see \SugarCraft\Crush\Cli\NonInteractive}), and it is public API
+     * that an embedder can iterate. Removing it would be a break bought for
+     * nothing; deriving it makes drift impossible instead.
+     *
      * @var list<string>
      */
     public const DENIED_ERROR_PREFIXES = [
-        'Permission denied:',
-        'Permission required:',
-        'Hook denied:',
+        DenialKind::Refused->value,
+        DenialKind::Unanswered->value,
+        DenialKind::Hook->value,
     ];
 
     /**
@@ -5100,21 +5146,21 @@ final class Chat implements Model
      * state, not just an error color". {@see Renderer::renderToolResults()}
      * is the consumer; the classification lives here, next to the code that
      * writes those errors, so the renderer never has to guess.
+     *
+     * THE MATCHING ITSELF MOVED TO {@see DenialKind::classify()} (E239) and
+     * this method is now the `?ToolResult`-shaped wrapper around it. Kept
+     * rather than inlined at the call sites: `isDeniedResult()` is what the
+     * renderer, the tests and the doc-blocks across this application all name,
+     * and it carries the null-error case that a bare `classify()` cannot.
+     * A caller that wants to know WHICH of the three kinds stopped the call —
+     * the thing a bool cannot say — should reach for `DenialKind::classify()`
+     * directly.
      */
     public static function isDeniedResult(ToolResult $result): bool
     {
         $error = $result->error;
-        if ($error === null) {
-            return false;
-        }
 
-        foreach (self::DENIED_ERROR_PREFIXES as $prefix) {
-            if (str_starts_with($error, $prefix)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $error !== null && DenialKind::classify($error) !== null;
     }
 
     /**

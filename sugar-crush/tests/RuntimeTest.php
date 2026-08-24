@@ -482,6 +482,29 @@ final class RuntimeTest extends TestCase
         $this->assertTrue($results[0]->isError());
     }
 
+    /**
+     * A HOOK DENY IS REPORTED WITH {@see Runtime::DENIAL_HOOK} IN FRONT OF THE
+     * HOOK'S OWN MESSAGE.
+     *
+     * THE HOOK'S MESSAGE IS DELIBERATELY NOT "Hook denied this tool" ANY MORE
+     * (E238). WHAT IT WAS: exactly that, asserted against with
+     * `assertStringContainsString('Hook denied', ...)` — so the substring the
+     * test looked for was already inside the string the test itself supplied,
+     * and the assertion said nothing whatever about the prefix
+     * {@see Runtime::gate()} adds. MEASURED on PHP 8.3.6 through this round's
+     * mutation harness: substituting `$prefix = self::DENIAL_HOOK;` in
+     * `gate()` with a literal `'Hook refused:'` left this test GREEN
+     * (`OK (1 test, 5 assertions)`), i.e. it passed with the thing it tests
+     * deleted. The message now shares no word with the prefix, and the
+     * assertion is `assertStringStartsWith` against the constant rather than a
+     * substring search, so the same mutation reds it.
+     *
+     * THE CONSTANT AND NOT A LITERAL, on purpose: a reword of the prefix
+     * should move this test with it, and only the drift between `Runtime`'s
+     * spelling and the roster's is a defect — which is
+     * {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest}'s job, not this
+     * one's.
+     */
     public function testExecuteToolCallsYieldsErrorWhenHookDenies(): void
     {
         $tool = $this->createMockTool('denied_tool', 'Should not execute');
@@ -494,7 +517,7 @@ final class RuntimeTest extends TestCase
             public function event(): HookEvent { return HookEvent::PreToolUse; }
             public function matcher(): string { return '.*'; }
             public function execute(HookContext $context): HookResult {
-                return HookResult::deny('Hook denied this tool');
+                return HookResult::deny('this tool is not allowed');
             }
         });
 
@@ -507,7 +530,11 @@ final class RuntimeTest extends TestCase
         $this->assertCount(1, $results);
         $this->assertInstanceOf(ToolResultMessage::class, $results[0]);
         $this->assertSame('call_deny', $results[0]->toolCallId());
-        $this->assertStringContainsString('Hook denied', $results[0]->content());
+        $this->assertStringStartsWith(Runtime::DENIAL_HOOK . ' ', $results[0]->content());
+        // The hook's own words survive the prefixing - a reason that names the
+        // prefix and drops the hook's message tells the operator which KIND of
+        // stop this was and nothing about why.
+        $this->assertStringContainsString('this tool is not allowed', $results[0]->content());
         $this->assertTrue($results[0]->isError());
     }
 

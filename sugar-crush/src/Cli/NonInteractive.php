@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Cli;
 
 use SugarCraft\Crush\Backend;
-use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\DenialKind;
 
 /**
  * The `-p "<prompt>"` / `run "<prompt>"` one-shot, non-interactive CLI path.
@@ -651,8 +651,12 @@ final class NonInteractive
     }
 
     /**
-     * The stream {@see readStdinIfPiped()} reads when no caller names one, and
-     * the seam a test process uses to keep the suite off its own descriptor 0.
+     * The stream this class's `-p` console family reads when no caller names
+     * one, and the seam a test process uses to keep the suite off its own
+     * descriptor 0. Two readers: {@see readStdinIfPiped()} and
+     * {@see HeadlessPermissionPrompt::__construct()} — see
+     * {@see stdinDefault()} for why the second one shares this pin rather than
+     * declaring its own.
      *
      * Null means "the real STDIN", which is what every production entry point
      * gets: nothing in `src/` or `bin/` ever assigns this.
@@ -694,13 +698,25 @@ final class NonInteractive
     }
 
     /**
-     * The stream {@see readStdinIfPiped()} reads when its caller names none —
+     * The stream this `-p` console family reads when its caller names none —
      * the pin from {@see pinStdinDefault()}, or the real `\STDIN`.
      *
      * Public because the pin is worth ASSERTING rather than trusting: a
      * `tests/bootstrap.php` that quietly stopped installing it would put the
      * suite back on the runner's descriptor 0 with every test still green, and
      * the failure that shape produces is a hang rather than a red.
+     *
+     * TWO READERS NOW, NOT ONE (E243). WHAT THIS SAID: "the stream
+     * {@see readStdinIfPiped()} reads when its caller names none". WHAT IS
+     * TRUE NOW: {@see HeadlessPermissionPrompt::__construct()} resolves its
+     * own `$in` default through here as well, because it had the same
+     * `?? \STDIN` and the same hazard — an approver built by
+     * {@see Bootstrap::withConsolePermissionPrompt()} takes no `$in` at all.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE: `readStdinIfPiped()` is the
+     * reader this seam was BUILT for and the one whose failure mode is a hang
+     * rather than a prompt, so it is still the reason the seam is worth
+     * having; the prompt is a second beneficiary of one pin rather than a
+     * second pin.
      *
      * @return resource
      */
@@ -909,17 +925,27 @@ final class NonInteractive
      * contract. Under `json` it is exactly one document, which is why
      * {@see HeadlessPermissionPrompt} puts its question here too.
      *
-     * ONE DELIBERATE DOUBLE LINE, stated because it is visible and looks like a
-     * bug. An ASK refused at a real terminal already writes
-     * "sugarcrush: refused <tool>." from
-     * {@see HeadlessPermissionPrompt::__invoke()}, so that one case produces two
-     * lines. It is not suppressed: the approver's line records the ANSWER, this
-     * one records the OUTCOME and carries the reason the MODEL was handed,
-     * which the terse one does not. Suppressing it would need this closure to
-     * know which refusals some approver had already announced — and the
-     * approver is constructed four frames away inside
+     * A DELIBERATE DOUBLE, ON EVERY ASK AND NOT ONLY AT A TERMINAL, stated
+     * because it is visible and looks like a bug. WHAT THIS SAID: that an ASK
+     * refused "at a real terminal" already writes the terse
+     * `sugarcrush: refused <tool>.` from
+     * {@see HeadlessPermissionPrompt::__invoke()}, "so that one case produces
+     * two lines". WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 49 in a
+     * child process with fd 2 on a plain file: the NO-TTY arm doubles too —
+     * that class's eight-line refusal block plus this line. Both arms, not one.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the reason neither is
+     * suppressed is unchanged and is the half a reader needs. The approver's
+     * text records WHICH ARM — a person answering no, versus nobody being
+     * there — and this line records the OUTCOME with the reason the MODEL was
+     * handed. The second cannot substitute for the first: BOTH arms produce a
+     * reason opening
+     * {@see \SugarCraft\Crush\Permissions\DenialKind::Refused}, so this
+     * line alone cannot say which happened. Suppressing it would additionally
+     * need this closure to know which refusals some approver had already
+     * announced — and the approver is constructed four frames away inside
      * {@see Bootstrap::backend()}, so that coupling does not exist and should
-     * not be invented for a cosmetic duplicate.
+     * not be invented.
+     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins it.
      *
      * IT ALSO WRITES INTO THE TEST SUITE'S OWN CONSOLE, and that is a
      * decision rather than an accident. Several suites drive `self::run()`
@@ -950,34 +976,41 @@ final class NonInteractive
      * `$event` as one `refusals` entry, or null when it is not a refusal.
      *
      * THE CLASSIFICATION IS NOT THIS CLASS'S TO INVENT, and that is the whole
-     * design of the method. {@see Chat::DENIED_ERROR_PREFIXES} already names
-     * the error texts that mean "this call never ran" rather than "this call
-     * ran and failed" — it is what {@see Chat::isDeniedResult()} reads to draw
-     * a refusal as its own struck-through state in the TUI. Reusing the roster
-     * makes the headless document and the interactive frame agree on what a
-     * refusal IS by construction; a second list here would be two parties
-     * disagreeing about the same tool call depending on which surface the
-     * operator happened to be looking at.
+     * design of the method. {@see DenialKind} already names the error texts
+     * that mean "this call never ran" rather than "this call ran and failed" —
+     * it is what {@see \SugarCraft\Crush\Chat::isDeniedResult()} reads to
+     * draw a refusal as its own struck-through state in the TUI. Reusing the
+     * roster makes the headless document and the interactive frame agree on
+     * what a refusal IS by construction; a second list here would be two
+     * parties disagreeing about the same tool call depending on which surface
+     * the operator happened to be looking at.
      *
-     * {@see Chat} IS TOUCHED LAZILY, ON PURPOSE. The `-p` path exists partly
-     * so a run can avoid building a `Chat` at all, and a class constant is
-     * still a class load.
+     * THE LAZINESS ARGUMENT THAT USED TO LIVE HERE IS OBSOLETE, AND IT IS
+     * REWRITTEN RATHER THAN DROPPED, because it is the reason the roster was
+     * moved. WHAT IT SAID, across two paragraphs: that
+     * `Chat::DENIED_ERROR_PREFIXES` was "TOUCHED LAZILY, ON PURPOSE" since the
+     * `-p` path exists partly so a run can avoid building a `Chat` at all and
+     * a class constant is still a class load; and, correcting its own earlier
+     * claim, that the guard below is `!isError()` rather than "is a refusal",
+     * so a turn whose tool RAN AND FAILED — a `Read` on a missing path, a
+     * `Bash` exiting non-zero — reached the roster and loaded `Chat` while
+     * refusing nothing at all. That correction carried the measurement
+     * {@see \SugarCraft\Crush\Runtime}'s `DENIAL_HOOK` doc-block cites by
+     * name: `class_exists(Chat::class, false)` after a full {@see self::run()}
+     * on PHP 8.3.6 — FALSE for a turn with no tool events and for one whose
+     * tool succeeded, TRUE for an errored non-refusal and TRUE for a refusal.
      *
-     * THE PREDICATE IS "NO ERRORED TOOL RESULT", NOT "NO REFUSAL", and the
-     * doc-block had the wrong one. WHAT IT SAID: "the roster is read only after
-     * an errored {@see ToolFinished} has arrived, so a turn that refuses
-     * nothing — which is nearly all of them — never loads it". The first
-     * clause is right and the second does not follow from it: the guard below
-     * is `!isError()`, so a turn whose tool RAN AND FAILED — a `Read` on a
-     * missing path, a `Bash` exiting non-zero — reaches the roster and loads
-     * `Chat` while refusing nothing at all. MEASURED on PHP 8.3.6 with
-     * `class_exists(Chat::class, false)` after a full {@see self::run()}: false
-     * for a turn with no tool events and for one whose tool succeeded, true for
-     * one errored non-refusal and true for a refusal. WHY THE LAZINESS STILL
-     * EARNS ITS PLACE: the load is still avoided on every turn that errors
-     * nothing, which is the common `-p` shape, and moving the roster to a
-     * cheaper owner would put the headless document and the TUI back on two
-     * lists — the thing this method exists not to do.
+     * WHAT IS TRUE NOW: the roster is {@see DenialKind}, a leaf enum in
+     * `src/Permissions/` with no `use` statements at all, so this method
+     * classifies without naming `Chat` and the load does not happen on ANY
+     * turn. RE-MEASURED on PHP 8.3.6 by driving this method through reflection
+     * with one errored {@see ToolFinished} carrying `Hook denied: nope`:
+     * `class_exists(Chat::class, false)` is FALSE before AND after, where
+     * against the previous line it was false before and TRUE after. WHY THE
+     * PARAGRAPH STILL EARNS ITS PLACE: "do not make the headless path pay for
+     * the TUI model" is the constraint that chose where the roster went, and
+     * without it a future reader sees only a shorter `foreach` and puts the
+     * list back on the nearest convenient class.
      *
      * THE KNOWN LIMIT RECORDED HERE IS CLOSED (E210). WHAT IT SAID: "a
      * permission refusal and a plain hook DENY are indistinguishable here, and
@@ -1009,12 +1042,10 @@ final class NonInteractive
         }
 
         $reason = $event->result->content();
-        foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
-            if (\str_starts_with($reason, $prefix)) {
-                return ['tool' => $event->toolName, 'reason' => $reason];
-            }
+        if (DenialKind::classify($reason) === null) {
+            return null;
         }
 
-        return null;
+        return ['tool' => $event->toolName, 'reason' => $reason];
     }
 }
