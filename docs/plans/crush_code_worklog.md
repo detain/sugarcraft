@@ -11077,7 +11077,7 @@ asked to drop to one agent at a time. The supervisor stopped run `wf_0bcbe384-77
 
 **The implement phase turned out to be essentially complete.** 42 commits across the five lanes — a 12,
 b 8, c 5, d 9, e 8 — and *every* lane had already reached its backlog-recording commit, which the brief
-puts last. Lanes a and d had even landed follow-ups past it (a's `Ea49-8`: E223's "only `Program` calls
+puts last. Lanes a and d had even landed follow-ups past it (a's `E253`: E223's "only `Program` calls
 `init()`" premise is false). **No implementer wrote a report; the stop preempted the report, not the
 work.**
 

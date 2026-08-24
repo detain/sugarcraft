@@ -8592,7 +8592,7 @@ has no generator to catch it.
 
 ---
 
-### Ea49-1 — `Runtime`'s three `DENIAL_*` constants are the last copy of the roster
+### E246 — `Runtime`'s three `DENIAL_*` constants are the last copy of the roster
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: design (the remainder of E239). **Measured.**
 
@@ -8618,7 +8618,7 @@ spellings, not about the copy.
 
 ---
 
-### Ea49-2 — the denial vocabulary matches a string in `src/Agents/TaskBlockedException.php`
+### E247 — the denial vocabulary matches a string in `src/Agents/TaskBlockedException.php`
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: guard scoping. **Measured, PHP 8.3.6.**
 
@@ -8642,7 +8642,7 @@ denial scan over `src/` does not have to re-derive it.
 
 ---
 
-### Ea49-3 — E238's mirror claim no longer reproduces
+### E248 — E238's mirror claim no longer reproduces
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process (backlog correction). **Measured.**
 
@@ -8665,7 +8665,7 @@ carries no sha.
 
 ---
 
-### Ea49-4 — E240's "at a terminal" is the smaller half; the no-tty arm doubles too
+### E249 — E240's "at a terminal" is the smaller half; the no-tty arm doubles too
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: cosmetic / decision recorded. **Measured, PHP 8.3.6.**
 
@@ -8692,7 +8692,7 @@ justification is rewritten in three-part form on `HeadlessPermissionPrompt`'s cl
 
 ---
 
-### Ea49-5 — `DenialKind` is a TYPE that nothing yet consumes as one
+### E250 — `DenialKind` is a TYPE that nothing yet consumes as one
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: design (the rest of E210). **Not measured; structural.**
 
@@ -8711,7 +8711,7 @@ cost before doing it: the `refusals` array's shape is published and
 
 ---
 
-### Ea49-6 — `E245` names lane a as the owner of a file round 49 assigned to lane c
+### E251 — `E245` names lane a as the owner of a file round 49 assigned to lane c
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process. **Not a code defect.**
 
@@ -8725,7 +8725,7 @@ written into a backlog entry is round-specific and reads as durable — the seco
 entry has been skipped by the lane it names.
 
 ---
-### Ea49-7 — three `src/`-wide cardinalities are literals in a test nobody owns, and one is restated in `src/`
+### E252 — three `src/`-wide cardinalities are literals in a test nobody owns, and one is restated in `src/`
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process. **Measured; it fired.**
 
@@ -8755,7 +8755,7 @@ if that is wanted it should be a named-file roster (the shape round 49's `Denial
 the same reason) rather than a total.
 
 ---
-### Ea49-8 — E223's premise is wrong: the in-tree hosted shell already arms the seam
+### E253 — E223's premise is wrong: the in-tree hosted shell already arms the seam
 
 **Recorded 2026-08-24 by round-49 lane a.** Severity: process (entry correction). **Measured.**
 
@@ -8787,7 +8787,7 @@ in it beside the two `init()`/`update()` obligations.
 
 ---
 
-### Ea49-9 — the denial-literal scanner's `^` anchor could not see this tree's own refusal note
+### E254 — the denial-literal scanner's `^` anchor could not see this tree's own refusal note
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
 
@@ -8817,7 +8817,7 @@ cases already known, and the case it could not express was the one in the tree.
 
 ---
 
-### Ea49-10 — `RefusalStderrSurfaceTest`'s hook-DENY row asserted `''` with no instrument attached
+### E255 — `RefusalStderrSurfaceTest`'s hook-DENY row asserted `''` with no instrument attached
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
 
@@ -8838,7 +8838,7 @@ returns on the DENY before `settleAsk()` is reached.
 
 ---
 
-### Ea49-11 — E240's byte/line figures live only in two doc-blocks and no test derives them
+### E256 — E240's byte/line figures live only in two doc-blocks and no test derives them
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process. **Partly measured.**
 
@@ -8856,7 +8856,7 @@ observer's line".
 
 ---
 
-### Ea49-12 — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
+### E257 — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
 
 **Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process (merge arithmetic). **Measured.**
 
@@ -8867,14 +8867,14 @@ observer's line".
 `grep -c '^+ *yield '` cross-check closes nothing here, because the provider walks a directory rather
 than spelling cases in the diff.
 
-Combined with Ea49-7, ONE new `src/` file therefore costs a lane: +1 suite test, three literal
+Combined with E252, ONE new `src/` file therefore costs a lane: +1 suite test, three literal
 cardinalities in `tests/Tools/BuiltInToolCorpusTest.php`, and two restated figures in
 `src/Context/RepoMapBlock.php` — five edits in two files, neither in any lane's ownership map.
 
-**Step.** Worth stating at the top of `BuiltInToolCorpusTest` alongside Ea49-7's option (a), so a lane
+**Step.** Worth stating at the top of `BuiltInToolCorpusTest` alongside E252's option (a), so a lane
 adding a `src/` file learns the cost before a four-minute run tells it.
 
-### Eb49-1 — `constructionSites()` reports a false ZERO for any class built through a named static factory
+### E258 — `constructionSites()` reports a false ZERO for any class built through a named static factory
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: correctness of an INSTRUMENT. **Measured, PHP 8.3.6.**
 Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`).
@@ -8901,7 +8901,7 @@ a superset scanner because the shared one could not answer, which is drift in th
 
 ---
 
-### Eb49-2 — `cleanupStaleWorktrees()` swallows every removal failure with a bare `catch (\Throwable)`
+### E259 — `cleanupStaleWorktrees()` swallows every removal failure with a bare `catch (\Throwable)`
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: diagnosability. **Measured.** Lane b's file, deferred
 deliberately.
@@ -8925,7 +8925,7 @@ directory survives anyway.
 
 ---
 
-### Eb49-3 — `removeDirectory()` follows a directory SYMLINK and deletes the target's contents
+### E260 — `removeDirectory()` follows a directory SYMLINK and deletes the target's contents
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: security / data loss. **Measured, PHP 8.3.6.**
 Lane b's file, deferred under "functionality before hardening".
@@ -8967,7 +8967,7 @@ back needs that, not just the CVE-shaped half.
 
 ---
 
-### Eb49-4 — `warnForkFailed()` reports the first fork failure per pool and never the count
+### E261 — `warnForkFailed()` reports the first fork failure per pool and never the count
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: cosmetic / observability. **Measured.** Lane b's file.
 
@@ -8984,7 +8984,7 @@ statistics.
 
 ---
 
-### Eb49-5 — the `-1` fork arm was unreachable from any test until this round, and three sibling arms still are
+### E262 — the `-1` fork arm was unreachable from any test until this round, and three sibling arms still are
 
 **Recorded 2026-08-24 by round-49 lane b.** Severity: test coverage. **Measured.** Lane b's file.
 
@@ -9004,7 +9004,7 @@ would be stale on the next merge; the generator is the point.
 
 ---
 
-### Eb49-6 — the stacked-doc-comment guard's unreadable-file arm has no fixture
+### E263 — the stacked-doc-comment guard's unreadable-file arm has no fixture
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: instrument coverage. **Measured, PHP
 8.3.6.** Lane b's file (`tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php`).
@@ -9040,7 +9040,7 @@ only writing the fixture showed it.
 
 ---
 
-### Eb49-7 — `removeDirectory()`'s `$emptied = false` on a failed `unlink()` is unkillable by construction
+### E264 — `removeDirectory()`'s `$emptied = false` on a failed `unlink()` is unkillable by construction
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: NOTE — recorded so the next reviewer
 does not spend the mutation on it. **Measured, PHP 8.3.6.**
@@ -9062,7 +9062,7 @@ handled, the shape is `!@unlink($itemPath) && file_exists($itemPath)` — and th
 
 ---
 
-### Eb49-8 — the process-unique-temp-name guard is blind to the fully-qualified call, which is the codebase's own style
+### E265 — the process-unique-temp-name guard is blind to the fully-qualified call, which is the codebase's own style
 
 **Recorded 2026-08-24 by round-49 lane b's review pass. MUTATION-PROVEN.** Severity: an instrument that
 reports zero while the offender is present. **Measured, PHP 8.3.6.** Not any lane's file this round
@@ -9117,7 +9117,7 @@ one, for rule 26's reason.
 
 ---
 
-### Eb49-9 — that guard's SCOPE is `tests/` only, and `src/` has five argument-less sites
+### E266 — that guard's SCOPE is `tests/` only, and `src/` has five argument-less sites
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: NOTE — an alphabet gap with low current
 exposure, recorded so the zero is not read as a clean bill. **Measured, PHP 8.3.6.** Same unowned file.
@@ -9137,7 +9137,7 @@ rule 11 — a census's scope is part of its coverage, and this one's is narrower
 
 ---
 
-### Eb49-10 — lane c's census reads all 291 sources with `(string) file_get_contents()` and has no rule-14 arm at all
+### E267 — lane c's census reads all 291 sources with `(string) file_get_contents()` and has no rule-14 arm at all
 
 **Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: instrument coverage. **Measured, PHP
 8.3.6.** Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`), in flight this round.
@@ -9159,7 +9159,7 @@ with `is_file()` + `assertIsString()` arms — and route all eleven sites throug
 with `$root` (a directory: guaranteed to exist, guaranteed not to be a file, no chmod, no uid dependence,
 nothing left on disk). That is the shape `WorktreeRemovalReportingTest::sitesIn()` uses now and it can be
 lifted directly.
-### Ec49-1 — a `@dataProvider` row expecting `0` can never satisfy rule 15 literally
+### E268 — a `@dataProvider` row expecting `0` can never satisfy rule 15 literally
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: process / structural. **Measured.**
 
@@ -9194,7 +9194,7 @@ the blanket textual pass rule 26 warns about.
 
 ---
 
-### Ec49-2 — `testTheTwoEmitterFunnelsDoNotCountTheSameWrite` states a cardinality nothing keeps honest
+### E269 — `testTheTwoEmitterFunnelsDoNotCountTheSameWrite` states a cardinality nothing keeps honest
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: cosmetic / rot. **Measured.** Lane c's own file.
 
@@ -9218,7 +9218,7 @@ the way the channels are, is what would make "two" a measurement.
 
 ---
 
-### Ec49-3 — a failure message's generator is the one part of a green suite that never runs
+### E270 — a failure message's generator is the one part of a green suite that never runs
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: low. **Measured, and fixed for one instance.**
 
@@ -9240,7 +9240,7 @@ a cheaper one is the habit of giving each such helper one known-input test.
 
 ---
 
-### Ec49-4 — E231 re-derived window-free: still zero, and the re-derivation's own harness had the bug first
+### E271 — E231 re-derived window-free: still zero, and the re-derivation's own harness had the bug first
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: informational. **Measured, PHP 8.3.6, deterministic
 across three runs.** Generator:
@@ -9270,7 +9270,7 @@ defect the measurement is about, and the second within E205/E231 specifically.
 
 ---
 
-### Ec49-5 — HANDOVER TO LANE `d`: the same-named-helper drift guard (E232's general shape)
+### E272 — HANDOVER TO LANE `d`: the same-named-helper drift guard (E232's general shape)
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: process.
 
@@ -9292,7 +9292,7 @@ known-positive fixture must be two synthetic declarations that differ, run throu
 the same test.
 
 ---
-### Ec49-6 — the guard that pins every cardinality in a file is itself outside the machinery
+### E273 — the guard that pins every cardinality in a file is itself outside the machinery
 
 **Recorded 2026-08-24 by round-49 lane c's review. FIXED in the same round** (`275d86a7`). Severity:
 structural. **Measured, PHP 8.3.6.**
@@ -9310,8 +9310,8 @@ arithmetic never worked either — "one per channel, plus the two in the channel
 90 tests, 1346 assertions, rc 0 at commit `11081a38` (scope: `--filter StderrEmitterCensusTest`, so the
 verdict is "survived the guards in this class", not "survived the suite").
 
-**AND THIS ENTRY FIRST SAID 91.** Recorded rather than quietly corrected, because it is Ec49-7's mechanism
-reproducing one commit after Ec49-7 was filed, in the same lane, by the reviewer who filed it: the mutation
+**AND THIS ENTRY FIRST SAID 91.** Recorded rather than quietly corrected, because it is E274's mechanism
+reproducing one commit after E274 was filed, in the same lane, by the reviewer who filed it: the mutation
 ran against a 90-test class, the reviewer read the test count off the class as it stood after the review's
 own first fix had added one, and committed the later number as the measurement. The assertion count was
 right, which is what made it look checked. **A mutation verdict must carry the commit it was measured at**,
@@ -9332,7 +9332,7 @@ guard is the one this round built: read the size back out of the doc-block and c
 
 ---
 
-### Ec49-7 — a figure measured mid-commit and never re-derived after the same commit moved its subject
+### E274 — a figure measured mid-commit and never re-derived after the same commit moved its subject
 
 **Recorded 2026-08-24 by round-49 lane c's review. FIXED in the same round** (`f59885fb`). Severity: low,
 recurrence: high. **Measured, PHP 8.3.6.**
@@ -9363,11 +9363,11 @@ the total stands in for, and assert that instead.
 
 ---
 
-### Ec49-8 — a `@dataProvider` row's expected value is not enough to place it in a channel's coverage
+### E275 — a `@dataProvider` row's expected value is not enough to place it in a channel's coverage
 
 **Recorded 2026-08-24 by round-49 lane c's review.** Severity: informational. **Measured.** Not acted on.
 
-**What.** Ec49-1 records that a row expecting `0` cannot carry its own positive control. Reviewing it
+**What.** E268 records that a row expecting `0` cannot carry its own positive control. Reviewing it
 surfaced the narrower and more useful statement: the per-provider escape hatch ("a dead scanner reds the
 provider anyway") is only sound PER CHANNEL, because each channel is a separate branch of `scan()` and a
 dead branch is invisible to rows on the other branches. That is now asserted for
@@ -9380,7 +9380,7 @@ holding silently the moment that scanner grows a mode.
 
 ---
 
-### Ed49-1 — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
+### E276 — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: harness correctness. **Measured**, PHP 8.3.6.
 **Recorded as `KNOWN_GAPS` rows, not fixed** — none of the three files is in any lane's list.
@@ -9433,7 +9433,7 @@ interpolation openers. The latency claim survived; the count did not. **A harnes
 the set it is measuring is measuring the hard-coded half** — rule 13, and the reason the row now ships the
 claim with no number in it at all.
 
-### Ed49-2 — the round-49 brief's stated floor does not reproduce, in both figures
+### E277 — the round-49 brief's stated floor does not reproduce, in both figures
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: process. **Measured** at `db90e768`, PHP 8.3.6.
 
@@ -9449,7 +9449,7 @@ of the same round quotes 9497, which is a third number and also not it.
 else, and it is what a reviewer checks a lane's delta against. A lane that trusts the brief and reports
 "+54 tests" has mis-stated its own change by an order of magnitude.
 
-### Ed49-3 — E232's live instance was already fixed, and the guard built for it had to find its own positive
+### E278 — E232's live instance was already fixed, and the guard built for it had to find its own positive
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
 
@@ -9468,7 +9468,7 @@ motivating instance will be gone and plan the synthetic positive from the start*
 ships with its known-positive slot filled by a case that is about to disappear, and the next round deletes
 it as stale.
 
-### Ed49-4 — `DuplicatedTestHelperDriftTest`'s bound is one token, and two is unexplored
+### E279 — `DuplicatedTestHelperDriftTest`'s bound is one token, and two is unexplored
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: coverage. **Measured**, PHP 8.3.6.
 
@@ -9486,7 +9486,7 @@ its core size, sorted.
 of scope; a helper copied and RENAMED is out of reach by construction; and two classes in one file are
 never compared (measured: no file in `tests/` declares one private name twice today).
 
-### Ed49-5 — `awaitPromise()`'s two bounds are the one accepted divergence that is behavioural
+### E280 — `awaitPromise()`'s two bounds are the one accepted divergence that is behavioural
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
 
@@ -9502,7 +9502,7 @@ only place anybody would notice a fourth copy arriving with a fourth number.
 argument. No action is required today; the entry exists so the decision is made deliberately the next time
 a copy is added.
 
-### Ed49-6 — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
+### E281 — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
 
 **Recorded 2026-08-24 by round-49 lane d.** Severity: cross-lane harness. **Observed**, then reproduced by
 elimination.
@@ -9529,7 +9529,7 @@ the hazard this round's brief spends a paragraph on.
 
 ---
 
-### Ed49-7 — a TEXT-keyed brace walk makes its token-id disjunct dormant, and a spelling roster cannot tell
+### E282 — a TEXT-keyed brace walk makes its token-id disjunct dormant, and a spelling roster cannot tell
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Measured**,
 PHP 8.3.6. **Fixed in the same round** for the one instance found; the shape is the entry.
@@ -9559,7 +9559,7 @@ pin the dormancy from the interpreter (assert the token's text) rather than leav
 as dead — and pin the deprecated opener behaviourally, since its truncation makes two drifted copies
 compare EQUAL, which reads as "no drift" rather than as an error.
 
-### Ed49-8 — a deferral keyed on the FILENAME is silent on a partial fix
+### E283 — a deferral keyed on the FILENAME is silent on a partial fix
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Fixed** for
 `InterpolationOpenerTokenTest::KNOWN_GAPS` in the same round; the shape is the entry.
@@ -9583,7 +9583,7 @@ this shape (`Context/`: "`git init` / `git config` fixture setup with `2>/dev/nu
 neither records a count — deliberately, per their own doc-blocks, because a count over `tests/` rots. The
 open question this entry leaves is what a rot-proof extent looks like for those two.
 
-### Ed49-9 — a harness that hard-codes half of the set it measures is measuring the hard-coded half
+### E284 — a harness that hard-codes half of the set it measures is measuring the hard-coded half
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: process. **Three figures retracted.**
 
@@ -9610,7 +9610,7 @@ the sub-case where the harness carries HALF the answer as a literal.** The revie
 and state the accessor used. A figure whose generator contains a literal list of the things being counted
 is not a measurement of them.
 
-### Ed49-10 — the drift guard compares BODIES, so a signature divergence is invisible
+### E285 — the drift guard compares BODIES, so a signature divergence is invisible
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured**, PHP 8.3.6.
 **Documented, not fixed.**
@@ -9627,11 +9627,11 @@ reaches the body.
 **Why it was not simply widened.** Including the signature folds every promoted-property and default-value
 spelling difference into the divergence core and pushes most real pairs past `DRIFT_BOUND`, which is a
 different guard rather than a wider one. Widening wants its own round with rows to argue — the same
-conclusion Ed49-4 reaches for the bound itself, and probably the same round.
+conclusion E279 reaches for the bound itself, and probably the same round.
 
 ---
 
-### Ed49-11 — a reader that slices `file(__FILE__)` with reflection's line numbers, unchecked in both directions
+### E286 — a reader that slices `file(__FILE__)` with reflection's line numbers, unchecked in both directions
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: correctness of an instrument.
 **FIXED**, with mutation proof in both halves.
@@ -9661,7 +9661,7 @@ synthetic nine-line source sliced at the wrong declaration.
 believed. When the diagnosis and the real cause differ, the message is worse than silence — so the reader
 must refuse states it cannot interpret rather than describe one it has not verified.
 
-### Ed49-12 — the drift guard's visibility alphabet was defended by a feeling
+### E287 — the drift guard's visibility alphabet was defended by a feeling
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED** (measured, and the
 measurement is now derived by a test rather than written down).
@@ -9692,7 +9692,7 @@ doc-block first credited that comparison with catching a dead report — which
 `assertTheScannerIsAlive()` already owns three assertions earlier — and was corrected to the mechanism it
 really covers.
 
-### Ed49-13 — a partition guard with one direction, carried by a loop that runs zero times
+### E288 — a partition guard with one direction, carried by a loop that runs zero times
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED.**
 
@@ -9715,7 +9715,7 @@ covers one order. Every `SCOPE`/`OUT_OF_SCOPE` pair in this tree should be read 
 `ChildStderrCaptureTest` grew it this round; the sibling had not, and the sentence recording that gap has
 been rewritten rather than deleted, because the mechanism it names is what both second loops are for.
 
-### Ed49-14 — the brace-walker predicate cannot express a `switch` or `match` depth counter
+### E289 — the brace-walker predicate cannot express a `switch` or `match` depth counter
 
 **Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured, not fixed.**
 
@@ -9740,7 +9740,7 @@ the currently-empty population with a synthetic known-positive in the same test 
 walker must be SELECTED and reported as missing `${`). Until then the doc-block's "nothing in the tree
 does that today" is true but unpinned — the first `switch`-based walker anyone writes lands unguarded.
 
-### Ee49-1 — E242's slowdown is a held-open descriptor 0 reaching spawned binaries, not concurrency
+### E290 — E242's slowdown is a held-open descriptor 0 reaching spawned binaries, not concurrency
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: test-infrastructure. **Measured, PHP 8.3.6. Fixed
 this round** in `tests/bootstrap.php`, pinned by `tests/SuiteChildStdinIsolationTest.php`.
@@ -9768,7 +9768,7 @@ which is exactly why it looked like it correlated with a sibling lane.
 **Relation to E212.** This is E212's other half. That entry closed the runner's own read and said in terms
 that the pin does not reach `src/` or `bin/`; `exec()`/`proc_open()` hand a child THIS process's fd 0, and
 a non-empty set of test files spawns the real binary. (WHAT THIS SAID: "eighteen test files". WHAT IS TRUE:
-see Ee49-8 — nobody can re-derive eighteen; three generators answer 41, 15 and 13. WHY THE SENTENCE STILL
+see E297 — nobody can re-derive eighteen; three generators answer 41, 15 and 13. WHY THE SENTENCE STILL
 EARNS ITS PLACE: what it is FOR is that the set is not empty and the children are real processes.)
 
 **Fix, THIRD attempt — and the first two are both recorded here because each was refuted by a
@@ -9809,12 +9809,12 @@ sentence looked in `sugar-crush/{src,bin,tests}`, and the reader that matters is
 suite, PHP 8.3.6, this lane: `9500 tests, 107 errors, rc 2`**, every error
 `Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`. A closed `\STDIN` does not
 cost one control assertion; it moves a whole library onto a code path that has never run. (That fallback
-is broken independently of this file — recorded separately as Ee49-13.)
+is broken independently of this file — recorded separately as E302.)
 
 *Attempt 4, SHIPPED — attempt 2, with the thing that refuted it fixed instead of routed around.* The flag
 is what ships. What broke it was `new Tty(null, $injectedTermios)`, and every instance of that shape in
 the tree now passes an explicit `stream_socket_pair()` end and asserts the flag moves on THAT stream in
-both directions (Ee49-12). So nothing in the run writes the description any more, and the guard on the
+both directions (E301). So nothing in the run writes the description any more, and the guard on the
 flag is order-dependent BY DESIGN: it is the only thing that reds when someone writes the next one. The
 order-independent guard beside it is the spawn test, which runs the bootstrap in a child of its own where
 no in-process seam can reach it.
@@ -9832,7 +9832,7 @@ suite's hermeticity.
 
 ---
 
-### Ee49-2 — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
+### E291 — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: convention accuracy. **Measured, PHP 8.3.6.**
 
@@ -9864,7 +9864,7 @@ a comment) and for `exitWorker()` itself. Not done: the file is lane d's.
 
 ---
 
-### Ee49-3 — the refusal classifier is duplicated in two headless callers
+### E292 — the refusal classifier is duplicated in two headless callers
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: drift risk, bounded. **Recorded only.**
 
@@ -9884,7 +9884,7 @@ both call sites move at once.
 
 ---
 
-### Ee49-4 — `ProcessUniqueTempNameTest`'s scope is `tests/`, and `src/` has five argument-less `uniqid` calls
+### E293 — `ProcessUniqueTempNameTest`'s scope is `tests/`, and `src/` has five argument-less `uniqid` calls
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: latent. **Measured, PHP 8.3.6.**
 
@@ -9905,7 +9905,7 @@ guard rather than leaving the omission to be read as an oversight. Lane d's file
 
 ---
 
-### Ee49-5 — E244's example list is wrong about one of its two examples
+### E294 — E244's example list is wrong about one of its two examples
 
 **Recorded 2026-08-24 by round-49 lane e.** Severity: doc accuracy. **Measured.**
 
@@ -9923,7 +9923,7 @@ from the guarded file.
 
 ---
 
-### Ee49-6 — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
+### E295 — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: latent, live-code. **Out of lane —
 `src/Agents/AgentWorkerPool.php` is lane b's file this round.** Reported, not fixed.
@@ -9949,7 +9949,7 @@ one of two grounds.
 
 ---
 
-### Ee49-7 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half — REOPENED
+### E296 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half — REOPENED
 
 **Recorded 2026-08-24 by round-49 lane e (review pass); CLOSED the same round.** Severity was
 test-hermeticity. **Measured, PHP 8.3.6.**
@@ -9965,18 +9965,18 @@ because `tests/Cli/NonInteractive*Test.php` is lane a's file.
 part.** Option (a) was taken: the known-positive was repointed at a fresh `php://stdin` handle and the
 repair went back to close + reopen `/dev/null`. **The first full suite run of that shape produced 107
 errors** — `SugarCraft\Mosaic\Detect` reads the `\STDIN` constant unguarded from a SIBLING library, which
-no grep of `sugar-crush/` could see (Ee49-1's attempt 3, and Ee49-13). So option (a) is not merely a
+no grep of `sugar-crush/` could see (E290's attempt 3, and E302). So option (a) is not merely a
 trade, it is unavailable while any reachable library reads that constant without a guard. The repair is
 the flag again, and this residual is **live**: bytes already sitting on the runner's stdin still reach a
 spawned `bin/sugarcrush -p` child and get prepended to its prompt.
 
 **WHY IT IS SMALLER THAN IT WAS.** The reason the flag failed before — `new Tty(null, $injectedTermios)`
-clearing it via `PosixBackend::restore()` — is fixed at every site in the tree (Ee49-12), so the flag now
+clearing it via `PosixBackend::restore()` — is fixed at every site in the tree (E301), so the flag now
 holds for a whole run rather than up to the first raw-mode test. The BLOCKING half, which is the one that
 hangs a run for 60s a test with no message, is genuinely closed.
 
 **Step, revised.** Not "close the descriptor". Either (a) fix `SugarCraft\Mosaic\Detect` to guard its
-`?? STDIN` with `is_resource()` and fix the fallback it falls into (Ee49-13), then re-try the descriptor
+`?? STDIN` with `is_resource()` and fix the fallback it falls into (E302), then re-try the descriptor
 replacement behind a full suite run — noting that the census must then cover every reachable
 `sugarcraft/*` lib, not `sugar-crush/` — or (b) pin the residual with a test proving bytes on the runner's
 stdin reach a spawned child, so the limit is a recorded fact rather than a gap. (b) is cheap and honest;
@@ -9988,7 +9988,7 @@ stdin reach a spawned child, so the limit is a recorded fact rather than a gap. 
 
 ---
 
-### Ee49-8 — "eighteen test files spawn a real `bin/sugarcrush`" is not re-derivable
+### E297 — "eighteen test files spawn a real `bin/sugarcrush`" is not re-derivable
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy. **Measured. Fixed this
 round** in `tests/bootstrap.php` and `tests/SuiteChildStdinIsolationTest.php`.
@@ -10003,7 +10003,7 @@ round brief; this is the third round to produce an instance.
 
 ---
 
-### Ee49-9 — `uniqid` was not the whole of E242: a FIXED shared temp path fails 2-3 runs in 6
+### E298 — `uniqid` was not the whole of E242: a FIXED shared temp path fails 2-3 runs in 6
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test-infrastructure, reproduced.
 **Out of lane — `tests/Hooks/AuditHookTest.php` and `src/Hooks/BuiltIn/AuditHook.php` belong to neither
@@ -10041,16 +10041,16 @@ sibling lane's suite.
 **Step.** Give the test its own `AuditHook` path derived from pid + entropy and assert the default is
 CONSTRUCTED as expected rather than written (or keep the write and use a private launch-environment
 `TMPDIR` for that one child). Then widen `ProcessUniqueTempNameTest`'s alphabet: a shared-name hazard is
-not a `uniqid` hazard, and the guard as written cannot see this one. See also Ee49-4, which found the
+not a `uniqid` hazard, and the guard as written cannot see this one. See also E293, which found the
 scope hole; this is the alphabet hole beside it.
 
 ---
-### Ee49-10 — PHPUnit includes `tests/bootstrap.php` inside a METHOD, so a bare local there is not a global
+### E299 — PHPUnit includes `tests/bootstrap.php` inside a METHOD, so a bare local there is not a global
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy on a load-bearing line.
 **Measured, PHP 8.3.6, PHPUnit 10.5.64. Fixed this round** in the same commit that found it.
 
-**What.** Ee49-1's shipped repair parks its replacement `/dev/null` handle in
+**What.** E290's shipped repair parks its replacement `/dev/null` handle in
 `$GLOBALS['__sugarcrushSuiteStdin']`. The comment justifying that said it was belt-and-braces — "a local in
 an included file is a global already, but naming the intent stops a future tidy-up from
 garbage-collecting fd 0 back to closed". **That is false, and the line is load-bearing.**
@@ -10074,7 +10074,7 @@ which asserts the identity rather than the absence of a hang — so the `$GLOBAL
 red test, not a silent downgrade. Confirmed by mutation this round.
 
 **WHAT IS TRUE NOW, and it does not retract the finding.** The `$GLOBALS` line is GONE, because the
-repair it belonged to is gone: closing descriptor 0 cost 107 errors (Ee49-1's attempt 3, Ee49-13) and the
+repair it belonged to is gone: closing descriptor 0 cost 107 errors (E290's attempt 3, E302) and the
 shipped repair is a flag, which needs no handle parked anywhere. **WHY THIS ENTRY STILL EARNS ITS PLACE:**
 the measurement is about PHPUnit, not about that line. Anything a future `tests/bootstrap.php` wants to
 keep alive for the length of a run — a stream, a handle, a temp directory guard object — must be parked in
@@ -10087,7 +10087,7 @@ scope" is an assumption about a HOST, and the host here is a method.
 
 ---
 
-### Ee49-11 — the daemon's refusal classifier reads `Chat::DENIED_ERROR_PREFIXES`, which E239 is moving
+### E300 — the daemon's refusal classifier reads `Chat::DENIED_ERROR_PREFIXES`, which E239 is moving
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: merge-time coordination. **Inherited
 dependency, not a defect.**
@@ -10110,7 +10110,7 @@ which is loud.
 went. Do NOT copy the literals.
 
 ---
-### Ee49-12 — `new Tty(null, $injectedTermios)` writes O_NONBLOCK onto the RUNNER's descriptor 0
+### E301 — `new Tty(null, $injectedTermios)` writes O_NONBLOCK onto the RUNNER's descriptor 0
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test cross-contamination, live.
 **Measured, PHP 8.3.6, three takes.** One of the sites fixed this round; the rest are out of lane.
@@ -10131,7 +10131,7 @@ PosixTermios($slaveFd))`, fd 0's `blocked` flag goes `true` → `false` across `
 an explicit `stream_socket_pair()` end instead, fd 0's flag never moves and the PAIR's flag moves instead
 (3/3).
 
-**Why it matters beyond tidiness.** This is what refuted attempt 2 of Ee49-1: an `O_NONBLOCK` repair on
+**Why it matters beyond tidiness.** This is what refuted attempt 2 of E290: an `O_NONBLOCK` repair on
 descriptor 0 in `tests/bootstrap.php` is silently undone by `restore()` at any of these sites, which makes
 any guard written against that flag ORDER-DEPENDENT. The `ForkedChildTest` instances are worse than the
 one that was fixed: they `pcntl_fork()` while holding the `Tty`, so the child inherits it too.
@@ -10143,7 +10143,7 @@ both directions — so a revert to `null` is red, not merely unnoticed. A socket
 distinguish "the seam wrote here" from "the seam wrote elsewhere".
 
 **DONE, all sites, later the same round — and it stopped being optional.** The shipped descriptor-0
-repair in `tests/bootstrap.php` IS the `O_NONBLOCK` flag (Ee49-1 attempt 4), so `restore()` at any of
+repair in `tests/bootstrap.php` IS the `O_NONBLOCK` flag (E290 attempt 4), so `restore()` at any of
 these sites was silently undoing it for every later test in the run. `tests/Support/ForkedChildTest.php`
 belongs to lane d this round and `tests/ChatTest.php` to no lane at all; all three constructions were
 changed anyway, because the alternative was shipping a repair that stops working at the first raw-mode
@@ -10154,7 +10154,7 @@ flag in both directions, so a revert is red where it happens.
 instances were `tests/Backend/EngineBackendTest.php` and `tests/Support/ForkedChildTest.php` twice, "at
 `5c5501f1`", derived from `grep -rn 'new Tty(' src/ tests/ bin/`. WHAT IS TRUE: there was a FOURTH, in
 `tests/ChatTest.php`, spelled `new \SugarCraft\Core\Util\Tty(null, …)` — **fully qualified, which that
-grep cannot express** (Ee49-14). It was found by the full suite going red at
+grep cannot express** (E303). It was found by the full suite going red at
 `SuiteChildStdinIsolationTest`'s flag guard with the other three already fixed. WHY THE PARAGRAPH STILL
 EARNS ITS PLACE: the generator it names is still the right *idea* and the wrong *instrument*, and that
 distinction is the finding.
@@ -10172,7 +10172,7 @@ at all — the combination means "drive this fd" and "wrap that stream", and the
 process's own descriptor 0 is the right answer to both.
 
 ---
-### Ee49-13 — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
+### E302 — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: live crash on a reachable path.
 **Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.**
@@ -10209,12 +10209,12 @@ should carry a test that drives `autoFromPalette()` directly rather than through
 the throw is what made it unreachable for so long.
 
 ---
-### Ee49-14 — a `grep` for `new Tty(` cannot see `new \Fully\Qualified\Tty(`, and it cost a full suite run
+### E303 — a `grep` for `new Tty(` cannot see `new \Fully\Qualified\Tty(`, and it cost a full suite run
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: methodology, with a measured cost.
 **Fixed this round** by replacing the generator with a token-based census test.
 
-**What happened, in order.** (1) Ee49-12's hazardous shape — `new Tty(null, $injectedTermios)` writing
+**What happened, in order.** (1) E301's hazardous shape — `new Tty(null, $injectedTermios)` writing
 `O_NONBLOCK` onto the runner's descriptor 0 — was censused with `grep -rn 'new Tty(' src/ tests/ bin/`,
 which found three sites. (2) All three were fixed and the count was written into two doc-blocks and a
 backlog entry. (3) The full suite went RED at `SuiteChildStdinIsolationTest`'s flag guard. (4) The fourth

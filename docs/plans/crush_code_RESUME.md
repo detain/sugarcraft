@@ -65,7 +65,7 @@ trust a lane-reported delta**, because one taken against 9445 is inflated by 54 
 **And `+15` tests vs `14` new test methods reconciled exactly**, which is worth carrying forward: the
 fifteenth is a **data-provider case**, not a method — `BinSugarcrushWiringTest`'s `crushSourceFiles`
 provider yields one case per file under `src/`, and lane `a` added `src/Permissions/DenialKind.php`.
-Recorded as **Ea49-12: every lane that adds a `src/` file owes +1 test it did not write.** Expect this at
+Recorded as **E257: every lane that adds a `src/` file owes +1 test it did not write.** Expect this at
 merge.
 
 Also worth noting: the reviewer **refuted one of its own findings**. It first called
