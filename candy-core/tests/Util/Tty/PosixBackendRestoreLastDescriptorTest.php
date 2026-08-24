@@ -130,7 +130,7 @@ final class PosixBackendRestoreLastDescriptorTest extends TestCase
         self::assertIsResource($ptmx, '/dev/ptmx is readable but did not open');
         self::assertTrue(stream_isatty($ptmx), '/dev/ptmx is not a tty here; the fixture cannot discriminate');
 
-        $resultFile = tempnam(sys_get_temp_dir(), 'sc_core_r49a_restorelast_' . $mode . '_');
+        $resultFile = tempnam(sys_get_temp_dir(), 'sc_core_r53a_restorelast_' . $mode . '_');
         self::assertIsString($resultFile);
         $this->artifacts[] = $resultFile;
 

@@ -188,7 +188,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
     {
         $this->requireLibcDescriptors();
 
-        foreach (['/dev/tty', self::TERMINAL_DEVICE, '/dev/null', '/nonexistent/r49a'] as $device) {
+        foreach (['/dev/tty', self::TERMINAL_DEVICE, '/dev/null', '/nonexistent/r53a'] as $device) {
             $handle = @fopen($device, 'rb');
             $openable = \is_resource($handle);
             if ($openable) {

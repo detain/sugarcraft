@@ -124,7 +124,7 @@ final class RendererAdaptiveSizeDescriptorTest extends TestCase
     {
         $stdout = $this->pty(self::STDOUT_COLS, self::STDOUT_ROWS);
 
-        $errLog = tempnam(sys_get_temp_dir(), 'sc_flip_r49a_errlog_');
+        $errLog = tempnam(sys_get_temp_dir(), 'sc_flip_r53a_errlog_');
         self::assertIsString($errLog);
         $this->artifacts[] = $errLog;
 
@@ -202,7 +202,7 @@ final class RendererAdaptiveSizeDescriptorTest extends TestCase
     {
         self::assertFileExists(self::PROBE);
 
-        $resultFile = tempnam(sys_get_temp_dir(), 'sc_flip_r49a_adaptive_');
+        $resultFile = tempnam(sys_get_temp_dir(), 'sc_flip_r53a_adaptive_');
         self::assertIsString($resultFile);
         $this->artifacts[] = $resultFile;
 
