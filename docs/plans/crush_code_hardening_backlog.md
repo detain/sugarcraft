@@ -10253,3 +10253,79 @@ it was spelled.
 believed on the strength of its output rather than on the strength of a known-answer control.**
 
 ---
+
+## Ea49-1 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
+
+`Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` / `DENIAL_UNANSWERED` and
+`Chat::DENIED_ERROR_PREFIXES` are now aliases that DERIVE from
+`Permissions\DenialKind`, so they cannot drift. Both doc-blocks call them deprecated. Neither
+carries `@deprecated`, and nothing in the tree tells an embedder to move to the enum: a consumer
+grepping for `@deprecated` finds nothing, and a static analyser sees four supported symbols.
+
+**Step.** Add `@deprecated Use \SugarCraft\Crush\Permissions\DenialKind` to all four, and pin with a
+reflection test that every alias's doc-comment carries the tag AND that its value is still the enum's
+(so the tag cannot be added to something that has quietly become a second copy). Deliberately NOT done
+in round 49: `@deprecated` on a `public const` is an API-signalling decision with a release note
+attached, and this round's mandate was to remove the copies rather than to schedule their removal.
+
+---
+
+## Ea49-2 — the roster's SPELLINGS are pinned only incidentally, by six unrelated test files
+
+`DenialPrefixRosterTest` derives every expectation from `DenialKind`, so it is self-consistent by
+construction and cannot see a respelling. MEASURED on PHP 8.3.6 at round 49 with the mutation harness:
+substituting `case Hook = 'Blocked:';` SURVIVED `--filter DenialPrefixRoster` entirely (10 tests, 67
+assertions, all green) and was KILLED only at a wider filter, by 13 failures across
+`ChatTest`, `DeniedToolCallTest`, `ParallelToolCallsTest`, `BackgroundSessionRunnerTest`,
+`NonInteractiveRefusalDocumentTest`, `ScriptHookTest` and `RuntimeTest` — every one of them a file that
+happens to spell `Hook denied:` as a literal in a fixture.
+
+That is a real pin but it is an accident of fixtures, and it points at the wrong file when it reds: a
+developer respelling a case gets seven unrelated red files and no statement of what the contract is.
+The three prefixes are model-facing text and `Chat::DENIED_ERROR_PREFIXES` is public, so a respelling is
+a behaviour change and not a rename.
+
+**Step.** One assertion in `DenialPrefixRosterTest` pinning the three backing values as literals, with a
+message saying they are published text. The `kind` TOKENS already got this treatment in round 49 for
+exactly this reason (the derived assertion `DenialKind::Hook->token()` let `return $this->name;` survive
+both files); the backing VALUES did not, because the token change was the one shipping a new contract.
+
+---
+
+## Ea49-3 — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
+
+Round 49 gave every `refusals` entry in the `--output-format json` document a `kind` field
+(`hook` / `refused` / `unanswered`, from `DenialKind::token()`), which is the seam where the enum
+rather than its rendering crosses out to a consumer. Two gaps are left, both deliberate:
+
+1. `--output-format text` puts nothing on stdout about refusals at all — a decision with its own
+   long justification in `NonInteractive::format()` — so the token is available only to a JSON consumer.
+2. `NonInteractive::noticeRefusal()`'s stderr line still says only `sugarcrush: <tool> was not run -
+   <reason>`, and `RefusalStderrSurfaceTest` pins that BOTH `HeadlessPermissionPrompt` arms produce a
+   `Permission denied:` reason, so stderr cannot distinguish "a person typed n" from "there was nobody
+   at the keyboard" except through the prompt's own prose. The kind is now available at that call site
+   as a typed value and is not used there.
+
+**Step.** Decide whether the stderr line should name the kind. It is one string concatenation at one
+existing `fwrite`, so `StderrEmitterCensusTest`'s per-file write count does not move — but it changes
+bytes that `RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()` now pins
+exactly, which is the point of that test: the figure is owned by a test rather than by a paragraph, so
+the change is visible.
+
+---
+
+## Ea49-4 — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
+
+`Permissions\ToolRefusal::fromEvent()` answers with a `DenialKind`. `NonInteractive::refusalFrom()`
+carries it out as the document's `kind`; `BackgroundSessionRunner::noticeRefusal()` takes `->tool` and
+`->reason` and discards `->kind`. That is not dormant code — the property is consumed — but the daemon's
+sidecar log is the one surface with no operator watching, and it is the surface where "which of the
+three" is hardest to reconstruct afterwards.
+
+**Step.** Consider `[session:tool:refused] <kind> <tool> was not run - <reason>`.
+`BackgroundSupervisor::restoreOutput()` decides line by line on the `[session:` prefix, so inserting a
+token after the record marker is safe against the line protocol — but
+`BackgroundSessionRunnerTest` asserts on the record's shape and the change is a log-format change, so it
+wants its own step rather than riding on a roster refactor.
+
+---
