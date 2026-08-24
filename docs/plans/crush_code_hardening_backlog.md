@@ -11026,22 +11026,56 @@ wrong. Both are corrected and the mutation is now killed.
 
 ### E328 — `AuditHook`'s default log path is a fixed shared name in PRODUCTION, not only in its test
 
-**Recorded 2026-08-24 by round-49 lane c.** Severity: low, cross-process. **Measured.** Not fixed.
+**Recorded 2026-08-24 by round-49 lane c. FIXED at round 51. ITS RECORDED MECHANISM WAS WRONG AND IS
+REWRITTEN BELOW rather than deleted — E344 raised the objection, and round 49 lane b settled it against
+this entry with a generator.** Severity: low, cross-process.
 
 E298 fixed the TEST that drove `AuditHook`'s production default, wrote the file and unlinked it. The
-default itself is unchanged and is `sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name, world-
-writable temp dir, no pid and no entropy. Two `sugarcrush` processes on one box append to one file
-(interleaved, and a partial write from either can split a record), and any local user can pre-create it as
-a symlink to somewhere else before the first run.
+default itself was unchanged and was `sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name,
+world-writable temp dir, no pid and no entropy.
 
-**Why it is recorded rather than fixed.** An audit log that moves every run is not an audit log, and a
-caller who wants a private one passes it in — so the fixed name is the intended behaviour and changing it
-is a product decision, not a bug fix. The site is carried in
-`ProcessUniqueTempNameTest::STATIC_TEMP_PATH_INVENTORY`, where it also serves as that scanner's only
+**WHAT THIS ENTRY SAID.** "Two `sugarcrush` processes on one box append to one file (interleaved, and a
+partial write from either can split a record), and any local user can pre-create it as a symlink to
+somewhere else before the first run."
+
+**WHAT IS TRUE.** The second clause was right and is the whole of what the fix closed. **The first clause
+is false, and was false at the moment this entry was written** — not superseded by the fix. Two things
+were measured, PHP 8.3.6, generator `probe_append_r49b.php` in the round's scratchpad:
+
+- *The write already serialised.* `git show d881f552^:sugar-crush/src/Hooks/BuiltIn/AuditHook.php` — the
+  commit immediately BEFORE the E328 fix — spells `file_put_contents($this->logFile, $entry,
+  FILE_APPEND | LOCK_EX)`. `FILE_APPEND` never truncates and `LOCK_EX` serialises cooperating writers, so
+  the flags this entry's hazard would have needed to be absent were present the whole time.
+- *And it holds under load.* The probe drives the REAL `AuditHook::execute()` from 8 concurrent processes
+  × 200 records × a 9000-byte payload (past `PIPE_BUF` and past one page), with a caller-supplied path so
+  `$ownsPath` is false and the write is byte-for-byte the pre-fix one. Three takes: **1600 lines,
+  1600 whole, 0 split, 0 interleaved, 14467200 bytes, identical every take.**
+
+**AND THE DETECTOR IS NOT DEAD, which is why the zero above is evidence.** The same probe has two
+known-positive control modes, run at the same parameters on the same box. `trunc` (`file_put_contents`
+with no `FILE_APPEND` and no `LOCK_EX`) returned **1 line of 1600** — it sees loss. `nolock` (`fopen('a')`
+plus chunked `fwrite`, no `flock`) returned **1600 lines, 39 whole, 1560 split, 1 interleaved** — it sees
+splitting and interleaving. An "all intact" verdict from an instrument that cannot report damage would
+not have been worth writing down.
+
+**WHY THIS ENTRY STILL EARNS ITS PLACE.** Its conclusion — that the fixed shared leaf had to go — was
+right, and the reachability half it named is the reason: any local user could pre-create the leaf as a
+symlink and have the hook append through it, and the file the hook created was mode 0664 under the
+ordinary umask 0002, i.e. world-readable, carrying every tool's arguments and 200 bytes of its output.
+What the false half costs a reader is a wrong repair: someone who believed it would reach for locking,
+find it already there, conclude the entry was stale, and leave the reachability untouched. That is the
+failure mode E344 was filed about, and it is why the sentence is corrected in place instead of removed.
+
+**Why it was originally recorded rather than fixed.** An audit log that moves every run is not an audit
+log, and a caller who wants a private one passes it in — so the fixed name is the intended behaviour and
+changing it is a product decision, not a bug fix. That argument survived the fix: the leaf name is still
+fixed, it just sits inside a per-user directory now. The site was carried in
+`ProcessUniqueTempNameTest::STATIC_TEMP_PATH_INVENTORY`, where it also served as that scanner's only
 real-tree liveness control.
 
-**Step.** Decide: keep the fixed default and open it with `O_APPEND` plus an `is_link()` refusal, or move
-the default under a per-user directory the process owns.
+**Step — DONE at round 51.** The default is
+`sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, the directory created 0700 and refused when
+it is a symlink, a non-directory, not owned by this euid, or reachable by anybody else.
 
 ---
 
@@ -11457,6 +11491,23 @@ The default is now `sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`,
 
 **Why this matters beyond bookkeeping.** A reader who trusted the recorded mechanism would have reached
 for locking, which was already there, and left the reachability untouched.
+
+> **SETTLED IN THIS ENTRY'S FAVOUR at round 49 by lane b, which was sent to decide between this entry and
+> E328 and found one thing this entry did not have.** E344 argued from the CURRENT code, which leaves open
+> the reading that E328 was right when written and the fix made it stale. It was not:
+> `git show d881f552^:sugar-crush/src/Hooks/BuiltIn/AuditHook.php` — the commit immediately before the
+> per-user directory landed — already spells `file_put_contents($this->logFile, $entry,
+> FILE_APPEND | LOCK_EX)`. There was never a version of the class whose appends raced, so E328's first
+> clause was **false at the moment it was recorded**. Independently re-measured with a fresh generator
+> (`probe_append_r49b.php`, PHP 8.3.6) driving the real `AuditHook` at a caller-supplied path so
+> `$ownsPath` is false and the write is byte-for-byte the pre-fix one: 8 processes × 200 records × 9000
+> bytes, three takes, **1600/1600 whole, 0 split, 0 interleaved, 14467200 bytes every take**. The same
+> probe's two control modes fired as they must — `trunc` (no `FILE_APPEND`, no `LOCK_EX`) returned 1 line
+> of 1600, `nolock` (`fopen('a')` + chunked `fwrite`) returned 1600 lines of which 39 were whole and 1560
+> torn — so the zeros above come from an instrument that demonstrably sees damage. **E328 is rewritten in
+> place accordingly**, and the invariant is now derived by
+> `tests/Hooks/AuditHookConcurrentAppendTest.php` rather than restated in two doc-blocks, so the next
+> person to change the write flags is told by a red test rather than by a paragraph.
 
 ---
 

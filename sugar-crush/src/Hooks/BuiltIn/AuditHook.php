@@ -113,6 +113,23 @@ final readonly class AuditHook implements HookInterface
      * interleaved. Cross-process APPENDING was already safe. Cross-user
      * REACHABILITY was not.
      *
+     * AND THE CLAIM WAS FALSE WHEN IT WAS MADE, not merely superseded by this
+     * fix — which is the part that decides whether a reader treats the old
+     * entry as stale or as wrong. `git show d881f552^` is the commit
+     * immediately BEFORE the per-user directory landed, and its write already
+     * spells `FILE_APPEND | LOCK_EX`. There was never a version of this class
+     * whose appends raced.
+     *
+     * THAT SENTENCE IS LOAD-BEARING — it is the reason a future reader is told
+     * not to reach for locking — SO IT IS PINNED BY A TEST RATHER THAN BY THIS
+     * PARAGRAPH. {@see \SugarCraft\Crush\Tests\Hooks\AuditHookConcurrentAppendTest}
+     * drives concurrent writers through this class at a payload past
+     * `PIPE_BUF` and asserts nothing is lost, torn or interleaved, with three
+     * constructed known-positive controls proving its analyser can still
+     * report each of those three. Dropping a flag from the
+     * `file_put_contents()` below is a one-token edit, and that test is what
+     * notices it.
+     *
      * WHY THIS IS A STATIC METHOD RATHER THAN A CONSTANT: the uid is a
      * property of the running process, so there is nothing to declare.
      */
