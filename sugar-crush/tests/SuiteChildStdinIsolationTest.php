@@ -13,8 +13,11 @@ use PHPUnit\Framework\TestCase;
  * {@see \SugarCraft\Crush\Cli\NonInteractive::pinStdinDefault()} in
  * `tests/bootstrap.php`, and that pin is deliberately in-process only: `src/`
  * and `bin/` read the real `\STDIN`, which is the production contract. But
- * `exec()` and `proc_open()` hand a child THIS process's descriptor 0, and
- * eighteen test files spawn a real `bin/sugarcrush`. So the same hazard was
+ * `exec()` and `proc_open()` hand a child THIS process's descriptor 0, and a
+ * dozen-odd test files spawn a real `bin/sugarcrush` — deliberately not a
+ * count, because a cardinality over `tests/` is stale the next time one is
+ * added and three plausible generators disagree about this one anyway. So the
+ * same hazard was
  * still live one process down, and it is the WORSE version: the runner's
  * `-p` tests are in-process and pinned, while a spawned `-p` child reaches
  * `readStdinIfPiped()` with no pin at all and `stream_get_contents()` on an
@@ -58,7 +61,10 @@ final class SuiteChildStdinIsolationTest extends TestCase
             @unlink($path);
         }
         $this->paths = [];
-        @rmdir($this->home);
+        // Recursive, because the spawned binary is handed this directory as
+        // HOME and writes its own state into it: a bare rmdir() fails on a
+        // non-empty directory and leaks one per test run into /tmp.
+        self::removeTree($this->home);
 
         parent::tearDown();
     }
@@ -95,6 +101,85 @@ final class SuiteChildStdinIsolationTest extends TestCase
             $treatment['elapsed'],
             'the spawned binary answered, but only after a wait the control shows is the stdin block',
         );
+    }
+
+    /**
+     * `\STDIN` SURVIVES THE BOOTSTRAP AS A LIVE RESOURCE, and it is here
+     * because the FIRST version of the fix in `tests/bootstrap.php` did not
+     * leave it that way.
+     *
+     * That version closed descriptor 0 and reopened `/dev/null` onto it, on
+     * the reasoning that PHP has no `dup2` — which is true — and that nothing
+     * in the suite reads the constant, which is not.
+     * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()}
+     * reads `stream_get_meta_data(\STDIN)` as its own known-positive control,
+     * and on a closed resource that is a `TypeError`. It reddened the suite on
+     * every non-tty runner and stayed green from a terminal, because the tty
+     * guard skips the block there.
+     *
+     * So the mechanism moved to `O_NONBLOCK` on the open file description,
+     * which children inherit just the same, and this test is the thing that
+     * would have caught the first version — a live constant, and the flag
+     * actually cleared, with a blocking stream run through the same probe as
+     * the control so "blocked is false" cannot be what a probe that reads
+     * nothing says.
+     */
+    public function testTheBootstrapLeavesTheRunnersStdinConstantUsable(): void
+    {
+        self::assertTrue(
+            is_resource(\STDIN),
+            'tests/bootstrap.php closed the \STDIN constant; every in-process read of it now fatals',
+        );
+
+        // Would itself throw a TypeError on a closed resource, which is the
+        // exact failure this pins.
+        $meta = stream_get_meta_data(\STDIN);
+        self::assertSame('php://stdin', $meta['uri'] ?? null);
+
+        // KNOWN-POSITIVE THROUGH THE SAME PROBE: a stream nobody has touched
+        // reports blocked === true, so the assertion below is reading a flag
+        // rather than reporting a missing key as false.
+        $fresh = fopen('php://memory', 'r+');
+        self::assertTrue(stream_get_meta_data($fresh)['blocked'], 'the probe cannot see a blocking stream at all');
+        fclose($fresh);
+
+        if (stream_isatty(\STDIN)) {
+            self::assertTrue(
+                $meta['blocked'],
+                "the bootstrap cleared O_NONBLOCK on a TERMINAL - it must leave a developer's tty alone",
+            );
+
+            return;
+        }
+
+        self::assertFalse(
+            $meta['blocked'],
+            'the bootstrap did not clear O_NONBLOCK on descriptor 0, so a spawned binary can still park '
+                . 'in stream_get_contents() on the runner\'s stdin',
+        );
+    }
+
+    /** Remove a directory tree this test created, contents and all. */
+    private static function removeTree(string $dir): void
+    {
+        if ($dir === '' || !is_dir($dir)) {
+            return;
+        }
+
+        foreach ((array) scandir($dir) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            if (is_dir($path) && !is_link($path)) {
+                self::removeTree($path);
+
+                continue;
+            }
+            @unlink($path);
+        }
+
+        @rmdir($dir);
     }
 
     /**
