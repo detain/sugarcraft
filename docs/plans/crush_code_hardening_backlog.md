@@ -13160,11 +13160,21 @@ own tests". The ownership map in the same brief lists `tests/Support/ChildStderr
 d**, and lane c as "(censuses)" owning two `tests/Cli/` files its work items never mention. Two lanes were
 told they own one file.
 
-Resolved by touching neither: lane c's work went into new files that match no other lane's glob
-(`ChildLifetimeScanner.php`, `ChildLifetimeScannerFixtureTest.php`,
-`DescriptorInheritanceGuardTest.php`). **Step:** when a brief's per-lane file list and the shared ownership
-map disagree, the disagreement itself is the finding — say so before working, and prefer the resolution
-that makes the question moot.
+**WHAT THIS ENTRY FIRST SAID:** resolved by touching neither, with lane c's work going into new files
+that match no other lane's glob (`ChildLifetimeScanner.php`, `ChildLifetimeScannerFixtureTest.php`,
+`DescriptorInheritanceGuardTest.php`).
+
+**WHAT IS TRUE NOW:** that was the right call while the question was open, and the three new files above
+are still where the bulk of the work lives. But the question is not open — **lane d was never launched.**
+`/home/sites/` holds `crush-lane-a`, `crush-lane-b` and `crush-lane-c` and no `crush-lane-d`, so
+`ChildStderrCapture*.php` had no second claimant this round and lane c's own YOUR-FILES line governs.
+Lane c then did edit `ChildStderrCaptureScanner.php`, for Ec53-7.
+
+**WHY THIS STILL EARNS ITS PLACE:** the brief was internally inconsistent whether or not the lane it
+assigned the file to existed, and the next round's map is written from this one. The step below is
+unchanged and is the durable part. **Step:** when a brief's per-lane file list and the shared ownership
+map disagree, the disagreement itself is the finding — say so before working; then check whether the
+other claimant is actually running before paying the cost of avoiding it.
 
 ---
 
@@ -13213,3 +13223,77 @@ not done: a shape with one occurrence to verify against is thin evidence for a c
 site in the tree at once, and the honest `unclassified` costs a roster row rather than a wrong answer.
 
 ---
+
+---
+
+### Ec53-7 — a MIXED `proc_open()` descriptor spec was answered `inherited`, and two of its three spellings put a pipe on fd 2
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: instrument correctness. **FIXED** in
+`tests/Support/ChildStderrCaptureScanner.php`.
+
+Round 48 found `classifySpec()` answering `inherited` for every POSITIONAL spec regardless of truth and
+fixed it with `positionalShape()`. The same hole survived one branch further in. `positionalShape()`
+returned `SHAPE_INHERITED` on the first element it saw carrying a `=>`, reasoning that a keyed spec not
+naming `2` leaves fd 2 alone. True of an all-keyed spec; false of one that MIXES the spellings, because
+PHP hands a positional element the next free integer key. Measured with `array_keys()` on **PHP 8.3.6**:
+
+| spec | keys | fd 2 |
+| --- | --- | --- |
+| `[0 => a, b, c]` | 0,1,2 | **is `c`** |
+| `[1 => a, b]` | 1,2 | **is `b`** |
+| `[5 => a, b, c]` | 5,6,7 | untouched |
+
+Three truths, one answer. `inherited` is the shape this scanner's guards FLAG, so a wrong one reds correct
+code, and an exemption row written for correct code is where the next real offender hides.
+
+Fixed to `SHAPE_UNCLASSIFIED` for a mixed spec — the answer `ChildLifetimeScanner::keysOf()` already gives
+the same shape, reached independently and documented there as "a mixed spec is unreadable, not half-read".
+Two instruments walking one syntax disagreeing about what they cannot read is the disagreement worth
+removing. The arrow test is now top-level rather than `str_contains()`, since an arrow nested inside an
+element is not a key separator. **No classification in the tree moved: no mixed spec exists in the scanned
+scope today.** This is a latent hole closed before its first instance, which is E366's own argument.
+
+**Step:** when a fixture alphabet pins N shapes, ask which shape the alphabet cannot express. This one
+pinned four positional spellings and one all-keyed spelling, and had no way to say "mixed".
+
+---
+
+### Ec53-8 — the scanner called a bounded reaper "nothing happens to this handle", and would have reddened the lane that added it
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: invented finding / merge hazard. **FIXED** in
+`tests/Support/ChildLifetimeScanner.php`. **Cross-lane — read the merge instruction below.**
+
+`ChildLifetimeScanner` recognised only a literal `proc_close($h)` as a reap. Round 53's lane b introduces
+`Support/ProcessReaper` and replaces the builtin call at several sites with
+`ProcessReaper::terminateAndClose($h)` — a bounded SIGTERM → SIGKILL → `proc_close()` ladder, i.e. strictly
+stricter code. Measured by running this lane's scanner over lane b's `src/` (read-only) at lane b
+`b1e732e9`, the pre-fix scanner produced **two invented findings and zero real ones**:
+
+- `Sessions/BackgroundSupervisor.php::spawnSession`, which lane b FIXED, stayed on the exposed list.
+- `Providers/ClaudeCodeProvider.php::completeStream` went from short-lived to *"nothing returns, stores or
+  `proc_close()`s it"* — a confident false statement about a function that plainly reaps.
+
+Fixed three ways: a `CLOSING_HELPERS` roster matched on the trailing `Class::method` (a bare method name
+would let any class of that name reap a handle — the polarity that hides a leak); a handle handed to a
+call the scanner cannot follow now reports **that, naming the callee**, rather than an absence (rule 14
+one level in — already true in this tree, where `ProcessExecutor::spawnWorker` hands its handle to
+`is_resource`); and the reason names the closer actually found instead of always printing `proc_close`.
+
+**MERGE INSTRUCTION for `DescriptorInheritanceGuardTest::ACCOUNTED_FOR`, once lane b lands.** This is a
+DATA edit in the roster, never a weakening of the check, and the guard's own failure text says the same:
+
+1. **DELETE** the row `'Sessions/BackgroundSupervisor.php::spawnSession'`. Lane b reaps it
+   unconditionally through `ProcessReaper::terminateAndClose($proc)`; the scanner now reads it as
+   short-lived and `testNoAccountedForRowIsStale` will red on the stale row. **That red means lane b fixed
+   it.**
+2. **ADD** a row `'Providers/ClaudeCodeProvider.php::completeStream'`. On lane b the reap runs only inside
+   a nested block, so it does not cover every path out of the function; the scanner reports
+   `unclassified` with that reason and `testEveryExposedSpawnIsHandledOrAccountedFor` will red.
+
+Every other row is unchanged. Measured at lane c `d00b9b05` against lane b `b1e732e9`; **if lane b commits
+further after that sha, re-run the prediction rather than trusting this list** — the generator is
+`predict_merge.php` in lane c's scratchpad, and it is twenty lines over the scanner's public `scan()`.
+
+**Step:** a guard whose subject another lane is editing should be run against that lane's tree before the
+merge, not after. It cost four minutes here and turned two merge-time red herrings into a two-line data
+edit written down in advance.
