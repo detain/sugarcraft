@@ -134,24 +134,38 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'wrong number surfaces as "Cannot query size of non-tty fd" rather than as a '
             . 'wrong size.',
         ],
+
+        // ---- the rest of the tree ----------------------------------------
+        // Every one of these passes the STREAM ITSELF, uncast. `posix_isatty()`
+        // and `posix_ttyname()` are declared `resource|int`, so this is not
+        // merely tolerated -- it is the shape the whole family should be
+        // moving toward, and the reason it cannot everywhere is that the
+        // ioctl and termios sinks take `int` only.
+        'candy-log/src/Log.php::posix_isatty(\STDERR)' => [
+            DescriptorSinkScanner::STREAM_CONSTANT,
+            'CORRECT. The resource, not a cast of it. Not named in E368\'s carve-out list -- '
+            . 'found by re-deriving the population with the corrected instrument.',
+        ],
+        'candy-palette/src/Probe/TerminalProbe.php::posix_isatty(STDOUT)' => [
+            DescriptorSinkScanner::STREAM_CONSTANT,
+            'CORRECT, and an E368 carve-out: the resource, no cast.',
+        ],
+        'candy-shine/src/Theme.php::posix_isatty(STDOUT)' => [
+            DescriptorSinkScanner::STREAM_CONSTANT,
+            'CORRECT, and an E368 carve-out: the resource, no cast.',
+        ],
+        'candy-vcr/src/Cli/RecordCommand.php::posix_ttyname(\STDIN)' => [
+            DescriptorSinkScanner::STREAM_CONSTANT,
+            'CORRECT. The resource, not a cast. Not named in E368\'s carve-out list, which '
+            . 'mentioned only this file\'s `TermiosFactory::open(0)`.',
+        ],
+        'candy-vcr/src/Cli/RecordCommand.php::TermiosFactory::open(0)' => [
+            DescriptorSinkScanner::LITERAL_INT,
+            'CORRECT, and an E368 carve-out: a real descriptor number spelled as a literal. '
+            . 'This is the shape restoreLast() was moved to.',
+        ],
     ];
 
-    /**
-     * Libraries scanned, relative to the monorepo root.
-     *
-     * Deliberately NOT every library in the tree. A census run from
-     * candy-core\'s suite that reddened on an unrelated library\'s edit would
-     * be a guard nobody can see coming; these three are where this defect
-     * family lives and they move together. To widen it, add a directory here
-     * and add the rows the scanner then reports.
-     *
-     * A library that is absent -- which is every sibling in a split-repo
-     * clone of candy-core -- has its rows skipped rather than reported
-     * missing. candy-core itself is always present, and
-     * {@see testTheCensusActuallyScannedSomething()} refuses a run in which
-     * it somehow was not.
-     */
-    private const LIBRARIES = ['candy-core', 'candy-flip', 'candy-pty'];
 
     public function testEverySiteThatConsumesADescriptorIsJudgedInTheRoster(): void
     {
@@ -308,22 +322,50 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         self::assertContains(DescriptorSinkScanner::INT_CAST_VIA_VARIABLE, $kinds);
     }
 
-    /** @return list<string> the libraries in self::LIBRARIES that exist here */
+    /**
+     * Every library beside candy-core that has a `src/`, sorted.
+     *
+     * Discovered rather than listed, which is the whole point: a census that
+     * enumerates the libraries it looks at can only ever find the defect in
+     * the libraries someone already suspected, and that is the exact failure
+     * this census was written to replace one level up. A NEW library with a
+     * descriptor sink in it must red this test on its first commit.
+     *
+     * In a split-repo clone of candy-core there are no siblings, so this
+     * answers `['candy-core']` and the roster rows for absent libraries are
+     * skipped. {@see testTheCensusActuallyScannedSomething()} refuses a run
+     * in which even candy-core was not found.
+     *
+     * @return list<string>
+     */
     private function presentLibraries(): array
     {
+        $root    = $this->monorepoRoot();
         $present = [];
-        foreach (self::LIBRARIES as $lib) {
-            if (is_dir($this->monorepoRoot() . '/' . $lib . '/src')) {
-                $present[] = $lib;
-            }
+        foreach ((array) glob($root . '/*/src', \GLOB_ONLYDIR) as $dir) {
+            $present[] = basename(\dirname((string) $dir));
         }
+        sort($present);
 
         return $present;
     }
 
+    /**
+     * Memoised because the walk covers every library's `src/` and three tests
+     * ask for it. Measured on this box, PHP 8.3.6: ~1.4s per walk, so caching
+     * takes the file from ~2.0s to ~0.8s.
+     *
+     * @var array<string, array{sink:string, kind:string, argument:string}>|null
+     */
+    private static ?array $scanned = null;
+
     /** @return array<string, array{sink:string, kind:string, argument:string}> */
     private function scanLibraries(): array
     {
+        if (self::$scanned !== null) {
+            return self::$scanned;
+        }
+
         $root  = $this->monorepoRoot();
         $found = [];
 
@@ -339,7 +381,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             }
         }
 
-        return $found;
+        return self::$scanned = $found;
     }
 
     private function monorepoRoot(): string
