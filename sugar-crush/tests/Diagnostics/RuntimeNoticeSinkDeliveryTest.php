@@ -1338,6 +1338,16 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * assertion E228 warns about, and a helper that threw for an unrelated
      * reason satisfies it just as well.
      *
+     * THE `self::fail()` BELOW IS UNKILLABLE BY CONSTRUCTION, recorded here so
+     * the next reviewer does not spend a mutation on it: rewriting it to
+     * `return ''` SURVIVES this file's suite (MEASURED). It cannot be observed
+     * while both refusal arms work, because the callers never reach it — and if
+     * an arm stops refusing, `assertStringContainsString(…, '')` in the caller
+     * reds anyway. What the `fail()` buys is the MESSAGE: "scanned an
+     * unscannable roster without complaining, answering […]" names the defect,
+     * where the caller's own failure would only report a missing substring in an
+     * empty string. Keep it for that; do not read its survival as a hole.
+     *
      * @param list<string> $files
      */
     private static function refusalMessageFor(array $files, string $root): string
