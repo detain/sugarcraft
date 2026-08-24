@@ -1621,14 +1621,19 @@ final class StderrEmitterCensusTest extends TestCase
      * SAID: "THE FOUR BARE CONTROLS at the bottom, `<?php echo 1;` on each
      * channel … That was measured too, by blinding {@see scan()}: thirty-two
      * rows go red."
-     * WHAT IS TRUE NOW, MEASURED at round 49 by inserting `return 0;` at the
-     * top of {@see scan()} and running this class (PHP 8.3.6): THIRTY-FIVE
-     * rows go red, not thirty-two. Thirty-two was the count BEFORE the same
-     * commit added three non-zero rows to this provider, and nothing
-     * re-derived it afterwards. The other two numerals were wrong in the same
-     * way: this provider carries five `<?php echo 1;` rows and not four, and
-     * they sit on five of its seven channel spellings and not on each — there
-     * is none on `indirect` and none on `shape`.
+     * WHAT WAS TRUE WHEN THAT SENTENCE WAS COMMITTED, MEASURED at round 49 by
+     * inserting `return 0;` at the top of {@see scan()} and running this class
+     * (PHP 8.3.6, commit `11081a38`): thirty-five rows went red, not
+     * thirty-two. Thirty-two was the count BEFORE the same commit added three
+     * non-zero rows to this provider, and nothing re-derived it afterwards. The
+     * other two numerals were wrong in the same way — the provider carried five
+     * `<?php echo 1;` rows and not four, on five of its seven channel spellings
+     * and not on each, with none on `indirect` and none on `shape`. All three
+     * are written in the past tense on purpose: they are quoted measurements of
+     * one commit, and the sibling census's criterion is that a sentence saying
+     * what a count WAS is exempt from anchoring while a sentence saying what it
+     * IS is not. The present-tense form of the claim is the generator named
+     * below, which is where a reader should look for today's answer.
      * WHY THE CLAIM STILL EARNS ITS PLACE: it is the entire reason the bare
      * controls are allowed to have no positive component of their own, so it
      * has to be true, and a numeral in a doc-block is the one form of it that
@@ -2067,7 +2072,9 @@ final class StderrEmitterCensusTest extends TestCase
      * `count(self::selfCountAnchors())`, so adding a row without editing the
      * sentence reds. Verified by mutation both ways: before that assertion
      * existed, rewriting all three numerals to "nineteen" left this class
-     * entirely green (91 tests).
+     * entirely green — 90 tests, 1346 assertions, measured at commit
+     * `11081a38`, which is the class as it stood BEFORE this round's review
+     * added anything to it.
      *
      * WHERE THE REGRESS STOPS, and it stops one level up exactly as the sibling
      * census stops it: how many sentences state the size of this list is not

@@ -8740,7 +8740,15 @@ transcript-seam channel took the list to nine and the numeral moved with nothing
 arithmetic never worked either — "one per channel, plus the two in the channel-5 paragraph" is eight.
 
 **Proved unpinned before being fixed.** Rewriting all three numerals to "nineteen" left the class green:
-91 tests, 1346 assertions, rc 0 (scope: `--filter StderrEmitterCensusTest`).
+90 tests, 1346 assertions, rc 0 at commit `11081a38` (scope: `--filter StderrEmitterCensusTest`, so the
+verdict is "survived the guards in this class", not "survived the suite").
+
+**AND THIS ENTRY FIRST SAID 91.** Recorded rather than quietly corrected, because it is Ec49-7's mechanism
+reproducing one commit after Ec49-7 was filed, in the same lane, by the reviewer who filed it: the mutation
+ran against a 90-test class, the reviewer read the test count off the class as it stood after the review's
+own first fix had added one, and committed the later number as the measurement. The assertion count was
+right, which is what made it look checked. **A mutation verdict must carry the commit it was measured at**,
+not just the date — that is the only form of the figure that cannot be re-read off a moved tree.
 
 **The transferable shape, and it is not "someone was careless".** Anchoring machinery has a blind spot at
 its own root, and the root is the most natural place to describe the machinery — so it attracts prose about
