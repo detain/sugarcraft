@@ -189,10 +189,21 @@ use SugarCraft\Crush\Tools\ToolCall;
  * ASKs, once per arm, in a child process with fd 2 on a plain file:
  *
  *  - THE DOUBLING IS NOT TTY-ONLY. The no-tty arm doubles as well — shape 2's
- *    eight-line block plus the observer's line, 526 bytes over 9 lines,
- *    against the terminal arm's 266 over 8. So removing shape 4 would take
+ *    refusal block plus the observer's line. So removing shape 4 would take
  *    the doubling out of one of the two arms that have it, not out of the
  *    behaviour.
+ *
+ *    THE BYTE AND LINE TOTALS THAT USED TO BE HERE ARE RETIRED (E256). WHAT
+ *    THEY SAID: "526 bytes over 9 lines, against the terminal arm's 266 over
+ *    8". WHAT IS TRUE NOW: those figures were correct — re-derived at round 49
+ *    on PHP 8.3.6 they are exactly those — and they had no runnable generator,
+ *    so no reader could re-derive them and nothing would have reddened when
+ *    they stopped holding. They are measured by
+ *    {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()},
+ *    which is now the one place they are written down. WHY THE SENTENCE STILL
+ *    EARNS ITS PLACE: the SHAPE of the comparison — the no-tty arm writes
+ *    strictly more, not less — is the half that decides whether shape 4 is
+ *    droppable, and it is asserted in that test rather than remembered here.
  *  - AND THE OBSERVER'S LINE CANNOT TELL THE ARMS APART. Both end in a reason
  *    opening `Permission denied:`
  *    ({@see \SugarCraft\Crush\Permissions\DenialKind::Refused}), because in

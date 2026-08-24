@@ -965,12 +965,36 @@ final class NonInteractive
      *
      * @param string $tool The runtime tool name, as the model called it.
      * @param string $reason The finished result text, which opens with one of
-     *   {@see \SugarCraft\Crush\Runtime}'s three denial prefixes — so the
-     *   line already says WHICH of the three this was.
+     *   {@see DenialKind}'s three prefixes — so the line already says WHICH of
+     *   the three this was.
      */
     private static function noticeRefusal(string $tool, string $reason): void
     {
-        \fwrite(\STDERR, "sugarcrush: {$tool} was not run - {$reason}\n");
+        \fwrite(\STDERR, self::refusalNotice($tool, $reason));
+    }
+
+    /**
+     * The exact bytes {@see noticeRefusal()} puts on stderr for one refusal.
+     *
+     * SPLIT OUT SO THE LINE CAN BE MEASURED WITHOUT BEING RE-SPELLED (E256).
+     * E240 recorded that a refused ASK writes two things to stderr and put
+     * byte and line totals for both arms in two doc-blocks; neither had a
+     * runnable generator, so nobody could re-derive them and nothing would
+     * notice when they stopped being true.
+     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} is the
+     * generator now, and it needs this half of the pair. It cannot capture
+     * the write itself — `\STDERR` is bound to descriptor 2 at startup and
+     * PHP has no `dup2` — and reconstructing the format in the test would
+     * make the measurement agree with a second copy of the thing it is
+     * measuring rather than with the code that runs.
+     *
+     * STILL ONE `fwrite` AT ONE CALL SITE. This is a rendering, not a second
+     * emitter: {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}
+     * counts writes to fd 2 per file and this change does not move that count.
+     */
+    private static function refusalNotice(string $tool, string $reason): string
+    {
+        return "sugarcrush: {$tool} was not run - {$reason}\n";
     }
 
     /**
