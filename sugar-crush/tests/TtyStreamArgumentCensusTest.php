@@ -7,15 +7,15 @@ namespace SugarCraft\Crush\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * No `Tty` in this tree is built with an INJECTED `Termios` and a null stream.
+ * Nothing in this tree builds a raw-mode backend over the process's OWN
+ * descriptor 0 with an injected `Termios`.
  *
  * WHY THIS IS A GUARD AND NOT A STYLE RULE. `tests/bootstrap.php` repairs the
  * suite's descriptor 0 by clearing `O_NONBLOCK` on it, so a spawned
  * `bin/sugarcrush` cannot park in `stream_get_contents()` on the runner's
  * stdin (E212's other half). `O_NONBLOCK` lives on the open file DESCRIPTION,
  * which is what makes it reach inherited children — and also what makes it
- * erasable by anything else holding that description. Exactly one shape in
- * this codebase holds it:
+ * erasable by anything else holding that description. The shape that holds it:
  *
  *   new Tty(null, $injectedTermios)
  *
@@ -27,6 +27,45 @@ use PHPUnit\Framework\TestCase;
  * `@stream_set_blocking($this->stream, false)`, with `restore()`'s matching
  * `@stream_set_blocking($this->stream, true)` putting the runner's fd 0 back
  * to BLOCKING for the remainder of the run.
+ *
+ * ## THE ALPHABET IS THE SHAPE, NOT ONE CLASS NAME (round 50)
+ *
+ * WHAT THIS GUARD SAID: "Exactly one shape in this codebase holds it", and
+ * the scanner accepted the short name `Tty` alone. WHAT IS TRUE: `Tty` is a
+ * FAÇADE over the backend, and the backend has the same constructor. Reading
+ * candy-core rather than inferring from the façade,
+ * `SugarCraft\Core\Util\Tty\PosixBackend::__construct()` is
+ * `$this->stream = $stream ?? STDIN;` — the identical resolution — and it is
+ * the class that actually owns both `stream_set_blocking()` calls. Anyone who
+ * wants the backend without the façade's platform dispatch constructs it
+ * directly, and this census would have reported the tree clean.
+ *
+ * MEASURED, PHP 8.3.6, three takes each, in a process whose fd 0 is an open
+ * never-written pipe with `O_NONBLOCK` already set (the shape
+ * `tests/bootstrap.php` leaves), driving the BACKEND directly with no `Tty`
+ * anywhere:
+ *
+ *   new PosixBackend(null, new PosixTermios($slaveFd))
+ *       fd 0 clear -> clear after enableRawMode() -> BLOCKED after restore()   3/3
+ *   new PosixBackend($socketPairEnd, new PosixTermios($slaveFd))
+ *       fd 0 clear -> clear -> clear                                           3/3
+ *
+ * — the same erasure, one layer down, so the name is in the alphabet.
+ *
+ * AND `WindowsBackend` IS DELIBERATELY NOT, which is checked rather than
+ * assumed because its constructor looks identical (`$this->stream = $stream ??
+ * STDIN;`, an injected `Kernel32Interface` in the second slot). It contains no
+ * `stream_set_blocking` call at all — verified by symbol over
+ * `candy-core/src/Util/Tty/WindowsBackend.php`, whose `enableRawMode()` and
+ * `restore()` go through the console-mode API instead — so it cannot erase the
+ * flag this guard exists to protect. It is named here so the next reader does
+ * not "complete" the roster by symmetry. (Linux box, PHP 8.3.6: that backend
+ * is never selected here, so this is a source claim and not a measurement, and
+ * it is the only claim in this doc-block that is not.)
+ *
+ * The measured instance count is deliberately absent (rule 18): a cardinality
+ * over `tests/` is stale the next time one is added, and the assertions below
+ * derive their own.
  *
  * MEASURED, PHP 8.3.6, three takes each, in a child whose fd 0 is a pipe:
  *
@@ -68,6 +107,32 @@ final class TtyStreamArgumentCensusTest extends TestCase
     private const SCOPE = ['src', 'tests', 'bin'];
 
     /**
+     * The class names whose constructor resolves a null stream to the
+     * process's own `STDIN` and then writes `stream_set_blocking()` to it.
+     *
+     * Both halves of that sentence are load-bearing, and the class doc-block
+     * carries the measurement for each name. `Tty` is the façade;
+     * `PosixBackend` is what the façade builds and what actually owns the two
+     * flag writes, so a caller who skips the façade skips a one-name census
+     * too. `WindowsBackend` has the same `?? STDIN` and no flag write, so it
+     * is excluded on mechanism rather than on platform.
+     */
+    private const HAZARD_CLASSES = ['Tty', 'PosixBackend'];
+
+    /**
+     * Reachable sibling libraries, scanned for the same shape.
+     *
+     * E296'S LESSON AT LIBRARY SCOPE, and it is the reason this arm exists.
+     * Round 49 spent three attempts on the descriptor-0 repair; two were
+     * refuted by a claim of the form "nothing reaches X" whose census scope
+     * was `sugar-crush/` — and the reader that mattered was in `candy-mosaic`.
+     * A census's ALPHABET includes the directory it is pointed at. `src` only:
+     * a sibling's own `tests/` never runs in this process, so it cannot touch
+     * this runner's descriptor 0.
+     */
+    private const LIB_SCOPE = 'vendor/sugarcraft';
+
+    /**
      * Nothing in the tree builds the hazardous shape.
      *
      * The known-positive lives in its own test below rather than here, but it
@@ -82,7 +147,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
         $seen = 0;
 
         foreach (self::sources() as $path => $source) {
-            foreach (self::ttyConstructions($source) as $site) {
+            foreach (self::rawModeConstructions($source) as $site) {
                 ++$seen;
                 if ($site['firstArg'] === 'null' && $site['extraArgs']) {
                     $offenders[] = $path . ': new ' . $site['name'] . '(' . $site['firstArg'] . ', …)';
@@ -129,6 +194,86 @@ final class TtyStreamArgumentCensusTest extends TestCase
     }
 
     /**
+     * AND NO REACHABLE SIBLING LIBRARY BUILDS IT EITHER (E296's lesson).
+     *
+     * WHY A SECOND ARM RATHER THAN ONE WIDER SCOPE. The two arms assert
+     * different things and can be broken by different people. The package arm
+     * above is about code this repository writes, and it pins the CONSTANT
+     * roster as well because a new constant there is a decision somebody here
+     * made. This arm is about code that arrives through `composer`, where the
+     * only useful question is whether the hazardous shape appeared — a roster
+     * of every sibling's stream constants would red on an unrelated upstream
+     * refactor and teach the next reader to widen it away.
+     *
+     * IT IS HERE BECAUSE THE ROUND-49 REPAIR WAS REFUTED TWICE BY A CENSUS
+     * WHOSE SCOPE WAS A DIRECTORY. Both refutations had the form "nothing
+     * reaches X", verified over `sugar-crush/`, and both times the thing that
+     * reached X was in a sibling library — `SugarCraft\Mosaic\Detect` reading
+     * the `\STDIN` constant unguarded, which cost a full suite run and 107
+     * errors. The shape this file scans for is a candy-core shape, so the
+     * library that is most likely to grow the next instance of it is candy-core
+     * and not this package.
+     *
+     * MEASURED at the commit that added this arm, PHP 8.3.6: the scan sees
+     * constructions (so it is not dead) and none is an offender. The count is
+     * not written down — it is upstream's to change, and `$seen` is derived.
+     *
+     * `src` only, and `bin` deliberately not: a sibling's `bin` script is a
+     * separate process with its own descriptor 0, so it cannot erase this
+     * runner's flag. A sibling's `tests` never execute here at all.
+     */
+    public function testNoReachableSiblingLibraryBuildsTheHazardousShapeEither(): void
+    {
+        $offenders = [];
+        $constants = [];
+        $seen = 0;
+
+        foreach (self::libSources() as $path => $source) {
+            foreach (self::rawModeConstructions($source) as $site) {
+                ++$seen;
+                if ($site['firstArg'] === 'null' && $site['extraArgs']) {
+                    $offenders[] = $path . ': new ' . $site['name'] . '(' . $site['firstArg'] . ', …)';
+                }
+                if ($site['firstArg'] === 'unparsed') {
+                    $offenders[] = $path . ': new ' . $site['name'] . '(<argument list this scanner could '
+                        . 'not read to its close>)';
+                }
+                if (str_starts_with($site['firstArg'], 'constant:')) {
+                    $constants[] = $path . ': ' . $site['firstArg'];
+                }
+            }
+        }
+
+        // The dead-scanner control, and it is not decorative here: this arm
+        // walks a directory that a `composer install` can leave in a shape
+        // nobody expected. An empty offender list from an empty walk is the
+        // silence of a dead instrument, not evidence (rule 15).
+        self::assertGreaterThan(
+            0,
+            $seen,
+            'the census found no Tty/PosixBackend construction anywhere under ' . self::LIB_SCOPE
+                . ' - the walk is dead, not the libraries clean. candy-core builds both.',
+        );
+
+        self::assertSame(
+            [],
+            $offenders,
+            "a reachable sibling library builds a raw-mode backend over the process's own descriptor 0 with "
+                . "an injected Termios. In THIS process that descriptor belongs to the PHPUnit runner, and "
+                . "restore() puts O_NONBLOCK back on it - which is tests/bootstrap.php's fd-0 repair, erased "
+                . "for every later test in the run:\n  " . implode("\n  ", $offenders),
+        );
+
+        self::assertSame(
+            [],
+            $constants,
+            'a sibling library now builds one of these with a CONSTANT as its stream, and a constant can be '
+                . "null. Check what that constant holds, then decide whether this arm should name it:\n  "
+                . implode("\n  ", $constants),
+        );
+    }
+
+    /**
      * KNOWN-ANSWER FIXTURES THROUGH THE SAME SCANNER.
      *
      * Every polarity the census depends on, including the two spellings that
@@ -144,7 +289,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
         string $source,
         array $expected,
     ): void {
-        self::assertSame($expected, self::ttyConstructions('<?php ' . $source));
+        self::assertSame($expected, self::rawModeConstructions('<?php ' . $source));
     }
 
     /** @return iterable<string, array{string, list<array{name: string, firstArg: string, extraArgs: bool}>}> */
@@ -194,8 +339,35 @@ final class TtyStreamArgumentCensusTest extends TestCase
             '$t = new Tty();',
             [['name' => 'Tty', 'firstArg' => 'null', 'extraArgs' => false]],
         ];
+        // THE BACKEND, WHICH THE ONE-NAME ALPHABET COULD NOT EXPRESS. Same
+        // `$stream ?? STDIN` constructor, and it is the class that owns both
+        // `stream_set_blocking()` calls - measured in the class doc-block.
+        yield 'PosixBackend built directly, null stream, injected termios' => [
+            '$b = new PosixBackend(null, new PosixTermios($fd));',
+            [['name' => 'PosixBackend', 'firstArg' => 'null', 'extraArgs' => true]],
+        ];
+        yield 'PosixBackend FULLY QUALIFIED, null stream' => [
+            '$b = new \SugarCraft\Core\Util\Tty\PosixBackend(null, $termios);',
+            [['name' => '\SugarCraft\Core\Util\Tty\PosixBackend', 'firstArg' => 'null', 'extraArgs' => true]],
+        ];
+        yield 'PosixBackend via the Tty sub-namespace, as candy-core spells it' => [
+            '$b = new Tty\PosixBackend($stream, $termios);',
+            [['name' => 'Tty\PosixBackend', 'firstArg' => 'expression', 'extraArgs' => true]],
+        ];
+        // NEGATIVE, and deliberately so: WindowsBackend has the same
+        // `?? STDIN` and NO `stream_set_blocking` anywhere, so it is out of the
+        // alphabet on mechanism. If someone adds it, this fixture reds and they
+        // have to read the reason first.
+        yield 'WindowsBackend is NOT in the alphabet - it writes no stream flag' => [
+            '$b = new WindowsBackend(null, $kernel32);',
+            [],
+        ];
         yield 'a class merely NAMED like Tty is not one' => [
             '$t = new TtyDetect(null, $x);',
+            [],
+        ];
+        yield 'a class merely NAMED like PosixBackend is not one' => [
+            '$b = new PosixBackendFactory(null, $t);',
             [],
         ];
         yield 'a Tty in a comment is not a construction' => [
@@ -248,7 +420,57 @@ final class TtyStreamArgumentCensusTest extends TestCase
     }
 
     /**
-     * Every `new <…>Tty(...)` in $source, with its first argument classified.
+     * The `src` of every reachable sibling library, for the arm above.
+     *
+     * `vendor/sugarcraft` is the REACHABILITY definition, not the monorepo
+     * directory beside this package: a lib nothing requires cannot run in this
+     * process whatever it contains, and a lib that IS required is here whether
+     * it arrived as a path-repo symlink (the monorepo and CI's injection) or
+     * as a Packagist copy (a split-repo clone). Both shapes yield the same
+     * files, which is why this arm does not care which one it got.
+     *
+     * @return iterable<string, string> `<lib>/<relative path>` => contents
+     */
+    private static function libSources(): iterable
+    {
+        $base = \dirname(__DIR__) . '/' . self::LIB_SCOPE;
+        if (!is_dir($base)) {
+            // Loud rather than skipped: this suite cannot have loaded without
+            // it, so its absence means the walk is being pointed somewhere new.
+            self::fail(self::LIB_SCOPE . ' does not exist under ' . \dirname(__DIR__));
+        }
+
+        $libs = glob($base . '/*', \GLOB_ONLYDIR) ?: [];
+        foreach ($libs as $lib) {
+            $dir = $lib . '/src';
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $it = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($it as $file) {
+                /** @var \SplFileInfo $file */
+                if (!$file->isFile() || $file->getExtension() !== 'php') {
+                    continue;
+                }
+                $source = (string) file_get_contents($file->getPathname());
+                if (!str_contains($source, '<?php')) {
+                    continue;
+                }
+                yield basename($lib) . '/' . substr($file->getPathname(), \strlen($lib) + 1) => $source;
+            }
+        }
+    }
+
+    /**
+     * Every `new <…><hazard class>(...)` in $source, first argument classified.
+     *
+     * The class alphabet is {@see HAZARD_CLASSES} rather than the single name
+     * `Tty`, because the façade and the backend it builds have the SAME
+     * `$stream ?? STDIN` constructor and the backend is the one that writes
+     * the flag. Matching on the SHORT name after the last `\` is what makes
+     * every spelling — imported, partially and fully qualified — one case.
      *
      * Token-based on purpose: the class name may be short, partially or fully
      * qualified, and `T_NEW` cannot appear inside a comment or a string, which
@@ -256,7 +478,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
      *
      * @return list<array{name: string, firstArg: string, extraArgs: bool}>
      */
-    private static function ttyConstructions(string $source): array
+    private static function rawModeConstructions(string $source): array
     {
         $tokens = token_get_all($source);
         $count = \count($tokens);
@@ -286,7 +508,7 @@ final class TtyStreamArgumentCensusTest extends TestCase
             }
 
             $short = str_contains($name, '\\') ? substr($name, strrpos($name, '\\') + 1) : $name;
-            if ($short !== 'Tty' || $j >= $count || $tokens[$j] !== '(') {
+            if (!\in_array($short, self::HAZARD_CLASSES, true) || $j >= $count || $tokens[$j] !== '(') {
                 continue;
             }
 
