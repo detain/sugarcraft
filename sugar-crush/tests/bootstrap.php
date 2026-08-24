@@ -81,9 +81,15 @@ putenv('COLORFGBG');
  *    sweep for any test to spend on the real directory. ToolIpcFilesTest resets
  *    it by reflection where it needs to exercise the sweep itself.
  *
- * 2. TMPDIR covers the real `bin/sugarcrush` processes eighteen test files
- *    spawn, which get a genuine startup sweep of their own that no in-process
- *    latch can reach. It works on a CHILD and only on a child: `putenv()` does
+ * 2. TMPDIR covers the real `bin/sugarcrush` processes this suite spawns,
+ *    which get a genuine startup sweep of their own that no in-process latch
+ *    can reach. (WHAT THIS SAID: "eighteen test files". WHAT IS TRUE: nobody
+ *    can re-derive that. Three generators over `tests/` at 85a34cc1 answer
+ *    41 files mentioning the path at all, 15 of those also containing a spawn
+ *    primitive, and 13 naming it outside a comment — none of them eighteen.
+ *    WHY THE SENTENCE STILL EARNS ITS PLACE: what it is FOR is that the set
+ *    is not empty and the children are real processes, and that is why TMPDIR
+ *    has to be exported rather than merely resolved in here.) It works on a CHILD and only on a child: `putenv()` does
  *    not move the temp directory of the process that calls it (PHP has already
  *    resolved sys_get_temp_dir(), so this suite keeps building its sandboxes
  *    under the real one and every test that does so keeps working), but a child
@@ -102,6 +108,42 @@ putenv('COLORFGBG');
  * back on the real one), a shutdown hook would be inherited by every forked
  * child and run at the wrong time, and the sweep above prunes it on the next
  * run anyway. Per-uid because /tmp is shared.
+ *
+ * PER-UID AND NOT PER-CHECKOUT, which E242 proposed and which was measured
+ * before it was declined (round 49). Three findings, all on PHP 8.3.6 and all
+ * pinned by `tests/SuiteTempSandboxContractTest.php` so 8.4 answers for itself:
+ *
+ *  - THE KEY CANNOT HAVE CAUSED WHAT IT WAS BLAMED FOR. E242's one observed
+ *    failure was two processes opening one `tasklist_test_<id>.sqlite3`, and
+ *    that path is built from `sys_get_temp_dir()`. By the paragraph above,
+ *    `putenv()` never moves THIS process's answer to that — measured in both
+ *    orderings, including putenv before the first call — so it was the
+ *    machine's real temp directory, not this sandbox, at any key. The same is
+ *    true of every in-process `ToolIpcFiles::reserve()`, whose names are
+ *    `sys_get_temp_dir()`-based too. Re-keying moves none of them.
+ *  - THERE IS ALMOST NOTHING IN HERE TO COLLIDE ON. Sampled every 0.5s across
+ *    a full 9,508-test run, the only entries this directory ever held were 20
+ *    `crush-hook-payload-*` files, every one named by `tempnam()` — which is
+ *    atomic and collision-free by construction, not by luck.
+ *  - AND A PER-CHECKOUT KEY WOULD ADD A LEAK THIS ONE DOES NOT HAVE. The
+ *    sandbox is pruned only by the next run's own bootstrap sweep. Keyed by
+ *    uid there is exactly one per user and every run of any checkout prunes
+ *    it; keyed by uid plus checkout path there is one per checkout, and a
+ *    deleted lane worktree leaves a directory no bootstrap will ever sweep
+ *    again — five of those a round, forever.
+ *
+ * WHAT THE RE-KEY WOULD HAVE DONE TO `ToolIpcFiles::sweepOnce()`, since E242's
+ * Step asked and the answer is "less than it looks": nothing. The sweep above
+ * is spent HERE to trip the per-process latch, and by the first finding the
+ * payloads this suite reserves in-process are not in the directory it is
+ * pointed at anyway. Its `$dir` argument only has to be somewhere harmless.
+ * The uid filter inside `ToolIpcFiles::sweep()` keeps its stated reason too —
+ * courtesy on a shared `/tmp` — because the one place the suite genuinely
+ * sweeps the real `/tmp` is `ToolIpcFilesTest`'s wiring proof, which resets
+ * the latch itself and never consults this key.
+ *
+ * WHAT E242 ACTUALLY SAW is the descriptor-0 block recorded at the bottom of
+ * this file, which reproduces with one process on an idle box.
  */
 $sandbox = sys_get_temp_dir() . '/sc_suite_tmp_' . (function_exists('posix_geteuid') ? posix_geteuid() : 'x');
 @mkdir($sandbox, 0o700, true);
@@ -142,3 +184,152 @@ putenv('TMPDIR=' . $sandbox);
  * because deleting it fails as a HANG rather than as a red.
  */
 NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
+
+/*
+ * ...and neither does anything the suite SPAWNS (E212's other half, measured
+ * in round 49).
+ *
+ * The pin above is on `NonInteractive`'s in-process default only, and says so:
+ * "`src/`/`bin/` never call `pinStdinDefault()`, so production reads `\STDIN`
+ * exactly as before". Many test files spawn a real `bin/sugarcrush`, and
+ * `exec()`/`proc_open()` hand a child THIS process's descriptor 0. So the
+ * hazard the pin removed from the runner was still live one process down.
+ *
+ * MEASURED on PHP 8.3.6, `bin/sugarcrush -p "hi"` with a sandbox HOME, timing
+ * only the descriptor-0 shape:
+ *
+ *   stdin = /dev/null                 0.110s
+ *   stdin = closed                    0.105s
+ *   stdin = open, never-written pipe  blocks; SIGKILLed at 25s
+ *
+ * and, with a writer that sends one line after four seconds and then closes,
+ * the run finishes at 4.1s with those bytes PREPENDED TO THE PROMPT
+ * ("You said: > LATE-STDIN-CONTEXT ... > hi"). The block is
+ * `stream_get_contents()` inside
+ * {@see NonInteractive::readStdinIfPiped()} — bounded above by nothing —
+ * and the child's own output places it there: the two `Bootstrap` notices
+ * that immediately precede that call are printed, and nothing after it is.
+ *
+ * WHY THIS IS NOT A THEORETICAL SHAPE. `phpunit.xml` sets
+ * `enforceTimeLimit="true" defaultTimeLimit="60"`, so each such test costs a
+ * full minute and is reported as RISKY ("aborted after 60 seconds"), not as a
+ * failure naming stdin. Observed in this tree while measuring E242:
+ * `BootstrapSkillSkipsTest`'s two `-p` cases — 0.4s for the whole file when
+ * run from a terminal — were both aborted at 60s in a full run whose runner
+ * had been started with its stdin held open by a supervising process. That is
+ * the "crawling, not CPU-bound, wall-clock waits" symptom E242 recorded and
+ * attributed to concurrency; it reproduces with ONE process on an idle box and
+ * has nothing to do with how many suites are running.
+ *
+ * THE REPAIR IS A FLAG ON THE OPEN FILE DESCRIPTION, and round 49 spent TWO
+ * attempts at a real descriptor before settling there. Both attempts are kept
+ * because each was refuted by a measurement, and the second refutation is the
+ * one nobody would guess.
+ *
+ * ATTEMPT 1 — `fclose(\STDIN)` then `fopen('/dev/null', 'r')`, which lands on
+ * the lowest free descriptor, i.e. 0. Hermetic, and PHP has no `dup2` so this
+ * is the only way to REPLACE the descriptor from in here. WHAT WAS SAID FOR
+ * IT: "the `\STDIN` constant is now a closed resource for the rest of the run
+ * … Nothing in the suite reaches it today, and the two things that could are
+ * both already safe."
+ *
+ * WHAT IS TRUE: the census behind that sentence looked in `sugar-crush/src`,
+ * `bin` and `tests` for `\STDIN`, and the reader that matters is in a SIBLING
+ * LIBRARY. {@see \SugarCraft\Mosaic\Detect} resolves its probe stream as
+ * `self::$probeStdin ?? STDIN` and hands it to `drainStdin()` with no
+ * `is_resource()` guard; `Mosaic::auto()` catches the resulting throw and
+ * falls back to `autoFromPalette()`, which references a `Capability` case that
+ * DOES NOT EXIST on candy-palette's enum (`Iterm2Image`; the enum spells
+ * `ITerm2`). MEASURED — full suite, PHP 8.3.6, this lane: attempt 1 produced
+ * `9500 tests, 107 errors, rc 2`, every error
+ * `Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`.
+ * A closed `\STDIN` does not merely inconvenience one control assertion; it
+ * moves a whole library onto a code path that has never run. Recorded as its
+ * own finding, because that fallback is broken independently of this file.
+ *
+ * ATTEMPT 2 — `stream_set_blocking(\STDIN, false)`, which is what ships.
+ * `O_NONBLOCK` lives on the open file DESCRIPTION, and a description is
+ * exactly what `fork(2)` and `exec(2)` share, so setting it here reaches every
+ * child that inherits fd 0 without touching the descriptor or the constant.
+ * MEASURED on PHP 8.3.6, three takes each, a parent whose own fd 0 is an open
+ * never-written pipe `exec()`ing a child that calls
+ * `stream_get_contents(\STDIN)`:
+ *
+ *   inherited as-is                     child SIGKILLed at 8s, rc 137   3/3
+ *   stream_set_blocking(\STDIN, false)  child read 0 bytes in 0.000s    3/3
+ *   close fd 0 + reopen /dev/null       child read 0 bytes in 0.000s    3/3
+ *
+ * — indistinguishable to the child, and after the flag `is_resource(\STDIN)`
+ * is still true where after the close it is false. That is the whole
+ * difference and, given attempt 1's 107 errors, the whole reason.
+ *
+ * WHAT REFUTED ATTEMPT 2 THE FIRST TIME, and why it does not any more. A flag
+ * can be cleared by anything holding the same description, and this suite had
+ * such sites: `new Tty(null, $injectedTermios)`. `Tty::__construct()` is
+ * `self::backend($stream ?? STDIN, $termios)`, so a null stream wraps THIS
+ * process's fd 0, and the injected-Termios branch of
+ * `PosixBackend::enableRawMode()` skips its own `isTty()` guard — so its
+ * trailing `@stream_set_blocking($this->stream, false)` and `restore()`'s
+ * matching `(…, true)` both landed on descriptor 0. MEASURED, PHP 8.3.6, three
+ * takes each, that seam driven directly in a child whose fd 0 is a pipe: with
+ * `null`, clear once the flag is set, still clear after `enableRawMode()`,
+ * BLOCKED AGAIN after `restore()` — 3/3; with an explicit stream, fd 0's flag
+ * never moves — 3/3; with NO `Termios` at all, also never moves — 3/3, because
+ * `enableRawMode()` returns at `!isTty()` before it reaches the flag. That
+ * third row is why the shape is null-stream AND injected-Termios rather than
+ * either alone.
+ *
+ * Every such site was given an explicit stream, and each now asserts the flag
+ * moves on the stream it PASSED rather than on the runner's, so a revert is red
+ * where it happens. THREE WERE FOUND BY A GREP AND A FOURTH WAS NOT, which is
+ * the part worth carrying: `grep -rn 'new Tty(' src/ tests/ bin/` cannot
+ * express `new \SugarCraft\Core\Util\Tty(null, …)`, which is how
+ * `tests/ChatTest.php` spells it — and the full run went red at the guard
+ * below with the other three already repaired. So the census is no longer
+ * prose. {@see \SugarCraft\Crush\Tests\TtyStreamArgumentCensusTest} walks the
+ * token stream, where the spelling cannot hide a site; it FAILS on an argument
+ * list it cannot read to its close rather than skipping it; and it carries
+ * known-answer fixtures for both spellings, so an empty result is evidence
+ * rather than the silence of a dead scanner. No count is quoted here, because
+ * a count over `tests/` is stale the next time one is added.
+ *
+ * WHAT THIS COSTS, stated because it is invisible until something steps on it:
+ *
+ *  - The flag is on the description, so it is shared with whatever else holds
+ *    it — this process's children, and the process that handed fd 0 down. A
+ *    reader elsewhere gets `EAGAIN` where it used to block.
+ *  - It is NOT hermetic the way `/dev/null` was. Bytes already sitting in the
+ *    pipe stay readable, so a runner started with data on stdin can still leak
+ *    them into a spawned `-p` child's prompt. That is the PREPEND half of the
+ *    hazard above, still open one process down; the BLOCKING half is what this
+ *    line closes. Closing the prepend half needs the descriptor itself gone,
+ *    and attempt 1 is what that costs.
+ *
+ * ONLY WHEN FD 0 IS NOT A TERMINAL, for two reasons rather than one. A
+ * developer running the suite from a shell keeps their terminal, and a tty is
+ * harmless anyway (`stream_isatty()` is the first thing `readStdinIfPiped()`
+ * checks, and it returns null on it). It is also where descriptors 0, 1 and 2
+ * most often ARE one description, and `O_NONBLOCK` set through fd 0 would
+ * then reach this suite's stdout.
+ *
+ * WHAT IT DOES TO E243: nothing changes in the outcome.
+ * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt::isInteractive()} is
+ * `is_resource($this->in) && stream_isatty($this->in)`, so its `?? \STDIN`
+ * default takes the no-tty refusal arm via the SECOND clause, and a
+ * non-blocking `fgets()` cannot park. E243 stays NARROWED, not closed: a
+ * developer running the suite from a real terminal skips this whole block,
+ * `\STDIN` stays open, blocking and interactive, and the block E243 describes
+ * is still live there.
+ *
+ * Pinned by `tests/SuiteChildStdinIsolationTest.php`, which spawns the real
+ * binary from a runner whose own stdin is an open, never-written pipe — and
+ * runs the un-bootstrapped control through the same harness first, because
+ * "it did not hang" is also what a harness that never started the child says.
+ * That spawn test is the order-INDEPENDENT guard: it runs the bootstrap in a
+ * child of its own, so no in-process seam can reach it. The flag assertion
+ * beside it is the order-DEPENDENT one, and is kept precisely because a future
+ * `new Tty(null, …)` should turn it red.
+ */
+if (!stream_isatty(\STDIN)) {
+    stream_set_blocking(\STDIN, false);
+}

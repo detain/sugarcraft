@@ -834,10 +834,45 @@ final class ChatTest extends TestCase
 
         // Injected Termios test seam - see EngineBackendTest's matching test
         // for why this bypasses candy-core's (int)-cast fd resolution.
-        $tty = new \SugarCraft\Core\Util\Tty(null, new \SugarCraft\Pty\Posix\PosixTermios($slaveFd));
+        //
+        // THE STREAM ARGUMENT IS EXPLICIT, AND USED TO BE `null` (round 49,
+        // lane e - a FORCED out-of-lane edit, named in that lane's report).
+        // WHAT `null` DID: `Tty::__construct()` is `self::backend($stream ??
+        // STDIN, $termios)`, so it wrapped THIS PROCESS's descriptor 0, and
+        // the injected-Termios branch of `PosixBackend::enableRawMode()` skips
+        // its own `isTty()` guard - so its trailing
+        // `@stream_set_blocking($this->stream, false)` and `restore()`'s
+        // matching `(..., true)` both landed on the runner's fd 0.
+        // `tests/bootstrap.php` repairs descriptor 0 with exactly that flag,
+        // so `restore()` here was undoing it for every later test in the run.
+        //
+        // THIS SITE IS WHY THE OTHER THREE WERE NOT ENOUGH, and it is worth a
+        // sentence: the census that found the others was `grep -rn 'new Tty('`
+        // over `src/ tests/ bin/`, and this call is FULLY QUALIFIED, so that
+        // alphabet could not express it. The suite went red at the guard in
+        // `tests/SuiteChildStdinIsolationTest.php` on a full run with the
+        // other three already fixed - which is the guard doing its job.
+        //
+        // A SOCKET PAIR rather than `php://memory`: PHP reports a memory
+        // stream as blocked whatever is set on it, so it cannot tell "the seam
+        // wrote the flag here" from "the seam wrote it somewhere else".
+        // Asserted in BOTH directions, so a revert to `null` is red.
+        $flagSink = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        $this->assertIsArray($flagSink, 'no socket pair: this test cannot observe where the seam writes');
+        $this->assertTrue(
+            stream_get_meta_data($flagSink[0])['blocked'],
+            'control: a stream nobody has touched must report blocked, or the probe below reads nothing',
+        );
+
+        $tty = new \SugarCraft\Core\Util\Tty($flagSink[0], new \SugarCraft\Pty\Posix\PosixTermios($slaveFd));
         $tty->enableRawMode();
 
         try {
+            $this->assertFalse(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                'enableRawMode() did not clear O_NONBLOCK on the stream it was GIVEN, so it wrote the flag '
+                    . "somewhere else - on a null stream that somewhere else is the runner's descriptor 0",
+            );
             $this->assertTrue($isRaw($slavePath), 'setup: raw mode must be active before running the tool');
 
             $toolCall = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls -la']);
@@ -854,6 +889,12 @@ final class ChatTest extends TestCase
             );
         } finally {
             $tty->restore();
+            $this->assertTrue(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                'restore() did not put O_NONBLOCK back on the stream it was given',
+            );
+            fclose($flagSink[0]);
+            fclose($flagSink[1]);
             $libc->close($slaveFd);
             $pair->master()->close();
         }

@@ -9739,3 +9739,508 @@ rather than as a script, because a cardinality taken in a lane worktree is void 
 the currently-empty population with a synthetic known-positive in the same test (a nowdoc `switch`-based
 walker must be SELECTED and reported as missing `${`). Until then the doc-block's "nothing in the tree
 does that today" is true but unpinned — the first `switch`-based walker anyone writes lands unguarded.
+
+### Ee49-1 — E242's slowdown is a held-open descriptor 0 reaching spawned binaries, not concurrency
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: test-infrastructure. **Measured, PHP 8.3.6. Fixed
+this round** in `tests/bootstrap.php`, pinned by `tests/SuiteChildStdinIsolationTest.php`.
+
+**What E242 said.** A lane's suite went from 4m 26s to "roughly 160 tests per ten minutes" while a
+sibling suite ran; on a 48-core box at load 6, "not CPU-bound — that points at wall-clock waits rather
+than scheduling", with the shared uid-keyed `TMPDIR` named as the most obvious candidate.
+
+**The diagnosis of the symptom was right and the candidate was wrong.** It is wall-clock waits. They come
+from descriptor 0. `bin/sugarcrush -p "hi"` with a sandbox HOME, timing only the fd-0 shape:
+`/dev/null` 0.110s · closed 0.105s · **open, never-written pipe: blocks, SIGKILLed at 25s.** With a writer
+that sends one line after four seconds and then closes, the run ends at 4.1s and those bytes are
+PREPENDED TO THE PROMPT. The block is `stream_get_contents()` inside
+`NonInteractive::readStdinIfPiped()`, placed there by the child's own output: the two `Bootstrap` notices
+that immediately precede that call are printed and nothing after it is.
+
+**Why nobody could see it.** `phpunit.xml` sets `enforceTimeLimit="true" defaultTimeLimit="60"`, so each
+such test is reported RISKY — "aborted after 60 seconds", "did not perform any assertions" — naming
+nothing. Observed here: `BootstrapSkillSkipsTest`'s two `-p` cases, 0.4s for the whole file when run
+alone AND 0.55s each with five copies concurrent, were both aborted at 60s in a full run whose runner had
+its stdin held open by a supervising process. **It reproduces with one process on an idle box.** The
+variable is the fd 0 the runner was started with, which is a property of the harness, not of the tree —
+which is exactly why it looked like it correlated with a sibling lane.
+
+**Relation to E212.** This is E212's other half. That entry closed the runner's own read and said in terms
+that the pin does not reach `src/` or `bin/`; `exec()`/`proc_open()` hand a child THIS process's fd 0, and
+a non-empty set of test files spawns the real binary. (WHAT THIS SAID: "eighteen test files". WHAT IS TRUE:
+see Ee49-8 — nobody can re-derive eighteen; three generators answer 41, 15 and 13. WHY THE SENTENCE STILL
+EARNS ITS PLACE: what it is FOR is that the set is not empty and the children are real processes.)
+
+**Fix, THIRD attempt — and the first two are both recorded here because each was refuted by a
+measurement rather than by an opinion.**
+
+*Attempt 1: close fd 0 and reopen `/dev/null` onto it.* WHAT THIS ENTRY SAID of it: "Cost: the `\STDIN`
+constant is a closed resource for the rest of the run … Nothing reaches it today." WHAT WAS TRUE:
+something reached it.
+`tests/Cli/NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()` read
+`stream_get_meta_data(\STDIN)` as its OWN known-positive control, and on a closed resource that is a
+`TypeError`. **MEASURED at 85a34cc1 from a non-tty runner: that one file, 5 tests, 1 error.** Red on every
+runner whose fd 0 is not a terminal, green from a terminal, because the tty guard skips the block there —
+which is exactly why it shipped unnoticed.
+
+*Attempt 2: `stream_set_blocking(\STDIN, false)`, leaving the constant alive.* `O_NONBLOCK` lives on the
+open file DESCRIPTION, which is what `fork(2)`/`exec(2)` share, so it does reach every inherited child.
+**MEASURED, PHP 8.3.6, three takes each**, a parent whose fd 0 is an open never-written pipe `exec()`ing a
+child that calls `stream_get_contents(\STDIN)`: inherited as-is → SIGKILLed at 8s, rc 137 (3/3);
+`stream_set_blocking(…, false)` → 0 bytes in 0.000s (3/3); close + reopen `/dev/null` → 0 bytes in 0.000s
+(3/3). Indistinguishable to the child. **WHAT REFUTED IT: the flag does not survive this suite.**
+`tests/Backend/EngineBackendTest::testCompleteAsyncDoesNotResetTheRealTerminalsRawMode()` builds
+`new Tty(null, new PosixTermios($slaveFd))`; candy-core resolves the null stream to `\STDIN`, and the
+injected-Termios seam makes `PosixBackend::enableRawMode()` skip its own `isTty()` guard — so its trailing
+`@stream_set_blocking($this->stream, false)` and `restore()`'s matching `@stream_set_blocking($this->stream,
+true)` both land on descriptor 0. **MEASURED, PHP 8.3.6, three takes, that seam driven directly from a
+process whose fd 0 is an open pipe: clear after the flag is set, still clear after `enableRawMode()`,
+BLOCKED again after `restore()` — 3/3.** A guard on the flag is therefore ORDER-DEPENDENT: green when its
+own file runs alone or before that seam, red after it.
+
+*Attempt 3 — attempt 1 again, with its one known casualty repaired.* Tried, and **refuted by the first
+full suite run anyone had done of it.** WHAT ATTEMPT 3 ASSUMED: that the only in-process reader of the
+`\STDIN` constant was `NonInteractiveStdinPinTest`'s known-positive control, so pointing that control at
+a fresh `php://stdin` handle made closing the descriptor free. WHAT IS TRUE: **the census behind that
+sentence looked in `sugar-crush/{src,bin,tests}`, and the reader that matters is in a SIBLING LIBRARY.**
+`SugarCraft\Mosaic\Detect` resolves its probe stream as `self::$probeStdin ?? STDIN` and hands it to
+`drainStdin()` with no `is_resource()` guard; `Mosaic::auto()` catches the resulting throw and falls into
+`autoFromPalette()`, which references a `Capability` case candy-palette does not have. **MEASURED, full
+suite, PHP 8.3.6, this lane: `9500 tests, 107 errors, rc 2`**, every error
+`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`. A closed `\STDIN` does not
+cost one control assertion; it moves a whole library onto a code path that has never run. (That fallback
+is broken independently of this file — recorded separately as Ee49-13.)
+
+*Attempt 4, SHIPPED — attempt 2, with the thing that refuted it fixed instead of routed around.* The flag
+is what ships. What broke it was `new Tty(null, $injectedTermios)`, and every instance of that shape in
+the tree now passes an explicit `stream_socket_pair()` end and asserts the flag moves on THAT stream in
+both directions (Ee49-12). So nothing in the run writes the description any more, and the guard on the
+flag is order-dependent BY DESIGN: it is the only thing that reds when someone writes the next one. The
+order-independent guard beside it is the spawn test, which runs the bootstrap in a child of its own where
+no in-process seam can reach it.
+
+**The lesson worth keeping, since four attempts is a lot for one line.** Both refutations were of the same
+kind: a claim of the form "nothing reaches X", verified by a grep whose scope was the directory the author
+was working in. Attempt 1/3's scope stopped at `sugar-crush/`; attempt 2's stopped at "the site I found"
+rather than the SHAPE. Neither was refutable by reading — one needed a full suite run, the other needed
+the seam driven in isolation three times.
+
+**Residual, deliberately not fixed.** In PRODUCTION `sugarcrush -p` still blocks forever on a held-open
+stdin with no bound. That is arguably the correct read-stdin contract, but it is unbounded, and a caller
+that leaves the pipe open hangs the CLI with no message. Deciding that is a separate question from the
+suite's hermeticity.
+
+---
+
+### Ee49-2 — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: convention accuracy. **Measured, PHP 8.3.6.**
+
+**What.** `ForkedChild`'s doc-block says every `pcntl_fork()`'d child in this codebase MUST end with
+`exitNow()` instead of a plain `exit()`, and `ForkedChildExitConventionTest` enforces that over `tests/`.
+`exitNow()` leaves through `posix_kill(getmypid(), SIGKILL)`, so the child is SIGNALLED rather than
+exited and its status carries no exit code at all.
+
+`BackgroundSessionRunner::supervise()` reads exactly that code:
+`pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0`. Measured by driving the real `run()`
+against a real unix socket: plain `exit($code)` → marker printed twice (E229), `run()` returns 0; with
+`exitNow($code)` → marker printed once, **`run()` returns 1**. The conversion would report every
+background session that succeeded as failed.
+
+**Closed at that site** by `exitWorker()`, which drops inherited output buffers and keeps the ordinary
+exit — E229's consequence removed, the code preserved. The general point is what is recorded: the
+convention as written has an unstated precondition ("the child's exit status is not read"), and the next
+site where it is read will meet the same wall.
+
+**Scope hole beside it.** `ForkedChildExitConventionTest::census()` walks `dirname(__DIR__)`, i.e.
+`tests/` only. `src/` has five `pcntl_fork()` CALL sites and they are unscanned — `EngineBackend`,
+`Chat`, `Runtime`, `AgentWorkerPool`, `BackgroundSessionRunner`, re-derived at 85a34cc1 by
+`grep -rn 'pcntl_fork()' src/` minus the `function_exists` guards, plus two more inside the daemon
+bootstrap that `BackgroundSupervisor` builds as a `php -r` string, which no scanner of `src/` would
+attribute to a file anyway; `BackgroundSessionRunner`'s was an
+un-argued bare exit for as long as it existed, and no guard could see it. Widening the census to `src/`
+needs the `ACCEPTED_BARE_EXIT` map to grow an argued row for `AgentWorkerPool` (which has one, reasoned in
+a comment) and for `exitWorker()` itself. Not done: the file is lane d's.
+
+---
+
+### Ee49-3 — the refusal classifier is duplicated in two headless callers
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: drift risk, bounded. **Recorded only.**
+
+**What.** E241 gave `BackgroundSessionRunner` a refusal observer. Its classifier — "a `ToolFinished`
+whose result `isError()` and whose text opens with a `Chat::DENIED_ERROR_PREFIXES` entry" — is twelve
+lines duplicated from `NonInteractive::refusalFrom()`, which is `private static` in another file.
+
+**Why it is bounded rather than urgent.** The ROSTER is read, not copied, so the two cannot disagree
+about what a refusal IS — which is the failure that would matter.
+`BackgroundSessionRunnerTest::testEveryPrefixInTheSharedDenialRosterIsRecordedAsARefusal()` iterates the
+so an added entry the daemon stopped recognising fails there.
+
+**Step.** Hoist it to a shared owner. Blocked this round on ownership: `NonInteractive` is lane a's,
+`Chat` is lane a's, and a new file in `src/` was outside lane e's list. Note the interaction with E239 —
+if the denial kinds move to `src/Permissions/DenialKind.php`, the new owner is probably next to them, and
+both call sites move at once.
+
+---
+
+### Ee49-4 — `ProcessUniqueTempNameTest`'s scope is `tests/`, and `src/` has five argument-less `uniqid` calls
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: latent. **Measured, PHP 8.3.6.**
+
+**The guard is right about its own scope and its own alphabet, and both were checked rather than
+assumed.** Census of every spelling across `src/` and `tests/`: `tests/` has 92 pid-prefixed entropic
+calls, 144 `uniqid('', true)`, and zero argument-less ones. Measured collision rate with eight concurrent
+processes emitting 200 values each, three takes: argument-less **282 / 437 / 353 collisions per 1600**;
+`uniqid('', true)` **0 / 0 / 0**; pid-prefixed entropic **0 / 0 / 0**. So the 144 untouched sites are not
+a hazard and the narrow alphabet is correct, not a hole.
+
+**What is outside it.** `ProcessUniqueTempNameTest::SCOPE` is `['tests']`, and `src/Workflows/WorkflowEngine.php`
+makes five argument-less calls, all building stage/task/verifier IDs. They are identifiers rather than
+paths, so no `open()` collides on them — but two concurrent engines can mint the same stage id, and
+nothing says they may not.
+
+**Step.** Decide whether the guard's scope should include `src/`, and if it should not, say so in the
+guard rather than leaving the omission to be read as an oversight. Lane d's file.
+
+---
+
+### Ee49-5 — E244's example list is wrong about one of its two examples
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: doc accuracy. **Measured.**
+
+**What E244 says.** `NonInteractiveRefusalDocumentTest::stderrWritesIn()` cannot see "a `proc_open()`
+descriptor spec — `2 => ['pipe', 'w']`, **or `2 => \STDERR` passed through to a child**".
+
+**Measured** by pushing known-answer fixtures through the live regex rather than reading it:
+`2 => ['pipe','w']` INVISIBLE · `2 => ['file', $log, 'a']` INVISIBLE · a computed `"php://" . "fd/" . "2"`
+INVISIBLE · **`2 => \STDERR` IS SEEN** (the bare token matches) · controls `fwrite(\STDERR, …)` and
+`error_log(…)` both seen. So the second of the entry's two examples is not a hole at all.
+
+**The rest of E244 stands and stays recorded-only, confirmed at this head:** `src/Runtime.php` contains
+zero `proc_open` — and zero `popen`/`shell_exec`/`passthru`/`system` — so the real hole is unreachable
+from the guarded file.
+
+---
+
+### Ee49-6 — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: latent, live-code. **Out of lane —
+`src/Agents/AgentWorkerPool.php` is lane b's file this round.** Reported, not fixed.
+
+**What.** E229 was closed at `BackgroundSessionRunner::run()`'s worker only. `AgentWorkerPool::startAgent()`
+ends its `pcntl_fork()` child with a plain `exit(0)`, and the comment above it argues that is safe —
+"the one thing that made a bare `exit()` dangerous — an inherited raw-mode `Tty`'s destructor clobbering
+the real terminal on the way out — is now fixed at the ROOT in candy-core's `PosixBackend::restore()`".
+That is the TTY consequence of E201. It is not the OUTPUT-BUFFER consequence, which is E229, which the
+comment does not mention and which a plain `exit()` still has: PHP's shutdown flushes every open `ob_*`
+level, so a child forked while the parent holds a buffer republishes the parent's buffered bytes.
+
+**Why it is latent rather than live today, measured at 85a34cc1.** `startAgent()` takes the fork arm only
+with the default `ProcessExecutor` (`$this->customExecutor` short-circuits first, and the pool's own tests
+inject mocks), so no test in this suite reaches it with `TestCase::runBare()`'s buffer open. That is a
+property of how the tests are written, not of the site.
+
+**Step.** Either route it through a buffer-dropping exit of the same shape as
+`BackgroundSessionRunner::exitWorker()` (its exit CODE is not read — `waitForCompletion()` settles on the
+reap — so `ForkedChild::exitNow()` is also available there, unlike at the runner), or extend the existing
+comment with the third consequence and why it does not apply. Do not leave the comment asserting safety on
+one of two grounds.
+
+---
+
+### Ee49-7 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half — REOPENED
+
+**Recorded 2026-08-24 by round-49 lane e (review pass); CLOSED the same round.** Severity was
+test-hermeticity. **Measured, PHP 8.3.6.**
+
+**WHAT THIS ENTRY SAID.** That `tests/bootstrap.php` cleared `O_NONBLOCK` on descriptor 0 rather than
+replacing the descriptor, because replacing it closes the `\STDIN` constant and that reddens
+`NonInteractiveStdinPinTest` — and that a non-blocking read returns what is *available* rather than
+nothing, so bytes already on the runner's stdin still reach every spawned `bin/sugarcrush -p` child and
+get prepended to its prompt. It offered two Steps and called (a) the better trade, declining it only
+because `tests/Cli/NonInteractive*Test.php` is lane a's file.
+
+**WHAT IS TRUE NOW — and this entry was closed and then REOPENED inside one round, which is the useful
+part.** Option (a) was taken: the known-positive was repointed at a fresh `php://stdin` handle and the
+repair went back to close + reopen `/dev/null`. **The first full suite run of that shape produced 107
+errors** — `SugarCraft\Mosaic\Detect` reads the `\STDIN` constant unguarded from a SIBLING library, which
+no grep of `sugar-crush/` could see (Ee49-1's attempt 3, and Ee49-13). So option (a) is not merely a
+trade, it is unavailable while any reachable library reads that constant without a guard. The repair is
+the flag again, and this residual is **live**: bytes already sitting on the runner's stdin still reach a
+spawned `bin/sugarcrush -p` child and get prepended to its prompt.
+
+**WHY IT IS SMALLER THAN IT WAS.** The reason the flag failed before — `new Tty(null, $injectedTermios)`
+clearing it via `PosixBackend::restore()` — is fixed at every site in the tree (Ee49-12), so the flag now
+holds for a whole run rather than up to the first raw-mode test. The BLOCKING half, which is the one that
+hangs a run for 60s a test with no message, is genuinely closed.
+
+**Step, revised.** Not "close the descriptor". Either (a) fix `SugarCraft\Mosaic\Detect` to guard its
+`?? STDIN` with `is_resource()` and fix the fallback it falls into (Ee49-13), then re-try the descriptor
+replacement behind a full suite run — noting that the census must then cover every reachable
+`sugarcraft/*` lib, not `sugar-crush/` — or (b) pin the residual with a test proving bytes on the runner's
+stdin reach a spawned child, so the limit is a recorded fact rather than a gap. (b) is cheap and honest;
+(a) is the only thing that actually closes it.
+
+**And the note this entry earned the first time still stands:** the reason originally given for not acting
+(file ownership) was the wrong reason to stop. A forced out-of-lane edit is reportable, not prohibited
+(rule 23) — the two edits in `tests/Support/ForkedChildTest.php` that make the flag hold are exactly that.
+
+---
+
+### Ee49-8 — "eighteen test files spawn a real `bin/sugarcrush`" is not re-derivable
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy. **Measured. Fixed this
+round** in `tests/bootstrap.php` and `tests/SuiteChildStdinIsolationTest.php`.
+
+The sentence predates round 49 in the bootstrap's `TMPDIR` write-up and was copied into two new places
+this round. Three generators over `tests/` at 85a34cc1: **41** files mention the path at all, **15** of
+those also contain a spawn primitive (`exec`/`proc_open`/`popen`/`shell_exec`/`passthru`), and **13** name
+it outside a comment or doc-block (token-accurate, `token_get_all()` on PHP 8.3.6). None is eighteen. Both
+occurrences now say what the sentence is FOR — the set is non-empty and the children are real processes,
+which is why `TMPDIR` has to be exported rather than merely resolved — with no count. Rule 18 in the
+round brief; this is the third round to produce an instance.
+
+---
+
+### Ee49-9 — `uniqid` was not the whole of E242: a FIXED shared temp path fails 2-3 runs in 6
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test-infrastructure, reproduced.
+**Out of lane — `tests/Hooks/AuditHookTest.php` and `src/Hooks/BuiltIn/AuditHook.php` belong to neither
+lane e nor any lane's list this round.** Reported, not fixed.
+
+**The brief asked whether `uniqid()` was the whole mechanism or only the part that was easy to see. It was
+the part that was easy to see.** The pre-round sweep's ALPHABET was the token `uniqid`, and an alphabet
+cannot express what it has no symbol for (rule 11): a temp path with **no entropy source at all**.
+
+**The generator.** Every line under `tests/` matching `sys_get_temp_dir()` concatenated with a literal
+`/`, minus every line that also mentions `uniqid`, `random_bytes`, `random_int`, `mt_rand`, `getmypid`,
+`tempnam`, `bin2hex`, `microtime` or `getenv`. 18 hits at 3cce483c. Its own known hole, stated because a
+guard that silently drops what it cannot parse has a hole shaped like the next defect (rule 14): it is
+LINE-based, so a concatenation whose entropy sits on the following line reads as entropy-free — four of
+the 18 are that, and were cleared by hand. Of the rest, all but one are inert data (`ToolCall` arguments,
+`Skill::$sourcePath`, doc-block prose) that never reaches `open()`.
+
+**The one that does.** `AuditHookTest::testExecuteCreatesDefaultLogFileWhenNoneProvided()` exercises
+`AuditHook`'s DEFAULT log path, which `src/Hooks/BuiltIn/AuditHook.php` builds as
+`sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name, on the machine's REAL temp directory
+(the `TMPDIR` sandbox does not move `sys_get_temp_dir()` in-process; that is the finding this entry sits
+next to). The test asserts the file exists and then **unlinks it**. Two concurrent copies therefore race:
+one deletes the file between the other's write and its `assertFileExists`.
+
+**MEASURED, PHP 8.3.6, three takes of six concurrent single-test runs**, each take pointed at its own
+private launch-environment `TMPDIR` so the probe could not disturb a sibling lane: **3 of 6, 2 of 6, 2 of
+6 failed**, every failure `Failed asserting that file ".../sugar-crush-audit.log" exists`. That is the
+same signature class E242 reported once and could not reproduce, and unlike the `TMPDIR`-key hypothesis it
+reproduces on demand.
+
+**It is also cross-process vandalism, not only self-interference.** The name is `AuditHook`'s production
+default, so the suite deletes the audit log of any real `sugarcrush` running on the same box — and of any
+sibling lane's suite.
+
+**Step.** Give the test its own `AuditHook` path derived from pid + entropy and assert the default is
+CONSTRUCTED as expected rather than written (or keep the write and use a private launch-environment
+`TMPDIR` for that one child). Then widen `ProcessUniqueTempNameTest`'s alphabet: a shared-name hazard is
+not a `uniqid` hazard, and the guard as written cannot see this one. See also Ee49-4, which found the
+scope hole; this is the alphabet hole beside it.
+
+---
+### Ee49-10 — PHPUnit includes `tests/bootstrap.php` inside a METHOD, so a bare local there is not a global
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy on a load-bearing line.
+**Measured, PHP 8.3.6, PHPUnit 10.5.64. Fixed this round** in the same commit that found it.
+
+**What.** Ee49-1's shipped repair parks its replacement `/dev/null` handle in
+`$GLOBALS['__sugarcrushSuiteStdin']`. The comment justifying that said it was belt-and-braces — "a local in
+an included file is a global already, but naming the intent stops a future tidy-up from
+garbage-collecting fd 0 back to closed". **That is false, and the line is load-bearing.**
+`PHPUnit\TextUI\Application::loadBootstrapScript()` runs `include_once $filename` from inside a private
+METHOD, so a top-level `$keep = fopen(…)` in the bootstrap is that method's local: it is freed the moment
+`loadBootstrapScript()` returns, which closes the stream and takes descriptor 0 with it.
+
+**The generator.** Two three-line bootstrap fixtures, identical but for `$GLOBALS[...]` versus a bare
+local, each `include_once`d from inside a method of a throwaway class (PHPUnit's own shape) in a child
+whose fd 0 is a pipe, then `readlink('/proc/self/fd/0')`. **Three takes each: `$GLOBALS` answers
+`/dev/null` 3/3; the bare local answers `false` — i.e. fd 0 closed — 3/3.**
+
+**Why it matters beyond the comment.** The two states are not equivalent. `/dev/null` is a descriptor a
+child can read to EOF; a closed fd 0 is a descriptor a child's first `fopen()` will silently CLAIM, so an
+unrelated file handle in a spawned binary can land on descriptor 0. The bootstrap's own prose calls a
+closed fd 0 "benign" on the strength of a timing measurement (0.105s, same as `/dev/null`); that measures
+the blocking hazard only and says nothing about descriptor reuse.
+
+**Pinned by** `tests/SuiteChildStdinIsolationTest::testTheRunnersDescriptorZeroIsDevNullAndNoStreamFlagCanUndoIt()`,
+which asserts the identity rather than the absence of a hang — so the `$GLOBALS`→local regression is a
+red test, not a silent downgrade. Confirmed by mutation this round.
+
+**WHAT IS TRUE NOW, and it does not retract the finding.** The `$GLOBALS` line is GONE, because the
+repair it belonged to is gone: closing descriptor 0 cost 107 errors (Ee49-1's attempt 3, Ee49-13) and the
+shipped repair is a flag, which needs no handle parked anywhere. **WHY THIS ENTRY STILL EARNS ITS PLACE:**
+the measurement is about PHPUnit, not about that line. Anything a future `tests/bootstrap.php` wants to
+keep alive for the length of a run — a stream, a handle, a temp directory guard object — must be parked in
+`$GLOBALS` or a static, because `Application::loadBootstrapScript()` is a METHOD and a bare local there
+dies on return. That is a fact about the host, and the next person to reach for a local in that file needs
+it.
+
+**Step.** None; recorded because the class of error is worth remembering: "an included file is at file
+scope" is an assumption about a HOST, and the host here is a method.
+
+---
+
+### Ee49-11 — the daemon's refusal classifier reads `Chat::DENIED_ERROR_PREFIXES`, which E239 is moving
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: merge-time coordination. **Inherited
+dependency, not a defect.**
+
+**What.** E241's `BackgroundSessionRunner::noticeRefusal()` reads the roster from
+`Chat::DENIED_ERROR_PREFIXES` rather than spelling any prefix literally — deliberately, so the daemon
+cannot drift from the `-p` path or the TUI on what a refusal IS, and so
+`tests/DenialPrefixRosterTest::testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()` keeps covering it.
+Round 49's lane a is moving the denial kinds to `src/Permissions/DenialKind.php` (E239). If that move
+relocates or renames the constant, `src/Sessions/BackgroundSessionRunner.php` and
+`tests/Sessions/BackgroundSessionRunnerTest.php` both need the new symbol — two `use` lines and the
+`foreach` subject, no logic.
+
+**Why it was left as a dependency rather than pre-empted.** Guessing at the destination symbol would hard
+-code a name that does not exist yet, which is worse than a mechanical rename at merge. Nothing here
+duplicates a prefix string, so there is no correctness risk in either ordering — only a compile-time one,
+which is loud.
+
+**Step.** At merge, if `Chat::DENIED_ERROR_PREFIXES` has moved, repoint the two files above at wherever it
+went. Do NOT copy the literals.
+
+---
+### Ee49-12 — `new Tty(null, $injectedTermios)` writes O_NONBLOCK onto the RUNNER's descriptor 0
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test cross-contamination, live.
+**Measured, PHP 8.3.6, three takes.** One of the sites fixed this round; the rest are out of lane.
+
+**What.** `SugarCraft\Core\Util\Tty::__construct()` is `self::backend($stream ?? STDIN, $termios)`, so a
+`null` first argument wraps the calling process's descriptor 0. With an injected `Termios`,
+`PosixBackend::enableRawMode()` takes the branch that SKIPS its own `isTty()` guard, and then runs
+`@stream_set_blocking($this->stream, false)`; `restore()` runs the matching `(…, true)`. Both therefore
+land on the runner's fd 0 — for a test whose entire intent is to drive a PTY it opened itself.
+
+**The generator, not a count** (rule 18): `grep -rn 'new Tty(' src/ tests/ bin/` under `sugar-crush/`;
+every hit whose first argument is `null` is an instance. At `5c5501f1` that is
+`tests/Backend/EngineBackendTest.php` (FIXED this round) and `tests/Support/ForkedChildTest.php` twice
+(lane d's file — not touched). `src/Tui/Renderer.php` passes `STDOUT` explicitly and is not an instance.
+
+**Measured.** A child whose fd 0 is an open pipe, three takes each: with `new Tty(null, new
+PosixTermios($slaveFd))`, fd 0's `blocked` flag goes `true` → `false` across `enableRawMode()` (3/3); with
+an explicit `stream_socket_pair()` end instead, fd 0's flag never moves and the PAIR's flag moves instead
+(3/3).
+
+**Why it matters beyond tidiness.** This is what refuted attempt 2 of Ee49-1: an `O_NONBLOCK` repair on
+descriptor 0 in `tests/bootstrap.php` is silently undone by `restore()` at any of these sites, which makes
+any guard written against that flag ORDER-DEPENDENT. The `ForkedChildTest` instances are worse than the
+one that was fixed: they `pcntl_fork()` while holding the `Tty`, so the child inherits it too.
+
+**Fixed at one site, and pinned there.** `EngineBackendTest::testCompleteAsyncDoesNotResetTheRealTerminals
+RawMode()` now passes one end of a `stream_socket_pair()` and asserts the flag moves on THAT stream in
+both directions — so a revert to `null` is red, not merely unnoticed. A socket pair rather than
+`php://memory` is forced: PHP reports a memory stream as blocked whatever is set on it, so it cannot
+distinguish "the seam wrote here" from "the seam wrote elsewhere".
+
+**DONE, all sites, later the same round — and it stopped being optional.** The shipped descriptor-0
+repair in `tests/bootstrap.php` IS the `O_NONBLOCK` flag (Ee49-1 attempt 4), so `restore()` at any of
+these sites was silently undoing it for every later test in the run. `tests/Support/ForkedChildTest.php`
+belongs to lane d this round and `tests/ChatTest.php` to no lane at all; all three constructions were
+changed anyway, because the alternative was shipping a repair that stops working at the first raw-mode
+test. **FORCED OUT-OF-LANE EDITS, named at the top of lane e's report (rule 23).** Each now asserts the
+flag in both directions, so a revert is red where it happens.
+
+**AND THE COUNT IN THE PARAGRAPH ABOVE WAS WRONG WHEN IT WAS WRITTEN.** WHAT THIS ENTRY SAID: that the
+instances were `tests/Backend/EngineBackendTest.php` and `tests/Support/ForkedChildTest.php` twice, "at
+`5c5501f1`", derived from `grep -rn 'new Tty(' src/ tests/ bin/`. WHAT IS TRUE: there was a FOURTH, in
+`tests/ChatTest.php`, spelled `new \SugarCraft\Core\Util\Tty(null, …)` — **fully qualified, which that
+grep cannot express** (Ee49-14). It was found by the full suite going red at
+`SuiteChildStdinIsolationTest`'s flag guard with the other three already fixed. WHY THE PARAGRAPH STILL
+EARNS ITS PLACE: the generator it names is still the right *idea* and the wrong *instrument*, and that
+distinction is the finding.
+
+**The census is now a test, not a grep.** `tests/TtyStreamArgumentCensusTest.php` walks the token stream,
+so no spelling can hide a site; classifies each construction's first argument; fails on an argument list it
+cannot read to its close (rule 14); and carries thirteen known-answer fixtures including both spellings, so
+an empty result is evidence rather than the silence of a dead scanner (rule 15). Its one honest residual is
+stated in its own doc-block: an expression first argument (`$stream`) is not provably non-null by any
+scanner that does not run the code, and a bare CONSTANT could be defined as null — so the set of constant
+names is asserted rather than their shape.
+
+**Step.** Consider whether candy-core's `Tty` should refuse `null` when an injected `Termios` is supplied
+at all — the combination means "drive this fd" and "wrap that stream", and there is no caller for which the
+process's own descriptor 0 is the right answer to both.
+
+---
+### Ee49-13 — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: live crash on a reachable path.
+**Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.**
+
+**What.** `candy-mosaic/src/Mosaic.php`'s `autoFromPalette()` — the fallback taken when `Detect::probe()`
+throws, i.e. whenever there is no usable TTY to probe — evaluates
+`$report->has(PaletteCapability::Iterm2Image)`. **There is no such case.**
+`candy-palette/src/Probe/Capability.php` spells it `ITerm2 = 'iterm2'`. The line is a fatal
+`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`, not a false.
+
+**Why nobody has hit it.** `Mosaic::auto()` wraps the probe in a try/catch and only reaches
+`autoFromPalette()` when the probe throws — and the probe's own stdin read normally succeeds (returning
+nothing) rather than throwing. It took a `\STDIN` that was a CLOSED resource to make the probe throw:
+`Detect::stdinFd()` is `self::$probeStdin ?? STDIN` and `drainStdin()` gets it with no `is_resource()`
+guard.
+
+**How it was found, and the generator.** Round 49 lane e's attempt to replace the suite's descriptor 0
+with `/dev/null` closes the `\STDIN` constant. **Full suite, PHP 8.3.6: `9500 tests, 107 errors, rc 2`,
+every error that undefined constant**, reached through
+`Mosaic.php:166 ← Mosaic.php:122 ← sugar-crush/src/ToolResult.php:280 ← :294 ← src/Cli/Bootstrap.php:1003`.
+To reproduce without that change: `fclose(\STDIN)` before anything calls `Mosaic::auto()`.
+
+**Two defects, not one.**
+ 1. `autoFromPalette()` cannot run at all — it references a nonexistent enum case. Anything reaching that
+    fallback in production (a `sugarcrush` invoked with a closed or unusable fd 0, which is an ordinary
+    thing for a daemon or a hook) gets a fatal instead of a HalfBlock renderer.
+ 2. `Detect::stdinFd()` hands an unguarded `?? STDIN` to stream functions. A closed descriptor 0 is a
+    legitimate state for a process to be in; it should degrade, not throw.
+
+**Step.** Fix the case name in `candy-mosaic` (`ITerm2`, and check the rest of that method against the
+enum the same way — one wrong name means nobody has executed the method). Guard `Detect::stdinFd()`'s
+consumers with `is_resource()`. Neither is a sugar-crush change; both are worth a PR of their own, and (1)
+should carry a test that drives `autoFromPalette()` directly rather than through a thrown probe, since
+the throw is what made it unreachable for so long.
+
+---
+### Ee49-14 — a `grep` for `new Tty(` cannot see `new \Fully\Qualified\Tty(`, and it cost a full suite run
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: methodology, with a measured cost.
+**Fixed this round** by replacing the generator with a token-based census test.
+
+**What happened, in order.** (1) Ee49-12's hazardous shape — `new Tty(null, $injectedTermios)` writing
+`O_NONBLOCK` onto the runner's descriptor 0 — was censused with `grep -rn 'new Tty(' src/ tests/ bin/`,
+which found three sites. (2) All three were fixed and the count was written into two doc-blocks and a
+backlog entry. (3) The full suite went RED at `SuiteChildStdinIsolationTest`'s flag guard. (4) The fourth
+site is `tests/ChatTest.php`, written `new \SugarCraft\Core\Util\Tty(null, new \SugarCraft\Pty\Posix\PosixTermios($fd))`.
+**A grep for `new Tty(` is an alphabet that cannot express a fully-qualified constructor call.**
+
+**And the widened grep written to check it had the same hole**, which is the part worth writing down.
+The follow-up was `grep -rnE 'new\s+(\\?[A-Za-z_][A-Za-z0-9_]*\\)*Tty\s*\('` typed inside single quotes,
+where `\\` reaches the regex engine as a literal backslash pair rather than "an optional backslash" — so
+it silently missed the same line, and its output looked like a clean confirmation. **A harness written to
+check a claim can carry the defect the claim is about**, and the only thing that caught it was pushing a
+known-answer fixture (a fully-qualified call) through the generator before trusting it on the tree.
+
+**The working generator, for the record:**
+`grep -rn 'Tty(' src/ tests/ bin/ | grep -vE ':[[:space:]]*(\*|//)' | grep 'new '` — matching the SHORT
+name only, then filtering, rather than trying to spell the qualification in the pattern.
+
+**Why the fix is a test and not a better grep.** Any pattern over source text gets the two polarities
+wrong in both directions: it misses a spelling it did not anticipate, and it matches the same words inside
+a comment or a string — this very entry, and the doc-blocks describing the shape, contain the literal
+`new Tty(null, $injectedTermios)` as prose. `tests/TtyStreamArgumentCensusTest.php` uses `token_get_all()`,
+where `T_NEW` cannot occur in a comment or a string and the class name arrives already assembled however
+it was spelled.
+
+**Step.** None outstanding. Recorded because the pattern recurs: round 43's fuzz alphabet, round 44's
+`grep -c` on control bytes, round 48's unexecuted scanner, and this. **The common shape is a census
+believed on the strength of its output rather than on the strength of a known-answer control.**
+
+---

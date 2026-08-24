@@ -343,10 +343,43 @@ final class EngineBackendTest extends TestCase
         // resolution, which only coincides with the real OS fd for a
         // process's original STDIN/STDOUT (irrelevant to production, which
         // only ever wraps the real STDIN).
-        $tty = new Tty(null, new PosixTermios($slaveFd));
+        //
+        // THE STREAM ARGUMENT IS EXPLICIT, AND USED TO BE `null` (round 49).
+        // WHAT THAT DID: `Tty::__construct()` is `self::backend($stream ??
+        // STDIN, $termios)`, so `null` here wrapped THIS PROCESS's descriptor
+        // 0 - and the injected-Termios branch of
+        // `PosixBackend::enableRawMode()` skips its own `isTty()` guard, so
+        // its trailing `@stream_set_blocking($this->stream, false)` and
+        // `restore()`'s matching `(…, true)` both landed on the runner's fd 0.
+        // MEASURED, PHP 8.3.6, three takes: with `null`, fd 0's `blocked` flag
+        // goes true -> false across this seam (3/3); with an explicit stream it
+        // stays true (3/3). That side effect is not cosmetic: the descriptor-0
+        // repair in `tests/bootstrap.php` IS an `O_NONBLOCK` flag on fd 0, and
+        // `restore()` here was clearing it back for every later test in the
+        // run. See that file's write-up; it cost a full run to find.
+        //
+        // A SOCKET PAIR rather than `php://memory`, and that is forced: PHP
+        // reports a memory stream as blocked whatever you set, so it cannot
+        // tell "the seam wrote the flag here" from "the seam wrote it
+        // somewhere else". The pair's flag is observable in both directions -
+        // asserted below in both, which is what makes a revert to `null` red
+        // rather than merely undetected.
+        $flagSink = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        $this->assertIsArray($flagSink, 'no socket pair: this test cannot observe where the seam writes');
+        $this->assertTrue(
+            stream_get_meta_data($flagSink[0])['blocked'],
+            'control: a stream nobody has touched must report blocked, or the probe below reads nothing',
+        );
+
+        $tty = new Tty($flagSink[0], new PosixTermios($slaveFd));
         $tty->enableRawMode();
 
         try {
+            $this->assertFalse(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                "enableRawMode() did not clear O_NONBLOCK on the stream it was GIVEN, so it wrote the flag "
+                    . "somewhere else - on a null stream that somewhere else is the runner's descriptor 0",
+            );
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before completing');
 
             $backend = EngineBackend::new(new EchoProvider(), 'echo');
@@ -359,6 +392,12 @@ final class EngineBackendTest extends TestCase
             );
         } finally {
             $tty->restore();
+            $this->assertTrue(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                'restore() did not put O_NONBLOCK back on the stream it was given',
+            );
+            fclose($flagSink[0]);
+            fclose($flagSink[1]);
             $libc->close($slaveFd);
             $pair->master()->close();
         }
