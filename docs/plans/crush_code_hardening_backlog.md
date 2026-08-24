@@ -13186,3 +13186,71 @@ four files in this package now share these helpers. Extraction would land them i
 round 53 assigns to another lane, so it is deferred rather than declined.
 
 ---
+
+### Eb53-5 — `MCP/StdioMcpServer` has the identical undrained-stderr wedge, and is OUT OF LANE
+
+**Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: functional, latent. **Reported, deliberately not fixed — the file belongs to another lane.**
+
+`StdioMcpServer::start()` opens fd 2 as `['pipe', 'w']`, sets only fd 1 non-blocking, and **never reads
+fd 2** (`grep -c 'pipes\[2\]'` → 0 on this file). That is byte-for-byte the shape round 53 fixed in three
+sibling classes. A pipe whose reader never reads holds one kernel buffer, after which the child blocks in
+`write(2)`: an MCP server that logs to stderr — the conventional place for a **stdio**-transport server to
+log, since stdout is the protocol — stops answering and cannot exit.
+
+**Generator, so this needs no re-investigation.** PHP 8.3.6, Linux 6.8, 64 KiB pipe buffer. Three-pipe
+descriptor spec identical to the class's own, fd 1 non-blocking, fd 2 never read, 5.0 s deadline / 5 ms
+poll; child writes N bytes to stderr and then a framed reply to stdout. Three consecutive takes,
+identical every time:
+
+| stderr bytes | reply arrived | elapsed |
+|---|---|---|
+| 1 000 | yes | 0.04 s |
+| 60 000 | yes | 0.04 s |
+| 100 000 | **no** | 5.00 s (deadline) |
+
+**The symptom is not a hang on the reading side, which is how this survived three reviews.** Every read
+path is deadline-bounded, so the CALLER returns on time with nothing while the SERVER is permanently
+stuck, and `isConnected()` goes on answering true.
+
+**Acceptance for whoever takes it:** mirror `LspConnection::drainStderr()` — `stream_set_blocking($pipes[2],
+false)` at start, a bounded drain called before each stdout read and once before teardown, a tail capped at
+one pipe buffer. Guard the read with `is_resource()`, **not** `@`: `fread()` on a closed pipe raises a
+TypeError, which `@` does not suppress (this bit the LSP fix, surfaced by `testProcessDiesMidRead`). Pin it
+with a two-row test — a quiet control under one buffer and a loud row over it — asserting **that the reply
+arrived**, never that the call was quick; a timing bound is satisfied by the broken version.
+
+---
+
+### Eb53-6 — `McpMessage::parse()` raises a TypeError on a JSON-RPC reply whose `result` is not an object
+
+**Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: robustness. **Found incidentally; `src/McpMessage.php` is out of lane.**
+
+`McpMessage::__construct()` types `$result` as `?array`, and `parse()` passes `$decoded['result']` straight
+through with no shape check. A server answering `{"jsonrpc":"2.0","id":"1","result":"ok"}` — legal JSON-RPC
+2.0, where `result` is any value — therefore raises
+`TypeError: McpMessage::__construct(): Argument #4 ($result) must be of type ?array, string given`.
+
+Observed while building a fixture for Eb53-5's sibling fix: the fixture answered with a string `result` and
+the client threw. Every other malformed input `parse()` meets is answered with `null`; this one is an
+uncaught throw out of `readMessages()`, i.e. a third-party MCP server can crash the client with a
+well-formed reply.
+
+**Acceptance:** widen the parameter to `mixed` (and the `?array` PHPDoc with it) or coerce a non-array
+`result` the way the other fields are coerced, then pin with a parse test per JSON-RPC scalar type —
+string, int, bool, null — plus the array case as the known-positive control.
+
+---
+
+### Eb53-7 — `BackgroundSupervisorReapTest` moves the suite's skip count off 1 on any non-Linux runner
+
+**Recorded 2026-08-24, round 53 lane b (fix stage).** Severity: CI hygiene. **Not a defect today; filed so a future runner change does not read as a regression.**
+
+The round's standing invariant is "the suite's skip count is exactly 1". `BackgroundSupervisorReapTest`
+adds capability gates — `requireProcTools()` needs `proc_open`, `posix_kill` and a `/proc`, and three tests
+additionally need `pcntl_fork`, `posix_setsid` and `stream_socket_server`. These are **capability** skips,
+not the timing-dependent kind the round forbids, and they are correct usage. But they read `/proc`, so on a
+macOS or Windows runner the count moves from 1 to several and any check pinned to the literal 1 reds for a
+reason that is not a defect.
+
+No action while `sugar-crush` is Linux-only in CI. **Trigger:** if `sugar-crush` is ever added to
+`MACOS_LIBS` or `WINDOWS_LIBS` in `ci.yml`, the skip-count invariant must be expressed per-platform first.
