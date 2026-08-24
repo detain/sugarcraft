@@ -8592,3 +8592,132 @@ has no generator to catch it.
 
 ---
 
+
+### Ee49-1 — E242's slowdown is a held-open descriptor 0 reaching spawned binaries, not concurrency
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: test-infrastructure. **Measured, PHP 8.3.6. Fixed
+this round** in `tests/bootstrap.php`, pinned by `tests/SuiteChildStdinIsolationTest.php`.
+
+**What E242 said.** A lane's suite went from 4m 26s to "roughly 160 tests per ten minutes" while a
+sibling suite ran; on a 48-core box at load 6, "not CPU-bound — that points at wall-clock waits rather
+than scheduling", with the shared uid-keyed `TMPDIR` named as the most obvious candidate.
+
+**The diagnosis of the symptom was right and the candidate was wrong.** It is wall-clock waits. They come
+from descriptor 0. `bin/sugarcrush -p "hi"` with a sandbox HOME, timing only the fd-0 shape:
+`/dev/null` 0.110s · closed 0.105s · **open, never-written pipe: blocks, SIGKILLed at 25s.** With a writer
+that sends one line after four seconds and then closes, the run ends at 4.1s and those bytes are
+PREPENDED TO THE PROMPT. The block is `stream_get_contents()` inside
+`NonInteractive::readStdinIfPiped()`, placed there by the child's own output: the two `Bootstrap` notices
+that immediately precede that call are printed and nothing after it is.
+
+**Why nobody could see it.** `phpunit.xml` sets `enforceTimeLimit="true" defaultTimeLimit="60"`, so each
+such test is reported RISKY — "aborted after 60 seconds", "did not perform any assertions" — naming
+nothing. Observed here: `BootstrapSkillSkipsTest`'s two `-p` cases, 0.4s for the whole file when run
+alone AND 0.55s each with five copies concurrent, were both aborted at 60s in a full run whose runner had
+its stdin held open by a supervising process. **It reproduces with one process on an idle box.** The
+variable is the fd 0 the runner was started with, which is a property of the harness, not of the tree —
+which is exactly why it looked like it correlated with a sibling lane.
+
+**Relation to E212.** This is E212's other half. That entry closed the runner's own read and said in terms
+that the pin does not reach `src/` or `bin/`; `exec()`/`proc_open()` hand a child THIS process's fd 0, and
+eighteen test files spawn the real binary.
+
+**Fix.** The bootstrap closes fd 0 and reopens `/dev/null` onto it — only when fd 0 is not a tty, only
+after checking `/dev/null` is readable. If the reopen misses, children inherit a closed fd 0, measured as
+equally fine. Cost: the `\STDIN` constant is a closed resource for the rest of the run
+(`stream_isatty(\STDIN)` fatals). Nothing reaches it today, and the write-up in `tests/bootstrap.php`
+argues the fatal is the right failure.
+
+**Residual, deliberately not fixed.** In PRODUCTION `sugarcrush -p` still blocks forever on a held-open
+stdin with no bound. That is arguably the correct read-stdin contract, but it is unbounded, and a caller
+that leaves the pipe open hangs the CLI with no message. Deciding that is a separate question from the
+suite's hermeticity.
+
+---
+
+### Ee49-2 — `ForkedChild::exitNow()` is unusable where the child's exit CODE is the protocol
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: convention accuracy. **Measured, PHP 8.3.6.**
+
+**What.** `ForkedChild`'s doc-block says every `pcntl_fork()`'d child in this codebase MUST end with
+`exitNow()` instead of a plain `exit()`, and `ForkedChildExitConventionTest` enforces that over `tests/`.
+`exitNow()` leaves through `posix_kill(getmypid(), SIGKILL)`, so the child is SIGNALLED rather than
+exited and its status carries no exit code at all.
+
+`BackgroundSessionRunner::supervise()` reads exactly that code:
+`pcntl_wifexited($status) && pcntl_wexitstatus($status) === 0`. Measured by driving the real `run()`
+against a real unix socket: plain `exit($code)` → marker printed twice (E229), `run()` returns 0; with
+`exitNow($code)` → marker printed once, **`run()` returns 1**. The conversion would report every
+background session that succeeded as failed.
+
+**Closed at that site** by `exitWorker()`, which drops inherited output buffers and keeps the ordinary
+exit — E229's consequence removed, the code preserved. The general point is what is recorded: the
+convention as written has an unstated precondition ("the child's exit status is not read"), and the next
+site where it is read will meet the same wall.
+
+**Scope hole beside it.** `ForkedChildExitConventionTest::census()` walks `dirname(__DIR__)`, i.e.
+`tests/` only. `src/` has five fork sites and they are unscanned; `BackgroundSessionRunner`'s was an
+un-argued bare exit for as long as it existed, and no guard could see it. Widening the census to `src/`
+needs the `ACCEPTED_BARE_EXIT` map to grow an argued row for `AgentWorkerPool` (which has one, reasoned in
+a comment) and for `exitWorker()` itself. Not done: the file is lane d's.
+
+---
+
+### Ee49-3 — the refusal classifier is duplicated in two headless callers
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: drift risk, bounded. **Recorded only.**
+
+**What.** E241 gave `BackgroundSessionRunner` a refusal observer. Its classifier — "a `ToolFinished`
+whose result `isError()` and whose text opens with a `Chat::DENIED_ERROR_PREFIXES` entry" — is twelve
+lines duplicated from `NonInteractive::refusalFrom()`, which is `private static` in another file.
+
+**Why it is bounded rather than urgent.** The ROSTER is read, not copied, so the two cannot disagree
+about what a refusal IS — which is the failure that would matter.
+`BackgroundSessionRunnerTest::testEveryPrefixInTheSharedDenialRosterIsRecognised()` iterates the roster,
+so an added entry the daemon stopped recognising fails there.
+
+**Step.** Hoist it to a shared owner. Blocked this round on ownership: `NonInteractive` is lane a's,
+`Chat` is lane a's, and a new file in `src/` was outside lane e's list. Note the interaction with E239 —
+if the denial kinds move to `src/Permissions/DenialKind.php`, the new owner is probably next to them, and
+both call sites move at once.
+
+---
+
+### Ee49-4 — `ProcessUniqueTempNameTest`'s scope is `tests/`, and `src/` has five argument-less `uniqid` calls
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: latent. **Measured, PHP 8.3.6.**
+
+**The guard is right about its own scope and its own alphabet, and both were checked rather than
+assumed.** Census of every spelling across `src/` and `tests/`: `tests/` has 92 pid-prefixed entropic
+calls, 144 `uniqid('', true)`, and zero argument-less ones. Measured collision rate with eight concurrent
+processes emitting 200 values each, three takes: argument-less **282 / 437 / 353 collisions per 1600**;
+`uniqid('', true)` **0 / 0 / 0**; pid-prefixed entropic **0 / 0 / 0**. So the 144 untouched sites are not
+a hazard and the narrow alphabet is correct, not a hole.
+
+**What is outside it.** `ProcessUniqueTempNameTest::SCOPE` is `['tests']`, and `src/Workflows/WorkflowEngine.php`
+makes five argument-less calls, all building stage/task/verifier IDs. They are identifiers rather than
+paths, so no `open()` collides on them — but two concurrent engines can mint the same stage id, and
+nothing says they may not.
+
+**Step.** Decide whether the guard's scope should include `src/`, and if it should not, say so in the
+guard rather than leaving the omission to be read as an oversight. Lane d's file.
+
+---
+
+### Ee49-5 — E244's example list is wrong about one of its two examples
+
+**Recorded 2026-08-24 by round-49 lane e.** Severity: doc accuracy. **Measured.**
+
+**What E244 says.** `NonInteractiveRefusalDocumentTest::stderrWritesIn()` cannot see "a `proc_open()`
+descriptor spec — `2 => ['pipe', 'w']`, **or `2 => \STDERR` passed through to a child**".
+
+**Measured** by pushing known-answer fixtures through the live regex rather than reading it:
+`2 => ['pipe','w']` INVISIBLE · `2 => ['file', $log, 'a']` INVISIBLE · a computed `"php://" . "fd/" . "2"`
+INVISIBLE · **`2 => \STDERR` IS SEEN** (the bare token matches) · controls `fwrite(\STDERR, …)` and
+`error_log(…)` both seen. So the second of the entry's two examples is not a hole at all.
+
+**The rest of E244 stands and stays recorded-only, confirmed at this head:** `src/Runtime.php` contains
+zero `proc_open` — and zero `popen`/`shell_exec`/`passthru`/`system` — so the real hole is unreachable
+from the guarded file.
+
+---
