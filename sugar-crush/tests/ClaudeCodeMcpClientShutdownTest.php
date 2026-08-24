@@ -48,6 +48,19 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      */
     private const BOUND_SECONDS = 4.0;
 
+    /**
+     * Under one pipe buffer (64 KiB on this host). The CONTROL volume: a server
+     * writing this much is heard whether or not fd 2 is drained.
+     */
+    private const QUIET_STDERR_BYTES = 1000;
+
+    /**
+     * Over one pipe buffer, with margin. MEASURED on this host: 60000 bytes of
+     * undrained stderr still lets the reply through in 0.04s, 100000 never
+     * does — so the boundary is between them and this sits clear of it.
+     */
+    private const FLOODING_STDERR_BYTES = 200000;
+
     private string $tempDir = '';
 
     /** @var list<int> pids a fixture reported for itself, killed on the way out */
@@ -210,6 +223,128 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      * simply END — which looks exactly like a well-behaved exit and would make
      * this fixture silently useless in the other direction.
      */
+    /**
+     * A SERVER THAT LOGS MORE THAN ONE PIPE BUFFER IS STILL HEARD.
+     *
+     * {@see ClaudeCodeMcpClient::connect()} gives the child fd 2 as a
+     * `['pipe','w']` and nothing here read it. A pipe nobody reads holds one
+     * kernel buffer and then blocks the WRITER in `write(2)`, so a server that
+     * logged enough never wrote its next JSON-RPC line and could not exit.
+     * stderr is the CONVENTIONAL place for a stdio-transport MCP server to log,
+     * because stdout is the protocol — this is the ordinary case.
+     *
+     * ⚠️ THE SYMPTOM IS NOT A HANG. {@see ClaudeCodeMcpClient::readMessages()}
+     * returns what it has and moves on, so the caller gets an empty list ON
+     * TIME while the server is stuck forever and `isConnected()` still answers
+     * true. So this asserts a MESSAGE ARRIVED, never that a call was quick — a
+     * timing bound is satisfied by the broken version.
+     *
+     * THE QUIET ROW IS THE CONTROL (rule 15): it passes with or without the
+     * drain, and exists so a red on the loud row is unambiguously about VOLUME
+     * rather than about the fixture, the framing or the request id. Both rows
+     * red means the defect is in this test.
+     */
+    public function testAServerThatFloodsStderrIsStillHeard(): void
+    {
+        $this->assertSame(
+            ['served' => true],
+            $this->replyOverNoisyServer(self::QUIET_STDERR_BYTES),
+            'the CONTROL row failed, so this test is not measuring what it claims: a server '
+            . 'writing well under one pipe buffer must be heard whether or not fd 2 is drained'
+        );
+
+        $this->assertSame(
+            ['served' => true],
+            $this->replyOverNoisyServer(self::FLOODING_STDERR_BYTES),
+            'a server that wrote ' . self::FLOODING_STDERR_BYTES . ' bytes to stderr was never '
+            . 'heard from. fd 2 is an undrained pipe, so it is wedged in write(2) — note the '
+            . 'call itself returned on time, which is why a timing bound would not catch this'
+        );
+    }
+
+    /**
+     * The flooding server's stderr is RETAINED and BOUNDED.
+     *
+     * Separate from the test above because they fail independently, and the
+     * difference matters: draining to nowhere would satisfy liveness while
+     * discarding the only diagnostic a wedged MCP server produces. This is also
+     * the positive component that stops {@see ClaudeCodeMcpClient::stderrTail()}
+     * being pinned only by an empty string.
+     */
+    public function testTheFloodingServersStderrIsRetainedUpToOneBufferAndNoMore(): void
+    {
+        $client = $this->connectedClientOverNoisy(self::FLOODING_STDERR_BYTES);
+
+        try {
+            $client->readMessages();
+            $tail = $client->stderrTail();
+
+            $this->assertNotSame(
+                '',
+                $tail,
+                'nothing was retained, so fd 2 is being discarded rather than read — the server '
+                . 'stays alive but its only diagnostic is gone'
+            );
+            $this->assertSame(
+                str_repeat('E', strlen($tail)),
+                $tail,
+                'the retained stderr is not what the fixture wrote'
+            );
+            $this->assertLessThanOrEqual(
+                65536,
+                strlen($tail),
+                'the retained stderr is unbounded; a server in a warning loop would then be an '
+                . 'unbounded allocation in a long-lived TUI'
+            );
+        } finally {
+            $client->disconnect();
+        }
+    }
+
+    /**
+     * The `result` of the first reply a noisy server sends, or null if it never
+     * sent one within the fixture's own lifetime.
+     *
+     * The fixture answers with an ARRAY result rather than a scalar because
+     * {@see \SugarCraft\Crush\McpMessage} types `$result` as `?array` and
+     * raises a TypeError on anything else — which is a real robustness gap
+     * against a real server, recorded separately, and not what this test is
+     * about.
+     */
+    private function replyOverNoisyServer(int $stderrBytes): mixed
+    {
+        $client = $this->connectedClientOverNoisy($stderrBytes);
+
+        try {
+            // `callTool()` does its own bounded polling and THROWS when the
+            // reply never comes, which is exactly the wedged case. Translated
+            // to null here so the caller's assertion message is the one the
+            // reader sees, rather than a bare RuntimeException.
+            return $client->callTool('anything')->result;
+        } catch (\RuntimeException) {
+            return null;
+        } finally {
+            $client->disconnect();
+        }
+    }
+
+    private function connectedClientOverNoisy(int $stderrBytes): ClaudeCodeMcpClient
+    {
+        $script = $this->tempDir . '/noisy.php';
+        file_put_contents($script, self::NOISY_STDERR_SERVER);
+        @unlink($this->pidFile());
+
+        $client = new ClaudeCodeMcpClient(
+            PHP_BINARY,
+            [$script, $this->pidFile(), (string) $stderrBytes]
+        );
+        $client->connect();
+        $this->assertTrue($client->isConnected(), 'the noisy fixture server must have started');
+        $this->selfReportedPid();
+
+        return $client;
+    }
+
     private const STUBBORN_SERVER = <<<'PHP'
         <?php
         pcntl_async_signals(true);
@@ -225,6 +360,38 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      * The same, but with SIGTERM left at its DEFAULT disposition — the control
      * that keeps the bound above from being satisfied by a short budget.
      */
+    /**
+     * Speaks the protocol, but writes `$argv[2]` bytes to fd 2 first.
+     *
+     * THE PID FILE IS WRITTEN BEFORE THE STORM, deliberately: if the child
+     * wedged before reporting itself the red would land in
+     * {@see selfReportedPid()} as "never reported its pid", pointing at the
+     * handshake rather than at the pipe.
+     */
+    private const NOISY_STDERR_SERVER = <<<'PHP'
+        <?php
+        file_put_contents($argv[1], (string) getmypid());
+        fwrite(STDERR, str_repeat('E', (int) $argv[2]));
+        $deadline = microtime(true) + 20.0;
+        while (microtime(true) < $deadline) {
+            $line = fgets(STDIN);
+            if ($line === false) {
+                usleep(20000);
+                continue;
+            }
+            $message = json_decode(trim($line), true);
+            if (!is_array($message)) {
+                continue;
+            }
+            echo json_encode([
+                'jsonrpc' => '2.0',
+                'id' => $message['id'] ?? 0,
+                'result' => ['served' => true],
+            ]), "\n";
+            flush();
+        }
+        PHP;
+
     private const WELL_BEHAVED_SERVER = <<<'PHP'
         <?php
         file_put_contents($argv[1], (string) getmypid());

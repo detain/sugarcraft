@@ -64,6 +64,23 @@ final class ClaudeCodeMcpClient
 {
     private const READ_CHUNK_SIZE = 8192;
 
+    /**
+     * How much of the server's stderr is kept for diagnostics.
+     *
+     * 64 KiB is one pipe buffer on this host, which is the natural unit: it is
+     * exactly the point at which an undrained fd 2 stops the child dead. See
+     * {@see drainStderr()}.
+     */
+    private const MAX_STDERR_BYTES = 65536;
+
+    /**
+     * The TAIL of whatever the MCP server has written to stderr, bounded.
+     *
+     * The tail rather than the head because this text answers "why did it stop
+     * talking", and the reason a process gives is the last thing it says.
+     */
+    private string $stderrTail = '';
+
     /** @param array<string, mixed>|null $initialOptions */
     public function __construct(
         public readonly ?string $command = null,
@@ -120,6 +137,10 @@ final class ClaudeCodeMcpClient
         // Set non-blocking mode on stdout so we can read without blocking the TUI
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[0], false);
+        // AND fd 2, which is DRAINED in readMessages() — see drainStderr().
+        // It was opened as a pipe and never read, and a pipe nobody reads
+        // blocks the writer at one buffer.
+        stream_set_blocking($pipes[2], false);
 
         // Send initialize handshake notification
         /** @var array<string, mixed> $handshakeOptions */
@@ -239,6 +260,11 @@ final class ClaudeCodeMcpClient
         $messages = [];
         $buffer = '';
 
+        // BEFORE stdout. A child blocked writing to a full stderr pipe has not
+        // written its next stdout byte either, so draining fd 2 first is what
+        // makes the loop below able to make progress at all.
+        $this->drainStderr();
+
         // Read available bytes from stdout
         while (true) {
             $chunk = fread($pipes[1], self::READ_CHUNK_SIZE);
@@ -307,6 +333,13 @@ final class ClaudeCodeMcpClient
             return;
         }
 
+        // ONE LAST DRAIN, BEFORE THE PIPES GO. A child blocked in write(2) on a
+        // full stderr pipe cannot run its own SIGTERM handler, so it would take
+        // the ladder's escalation to signal 9 every time. Emptying fd 2 first
+        // gives it the chance to exit on the polite signal, and leaves
+        // {@see stderrTail()} holding whatever it said on the way out.
+        $this->drainStderr();
+
         if ($this->pipes !== null) {
             foreach ($this->pipes as $pipe) {
                 if (is_resource($pipe)) {
@@ -330,6 +363,59 @@ final class ClaudeCodeMcpClient
     public function __destruct()
     {
         $this->disconnect();
+    }
+
+    /**
+     * Take whatever the server has written to stderr and keep the tail.
+     *
+     * ⚠️ THIS IS NOT DIAGNOSTICS PLUMBING; IT IS WHAT STOPS THE SERVER WEDGING.
+     * {@see connect()} gives the child fd 2 as a `['pipe', 'w']` and nothing in
+     * this class ever read it. A pipe whose reader never reads holds at most
+     * one kernel buffer, after which the WRITER blocks in `write(2)` — so an
+     * MCP server that logged more than that never got to write its next
+     * JSON-RPC line, and could not exit either.
+     *
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8, 64 KiB pipe buffer) with a
+     * child that writes N bytes to stderr and then a framed reply to stdout,
+     * fd 1 non-blocking and fd 2 never read, 5.0s deadline / 5ms poll — three
+     * consecutive takes, identical: N = 1000 and N = 60000 both deliver the
+     * reply in 0.04s; N = 100000 never delivers it at all.
+     *
+     * THE SYMPTOM IS NOT A HANG HERE. {@see readMessages()} returns whatever it
+     * has and moves on, so the caller sees an empty list on time while the
+     * server is permanently stuck, and {@see isConnected()} goes on answering
+     * true. An MCP server that logs to stderr — which is the conventional place
+     * for a stdio-transport server to log, since stdout is the protocol — is
+     * the ordinary case, not the pathological one.
+     */
+    private function drainStderr(): void
+    {
+        // `is_resource()`, NOT `@`: `fread()` on a closed pipe raises a
+        // TypeError, and `@` does not suppress an exception. That is the E367
+        // mistake, where an `@stream_get_contents()` on an fclose'd pipe meant
+        // the RuntimeException being built was never constructed at all.
+        if ($this->pipes === null || !isset($this->pipes[2]) || !is_resource($this->pipes[2])) {
+            return;
+        }
+
+        // Bounded per pass rather than "until EOF": a child writing faster than
+        // this reads must not be able to hold the caller here forever.
+        for ($i = 0; $i < 16; $i++) {
+            $chunk = @fread($this->pipes[2], self::READ_CHUNK_SIZE);
+            if (!is_string($chunk) || $chunk === '') {
+                break;
+            }
+            $this->stderrTail = substr($this->stderrTail . $chunk, -self::MAX_STDERR_BYTES);
+        }
+    }
+
+    /**
+     * The tail of the server's stderr, for a caller trying to explain a client
+     * that went quiet. Empty when the server has said nothing.
+     */
+    public function stderrTail(): string
+    {
+        return $this->stderrTail;
     }
 
     /**
