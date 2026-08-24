@@ -20,18 +20,37 @@ namespace SugarCraft\Crush\Permissions;
  * `-p` one-shot path that exists partly so a run never builds one. So the
  * engine carried a pinned copy and a test enforced the coupling.
  *
+ * THAT AUTOLOAD COST IS NOT HISTORY, AND IT IS WHY THIS LEAF MUST STAY
+ * DEPENDENCY-FREE. MEASURED on PHP 8.3.6 at round 49 from a bare
+ * `vendor/autoload.php`: `class_exists(Chat::class, false)` is FALSE after
+ * {@see self::classify()} has answered, and TRUE on the very next line after
+ * reading `Chat::DENIED_ERROR_PREFIXES`. Reading the roster through this enum
+ * costs nothing; reading the same three strings through `Chat` still pulls in
+ * the whole TUI model. Anything added to this file that needs a `use`
+ * statement re-opens the objection above for every party that reads it.
+ *
  * This enum is the neutral leaf that removes the reason for the copy. It has
  * no `use` statements and depends on nothing in this application, so any
  * party — engine, TUI, headless CLI — can name a KIND and let the rendering
  * happen in exactly one place.
  *
- * THE ENGINE STILL CARRIES ITS OWN CONSTANTS, and that is a lane fact rather
- * than a design one: `src/Runtime.php` was owned by another concurrent lane
- * when this leaf landed, so `Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` /
- * `DENIAL_UNANSWERED` are still three string literals.
- * {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} is what makes the
- * remaining copy loud instead of silent, and re-pointing those three constants
- * at these three cases is the last step of E239.
+ * THE ENGINE'S COPY IS GONE (E246). WHAT THIS DOC-BLOCK SAID: that
+ * `src/Runtime.php` was owned by another concurrent lane when this leaf
+ * landed, so `Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` / `DENIAL_UNANSWERED`
+ * "are still three string literals", and that re-pointing them at these three
+ * cases is the last step of E239. WHAT IS TRUE NOW: that step landed. Those
+ * three constants are declared as `DenialKind::<Case>->value` constant
+ * expressions — deprecated aliases that DERIVE rather than a fourth copy —
+ * `src/Runtime.php` spells no denial literal at all, and
+ * {@see \SugarCraft\Crush\Runtime::gate()} holds a case and renders it once
+ * through {@see reason()}. WHY THIS STILL EARNS ITS PLACE: the aliases remain
+ * `public const` on a class an embedder reads, so the tree publishes FOUR
+ * names for three kinds, and
+ * {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} is still what keeps
+ * every one of them agreeing. It gained a spelled-out pin on the three
+ * BACKING VALUES when the copy went, because once both sides of its
+ * membership test derive from this enum, that test can no longer see a case
+ * being respelled.
  *
  * THE SPELLINGS ARE NOT FREE CHOICES. Each case's backing value is the exact
  * text a finished reason OPENS with, and
