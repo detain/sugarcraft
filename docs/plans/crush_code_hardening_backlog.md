@@ -12064,3 +12064,112 @@ opposite responses.
 ---
 
 ---
+
+### Eb52-1 — `LOCK_EX` is not load-bearing for `AuditHook`'s write on any filesystem this box can offer
+
+**Recorded 2026-08-24 by round-49 lane b, from a mutation of its own fix.** Severity: stated bound.
+**Measured**, PHP 8.3.6, Linux, local ext4. Not a defect; recorded because a surviving mutation that is
+never written down is a guard nobody can defend next time.
+
+Deleting `LOCK_EX` from `AuditHook::append()`'s `file_put_contents()` **SURVIVES**
+`AuditHookConcurrentAppendTest`. Deleting `FILE_APPEND` instead **KILLS** it, so the window is awake and it
+is `O_APPEND` doing the work. Generator `probe_lockex_r49b.php`: with `FILE_APPEND` alone, 8 processes ×
+60 records at payloads of 9000 / 100000 / 1000000 bytes, three takes each — **nine runs, 480/480 whole
+records, zero damage every time**.
+
+**Why the flag stays.** `O_APPEND`'s seek-and-write atomicity is a property of the FILESYSTEM, and it is
+exactly the guarantee NFS is known not to honour. A temp directory on a network mount is ordinary on a
+shared build host, so the flag defends a case this hardware cannot produce. Under the no-removal rule that
+makes a TEXTUAL pin the only honest test the property can have —
+`AuditHookConcurrentAppendTest::testTheWriteStillCarriesBothFlags()`, which strips comment and doc-block
+tokens before matching because both constant names appear in the prose arguing for them, with a
+known-positive fixture proving the scanner can still say no.
+
+**Step.** None wanted. Re-open only if a build target appears where the temp directory can be networked
+and a behavioural test becomes possible.
+
+---
+
+### Eb52-2 — `RuntimeNoticeSink::drain()` de-duplicates, and a "how many notices" assertion measures that instead
+
+**Recorded 2026-08-24 by round-49 lane b, from a mutation of its own new test.** Severity: instrument
+trap, general. **Measured** — the mutation survived, then killed after the window was fixed.
+
+`drain()` ends with an `in_array($notice, $unique, true)` filter, so **identical rows collapse to one
+before any caller sees them**. A test that drives N emissions of the SAME message and asserts one notice
+arrived is therefore asserting nothing about the emitter: round 49's first version of
+`AuditHookRefusalNoticeTest`'s latch test did exactly that, and **deleting the once-per-process latch it
+existed to defend SURVIVED it**. Three DISTINCT directories now produce three distinct messages `drain()`
+cannot merge, plus a control asserting the three really are distinct (derived by invoking
+`AuditHook::directoryRefusalReason()`, not by re-spelling its format), and the same mutation is KILLED.
+
+**Why this is filed as a general trap and not as one test's bug.** `drain()` is the shared surface: any
+future test of "does subsystem X warn once / twice / not at all" has the same hole, and nothing at the
+`drain()` call site says so. Grep for `drain()` in `tests/` before trusting any cardinality taken through
+it.
+
+**Step.** Consider a `drainRaw()` for tests, or a doc-block line on `drain()` naming the hazard. Cheapest
+honest version is the doc-block line.
+
+---
+
+### Eb52-3 — E346's "five sites each need the token inserted" is wrong: two do
+
+**Recorded 2026-08-24 by round-49 lane b, which implemented E346.** Severity: premise correction, minor.
+**Measured** — by making the change and reading which tests went red.
+
+E346's ready-to-apply patch said `tests/Sessions/BackgroundSessionRunnerTest.php` "asserts the record's
+shape at five sites (search `was not run`) and each needs the token inserted". There are five hits and
+**exactly two needed the change**: the two that assert the emitted record's full shape. Of the other
+three, one asserts the substring `' Write was not run - '` and passes unchanged because the token lands
+before the tool name; the remaining two are hand-built buffer strings feeding
+`BackgroundSupervisor::bufferReportsFailure()`, which is a different parser and not the emitter's output
+at all — one of them does not even use `REFUSAL_RECORD`.
+
+**Why it is worth recording.** A reader following the patch literally would have edited three assertions
+that were already correct, two of them into fixtures that then no longer matched the parser they were
+written for. The entry's mechanism (token after the marker, safe against the `[session:` line protocol)
+was right and is confirmed by mutation: moving the token BEFORE the marker is killed by five tests.
+
+---
+
+### Eb52-4 — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
+
+**Recorded 2026-08-24 by round-49 lane b.** Severity: open design question. Verified, not implemented.
+
+E347's claim was re-checked rather than inherited:
+`RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()` does now compare the two
+arms' observer STRINGS (not their lengths), and it passes — so naming the kind on the stderr line
+genuinely cannot distinguish "a person typed n" from "there was nobody at the keyboard", because both are
+`DenialKind::Refused` and their token is one word. **No action was taken and none was available at this
+level.**
+
+What is still open is what E347 says: the distinction lives in `HeadlessPermissionPrompt`'s own prose and
+nowhere machine-readable. Closing it needs either a fourth `DenialKind` case or a second field on the
+prompt's line. Both change the PUBLISHED vocabulary a `--output-format json` consumer reads, which is a
+product decision, and no entry in this file currently owns it.
+
+**Step.** Decide whether `refused-by-person` and `refused-no-terminal` are two kinds or one kind with a
+qualifier, then implement. Until then the two arms are deliberately indistinguishable to a machine and
+`RefusalStderrSurfaceTest` is what says so.
+
+---
+
+### Eb52-5 — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
+
+**Recorded 2026-08-24 by round-49 lane b, which caused it.** Severity: doc drift, no runtime effect.
+**Measured**, PHP 8.3.6. Not fixed — `src/Cli/HeadlessPermissionPrompt.php` was outside this lane.
+
+E338 widened `NonInteractive::stdinDefault()` to `resource|null`, and
+`HeadlessPermissionPrompt::__construct()` resolves its `$in` default through it. The property is untyped
+with a `/** @var resource */` doc-block, so a null is legal at runtime and the annotation is now a lie.
+
+**No behaviour is wrong and that was checked, not assumed.** `$in` is read in exactly two places:
+`\fgets($this->in)`, which sits behind `isInteractive()`, and `isInteractive()` itself, which already
+opens `\is_resource($this->in) && \stream_isatty($this->in)`. A null therefore makes the prompt answer
+"not interactive" — the truth about a process with no descriptor 0 — instead of throwing.
+`HeadlessPermissionPromptStdinDefaultTest::testWithNoPinInstalledTheDefaultIsTheProcesssOwnDescriptorZero()`
+asserts both halves.
+
+**Step.** Change the two doc-blocks to `@var resource|null` when that file is next in a lane. One line
+each; no code change.
