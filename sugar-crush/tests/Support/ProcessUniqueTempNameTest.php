@@ -754,16 +754,14 @@ final class ProcessUniqueTempNameTest extends TestCase
         }
 
         while ($from < $close) {
+            // argumentEnd() stops BEFORE the delimiter, so a slice can END in a
+            // whitespace or comment run. IT IS DELIBERATELY NOT TRIMMED HERE:
+            // both readers of a slice — {@see sliceText()} and
+            // {@see isConstantStringExpression()} — skip insignificant tokens
+            // themselves, so a trim could not change any answer. It was written
+            // and then removed after the mutation that deleted it SURVIVED,
+            // which is the only evidence that would have settled it.
             $to = self::argumentEnd($tokens, $from, $close);
-
-            // argumentEnd() stops BEFORE the delimiter, so the slice can end in
-            // a whitespace or comment run — `uniqid('x' )`. Leaving it there
-            // made a one-literal argument look like a multi-token expression
-            // and reported a decidable call as undecidable.
-            while ($to > $from && \is_array($tokens[$to])
-                && \in_array($tokens[$to][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
-                $to--;
-            }
 
             if ($to < $from) {
                 break;
