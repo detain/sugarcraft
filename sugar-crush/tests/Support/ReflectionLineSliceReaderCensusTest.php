@@ -331,6 +331,38 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             . 'sits in the helper that does the slicing rather than in the function that reads '
             . 'the line numbers, which is one of the two places it can honestly be');
 
+        // ...BUT ONLY THE HELPER THAT DOES THE SLICING JOINS THE COVERAGE SET.
+        // The hop exists to follow the LINE NUMBERS, so absorbing every
+        // same-file callee would let a `getFileName` in an unrelated helper —
+        // a logging line, a path assertion about something else entirely —
+        // answer for a reader that never checks anything. This mutation
+        // SURVIVED the fixtures above, which had no case where a non-slicing
+        // neighbour holds the name; the window was wrong, not the mutation.
+        $launderable = <<<'PHP'
+            <?php
+            final class A
+            {
+                private function body(string $method): string
+                {
+                    $r = new \ReflectionMethod(self::class, $method);
+                    $this->note();
+
+                    return implode('', array_slice(file(__FILE__) ?: [], $r->getStartLine() - 1, 2));
+                }
+
+                private function note(): void
+                {
+                    error_log((string) (new \ReflectionClass(self::class))->getFileName());
+                }
+            }
+            PHP;
+
+        [$readers] = self::readers(['a/A.php' => $launderable]);
+        self::assertSame(['a/A.php::body' => false], $readers, 'a getFileName() in a same-file '
+            . 'helper that does no slicing was counted as this reader\'s check. The hop follows '
+            . 'the line numbers to the indexing; a neighbour that never indexes anything is not '
+            . 'jointly responsible for the pairing and cannot vouch for it.');
+
         // ...AND A READ WHOSE SLICE IS OUT OF REACH IS REPORTED, NOT DROPPED.
         // A function that reads a line number and reaches no slice — because
         // it never slices, or because the indexing was lifted into a shared
