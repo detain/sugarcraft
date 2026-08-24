@@ -333,6 +333,29 @@ final class ChildLifetimeScanner
     }
 
     /**
+     * Is every block between the floor and here a `finally`?
+     *
+     * The floor itself is not checked: it is the level the spawn is on, and a
+     * call there is already unconditional by depth alone.
+     *
+     * @param array<int,bool> $finallyAt
+     */
+    private static function everyBlockIsFinally(array $finallyAt, int $floor, int $depth): bool
+    {
+        if ($depth <= $floor) {
+            return false;
+        }
+
+        for ($level = $floor + 1; $level <= $depth; $level++) {
+            if (($finallyAt[$level] ?? false) !== true) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * The fate of a handle that lands in a plain local variable.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
@@ -347,6 +370,24 @@ final class ChildLifetimeScanner
         $unfollowedAt = null;
         $depth = 0;
         $floor = 0;
+
+        // Which open blocks were opened by `finally`, keyed by the depth the
+        // brace opened. A `finally` block is the ONE nested block that runs on
+        // every path out of the function it is in, so a closer inside one is
+        // as unconditional as a closer at the function's own level - and this
+        // scanner said otherwise about correct code. MEASURED at the round-53
+        // merge: `Providers/ClaudeCodeProvider.php::completeStream` reaps its
+        // child in a generator `finally`, which covers normal completion, an
+        // exception, AND a consumer that `break`s out of the foreach and
+        // destroys the generator mid-body. The guard called that "runs only
+        // inside a nested block, so it does not cover every path out of this
+        // function", which is exactly false about `finally`.
+        //
+        // KEYED BY DEPTH, not a bare flag, because the qualifying case is
+        // "every block between the floor and here is a finally" - a closer
+        // inside an `if` inside a `finally` is still conditional, and one
+        // inside a `finally` inside a `foreach` did not escape the foreach.
+        $finallyAt = [];
 
         for ($i = $from + 1; $i <= $end; $i++) {
             $token = $tokens[$i];
@@ -372,10 +413,18 @@ final class ChildLifetimeScanner
             // above the floor.
             if (\is_string($token) && $token === '{') {
                 $depth++;
+                // The brace's own opener, not the statement's: `finally {`.
+                $opener = self::prev($tokens, $i);
+                $finallyAt[$depth] = $opener !== null
+                    && \is_array($tokens[$opener])
+                    && $tokens[$opener][0] === \T_FINALLY;
             } elseif (\is_array($token)
                 && \in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
                 $depth++;
+                // String interpolation, never a finally.
+                $finallyAt[$depth] = false;
             } elseif (\is_string($token) && $token === '}') {
+                unset($finallyAt[$depth]);
                 $depth--;
                 $floor = \min($floor, $depth);
             }
@@ -421,7 +470,7 @@ final class ChildLifetimeScanner
                 // that "runs unconditionally" whenever both spellings were
                 // present - the same defect the named-closer change existed
                 // to remove, one level in.
-                if ($depth === $floor) {
+                if ($depth === $floor || self::everyBlockIsFinally($finallyAt, $floor, $depth)) {
                     $unconditionalCloser ??= $callee;
                 } else {
                     $conditionalCloser ??= $callee;

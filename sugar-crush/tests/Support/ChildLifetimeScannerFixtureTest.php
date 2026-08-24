@@ -870,6 +870,93 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     /**
      * @return list<array{line:int,function:string,lifetime:string,reason:string,fds:list<int>|null,highFds:list<int>}>
      */
+    /**
+     * A closer inside `finally` runs on EVERY path out, so it is SHORT.
+     *
+     * THE POSITIVE CONTROL FOR THE `finally` RULE. Before this, the scanner
+     * classified `Providers/ClaudeCodeProvider.php::completeStream` as
+     * unclassified with the reason "runs only inside a nested block, so it
+     * does not cover every path out of this function" - a sentence that is
+     * flatly false about `finally`, and one that reddened correct code at the
+     * round-53 merge. An exemption row for correct code is where the next real
+     * offender hides, so the classifier learned the rule instead.
+     */
+    public function testACloserInsideFinallyRunsOnEveryPathAndIsShort(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class C {
+                public function m(array $pipes) {
+                    $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                    try {
+                        $this->pump($h);
+                    } finally {
+                        proc_close($h);
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+    }
+
+    /**
+     * THE NEGATIVE HALF, and the reason the rule is keyed by depth rather than
+     * by a bare "saw a finally" flag: an `if` INSIDE a `finally` is still
+     * conditional. A flag would have called this short and licensed exactly
+     * the shape the guard exists to catch.
+     */
+    public function testACloserInsideAnIfInsideFinallyIsStillUnclassified(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class C {
+                public function m(array $pipes, bool $tidy) {
+                    $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                    try {
+                        $this->pump($h);
+                    } finally {
+                        if ($tidy) {
+                            proc_close($h);
+                        }
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+    }
+
+    /**
+     * And the other half of the same trap: a `finally` the spawn is NOT inside
+     * still has to leave the block the spawn opened. A `finally` nested in a
+     * `foreach` runs on every path out of the LOOP BODY, not out of the
+     * function.
+     */
+    public function testAFinallyInsideALoopDoesNotCoverEveryPathOutOfTheFunction(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class C {
+                public function m(array $pipes, array $jobs) {
+                    $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                    foreach ($jobs as $job) {
+                        try {
+                            $this->pump($h, $job);
+                        } finally {
+                            proc_close($h);
+                        }
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+    }
+
     private function sitesIn(string $source): array
     {
         return ChildLifetimeScanner::scan($source)['sites'];
