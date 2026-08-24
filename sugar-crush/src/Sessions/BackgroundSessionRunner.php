@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Sessions;
 
 use SugarCraft\Crush\Backend;
-use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Cli\PermissionConfigException;
-use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\ToolRefusal;
 
 /**
  * The agent loop that a `/bg` background session actually runs.
@@ -393,40 +392,56 @@ final class BackgroundSessionRunner
      * injected into the transcript. The same collapse is applied to every
      * other free text this class logs, for the same reason.
      *
-     * THE CLASSIFIER IS DUPLICATED AND THE ROSTER IS NOT, which is the half
-     * that matters. {@see Chat::DENIED_ERROR_PREFIXES} is read rather than
-     * copied, so this daemon and the `-p` path and the TUI's struck-through
-     * refusal state cannot disagree about what a refusal IS. The twelve lines
-     * of `str_starts_with` around it are duplicated from
-     * `NonInteractive::refusalFrom()`, which is private and in another file;
-     * hoisting them to a shared owner is worth doing and is recorded, but a
-     * shared classifier reading a shared roster and two classifiers reading
-     * one shared roster fail in the same way — which is to say they do not.
+     * THE CLASSIFIER WAS DUPLICATED AND THE DEFENCE OF THAT WAS HALF WRONG
+     * (E292, E300). WHAT THIS SAID: that the roster is read rather than
+     * copied — `Chat::DENIED_ERROR_PREFIXES` — so this daemon, the `-p` path
+     * and the TUI's struck-through refusal state cannot disagree about what a
+     * refusal IS; and that the twelve lines of `str_starts_with` duplicated
+     * from `NonInteractive::refusalFrom()` were tolerable because "a shared
+     * classifier reading a shared roster and two classifiers reading one
+     * shared roster fail in the same way — which is to say they do not".
      *
-     * {@see Chat} IS TOUCHED LAZILY, on purpose and for the same reason the
-     * `-p` path does it: a class constant is still a class load, and the guard
-     * above is "an errored tool result", so a turn that errors nothing never
-     * loads it.
+     * WHAT IS TRUE NOW, and it is the half that sentence could not see: the
+     * two copies read the roster through DIFFERENT DOORS, and one of the doors
+     * moved. E239 lifted the roster off `Chat` onto
+     * {@see \SugarCraft\Crush\Permissions\DenialKind}, a leaf enum with no
+     * dependencies, precisely so a headless path need not load the TUI model
+     * to classify an error; `NonInteractive` was re-pointed at the enum and
+     * this copy was not, so from that commit until E300 the daemon was the one
+     * surface still paying for a whole `Chat` on every errored tool result —
+     * the exact cost the move existed to remove, re-created in the file whose
+     * doc-block was arguing the copies were equivalent. Both callers now ask
+     * {@see ToolRefusal::fromEvent()}, which owns the shape and reads the enum.
+     *
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: "one roster, however many
+     * readers" is the right invariant and is why the duplicate was survivable
+     * for as long as it was. What it got wrong is that a reader is not free —
+     * a second classifier is a second decision about WHERE the roster is read
+     * FROM, and that is the half that drifted.
+     *
+     * THE LAZINESS NOTE IS OBSOLETE AND IS REWRITTEN RATHER THAN DROPPED.
+     * WHAT IT SAID: `Chat` is touched lazily, on purpose and for the same
+     * reason the `-p` path does it — a class constant is still a class load,
+     * and the guard is "an errored tool result", so a turn that errors nothing
+     * never loads it. WHAT IS TRUE NOW: `Chat` is not touched at all from
+     * here. The guard survives unchanged inside
+     * {@see ToolRefusal::fromEvent()} and the load it defers is now one leaf
+     * enum rather than the TUI model. WHY IT STILL EARNS ITS PLACE: it records
+     * that the `isError()` guard is load-bearing rather than a tidy early
+     * return, which is the fact that would be lost if someone hoisted the
+     * classification above it.
      */
     private function noticeRefusal(object $event): void
     {
-        if (!$event instanceof ToolFinished || !$event->result->isError()) {
+        $refusal = ToolRefusal::fromEvent($event);
+        if ($refusal === null) {
             return;
         }
 
-        $reason = $event->result->content();
-        foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
-            if (!\str_starts_with($reason, $prefix)) {
-                continue;
-            }
-
-            $this->log(
-                self::REFUSAL_RECORD . ' ' . $this->oneLine($event->toolName)
-                . ' was not run - ' . $this->oneLine($reason),
-            );
-
-            return;
-        }
+        $this->log(
+            self::REFUSAL_RECORD . ' ' . $this->oneLine($refusal->tool)
+            . ' was not run - ' . $this->oneLine($refusal->reason),
+        );
     }
 
     /**

@@ -406,8 +406,15 @@ that kept the code tells apart the kinds of each.
 One key is **conditional**, and it is the only one: `refusals`. A turn that
 blocked a tool call — a permission ASK that nothing could answer, an explicit
 `n` at the prompt, a hook that denied the call outright — adds
-`"refusals": [{"tool": "<name>", "reason": "<why it was stopped>"}, …]` to
-whichever document it emits, the answer and the error one alike. Before this,
+`"refusals": [{"tool": "<name>", "kind": "<which of the three>", "reason":
+"<why it was stopped>"}, …]` to whichever document it emits, the answer and
+the error one alike. `kind` is one of exactly three tokens and says which of
+those three things happened: `hook` (a hook denied the call outright),
+`refused` (an approver was asked and answered no) and `unanswered` (the call
+needed permission and there was nobody to ask). It is there so a consumer does
+not have to re-match the prefix `reason` opens with — that prefix is still
+present and unchanged, so a script written against the older document keeps
+working. Before this,
 the document read `{"result": "<the answer>"}` for a turn in which a tool was
 quietly not run, and the model — which *did* see the refusal — had simply
 answered around it. `refusals` is **absent, not empty**, on a run that refused

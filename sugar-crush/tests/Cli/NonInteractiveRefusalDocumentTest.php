@@ -14,6 +14,7 @@ use SugarCraft\Crush\Cli\NonInteractive;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
@@ -97,6 +98,12 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertCount(1, $document['refusals']);
         self::assertSame('Bash', $document['refusals'][0]['tool']);
         self::assertNotSame('', $document['refusals'][0]['reason']);
+        // E250: the entry carries the KIND as a token, so a consumer outside
+        // PHP does not have to re-match the prefix `reason` opens with. A real
+        // gate DENY is a `hook` refusal and nothing else, and this is the one
+        // row in this file driven by a REAL EngineBackend rather than by a
+        // hand-built event, so it is where the token is worth asserting.
+        self::assertSame(DenialKind::Hook->token(), $document['refusals'][0]['kind']);
 
         // The answer is still the answer. A refusal is additional information,
         // never a replacement for the turn's result.
@@ -181,7 +188,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         $document = $this->documentFrom($backend, NonInteractive::EXIT_OK);
 
         self::assertSame(
-            [['tool' => 'Bash', 'reason' => 'Hook denied: rm -rf is not allowed']],
+            [['tool' => 'Bash', 'kind' => DenialKind::Hook->token(), 'reason' => 'Hook denied: rm -rf is not allowed']],
             $document['refusals'],
             'the refusal list is not the error list; a call that ran and failed is a result',
         );
@@ -202,8 +209,8 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
 
         self::assertSame(
             [
-                ['tool' => 'Bash', 'reason' => 'Hook denied: rm -rf is not allowed'],
-                ['tool' => 'Write', 'reason' => 'Permission denied: /etc/passwd'],
+                ['tool' => 'Bash', 'kind' => DenialKind::Hook->token(), 'reason' => 'Hook denied: rm -rf is not allowed'],
+                ['tool' => 'Write', 'kind' => DenialKind::Refused->token(), 'reason' => 'Permission denied: /etc/passwd'],
             ],
             $this->documentFrom($backend, NonInteractive::EXIT_OK)['refusals'],
         );
@@ -229,7 +236,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertNull($document['result']);
         self::assertSame('backend', $document['error']['type']);
         self::assertSame(
-            [['tool' => 'Bash', 'reason' => 'Hook denied: rm -rf is not allowed']],
+            [['tool' => 'Bash', 'kind' => DenialKind::Hook->token(), 'reason' => 'Hook denied: rm -rf is not allowed']],
             $document['refusals'],
         );
     }
@@ -470,7 +477,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
         self::assertIsArray($document);
         self::assertSame('the answer', $document['result']);
         self::assertSame(
-            [['tool' => 'Bash', 'reason' => 'Hook denied: rm -rf is not allowed']],
+            [['tool' => 'Bash', 'kind' => DenialKind::Hook->token(), 'reason' => 'Hook denied: rm -rf is not allowed']],
             $document['refusals'],
         );
 

@@ -303,6 +303,14 @@ final class BuiltInToolCorpusTest extends TestCase
      * (crush_code.md P3.4). Each was a single concrete class too. The file
      * before that trio was `Providers/ToolCallParser/MarkupScanner`.
      *
+     * THE LAST BUMP, NAMED SO THE NEXT READER DOES NOT HAVE TO GUESS: +1 file
+     * and +1 concrete class from `src/Permissions/ToolRefusal.php`, the shared
+     * refusal classifier E292/E300 hoisted out of
+     * {@see \SugarCraft\Crush\Cli\NonInteractive} and
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}. It
+     * declares one concrete final readonly class and nothing else, which is
+     * why only `concrete` moved.
+     *
      * THE PREVIOUS BUMP NAMED THE WRONG CAUSE. This paragraph attributed the
      * last +1 to `Config/LayeredSettings` after the numbers had already been
      * moved by a different file, so the prose and the literal disagreed about
@@ -343,9 +351,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(291, $files, 'php files under src/');
+        $this->assertSame(292, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 240, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
+            ['concrete' => 241, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -435,8 +443,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(291, count($files), 'php files under src/');
-        $this->assertSame(310, $declarations, 'top-level declarations in them');
+        $this->assertSame(292, count($files), 'php files under src/');
+        $this->assertSame(311, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

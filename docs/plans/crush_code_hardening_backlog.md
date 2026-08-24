@@ -10253,3 +10253,146 @@ it was spelled.
 believed on the strength of its output rather than on the strength of a known-answer control.**
 
 ---
+
+## Ea49-1 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
+
+`Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` / `DENIAL_UNANSWERED` and
+`Chat::DENIED_ERROR_PREFIXES` are now aliases that DERIVE from
+`Permissions\DenialKind`, so they cannot drift. Both doc-blocks call them deprecated. Neither
+carries `@deprecated`, and nothing in the tree tells an embedder to move to the enum: a consumer
+grepping for `@deprecated` finds nothing, and a static analyser sees four supported symbols.
+
+**Step.** Add `@deprecated Use \SugarCraft\Crush\Permissions\DenialKind` to all four, and pin with a
+reflection test that every alias's doc-comment carries the tag AND that its value is still the enum's
+(so the tag cannot be added to something that has quietly become a second copy). Deliberately NOT done
+in round 49: `@deprecated` on a `public const` is an API-signalling decision with a release note
+attached, and this round's mandate was to remove the copies rather than to schedule their removal.
+
+---
+
+## Ea49-2 — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
+
+**Status: closed by the round-49 fix pass** (`DenialPrefixRosterTest::testTheRostersBackingValuesAreTheThreePublishedPrefixes()`).
+Kept rather than deleted because the mechanism is the useful part and the original entry got two things
+wrong.
+
+`DenialPrefixRosterTest` derived every expectation from `DenialKind`, so it was self-consistent by
+construction and could not see a respelling. MEASURED on PHP 8.3.6 at round 49 with the mutation
+harness: substituting `case Hook = 'Blocked:';` SURVIVED `--filter DenialPrefixRoster` entirely, and was
+KILLED only at a wider filter by failures across `ChatTest`, `DeniedToolCallTest`,
+`ParallelToolCallsTest`, `BackgroundSessionRunnerTest`, `NonInteractiveRefusalDocumentTest`,
+`ScriptHookTest` and `RuntimeTest` — SEVEN files, each of which happens to spell `Hook denied:` as a
+literal in a fixture. That is a real pin but an accident of fixtures, and it points at the wrong file
+when it reds.
+
+**WHAT THIS ENTRY GOT WRONG, both corrected here rather than overwritten.** (1) Its heading said SIX
+files and its body enumerated seven; seven is right. (2) It reported the survival as "10 tests, 67
+assertions" — a figure taken at an intermediate commit and shipped without one, which is the defect
+E256 exists for. Re-measured at `463c7469`, the survival was 12 tests / 79 assertions.
+
+**AND ITS FRAMING WAS WRONG IN A WAY THAT MATTERED.** This entry called the incidental pin a standing
+condition. It is not: it is coverage E246 removed in the same round. Before E246, `Runtime`'s three
+`DENIAL_*` constants were string LITERALS, so
+`testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()` compared a literal against a derived roster and
+KILLED a respelling. MEASURED on PHP 8.3.6, both halves: with `Runtime`'s constants restored to their
+pre-E246 form the respelling fails that test at its `assertContains`; at HEAD, with both sides deriving
+from the enum, it leaves the whole file green. Re-pointing the constants was still the right fix for
+drift — it just also had a cost, and the cost belonged in the commit that incurred it.
+
+**What landed.** One `assertSame(['Permission denied:', 'Permission required:', 'Hook denied:'],
+DenialKind::prefixes())` with a message saying these are published text, plus the disclosure in the
+class doc-block. The `kind` TOKENS got the same treatment earlier in round 49 for exactly the same
+reason.
+
+---
+
+## Ea49-3 — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
+
+Round 49 gave every `refusals` entry in the `--output-format json` document a `kind` field
+(`hook` / `refused` / `unanswered`, from `DenialKind::token()`), which is the seam where the enum
+rather than its rendering crosses out to a consumer. Two gaps are left, both deliberate:
+
+1. `--output-format text` puts nothing on stdout about refusals at all — a decision with its own
+   long justification in `NonInteractive::format()` — so the token is available only to a JSON consumer.
+2. `NonInteractive::noticeRefusal()`'s stderr line still says only `sugarcrush: <tool> was not run -
+   <reason>`, and `RefusalStderrSurfaceTest` pins that BOTH `HeadlessPermissionPrompt` arms produce a
+   `Permission denied:` reason, so stderr cannot distinguish "a person typed n" from "there was nobody
+   at the keyboard" except through the prompt's own prose. The kind is now available at that call site
+   as a typed value and is not used there.
+
+**Step.** Decide whether the stderr line should name the kind. It is one string concatenation at one
+existing `fwrite`, so `StderrEmitterCensusTest`'s per-file write count does not move — but it changes
+bytes that `RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()` now pins
+exactly, which is the point of that test: the figure is owned by a test rather than by a paragraph, so
+the change is visible.
+
+---
+
+## Ea49-4 — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
+
+`Permissions\ToolRefusal::fromEvent()` answers with a `DenialKind`. `NonInteractive::refusalFrom()`
+carries it out as the document's `kind`; `BackgroundSessionRunner::noticeRefusal()` takes `->tool` and
+`->reason` and discards `->kind`. That is not dormant code — the property is consumed — but the daemon's
+sidecar log is the one surface with no operator watching, and it is the surface where "which of the
+three" is hardest to reconstruct afterwards.
+
+**Step.** Consider `[session:tool:refused] <kind> <tool> was not run - <reason>`.
+`BackgroundSupervisor::restoreOutput()` decides line by line on the `[session:` prefix, so inserting a
+token after the record marker is safe against the line protocol — but
+`BackgroundSessionRunnerTest` asserts on the record's shape and the change is a log-format change, so it
+wants its own step rather than riding on a roster refactor.
+
+---
+
+## Ea49-5 — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
+
+`Chat::invokeTool()`'s `catch (\Throwable $e)` returns
+`ToolResult::error($name, $e->getMessage(), $toolCall->id)` — the message VERBATIM, with no prefix of
+its own — and `Chat::isDeniedResult()` reads exactly that field and hands it to
+`DenialKind::classify()`. So any tool whose exception message OPENS with `Permission denied:`,
+`Permission required:` or `Hook denied:` is drawn struck through in the TUI and listed in a
+`--output-format json` document's `refusals` array as a call that never ran — when in fact it ran and
+failed. Verified at round 49 on PHP 8.3.6: `isDeniedResult()` reads `$result->error`; the catch is
+generic, so the throwing class need not name anything the round-49 co-occurrence guard can see.
+
+The engine path is NOT affected and that asymmetry is the interesting part: `Runtime::executionFailure()`
+wraps a throw as `Error: %s failed with %s: %s`, so a forged prefix there is defused by the wrapper. The
+TUI-side callback has no such wrapper.
+
+Nothing in `src/` spells a roster prefix today (the whole-`src/` map in `DenialPrefixRosterTest` asserts
+it), so this is not currently reachable from a built-in tool. It IS reachable from an MCP tool, a
+`Skill`, or any exception text that quotes an OS error — the direction of the failure is that a call the
+model DID make is reported to a machine consumer as one that never happened.
+
+**Step.** Either prefix the caught message the way `Runtime::executionFailure()` does, or classify on a
+typed field rather than on free text (`ToolRefusal` already exists and carries a `DenialKind`). Deferred
+here rather than fixed because both options change a model-visible string, which is a behaviour change
+wanting its own step and its own golden-file pass — and functionality comes before hardening.
+
+---
+
+## Ea49-6 — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
+
+Round 49 widened it twice (round-49 implement pass: the `^` anchor and the `[a-z]+` verb; round-49 fix
+pass: `declined`, `prohibited`, `vetoed`, `barred`, plus a case-variant rule and per-frame judging). Both
+widenings were found by someone thinking of a word that was not on the list, which is the point: the
+guard's coverage IS its alphabet, and its alphabet is written to match the cases already known.
+
+MEASURED on PHP 8.3.6 at round 49 (fix pass): with the current list, a dead `private const` in
+`src/Permissions/ToolRefusal.php` carrying `Tool call declined:`, `Tool call prohibited:`, `Vetoed:` or
+`permission denied:` all SURVIVED `--filter DenialPrefixRoster`; all four are KILLED now. The next
+invented verb that is not on the list survives in exactly the same way.
+
+Also recorded, so it is not rediscovered: widening the frame's opener from `[A-Z]` to `[A-Za-z]` — the
+obvious general fix — was measured and NOT taken. Over 200,000 random strings from a 21-token alphabet
+of this tree's own denial words, four seeds (49491 / 20260824 / 777 / 1), the `(?<![A-Za-z])` lookbehind
+changes the verdict 639-691 times with the capitalised opener and ZERO times with a widened one: a
+lowercase-permitted frame always has its leftmost match at a word start, so widening leaves a
+live-looking assertion in the pattern doing nothing.
+
+**Step.** The only structural fix is to stop guessing at vocabulary — e.g. require every producer of a
+tool-result error to go through a factory that names a `DenialKind` or explicitly declines to, so the
+guard becomes "no raw error strings" rather than "no strings that look like denials". That is a
+tree-wide change and wants its own plan.
+
+---

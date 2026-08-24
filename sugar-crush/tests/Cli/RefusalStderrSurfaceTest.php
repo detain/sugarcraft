@@ -43,9 +43,12 @@ use SugarCraft\Crush\Tools\ToolResult;
  *
  *  1. THE DOUBLING IS NOT TTY-ONLY. The entry says "an ASK refused at a
  *     terminal now writes two stderr lines". The NO-TTY arm doubles too: the
- *     eight-line refusal block AND the observer's line, 526 bytes over 9
- *     lines. Dropping the terse line would therefore not remove the doubling
- *     in general — it would remove it from one of the two arms that has it.
+ *     refusal block AND the observer's line. Dropping the terse line would
+ *     therefore not remove the doubling in general — it would remove it from
+ *     one of the two arms that has it. The byte and line totals this paragraph
+ *     used to carry are retired and MEASURED instead, by
+ *     {@see self::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()} — see
+ *     E256 there for why a figure in prose was the wrong shape for them.
  *  2. THE OBSERVER'S LINE CANNOT TELL THE TWO ARMS APART, and that is the
  *     decisive one. Both arms end in a reason opening with
  *     {@see DenialKind::Refused} — `Permission denied:` — because in both an
@@ -142,6 +145,121 @@ final class RefusalStderrSurfaceTest extends TestCase
             . 'consulted at all');
         self::assertNotNull($refusal);
         self::assertStringStartsWith(DenialKind::Hook->value, $refusal['reason']);
+    }
+
+    /**
+     * THE GENERATOR FOR E240's FIGURES, WHICH E240 DID NOT SHIP (E256).
+     *
+     * WHAT THE TWO DOC-BLOCKS SAID: that the no-tty arm writes "526 bytes over
+     * 9 lines" and the terminal arm "266 over 8". WHAT WAS WRONG WITH IT: not
+     * the numbers — re-derived here on PHP 8.3.6 they are exactly those — but
+     * that they lived in prose in {@see HeadlessPermissionPrompt}'s class
+     * doc-block and in this file's, with no runnable thing behind either. A
+     * figure whose generator is a sentence cannot be re-derived by the next
+     * reader and cannot go red when it stops being true, which is the one
+     * property that would make it worth writing down. Both copies are retired
+     * and this method is what replaces them.
+     *
+     * THE NUMBERS LIVE HERE AND NOWHERE ELSE, deliberately. Reword
+     * {@see HeadlessPermissionPrompt::refusal()} or
+     * {@see NonInteractive::refusalNotice()} and this test goes red with the
+     * measured values in the message; update them in this one place. That is
+     * the whole difference between a number a test owns and a number a
+     * paragraph owns.
+     *
+     * BOTH HALVES ARE MEASURED FROM THE CODE THAT RUNS. The prompt's bytes are
+     * whatever it wrote to its own `$err`; the observer's are
+     * `NonInteractive::refusalNotice()` invoked by reflection on the reason
+     * the observer actually saw. Neither is a string this file spells — a
+     * re-spelled copy would agree with itself and with nothing else.
+     *
+     * AND THE CLAIM THE FIGURES SUPPORT IS ASSERTED SEPARATELY FROM THEM,
+     * because it is the part that matters and it must not depend on any
+     * particular wording: BOTH arms put a prompt block AND an observer line on
+     * stderr, and the observer's line is byte-identical across the two. That
+     * is E249 — the doubling is not tty-only — and it is why the terse line
+     * cannot be dropped as a duplicate.
+     *
+     * THE WORDING-INDEPENDENT ASSERTIONS RUN FIRST, AND THAT ORDER IS LOAD-
+     * BEARING RATHER THAN COSMETIC. WHAT THIS DOC-BLOCK SAID when the method
+     * landed: that those two assertions "must not depend on any particular
+     * wording". WHAT WAS WRONG WITH IT: they sat BELOW the exact-figure
+     * `assertSame`, and PHPUnit stops a test at its first failure — so on the
+     * one class of change they exist to survive, they did not execute at all.
+     * MEASURED on PHP 8.3.6 before the reorder, by deleting the three
+     * remedy lines from {@see HeadlessPermissionPrompt::refusal()} (a mutation
+     * that breaks the DOUBLING claim itself, not merely the byte counts): the
+     * failure was reported at the figure `assertSame`, 11 assertions in, and
+     * the `assertGreaterThan` that names the doubling never ran. WHY THIS
+     * STILL EARNS ITS PLACE: the figures are still the generator E256 asked
+     * for and still go red on a reword — they just no longer mask the
+     * structural claim while doing it. A reword now reds ONE assertion with
+     * the new numbers in its message; a change that also breaks the doubling
+     * reds the doubling first, which is the one a reader must not miss.
+     */
+    public function testBothArmsDoubleAndTheseAreTheBytesTheyWrite(): void
+    {
+        $notice = new \ReflectionMethod(NonInteractive::class, 'refusalNotice');
+        $notice->setAccessible(true);
+
+        $measured = [];
+        foreach (['terminal' => true, 'no-tty' => false] as $arm => $interactive) {
+            [$promptText, $refusal] = $this->refuse(interactive: $interactive);
+            self::assertNotNull($refusal, "the {$arm} arm produced no refusal for the observer to report");
+
+            $observer = (string) $notice->invoke(null, $refusal['tool'], $refusal['reason']);
+
+            // THE DOUBLING ITSELF, per arm, before any number is compared.
+            self::assertNotSame('', $promptText, "the {$arm} arm's prompt wrote nothing, so there is no "
+                . 'pair here and the figures below are measuring one producer');
+            self::assertNotSame('', $observer, "the {$arm} arm's observer line is empty");
+
+            $measured[$arm] = [
+                'promptBytes' => \strlen($promptText),
+                'promptLines' => substr_count($promptText, "\n"),
+                'observerBytes' => \strlen($observer),
+                'observerLines' => substr_count($observer, "\n"),
+                'totalBytes' => \strlen($promptText) + \strlen($observer),
+                'totalLines' => substr_count($promptText, "\n") + substr_count($observer, "\n"),
+            ];
+        }
+
+        // AND THE OBSERVER CANNOT TELL THE ARMS APART, at the byte level.
+        // Asserted from the measurement rather than restated, so it cannot
+        // drift away from the exact figures below. FIRST, and that ordering is
+        // the fix rather than a tidy: see the class of assertion each one is
+        // in this method's doc-block.
+        self::assertSame(
+            $measured['terminal']['observerBytes'],
+            $measured['no-tty']['observerBytes'],
+            'the observer line now differs between the two arms, which is the fact this file exists to '
+            . "deny. If that is deliberate, the prompt's terse line may finally be droppable",
+        );
+        self::assertGreaterThan(
+            $measured['terminal']['totalLines'],
+            $measured['no-tty']['totalLines'],
+            'the no-tty arm no longer writes MORE than the terminal one, so E240\'s "removing the terse '
+            . 'line removes the doubling" would now be arguable',
+        );
+
+        self::assertSame(
+            [
+                'terminal' => [
+                    'promptBytes' => 189, 'promptLines' => 7,
+                    'observerBytes' => 77, 'observerLines' => 1,
+                    'totalBytes' => 266, 'totalLines' => 8,
+                ],
+                'no-tty' => [
+                    'promptBytes' => 449, 'promptLines' => 8,
+                    'observerBytes' => 77, 'observerLines' => 1,
+                    'totalBytes' => 526, 'totalLines' => 9,
+                ],
+            ],
+            $measured,
+            'the stderr surface of a refused ASK has changed size. This is the generator for the figures '
+            . "E240 recorded in prose; if the wording moved on purpose, the new numbers are in this test's "
+            . 'diff and this is the one place they are written down',
+        );
     }
 
     /**
