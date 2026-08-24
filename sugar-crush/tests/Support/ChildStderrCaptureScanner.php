@@ -422,6 +422,34 @@ final class ChildStderrCaptureScanner
      * FEWER THAN THREE ELEMENTS IS A REAL `inherited`, not a failure to read:
      * a spec that supplies only fds 0 and 1 leaves fd 2 pointing wherever the
      * parent's was, which is the definition of the shape.
+     *
+     * WHAT THE ARROW BRANCH SAID, and it is the same hole one branch further
+     * in - the paragraphs above are kept whole because they are still true of
+     * the branch they describe. It said: an element carrying a `=>` means the
+     * spec is keyed, a keyed spec that does not name `2` leaves fd 2 alone,
+     * therefore return {@see SHAPE_INHERITED}. Every clause of that is true of
+     * a spec whose elements ALL carry keys.
+     *
+     * WHAT IS TRUE NOW: it was applied on the FIRST element carrying an arrow,
+     * so a spec that MIXES the two spellings took it too. PHP hands a
+     * positional element the next free integer key, measured on PHP 8.3.6:
+     * `[0 => a, b, c]` has keys 0, 1, 2, `[1 => a, b]` has keys 1 and 2, and
+     * `[5 => a, b, c]` has keys 5, 6 and 7. So in a mixed spec fd 2 may be the
+     * second element, the third, or absent entirely - the position of an
+     * element no longer tells you its fd, and two of those three spellings put
+     * a pipe on fd 2 while the branch answered `inherited` for all three.
+     *
+     * WHY THIS EARNS ITS PLACE: `inherited` is the shape this scanner's guards
+     * FLAG, so a wrong `inherited` reds correct code, and an exemption row
+     * written for correct code is where the next real offender hides. A mixed
+     * spec is therefore UNREADABLE rather than half-read - the same answer
+     * {@see ChildLifetimeScanner::keysOf()} already gives the same shape,
+     * reached independently. Two instruments walking one syntax disagreeing
+     * about what they cannot read is the disagreement worth removing.
+     *
+     * THE ARROW TEST IS TOP-LEVEL, not `str_contains()`. An arrow nested
+     * inside an element is not that element's key separator, and a text search
+     * cannot tell the two apart.
      */
     private static function positionalShape(string $spec): string
     {
@@ -439,12 +467,23 @@ final class ChildStderrCaptureScanner
             return self::SHAPE_INHERITED;
         }
 
+        $keyed = 0;
         foreach ($elements as $element) {
-            // A keyed array that does not name `2` - the caller already
-            // established that - genuinely leaves fd 2 alone.
-            if (\str_contains($element, '=>')) {
-                return self::SHAPE_INHERITED;
+            if (self::hasTopLevelArrow($element)) {
+                $keyed++;
             }
+        }
+
+        if ($keyed > 0 && $keyed === \count($elements)) {
+            // EVERY element carries its own key and none of them is `2` - the
+            // caller already established that - so fd 2 genuinely goes
+            // untouched. This is the one reading of an arrow that survives.
+            return self::SHAPE_INHERITED;
+        }
+
+        if ($keyed > 0) {
+            // MIXED. Position no longer names the fd; see the doc-block.
+            return self::SHAPE_UNCLASSIFIED;
         }
 
         if (!isset($elements[2])) {
@@ -467,6 +506,28 @@ final class ChildStderrCaptureScanner
         }
 
         return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /** Whether an array element's own top level carries a `=>`. */
+    private static function hasTopLevelArrow(string $element): bool
+    {
+        $depth = 0;
+
+        foreach (\token_get_all('<?php ' . $element . ';') as $token) {
+            if (\is_array($token) && $token[0] === \T_DOUBLE_ARROW && $depth === 0) {
+                return true;
+            }
+            if (!\is_string($token)) {
+                continue;
+            }
+            if (\in_array($token, ['[', '(', '{'], true)) {
+                $depth++;
+            } elseif (\in_array($token, [']', ')', '}'], true)) {
+                $depth--;
+            }
+        }
+
+        return false;
     }
 
     /**
