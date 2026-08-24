@@ -644,6 +644,46 @@ final class DenialPrefixRosterTest extends TestCase
     }
 
     /**
+     * AND THE TOKEN THE `refusals` DOCUMENT CARRIES IS THE ONE THREE-WORD
+     * VOCABULARY A CONSUMER OUTSIDE PHP MATCHES ON (E250).
+     *
+     * PINNED AS LITERALS, WHICH IS DELIBERATE AND IS NOT RULE-18 ROT.
+     * {@see DenialKind::token()} is `strtolower($this->name)`, so an
+     * assertion written as `DenialKind::Hook->token()` moves with the
+     * implementation and pins nothing: MEASURED on PHP 8.3.6 by substituting
+     * `return $this->name;` — with only the derived assertions in place that
+     * mutation SURVIVED the whole of this file and
+     * {@see NonInteractiveRefusalDocumentTest}, emitting `Hook` where the
+     * documented contract says `hook`. The three strings below are the
+     * contract `README.md` publishes for the `kind` field of a `refusals`
+     * entry; a fourth denial kind SHOULD red this test, because it is a
+     * change to a document other people parse.
+     *
+     * THE SHAPE IS ASSERTED SEPARATELY FROM THE SET, because the two fail
+     * differently: the set catches a respelling, and the lowercase-only shape
+     * catches the specific regression of emitting the PHP identifier — which
+     * is the one that arrives by deleting a function call rather than by
+     * editing a string.
+     */
+    public function testTheDocumentsKindTokenIsLowercaseAndIsTheThreePublishedWords(): void
+    {
+        $tokens = array_map(static fn (DenialKind $k): string => $k->token(), DenialKind::cases());
+
+        self::assertSame(['refused', 'unanswered', 'hook'], $tokens, 'the `kind` field of a refusals entry '
+            . 'is no longer the three tokens README.md publishes, so every consumer matching on it is now '
+            . 'matching on nothing');
+
+        foreach ($tokens as $token) {
+            self::assertMatchesRegularExpression('/^[a-z]+$/', $token, "'{$token}' is not a lowercase word. "
+                . 'A token that is the PHP case identifier makes renaming a case a breaking change to a '
+                . 'JSON document');
+        }
+
+        self::assertSame($tokens, array_unique($tokens), 'two denial kinds share one token, so a consumer '
+            . 'cannot tell them apart at all');
+    }
+
+    /**
      * AND THE CLASSIFIER `Chat` EXPOSES IS THE ENUM'S, for every kind and for
      * a plain error.
      *
