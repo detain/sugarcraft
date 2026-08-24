@@ -65,9 +65,8 @@ final class ChildLifetimeScanner
      */
     public const LIFETIME_UNCLASSIFIED = 'unclassified';
 
-    /** `proc_open` appearing as something other than a direct global call. */
     /**
-     * Calls that reap a handle, besides `proc_close()` itself.
+     * Calls that reap a handle ON EVERY PATH, besides `proc_close()` itself.
      *
      * WHY THIS IS A ROSTER AND NOT A NAME. A tree that grows a reaping helper
      * stops spelling `proc_close()` at the call sites, and a scanner that
@@ -84,19 +83,74 @@ final class ChildLifetimeScanner
      * "nothing returns, stores or proc_close()s it" on a change that added a
      * bounded SIGTERM->SIGKILL ladder.
      *
-     * ⚠️ A ROW HERE IS A CLAIM THAT THE HELPER REALLY CLOSES. Adding the name
-     * of something that merely *inspects* a handle would wave a genuine leak
-     * through, which is the polarity this class exists to avoid. Keys are
-     * matched case-insensitively on the trailing `Class::method`, because that
-     * is the part a `use` statement cannot change.
+     * ⚠️ A ROW HERE IS A CLAIM THAT THE HELPER REALLY CLOSES, ON EVERY PATH
+     * OUT OF ITSELF. This is the one roster in this class whose rows can HIDE
+     * a finding rather than raise one - a wrong row here turns an exposed
+     * spawn into {@see LIFETIME_SHORT}, and
+     * `DescriptorInheritanceGuardTest::exposedIn()` drops every short site
+     * without a trace. {@see BEST_EFFORT_REAPERS} is where a helper that
+     * reaps only SOMETIMES belongs; putting one here is the polarity this
+     * class exists to avoid.
      *
-     * @var list<string>
+     * WHAT THIS DOC-BLOCK USED TO CLAIM AND WHY THE WARNING IS NOW TWO
+     * ROSTERS. It said "a row here is a claim that the helper really closes"
+     * and left it at that, and the very commit that wrote the sentence also
+     * added `processreaper::reapifexited` underneath it. WHAT IS TRUE NOW,
+     * read off that helper's own source rather than its name:
+     * `ProcessReaper::reapIfExited()` waits WITHOUT signalling and, when the
+     * child is still running at the end of the budget, `return null`s with
+     * the handle untouched - by design, for a launcher that must not SIGTERM
+     * the process mid-double-fork. It is a conditional best-effort reap, so
+     * it belongs in the other roster. WHY THIS STILL EARNS ITS PLACE: the
+     * warning was right and was still not enough, because "really closes" is
+     * a judgement a reader makes about a method in ANOTHER package, at a
+     * glance, from its name. Splitting the rosters makes the safe answer the
+     * easy one - if you are not certain it closes on every path, the other
+     * list is always correct.
+     *
+     * Keys are matched case-insensitively on the trailing `Class::method`,
+     * because that is the part a `use` statement cannot change. The value is
+     * the measured reason the helper qualifies, and
+     * {@see \SugarCraft\Crush\Tests\Support\ChildLifetimeScannerFixtureTest}
+     * refuses an empty one.
+     *
+     * @var array<string, string>
      */
     public const CLOSING_HELPERS = [
-        'processreaper::terminateandclose',
-        'processreaper::reapifexited',
+        'processreaper::terminateandclose'
+            => 'SIGTERM, a polled grace period, signal 9, then proc_close() - the only early '
+                . 'return is the !is_resource() idempotency guard, where there is no live handle '
+                . 'to close in the first place. Every path that is handed a live child ends in '
+                . 'proc_close().',
     ];
 
+    /**
+     * Calls that MIGHT reap a handle, and might leave it alone.
+     *
+     * THE SAFE HALF OF THE ROSTER SPLIT, and the asymmetry is the point. A
+     * wrong row in {@see CLOSING_HELPERS} deletes a finding; a wrong row here
+     * cannot, because every row here produces {@see LIFETIME_UNCLASSIFIED},
+     * which the guard treats as exposed and requires a person to account for.
+     * When in doubt, this is the list.
+     *
+     * WHY IT IS NOT SIMPLY LEFT TO THE FALL-THROUGH. A handle handed to an
+     * unrostered call already reads as unclassified, but with the reason
+     * "handed to X, which this scanner cannot follow; if one of those reaps
+     * the child, roster it in CLOSING_HELPERS" - which is an instruction to
+     * commit exactly the defect described above. A named best-effort reaper
+     * gets a sentence saying what it really does instead.
+     *
+     * @var array<string, string>
+     */
+    public const BEST_EFFORT_REAPERS = [
+        'processreaper::reapifexited'
+            => 'waits WITHOUT signalling and returns null with the handle untouched when the '
+                . 'child is still running at the end of the budget, so it closes on some paths '
+                . 'and not others. Deliberate: it exists for a launcher that must not signal a '
+                . 'process in the middle of a double fork.',
+    ];
+
+    /** `proc_open` appearing as something other than a direct global call. */
     public const REF_METHOD = 'method call';
     public const REF_STATIC = 'static call';
     public const REF_DECLARATION = 'function declaration';
@@ -216,10 +270,26 @@ final class ChildLifetimeScanner
     /**
      * Whether the child outlives the call.
      *
-     * THE ESCAPE TEST RUNS BEFORE THE CLOSE TEST, deliberately. A function that
+     * THE ASSIGNMENT ESCAPE BEATS THE CLOSE, deliberately. A function that
      * both stores the handle on `$this` AND calls `proc_close()` on some path
      * has a child that can outlive the call, and reading the `proc_close()` as
-     * proof of a short life is the polarity that hides a leak. Escape wins.
+     * proof of a short life is the polarity that hides a leak - so a
+     * `$this->handle = $proc` returns {@see LIFETIME_LONG} the moment
+     * {@see classifyLocal()} walks onto it, before any close is weighed.
+     *
+     * "ESCAPE WINS" IS WHAT THIS SAID, FLATLY, AND IT IS TRUE OF ONE OF THE
+     * TWO ESCAPE SPELLINGS. MEASURED: `$this->register($h); proc_close($h);`
+     * answers {@see LIFETIME_SHORT}, because a CALL escape is only collected
+     * and is weighed after the close, while `proc_close($h); $this->h = $h;`
+     * answers `long`. WHY THE BEHAVIOUR IS LEFT ALONE AND ONLY THE SENTENCE
+     * CHANGED: for the call spelling the short answer is the CORRECT one. The
+     * question this class asks is whether the CHILD outlives the call, and an
+     * unconditional `proc_close()` ends it whatever some other function did
+     * with the handle first. The assignment rule is the conservative one
+     * because a stored handle is reachable from a path that never reaches the
+     * close; a call that already ran is not. WHY THE PARAGRAPH STILL EARNS ITS
+     * PLACE: the ordering it describes is real and load-bearing, and a reader
+     * who deletes it will re-derive the hidden-leak polarity the hard way.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      * @param list<array{name:string,from:int,to:int}> $functions
@@ -270,10 +340,11 @@ final class ChildLifetimeScanner
      */
     private static function classifyLocal(array $tokens, int $from, int $end, string $variable): array
     {
-        $closedUnconditionally = false;
-        $closedSomewhere = false;
+        $unconditionalCloser = null;
+        $conditionalCloser = null;
         $escapes = [];
-        $closer = 'proc_close';
+        $bestEffort = [];
+        $unfollowedAt = null;
         $depth = 0;
         $floor = 0;
 
@@ -340,12 +411,27 @@ final class ChildLifetimeScanner
                 }
             }
 
-            if (self::isProcCloseArgument($tokens, $i)) {
-                $closedSomewhere = true;
-                $closer = self::calleeTakingArgument($tokens, $i) ?? 'proc_close';
+            $callee = self::calleeTakingArgument($tokens, $i);
+
+            if ($callee !== null && self::isClosingCallee($callee)) {
+                // NAMED SEPARATELY BY CONDITIONALITY, because the reason
+                // sentence quotes one of them and the reader goes looking for
+                // that exact line. A single `$closer` overwritten by whichever
+                // close came LAST reported the conditional call as the one
+                // that "runs unconditionally" whenever both spellings were
+                // present - the same defect the named-closer change existed
+                // to remove, one level in.
                 if ($depth === $floor) {
-                    $closedUnconditionally = true;
+                    $unconditionalCloser ??= $callee;
+                } else {
+                    $conditionalCloser ??= $callee;
                 }
+
+                continue;
+            }
+
+            if ($callee !== null && isset(self::BEST_EFFORT_REAPERS[\strtolower($callee)])) {
+                $bestEffort[$callee] = true;
 
                 continue;
             }
@@ -354,24 +440,42 @@ final class ChildLifetimeScanner
             // "nothing happens to it" - it is this scanner failing to follow
             // it, and the two must not share a sentence. A reviewer can act on
             // the name of the call; they cannot act on a false absence.
-            $handedTo = self::calleeTakingArgument($tokens, $i);
-            if ($handedTo !== null) {
-                $escapes[$handedTo] = true;
+            if ($callee !== null) {
+                $escapes[$callee] = true;
+
+                continue;
             }
+
+            // Not an assignment, not a return, not an argument: the handle
+            // appears in a shape with no callee to name - an array member
+            // (`$a = ['p' => $h];`), an index, an interpolation. Recording the
+            // LINE rather than nothing, because the alternative sentence -
+            // "nothing in this function returns, stores or proc_close()s $h" -
+            // is flatly false about a function that plainly mentions it.
+            $unfollowedAt ??= \is_array($token) ? $token[2] : null;
         }
 
-        if ($closedUnconditionally) {
+        if ($unconditionalCloser !== null) {
             return [
                 self::LIFETIME_SHORT,
-                $closer . '(' . $variable . ') runs unconditionally in the same function',
+                $unconditionalCloser . '(' . $variable . ') runs unconditionally in the same function',
             ];
         }
 
-        if ($closedSomewhere) {
+        if ($conditionalCloser !== null) {
             return [
                 self::LIFETIME_UNCLASSIFIED,
-                $closer . '(' . $variable . ') runs only inside a nested block, so it does not '
-                    . 'cover every path out of this function',
+                $conditionalCloser . '(' . $variable . ') runs only inside a nested block, so it '
+                    . 'does not cover every path out of this function',
+            ];
+        }
+
+        if ($bestEffort !== []) {
+            return [
+                self::LIFETIME_UNCLASSIFIED,
+                \implode(', ', \array_keys($bestEffort)) . '(' . $variable . ') is a BEST-EFFORT '
+                    . 'reap: it closes the child on some paths and leaves the handle alone on '
+                    . 'others, so it does not end the child\'s life the way proc_close() does',
             ];
         }
 
@@ -379,8 +483,18 @@ final class ChildLifetimeScanner
             return [
                 self::LIFETIME_UNCLASSIFIED,
                 $variable . ' is handed to ' . \implode(', ', \array_keys($escapes))
-                    . ', which this scanner cannot follow; if one of those reaps the child, '
-                    . 'roster it in CLOSING_HELPERS',
+                    . ', which this scanner cannot follow; if one of those reaps the child on '
+                    . 'EVERY path out of itself, roster it in CLOSING_HELPERS, and if it reaps '
+                    . 'only sometimes, in BEST_EFFORT_REAPERS',
+            ];
+        }
+
+        if ($unfollowedAt !== null) {
+            return [
+                self::LIFETIME_UNCLASSIFIED,
+                $variable . ' appears again on line ' . $unfollowedAt . ' in a shape with no '
+                    . 'callee to name - an array member, an index, an interpolation - so this '
+                    . 'scanner cannot say where it goes',
             ];
         }
 
@@ -390,17 +504,33 @@ final class ChildLifetimeScanner
         ];
     }
 
+    /** Whether a callee name ends a child's life on every path out of itself. */
+    private static function isClosingCallee(string $callee): bool
+    {
+        return $callee === 'proc_close'
+            || isset(self::CLOSING_HELPERS[\strtolower($callee)]);
+    }
+
     /**
-     * Whether the variable at $at is the argument of a `proc_close()`.
+     * Whether the variable at $at is being CONSUMED by a reaping call.
      *
-     * SHARED BY THE CLOSE TEST AND THE RETURN TEST, and the second use is why
-     * it is a method. `return proc_close($process);` is a function handing
-     * back an EXIT CODE, and the return scan - which deliberately looks
-     * anywhere inside the returned expression, because `return [$proc,
-     * $pipes];` is the tree's commonest escape - read the handle's appearance
-     * there as the handle escaping. It reported a correctly-closed child as
-     * long-lived. Found by a fixture written for a different rule, which is
-     * the argument for having fixtures at all.
+     * USED ONLY BY THE RETURN TEST NOW, and that use is why it is a method.
+     * `return proc_close($process);` is a function handing back an EXIT CODE,
+     * and the return scan - which deliberately looks anywhere inside the
+     * returned expression, because `return [$proc, $pipes];` is the tree's
+     * commonest escape - read the handle's appearance there as the handle
+     * escaping. It reported a correctly-closed child as long-lived. Found by a
+     * fixture written for a different rule, which is the argument for having
+     * fixtures at all.
+     *
+     * BOTH ROSTERS COUNT HERE, unlike everywhere else, and the asymmetry is
+     * deliberate rather than sloppy. This method answers "is the thing being
+     * returned an exit status rather than the handle", and
+     * {@see BEST_EFFORT_REAPERS} members return an exit status too. Whether
+     * they reap on every path is a question about the CHILD's lifetime, which
+     * {@see classifyLocal()} asks separately with its own branch; conflating
+     * the two here would make `return ProcessReaper::reapIfExited($h);` read
+     * as the handle escaping, which it is not.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      */
@@ -412,8 +542,8 @@ final class ChildLifetimeScanner
             return false;
         }
 
-        return $callee === 'proc_close'
-            || \in_array(\strtolower($callee), self::CLOSING_HELPERS, true);
+        return self::isClosingCallee($callee)
+            || isset(self::BEST_EFFORT_REAPERS[\strtolower($callee)]);
     }
 
     /**
@@ -524,10 +654,28 @@ final class ChildLifetimeScanner
      * The integer fds an array literal's keys name.
      *
      * A MIXED SPEC IS UNREADABLE, not half-read. PHP assigns a positional
-     * element the next free integer key, so in a spec that mixes the two
-     * spellings the position of an element no longer tells you its fd. No
-     * such spec exists in this tree; guessing at one would be the kind of
-     * confident wrong answer this class is written to avoid.
+     * element ONE GREATER THAN THE LARGEST INTEGER KEY IT HAS ASSIGNED SO FAR,
+     * so in a spec that mixes the two spellings the position of an element no
+     * longer tells you its fd. No such spec exists in this tree; guessing at
+     * one would be the kind of confident wrong answer this class is written to
+     * avoid.
+     *
+     * WHAT THAT SENTENCE USED TO SAY: "the next free integer key". WHAT IS
+     * TRUE NOW - and it was never true, it was a wrong rule whose worked
+     * examples all happened to agree with the right one. MEASURED on PHP
+     * 8.3.6: `[5 => 'a', 0 => 'b', 'c']` has keys 5, 0 and **6**. "Next free"
+     * predicts 1. WHY THE SENTENCE STILL EARNS ITS PLACE: the conclusion it
+     * supports is unchanged and is if anything stronger - a rule that depends
+     * on the running maximum is even less recoverable from an element's
+     * position than one that depends on occupancy.
+     *
+     * A STRING-SPELLED INTEGER KEY IS AN INTEGER KEY. PHP canonicalises
+     * `"2" => x` to `2 => x` (measured, 8.3.6), and refusing to read it would
+     * make {@see \SugarCraft\Crush\Tests\Support\DescriptorInheritanceGuardTest::testNoDescriptorSpecInSrcIsUnreadable()}
+     * red a perfectly ordinary spec while telling its author not to add an
+     * exemption. Only the CANONICAL spelling converts: `"01"` and `"2 "` stay
+     * strings, so the digits are round-tripped through `(int)` before being
+     * believed.
      *
      * @return list<int>|null
      */
@@ -545,8 +693,17 @@ final class ChildLifetimeScanner
         $positional = 0;
 
         foreach ($elements as $element) {
-            if (\preg_match('/^\s*(\d+)\s*=>/', $element, $key) === 1) {
-                $keyed[] = (int) $key[1];
+            if (\preg_match('/^\s*(?:(\d+)|\'(\d+)\'|"(\d+)")\s*=>/', $element, $key) === 1) {
+                // Trailing alternation groups that did not participate are
+                // simply ABSENT from $key, not empty - `??` rather than a
+                // truthiness test, or a bare-integer key raises a notice.
+                $digits = ($key[3] ?? '') !== '' ? $key[3] : ((($key[2] ?? '') !== '') ? $key[2] : $key[1]);
+                if ((string) (int) $digits !== $digits) {
+                    // `"01"` is NOT an integer key in PHP; a non-canonical
+                    // spelling names a STRING key and no fd at all.
+                    return null;
+                }
+                $keyed[] = (int) $digits;
 
                 continue;
             }

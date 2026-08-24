@@ -263,11 +263,18 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     }
 
     /**
-     * A function that both stores the handle AND closes it is LONG.
+     * A function that both STORES the handle and closes it is LONG.
      *
-     * Escape beats close, because a child reachable from `$this` can outlive
-     * the call on any path that does not reach the `proc_close()`, and reading
-     * the close as proof of a short life is the polarity that hides a leak.
+     * The assignment escape beats the close, because a child reachable from
+     * `$this` can outlive the call on any path that does not reach the
+     * `proc_close()`, and reading the close as proof of a short life is the
+     * polarity that hides a leak.
+     *
+     * ⚠️ THE CALL SPELLING IS THE OTHER WAY ROUND, pinned in
+     * {@see testAnUnconditionalCloseBeatsACallEscape()} beside this one so the
+     * asymmetry cannot be read as an accident. It is not "escape wins"; it is
+     * "an assignment escape wins", and the reason the two differ is in
+     * {@see ChildLifetimeScanner::classifyLifetime()}'s doc-block.
      */
     public function testEscapeBeatsCloseWhenAFunctionDoesBoth(): void
     {
@@ -287,6 +294,35 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             PHP);
 
         self::assertSame(ChildLifetimeScanner::LIFETIME_LONG, $sites[0]['lifetime']);
+    }
+
+    /**
+     * A function that HANDS the handle somewhere and then closes it is SHORT.
+     *
+     * THE HALF OF "ESCAPE WINS" THAT DOES NOT WIN, and it is correct that it
+     * does not. The question this scanner asks is whether the CHILD outlives
+     * the call; an unconditional `proc_close()` ends it whatever some other
+     * function did with the handle beforehand. A stored handle is different
+     * because it stays reachable from a path that never reaches the close.
+     *
+     * Pinned so that a reader who takes the doc-block's ordering literally and
+     * "fixes" the call spelling to match reds here and finds the argument.
+     */
+    public function testAnUnconditionalCloseBeatsACallEscape(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Both {
+                public function go(): void {
+                    $pipes = [];
+                    $proc = @proc_open('ls', [1 => ['pipe', 'w']], $pipes);
+                    $this->register($proc);
+                    proc_close($proc);
+                }
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
     }
 
     /**
@@ -347,13 +383,32 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         yield 'empty spec' => [$wrap('[]'), []];
         yield 'high fd named' => [$wrap("[2 => ['pipe','w'], 7 => ['file','/dev/null','w']]"), [2, 7]];
 
-        // Mixed keyed/positional: PHP hands a positional element the next free
-        // integer key, so position no longer tells you the fd.
+        // Mixed keyed/positional: PHP gives a positional element ONE GREATER
+        // THAN THE LARGEST INTEGER KEY SO FAR, so position no longer tells you
+        // the fd. (Not "the next free key", which this comment used to say and
+        // which is a different rule: measured on PHP 8.3.6, `[5 => 'a',
+        // 0 => 'b', 'c']` has keys 5, 0 and 6, where "next free" predicts 1.)
         yield 'mixed keyed and positional' => [$wrap("[['pipe','r'], 2 => ['pipe','w']]"), null];
 
         // A key that is not an integer literal names an fd this scanner cannot
         // evaluate.
         yield 'constant key' => [$wrap("[self::FD_ERR => ['pipe','w']]"), null];
+
+        // A STRING-SPELLED INTEGER KEY IS AN INTEGER KEY. Measured on PHP
+        // 8.3.6: `["0" => x]` has the int key 0. Reading it as unknowable
+        // would make the guard red an ordinary spec while telling its author
+        // not to add an exemption - a red on correct code, which is where the
+        // next real offender buys its row.
+        yield 'double-quoted integer keys' => [
+            $wrap('["0" => [\'pipe\',\'r\'], "1" => [\'pipe\',\'w\'], "2" => [\'pipe\',\'w\']]'),
+            [0, 1, 2],
+        ];
+        yield 'single-quoted integer key' => [$wrap("['3' => ['file','/dev/null','w']]"), [3]];
+
+        // ...but only the CANONICAL spelling converts. `"01"` stays a string
+        // key naming no fd at all, so the honest answer is that the spec is
+        // unreadable, not that fd 1 is covered.
+        yield 'non-canonical quoted key' => [$wrap('["01" => [\'pipe\',\'r\']]'), null];
 
         // Not an array literal at all.
         yield 'method call' => [$wrap('$this->descriptors()'), null];
@@ -535,19 +590,243 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     public function testTheClosingHelperRosterIsNotEmpty(): void
     {
         self::assertNotSame([], ChildLifetimeScanner::CLOSING_HELPERS);
+        self::assertNotSame([], ChildLifetimeScanner::BEST_EFFORT_REAPERS);
 
-        foreach (ChildLifetimeScanner::CLOSING_HELPERS as $helper) {
-            self::assertSame(
-                \strtolower($helper),
-                $helper,
-                'rows are compared lowercased, so a row with capitals can never match: ' . $helper,
-            );
-            self::assertStringContainsString(
-                '::',
-                $helper,
-                'a bare method name would let any class of that name reap a handle: ' . $helper,
-            );
+        $rosters = [
+            'CLOSING_HELPERS' => ChildLifetimeScanner::CLOSING_HELPERS,
+            'BEST_EFFORT_REAPERS' => ChildLifetimeScanner::BEST_EFFORT_REAPERS,
+        ];
+
+        foreach ($rosters as $name => $roster) {
+            foreach ($roster as $helper => $why) {
+                self::assertSame(
+                    \strtolower($helper),
+                    $helper,
+                    "{$name} rows are compared lowercased, so a row with capitals can never "
+                        . 'match: ' . $helper,
+                );
+                self::assertStringContainsString(
+                    '::',
+                    $helper,
+                    "a bare method name in {$name} would let any class of that name count: " . $helper,
+                );
+                self::assertNotSame(
+                    '',
+                    \trim($why),
+                    "{$name}[{$helper}] carries no reason. The reason is the only thing that "
+                        . 'distinguishes a measured row from a guess about a method in another '
+                        . 'package, read off its name.',
+                );
+            }
         }
+
+        self::assertSame(
+            [],
+            \array_intersect_key(
+                ChildLifetimeScanner::CLOSING_HELPERS,
+                ChildLifetimeScanner::BEST_EFFORT_REAPERS,
+            ),
+            'a helper cannot both close on every path and close on only some of them; the two '
+                . 'rosters produce opposite verdicts, so an overlap makes the answer depend on '
+                . 'which branch runs first',
+        );
+    }
+
+    /**
+     * EVERY ROSTERED ROW IS SPENT, one synthetic site per row.
+     *
+     * WHAT THIS EXISTS TO CATCH, measured rather than assumed. Before it,
+     * deleting `processreaper::reapifexited` from the roster SURVIVED the whole
+     * of this file plus {@see DescriptorInheritanceGuardTest} - 41 tests, 99
+     * assertions, rc 0 - because the only rows any fixture spelled were
+     * `terminateAndClose` and a deliberately-unrostered `Bookkeeping::`. A
+     * roster whose rows are individually free to be wrong is a roster whose
+     * contract is decorative, and this one's rows can DELETE a finding.
+     *
+     * WHAT IT DOES NOT PROVE, said out loud so the next reader does not take
+     * more from it than it offers: that the named helper really closes. That
+     * is a fact about a method in `src/` - in another lane's package, at that -
+     * and it cannot be settled from a synthetic string. What it does prove is
+     * that the row is wired, that its polarity is the one the roster claims,
+     * and that removing it costs a red. The residual is recorded in the
+     * hardening backlog.
+     *
+     * @dataProvider rosteredHelpers
+     */
+    public function testEveryRosteredHelperProducesItsRostersVerdict(
+        string $helper,
+        string $expected,
+    ): void {
+        // Rebuilt from the lowercased roster key, so the fixture cannot drift
+        // away from the row it is spending: `processreaper::terminateandclose`
+        // becomes `Processreaper::terminateandclose($h)`, which matches
+        // case-insensitively exactly as the roster promises.
+        [$class, $method] = \explode('::', $helper, 2);
+        $call = \ucfirst($class) . '::' . $method;
+
+        $sites = $this->sitesIn(<<<PHP
+            <?php
+            function m(array \$pipes) {
+                \$h = proc_open('x', [2 => ['pipe','w']], \$pipes);
+                {$call}(\$h);
+            }
+            PHP);
+
+        self::assertCount(1, $sites, 'the fixture for ' . $helper . ' produced no site');
+        self::assertSame(
+            $expected,
+            $sites[0]['lifetime'],
+            $helper . ' is rostered but the scanner does not give it that roster\'s verdict. A '
+                . 'row nothing exercises is a row that can be wrong for free.',
+        );
+        self::assertStringContainsString(
+            $method,
+            \strtolower($sites[0]['reason']),
+            'the reason must name the call that was actually found, not a generic proc_close()',
+        );
+    }
+
+    /** @return iterable<string, array{0:string,1:string}> */
+    public static function rosteredHelpers(): iterable
+    {
+        foreach (ChildLifetimeScanner::CLOSING_HELPERS as $helper => $_) {
+            yield 'closes: ' . $helper => [$helper, ChildLifetimeScanner::LIFETIME_SHORT];
+        }
+        foreach (ChildLifetimeScanner::BEST_EFFORT_REAPERS as $helper => $_) {
+            yield 'best effort: ' . $helper => [$helper, ChildLifetimeScanner::LIFETIME_UNCLASSIFIED];
+        }
+    }
+
+    /**
+     * A BEST-EFFORT REAP IS NOT A CLOSE, and this is the row that was wrong.
+     *
+     * `ProcessReaper::reapIfExited()` was rostered in
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} under a doc-block warning
+     * that a row there "is a claim that the helper really closes". Read off
+     * that method's own source rather than its name: it waits WITHOUT
+     * signalling, and on the branch where the child is still running at the
+     * end of the budget it `return null`s with the handle untouched. So it
+     * reaps sometimes.
+     *
+     * WHY THAT MATTERED RATHER THAN BEING A WORDING QUIBBLE. With the row in
+     * place the scanner answered {@see ChildLifetimeScanner::LIFETIME_SHORT}
+     * for `Sessions/BackgroundSupervisor::spawnSession` - and
+     * {@see DescriptorInheritanceGuardTest::exposedIn()} `continue`s past every
+     * short site, so E366's own HIGH finding would have vanished from the
+     * guard entirely on the merge that introduced the helper. Not reported and
+     * exempted: gone.
+     */
+    public function testABestEffortReaperIsNotAClose(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Crush\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::reapIfExited($h);
+            }
+            PHP);
+
+        self::assertNotSame(
+            ChildLifetimeScanner::LIFETIME_SHORT,
+            $sites[0]['lifetime'],
+            'a helper that returns without closing when the child is still running does not end '
+                . "the child's life, and reading it as short DELETES the site from the guard",
+        );
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('BEST-EFFORT', $sites[0]['reason']);
+    }
+
+    /**
+     * The unfollowable-call sentence must not PRESCRIBE the defect above.
+     *
+     * A handle handed to an unrostered call is unclassified with advice
+     * attached, and the advice used to be "if one of those reaps the child,
+     * roster it in CLOSING_HELPERS" - which is precisely the edit that hid
+     * `spawnSession`. The advice now names both rosters.
+     */
+    public function testTheUnfollowableCallAdviceNamesBothRosters(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $this->registry->adopt($h);
+            }
+            PHP);
+
+        self::assertStringContainsString('CLOSING_HELPERS', $sites[0]['reason']);
+        self::assertStringContainsString('BEST_EFFORT_REAPERS', $sites[0]['reason']);
+    }
+
+    /**
+     * The reason names the close that ACTUALLY covered every path.
+     *
+     * A single overwritten `$closer` reported whichever reaping call came
+     * last, so a function with an unconditional `proc_close()` followed by a
+     * conditional helper said the CONDITIONAL one "runs unconditionally". The
+     * verdict was right and the sentence sent the reader to the wrong line -
+     * the same defect the named-closer change existed to remove.
+     */
+    public function testTheNamedCloserIsTheOneThatCoveredEveryPath(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Crush\Support\ProcessReaper;
+            function m(array $pipes, bool $extra) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                proc_close($h);
+                if ($extra) {
+                    ProcessReaper::terminateAndClose($h);
+                }
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+        self::assertStringContainsString('proc_close($h) runs unconditionally', $sites[0]['reason']);
+        self::assertStringNotContainsString(
+            'terminateAndClose($h) runs unconditionally',
+            $sites[0]['reason'],
+            'the conditional call is inside an if; naming it as the unconditional one describes '
+                . 'a line the reader will not find where the message says it is',
+        );
+    }
+
+    /**
+     * A handle inside an array literal is UNFOLLOWED, not untouched.
+     *
+     * `$a = ['p' => $h];` has no callee to name, so the escape branch does not
+     * fire and the fall-through claimed "nothing in this function returns,
+     * stores or proc_close()s $h" - flatly false about a function that plainly
+     * puts it somewhere. Same family as the unfollowable-call sentence, and
+     * the same rule: a reviewer can act on "I could not follow this", and
+     * cannot act on a false absence.
+     */
+    public function testAHandleInsideAnArrayLiteralSaysSoRatherThanClaimingNothingHappens(): void
+    {
+        $member = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $bundle = ['process' => $h];
+                return $bundle;
+            }
+            PHP);
+        $untouched = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $member[0]['lifetime']);
+        self::assertStringContainsString('appears again on line', $member[0]['reason']);
+        self::assertStringNotContainsString('nothing in this function', $member[0]['reason']);
+
+        // The other polarity, in the same test: a function that really does
+        // nothing with the handle must still get the absence sentence, or the
+        // fix above has simply replaced one always-wrong message with another.
+        self::assertStringContainsString('nothing in this function', $untouched[0]['reason']);
     }
 
     /**
