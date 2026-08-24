@@ -241,6 +241,13 @@ final class WorktreeRemovalReportingTest extends TestCase
      * only fixture that denies anything denies WRITE (`0555`), which leaves
      * `scandir()` working. `0000` is a different arm and needs its own fixture.
      *
+     * THE FIRST VERSION OF THIS TEST ASSERTED ON THE PARENT AND THE MUTATION
+     * SURVIVED IT ANYWAY, which is rule 16 landing on the fix rather than on the
+     * defect: with `scandir()`'s failure reported as `true`, the unreadable child
+     * is left in place, so `@rmdir()` on the PARENT fails on `ENOTEMPTY` and the
+     * parent still answers false. The arm has to be driven at the unreadable
+     * directory ITSELF, where nothing else can supply the false.
+     *
      * The positive half is in the same test: a loose file beside the unreadable
      * directory still goes, so a remover that had simply become "always false"
      * would not satisfy this either.
@@ -257,6 +264,14 @@ final class WorktreeRemovalReportingTest extends TestCase
             'the mode-bit denial did not take — running as root, or on a filesystem that ignores '
                 . 'mode bits, and then nothing below is measuring anything',
         );
+
+        // AT THE UNREADABLE DIRECTORY ITSELF — see the doc-block: asserted on
+        // the parent, this passes whether or not the scandir arm reports.
+        self::assertFalse(
+            self::removeDirectory($this->manager, $tree . '/inner'),
+            'a directory whose contents could not even be listed is being reported as removed',
+        );
+        self::assertDirectoryExists($tree . '/inner');
 
         self::assertFalse(self::removeDirectory($this->manager, $tree));
         self::assertDirectoryExists($tree . '/inner');
