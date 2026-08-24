@@ -36,14 +36,27 @@ use PHPUnit\Framework\TestCase;
  * WHAT THE SCANNER READS, and why it is an assertion and not a `grep`. The
  * offending shape is a message paired with an assertion that contradicts it,
  * so neither half can be read alone: `assertFalse($meta['blocked'], …)` demands
- * a set flag and `assertTrue($meta['blocked'], …)` demands a cleared one, and
- * the verdict is whether the message names the other direction. A `grep` for
- * the token sees ten sites and can rank none of them.
+ * a set flag and `assertTrue($meta['blocked'], …)` demands a cleared one. A
+ * `grep` for the token sees ten sites and can rank none of them.
+ *
+ * AND THE DEMANDED DIRECTION IS STILL NOT THE ANSWER, WHICH IS WHERE THE FIRST
+ * VERSION OF THIS FILE WAS WRONG. A failure message is read at the moment the
+ * assertion FAILS, so a NEGATED sentence ("did not clear it") names the
+ * demanded act and reports it missing, while an AFFIRMATIVE one ("the bootstrap
+ * cleared it") describes the state at failure — the OPPOSITE of the demand.
+ * Grading both against the demand alone is not blind to the affirmative form,
+ * it is exactly backwards on it, and it false-cleaned the tree's one
+ * affirmative site. {@see rank()} carries the derivation and
+ * {@see vocabularyCases()} carries all four affirmative combinations, which the
+ * table did not when the defect shipped: every polarity row in it was negated,
+ * so the shape it mis-ranked was outside its own alphabet (rule 11).
  *
  * RULE 14: A SITE WHOSE DIRECTION THIS CANNOT DECIDE IS `unreadable`, NOT
  * CLEAN. One real site names BOTH directions in one sentence, which is a
  * different defect from naming the wrong one and is rostered as its own kind
- * rather than being quietly counted as fine.
+ * rather than being quietly counted as fine. A sentence carrying a negation
+ * that this cannot attach to its verb ({@see negatesTheVerb()}) takes the same
+ * exit rather than being resolved by a coin flip.
  *
  * WHAT IT DELIBERATELY CANNOT SEE. Prose that discusses the flag without an
  * assertion beside it — `tests/bootstrap.php`'s measured table uses "clear" to
@@ -99,6 +112,19 @@ final class NonBlockingVocabularyTest extends TestCase
                 . 'entry says "(x2)" where the tree has four. Derived here rather than quoted, '
                 . 'which is why the discrepancy is visible at all. Out of this lane.',
         ],
+        'tests/SuiteChildStdinIsolationTest.php' => [
+            'sites' => 1,
+            'why' => 'The TERMINAL arm, and the ONLY affirmatively-phrased site in the tree. The '
+                . 'first rank() graded every message against the direction its assertion DEMANDS, '
+                . 'which is right only for the negated form, so this one came back `consistent` '
+                . 'and the file was rostered as carrying nothing. It is inverted against the code '
+                . 'and not merely against a rule: `tests/bootstrap.php` ends in '
+                . '`if (!stream_isatty(STDIN)) { stream_set_blocking(STDIN, false); }`, so the '
+                . 'only act it could perform on a tty is a flag SET, and the sentence says the '
+                . 'opposite. The same file also owns the one UNREADABLE row below. Out of this '
+                . 'lane — the repair is a prose edit in lane e, and it must land WITH this row\'s '
+                . 'deletion or the census reds at the merge.',
+        ],
     ];
 
     /**
@@ -133,12 +159,32 @@ final class NonBlockingVocabularyTest extends TestCase
      * "the call set the flag" from "the call happened to be a no-op and the fd
      * always looked like that".
      *
-     * @requires OS Linux
+     * ⚠️ THIS TEST NEVER SKIPS, DELIBERATELY. Its first version carried both an
+     * OS-Linux requires-annotation — the only one in the suite — and a
+     * `markTestSkipped` on `/proc/self/fdinfo`. Neither fires here or in CI
+     *
+     * (AND THE NAME OF THAT ANNOTATION IS NOT SPELLED IN THIS FILE, which is
+     * rule 26 arriving one level down: the first draft of this very paragraph
+     * WROTE the annotation while describing it, PHPUnit read it out of the
+     * doc-block, and the test skipped — inside the change whose entire purpose
+     * was to stop it skipping. A doc-comment is not an inert place to quote a
+     * doc-comment directive.)
+     * (`sugar-crush` is in neither `WINDOWS_LIBS` nor `MACOS_LIBS` in
+     * `scripts/affected-libs.php`), but a round whose central sanity check is
+     * "skips are exactly one" should not hand itself two new ways to break it
+     * on a runner-pool change. The split instead is by CAPABILITY: the
+     * `stream_get_meta_data()` half is portable and always runs, the
+     * descriptor-flag half needs `/proc`, and a box that has no `/proc` must
+     * prove it is not Linux — which is a red on the case actually worth
+     * catching (a Linux runner that lost `/proc`) rather than a silent skip.
      */
     public function testTheFlagDirectionIsWhatTheVocabularyHereSaysItIs(): void
     {
-        if (!is_dir('/proc/self/fdinfo')) {
-            self::markTestSkipped('no /proc/self/fdinfo: the flag cannot be read on this box');
+        $canReadFlags = is_dir('/proc/self/fdinfo');
+        if (!$canReadFlags) {
+            self::assertNotSame('Linux', \PHP_OS_FAMILY, 'this is Linux and /proc/self/fdinfo is '
+                . 'missing, so the descriptor-level half of this measurement went away on a box '
+                . 'where it should work');
         }
 
         // THE PIPE COMES FROM proc_open() AND NOT FROM popen(), and the first
@@ -165,35 +211,50 @@ final class NonBlockingVocabularyTest extends TestCase
 
         foreach ($kinds as $why => $stream) {
 
-            $before = self::flagSnapshot();
+            $before = $canReadFlags ? self::flagSnapshot() : [];
             stream_set_blocking($stream, false);
-            $nonBlocking = self::flagSnapshot();
+            $nonBlocking = $canReadFlags ? self::flagSnapshot() : [];
             $metaNonBlocking = stream_get_meta_data($stream)['blocked'];
             stream_set_blocking($stream, true);
-            $blocking = self::flagSnapshot();
+            $blocking = $canReadFlags ? self::flagSnapshot() : [];
             $metaBlocking = stream_get_meta_data($stream)['blocked'];
 
-            $moved = self::soleMovedDescriptor($before, $nonBlocking);
-            self::assertNotNull($moved, $why . ': no descriptor\'s flags changed, so this '
-                . 'measurement is about a descriptor it never found and every claim below is void');
+            if ($canReadFlags) {
+                // THE FAILURE MODE HERE IS A HARD RED AND NOT A SKIP, and the
+                // message has to say which of the two ways it went. This asks a
+                // WHOLE-PROCESS question — "exactly one descriptor in
+                // /proc/self/fd moved" — to answer a local one, with a live
+                // `cat` child and PHPUnit's own descriptors in the same table.
+                // Nothing in-process should move another fd's flags across
+                // these two lines and nothing has in any run, but a reader
+                // chasing a one-off red needs to know whether it found none or
+                // several before they go looking at the stream.
+                $moved = self::movedDescriptors($before, $nonBlocking);
+                self::assertCount(1, $moved, $why . ': ' . \count($moved) . ' descriptors changed '
+                    . 'flags across the call (' . implode(',', $moved) . '), not one, so this '
+                    . 'measurement cannot say which descriptor it is about and every claim below '
+                    . 'it is void. Zero means the call was a no-op; more than one means something '
+                    . 'else in this process moved a flag between the two snapshots');
+                $moved = $moved[0];
 
-            self::assertSame(
-                self::FLAG,
-                $nonBlocking[$moved] & self::FLAG,
-                $why . ': making the stream non-blocking did not SET the flag on its descriptor, '
-                    . 'so the convention this file enforces is wrong about this box',
-            );
-            self::assertSame(
-                0,
-                $blocking[$moved] & self::FLAG,
-                $why . ': making the stream blocking again did not CLEAR the flag',
-            );
-            self::assertSame(
-                $before[$moved],
-                $blocking[$moved],
-                $why . ': the descriptor did not come back to the flags it started with, so the '
-                    . 'pair of calls is not the round trip this measurement assumes',
-            );
+                self::assertSame(
+                    self::FLAG,
+                    $nonBlocking[$moved] & self::FLAG,
+                    $why . ': making the stream non-blocking did not SET the flag on its descriptor, '
+                        . 'so the convention this file enforces is wrong about this box',
+                );
+                self::assertSame(
+                    0,
+                    $blocking[$moved] & self::FLAG,
+                    $why . ': making the stream blocking again did not CLEAR the flag',
+                );
+                self::assertSame(
+                    $before[$moved],
+                    $blocking[$moved],
+                    $why . ': the descriptor did not come back to the flags it started with, so the '
+                        . 'pair of calls is not the round trip this measurement assumes',
+                );
+            }
 
             // AND THE BRIDGE TO WHAT THE ROSTERED ASSERTIONS ACTUALLY READ.
             // Every site the census ranks reads `blocked`, not the descriptor,
@@ -388,9 +449,98 @@ final class NonBlockingVocabularyTest extends TestCase
             "<?php\n/** " . $flag . " is " . $clear . "ed here. */\n",
             [],
         ];
+        // ⚠️ THIS ROW DOES NOT PIN THE COMMENT STRIP, AND ITS MESSAGE ONCE SAID
+        // IT DID. The walk's only index read is `$tokens[$i + 1] === '('`;
+        // everything after that is text concatenation, which a comment inside
+        // the parens cannot break. Measured: with the strip mutated to keep
+        // comments, and again with the whole strip disabled, this file stayed
+        // green — the E228 shape, re-created two commits after the lane fixed
+        // it elsewhere. The row is kept because reading past an interior
+        // comment IS a capability worth a positive, and the row below is the
+        // one that actually needs the strip.
         yield 'the flag named in a COMMENT inside the call is still read' => [
-            'the comment strip is what makes the argument walk see past a comment; it did not',
+            'a comment between the parens hid the flag from the argument walk, so any message can '
+                . 'leave this census by growing an inline comment',
             "<?php\nself::assertFalse(/* c */ " . $meta . ", 'did not " . $clear . ' ' . $flag . "');\n",
+            ['inverted'],
+        ];
+        // THE STRIP'S OWN KNOWN-POSITIVE, in the position where it is
+        // load-bearing: between the call name and its paren. Without the strip
+        // `$tokens[$i + 1]` is the comment, the adjacency test fails and the
+        // site is never found at all. This file is the SIXTH consumer of
+        // DropsInsignificantTokensTrait and was the only one with no row that
+        // reds when the strip stops working.
+        yield 'a comment between the call name and its paren does not hide the site' => [
+            'the site vanished when a comment sat between the call name and its paren, which is '
+                . 'the one position where the shared token strip is what makes this walk work',
+            "<?php\nself::assertFalse /* c */ (" . $meta . ", 'did not " . $clear . ' ' . $flag . "');\n",
+            ['inverted'],
+        ];
+
+        // ── POLARITY. The four rows above are all NEGATED ("did not …"), and
+        // that alphabet is what let rank() ship inverted in both directions for
+        // the affirmative form (rule 11). All four affirmative combinations are
+        // here, and each one reds if rank() stops consulting the polarity.
+        yield 'an AFFIRMATIVE message with a clearing verb beside a demand-cleared assertion is inverted' => [
+            'the shape of the tree\'s one affirmative site was ranked as anything but inverted. An '
+                . 'affirmative message describes the state AT FAILURE, so beside an assertion '
+                . 'demanding a cleared flag the correct verb is the SETTING one',
+            $call('assertTrue', 'the bootstrap ' . $clear . 'ed ' . $flag . ' on a TERMINAL'),
+            ['inverted'],
+        ];
+        yield 'an AFFIRMATIVE message with a setting verb beside a demand-cleared assertion is consistent' => [
+            'the CORRECTED form of the tree\'s one affirmative site was still reported as a '
+                . 'contradiction, so the fix for it has nowhere to land',
+            $call('assertTrue', 'the bootstrap ' . $set . ' ' . $flag . ' on a TERMINAL'),
+            ['consistent'],
+        ];
+        yield 'an AFFIRMATIVE message with a setting verb beside a demand-set assertion is inverted' => [
+            'the other affirmative polarity was mis-ranked: beside an assertion demanding a SET '
+                . 'flag, failure means the flag is cleared, so a message saying it was ' . $set . ' '
+                . 'is naming the wrong direction',
+            $call('assertFalse', 'the tty restore put ' . $flag . ' ' . $back),
+            ['inverted'],
+        ];
+        yield 'an AFFIRMATIVE message with a clearing verb beside a demand-set assertion is consistent' => [
+            'a correct affirmative sentence in the remaining polarity was reported as a contradiction',
+            $call('assertFalse', 'something ' . $clear . 'ed ' . $flag . ' mid-run'),
+            ['consistent'],
+        ];
+        yield 'a negation too far from the verb to govern it is unreadable, not guessed' => [
+            'a sentence that is affirmative about the verb and negated about something else was '
+                . 'ranked anyway. A bare search for a negation anywhere in the message calls this '
+                . 'one negated and inverts its verdict silently (rule 14)',
+            $call('assertTrue', 'the bootstrap ' . $clear . 'ed ' . $flag
+                . ' on a tty, which the policy in this file does not allow'),
+            ['unreadable'],
+        ];
+        yield 'a negation within reach of the verb still governs it across a few words' => [
+            'the negation stopped reaching its verb across the words between them, so the tree\'s '
+                . 'own `did not put ' . $flag . ' ' . $back . '` shape would stop being read',
+            $call('assertTrue', 'did not ever once actually ' . $clear . ' ' . $flag),
+            ['consistent'],
+        ];
+        yield 'a negation beyond NEGATION_REACH words of the verb is unreadable' => [
+            'a negation five words from its verb was read as governing it, so the reach is not the '
+                . 'bound this file says it is and the rule-14 branch is unreachable',
+            $call('assertTrue', 'did not ever once really truly finally ' . $clear . ' ' . $flag),
+            ['unreadable'],
+        ];
+
+        // ── WORD BOUNDARIES. Both rows red with their `\b` removed; before
+        // they existed, removing either boundary SURVIVED the whole of
+        // tests/Support tests/Cli tests/Config. See directionPatterns().
+        yield 'a message that quotes stream_' . $set . '_blocking still names one direction' => [
+            'the setting verb was matched inside the name of the call the message quotes, so a '
+                . 'real inverted sentence was downgraded to unrankable and left the census',
+            $call('assertFalse', 'did not ' . $clear . ' ' . $flag
+                . ', though stream_' . $set . '_blocking(STDIN, false) ran'),
+            ['inverted'],
+        ];
+        yield 'a message containing the word un' . $clear . ' still names one direction' => [
+            'the clearing verb was matched inside a longer word, with the same effect in the other '
+                . 'direction',
+            $call('assertTrue', 'did not ' . $set . ' ' . $flag . ', and the reason is un' . $clear),
             ['inverted'],
         ];
     }
@@ -470,25 +620,151 @@ final class NonBlockingVocabularyTest extends TestCase
      * demands.
      *
      * `$wantsSet` is true for the assertion that demands a NON-blocking stream,
-     * because non-blocking is the flag set. The verbs are matched on word
-     * boundaries: without them the setting verb matches inside `offset` and
-     * every message in the suite would name both directions.
+     * because non-blocking is the flag set.
+     *
+     * 🔴 THE DEMANDED DIRECTION IS NOT THE CORRECT VERB — THE MESSAGE'S
+     * GRAMMATICAL POLARITY DECIDES WHICH IS. A failure message is read at the
+     * moment the assertion FAILS, so the two shapes point opposite ways:
+     *
+     *  - NEGATED — `assertFalse($m['blocked'], 'did not <verb> the flag')`.
+     *    The sentence names the act the assertion demanded and reports it
+     *    missing, so the correct verb IS the demanded direction.
+     *  - AFFIRMATIVE — `assertTrue($m['blocked'], 'X <verb>ed the flag')`.
+     *    The sentence describes the state AT FAILURE, which is the OPPOSITE of
+     *    what the assertion demanded, so the correct verb is the opposite one.
+     *
+     * The first version of this method graded every message against the
+     * demanded direction alone. That is right for the negated form and exactly
+     * backwards for the affirmative one — wrong in BOTH polarities, not merely
+     * blind to one — and it false-cleaned the tree's one affirmative site
+     * (`tests/SuiteChildStdinIsolationTest.php`, the TERMINAL arm), reporting
+     * `consistent` for a sentence that is inverted and reddening if anybody
+     * fixed it. It survived its own known-answer table because all four
+     * polarity rows there were negated: the shape it mis-ranked was outside
+     * the table's alphabet by construction (rule 11).
+     *
+     * @see negatesTheVerb() for what happens when the polarity cannot be read
      */
     private static function rank(bool $wantsSet, string $body): string
     {
-        $says = [];
-        if (preg_match('/\b' . 'cle' . 'ar(?:s|ed|ing)?\b/i', $body) === 1) {
-            $says['cleared'] = true;
-        }
-        if (preg_match('/\b(?:' . 's' . 'et|sets|ba' . 'ck|restore[sd]?)\b/i', $body) === 1) {
-            $says['set'] = true;
+        $named = [];
+        foreach (self::directionPatterns() as $direction => $pattern) {
+            if (preg_match($pattern, $body) === 1) {
+                $named[$direction] = $pattern;
+            }
         }
 
-        if (\count($says) !== 1) {
+        if (\count($named) !== 1) {
             return 'unreadable';
         }
 
-        return isset($says['set']) === $wantsSet ? 'consistent' : 'inverted';
+        $direction = array_key_first($named);
+        $negated   = self::negatesTheVerb($body, $named[$direction]);
+
+        if ($negated === null) {
+            return 'unreadable';
+        }
+
+        // NEGATED: the correct verb is the demanded direction. AFFIRMATIVE: the
+        // opposite. Which is exactly `$negated === $wantsSet`.
+        $correct = $negated === $wantsSet ? 'set' : 'cleared';
+
+        return $direction === $correct ? 'consistent' : 'inverted';
+    }
+
+    /**
+     * The two direction vocabularies, keyed by the flag state each names.
+     *
+     * WORD BOUNDARIES — REWRITTEN AGAINST A MEASUREMENT (rule 7).
+     *
+     * WHAT IT SAID: "The verbs are matched on word boundaries: without them the
+     * setting verb matches inside `offset` and every message in the suite would
+     * name both directions."
+     *
+     * WHAT IS TRUE NOW: that was never measured and it is false. Pushing the
+     * real population (`tests` + `src`, 10 ranked sites, PHP 8.3.6) through a
+     * byte-copy of this pair with every `\b` removed changes 0 of 10 verdicts,
+     * and mutating each `\b` pair out of this file individually SURVIVED the
+     * whole of `tests/Support tests/Cli tests/Config`. The word `offset`
+     * appears in no ranked message.
+     *
+     * WHY THEY STILL EARN THEIR PLACE: the shape that needs them has not
+     * arrived yet but is one edit away — a message that quotes the call it is
+     * about. `stream_set_blocking(STDIN, false)` contains the setting verb and
+     * `unclear` contains the clearing one, so a sentence naming either would,
+     * without the boundaries, name both directions and be downgraded from
+     * `inverted` to `unreadable` — a real site quietly leaving the census. That
+     * is no longer an argument: two rows of {@see vocabularyCases()} are those
+     * two sentences, and each one reds if its boundary is removed.
+     *
+     * The setting side also spells `setting`, which it did not: it matched
+     * `set|sets|back|restore[sd]?` while the clearing side matched all four of
+     * `clear|clears|cleared|clearing`. Nothing in the population turns on it —
+     * the asymmetry is closed because a reader would not expect it, not
+     * because a site was escaping.
+     *
+     * @return array<string,string> flag state => pattern that names it
+     */
+    private static function directionPatterns(): array
+    {
+        return [
+            'cleared' => '/\b' . 'cle' . 'ar(?:s|ed|ing)?\b/i',
+            'set'     => '/\b(?:' . 's' . 'et(?:s|ting)?|ba' . 'ck|restore[sd]?)\b/i',
+        ];
+    }
+
+    /**
+     * At most this many words may sit between a negation and the verb it is
+     * read as governing.
+     *
+     * MEASURED, not chosen: the widest gap in today's population is TWO words,
+     * in `restore() did not put O_NONBLOCK back` — the negation and the verb
+     * are separated by `put O_NONBLOCK`. Every other ranked site has a gap of
+     * zero. Four is that plus headroom, and a wider gap is reported as
+     * `unreadable` rather than guessed at.
+     */
+    private const NEGATION_REACH = 4;
+
+    /**
+     * Whether a negation governs the direction verb $verbPattern found in
+     * $body: true for a negated message, false for an affirmative one, and
+     * NULL when $body carries a negation this cannot attach to the verb.
+     *
+     * RULE 14 LIVES IN THE NULL. "There is a negation somewhere in the sentence
+     * but not near the verb" is precisely the shape a positional rule gets
+     * wrong — `the bootstrap cleared the flag, which is not allowed` is
+     * affirmative about the verb and negated about the consequence — so it is
+     * reported as unrankable rather than resolved by whichever rule happened to
+     * be written first. A bare `str_contains($body, 'not')` would have called
+     * that sentence negated and inverted its verdict silently.
+     *
+     * The reach is deliberately forward-only and short {@see NEGATION_REACH}. A
+     * marker AFTER the verb never negates it here, because the two orderings
+     * that would need are `never <verb>` (already forward) and a trailing
+     * clause about something else.
+     */
+    private static function negatesTheVerb(string $body, string $verbPattern): ?bool
+    {
+        $negation = '/\b(?:(?:did|does|do|is|are|was|were|has|have|had|can|could|will|would|should|must)'
+            . '\s*n(?:o|\')t|never|no\s+longer|fail(?:s|ed)?\s+to|stopped)\b/i';
+
+        if (preg_match_all($negation, $body, $markers, \PREG_OFFSET_CAPTURE) < 1) {
+            return false;
+        }
+
+        foreach ($markers[0] as [$text, $at]) {
+            $tail = substr($body, $at + \strlen($text));
+            if (preg_match($verbPattern, $tail, $hit, \PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+
+            $between = preg_split('/\s+/', trim(substr($tail, 0, $hit[0][1])), -1, \PREG_SPLIT_NO_EMPTY);
+            if (\count($between ?: []) <= self::NEGATION_REACH) {
+                return true;
+            }
+        }
+
+        return null;
     }
 
     /** @return array<int,int> descriptor => flags */
@@ -514,13 +790,19 @@ final class NonBlockingVocabularyTest extends TestCase
     }
 
     /**
-     * The one descriptor whose flags differ between two snapshots, or null when
-     * that is not exactly one.
+     * Every descriptor whose flags differ between two snapshots.
+     *
+     * Returns the LIST and not "the sole one or null" so the caller can say how
+     * many it found: zero and several are different failures and the message
+     * that told a reader only "no descriptor's flags changed" was wrong in the
+     * second case.
      *
      * @param array<int,int> $before
      * @param array<int,int> $after
+     *
+     * @return list<int>
      */
-    private static function soleMovedDescriptor(array $before, array $after): ?int
+    private static function movedDescriptors(array $before, array $after): array
     {
         $moved = [];
         foreach ($after as $fd => $flags) {
@@ -529,7 +811,7 @@ final class NonBlockingVocabularyTest extends TestCase
             }
         }
 
-        return \count($moved) === 1 ? $moved[0] : null;
+        return $moved;
     }
 
     /** @return array<string,string> relative path => absolute path */
