@@ -1218,6 +1218,37 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             /** Another block, with a declaration between them. */
             function g(): void {}
             PHP));
+
+        // AND ACROSS AN ATTRIBUTE, which an adjacency walk loses (rule 11: ask
+        // what the alphabet cannot express before believing a zero). PHP still
+        // attaches only the LAST block, so the first is still stranded.
+        //
+        // THE ARGUMENT CARRIES A NESTED ARRAY ON PURPOSE. It makes this one
+        // fixture kill both ways the skip can be wrong: not skipping the
+        // attribute at all leaves `T_ATTRIBUTE` between the blocks, and skipping
+        // to the FIRST `]` instead of counting depth leaves the array's own
+        // closing brackets there. Either way the pair stops being adjacent and
+        // this assertion goes red.
+        self::assertSame([2], self::stackedDocCommentLines(<<<'PHP'
+            <?php
+            /** First, stranded across the attribute. */
+            #[\Deprecated(['a' => [1, 2]])]
+            /** Second, which wins. */
+            function f(): void {}
+            PHP));
+
+        // AND THE SKIP MUST NOT MANUFACTURE A PAIR. A lone attributed block
+        // followed later by an unrelated one is not stacked, and the array
+        // literal in the attribute's argument is what makes the depth count
+        // rather than a scan-to-the-next-bracket necessary.
+        self::assertSame([], self::stackedDocCommentLines(<<<'PHP'
+            <?php
+            /** One attributed block. */
+            #[\Deprecated(['a' => [1, 2]])]
+            function f(): void {}
+            /** Another block. */
+            function g(): void {}
+            PHP));
     }
 
     /**
@@ -1257,13 +1288,38 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * `T_COMMENT` is skipped but `T_DOC_COMMENT` is not, so a `//` line between
      * two blocks does NOT rescue the first — PHP does not attach it either.
      *
+     * AN ATTRIBUTE IS SKIPPED WHOLE, WHICH IS AN ALPHABET FIX AND NOT A TIDY-UP.
+     * `/** A * / #[Attr] /** B * / function f()` is the same defect as the
+     * adjacent pair — MEASURED, PHP 8.3.6: `getDocComment()` returns block B and
+     * block A documents nothing — but the two blocks are not adjacent, so a walk
+     * that counted `#[` as significant scored the pair as ABSENT. Depth-counted
+     * rather than scanned to the next `]`, because an attribute argument can
+     * carry an array literal and its brackets would close the run early.
+     *
      * @return list<int>
      */
     private static function stackedDocCommentLines(string $source): array
     {
         $significant = [];
+        $attributeDepth = 0;
         foreach (token_get_all($source) as $token) {
             if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT], true)) {
+                continue;
+            }
+            if ($attributeDepth > 0) {
+                if ($token === '[') {
+                    $attributeDepth++;
+                } elseif ($token === ']') {
+                    $attributeDepth--;
+                }
+
+                continue;
+            }
+            // `T_ATTRIBUTE` IS the opening `#[`, so the depth starts at one and
+            // the matching `]` closes it.
+            if (\is_array($token) && $token[0] === T_ATTRIBUTE) {
+                $attributeDepth = 1;
+
                 continue;
             }
             $significant[] = $token;
