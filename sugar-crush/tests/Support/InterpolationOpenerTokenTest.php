@@ -136,8 +136,9 @@ final class InterpolationOpenerTokenTest extends TestCase
      * SELECTION found three more walkers the guard had never been able to
      * see, which is why the map is not empty. WHY THE MECHANISM STILL EARNS
      * ITS PLACE whatever the map holds: a deferral recorded here is checked
-     * against the tree in both directions, and an empty map would still be
-     * the only place the next one can go.
+     * against the tree in every direction it can be wrong - the gap with no
+     * row, the row with no gap, and the row that no longer describes its gap -
+     * and an empty map would still be the only place the next one can go.
      *
      * ALL THREE ROWS BELOW CAME FROM ONE WIDENING, and that is the entry
      * worth reading twice. Selection used to be "names `T_CURLY_OPEN` as
@@ -147,10 +148,24 @@ final class InterpolationOpenerTokenTest extends TestCase
      * one, and was invisible to this guard by construction - the alphabet had
      * been written to match the cases already known.
      *
-     * @var array<string,string>
+     * A ROW RECORDS WHICH OPENERS THE FILE IS MISSING, NOT JUST THAT IT IS
+     * MISSING SOME. Keying a deferral on the FILENAME alone was the weaker
+     * shape this file shipped with, and it fails in the direction a deferral
+     * always fails: a PARTIAL fix. A walker that gained `T_CURLY_OPEN` and not
+     * the deprecated opener still has A gap, so a file-keyed row still matched
+     * it, and nothing reported that the row's own prose - which says this one
+     * misses the everyday spelling too - had become false. With the set
+     * recorded, that fix reds here and says which half was closed. The set is
+     * intersected with the LIVE roster before comparing, so a PHP that removes
+     * the deprecated opener shrinks both sides together instead of reddening
+     * every row at once.
+     *
+     * @var array<string,array{openers:list<string>,reason:string}>
      */
     private const KNOWN_GAPS = [
-        'tests/Cli/BootstrapLaunchFormatConstantsTest.php' =>
+        'tests/Cli/BootstrapLaunchFormatConstantsTest.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
             'methodBody() counts depth on the BARE string `{` over a token_get_all() stream, '
             . 'where T_CURLY_OPEN comes back as an ARRAY token and its closer comes back as a '
             . 'bare `}` - so it misses the everyday spelling, not just the deprecated one, and '
@@ -167,18 +182,34 @@ final class InterpolationOpenerTokenTest extends TestCase
             . 'was both wrong - the derived set is smaller - and not the claim, since the set '
             . 'is derived and a cardinality in prose is wrong by the next merge. tests/Cli/ '
             . "was in no lane's file list for the round that found this.",
-        'tests/Commands/SlashDispatchTest.php' =>
+        ],
+        'tests/Commands/SlashDispatchTest.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
             'dispatchArmNames() has the same bare-string shape over a token_get_all() stream, '
             . 'walking the `match` arms of Chat::dispatchCommand(). Latent: measured on PHP '
             . '8.3.6, that method contains zero T_CURLY_OPEN tokens today, so nothing '
             . 'truncates. The failure mode if one appears is the same as the row above.',
-        'tests/Config/ReadmeJsonErrorContractDriftTest.php' =>
+        ],
+        'tests/Config/ReadmeJsonErrorContractDriftTest.php' => [
+            // Both, because the SELECTION cannot tell a text-keyed walker from
+            // a bare-string one - see the reason. This row is the one place
+            // that distinction is written down, which is why deleting it in
+            // favour of "it is fine really" would lose the only record of it.
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
             'Two depth counters keyed on `$token->text === \'{\'`. This one handles '
             . 'T_CURLY_OPEN BY ACCIDENT and not by design - a PhpToken\'s text for that token '
             . 'IS `{`, measured on PHP 8.3.6 - while T_DOLLAR_OPEN_CURLY_BRACES\' text is `${` '
             . 'and is missed. So it is the deprecated spelling alone here, as in '
             . 'VhsTapeContractTest before it was fixed, and it is latent for the same reason: '
-            . 'the syntax occurs nowhere in the tree.',
+            . 'the syntax occurs nowhere in the tree. THE RECORDED OPENER SET IS WIDER THAN THE '
+            . 'TRUTH HERE, deliberately and visibly: a PhpToken\'s text for T_CURLY_OPEN IS '
+            . '`{`, so this walker really does handle that one, but the selection reads a '
+            . 'comparison against a brace and cannot see which stream it is over. The set '
+            . 'records what the SCANNER reports so the row and the scanner cannot drift apart; '
+            . 'this sentence records what is actually true.',
+        ],
     ];
 
     /**
@@ -520,7 +551,11 @@ final class InterpolationOpenerTokenTest extends TestCase
                 . 'or this test is looking in the wrong place',
         );
 
-        [$unrecorded, $overtaken] = self::reconcile($gaps, self::KNOWN_GAPS);
+        [$unrecorded, $overtaken, $mismatched] = self::reconcile(
+            $gaps,
+            self::KNOWN_GAPS,
+            $openers,
+        );
 
         $this->assertSame(
             [],
@@ -532,12 +567,24 @@ final class InterpolationOpenerTokenTest extends TestCase
                 . 'broken. Add the token beside T_CURLY_OPEN wherever the depth is counted.',
         );
 
-        // THE DEFERRAL IS CHECKED AGAINST THE TREE, in both directions. A row
-        // whose file has been fixed is a note about something already done,
-        // and the next reader widens the guard by deleting rows rather than
-        // by measuring.
-        foreach (self::KNOWN_GAPS as $relative => $reason) {
-            $this->assertNotSame('', trim($reason), $relative . ' is deferred without a reason');
+        // THE DEFERRAL IS CHECKED AGAINST THE TREE, in every direction it can
+        // be wrong. A row whose file has been fixed is a note about something
+        // already done, and the next reader widens the guard by deleting rows
+        // rather than by measuring. A row whose file is still a gap but a
+        // DIFFERENT one is the third direction, added after a review found that
+        // a file-keyed row was silent on a partial fix.
+        foreach (self::KNOWN_GAPS as $relative => $row) {
+            $this->assertNotSame(
+                '',
+                trim($row['reason']),
+                $relative . ' is deferred without a reason',
+            );
+            $this->assertNotSame(
+                [],
+                $row['openers'],
+                $relative . ' is deferred without naming which openers it is missing, so a '
+                    . 'partial fix cannot be told from no fix at all',
+            );
         }
 
         $this->assertSame(
@@ -546,6 +593,20 @@ final class InterpolationOpenerTokenTest extends TestCase
             'this file is recorded in KNOWN_GAPS as a brace walker that misses an opener, and it '
                 . 'no longer is. Delete its row - a deferral that has been overtaken is how a '
                 . 'file silently stops being guarded.',
+        );
+
+        // AND THE THIRD DIRECTION: the row still matches the file, but not the
+        // gap. This is what a PARTIAL fix looks like, and it is the direction a
+        // file-keyed deferral cannot express at all.
+        $this->assertSame(
+            [],
+            $mismatched,
+            'this file is still a gap, so its KNOWN_GAPS row still matches - but the row records '
+                . 'a different set of missing openers than the one the scanner now finds. '
+                . 'Somebody closed part of the gap without finishing it, or the selection '
+                . 'changed what it can see. Update the row\'s `openers` to the set in the '
+                . 'message and re-read its `reason`, which was written about the wider gap and '
+                . 'is now describing something that is no longer true.',
         );
     }
 
@@ -562,33 +623,41 @@ final class InterpolationOpenerTokenTest extends TestCase
      * EARNS ITS PLACE, and why it is not simply corrected to "not empty": the
      * rows exist to be DELETED as their files are fixed, so an empty map is
      * one commit away in the direction this file is pushing. On the day the
-     * last row goes, both directions of the real check loop zero times, and
-     * "nothing is unrecorded" and "no row is overtaken" become true of a
-     * reconciliation that has been deleted outright - the same hole as a
+     * last row goes, every direction of the real check loops zero times, and
+     * "nothing is unrecorded", "no row is overtaken" and "no row has drifted"
+     * become true of a reconciliation deleted outright - the same hole as a
      * fixture whose expected value is what a dead instrument returns. The tree
      * cannot supply a positive here without re-breaking a file on purpose, so
      * the positive is synthetic and goes through the SAME {@see reconcile()}
      * the real check calls.
      *
-     * BOTH DIRECTIONS, because they fail for opposite reasons and either can
-     * be deleted without the other noticing.
+     * ALL THREE DIRECTIONS, because they fail for different reasons and any one
+     * of them can be deleted without the other two noticing.
      */
-    public function testTheKnownGapReconciliationFailsInBothDirections(): void
+    public function testTheKnownGapReconciliationFailsInEveryDirection(): void
     {
+        $openers = ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'];
         $gaps = ['a/Walker.php' => ['T_DOLLAR_OPEN_CURLY_BRACES']];
+        $row = static fn (array $openers): array
+            => ['openers' => $openers, 'reason' => 'deferred'];
 
         // A gap with no row: refused, and the message has to carry the file
         // and the token or the next reader cannot act on it.
-        [$unrecorded, $overtaken] = self::reconcile($gaps, []);
+        [$unrecorded, $overtaken, $mismatched] = self::reconcile($gaps, [], $openers);
         $this->assertSame(
             ['a/Walker.php does not name T_DOLLAR_OPEN_CURLY_BRACES'],
             $unrecorded,
             'a brace walker missing an opener, with no row recording it, was not reported',
         );
         $this->assertSame([], $overtaken, 'an empty KNOWN_GAPS cannot have an overtaken row');
+        $this->assertSame([], $mismatched, 'an empty KNOWN_GAPS cannot have a mismatched row');
 
         // A row whose file has been fixed: refused from the other side.
-        [$unrecorded, $overtaken] = self::reconcile([], ['a/Walker.php' => 'deferred']);
+        [$unrecorded, $overtaken, $mismatched] = self::reconcile(
+            [],
+            ['a/Walker.php' => $row(['T_DOLLAR_OPEN_CURLY_BRACES'])],
+            $openers,
+        );
         $this->assertSame([], $unrecorded, 'a clean tree cannot produce an unrecorded gap');
         $this->assertSame(
             ['a/Walker.php'],
@@ -596,24 +665,107 @@ final class InterpolationOpenerTokenTest extends TestCase
             'a KNOWN_GAPS row whose file no longer has the gap was not reported, so a deferral '
                 . 'can outlive the thing it deferred',
         );
+        $this->assertSame([], $mismatched, 'an overtaken row is not also a mismatched one');
 
-        // Matched: neither direction fires. Without this the two assertions
-        // above are satisfied by a reconciliation that reports everything.
-        [$unrecorded, $overtaken] = self::reconcile($gaps, ['a/Walker.php' => 'deferred']);
+        // THE THIRD DIRECTION: the file is still a gap, and the row describes a
+        // WIDER one than it has. That is a partial fix, and a file-keyed
+        // deferral is silent on it - which is what this file shipped with.
+        [$unrecorded, $overtaken, $mismatched] = self::reconcile(
+            $gaps,
+            ['a/Walker.php' => $row(['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'])],
+            $openers,
+        );
+        $this->assertSame([], $unrecorded, 'a recorded file is not an unrecorded gap');
+        $this->assertSame([], $overtaken, 'a file that is still a gap has not been overtaken');
+        $this->assertSame(
+            ['a/Walker.php is recorded as missing [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES] '
+                . 'but is actually missing [T_DOLLAR_OPEN_CURLY_BRACES]'],
+            $mismatched,
+            'half the gap was closed and the row still claims the whole of it, and nothing '
+                . 'reported the difference - so the row\'s reason now describes a gap that is '
+                . 'no longer there and the remaining half is deferred by accident',
+        );
+
+        // ...AND THE OTHER WAY ROUND, which is not the same statement: a row
+        // NARROWER than the gap means somebody widened the selection, or a new
+        // opener appeared, and the deferral is now covering more than it argued
+        // for.
+        [, , $mismatched] = self::reconcile(
+            ['a/Walker.php' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES']],
+            ['a/Walker.php' => $row(['T_DOLLAR_OPEN_CURLY_BRACES'])],
+            $openers,
+        );
+        $this->assertSame(
+            ['a/Walker.php is recorded as missing [T_DOLLAR_OPEN_CURLY_BRACES] but is actually '
+                . 'missing [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES]'],
+            $mismatched,
+            'a row narrower than the gap it defers was not reported, so a deferral can quietly '
+                . 'grow to cover openers nobody argued about',
+        );
+
+        // Matched: nothing fires. Without this the assertions above are
+        // satisfied by a reconciliation that reports everything.
+        [$unrecorded, $overtaken, $mismatched] = self::reconcile(
+            $gaps,
+            ['a/Walker.php' => $row(['T_DOLLAR_OPEN_CURLY_BRACES'])],
+            $openers,
+        );
         $this->assertSame([], $unrecorded);
         $this->assertSame([], $overtaken);
+        $this->assertSame([], $mismatched);
+
+        // AND THE ROSTER SHRINKS BOTH SIDES TOGETHER. This is the day PHP
+        // removes `${...}`: the lexer stops producing that opener, so the
+        // actual gap loses it - and a row still naming it must NOT red, or
+        // every row in the map reds at once for a reason that has nothing to
+        // do with the tree.
+        [, , $mismatched] = self::reconcile(
+            ['a/Walker.php' => ['T_CURLY_OPEN']],
+            ['a/Walker.php' => $row(['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'])],
+            ['T_CURLY_OPEN'],
+        );
+        $this->assertSame(
+            [],
+            $mismatched,
+            'a row naming an opener the running PHP no longer produces was reported as a '
+                . 'mismatch. The comparison has to be against the LIVE roster, or the map reds '
+                . 'wholesale on the language change it was written to survive.',
+        );
     }
 
     /**
-     * The two failure directions of the KNOWN_GAPS map, as data.
+     * The three failure directions of the KNOWN_GAPS map, as data.
      *
-     * @param array<string,list<string>> $gaps    file => openers it does not name
-     * @param array<string,string>       $known   file => reason it is deferred
+     * THE THIRD ONE IS THE ONE THIS FILE SHIPPED WITHOUT. A deferral keyed on
+     * the FILENAME alone matches whatever gap the file still has, so a PARTIAL
+     * fix - one opener added, the other not - kept the row matching and left
+     * its prose describing a gap that was half closed, with nothing to say so.
+     * The recorded set is compared against the actual one; a row that no longer
+     * describes its file is reported separately from one whose file is clean,
+     * because the two ask for opposite edits.
      *
-     * @return array{list<string>,list<string>} unrecorded gaps, overtaken rows
+     * THE COMPARISON IS AGAINST THE LIVE ROSTER, not against the row as
+     * written. On a PHP that removes `${...}` the lexer stops producing that
+     * opener, every actual gap set loses it, and a row still naming it would
+     * red - all three at once, for a reason that has nothing to do with the
+     * tree. Intersecting the row with the roster shrinks both sides together.
+     *
+     * @param array<string,list<string>>                              $gaps    file => openers it does not name
+     * @param array<string,array{openers:list<string>,reason:string}> $known   file => deferral
+     * @param list<string>                                            $openers the live roster
+     *
+     * @return array{list<string>,list<string>,list<string>} unrecorded gaps,
+     *         overtaken rows, rows whose recorded set no longer matches
      */
-    private static function reconcile(array $gaps, array $known): array
+    private static function reconcile(array $gaps, array $known, array $openers): array
     {
+        $normalise = static function (array $names) use ($openers): array {
+            $kept = array_values(array_intersect($names, $openers));
+            sort($kept);
+
+            return $kept;
+        };
+
         $unrecorded = [];
         foreach ($gaps as $relative => $names) {
             if (isset($known[$relative])) {
@@ -623,13 +775,24 @@ final class InterpolationOpenerTokenTest extends TestCase
         }
 
         $overtaken = [];
-        foreach (array_keys($known) as $relative) {
+        $mismatched = [];
+        foreach ($known as $relative => $row) {
             if (!isset($gaps[$relative])) {
                 $overtaken[] = $relative;
+
+                continue;
+            }
+
+            $recorded = $normalise($row['openers']);
+            $actual = $normalise($gaps[$relative]);
+            if ($recorded !== $actual) {
+                $mismatched[] = $relative . ' is recorded as missing ['
+                    . implode(', ', $recorded) . '] but is actually missing ['
+                    . implode(', ', $actual) . ']';
             }
         }
 
-        return [$unrecorded, $overtaken];
+        return [$unrecorded, $overtaken, $mismatched];
     }
 
     /**
