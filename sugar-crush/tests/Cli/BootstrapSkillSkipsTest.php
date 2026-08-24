@@ -47,23 +47,49 @@ final class BootstrapSkillSkipsTest extends TestCase
      * that with `pcntl_alarm()` plus a handler that throws. A budget EQUAL to
      * that limit means the two clocks expire together and PHPUnit's wins, since
      * its clock starts before `setUp()` and the child's starts after. When it
-     * wins, the test is ABORTED: it is recorded RISKY rather than failed, and
-     * every assertion the arm would have made is SHED from the run's totals.
-     * That is a strictly worse verdict than a red — a reader gets a count that
-     * moved and no statement about what broke.
+     * wins, the test is ABORTED rather than failed, and recorded RISKY.
+     *
+     * WHAT AN ABORT COSTS — CORRECTED, BECAUSE THE FIRST VERSION OF THIS
+     * PARAGRAPH GOT THE POLARITY WRONG. WHAT IT SAID: an abort is "strictly
+     * worse than a red" because risky still exits zero, so above the ceiling
+     * this file "can no longer fail at all". WHAT IS TRUE NOW, AND WAS TRUE
+     * WHEN THAT WAS WRITTEN: `phpunit.xml` ALSO sets `failOnRisky`, which is
+     * the attribute that decides this, and the paragraph was written from the
+     * two attributes above it without reading the third. Measured on this host,
+     * PHP 8.3.6 / PHPUnit 10.5.64, with two configurations differing ONLY in
+     * that attribute and one test whose child outlives a three-second limit:
+     * `failOnRisky="true"` exits **1** and `"false"` exits 0, both printing the
+     * same "OK, but there were issues!" banner. So an abort here IS a red, and
+     * PHPUnit names the aborted test and the file it lives in.
+     *
+     * WHY A BUDGET UNDER THE CEILING STILL EARNS ITS PLACE. What the abort
+     * actually costs is two things, both real. (1) The assertions the arm would
+     * have made are SHED — the probe reported `Assertions: 1` where two would
+     * otherwise have been made — and a moved assertion count is the signal this
+     * project reads as evidence its dependency closure is intact. (2) The
+     * diagnosis becomes "This test was aborted after N seconds / This test did
+     * not perform any assertions" instead of the sentence
+     * {@see assertTheChildRanToCompletion()} writes, which names this constant,
+     * names the child, and says what to do. Trading a specific red for a
+     * generic one is a smaller loss than the sentence above claimed, and still
+     * a loss worth one constant.
      *
      * Measured on this host, PHP 8.3.6 / PHPUnit 10.5.64, at load average 6
      * with sibling suites running: one `-p` child costs 0.28s (three takes:
      * 0.28 / 0.28 / 0.28), and the whole file runs in 0.41s. So this budget is
      * ~70x the real cost of the thing it bounds, and sits far enough under the
      * per-test limit that a child which genuinely hangs is SIGKILLed first and
-     * reported by {@see assertTheChildWasNotKilledByItsBudget()} as a red that
-     * names this constant.
+     * reported by {@see assertTheChildRanToCompletion()} as a red that names
+     * this constant.
      *
-     * RAISING IT IS A REAL TRADE AND IT HAS A CEILING. Above the per-test limit
-     * this file stops being able to fail at all, which is the state it was in.
+     * RAISING IT IS A REAL TRADE AND IT HAS A CEILING. At or above the per-test
+     * limit every genuine hang in this file reports as a generic abort with its
+     * assertions shed instead of as the specific red below — which is the state
+     * it was in.
      * {@see testTheChildBudgetStaysUnderThePerTestLimitPhpunitEnforces()} pins
-     * that ceiling against `phpunit.xml` so the relation cannot rot silently.
+     * that ceiling against `phpunit.xml` so the relation cannot rot silently,
+     * and {@see testAnAbortAtThatCeilingStillFailsTheRun()} pins the attribute
+     * that decides what the abort costs.
      */
     private const CHILD_WALL_CLOCK_BUDGET_SECONDS = 20;
 
@@ -75,9 +101,19 @@ final class BootstrapSkillSkipsTest extends TestCase
     /**
      * How much of the per-test limit must remain unspent by the child budget.
      *
-     * Not taste: the gap has to cover everything in the test that is NOT the
-     * child — `setUp()`, the sandbox teardown, the process spawn — because
-     * PHPUnit's clock is running for all of it and the child's is not.
+     * WHAT THE GAP IS FOR: everything in the test that is NOT the child —
+     * `setUp()`, the sandbox teardown, the process spawn — because PHPUnit's
+     * clock is running for all of it and the child's is not.
+     *
+     * WHERE THE VALUE COMES FROM, since "not taste" was claimed for it once
+     * without a derivation and that is worth less than an honest one. It is not
+     * derived from the measured cost of that overhead: the whole file runs in
+     * 0.41s (PHP 8.3.6, load average 6 with sibling suites running), so any
+     * headroom above a second or two would cover it with room to spare. It is
+     * set EQUAL to the budget instead, which is a policy and states itself as
+     * one: the child may never be given more than half the per-test clock. That
+     * survives a `defaultTimeLimit` cut in half without re-argument, which a
+     * headroom tuned to today's 0.41s would not.
      */
     private const BUDGET_HEADROOM_SECONDS = 20;
 
@@ -183,7 +219,7 @@ final class BootstrapSkillSkipsTest extends TestCase
             escapeshellarg($errFile),
         ), $output, $status);
 
-        $this->assertTheChildWasNotKilledByItsBudget($status, 'the one-shot run');
+        $this->assertTheChildRanToCompletion($status, 'the one-shot run');
 
         return is_file($errFile) ? (string) file_get_contents($errFile) : '';
     }
@@ -223,7 +259,7 @@ final class BootstrapSkillSkipsTest extends TestCase
             escapeshellarg($errFile),
         ), $output, $status);
 
-        $this->assertTheChildWasNotKilledByItsBudget($status, 'the launch');
+        $this->assertTheChildRanToCompletion($status, 'the launch');
 
         return is_file($errFile) ? (string) file_get_contents($errFile) : '';
     }
@@ -239,21 +275,53 @@ final class BootstrapSkillSkipsTest extends TestCase
      * with the budget cut to a fraction of a second those two tests are GREEN
      * without this arm and RED with it.
      *
-     * It refuses ONLY the budget's own kill. The launch child's exit status is
-     * otherwise not this file's business — it is a TUI process in a pipe, and
-     * demanding a particular status from it would be a second, unrelated claim.
+     * IT REFUSES EVERY NON-ZERO STATUS, NOT ONLY THE BUDGET'S OWN KILL. WHAT
+     * THIS SAID WHEN IT WAS WRITTEN: that only the kill was worth refusing,
+     * because "the launch child's exit status is otherwise not this file's
+     * business — it is a TUI process in a pipe". WHAT IS TRUE NOW: that excused
+     * exactly the gap the heading above promises to close. A child pointed at a
+     * path that does not exist never runs at all and exits 127, and under the
+     * narrow form `testACleanOneShotRunIsSilent()` was GREEN on it — measured,
+     * by pointing the one-shot helper at a nonexistent binary. The excuse was
+     * also not true of the one-shot helper at all, which runs `bin/sugarcrush`
+     * in `-p` mode and is not a TUI in a pipe.
+     *
+     * WHY THE STRICT FORM IS SAFE TO DEMAND HERE. Both children exit 0 on this
+     * host — three takes each, PHP 8.3.6, load average 6 with sibling suites
+     * running — so it costs nothing today. And the launch child is a script
+     * THIS FILE writes, whose whole body is one `Bootstrap::chat()` call: a
+     * non-zero status from it is a throw on the launch path, which is worth a
+     * red here even though it is a different claim from the absence. If a
+     * launch ever exits non-zero for a legitimate reason, give that helper its
+     * own expected status — do NOT widen this back to "anything but the kill",
+     * which is the shape that read a child that never ran as a child with
+     * nothing to say.
      */
-    private function assertTheChildWasNotKilledByItsBudget(int $status, string $which): void
+    private function assertTheChildRanToCompletion(int $status, string $which): void
     {
         $this->assertNotSame(self::KILLED_BY_THE_BUDGET, $status, \sprintf(
-            '%s was SIGKILLed by its wall-clock budget of %d second(s), so every assertion '
-            . 'below it is about a process that never finished. Either the child hung — which '
-            . 'is what this budget is for, and the hang is the bug — or the budget is now too '
-            . 'tight for this host. Raise CHILD_WALL_CLOCK_BUDGET_SECONDS knowingly, and note '
-            . 'that it has a ceiling: past the per-test limit in phpunit.xml this file can no '
-            . 'longer fail at all, it can only be aborted as risky.',
+            '%s exited %d, which is what a shell reports for a process killed by SIGKILL — '
+            . 'here almost certainly its own wall-clock budget of %d second(s), though any '
+            . 'other SIGKILL reports the same number. Every assertion below it is about a '
+            . 'process that never finished. Either the child hung — which is what this budget '
+            . 'is for, and the hang is the bug — or the budget is now too tight for this host. '
+            . 'Raise CHILD_WALL_CLOCK_BUDGET_SECONDS knowingly, and note that it has a '
+            . 'ceiling: at or past the per-test limit in phpunit.xml, PHPUnit\'s own alarm '
+            . 'wins the race instead and replaces this sentence with a generic "aborted after '
+            . 'N seconds", shedding the assertions below.',
             $which,
+            self::KILLED_BY_THE_BUDGET,
             self::CHILD_WALL_CLOCK_BUDGET_SECONDS,
+        ));
+
+        $this->assertSame(0, $status, \sprintf(
+            '%s exited %d. A child that never ran leaves the same empty stderr as a child '
+            . 'with nothing to say, so the absence assertions above would pass on a run that '
+            . 'did not happen: 127 means the binary was not found, 255 a PHP fatal before any '
+            . 'output. Fix the child, or — if this path now exits non-zero legitimately — '
+            . 'give this helper an expected status rather than dropping the arm.',
+            $which,
+            $status,
         ));
     }
 
@@ -262,13 +330,23 @@ final class BootstrapSkillSkipsTest extends TestCase
      *
      * `phpunit.xml` enforces a per-test limit through
      * `SebastianBergmann\Invoker\Invoker`, which is `pcntl_alarm()` plus a
-     * handler that throws. When that fires the test is ABORTED, PHPUnit records
-     * it RISKY rather than failed, and the assertions the arm would have made
-     * are shed from the run's totals — so a budget at or above the per-test
-     * limit converts every genuine hang in this file from a red into a moved
-     * number. Reproduced on PHP 8.3.6 / PHPUnit 10.5.64 with a three-test probe
-     * under a three-second limit: `Tests: 3, Assertions: 1, Risky: 2`, where
-     * the two aborted tests would have made three assertions between them.
+     * handler that throws. When that fires the test is ABORTED and recorded
+     * RISKY rather than failed, and the assertions the arm would have made are
+     * shed from the run's totals. Reproduced on PHP 8.3.6 / PHPUnit 10.5.64
+     * with a three-test probe under a three-second limit: `Tests: 3,
+     * Assertions: 1, Risky: 2`, where the two aborted tests would have made
+     * three assertions between them.
+     *
+     * WHAT THAT DOES *NOT* MEAN, corrected here because the first version of
+     * this paragraph said it did. An abort is not a silent pass: `phpunit.xml`
+     * sets `failOnRisky`, so the run still exits non-zero and PHPUnit names the
+     * aborted test — measured, two configurations differing only in that
+     * attribute, rc 1 against rc 0. A budget at or above the per-test limit
+     * therefore trades a SPECIFIC red for a GENERIC one and sheds the
+     * assertions; it does not turn a hang into a green.
+     * {@see testAnAbortAtThatCeilingStillFailsTheRun()} pins the attribute that
+     * makes that so, because with it off the trade really would be a red for
+     * nothing at all.
      *
      * ONE MORE THING WORTH KNOWING WHEN THIS EVER FIRES IN ANGER: the abort's
      * text quotes the CONFIGURED limit and not the elapsed time — `Invoker`
@@ -310,6 +388,14 @@ final class BootstrapSkillSkipsTest extends TestCase
      * and the three that mean "this reader is out of its depth". Answering
      * "no limit" for a source it merely failed to parse is the hole this shape
      * exists to avoid: it would read as permission for any budget at all.
+     *
+     * WHICH IS WHY THE REFUSALS ARE DISTINGUISHABLE PROSE AND THE TABLE READS
+     * THEM. The table used to assert only that a refusing row refused — every
+     * string row collapsed to "is a string" — and under that shape making the
+     * unparseable branch answer with the no-limit SENTENCE, which is literally
+     * the hole this doc-block names, SURVIVED: 17 tests, 26 assertions, green,
+     * run filtered to this file. Each refusal now carries a phrase no other
+     * refusal carries, and the table asserts the phrase.
      *
      * @return int|string seconds, or the reason there is no answer
      */
@@ -370,17 +456,33 @@ final class BootstrapSkillSkipsTest extends TestCase
     ): void {
         $answer = self::perTestLimitFromConfig($xml);
 
-        \is_int($expected)
-            ? self::assertSame($expected, $answer, $why)
-            : self::assertIsString($answer, $why);
+        if (\is_int($expected)) {
+            self::assertSame($expected, $answer, $why);
+
+            return;
+        }
+
+        self::assertIsString($answer, $why);
+        self::assertStringContainsString($expected, $answer, $why);
     }
 
     /**
+     * A string in the third column is a phrase the refusal must CONTAIN, not
+     * the refusal itself: the point is to tell the refusals apart, and pinning
+     * whole sentences would red on a rewording that changed nothing.
+     *
      * @return iterable<string, array{0: string, 1: string, 2: int|string}>
      */
     public static function perTestLimitCases(): iterable
     {
         $cannot = 'this reader has to say it cannot answer, not answer "no limit"';
+
+        // The phrase that identifies each refusal. No two share one, so a
+        // branch answering with another branch's sentence is a red.
+        $notEnforced = 'does not set enforceTimeLimit';
+        $noDefault = 'without setting defaultTimeLimit';
+        $notWholeSeconds = 'not a whole number of seconds';
+        $notXml = 'did not parse as XML';
 
         yield 'the shape this repository actually uses' => [
             'the reader cannot read the real file\'s shape, so the guard above never runs',
@@ -407,37 +509,192 @@ final class BootstrapSkillSkipsTest extends TestCase
         yield 'enforcement turned off means there is no limit to stay under' => [
             'a configuration that enforces nothing was reported as enforcing a number',
             '<phpunit enforceTimeLimit="false" defaultTimeLimit="60"/>',
-            'no limit',
+            $notEnforced,
         ];
         yield 'enforcement absent means there is no limit to stay under' => [
             'a configuration that enforces nothing was reported as enforcing a number',
             '<phpunit defaultTimeLimit="60"/>',
-            'no limit',
+            $notEnforced,
         ];
         yield 'enforcement on with no default is a limit this reader cannot name' => [
             $cannot,
             '<phpunit enforceTimeLimit="true"/>',
-            'unknown',
+            $noDefault,
         ];
         yield 'a non-numeric limit is unparseable, not absent' => [
             $cannot,
             '<phpunit enforceTimeLimit="true" defaultTimeLimit="sixty"/>',
-            'unparseable',
+            $notWholeSeconds,
         ];
         yield 'a fractional limit is unparseable, not truncated' => [
             'a fraction was silently truncated, which quietly changes the ceiling',
             '<phpunit enforceTimeLimit="true" defaultTimeLimit="60.5"/>',
-            'unparseable',
+            $notWholeSeconds,
         ];
         yield 'text that is not XML at all is unparseable, not absent' => [
             $cannot,
             'this is not xml',
-            'not xml',
+            $notXml,
         ];
         yield 'an empty file is unparseable, not absent' => [
             $cannot,
             '',
-            'empty',
+            $notXml,
+        ];
+    }
+
+    /**
+     * AN ABORT AT THAT CEILING STILL FAILS THE RUN, AND ONE ATTRIBUTE DECIDES
+     * IT.
+     *
+     * The ceiling above is a statement about WHICH OF TWO CLOCKS WINS. What
+     * losing that race costs is a separate question, and `failOnRisky` is its
+     * whole answer: with it on, a risky abort exits non-zero and PHPUnit names
+     * the aborted test and its file; with it off, the same abort prints under
+     * an "OK, but there were issues!" banner and the run exits 0. Measured on
+     * this host, PHP 8.3.6 / PHPUnit 10.5.64 — two configurations differing in
+     * that attribute alone, one test whose child outlives a three-second limit,
+     * identical banners, rc 1 against rc 0.
+     *
+     * So this is not decoration for the paragraphs above; it is what makes them
+     * true. Turn `failOnRisky` off and a hung child here becomes a notice CI
+     * scrolls past, the budget under the ceiling becomes the only bound left,
+     * and those paragraphs need rewriting rather than this guard deleting.
+     */
+    public function testAnAbortAtThatCeilingStillFailsTheRun(): void
+    {
+        $answer = self::failOnRiskyFromConfig(
+            (string) file_get_contents(\dirname(__DIR__, 2) . '/phpunit.xml'),
+        );
+
+        // RULE: GO RED ON WHAT YOU CANNOT PARSE. A reason string is not a
+        // measured `false`; both are refused here, and the string says why.
+        self::assertTrue($answer, \is_string($answer) ? $answer : 'phpunit.xml no longer makes a '
+            . 'risky test fail the run, so a child hung past the per-test limit is aborted, '
+            . 'reported under a green banner, and exits 0. Re-argue the ceiling paragraphs on '
+            . 'CHILD_WALL_CLOCK_BUDGET_SECONDS before accepting that.');
+    }
+
+    /**
+     * Whether `phpunit.xml` makes a risky test fail the run, or a sentence
+     * saying why this reader cannot say.
+     *
+     * SAME SHAPE AND SAME REASON AS {@see perTestLimitFromConfig()}: a source
+     * this reader cannot parse must not come back as `false`, because `false`
+     * here reads as a measured fact about the configuration rather than as the
+     * reader being out of its depth — and the two demand opposite responses.
+     *
+     * @return bool|string whether risky fails the run, or the reason there is
+     *                     no answer
+     */
+    private static function failOnRiskyFromConfig(string $xml): bool|string
+    {
+        $previous = libxml_use_internal_errors(true);
+
+        try {
+            $root = simplexml_load_string($xml);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+
+        if (!$root instanceof \SimpleXMLElement) {
+            return 'phpunit.xml did not parse as XML, so nothing could be read from it about '
+                . 'whether a risky test fails the run';
+        }
+
+        $attribute = $root['failOnRisky'];
+        if ($attribute === null) {
+            return 'phpunit.xml does not set failOnRisky, and PHPUnit\'s own default is off';
+        }
+
+        $text = strtolower(trim((string) $attribute));
+
+        return match ($text) {
+            'true', '1' => true,
+            'false', '0' => false,
+            default => \sprintf(
+                'failOnRisky is %s, which is not a boolean spelling this reader knows',
+                var_export($text, true),
+            ),
+        };
+    }
+
+    /**
+     * KNOWN-ANSWER TABLE FOR {@see failOnRiskyFromConfig()}.
+     *
+     * RULE 15 ONE LEVEL DOWN. The arm above asserts that one attribute is on,
+     * and an arm asserting a single `true` is exactly as green against a reader
+     * that answers `true` for everything. These rows are the only thing that
+     * tells those two states apart, and the rows that must come back FALSE are
+     * the load-bearing half.
+     *
+     * A string in the third column is a phrase the refusal must CONTAIN — the
+     * refusals have to be distinguishable from each other, and from `false`.
+     *
+     * @dataProvider failOnRiskyCases
+     */
+    public function testTheFailOnRiskyReaderAnswersSourcesWhoseAnswerIsKnown(
+        string $why,
+        string $xml,
+        bool|string $expected,
+    ): void {
+        $answer = self::failOnRiskyFromConfig($xml);
+
+        if (\is_bool($expected)) {
+            self::assertSame($expected, $answer, $why);
+
+            return;
+        }
+
+        self::assertIsString($answer, $why);
+        self::assertStringContainsString($expected, $answer, $why);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: string, 2: bool|string}>
+     */
+    public static function failOnRiskyCases(): iterable
+    {
+        $absent = 'does not set failOnRisky';
+        $notBoolean = 'not a boolean spelling this reader knows';
+        $notXml = 'did not parse as XML';
+
+        yield 'the shape this repository actually uses' => [
+            'the reader cannot read the real file\'s shape, so the guard above never runs',
+            '<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" colors="true" '
+                . 'failOnRisky="true" enforceTimeLimit="true" defaultTimeLimit="60"/>',
+            true,
+        ];
+        yield 'enabled spelled as 1 rather than true' => [
+            'the reader accepts only one spelling of a boolean XML attribute',
+            '<phpunit failOnRisky="1"/>',
+            true,
+        ];
+        yield 'turned off is reported as off' => [
+            'a configuration where risky exits 0 was reported as one where it does not',
+            '<phpunit failOnRisky="false" enforceTimeLimit="true" defaultTimeLimit="60"/>',
+            false,
+        ];
+        yield 'turned off spelled as 0' => [
+            'the reader accepts only one spelling of a disabled boolean attribute',
+            '<phpunit failOnRisky="0"/>',
+            false,
+        ];
+        yield 'absent is not the same as off, and says so' => [
+            'an absent attribute was answered as a measured false rather than as an absence',
+            '<phpunit enforceTimeLimit="true" defaultTimeLimit="60"/>',
+            $absent,
+        ];
+        yield 'a spelling this reader does not know is refused, not guessed' => [
+            'an unknown spelling was guessed at instead of refused',
+            '<phpunit failOnRisky="yes"/>',
+            $notBoolean,
+        ];
+        yield 'text that is not XML at all is refused, not answered false' => [
+            'a source that did not parse was answered as a configuration with risky off',
+            'this is not xml',
+            $notXml,
         ];
     }
 
