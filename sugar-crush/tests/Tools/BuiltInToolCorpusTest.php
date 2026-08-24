@@ -250,13 +250,27 @@ final class BuiltInToolCorpusTest extends TestCase
      * classified correctly, and there are none — while the 18 interfaces and 6
      * traits it would have thrown on are already here.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. These 288 files declare
-     * 307 top-level types, so this is not a census of the tree's types and never
-     * was; see {@see testTheSecondaryDeclarationCensus()} for the other 19 and
-     * for the blind spot that equating the two produced.
+     * DOMAIN: one symbol per FILE — the PSR-4-named one. `src/` declares MORE
+     * top-level types than it has files, so this is not a census of the tree's
+     * types and never was; see {@see testTheSecondaryDeclarationCensus()} for
+     * the secondary ones and for the blind spot that equating the two produced.
      *
-     * The most recent file is `Permissions/DenialKind` — the leaf enum the
+     * ⚠️ THIS SENTENCE USED TO CARRY THE PAIR "288 files / 307 types" (rule 7,
+     * so here is what it said and why it now reads differently). WHAT IS TRUE
+     * NOW: both figures were stale — the tree is at 295 and 314, and had
+     * already moved before this paragraph was last edited. WHY THE CLAIM STILL
+     * EARNS ITS PLACE: the RELATION is the load-bearing part and does not rot,
+     * while the pair did, twice. The live numbers belong in the assertions
+     * below, which fail with the derived value in the message; prose that
+     * restates them is a second place to be wrong (rule 18).
+     *
+     * `Permissions/DenialKind` — the leaf enum the
      * three denial prefixes moved onto when the roster came off `Chat` (E239).
+     * (THIS PARAGRAPH USED TO OPEN "The most recent file is". It was not, by the
+     * time it was written: the newest arrival is named under THE LAST BUMP
+     * below, and two bump paragraphs each claiming primacy is how this block
+     * came to contradict itself in three places at once. New arrivals go in the
+     * LAST BUMP paragraph; this list is history, in no particular order.)
      * ONE file and it is an `enum`, so this bump is +1 on the file count and
      * +1 on `enum`, NOT on `concrete`; the declaration total moved by the same
      * +1 and by no more, checked rather than assumed, and the 19 SECONDARY
@@ -397,8 +411,11 @@ final class BuiltInToolCorpusTest extends TestCase
      * one-type-per-file — and `src/` ships nineteen counterexamples.
      *
      * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names: 288 `.php`
-     * files, 307 top-level declarations, 19 of them secondary in 8 files. Pinned
+     * secondary symbols are not autoloadable by their own names. The file and
+     * declaration totals are asserted below rather than restated here — they
+     * were spelled "288" and "307" in this sentence for two rounds after the
+     * tree left those values behind (rule 18). What does not rot: a minority of
+     * declarations are SECONDARY, and they live in a handful of files. Pinned
      * per file, so a second declaration arriving in a scanned file reds THIS test
      * with the file named rather than silently widening the blind spot.
      *

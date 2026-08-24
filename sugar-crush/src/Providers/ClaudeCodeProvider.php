@@ -177,8 +177,24 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
 
                 if ($ready === false) {
                     // EINTR, or a stream that has genuinely gone away. Drop
-                    // whatever is at EOF so this cannot spin forever on a pipe
-                    // `select()` will never report again, then yield the CPU.
+                    // whatever is at EOF, then yield the CPU.
+                    //
+                    // ⚠️ THIS USED TO SAY "so this cannot spin forever on a
+                    // pipe `select()` will never report again", flat. That
+                    // overstates what the loop below can promise, and the
+                    // assumption it hides is worth naming. WHAT IS TRUE NOW:
+                    // the exit depends on a pipe that will never be selectable
+                    // again eventually answering `feof() === true`. A live pipe
+                    // at EOF does. A pipe whose RESOURCE has been closed does
+                    // not answer at all — MEASURED on this host, PHP 8.3.6,
+                    // `feof()` on an fclose'd `proc_open()` pipe raises
+                    // `TypeError: feof(): supplied resource is not a valid
+                    // stream resource`, so it would leave this loop by throwing
+                    // rather than by spinning. Nothing closes these pipes while
+                    // this loop owns them, so that path is unreachable today.
+                    // WHY THE GUARD STILL EARNS ITS PLACE: without it a genuine
+                    // EOF-plus-EINTR combination has no exit at all, which is a
+                    // real hang rather than a hypothetical one.
                     foreach ($open as $fd => $pipe) {
                         if (feof($pipe)) {
                             unset($open[$fd]);
