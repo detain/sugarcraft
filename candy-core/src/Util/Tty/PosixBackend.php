@@ -384,10 +384,32 @@ final class PosixBackend implements Backend
             return;
         }
         // First call: save current state from STDIN.
+        //
+        // WHAT THE CODE UNDER THIS SENTENCE USED TO SAY, AND WHY IT MOVED
+        //
+        // WHAT IT SAID: `TermiosFactory::open((int) STDIN)`. The sentence
+        // above it has always read "save current state from STDIN", and the
+        // sentence was the half telling the truth about the intent.
+        //
+        // WHAT IS TRUE: an `(int)` cast of a PHP stream yields its RESOURCE
+        // ID, and for the three standard streams that number is not the
+        // descriptor. MEASURED, PHP 8.3.6, in a fresh CLI process, three
+        // takes, identical every time: `(int) STDIN` is 1, `(int) STDOUT` is
+        // 2 and `(int) STDERR` is 3, over descriptors 0, 1 and 2. So this
+        // snapshotted descriptor 1 — STDOUT — and the whole rescue path was
+        // saving and restoring the wrong end of the terminal. It looked
+        // right in an ordinary terminal only because 0 and 1 name the same
+        // device there.
+        //
+        // WHY THE FIX IS A LITERAL AND NOT A CONSTANT: `TermiosFactory::open()`
+        // takes an `int` descriptor, and STDIN's descriptor is 0. There is no
+        // PHP constant that holds it — `STDIN` holds the stream. candy-vcr's
+        // `Cli\RecordCommand` already spells the same call `open(0)`.
         try {
-            self::$rescueSnapshot = TermiosFactory::open((int) STDIN)->current();
+            self::$rescueSnapshot = TermiosFactory::open(0)->current();
         } catch (\Throwable) {
-            // STDIN closed (CI runner): silently no-op.
+            // Descriptor 0 is closed or is not a terminal (CI runner):
+            // silently no-op.
         }
     }
 }
