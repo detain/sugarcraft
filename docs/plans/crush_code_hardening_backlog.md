@@ -14072,3 +14072,44 @@ with boolean membership? If so it has the same hole.
 
 **Step:** a defect found in one exemption roster is a question to ask of every exemption roster in the
 package, and the asking is cheap enough that not doing it needs a reason.
+
+### E427 — the lane scratchpads have been the SAME THREE DIRECTORIES since round 49
+
+**Recorded 2026-08-24 by the round-53 supervisor.** Severity: harness defect (rule 13). **Measured.**
+
+The round-53 script pointed all three lanes at `…/scratchpad/r49a`, `r49b`, `r49c` — the round-49 names,
+carried forward unedited through rounds 50, 51, 52 and 53. Only the prompt HEADERS were de-hardcoded
+from `round-49`; the paths were not. Measured at the round-53 merge, those directories hold prior-round
+artifacts in two hazardous classes:
+
+1. **Stale wait targets.** The lanes bound their suite waits with
+   `until grep -q "^rc=" $S/final.txt`. `r49a/final.txt` and `r49b/final.txt` were **7 hours old** when
+   round 53 started. A wait against an already-satisfied file exits instantly and the agent reads a
+   figure measured **on a different tree**. Every `final*` file the lanes actually read this round
+   carried a same-hour mtime, so this did not fire in round 53 — but nothing prevented it.
+2. **Stale mutation backups.** `backup.M1_*`, `mutbak_M11…M19` and friends from round 49 sit in the
+   namespace this round's mutation testing writes into. A restore that guesses a colliding name
+   overwrites live work with round-49 code — silent loss, not a wrong number.
+
+**STEP:** per-round directories, `r<ROUND><lane>`, and the round number already exists in the script as
+`ROUND`. Cheap and total. **Round 54 uses `r54a`/`r54b`/`r54c`.**
+
+### E428 — `pgrep -af 'php -S' | wc -l` reports 1 on a clean host, because it matches itself
+
+**Recorded 2026-08-24 by the round-53 supervisor.** Severity: instrument defect. **Measured.**
+
+The orphaned-server invariant has been checked with `pgrep -af 'php -S' | wc -l` for several rounds. On
+a host with **zero** orphans it answers **1**: `pgrep -f` matches the pattern against full command lines,
+and the invoking shell's own `-c` line contains the pattern. Measured this round — the single "hit" was
+`/bin/bash -c … pgrep -af 'php -S' …`, PID 2201773, elapsed 00:00.
+
+It has never produced a false GREEN, so no past round's conclusion moves. But it is the same shape as
+the defects this round spent itself on: an instrument whose answer includes the act of asking. The honest
+spelling filters on the process name rather than the command line:
+
+```sh
+ps -eo comm,args --no-headers | awk '$1=="php" && /-S /' | wc -l
+```
+
+**STEP:** use the `ps` form in the invariant block, and treat "1 orphan, no lane running" as the
+suspicious reading it always was rather than the expected one.

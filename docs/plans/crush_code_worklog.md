@@ -8,6 +8,42 @@ Summary + Implementation Plan, 209-2160 are the 13 research dossiers.
 
 ---
 
+## Round 53 — the descriptor family, child reaping, and a guard that reddened correct code
+
+**Base `9ed3e200` · merged `3074d2ec` · floor `b8808d5a` — sugar-crush 9946/144269/1, candy-core
+819/7390/25, candy-flip 83/227/2, all rc 0.** Backlog 394 → 428 (lane ids E395–E426, supervisor
+E427/E428). Nine agents, 0 errors, 665 tool calls, ~98 minutes of wall clock across two session kills.
+
+**Tests predicted exactly for the eleventh consecutive round (9943), assertions exactly on the lower
+bound (144262) for the second.** The floor is three tests higher because the merge went red and the fix
+added three fixtures — the prediction's verdict and the round's floor are different numbers on purpose.
+
+**The merge went red exactly where the prediction said it would.** `round53-prediction.txt`, written
+before the first merge, named lane c's `DescriptorInheritanceGuardTest` against lane b's
+`Providers/ClaudeCodeProvider.php` as a rule-32 case: clean text merge, count-valued assertions, run it
+rather than trust it. One failure, that exact pair. The finding was a **false positive**:
+`ChildLifetimeScanner` judged conditionality by brace depth and called a reaper in a generator `finally`
+"runs only inside a nested block". The guard offered an exemption row; taking it would have written a
+licence for correct code. The classifier learned `finally` instead, pinned in both polarities and
+mutation-checked (dropping the arm reds 2 tests). **New standing rule 33.**
+
+**Two lanes' work survived two session kills.** Lane b was killed mid-edit holding 107 uncommitted
+insertions — the argv-not-shell-string fix for `BackgroundSupervisor`, with the measurement that dash
+does not exec through `-c`, so `proc_get_status()` had been reporting the `sh` wrapper and the error
+path's `proc_terminate()` killed the shell while the launcher ran on. The supervisor committed it
+verbatim at the resume boundary (`7dbc6eba`) with a message saying whose work it was, that item 3 was
+only partly done, and that the correct response was to verify by mutation rather than redo.
+
+**The cross-lane control paid for a fourth round.** Lane c refuted a merge instruction it had written
+itself, which would have deleted `BackgroundSupervisor::spawnSession` from the guard roster: the
+arithmetic was right and the mechanism inverted, and the deletion would have removed E366's own HIGH from
+the guard built to catch it.
+
+**Two harness defects filed.** E427: the lane scratchpads have been `r49a`/`r49b`/`r49c` since round 49,
+so a `until grep -q "^rc="` wait can be satisfied by a seven-hour-old file from another tree, and
+round-49 mutation backups share the namespace this round writes into. E428: `pgrep -af 'php -S' | wc -l`
+answers 1 on a clean host because it matches its own command line.
+
 ## Round 53 — IN FLIGHT (launched 2026-08-24 from `9ed3e200`)
 
 Run `wf_1771adc7-288`, task `wapbf9zqa`. Script:
