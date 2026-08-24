@@ -8592,3 +8592,130 @@ has no generator to catch it.
 
 ---
 
+### Ec49-1 — a `@dataProvider` row expecting `0` can never satisfy rule 15 literally
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: process / structural. **Measured.**
+
+**What.** E228's Step asks, per fixture, what mutation of the instrument the fixture would survive. Both
+census files answer that question through a `@dataProvider`, and a provider row IS its own test — so a row
+expecting `0` has no known-positive control in its own invocation, whatever else the provider contains.
+Rule 15 says the positive must be in the SAME test, and for this shape that is structurally unavailable.
+
+**Why it did not bite this round.** Both providers are dominated by rows expecting a non-zero count, so a
+dead instrument reds them: measured, blinding `StderrEmitterCensusTest::scan()` reds 32 rows and blinding
+`countSeamCallSites()` reds 5. The provider as a WHOLE is not vacuous. What is unavailable is the per-row
+guarantee, and that is exactly the guarantee E228 was filed about — round 48's fixture sat in a test with a
+working known-positive beside it and still could not fail.
+
+**What this round did instead.** Measured the whole matrix — mutate the instrument, re-run the provider,
+record which rows change answer — and wrote the result into both providers' doc-blocks, so a row credited
+with catching a clause is credited only where that was measured. Where a clause had no killer at all, a row
+was added whose expected value is `1` on a source carrying BOTH the negative shape and a live call: that
+fails at `2` if the clause is dropped and at `0` if the scanner dies.
+
+**Step.** Consider a provider shape that carries the positive with each row — e.g. yielding
+`[$channel, $negativeSource, $positiveSource, $expected]` and asserting both in one test method — so the
+guarantee is per-row rather than per-provider. Not done here: it would rewrite ~70 rows across two files
+for a guarantee the measured matrix already supplies, and a mechanical rewrite of 70 fixtures is precisely
+the blanket textual pass rule 26 warns about.
+
+---
+
+### Ec49-2 — `testTheTwoEmitterFunnelsDoNotCountTheSameWrite` states a cardinality nothing keeps honest
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: cosmetic / rot. **Measured.** Lane c's own file.
+
+**What.** E245's general lesson swept across both census files. Two method names carry a number:
+
+- `testTheWarnFamilyDecomposesIntoItsThreeEntryPoints()` — CLEARED. The three is pinned by the method's own
+  last assertion, `$direct + $once + $seam === PREFIXED_WRITER_SITES['src/Cli/Bootstrap.php']`, whose
+  failure message already says "the family gained a fourth entry point". A fourth entry point reds it.
+- `testTheTwoEmitterFunnelsDoNotCountTheSameWrite()` — NOT cleared. The two are channels 5 and 6. Nothing
+  anywhere asserts that the application has exactly two emitter-side funnels, so a third one arriving
+  leaves this name false with nothing red. It is the same defect E245 recorded, in the same file, one
+  method away.
+
+**Not renamed this round**, deliberately: unlike E245's case the name is not yet FALSE, and a rename with
+no accompanying guard just moves the rot. The useful fix is the guard.
+
+**Step.** Either rename it cardinality-free, or — better — add the assertion that makes the number true:
+an emitter-side funnel is a `src/` method that writes fd 2 on behalf of callers who do not, and the two
+known ones are `Bootstrap::warnPermissionConfig*` and `RuntimeNoticeSink::warn()`. A roster of them, pinned
+the way the channels are, is what would make "two" a measurement.
+
+---
+
+### Ec49-3 — a failure message's generator is the one part of a green suite that never runs
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: low. **Measured, and fixed for one instance.**
+
+**What.** E228 one level further out. `StderrEmitterCensusTest::message()` builds the text four roster
+assertions fail with. It is called only on the failing path, so in a green suite it is never executed —
+a version returning `''` would be invisible for as long as the census stayed green and missing at exactly
+the moment it is needed. That is the same shape as a fixture whose expected value is what a dead
+instrument returns: nothing distinguishes working from absent.
+
+**Fixed here for `message()`**: it now derives the per-file delta from the two maps the assertion compares
+(bumped / arrived / gone), and `testTheRosterFailureMessageNamesEveryFileThatMovedAndBothCounts()` runs it
+on known input. Verified end to end by adding one `error_log()` to `src/Chat.php` under the mutation
+harness: the failure text reads `src/Chat.php: the roster says 1, the scan counts 2`.
+
+**Step.** The general case is un-swept. Any `private static function message()`/`describe()`/`explain()`
+helper whose only caller is an assertion's third argument has this property. A cheap guard is a scan for
+private helpers in `tests/` reachable only from an assertion message argument, reported as an inventory;
+a cheaper one is the habit of giving each such helper one known-input test.
+
+---
+
+### Ec49-4 — E231 re-derived window-free: still zero, and the re-derivation's own harness had the bug first
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: informational. **Measured, PHP 8.3.6, deterministic
+across three runs.** Generator:
+`scratchpad/r49c/e231.php` (run with `--controls`).
+
+**What.** E231 asked to be re-derived rather than trusted, and flagged its own bound: its one-line window
+undercounts a call whose command string wraps. That bound is now closed. This generator reads the first
+argument out of the TOKEN STREAM — concatenation pieces joined, depth-tracked, no window at all — so
+neither E231's three-line-window error nor its one-line-window bound is available to it.
+
+**Result, confirming E231.** 96 spawn sites under `tests/`. Shape A (a quoted inner shell, `sh -c '…'`):
+**0**. Shape B (more than one fd-2 redirection in one command): **0**. The site count is 96 rather than
+E231's 95 because one has been added since; an independent count through
+`ChildStderrCaptureScanner::scan()` over the same tree agrees at 96 (captured 62, discarded 20,
+inherited 14), so the two instruments find the same set.
+
+**AND THE GENERATOR WAS WRONG ON ITS FIRST RUN, caught by its own controls.** It extracted each string
+piece with `trim($piece, "'\"")`, which strips the SHELL's quotes as well as PHP's: in
+`'sh -c ' . "'inner 2>/dev/null'"` the middle piece's single quotes are part of the command, and trimming
+them turned a shape-A site into a shape-A miss. Six known-answer controls run before the census — E205's
+own three example commands, the shape the predicate gets right, a plain command, and one deliberately
+split across concatenated pieces — and it was the last of the six that failed. Only the delimiter is
+stripped now. This is the third recorded instance in this tree of a measurement harness carrying the
+defect the measurement is about, and the second within E205/E231 specifically.
+
+**E225 not acted on**, as recorded: it exists so the count of wrong prescriptions stays honest.
+
+---
+
+### Ec49-5 — HANDOVER TO LANE `d`: the same-named-helper drift guard (E232's general shape)
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: process.
+
+**What.** Round 49 lane c removed one instance of E232's shape by consolidating both `flattened()` copies
+into `tests/Support/FlattensSourceProseTrait.php` (E196/E224). The GUARD E232 asks for is lane `d`'s, so it
+is handed over rather than built here, with two constraints the consolidation measured:
+
+1. **Anchor on `T_FUNCTION`, not on the method-name token.** Round 48's instrument anchored on the name and
+   therefore compared the first CALL site in each file instead of the declaration, and reported "not
+   identical" for two byte-identical bodies. A comparison harness that silently compares the wrong two
+   things is the failure this whole family is about.
+2. **Compare bodies AND flag divergent doc-blocks separately.** E224's measurement was that the two bodies
+   were identical while the justifications had already diverged — the drift arrives in the reasoning first.
+   A guard that only diffs bodies would have called the pre-consolidation pair clean.
+
+**Step.** A test that collects every private/protected method declared under `tests/` with the same name in
+more than one file, and reds when their token streams (whitespace and comments dropped) differ. Its
+known-positive fixture must be two synthetic declarations that differ, run through the same comparator in
+the same test.
+
+---
