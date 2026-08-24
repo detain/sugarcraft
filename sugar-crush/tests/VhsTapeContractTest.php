@@ -3511,10 +3511,111 @@ final class VhsTapeContractTest extends TestCase
     }
 
     /**
+     * REFLECTION ANSWERS ABOUT THE DECLARING FILE AND
+     * {@see modelMethodTokens()} SLICES THIS ONE, so the two have to be checked
+     * against each other rather than assumed to agree.
+     *
+     * WHY A TEST AND NOT A COMMENT. The check inside that method is dormant
+     * today: every method it is asked for is declared here, so deleting the
+     * check changes no figure in this file and a whole-file run stays green.
+     * Rule: pin the dormancy, or the next reader deletes the line as dead. It
+     * stops being dormant the moment a helper this file reads is lifted into a
+     * trait, which is a thing that happens to duplicated test helpers in this
+     * tree on purpose.
+     *
+     * BOTH HALVES ARE DERIVED FROM THE RUNNING INTERPRETER, because the whole
+     * point of the check is that the answer is not the one the reader assumes.
+     * The first half establishes that reflection really does answer about
+     * another file — over a trait `tests/` already has, and one that
+     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildReaperAdoptionTest}
+     * requires that class to keep using, so the pair cannot quietly dissolve.
+     * The second pushes a method declared in ANOTHER FILE through the reader
+     * and requires it to refuse: with the check removed, that call returns
+     * tokens sliced out of this file at PHPUnit's line numbers and every
+     * census built on it measures whatever sits at those offsets.
+     */
+    public function testModelMethodTokensRefusesAMethodDeclaredInAnotherFile(): void
+    {
+        $trait = new \ReflectionClass(\SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait::class);
+        $user = new \ReflectionClass(\SugarCraft\Crush\Tests\Support\ForkedChildTest::class);
+        $traitFile = $trait->getFileName();
+
+        self::assertNotSame(
+            [],
+            $trait->getMethods(),
+            'the trait this mechanism is derived from declares no methods any more. Any trait '
+            . 'a class under tests/ uses will do — substitute one, do not delete the check '
+            . 'this pins',
+        );
+
+        $imported = null;
+        foreach ($trait->getMethods() as $method) {
+            $candidate = new \ReflectionMethod($user->getName(), $method->getName());
+            if ($candidate->getFileName() === $traitFile) {
+                $imported = $candidate;
+
+                break;
+            }
+        }
+
+        self::assertNotNull(
+            $imported,
+            'no method of ' . $user->getShortName() . ' reports the trait\'s file, so this half '
+            . 'of the derivation has stopped exercising the mechanism it exists to establish',
+        );
+        self::assertNotSame(
+            $user->getFileName(),
+            $imported->getFileName(),
+            'a method this class reaches through a trait reports the USING class\'s file, so '
+            . 'reflection\'s file and line numbers can no longer disagree with __FILE__ this '
+            . 'way. Re-read modelMethodTokens() before relaxing its check: the failure it '
+            . 'guards against is a silent misread, not an error',
+        );
+
+        try {
+            self::modelMethodTokens('assertTrue');
+            self::fail(
+                'modelMethodTokens() accepted a method declared in another file. It sliced THIS '
+                . 'file at PHPUnit\'s line numbers for it and returned the tokens as that '
+                . 'method\'s body — which is how a census reports one method\'s figures under '
+                . 'another\'s name and blames the docblock two screens away.',
+            );
+        } catch (\PHPUnit\Framework\ExpectationFailedException $refusal) {
+            self::assertStringContainsString(
+                'is not declared in this file',
+                $refusal->getMessage(),
+                'the reader refused, but not for this reason — so this fixture is pinning some '
+                . 'other failure and the declaring-file check could be gone',
+            );
+        }
+    }
+
+    /**
      * One model method's own tokens, with comments and whitespace dropped.
      *
-     * Located by reflection rather than by line numbers so it cannot drift, and
-     * read through PHP's tokenizer rather than by regex because the thing being
+     * WHAT THIS SAID: "located by reflection rather than by line numbers so it
+     * cannot drift". WHAT IS TRUE NOW: reflection supplies the LINE NUMBERS and
+     * this method slices `file(__FILE__)` with them, so the two agree only while
+     * the method is declared in THIS file. Measured on PHP 8.3.6, a method
+     * imported from a trait reports the TRAIT's file from `getFileName()` and
+     * lines in the trait from `getStartLine()`/`getEndLine()`, and slicing this
+     * file with those returns unrelated source with no error of any kind. WHY
+     * THE REASONING STILL EARNS ITS PLACE: reflection is still the right
+     * locator, and for the reason the sentence gave — but what makes it better
+     * than a written-down line number is that it can be ASKED WHICH FILE IT
+     * ANSWERED ABOUT. The claim keeps its place and gains the check that makes
+     * it true.
+     *
+     * THE MISALIGNMENT IS OBSERVED, not imagined, which is why this is an
+     * assertion and not a paragraph. In a run where this file changed on disk
+     * between class load and this call, every body came back one declaration out
+     * of step: {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()}
+     * reported {@see directiveValues()}'s figures under {@see scanRegex()}'s
+     * name, under a message blaming "a docblock that has gone stale two screens
+     * away". A misaligned READ and stale prose are the same red in that message,
+     * and the invited repair — edit the figures — is the wrong one.
+     *
+     * Read through PHP's tokenizer rather than by regex because the thing being
      * counted — a guard, a conjunct — is spelled the same in code, in the comment
      * that discusses it and in the assertion message that quotes it.
      * {@see tokenize()} discusses three of {@see scanRegex()}'s guards in an
@@ -3525,6 +3626,17 @@ final class VhsTapeContractTest extends TestCase
     private static function modelMethodTokens(string $method, bool $keepWhitespace = false): array
     {
         $reflection = new \ReflectionMethod(self::class, $method);
+        self::assertSame(
+            __FILE__,
+            $reflection->getFileName(),
+            $method . '() is not declared in this file, so the line numbers reflection reports '
+                . 'for it do not address this file\'s lines and every census built on them '
+                . 'would be measured over whatever source happens to sit at those offsets. A '
+                . 'method reached through a trait is the ordinary way this happens: reflection '
+                . 'answers with the TRAIT\'s file and the trait\'s lines. Read the tokens from '
+                . 'the declaring file, or keep the method here — do not adjust the figures to '
+                . 'match what came back.',
+        );
         $lines = file(__FILE__);
         self::assertIsArray($lines, 'could not read this file');
 
