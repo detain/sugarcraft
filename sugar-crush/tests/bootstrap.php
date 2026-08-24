@@ -142,3 +142,68 @@ putenv('TMPDIR=' . $sandbox);
  * because deleting it fails as a HANG rather than as a red.
  */
 NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
+
+/*
+ * ...and neither does anything the suite SPAWNS (E212's other half, measured
+ * in round 49).
+ *
+ * The pin above is on `NonInteractive`'s in-process default only, and says so:
+ * "`src/`/`bin/` never call `pinStdinDefault()`, so production reads `\STDIN`
+ * exactly as before". Eighteen test files spawn a real `bin/sugarcrush`, and
+ * `exec()`/`proc_open()` hand a child THIS process's descriptor 0. So the
+ * hazard the pin removed from the runner was still live one process down.
+ *
+ * MEASURED on PHP 8.3.6, `bin/sugarcrush -p "hi"` with a sandbox HOME, timing
+ * only the descriptor-0 shape:
+ *
+ *   stdin = /dev/null                 0.110s
+ *   stdin = closed                    0.105s
+ *   stdin = open, never-written pipe  blocks; SIGKILLed at 25s
+ *
+ * and, with a writer that sends one line after four seconds and then closes,
+ * the run finishes at 4.1s with those bytes PREPENDED TO THE PROMPT
+ * ("You said: > LATE-STDIN-CONTEXT ... > hi"). The block is
+ * `stream_get_contents()` inside
+ * {@see NonInteractive::readStdinIfPiped()} — bounded above by nothing —
+ * and the child's own output places it there: the two `Bootstrap` notices
+ * that immediately precede that call are printed, and nothing after it is.
+ *
+ * WHY THIS IS NOT A THEORETICAL SHAPE. `phpunit.xml` sets
+ * `enforceTimeLimit="true" defaultTimeLimit="60"`, so each such test costs a
+ * full minute and is reported as RISKY ("aborted after 60 seconds"), not as a
+ * failure naming stdin. Observed in this tree while measuring E242:
+ * `BootstrapSkillSkipsTest`'s two `-p` cases — 0.4s for the whole file when
+ * run from a terminal — were both aborted at 60s in a full run whose runner
+ * had been started with its stdin held open by a supervising process. That is
+ * the "crawling, not CPU-bound, wall-clock waits" symptom E242 recorded and
+ * attributed to concurrency; it reproduces with ONE process on an idle box and
+ * has nothing to do with how many suites are running.
+ *
+ * The repair has to be a real descriptor, because PHP has no `dup2` and the
+ * `\STDIN` constant is bound at startup: close fd 0, then open `/dev/null`,
+ * which lands on the lowest free descriptor — 0, the one just freed.
+ *
+ * ONLY WHEN FD 0 IS NOT A TERMINAL. A developer running the suite from a shell
+ * keeps their terminal, and a tty is harmless anyway (`stream_isatty()` is the
+ * first thing `readStdinIfPiped()` checks, and it returns null on it).
+ *
+ * THE FAILURE MODE IS BENIGN, WHICH IS WHY THE SURGERY IS ACCEPTABLE HERE. If
+ * the reopen does not land on fd 0, children inherit a CLOSED descriptor 0 —
+ * measured above at 0.105s, i.e. the same answer as `/dev/null`. `/dev/null`
+ * is checked BEFORE the close so the descriptor is never freed without a
+ * replacement to hand.
+ *
+ * The handle is parked in `$GLOBALS` rather than a local: a local in an
+ * included file is a global already, but naming the intent stops a future
+ * tidy-up from garbage-collecting fd 0 back to closed.
+ *
+ * Pinned by `tests/SuiteChildStdinIsolationTest.php`, which spawns the real
+ * binary from a runner whose own stdin is an open, never-written pipe — and
+ * runs the un-bootstrapped control through the same harness first, because
+ * "it did not hang" is also what a harness that never started the child says.
+ */
+if (!stream_isatty(\STDIN) && is_readable('/dev/null')) {
+    fclose(\STDIN);
+    $GLOBALS['__sugarcrushSuiteStdin'] = fopen('/dev/null', 'r');
+}
+
