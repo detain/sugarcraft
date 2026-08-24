@@ -8602,8 +8602,14 @@ expecting `0` has no known-positive control in its own invocation, whatever else
 Rule 15 says the positive must be in the SAME test, and for this shape that is structurally unavailable.
 
 **Why it did not bite this round.** Both providers are dominated by rows expecting a non-zero count, so a
-dead instrument reds them: measured, blinding `StderrEmitterCensusTest::scan()` reds 32 rows and blinding
-`countSeamCallSites()` reds 5. The provider as a WHOLE is not vacuous. What is unavailable is the per-row
+dead instrument reds them: measured at round 49's lane HEAD by inserting `return 0;` at the top of each
+scanner (PHP 8.3.6), blinding `StderrEmitterCensusTest::scan()` reds **35** provider rows and blinding
+`countSeamCallSites()` reds **8**. The provider as a WHOLE is not vacuous.
+(**Both figures were first written here as 32 and 5** — the counts BEFORE the same commit added three
+non-zero rows to each provider. Corrected by round 49's review, which is the third instance recorded in
+this file of a figure measured mid-commit and never re-derived after the same commit moved its subject.
+The in-source copy of the `countSeamCallSites()` figure had been updated and the in-source copy of the
+`scan()` one had not, so the two statements of one measurement disagreed with each other.) What is unavailable is the per-row
 guarantee, and that is exactly the guarantee E228 was filed about — round 48's fixture sat in a test with a
 working known-positive beside it and still could not fail.
 
@@ -8649,8 +8655,8 @@ the way the channels are, is what would make "two" a measurement.
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: low. **Measured, and fixed for one instance.**
 
-**What.** E228 one level further out. `StderrEmitterCensusTest::message()` builds the text four roster
-assertions fail with. It is called only on the failing path, so in a green suite it is never executed —
+**What.** E228 one level further out. `StderrEmitterCensusTest::message()` builds the text six roster
+assertions fail with (recorded here as "four"; there are six, and there were six when this was written). It is called only on the failing path, so in a green suite it is never executed —
 a version returning `''` would be invisible for as long as the census stayed green and missing at exactly
 the moment it is needed. That is the same shape as a fixture whose expected value is what a dead
 instrument returns: nothing distinguishes working from absent.
@@ -8717,5 +8723,84 @@ is handed over rather than built here, with two constraints the consolidation me
 more than one file, and reds when their token streams (whitespace and comments dropped) differ. Its
 known-positive fixture must be two synthetic declarations that differ, run through the same comparator in
 the same test.
+
+---
+### Ec49-6 — the guard that pins every cardinality in a file is itself outside the machinery
+
+**Recorded 2026-08-24 by round-49 lane c's review. FIXED in the same round** (`275d86a7`). Severity:
+structural. **Measured, PHP 8.3.6.**
+
+**What.** `StderrEmitterCensusTest::selfCountAnchors()` is the list that gives every prose cardinality in
+that file a generator. Its own doc-block stated the size of that list, in prose, three times — "it shipped
+six of its own", "All six were correct the day they were written", "Two of the six cross a wrap" — and the
+generator says nine. It has never said six: the commit that introduced the list committed SEVEN rows (read
+back out of git, not inferred), so the sentence claiming all of them were correct when written was false on
+the day it was written, in the doc-block of the guard that exists to stop exactly that. Round 48's
+transcript-seam channel took the list to nine and the numeral moved with nothing. The sentence's own
+arithmetic never worked either — "one per channel, plus the two in the channel-5 paragraph" is eight.
+
+**Proved unpinned before being fixed.** Rewriting all three numerals to "nineteen" left the class green:
+91 tests, 1346 assertions, rc 0 (scope: `--filter StderrEmitterCensusTest`).
+
+**The transferable shape, and it is not "someone was careless".** Anchoring machinery has a blind spot at
+its own root, and the root is the most natural place to describe the machinery — so it attracts prose about
+its own size. The sibling `BootstrapTranscriptSeamCallSiteCensusTest` had already hit this one level up and
+resolved it by ELIDING the number ("If you find yourself wanting to write the number, add the row
+instead"). That resolution is right at level two and wrong at level one, where a generator is still
+available: this round added it, and the regress now stops one level higher, at a fact nobody states.
+
+**Step (general, not done).** Any file in this tree carrying an anchor list should be checked for prose
+stating that list's own size. Candidates: `BootstrapTranscriptSeamCallSiteCensusTest::PROSE_SITES` and
+`SELF_COUNT_ANCHORS` (checked this round — the present-tense statements are elided and the two remaining
+numerals are dated quoted measurements, correctly exempt), and any list added later. The cheap systemic
+guard is the one this round built: read the size back out of the doc-block and compare it with `count()`.
+
+---
+
+### Ec49-7 — a figure measured mid-commit and never re-derived after the same commit moved its subject
+
+**Recorded 2026-08-24 by round-49 lane c's review. FIXED in the same round** (`f59885fb`). Severity: low,
+recurrence: high. **Measured, PHP 8.3.6.**
+
+**What.** `scannerCases()`'s doc-block licensed its bare `<?php echo 1;` controls to have no positive
+component of their own on the strength of one measurement: "That was measured too, by blinding `scan()`:
+thirty-two rows go red." At the commit that wrote that sentence, thirty-five rows went red. Thirty-two was
+the count before the same commit added three non-zero rows to the provider. Two further numerals in the
+same bullet were wrong the same way (five `<?php echo 1;` rows, not four; on five of seven channel
+spellings, not on each). The identical measurement written into the sibling file's doc-block HAD been
+updated, so one commit left two statements of one figure disagreeing with each other.
+
+**Why this recurs and how to stop it.** The measurement is taken while the change is being designed and the
+change then invalidates it. Nothing catches it because a mutation figure looks like history, and history is
+legitimately exempt from anchoring. **The rule that works: a mutation figure must be re-derived as the LAST
+step before commit, or the sentence must not carry a number.**
+
+**What replaced it here, and this is the better half of the finding.** A count was the wrong shape for the
+claim regardless. What the licence needs is not "some total of rows reds" but "no channel is left where
+every row expects `0`" — a provider can hold a hundred non-zero rows on one channel while every row on
+another expects `0`, and the total then reads reassuringly while that channel's scanner is untested against
+its own death. `testEveryChannelInThisProviderHasARowADeadScanWouldRed()` asserts the per-channel form. It
+is strictly stronger than any total, it does not move when a row is added, and it was verified by mutating
+THE FIX: deleting both non-zero `shape` rows reds it and reds nothing else.
+
+**Step.** Apply the same substitution wherever a doc-block justifies a fixture by a total: ask what property
+the total stands in for, and assert that instead.
+
+---
+
+### Ec49-8 — a `@dataProvider` row's expected value is not enough to place it in a channel's coverage
+
+**Recorded 2026-08-24 by round-49 lane c's review.** Severity: informational. **Measured.** Not acted on.
+
+**What.** Ec49-1 records that a row expecting `0` cannot carry its own positive control. Reviewing it
+surfaced the narrower and more useful statement: the per-provider escape hatch ("a dead scanner reds the
+provider anyway") is only sound PER CHANNEL, because each channel is a separate branch of `scan()` and a
+dead branch is invisible to rows on the other branches. That is now asserted for
+`StderrEmitterCensusTest`. It is NOT asserted for `BootstrapTranscriptSeamCallSiteCensusTest`, which has a
+single scanner and therefore a single channel, so the property holds there trivially today — and would stop
+holding silently the moment that scanner grows a mode.
+
+**Step.** If `countSeamCallSites()` ever takes a mode or channel argument, port
+`testEveryChannelInThisProviderHasARowADeadScanWouldRed()` to it in the same commit.
 
 ---
