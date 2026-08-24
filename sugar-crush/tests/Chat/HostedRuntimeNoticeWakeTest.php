@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Chat;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
+use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\RuntimeNoticePumpMsg;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg\FocusGainedMsg;
 
 /**
@@ -15,13 +18,21 @@ use SugarCraft\Core\Msg\FocusGainedMsg;
  * (E223).
  *
  * E193 gave the seam an edge-driven wake-up armed from {@see Chat::init()}.
- * `init()` is part of the `SugarCraft\Core\Model` contract, and in this
- * application only `SugarCraft\Core\Program` calls it. A `Chat` driven by an
- * embedder that never builds a `Program` — the hosted-pane shape
- * {@see Chat::withSize()}'s doc-block describes — therefore never arms the
- * watcher and is back to "the notice waits for whatever `Msg` the host happens
- * to deliver next". That is no worse than before E193 and is not a
+ * `init()` is part of the `SugarCraft\Core\Model` contract, and a `Chat`
+ * driven by an embedder that never runs the Cmd it hands back never arms the
+ * watcher — it is back to "the notice waits for whatever `Msg` the host
+ * happens to deliver next". That is no worse than before E193 and is not a
  * regression; it was simply written down nowhere, in `src/` or here.
+ *
+ * THE ENTRY SAYS "ONLY `Program` CALLS IT" AND THAT IS FALSE, MEASURED by
+ * grepping `src/` and `bin/` for the call: there are TWO in-tree callers.
+ * `SugarCraft\Core\Program::run()` is one, and
+ * {@see \SugarCraft\Crush\App\App::init()} — the hosted SHELL, i.e. the
+ * very "hosted-pane shape" the entry names as the gap — is the other. It
+ * batches `$this->chat?->init()` with its own startup query and passes
+ * `Chat::update()`'s Cmd straight through. So the in-tree hosted pane is
+ * already correct, and what is actually unpinned is that it STAYS correct,
+ * plus the contract for an embedder outside this tree. Both are below.
  *
  * WHY THE FIX IS A DOCUMENTED OBLIGATION AND NOT A NEW METHOD. Everything a
  * host needs is already public on the `Model` interface: `init()` hands back
@@ -138,6 +149,47 @@ final class HostedRuntimeNoticeWakeTest extends TestCase
         self::assertFalse(RuntimeNoticeSink::hasTransport());
 
         self::assertNull(self::hostedOwner()->init());
+    }
+
+    /**
+     * THE IN-TREE HOST DISCHARGES PART ONE, AND MUST KEEP DOING SO.
+     *
+     * {@see \SugarCraft\Crush\App\App::init()} batches the hosted `Chat`'s
+     * startup Cmd with its own. `SugarCraft\Core\Cmd::batch()` drops nulls, so
+     * deleting `$this->chat?->init()` from that batch leaves a shell that still
+     * starts, still paints, and silently never arms the seam — no test anywhere
+     * asserted otherwise before this one.
+     *
+     * AND THE FAN-OUT IS THE HOST'S JOB TOO, which is a second obligation and
+     * was NOT obvious: `Cmd::batch()` does not run its children. It returns a
+     * Cmd yielding a `SugarCraft\Core\BatchMsg` that CARRIES them, and
+     * `Program::runCmd()` is what explodes it. A host embedding `App` rather
+     * than `Chat` therefore has to walk that sentinel or the arming Cmd is
+     * constructed and never invoked. This test walks it exactly as a host
+     * must, which is why the walk is here rather than hidden in a helper.
+     */
+    public function testTheHostedShellForwardsTheChatsStartupCmd(): void
+    {
+        self::assertTrue(RuntimeNoticeSink::arm());
+
+        $app = App::new($this->createMock(ProviderInterface::class), 'gpt-4')
+            ->withChat(self::hostedOwner());
+
+        $cmd = $app->init();
+        self::assertInstanceOf(\Closure::class, $cmd);
+
+        $batch = $cmd();
+        self::assertInstanceOf(BatchMsg::class, $batch, 'App::init() stopped batching; the walk below is '
+            . 'checking something other than what a host would do');
+        foreach ($batch->cmds as $child) {
+            $child();
+        }
+
+        self::assertTrue(
+            RuntimeNoticeSink::isNotificationArmed(),
+            "App::init() no longer runs the hosted Chat's startup Cmd, so a shell-hosted session is back to "
+            . 'waiting for the next keystroke to notice a mid-session notice',
+        );
     }
 
     /**

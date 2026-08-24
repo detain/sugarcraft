@@ -1101,10 +1101,17 @@ final class Chat implements Model
      *
      * ## A HOST THAT DRIVES `update()` ITSELF OWNS THE PUMPING (E223)
      *
-     * THIS METHOD IS CALLED BY `SugarCraft\Core\Program` AND, IN THIS
-     * APPLICATION, BY NOTHING ELSE. An embedder driving this model directly —
-     * the hosted-pane shape {@see withSize()}'s doc-block describes — gets the
-     * seam's idle wake-up only if it does what a `Program` does, in two parts:
+     * TWO CALLERS IN THIS TREE, AND THE SECOND ONE IS THE HOSTED SHAPE —
+     * CHECKED RATHER THAN ASSUMED, because the obvious sentence ("only
+     * `Program` calls this") is false. `SugarCraft\Core\Program::run()` calls
+     * it on the active model, and {@see \SugarCraft\Crush\App\App::init()}
+     * FORWARDS it: the shell batches its own OSC 11 query with
+     * `$this->chat?->init()`, and passes the Cmd `Chat::update()` returns
+     * straight through untouched. So the in-tree hosted pane already
+     * discharges both parts below, and the gap E223 records belongs to an
+     * embedder OUTSIDE this tree that drives `update()` itself. Such a host
+     * gets the seam's idle wake-up only if it does what those two do, in two
+     * parts:
      *
      *  1. CALL THIS AND RUN WHAT IT HANDS BACK. The return is the arming
      *     `Cmd`; a host that never runs it never installs the watcher, and the
