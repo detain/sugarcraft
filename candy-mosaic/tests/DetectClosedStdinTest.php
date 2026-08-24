@@ -229,13 +229,24 @@ final class DetectClosedStdinTest extends TestCase
      *
      * MEASURED, five single-clause mutations of the repair, each run against
      * this whole package suite (PHP 8.3.6): removing `drainStdin()`'s guard
-     * KILLS, and reverting `isInteractiveTty()`'s injected-stream arm to a bare
-     * `return true` KILLS — but removing `stdinFd()`'s own guard SURVIVED, and
-     * so did removing `readStdinTimed()`'s. Not because those clauses are
-     * wrong: because with any ONE of them in place the others are never reached
-     * with a dead handle. `probe()` drains unconditionally, so the drain guard
-     * absorbs the whole live path, and both read paths sit behind
-     * `isInteractiveTty()`, which already answers false for a dead descriptor.
+     * KILLED, and reverting `isInteractiveTty()`'s injected-stream arm to a
+     * bare `return true` KILLED — but removing `stdinFd()`'s own guard
+     * SURVIVED, and so did removing `readStdinTimed()`'s. Not because those
+     * clauses are wrong: because with any ONE of them in place the others are
+     * never reached with a dead handle. `probe()` drains unconditionally, so
+     * the drain guard absorbs the whole live path, and both read paths sit
+     * behind `isInteractiveTty()`, which already answers false for a dead
+     * descriptor.
+     *
+     * READ THE CONDITION ON THOSE TWO SURVIVALS BEFORE RE-RUNNING THEM: they
+     * were taken BEFORE THIS TEST AND ITS SIBLING BELOW EXISTED, which is the
+     * whole reason both exist. Re-run today, against this suite as it now
+     * stands, every one of the five KILLS — `stdinFd()`'s guard at this test
+     * (rc 1), `readStdinTimed()`'s at this test (rc 2), and the inline-spelling
+     * revert at the census below (rc 1); re-measured independently, PHP 8.3.6,
+     * full package suite. A survival recorded without the tree it was taken
+     * against is a verdict that inverts under the reader's hands and reads as
+     * "this doc-block is wrong" rather than "these pins work".
      *
      * That is a redundancy worth keeping and worth PINNING rather than
      * trusting: the reachability that makes each one dormant is a property of
@@ -292,6 +303,15 @@ final class DetectClosedStdinTest extends TestCase
      * `readStdinTimed()`'s own guard absorbs it. A source-level assertion is
      * the only thing that can see the difference, and E313's lesson is exactly
      * that a spelling is where these hide.
+     *
+     * THAT SURVIVAL WAS TAKEN AGAINST A SUITE THAT DID NOT YET CONTAIN THIS
+     * TEST, and stating it without the condition would hand the next reader
+     * the opposite result and no way to tell which of them was wrong.
+     * Re-measured against the tree as it now stands, PHP 8.3.6, full package
+     * suite: the same revert KILLS, rc 1, and it dies HERE — this assertion is
+     * the only thing in the suite that sees it. That is the survival becoming
+     * a kill because the pin landed, which is the claim, rather than the
+     * survival being a misreading.
      *
      * Token-based, not `grep`: this file's doc-blocks are full of the word, and
      * a text search cannot tell a reference from a description of one. The

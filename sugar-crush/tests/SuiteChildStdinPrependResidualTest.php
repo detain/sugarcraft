@@ -117,8 +117,18 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
     }
 
     /**
-     * THREE ARMS THROUGH ONE HARNESS, DIFFERING IN TWO BITS: whether the script
-     * loaded `tests/bootstrap.php`, and whether the marker was written.
+     * THREE ARMS THROUGH ONE HARNESS, DIFFERING IN THREE BITS: whether the
+     * script loaded `tests/bootstrap.php`, whether the marker was written, and
+     * whether the write end was CLOSED. {@see spawn()} takes exactly those
+     * three parameters.
+     *
+     * The sentence here said "TWO BITS" and named the first two, which
+     * undercounted the one bit that does the most work: `$closeWriter` is what
+     * separates the known-positive from both guarded arms, and the paragraphs
+     * below already turn on it twice — the known-positive needs the EOF to
+     * terminate at all, and the treatment must NOT have it or the blocking
+     * half is untested. Counting it out of the summary makes the harness look
+     * like a two-by-two with one cell missing rather than the three arms it is.
      *
      * KNOWN-POSITIVE — no bootstrap, marker written, writer CLOSED. The child
      * must answer AND its output must carry the marker. This is the arm that
