@@ -12132,6 +12132,56 @@ The table and its generator are in the round-52 lane c report. The load-bearing 
 
 ---
 
+**THE TABLE, measured at `e8227070`, full suite, PHP 8.3.6 / PHPUnit 10.5.64.** Quote it with that sha
+or re-derive it; never adjust it arithmetically across a commit (E354's step (a)).
+
+Generator — one probe file, created and deleted at an EXACT path, never a glob, with the working tree
+verified empty by `git status --porcelain` before and after:
+
+```sh
+cd sugar-crush
+vendor/bin/phpunit --log-junit control.xml                     # control
+printf '<?php\n' > tests/Support/<a name nothing else uses>.php
+vendor/bin/phpunit --log-junit testsprobe.xml
+rm -f tests/Support/<that exact path>
+# ...and the same with a src/ probe declaring a PSR-4 `final class`
+```
+
+Attribution is per class from the JUnit log's `<testsuite assertions=…>`, NOT by re-running suspects.
+Watch for the double count: a data-provider test emits a nested `<testsuite name="Class::method">`
+whose assertions are already inside its class's, so sum class-level suites only.
+
+ONE ADDED `tests/` FILE — **+5 assertions, +0 tests**:
+
+| census | per added tests/ file |
+| --- | --- |
+| `Support/ProcessUniqueTempNameTest` | +3 |
+| `Support/NonBlockingVocabularyTest` | +1 |
+| `Support/ReflectionLineSliceReaderCensusTest` | +1 |
+
+ONE ADDED `src/` FILE — **+48 assertions and +1 TEST on a run where `BuiltInToolCorpusTest` reds
+(Ec52-4); +53 counting only the classes that stayed green**:
+
+| census | per added src/ file |
+| --- | --- |
+| `Cli/StderrEmitterCensusTest` | +16 |
+| `Config/EnvRosterDriftTest` | +9 |
+| `Config/GlobFigureDriftTest` | +6 |
+| `Integration/BinSugarcrushWiringTest` | +6 assertions AND **+1 test** (a per-src-file provider) |
+| `Config/DocumentParagraphsTest` | +4 |
+| `SymbolCitationDriftTest` | +3 |
+| `Support/ProcessUniqueTempNameTest` | +3 |
+| `Agents/WorktreeRemovalReportingTest` | +2 |
+| `Diagnostics/RuntimeNoticeSinkDeliveryTest` | +2 |
+| `Support/HomeDirectoryPathReaderInventoryTest` | +1 |
+| `Support/NonBlockingVocabularyTest` | +1 |
+| `Tools/BuiltInToolCorpusTest` | **−5, because it FAILS** — see Ec52-4 |
+
+**The asymmetry is the finding.** A source file costs roughly ten times what a test file costs, moves
+four times as many censuses, adds a TEST as well as assertions, and reds a hard-coded figure on the way
+past. A lane that predicts its merged floor by counting the tests it added will be wrong by ~53 per
+source file a sibling adds.
+
 ### Ec52-6 — the E355 sweep over `tests/Cli/`'s two censuses: eight killed, two survivors, both E363's shape
 
 **Recorded 2026-08-24 by round-52 lane c. FIXED this round.** Severity: guard coverage.
