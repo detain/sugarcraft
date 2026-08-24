@@ -3215,8 +3215,43 @@ final class Chat implements Model
             $result = ToolResult::ok($name, is_string($raw) ? $raw : (json_encode($raw) ?: 'null'), $toolCall->id);
             return [$result, $raw, true];
         } catch (\Throwable $e) {
-            return [ToolResult::error($name, $e->getMessage(), $toolCall->id), null, false];
+            return [ToolResult::error($name, self::executionFailure($name, $e), $toolCall->id), null, false];
         }
+    }
+
+    /**
+     * The error text a tool that THREW is reported with.
+     *
+     * A TOOL THAT THROWS COULD OTHERWISE FORGE A REFUSAL (E308). The catch
+     * above used to put `$e->getMessage()` into the result's error field
+     * verbatim, and {@see isDeniedResult()} reads exactly that field and hands
+     * it to {@see DenialKind::classify()}, which asks whether the text OPENS
+     * with a roster prefix. So a tool whose exception message began
+     * `Permission denied:` — an MCP server quoting its own refusal, a `Skill`
+     * re-raising an OS error, any text that happens to start that way — was
+     * drawn struck through in the TUI and listed in a `--output-format json`
+     * document's `refusals` array as a call THAT NEVER RAN. It ran, and it
+     * failed, and those are different facts about what the model just did.
+     *
+     * WHY THE FIX IS A WRAPPER AND NOT ANOTHER SCANNER. The round-49
+     * co-occurrence guard finds a class that spells a roster prefix; this
+     * catch is generic, so the throwing class is not named here and need not
+     * be in this repository at all. There is nothing for a scanner to look at.
+     * A wrapper is structural: the text now opens with a literal that is on no
+     * roster, so `classify()` answers null whatever the exception said.
+     *
+     * THE SHAPE IS {@see \SugarCraft\Crush\Runtime}'s, DELIBERATELY. The
+     * engine path was never exposed to this — `Runtime::executionFailure()`
+     * already wraps a throw as `Error: <tool> failed with <class>: <message>`
+     * — and that asymmetry between the two paths is what E308 recorded. Two
+     * renderings of one event would have replaced it with a different
+     * asymmetry, so this spells the same sentence.
+     * {@see \SugarCraft\Crush\Tests\ChatTest} asserts the two agree by
+     * running both.
+     */
+    private static function executionFailure(string $tool, \Throwable $e): string
+    {
+        return sprintf('Error: %s failed with %s: %s', $tool, $e::class, $e->getMessage());
     }
 
     /**

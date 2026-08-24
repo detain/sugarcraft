@@ -997,6 +997,114 @@ final class ChatTest extends TestCase
         $this->assertTrue($next->history[2]->toolResults[0]->isError());
     }
 
+    /**
+     * E308: A TOOL THAT THROWS MUST NOT BE ABLE TO FORGE A REFUSAL.
+     *
+     * `Chat::invokeTool()`'s catch used to put `$e->getMessage()` into the
+     * result's error field verbatim, and {@see Chat::isDeniedResult()} reads
+     * exactly that field. So an exception whose text OPENED with a roster
+     * prefix made a call that ran and failed indistinguishable from one that
+     * never ran — struck through in the TUI, and listed in a
+     * `--output-format json` document's `refusals` array.
+     *
+     * THE CASES ARE THE ENUM'S, NOT THREE LITERALS. A fourth kind arrives here
+     * on its own, and a respelling of an existing one cannot leave a case
+     * uncovered.
+     *
+     * DRIVEN THROUGH THE LIVE ROUTE, not through the private method: the whole
+     * finding is about which field the classifier reads at the end of the real
+     * path, so a test that called the wrapper directly would be asserting the
+     * wrapper exists rather than that it is in the way.
+     *
+     * @dataProvider denialKinds
+     */
+    public function testAToolWhoseExceptionOpensWithARosterPrefixIsNotReportedAsARefusal(
+        \SugarCraft\Crush\Permissions\DenialKind $kind,
+    ): void {
+        $forged = $kind->reason('this tool ran and then threw');
+
+        // THE KNOWN-POSITIVE CONTROL, IN THE SAME TEST (rule 15). Asserting
+        // that something is NOT classified as a refusal is satisfied perfectly
+        // by a classifier that has stopped classifying anything, so the same
+        // method is asked about the same text arriving the way a REAL denial
+        // arrives — as the whole of a result's error.
+        self::assertTrue(
+            Chat::isDeniedResult(ToolResult::error('failing', $forged, 'id')),
+            'the classifier no longer recognises a genuine refusal, so the negative below proves nothing',
+        );
+
+        $toolCall = new ToolCall('failing', []);
+        $message = Message::assistant('Calling failing tool...')->withToolCalls([$toolCall]);
+
+        $chat = (new Chat(
+            history: [Message::user('test')],
+            inFlight: true,
+        ))->registerTool('failing', static function (array $args) use ($forged): void {
+            throw new \RuntimeException($forged);
+        });
+
+        [, $next] = $this->runToolCallsToCompletion($chat, $message);
+
+        $result = $next->history[2]->toolResults[0];
+
+        self::assertTrue($result->isError(), 'a throwing tool stopped being an error at all');
+        self::assertFalse(
+            Chat::isDeniedResult($result),
+            'a tool that RAN AND THREW was reported as a call that never ran, because its '
+                . 'exception message opened with ' . $kind->value,
+        );
+        self::assertStringContainsString(
+            'this tool ran and then threw',
+            (string) $result->error,
+            'the wrapper swallowed the message the model needs to act on',
+        );
+    }
+
+    /** @return iterable<string,array{0:\SugarCraft\Crush\Permissions\DenialKind}> */
+    public static function denialKinds(): iterable
+    {
+        foreach (\SugarCraft\Crush\Permissions\DenialKind::cases() as $kind) {
+            yield $kind->name => [$kind];
+        }
+    }
+
+    /**
+     * The two tool-failure paths spell one sentence.
+     *
+     * E308's finding was an ASYMMETRY: `Runtime::executionFailure()` already
+     * wrapped a throw, so the engine path could not be forged, and the
+     * TUI-side callback had no wrapper at all. Fixing it with a SECOND
+     * rendering would have swapped that asymmetry for a cosmetic one — the
+     * same failure described two ways depending on which surface ran the tool
+     * — so both are asked here and compared.
+     *
+     * Both methods are private and both are reached by reflection, which is
+     * the point: neither is API, and pinning the agreement is what stops the
+     * next edit to either from silently un-pinning it.
+     */
+    public function testTheTuiAndEngineToolFailurePathsSpellTheSameSentence(): void
+    {
+        $boom = new \LogicException('it went wrong');
+
+        $chatText = (new \ReflectionMethod(Chat::class, 'executionFailure'))
+            ->invoke(null, 'grep', $boom);
+
+        $tool = new class implements \SugarCraft\Crush\Tools\Tool {
+            public function name(): string { return 'grep'; }
+            public function description(): string { return ''; }
+            public function inputSchema(): array { return []; }
+            public function execute(array $args): EngineToolResult { return EngineToolResult::ok(''); }
+        };
+        $engineResult = (new \ReflectionMethod(\SugarCraft\Crush\Runtime::class, 'executionFailure'))
+            ->invoke(null, $tool, new EngineToolCall('call_1', 'grep', []), $boom);
+
+        self::assertSame($engineResult->content(), $chatText);
+
+        // And the property that makes either of them a fix rather than a
+        // reformatting: neither opens with anything on the roster.
+        self::assertNull(\SugarCraft\Crush\Permissions\DenialKind::classify($chatText));
+    }
+
     public function testMultipleToolCallsWithPoolConfiguredExecuteRealTools(): void
     {
         // R14b.fix: with 2+ tool calls AND a non-null pool configured,
