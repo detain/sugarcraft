@@ -228,12 +228,9 @@ final class TtyStreamArgumentCensusTest extends TestCase
         foreach (self::sources() as $path => $source) {
             foreach (self::rawModeConstructions($source) as $site) {
                 ++$seen;
-                if ($site['firstArg'] === 'null' && $site['extraArgs']) {
-                    $offenders[] = $path . ': new ' . $site['name'] . '(' . $site['firstArg'] . ', …)';
-                }
-                if ($site['firstArg'] === 'unparsed') {
-                    $offenders[] = $path . ': new ' . $site['name'] . '(<argument list this scanner could '
-                        . 'not read to its close>)';
+                $offender = self::ttyOffender($path, $site);
+                if ($offender !== null) {
+                    $offenders[] = $offender;
                 }
                 if (str_starts_with($site['firstArg'], 'constant:')) {
                     $constants[] = $path . ': ' . $site['firstArg'];
@@ -310,12 +307,9 @@ final class TtyStreamArgumentCensusTest extends TestCase
         foreach (self::libSources() as $path => $source) {
             foreach (self::rawModeConstructions($source) as $site) {
                 ++$seen;
-                if ($site['firstArg'] === 'null' && $site['extraArgs']) {
-                    $offenders[] = $path . ': new ' . $site['name'] . '(' . $site['firstArg'] . ', …)';
-                }
-                if ($site['firstArg'] === 'unparsed') {
-                    $offenders[] = $path . ': new ' . $site['name'] . '(<argument list this scanner could '
-                        . 'not read to its close>)';
+                $offender = self::ttyOffender($path, $site);
+                if ($offender !== null) {
+                    $offenders[] = $offender;
                 }
                 if (str_starts_with($site['firstArg'], 'constant:')) {
                     $constants[] = $path . ': ' . $site['firstArg'];
@@ -526,6 +520,85 @@ final class TtyStreamArgumentCensusTest extends TestCase
                 ['name' => 'Tty', 'firstArg' => 'null', 'extraArgs' => true],
                 ['name' => 'Tty', 'firstArg' => 'expression', 'extraArgs' => true],
             ],
+        ];
+    }
+
+    /**
+     * The offender line for one `Tty`/`PosixBackend` site, or null if it is
+     * fine.
+     *
+     * SHARED BY BOTH ARMS ABOVE, and extracted for the same reason as
+     * {@see optionsOffender()}: MEASURED at the commit that split it out, with
+     * the `unparsed` branch replaced by `false &&` in BOTH arms, the whole
+     * census stayed green — 41 tests, 46 assertions, OK. The fixtures pin what
+     * `rawModeConstructions()` REPORTS; nothing pinned what the arms did with
+     * an `unparsed` report, so the rule-14 branch that exists precisely so
+     * "I could not read it" is not spelled like "it was fine" was itself
+     * spelled like nothing at all.
+     *
+     * The two conditions are mutually exclusive — `firstArg` cannot be both
+     * `null` and `unparsed` — so unlike the options classifier this one has no
+     * meaningful order.
+     *
+     * @param array{name: string, firstArg: string, extraArgs: bool} $site
+     */
+    private static function ttyOffender(string $path, array $site): ?string
+    {
+        if ($site['firstArg'] === 'null' && $site['extraArgs']) {
+            return $path . ': new ' . $site['name'] . '(' . $site['firstArg'] . ', …)';
+        }
+
+        if ($site['firstArg'] === 'unparsed') {
+            return $path . ': new ' . $site['name']
+                . '(<argument list this scanner could not read to its close>)';
+        }
+
+        return null;
+    }
+
+    /**
+     * KNOWN ANSWERS FOR THE TTY CLASSIFICATION, the half a mutation proved was
+     * unpinned in both of the older arms.
+     *
+     * Two rows must produce an offender and three must produce null. The
+     * `null` first argument with NO extra arguments is the row that matters
+     * most: `new Tty()` resolves to the same descriptor and is deliberately
+     * NOT an offender, because without an injected `Termios`
+     * `enableRawMode()` returns at `!isTty()` before it reaches the flag.
+     *
+     * @param array{name: string, firstArg: string, extraArgs: bool} $site
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('ttyOffenderFixtures')]
+    public function testTheTtyClassifierAnswersCorrectlyOnSitesWhoseAnswerIsKnown(
+        array $site,
+        ?string $expected,
+    ): void {
+        self::assertSame($expected, self::ttyOffender('p.php', $site));
+    }
+
+    /**
+     * @return iterable<string, array{array{name: string, firstArg: string, extraArgs: bool}, ?string}>
+     */
+    public static function ttyOffenderFixtures(): iterable
+    {
+        $site = static fn (array $o): array => $o + ['name' => 'Tty', 'firstArg' => 'null', 'extraArgs' => true];
+
+        yield 'THE HAZARD: a null stream with an injected Termios' => [
+            $site([]),
+            'p.php: new Tty(null, …)',
+        ];
+        yield 'an unreadable argument list is an offender (rule 14)' => [
+            $site(['firstArg' => 'unparsed', 'extraArgs' => false]),
+            'p.php: new Tty(<argument list this scanner could not read to its close>)',
+        ];
+        yield 'a null stream with NO Termios is clean - enableRawMode() stops at !isTty()' => [
+            $site(['extraArgs' => false]),
+            null,
+        ];
+        yield 'an explicit stream expression is clean' => [$site(['firstArg' => 'expression']), null];
+        yield 'a constant is clean HERE - the constant roster is a separate assertion' => [
+            $site(['firstArg' => 'constant:STDOUT', 'extraArgs' => false]),
+            null,
         ];
     }
 
