@@ -1179,6 +1179,90 @@ final class BackgroundSupervisorReapTest extends TestCase
         );
     }
 
+    /**
+     * THE FOUR `markTestSkipped()` GATES IN THIS FILE ARE PLATFORM GATES, AND
+     * THIS IS THE TRIPWIRE FOR THE DAY THEY START FIRING IN CI.
+     *
+     * The claim they were filed under (E413) was that they move the suite's
+     * skip count off 1 "on any non-Linux runner", making the plan's floor
+     * unreadable on macOS/Windows CI. MEASURED against the repository rather
+     * than assumed: `sugar-crush` appears in NEITHER `WINDOWS_LIBS` nor
+     * `MACOS_LIBS` in `scripts/affected-libs.php` — the hand-maintained opt-in
+     * pools that populate `ci.yml`'s `windows_matrix` and `macos_matrix` — so
+     * this suite runs on `ubuntu-latest` and nowhere else, and no gate below can
+     * reach a runner without `/proc`.
+     *
+     * The gates themselves are also not removable. {@see commOf()} reads
+     * `/proc/<pid>/comm` and {@see directChildPids()} reads
+     * `/proc/self/task/<tid>/children`; every test that skips here observes the
+     * REAL process tree, which is the whole reason these tests exist rather
+     * than being assertions about a double. There is no test double for "this
+     * kernel has no procfs".
+     *
+     * So the finding is not "replace these with doubles" — it is "the skip
+     * figure quoted throughout the plan is a LINUX figure, and it stops being
+     * one the moment sugar-crush is opted into an OS pool". That is a fact about
+     * a config file, so it is asserted here rather than written down in a
+     * sentence that would rot: add `'sugar-crush'` to either pool and this goes
+     * red, in the same change that would have silently moved the count.
+     */
+    public function testThisSuiteIsNotOptedIntoAnyNonLinuxCiRunner(): void
+    {
+        $script = dirname(__DIR__, 3) . '/scripts/affected-libs.php';
+
+        if (!is_file($script)) {
+            // A split-repo clone of `sugarcraft/sugar-crush` has no monorepo
+            // scripts dir. ASSERTED rather than skipped: a `markTestSkipped()`
+            // here would add exactly the second skip this test exists to warn
+            // about.
+            $this->assertFalse(
+                is_dir(dirname(__DIR__, 3) . '/scripts'),
+                'scripts/ exists but affected-libs.php does not — the CI matrix generator has '
+                . 'moved and this tripwire is now reading nothing'
+            );
+
+            return;
+        }
+
+        $source = (string) file_get_contents($script);
+
+        foreach (['WINDOWS_LIBS', 'MACOS_LIBS'] as $pool) {
+            $matched = preg_match('/const\s+' . $pool . '\s*=\s*\[(.*?)\];/s', $source, $m);
+
+            // RED ON WHAT IT CANNOT PARSE, never a silent pass: a pool this
+            // regex stops matching is a pool that is no longer being checked.
+            $this->assertSame(
+                1,
+                $matched,
+                "could not find a `const $pool = [...]` array in scripts/affected-libs.php, so "
+                . 'this tripwire is not reading the CI pools at all'
+            );
+
+            $this->assertStringNotContainsString(
+                "'sugar-crush'",
+                $m[1],
+                "sugar-crush has been added to $pool, so its suite now runs on a runner without "
+                . '/proc. The four platform gates in this file will fire there, and every '
+                . "`1 skipped` figure in docs/plans is a Linux-only figure from that point on."
+            );
+        }
+
+        // THE KNOWN-POSITIVE CONTROL. Both assertions above are satisfied by a
+        // `$m[1]` that is empty, or by pools that no longer name anything —
+        // which is also what a gutted generator looks like. `candy-core` is in
+        // BOTH pools, so requiring it proves the extraction returned real
+        // content before the absence above is allowed to mean anything.
+        foreach (['WINDOWS_LIBS', 'MACOS_LIBS'] as $pool) {
+            preg_match('/const\s+' . $pool . '\s*=\s*\[(.*?)\];/s', $source, $m);
+            $this->assertStringContainsString(
+                "'candy-core'",
+                $m[1],
+                "the $pool extraction came back without candy-core, which IS in that pool — the "
+                . 'scanner is dead and its "sugar-crush is absent" answer means nothing'
+            );
+        }
+    }
+
     private function requireProcTools(): void
     {
         foreach (['proc_open', 'posix_kill'] as $fn) {
