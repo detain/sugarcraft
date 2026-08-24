@@ -104,14 +104,41 @@ final class HeadlessPermissionPromptStdinDefaultTest extends TestCase
      * `sugarcrush -p "…" < file` gets exactly the descriptor it always did.
      * Without this arm the change could have swapped one wrong default for
      * another and stayed green.
+     *
+     * WHAT THIS TEST SAID: `assertSame(\STDIN, self::answerStreamOf($prompt))`.
+     * WHAT IS TRUE NOW (E338): `tests/bootstrap.php` closes descriptor 0 on
+     * every non-tty run, so that assertion was passing on a CLOSED resource —
+     * PHPUnit names it "resource (closed)" — and what it pinned was that this
+     * prompt got handed a dead handle. `NonInteractive::stdinDefault()` now
+     * answers `null` for a dead descriptor rather than the corpse.
+     * WHY THE TEST STILL EARNS ITS PLACE: its claim is about the RESOLUTION —
+     * no pin means the process's own descriptor 0, not some other stream —
+     * and that claim is unchanged. What it can observe changed, so it now
+     * asserts the two things that are true of an unpinned prompt in a process
+     * with no descriptor 0: the default resolved to nothing, and the prompt
+     * consequently reports itself non-interactive. The second is why
+     * {@see HeadlessPermissionPrompt} needed no change of its own for E338 —
+     * `isInteractive()` already opens with `\is_resource($this->in)`, so the
+     * `\fgets()` behind it is never reached.
+     *
+     * `assertFalse(\is_resource(\STDIN))` states the premise, so a bootstrap
+     * that stopped closing descriptor 0 fails here with the reason visible
+     * rather than turning the assertions below into a different claim.
      */
-    public function testWithNoPinInstalledTheDefaultIsTheRealStdin(): void
+    public function testWithNoPinInstalledTheDefaultIsTheProcesssOwnDescriptorZero(): void
     {
         NonInteractive::pinStdinDefault(null);
 
         $prompt = new HeadlessPermissionPrompt(PermissionMode::Default);
 
-        self::assertSame(\STDIN, self::answerStreamOf($prompt));
+        self::assertFalse(
+            \is_resource(\STDIN),
+            'this suite is supposed to run with descriptor 0 closed; the expectations below assume it',
+        );
+        self::assertNull(self::answerStreamOf($prompt));
+
+        $isInteractive = new \ReflectionMethod(HeadlessPermissionPrompt::class, 'isInteractive');
+        self::assertFalse($isInteractive->invoke($prompt));
     }
 
     /**

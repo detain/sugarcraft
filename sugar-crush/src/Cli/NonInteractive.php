@@ -719,11 +719,41 @@ final class NonInteractive
      * having; the prompt is a second beneficiary of one pin rather than a
      * second pin.
      *
-     * @return resource
+     * IT ANSWERS `null` FOR A DEAD DESCRIPTOR, WHICH IS NEW (E338), and the
+     * reason is that the `?? \STDIN` fallback stopped being a live handle.
+     * `tests/bootstrap.php` closes descriptor 0 on every non-tty run (E296's
+     * option (a)), so inside the suite this method used to hand its callers a
+     * CLOSED resource, and — MEASURED, PHP 8.3.6 — `stream_isatty()`,
+     * `stream_get_contents()` and `fgets()` all throw
+     * `TypeError: supplied resource is not a valid stream resource` on one.
+     * `is_resource()` is the only member of that family that answers rather
+     * than throwing, so it is the one this method uses.
+     *
+     * WHAT `@` DOES NOT DO, recorded because it is the trap this fix exists
+     * to avoid re-opening: `@\stream_get_contents()` throws exactly the same
+     * `TypeError` as the unsuppressed call. `@` suppresses DIAGNOSTICS, not
+     * exceptions (measured alongside the above). A fix that guarded only the
+     * `stream_isatty()` in {@see readStdinIfPiped()} — the shape a reader
+     * spots first — would have RELOCATED the throw two lines down rather than
+     * removed it.
+     *
+     * THE RETURN TYPE WIDENED AND BOTH CONSUMERS WERE CHECKED, not assumed.
+     * {@see readStdinIfPiped()} takes the guard below, which covers a null
+     * from here AND an explicitly-passed dead handle in one place.
+     * {@see HeadlessPermissionPrompt::__construct()} needs no change: its
+     * `$in` is only ever read behind `HeadlessPermissionPrompt::isInteractive()`,
+     * which already opens with `\is_resource($this->in)`, so a null makes it
+     * answer "not interactive" — which is the truth about a process with no
+     * descriptor 0 — instead of throwing on the `\fgets()` below it.
+     *
+     * @return resource|null the stream, or null when there is no live
+     *   descriptor 0 to hand back
      */
     public static function stdinDefault()
     {
-        return self::$stdinDefault ?? \STDIN;
+        $stream = self::$stdinDefault ?? \STDIN;
+
+        return \is_resource($stream) ? $stream : null;
     }
 
     /**
@@ -745,12 +775,26 @@ final class NonInteractive
      * states the property the suite is supposed to have, and that property is
      * now enforced in one place instead of asserted per call site.
      *
+     * ONE `is_resource()` GUARD COVERS BOTH READS, and that is deliberate
+     * rather than tidy (E338). Two stream functions are called below and BOTH
+     * throw `TypeError` on a closed resource — `@` in front of the second one
+     * suppresses diagnostics, not exceptions — so a guard placed at either
+     * call alone moves the throw to the other. Placing it on the resolved
+     * `$stream` also covers the third route in, which neither call-site guard
+     * would: a caller passing its own handle that has since been closed.
+     * `null` is the answer because it is already this method's no-answer
+     * value for every caller.
+     *
      * @param resource|null $stream the stream to read, or null for
      *   {@see stdinDefault()}
      */
     public static function readStdinIfPiped($stream = null): ?string
     {
         $stream ??= self::stdinDefault();
+
+        if (!\is_resource($stream)) {
+            return null;
+        }
 
         if (\stream_isatty($stream)) {
             return null;
