@@ -134,9 +134,16 @@ use PHPUnit\Framework\TestCase;
  * ## What the roster does NOT do
  *
  * It does not classify. Whether a given reader BREAKS on a closed descriptor
- * is a per-site question. Three of the roster's entries are already answered,
- * and they are named rather than counted — a count of a roster the test itself
- * derives rots silently the next time an entry is added (rule 18):
+ * is a per-site question, and the ASSERTED set is the roster alone — the
+ * judgements live in prose below, are not machine-checked, and a new row
+ * arrives unjudged. They are named rather than counted: a count of a roster
+ * the test itself derives rots silently the next time an entry is added (rule
+ * 18), and the sentence that used to stand here said "three" over four
+ * bullets, having been written before one of them was added.
+ *
+ * As of the descriptor replacement shipping (see the deferral note below,
+ * which this retires), every row carries a judgement. Each was driven on this
+ * box rather than reasoned about, PHP 8.3.6:
  *
  *  - `candy-mosaic/src/Detect.php` — GUARDED NOW, and it is the site that
  *    TRIGGERED round 49's 107 errors rather than the site that caused them:
@@ -165,10 +172,86 @@ use PHPUnit\Framework\TestCase;
  *    CHILD's pipe. Not this process's descriptor 0, and not affected by
  *    closing it.
  *
- * Every other entry is unclassified on purpose. Classifying them is the work
- * E296's option (a) actually requires, and doing it here — without running the
- * descriptor replacement behind a full suite — would be the same reasoning-
- * instead-of-measuring that killed the first three attempts.
+ *  - `sugar-crush/src/Cli/NonInteractive.php` — DEGRADES TODAY, WILL THROW ON
+ *    THE NEXT UNPIN-AND-READ, and it is the one row this change made WORSE.
+ *    `stdinDefault()` is `self::$stdinDefault ?? \STDIN` and
+ *    `readStdinIfPiped()` is `$stream ??= self::stdinDefault();` then
+ *    `\stream_isatty($stream)` with no `is_resource()` guard. Before the
+ *    replacement that fallback handed back a LIVE `\STDIN`; inside the suite
+ *    it now hands back a dead one. MEASURED: `stream_isatty()` on a closed
+ *    resource throws `TypeError: stream_isatty(): supplied resource is not a
+ *    valid stream resource`, and so does the `@\stream_get_contents()` two
+ *    lines later — `@` suppresses diagnostics, not a thrown `TypeError`, so
+ *    guarding only the first call would move the throw rather than remove it.
+ *    NOT REACHABLE TODAY, which is why the suite is green:
+ *    `pinStdinDefault(null)` has exactly two callers
+ *    ({@see \SugarCraft\Crush\Tests\Cli\NonInteractiveStdinPinTest::testClearingThePinRestoresTheRealStdinAsTheDefault()}
+ *    and
+ *    {@see \SugarCraft\Crush\Tests\Cli\HeadlessPermissionPromptStdinDefaultTest::testWithNoPinInstalledTheDefaultIsTheRealStdin()}),
+ *    and neither then reads. The next test that unpins and reads gets a
+ *    `TypeError` where it used to get null. Recorded rather than fixed: the
+ *    file is `src/` and outside this lane.
+ *  - `candy-core/src/Util/Tty/EnvDetect.php` — WOULD THROW, AND IS DORMANT.
+ *    `isConsoleStdin()` is a bare `return stream_isatty(STDIN);` with no
+ *    guard, which is the throwing shape above. It has NO caller: grepped
+ *    across this package's `src`, `bin` and `tests` and across `src`/`bin` of
+ *    every sibling in {@see LIB_SCOPE}, the only occurrence of the name is its
+ *    own declaration. Dormant, not dead — it is the Windows console probe
+ *    {@see \SugarCraft\Core\Util\Tty} would use if the Windows path were
+ *    wired, so it stays (rule 6) and this row is the dormancy record.
+ *  - `candy-core/src/Util/Tty.php` and `candy-core/src/Util/RawMode.php` —
+ *    DEGRADE. Both resolve `?? STDIN` and then hand the result somewhere that
+ *    tests liveness first. `RawMode::enable()`/`disable()` gate on
+ *    {@see \SugarCraft\Core\Util\TtyDetect::isAtty()}, which opens with
+ *    `is_resource($stream)` and returns false. `Tty::backend()` on this box
+ *    reaches `PosixBackend`, whose `isTty()` is
+ *    `is_resource($this->stream) && stream_isatty($this->stream)` — the
+ *    liveness test is the LEFT operand, so the throwing call is never made —
+ *    and whose two `stream_set_blocking()` calls are each `is_resource()`
+ *    guarded. Verified by symbol.
+ *  - `candy-core/src/Util/Tty/WindowsBackend.php` — UNREACHABLE ON THIS BOX
+ *    AND IN CI. Its `$stream ?? STDIN` is only constructed from
+ *    `Tty::backend()` behind `DIRECTORY_SEPARATOR === '\\'`, and
+ *    `scripts/affected-libs.php`'s `WINDOWS_LIBS` does not list `sugar-crush`,
+ *    so no Windows runner executes this suite. Unjudged for Windows on
+ *    purpose: this box is Linux and PHP 8.3.6 only, and a claim about the
+ *    Windows path would be reasoning rather than measurement.
+ *  - `candy-core/src/Program.php` — GUARDED, BUT ITS GUARD'S FALLBACK IS NOW
+ *    ITSELF DEAD, and this is the subtlest row. `runExec()` does
+ *    `$childIn = is_resource($this->input) ? $this->input : STDIN;` — a guard
+ *    added, per its own comment, for "tests that closed the streams". Once the
+ *    suite closes the constant, both arms are dead handles whenever `$input`
+ *    came from the constructor's `$options->input ?? STDIN`. MEASURED:
+ *    `proc_open()` with a closed resource in the descriptor array throws
+ *    `TypeError: proc_open(): supplied resource is not a valid stream
+ *    resource`, so this degrades by exception rather than by falling back.
+ *    Not reached in this suite — `runExec()` is private and driven only by an
+ *    `ExecRequest` Cmd, which nothing in `sugar-crush/src` issues. Recorded
+ *    because "no test noticed" is not "the library is fine", which is the same
+ *    distinction that made anyone look at `Detect`.
+ *
+ * ## THE DEFERRAL THAT USED TO STAND HERE IS SPENT
+ *
+ * WHAT THIS SAID: "Every other entry is unclassified on purpose. Classifying
+ * them is the work E296's option (a) actually requires, and doing it here —
+ * without running the descriptor replacement behind a full suite — would be
+ * the same reasoning-instead-of-measuring that killed the first three
+ * attempts."
+ *
+ * WHAT IS TRUE NOW: option (a) has shipped, in `tests/bootstrap.php`, and has
+ * been run behind a full suite more than once. The deferral's own stated
+ * precondition is satisfied, so the rows above are classified from a tree in
+ * which the closed descriptor is the ACTUAL state of every non-tty run — which
+ * is exactly the measurement the deferral was waiting for, and is why two of
+ * them (`NonInteractive`, `Program`) came out worse than a reader would have
+ * guessed while the constant was still open.
+ *
+ * WHY THE PARAGRAPH STILL EARNS ITS PLACE: it is the reason the roster and the
+ * judgements are separate things. A deferral that survives its own precondition
+ * stops being a record and becomes a licence, so retiring it is part of the
+ * work rather than housekeeping — and the next reader tempted to classify a
+ * NEW row from first principles should note that the standard the deferral set
+ * still applies to that row.
  *
  * ## Scope, stated rather than left to be inferred
  *
@@ -213,9 +296,20 @@ use PHPUnit\Framework\TestCase;
  * measurement at a point in time.
  *
  * OPTION (a) HAS NOW SHIPPED, so the follow-up that sentence asked for is done:
- * OBSERVED, PHP 8.3.6, the full suite with the descriptor replacement in
- * `tests/bootstrap.php` — 9661 tests, and no error from `sebastian/environment`
- * or from any of the other three.
+ * OBSERVED, PHP 8.3.6, a full green suite with the descriptor replacement in
+ * `tests/bootstrap.php` — no error from `sebastian/environment` or from any of
+ * the other three.
+ *
+ * THAT SENTENCE CARRIED A SUITE HEADCOUNT AND NO LONGER DOES. WHAT IT SAID:
+ * "9661 tests". WHAT IS TRUE NOW: it was already wrong two commits after it
+ * was written, by this lane's own PTY test, and it would have been wrong again
+ * at the next merge — a cardinality over `tests/` measured in a lane worktree
+ * is stale the hour a sibling lands (rule 18). WHY THE SENTENCE STAYS: the
+ * claim it supports is "the full suite was green and none of these four
+ * errored", and that claim needs the RUN, not the count. The other suite
+ * figures in this tree's stdin doc-blocks are deliberately left alone: they
+ * are BASELINES pinned to a named commit, where the number is the measurement
+ * rather than a description of the present tree.
  */
 final class StdinConstantReaderCensusTest extends TestCase
 {
