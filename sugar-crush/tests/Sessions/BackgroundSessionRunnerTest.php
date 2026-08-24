@@ -11,6 +11,7 @@ use SugarCraft\Crush\Backend\CancellationToken;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Sessions\BackgroundSessionRunner;
 use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -497,7 +498,7 @@ final class BackgroundSessionRunnerTest extends TestCase
 
         $this->assertSame(0, $exit, 'a refusal is an event inside the turn, not a failed turn');
         $this->assertStringContainsString(
-            BackgroundSessionRunner::REFUSAL_RECORD . ' Bash was not run - Hook denied: rm -rf is blocked',
+            BackgroundSessionRunner::REFUSAL_RECORD . ' [hook] Bash was not run - Hook denied: rm -rf is blocked',
             $contents,
         );
         // The answer is still the answer.
@@ -515,6 +516,8 @@ final class BackgroundSessionRunnerTest extends TestCase
     {
         $this->assertNotSame([], Chat::DENIED_ERROR_PREFIXES, 'the shared roster is empty - the guard is dead');
 
+        $tokensSeen = [];
+
         foreach (Chat::DENIED_ERROR_PREFIXES as $prefix) {
             $buffer = $this->bufferPath();
             $backend = new FakeRunnerBackend('ok', events: [
@@ -523,12 +526,33 @@ final class BackgroundSessionRunnerTest extends TestCase
 
             $this->runner($buffer)->executeTask($backend);
 
+            // The kind is derived from the roster entry rather than spelled
+            // beside it: a hard-coded expectation here would be a second copy
+            // of DenialKind's own mapping, and would agree with itself rather
+            // than with the enum.
+            $kind = DenialKind::classify($prefix . ' because reasons');
+            $this->assertInstanceOf(DenialKind::class, $kind, 'roster entry "' . $prefix . '" classifies as nothing');
+            $tokensSeen[$kind->token()] = true;
+
             $this->assertStringContainsString(
-                BackgroundSessionRunner::REFUSAL_RECORD . ' Edit was not run - ' . $prefix . ' because reasons',
+                BackgroundSessionRunner::REFUSAL_RECORD . ' [' . $kind->token() . '] Edit was not run - '
+                . $prefix . ' because reasons',
                 (string) file_get_contents($buffer),
-                'roster entry "' . $prefix . '" was not recognised by the daemon',
+                'roster entry "' . $prefix . '" was not recognised by the daemon, or was recorded under the wrong kind',
             );
         }
+
+        // WITHOUT THIS THE LOOP ABOVE IS SATISFIED BY ONE TOKEN (rule 25/E228).
+        // Every assertion in it is derived from `$kind`, so a `noticeRefusal()`
+        // that emitted a CONSTANT token and a `classify()` that answered a
+        // constant kind would agree with each other all the way through. The
+        // roster spans more than one kind, so the set of tokens the daemon
+        // actually wrote must too.
+        $this->assertGreaterThan(
+            1,
+            count($tokensSeen),
+            'every roster prefix produced the same kind, so the loop above cannot tell a right token from a constant one',
+        );
     }
 
     /**

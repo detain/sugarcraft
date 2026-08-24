@@ -267,11 +267,31 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
 
         return array_map(function ($tc) {
             return ToolCall::fromArray([
-                // E329. A fallback for a payload that omitted the id; it never
-                // reaches a filename (ToolIpcFiles::reserve() names those), so the
-                // exposure is a duplicate id within one response. Fixed with the
-                // family — the literal prefix was never the entropy.
-                'id' => $tc['id'] ?? uniqid('tool_' . getmypid() . '_', true),
+                // A fallback for a payload that omitted the id. It never reaches
+                // a filename ({@see \SugarCraft\Crush\Support\ToolIpcFiles::reserve()}
+                // names those), so the exposure is a duplicate id within one
+                // response — but it DOES go on the wire, echoed back to the
+                // provider as `tool_call_id`, and that is what decides the
+                // alphabet.
+                //
+                // WHAT E329's FIX SAID, and why it is rewritten rather than
+                // dropped: this site spelled `uniqid('tool_…_')`, a literal
+                // prefix followed by the same microtime suffix the bare call
+                // returns, so the prefix contributed ZERO cross-process entropy
+                // and the site belonged to the family E329 swept. That reasoning
+                // is still right and is why the bare form is not coming back.
+                // WHAT IS TRUE NOW (E352): the sweep's replacement was
+                // `uniqid(…, true)`, whose more-entropy flag appends a PERIOD and
+                // eight more hex digits — putting a `.` into a protocol field
+                // whose character set nobody had weighed. A downstream consumer
+                // that splits on `.` would fail on the fallback path only, which
+                // is the hardest kind of bug to reproduce. WHY THIS STILL EARNS
+                // ITS PLACE: the requirement was never "call uniqid", it was
+                // "cross-process entropy", and `bin2hex(random_bytes(8))` — the
+                // shape `ToolIpcFiles::reserve()` already uses — gives 64 bits of
+                // it from an alphabet chosen for a wire format, which is strictly
+                // more than the microtime-plus-LCG form it replaces.
+                'id' => $tc['id'] ?? 'tool_' . getmypid() . '_' . bin2hex(random_bytes(8)),
                 'name' => $tc['name'] ?? $tc['function']['name'] ?? '',
                 'arguments' => is_string($tc['arguments'] ?? null)
                     ? json_decode($tc['arguments'], true) ?? []

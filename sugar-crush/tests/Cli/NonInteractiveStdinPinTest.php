@@ -178,17 +178,124 @@ final class NonInteractiveStdinPinTest extends TestCase
     }
 
     /**
-     * Clearing the pin goes back to `\STDIN` rather than to "no stream at all".
+     * Clearing the pin goes back to the `\STDIN` CONSTANT rather than to "no
+     * stream at all" — and in THIS process that constant is a closed
+     * descriptor, so the answer is `null`.
      *
      * Pinned dormancy: `src/` and `bin/` never call `pinStdinDefault()`, so
      * production always takes this arm, and it is the one arm no test would
      * otherwise reach.
+     *
+     * WHAT THIS TEST SAID: `assertSame(\STDIN, NonInteractive::stdinDefault())`.
+     * WHAT IS TRUE NOW (E338): that assertion was passing on a CLOSED
+     * resource. `tests/bootstrap.php` closes descriptor 0 on every non-tty
+     * run, and PHPUnit named the old expectation "resource (closed)" the
+     * moment the value stopped matching — so what this test was really
+     * pinning was that a dead handle got handed to every consumer, one
+     * `stream_isatty()` away from a `TypeError`. WHY THE TEST STILL EARNS ITS
+     * PLACE: its CLAIM — "unpinning resolves the constant, it does not
+     * disable the seam" — is exactly right and is the one arm production
+     * takes. Only the observable changed, so the claim is now split across
+     * two arms: this one for a dead descriptor, and
+     * {@see testWithALiveDescriptorZeroClearingThePinHandsBackStdinItself()}
+     * for a live one.
+     *
+     * `assertFalse(\is_resource(\STDIN))` is not decoration: it states the
+     * PREMISE this arm's expectation rests on, so a bootstrap that stopped
+     * closing descriptor 0 fails here with the reason on screen instead of
+     * silently turning the assertion below into a different claim.
      */
-    public function testClearingThePinRestoresTheRealStdinAsTheDefault(): void
+    public function testClearingThePinFallsBackToTheStdinConstant(): void
     {
         NonInteractive::pinStdinDefault(null);
 
-        self::assertSame(\STDIN, NonInteractive::stdinDefault());
+        self::assertFalse(
+            \is_resource(\STDIN),
+            'this suite is supposed to run with descriptor 0 closed; the expectation below assumes it',
+        );
+        self::assertNull(NonInteractive::stdinDefault());
+    }
+
+    /**
+     * THE TEST E338 SAID THIS DEFECT WAS "ONE NEW TEST AWAY" FROM BECOMING.
+     *
+     * E338 recorded the fd-0 replacement as a LATENT `TypeError`: two callers
+     * cleared the pin and neither then READ, "so the next test that unpins and
+     * reads gets a `TypeError` where it used to get `null`". This is that
+     * test, written on purpose so the hazard is exercised rather than
+     * described, and it must answer `null`.
+     *
+     * IT COVERS BOTH READS, WHICH IS THE WHOLE POINT. Round 51 measured that a
+     * guard placed only on the `stream_isatty()` call would RELOCATE the throw
+     * to the `@\stream_get_contents()` two lines down, because `@` suppresses
+     * diagnostics and not exceptions. A test that only reached the first call
+     * would have greened that half-fix.
+     */
+    public function testReadingWithNoPinAndNoDescriptorZeroAnswersNullRatherThanThrowing(): void
+    {
+        NonInteractive::pinStdinDefault(null);
+
+        self::assertFalse(\is_resource(\STDIN), 'the hazard needs a dead descriptor 0 to exist at all');
+        self::assertNull(NonInteractive::readStdinIfPiped());
+    }
+
+    /**
+     * The same guard, reached by the third route: a caller that passes its own
+     * handle and has since closed it.
+     *
+     * Neither of the two call-site guards E338 weighed would have covered
+     * this one — it is why the guard sits on the RESOLVED stream instead.
+     */
+    public function testReadingAnExplicitlyPassedClosedStreamAnswersNull(): void
+    {
+        $stream = \fopen('php://memory', 'r+');
+        self::assertIsResource($stream);
+        \fwrite($stream, 'bytes that will never be read');
+        \rewind($stream);
+        \fclose($stream);
+
+        self::assertNull(NonInteractive::readStdinIfPiped($stream));
+    }
+
+    /**
+     * THE POSITIVE CONTROL for the arm above, and the half an in-process
+     * assertion cannot make.
+     *
+     * With descriptor 0 closed, "resolves `\STDIN` and finds it dead" and
+     * "always answers null" are the same observation, so the test above on
+     * its own would be satisfied by a `stdinDefault()` mutated to
+     * `return null;`. A child `php` handed a LIVE pipe on descriptor 0 tells
+     * them apart: there the unpinned default must be the `\STDIN` constant
+     * ITSELF, identity-compared inside the child.
+     *
+     * A child rather than a fork, because the property under test IS the
+     * process's descriptor 0 and this process has none to lend.
+     */
+    public function testWithALiveDescriptorZeroClearingThePinHandsBackStdinItself(): void
+    {
+        $script = 'require ' . \var_export(\dirname(__DIR__, 2) . '/vendor/autoload.php', true) . ';'
+            . '\SugarCraft\Crush\Cli\NonInteractive::pinStdinDefault(null);'
+            . '$a = \SugarCraft\Crush\Cli\NonInteractive::stdinDefault();'
+            . 'echo "live=", var_export(is_resource(STDIN), true),'
+            . ' " same=", var_export($a === STDIN, true),'
+            . ' " null=", var_export($a === null, true);';
+
+        $process = \proc_open(
+            [\PHP_BINARY, '-r', $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($process, 'could not start the child php');
+
+        \fwrite($pipes[0], "piped\n");
+        \fclose($pipes[0]);
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($process);
+
+        self::assertSame('live=true same=true null=false', $out, 'child stderr: ' . $err);
     }
 
     /**

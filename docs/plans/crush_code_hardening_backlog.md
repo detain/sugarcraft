@@ -11026,22 +11026,56 @@ wrong. Both are corrected and the mutation is now killed.
 
 ### E328 — `AuditHook`'s default log path is a fixed shared name in PRODUCTION, not only in its test
 
-**Recorded 2026-08-24 by round-49 lane c.** Severity: low, cross-process. **Measured.** Not fixed.
+**Recorded 2026-08-24 by round-49 lane c. FIXED at round 51. ITS RECORDED MECHANISM WAS WRONG AND IS
+REWRITTEN BELOW rather than deleted — E344 raised the objection, and round 49 lane b settled it against
+this entry with a generator.** Severity: low, cross-process.
 
 E298 fixed the TEST that drove `AuditHook`'s production default, wrote the file and unlinked it. The
-default itself is unchanged and is `sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name, world-
-writable temp dir, no pid and no entropy. Two `sugarcrush` processes on one box append to one file
-(interleaved, and a partial write from either can split a record), and any local user can pre-create it as
-a symlink to somewhere else before the first run.
+default itself was unchanged and was `sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name,
+world-writable temp dir, no pid and no entropy.
 
-**Why it is recorded rather than fixed.** An audit log that moves every run is not an audit log, and a
-caller who wants a private one passes it in — so the fixed name is the intended behaviour and changing it
-is a product decision, not a bug fix. The site is carried in
-`ProcessUniqueTempNameTest::STATIC_TEMP_PATH_INVENTORY`, where it also serves as that scanner's only
+**WHAT THIS ENTRY SAID.** "Two `sugarcrush` processes on one box append to one file (interleaved, and a
+partial write from either can split a record), and any local user can pre-create it as a symlink to
+somewhere else before the first run."
+
+**WHAT IS TRUE.** The second clause was right and is the whole of what the fix closed. **The first clause
+is false, and was false at the moment this entry was written** — not superseded by the fix. Two things
+were measured, PHP 8.3.6, generator `probe_append_r49b.php` in the round's scratchpad:
+
+- *The write already serialised.* `git show d881f552^:sugar-crush/src/Hooks/BuiltIn/AuditHook.php` — the
+  commit immediately BEFORE the E328 fix — spells `file_put_contents($this->logFile, $entry,
+  FILE_APPEND | LOCK_EX)`. `FILE_APPEND` never truncates and `LOCK_EX` serialises cooperating writers, so
+  the flags this entry's hazard would have needed to be absent were present the whole time.
+- *And it holds under load.* The probe drives the REAL `AuditHook::execute()` from 8 concurrent processes
+  × 200 records × a 9000-byte payload (past `PIPE_BUF` and past one page), with a caller-supplied path so
+  `$ownsPath` is false and the write is byte-for-byte the pre-fix one. Three takes: **1600 lines,
+  1600 whole, 0 split, 0 interleaved, 14467200 bytes, identical every take.**
+
+**AND THE DETECTOR IS NOT DEAD, which is why the zero above is evidence.** The same probe has two
+known-positive control modes, run at the same parameters on the same box. `trunc` (`file_put_contents`
+with no `FILE_APPEND` and no `LOCK_EX`) returned **1 line of 1600** — it sees loss. `nolock` (`fopen('a')`
+plus chunked `fwrite`, no `flock`) returned **1600 lines, 39 whole, 1560 split, 1 interleaved** — it sees
+splitting and interleaving. An "all intact" verdict from an instrument that cannot report damage would
+not have been worth writing down.
+
+**WHY THIS ENTRY STILL EARNS ITS PLACE.** Its conclusion — that the fixed shared leaf had to go — was
+right, and the reachability half it named is the reason: any local user could pre-create the leaf as a
+symlink and have the hook append through it, and the file the hook created was mode 0664 under the
+ordinary umask 0002, i.e. world-readable, carrying every tool's arguments and 200 bytes of its output.
+What the false half costs a reader is a wrong repair: someone who believed it would reach for locking,
+find it already there, conclude the entry was stale, and leave the reachability untouched. That is the
+failure mode E344 was filed about, and it is why the sentence is corrected in place instead of removed.
+
+**Why it was originally recorded rather than fixed.** An audit log that moves every run is not an audit
+log, and a caller who wants a private one passes it in — so the fixed name is the intended behaviour and
+changing it is a product decision, not a bug fix. That argument survived the fix: the leaf name is still
+fixed, it just sits inside a per-user directory now. The site was carried in
+`ProcessUniqueTempNameTest::STATIC_TEMP_PATH_INVENTORY`, where it also served as that scanner's only
 real-tree liveness control.
 
-**Step.** Decide: keep the fixed default and open it with `O_APPEND` plus an `is_link()` refusal, or move
-the default under a per-user directory the process owns.
+**Step — DONE at round 51.** The default is
+`sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, the directory created 0700 and refused when
+it is a symlink, a non-directory, not owned by this euid, or reachable by anybody else.
 
 ---
 
@@ -11457,6 +11491,23 @@ The default is now `sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`,
 
 **Why this matters beyond bookkeeping.** A reader who trusted the recorded mechanism would have reached
 for locking, which was already there, and left the reachability untouched.
+
+> **SETTLED IN THIS ENTRY'S FAVOUR at round 49 by lane b, which was sent to decide between this entry and
+> E328 and found one thing this entry did not have.** E344 argued from the CURRENT code, which leaves open
+> the reading that E328 was right when written and the fix made it stale. It was not:
+> `git show d881f552^:sugar-crush/src/Hooks/BuiltIn/AuditHook.php` — the commit immediately before the
+> per-user directory landed — already spells `file_put_contents($this->logFile, $entry,
+> FILE_APPEND | LOCK_EX)`. There was never a version of the class whose appends raced, so E328's first
+> clause was **false at the moment it was recorded**. Independently re-measured with a fresh generator
+> (`probe_append_r49b.php`, PHP 8.3.6) driving the real `AuditHook` at a caller-supplied path so
+> `$ownsPath` is false and the write is byte-for-byte the pre-fix one: 8 processes × 200 records × 9000
+> bytes, three takes, **1600/1600 whole, 0 split, 0 interleaved, 14467200 bytes every take**. The same
+> probe's two control modes fired as they must — `trunc` (no `FILE_APPEND`, no `LOCK_EX`) returned 1 line
+> of 1600, `nolock` (`fopen('a')` + chunked `fwrite`) returned 1600 lines of which 39 were whole and 1560
+> torn — so the zeros above come from an instrument that demonstrably sees damage. **E328 is rewritten in
+> place accordingly**, and the invariant is now derived by
+> `tests/Hooks/AuditHookConcurrentAppendTest.php` rather than restated in two doc-blocks, so the next
+> person to change the write flags is told by a red test rather than by a paragraph.
 
 ---
 
@@ -12390,3 +12441,224 @@ process table instead of a source tree.
 descriptors from bash.
 
 ---
+### Round 49, lane b — a note on the numbering and the ids below
+
+**The round number in this block is 49, which is what this lane's brief calls the round, and the entries
+immediately above it are filed under 50 and 51.** That is not a mistake in either place and it is worth one
+sentence rather than a silent renumber: the supervisor's plan commits and this lane's brief both say round
+49, while several earlier merges filed under 50 and 51. Where an entry below cites "round 51" it is citing
+THAT round's work by its own name — E328's fix landing at `d881f552`, and E338's measurement recorded by
+round-51 lane a — and those citations are accurate as written. Renumbering them to match this block would
+break the reference rather than tidy it.
+
+**The `Eb52-` prefix is a provisional lane-scoped id**, spelled the way this lane's brief prescribed it
+verbatim, so that three lanes appending to this one file cannot collide before the supervisor renumbers at
+merge. No source file cites one — that is the standing rule, and it is what makes the renumber safe.
+
+---
+
+### Eb52-1 — `LOCK_EX` is not load-bearing for `AuditHook`'s write on any filesystem this box can offer
+
+**Recorded 2026-08-24 by round-49 lane b, from a mutation of its own fix.** Severity: stated bound.
+**Measured**, PHP 8.3.6, Linux, local ext4. Not a defect; recorded because a surviving mutation that is
+never written down is a guard nobody can defend next time.
+
+Deleting `LOCK_EX` from `AuditHook::append()`'s `file_put_contents()` **SURVIVES**
+`AuditHookConcurrentAppendTest`. Deleting `FILE_APPEND` instead **KILLS** it, so the window is awake and it
+is `O_APPEND` doing the work. Generator `probe_lockex_r49b.php`: with `FILE_APPEND` alone, 8 processes ×
+60 records at payloads of 9000 / 100000 / 1000000 bytes, three takes each — **nine runs, 480/480 whole
+records, zero damage every time**.
+
+**Why the flag stays.** `O_APPEND`'s seek-and-write atomicity is a property of the FILESYSTEM, and it is
+exactly the guarantee NFS is known not to honour. A temp directory on a network mount is ordinary on a
+shared build host, so the flag defends a case this hardware cannot produce. Under the no-removal rule that
+makes a TEXTUAL pin the only honest test the property can have —
+`AuditHookConcurrentAppendTest::testTheWriteStillCarriesBothFlags()`, which strips comment and doc-block
+tokens before matching because both constant names appear in the prose arguing for them, with a
+known-positive fixture proving the scanner can still say no.
+
+**Step.** None wanted. Re-open only if a build target appears where the temp directory can be networked
+and a behavioural test becomes possible.
+
+---
+
+### Eb52-2 — `RuntimeNoticeSink::drain()` de-duplicates, and a "how many notices" assertion measures that instead
+
+**Recorded 2026-08-24 by round-49 lane b, from a mutation of its own new test.** Severity: instrument
+trap, general. **Measured** — the mutation survived, then killed after the window was fixed.
+
+`drain()` ends with an `in_array($notice, $unique, true)` filter, so **identical rows collapse to one
+before any caller sees them**. A test that drives N emissions of the SAME message and asserts one notice
+arrived is therefore asserting nothing about the emitter: round 49's first version of
+`AuditHookRefusalNoticeTest`'s latch test did exactly that, and **deleting the once-per-process latch it
+existed to defend SURVIVED it**. Three DISTINCT directories now produce three distinct messages `drain()`
+cannot merge, plus a control asserting the three really are distinct (derived by invoking
+`AuditHook::directoryRefusalReason()`, not by re-spelling its format), and the same mutation is KILLED.
+
+**Why this is filed as a general trap and not as one test's bug.** `drain()` is the shared surface: any
+future test of "does subsystem X warn once / twice / not at all" has the same hole, and nothing at the
+`drain()` call site says so. Grep for `drain()` in `tests/` before trusting any cardinality taken through
+it.
+
+**The dedup is per BATCH, and that is the half that says which tests are exposed.** `drain()` builds its
+`$unique` list as a LOCAL and throws it away on return, so two messages merge only when one `drain()` call
+returns both. A test that drains after every stimulus is therefore already safe; the shape that gets caught
+is the natural one — drive N times, drain once at the end — which is exactly the shape the latch test had.
+`AuditHookRefusalNoticeTest`'s latch test now defends itself twice over (distinct messages AND a drain per
+stimulus), and its doc-block says so, because naming one defence invites a later reader to remove the other
+as redundant.
+
+**Step.** Consider a `drainRaw()` for tests, or a doc-block line on `drain()` naming the hazard. Cheapest
+honest version is the doc-block line, and it should say "per batch" rather than "de-duplicates": the
+unqualified verb is what makes a reader think a drain-per-stimulus test is exposed too.
+
+---
+
+### Eb52-3 — E346's "five sites each need the token inserted" is wrong: two do
+
+**Recorded 2026-08-24 by round-49 lane b, which implemented E346.** Severity: premise correction, minor.
+**Measured** — by making the change and reading which tests went red.
+
+E346's ready-to-apply patch said `tests/Sessions/BackgroundSessionRunnerTest.php` "asserts the record's
+shape at five sites (search `was not run`) and each needs the token inserted". There are five hits and
+**exactly two needed the change**: the two that assert the emitted record's full shape. Of the other
+three, one asserts the substring `' Write was not run - '` and passes unchanged because the token lands
+before the tool name; the remaining two are hand-built buffer strings feeding
+`BackgroundSupervisor::bufferReportsFailure()`, which is a different parser and not the emitter's output
+at all — one of them does not even use `REFUSAL_RECORD`.
+
+**Why it is worth recording.** A reader following the patch literally would have edited three assertions
+that were already correct, two of them into fixtures that then no longer matched the parser they were
+written for. The entry's mechanism (token after the marker, safe against the `[session:` line protocol)
+was right and is confirmed by mutation: moving the token BEFORE the marker is killed by five tests.
+
+---
+
+### Eb52-4 — the arm question E347 leaves open is a vocabulary decision, and nothing in the tree records who owns it
+
+**Recorded 2026-08-24 by round-49 lane b.** Severity: open design question. Verified, not implemented.
+
+E347's claim was re-checked rather than inherited:
+`RefusalStderrSurfaceTest::testBothArmsDoubleAndTheseAreTheBytesTheyWrite()` does now compare the two
+arms' observer STRINGS (not their lengths), and it passes — so naming the kind on the stderr line
+genuinely cannot distinguish "a person typed n" from "there was nobody at the keyboard", because both are
+`DenialKind::Refused` and their token is one word. **No action was taken and none was available at this
+level.**
+
+What is still open is what E347 says: the distinction lives in `HeadlessPermissionPrompt`'s own prose and
+nowhere machine-readable. Closing it needs either a fourth `DenialKind` case or a second field on the
+prompt's line. Both change the PUBLISHED vocabulary a `--output-format json` consumer reads, which is a
+product decision, and no entry in this file currently owns it.
+
+**Step.** Decide whether `refused-by-person` and `refused-no-terminal` are two kinds or one kind with a
+qualifier, then implement. Until then the two arms are deliberately indistinguishable to a machine and
+`RefusalStderrSurfaceTest` is what says so.
+
+---
+
+### Eb52-5 — `HeadlessPermissionPrompt::$in` is documented `@var resource` and can now be null
+
+**Recorded 2026-08-24 by round-49 lane b, which caused it.** Severity: doc drift, no runtime effect.
+**Measured**, PHP 8.3.6. Not fixed — `src/Cli/HeadlessPermissionPrompt.php` was outside this lane.
+
+E338 widened `NonInteractive::stdinDefault()` to `resource|null`, and
+`HeadlessPermissionPrompt::__construct()` resolves its `$in` default through it. The property is untyped
+with a `/** @var resource */` doc-block, so a null is legal at runtime and the annotation is now a lie.
+
+**No behaviour is wrong and that was checked, not assumed.** `$in` is read in exactly two places:
+`\fgets($this->in)`, which sits behind `isInteractive()`, and `isInteractive()` itself, which already
+opens `\is_resource($this->in) && \stream_isatty($this->in)`. A null therefore makes the prompt answer
+"not interactive" — the truth about a process with no descriptor 0 — instead of throwing.
+`HeadlessPermissionPromptStdinDefaultTest::testWithNoPinInstalledTheDefaultIsTheProcesssOwnDescriptorZero()`
+asserts both halves.
+
+**Step, NAMED BY SYMBOL BECAUSE "the two doc-blocks" IS WRONG.** `HeadlessPermissionPrompt` carries two
+`/** @var resource */` lines and only ONE of them is about a value that can now be null: the one on the
+`$in` PROPERTY. The other is on `$err`, which is resolved from `\STDERR` and is not nullable — widening it
+would document a state that cannot occur and would invite an `is_resource()` guard on a path that does not
+need one. The constructor's own `@param resource|null $in` is ALREADY correct and needs nothing. So: one
+line, on the `$in` property's `@var`, when that file is next in a lane. No code change.
+
+An earlier draft of this Step said "change the two doc-blocks", which followed literally would have made
+one of the two worse — a prescription in a backlog entry is a hypothesis exactly as a prescription in a
+review is (rule 16), and this one was measured against the file rather than counted from memory.
+
+---
+
+### Eb52-6 — the one refusal arm whose remedy is invisible is the one whose remedy gets clipped first
+
+**Recorded 2026-08-24 by round-49 lane b (fix pass), confirming a reviewer NOTE with its own measurement.**
+Severity: observability, not reachable at the production path. Not fixed.
+
+`AuditHook::directoryRefusalReason()`'s mode arm ends `Fix it with: chmod 700 <dir>`, and the directory is
+interpolated TWICE — once to name it and once inside the remedy. `RuntimeNoticeSink::MAX_CHARS` is 400 and
+clips the TRANSCRIPT row (the `error_log()` copy on stderr is never clipped, so the operator always has the
+full text somewhere).
+
+**Measured, PHP 8.3.6.** Generator, run against the format string as the class spells it:
+
+```php
+$fmt = "audit log disabled: %s is mode %04o, which lets other users on this box reach a log of every "
+     . "tool call and its arguments. Nothing is being recorded. Fix it with: chmod 700 %s";
+for ($n = 1; $n < 400; $n++) { $d = '/' . str_repeat('a', $n);
+    if (strlen(sprintf($fmt, $d, 0755, $d)) > 400) { echo strlen($d); break; } }
+```
+
+- production directory (`/tmp/sugar-crush-audit-1000`, 27 chars) → 224-char message, **not clipped**;
+- the message crosses 400 at a directory path of **116 characters**, and because the remedy is the LAST
+  clause it is the first thing to go.
+
+So the arm documented as "the one whose fix is invisible from the symptom" is also the arm that loses its
+fix first, for any caller with a long `TMPDIR` or a long pinned directory. Nothing in production reaches
+116 characters here, which is why this is recorded rather than fixed.
+
+**Step.** If it is ever worth an edit: move the remedy ahead of the explanatory clause rather than raising
+`MAX_CHARS`. The cap is deliberately generous and defends a different threat (a model-supplied tool name
+spending the session's context), and `AuditHookRefusalNoticeTest` asserts the remedy is PRESENT, not where.
+
+---
+
+### Eb52-7 — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
+
+**Recorded 2026-08-24 by round-49 lane b, which put the fork there.** Severity: future obligation, no hole
+today. Not fixed — `tests/Support/ForkedChildReaperAdoptionTest.php` is not this lane's file.
+
+`ForkedChildReaperAdoptionTest::SCOPE` is `['Agents/', 'Backend/', 'Diagnostics/', 'Integration/',
+'Support/']` and `OUT_OF_SCOPE` is empty. `tests/Hooks/AuditHookConcurrentAppendTest.php` forks four
+writers in-process and DOES adopt `ReapsForkedChildrenTrait`, so nothing is unaccounted for and the
+catch-all `testNoDirectoryWithUnreapedForksIsUnaccountedFor()` — which reds only on forks with a missing
+reap half — stays green. **Checked, not assumed.**
+
+What is missing is the OBLIGATION: the next fork written under `tests/Hooks/` is not required to adopt, and
+a `pcntl_alarm()` time limit is not inherited across a fork, so an unreaped writer there outlives a
+timed-out parent and goes on appending to a log `tearDown()` has already deleted.
+
+**Step.** Add `'Hooks/'` to `SCOPE`, in alphabetical position between `Diagnostics/` and `Integration/`.
+One word; the only fork in that directory already satisfies it, so it cannot red on landing.
+
+---
+
+### Eb52-8 — observing the suite floor at a pre-pin commit writes the production audit path that E351 closed
+
+**Recorded 2026-08-24 by round-49 lane b (fix pass), having done it.** Severity: process, self-limiting.
+No code change wanted.
+
+Lanes are told to OBSERVE their floor by re-running the suite at the round's base commit rather than
+inheriting the number, which is a good rule and produced an exact reproduction here
+(`9730 / 143168 / 1 / rc 0`). The base commit for round 49 is `b9abd2fb`, and
+`git show b9abd2fb:sugar-crush/tests/bootstrap.php | grep -c pinDefaultLogDirectory` answers **0** — the
+audit-directory pin lands later in this very round. So the act of observing the floor runs a full suite
+with `HookManager::registerBuiltIns()` writing every tool call to
+`sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, which is precisely the leak E351 exists to
+stop. The file was 29165 bytes when E351 was written and 52154 bytes after this lane's baseline run; some
+of that is sibling lanes at older commits and some of it is this observation.
+
+**Nothing is wrong with either rule.** They only conflict while the fix for the leak is younger than the
+commit the floor is measured at, which is a one-round window and is now closed for `sugar-crush`. It is
+written down because the shape recurs: any test-isolation fix whose landing round is also the round its
+baseline is measured in has the same property, and a reader finding a grown production file after a
+"read-only" baseline run should not go looking for a leak that was already fixed.
+
+**Step.** None on the code. When the lanes are merged, remove
+`/tmp/sugar-crush-audit-<euid>/audit.log` on the build box once — no lane can safely do it while siblings
+are still running suites at pre-pin commits, and no lane should glob-delete under `/tmp` in any case.

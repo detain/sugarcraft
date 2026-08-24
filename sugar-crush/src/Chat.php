@@ -3183,6 +3183,30 @@ final class Chat implements Model
      * still wins over whatever id the callback set, matching ok()'s
      * previous behaviour of always stamping the real id.
      *
+     * THE TWO BRANCHES ARE TRUSTED DIFFERENTLY ON PURPOSE, and the reason is
+     * recorded here because E348 found the tree said nothing about it.
+     *
+     *  - A callback that THROWS has its message wrapped by
+     *    {@see executionFailure()}, so nothing it said can reach
+     *    {@see isDeniedResult()}'s roster (E308). An exception message is
+     *    whatever string was nearest — an OS error, an HTTP body, a library's
+     *    prose — and the tool did not CHOOSE to say "this call was blocked".
+     *  - A callback that RETURNS a `ToolResult` has its `error` field carried
+     *    through VERBATIM, roster prefix and all, so it can declare its own
+     *    refusal and be drawn struck through and listed in a
+     *    `--output-format json` document's `refusals` array. That is the
+     *    decision, not a gap E308 missed: an MCP tool whose server refused,
+     *    a `Skill` a policy stopped, or a wrapper enforcing its own gate each
+     *    really did have the call blocked, and disbelieving them would make a
+     *    refusal real only when THIS process made it — false the moment a tool
+     *    is out-of-process.
+     *
+     * The reasoning, the boundary between the branches, and what would change
+     * the answer (a typed `DenialKind` field on `ToolResult`, so a callback
+     * DECLARES a refusal instead of spelling one) are asserted rather than
+     * only written down, by
+     * {@see \SugarCraft\Crush\Tests\Chat\CallbackAuthoredRefusalTest}.
+     *
      * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
      *     output (only meaningful when $succeeded), succeeded]
      */

@@ -172,25 +172,32 @@ use PHPUnit\Framework\TestCase;
  *    CHILD's pipe. Not this process's descriptor 0, and not affected by
  *    closing it.
  *
- *  - `sugar-crush/src/Cli/NonInteractive.php` — DEGRADES TODAY, WILL THROW ON
- *    THE NEXT UNPIN-AND-READ, and it is the one row this change made WORSE.
- *    `stdinDefault()` is `self::$stdinDefault ?? \STDIN` and
- *    `readStdinIfPiped()` is `$stream ??= self::stdinDefault();` then
- *    `\stream_isatty($stream)` with no `is_resource()` guard. Before the
- *    replacement that fallback handed back a LIVE `\STDIN`; inside the suite
- *    it now hands back a dead one. MEASURED: `stream_isatty()` on a closed
- *    resource throws `TypeError: stream_isatty(): supplied resource is not a
- *    valid stream resource`, and so does the `@\stream_get_contents()` two
- *    lines later — `@` suppresses diagnostics, not a thrown `TypeError`, so
- *    guarding only the first call would move the throw rather than remove it.
- *    NOT REACHABLE TODAY, which is why the suite is green:
- *    `pinStdinDefault(null)` has exactly two callers
- *    ({@see \SugarCraft\Crush\Tests\Cli\NonInteractiveStdinPinTest::testClearingThePinRestoresTheRealStdinAsTheDefault()}
- *    and
- *    {@see \SugarCraft\Crush\Tests\Cli\HeadlessPermissionPromptStdinDefaultTest::testWithNoPinInstalledTheDefaultIsTheRealStdin()}),
- *    and neither then reads. The next test that unpins and reads gets a
- *    `TypeError` where it used to get null. Recorded rather than fixed: the
- *    file is `src/` and outside this lane.
+ *  - `sugar-crush/src/Cli/NonInteractive.php` — FIXED (E338); the row is
+ *    rewritten rather than dropped, because what it records is why the guard
+ *    it now describes is shaped the way it is. WHAT THIS ROW SAID: "DEGRADES
+ *    TODAY, WILL THROW ON THE NEXT UNPIN-AND-READ, and it is the one row this
+ *    change made WORSE" — `stdinDefault()` was `self::$stdinDefault ?? \STDIN`
+ *    and `readStdinIfPiped()` was `$stream ??= self::stdinDefault();` then
+ *    `\stream_isatty($stream)` with no `is_resource()` guard, so inside the
+ *    suite the fallback handed back a CLOSED handle where it used to hand
+ *    back a live one. Not reachable at the time, because the two callers of
+ *    `pinStdinDefault(null)` cleared the pin and neither then read.
+ *    WHAT IS TRUE NOW: `stdinDefault()` answers `null` for a dead descriptor,
+ *    and `readStdinIfPiped()` opens with one `is_resource()` guard on the
+ *    RESOLVED stream. The hazard is exercised rather than described by
+ *    {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveStdinPinTest::testReadingWithNoPinAndNoDescriptorZeroAnswersNullRatherThanThrowing()},
+ *    which is precisely the "next test that unpins and reads" this row
+ *    predicted, and by its sibling covering an explicitly-passed closed
+ *    stream — the third route in, which neither call-site guard would have
+ *    covered.
+ *    WHY THE MEASUREMENT STILL EARNS ITS PLACE, and it is the load-bearing
+ *    part: `stream_isatty()` on a closed resource throws
+ *    `TypeError: supplied resource is not a valid stream resource`, AND SO
+ *    DOES the `@\stream_get_contents()` two lines later — `@` suppresses
+ *    diagnostics, not a thrown `TypeError`. That is why the guard is one
+ *    check on the resolved stream and not a check at the call a reader
+ *    notices first; delete the sentence and the next person to touch this
+ *    method reintroduces the half-fix.
  *  - `candy-core/src/Util/Tty/EnvDetect.php` — WOULD THROW, AND IS DORMANT.
  *    `isConsoleStdin()` is a bare `return stream_isatty(STDIN);` with no
  *    guard, which is the throwing shape above. It has NO caller: grepped

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use React\EventLoop\Loop;
 use React\EventLoop\StreamSelectLoop;
 use SugarCraft\Crush\Cli\NonInteractive;
+use SugarCraft\Crush\Hooks\BuiltIn\AuditHook;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -151,6 +152,35 @@ $sandbox = sys_get_temp_dir() . '/sc_suite_tmp_' . (function_exists('posix_geteu
 ToolIpcFiles::sweepOnce($sandbox);
 
 putenv('TMPDIR=' . $sandbox);
+
+/*
+ * ...and the built-in audit hook writes into the sandbox too (E351).
+ *
+ * `HookManager::registerBuiltIns()` constructs `new BuiltIn\AuditHook()` with
+ * no argument, and several suites reach it, so a plain `vendor/bin/phpunit`
+ * CREATED AND POPULATED THE PRODUCTION AUDIT DIRECTORY on the developer's own
+ * box — observed at round 49 as `/tmp/sugar-crush-audit-<uid>/` with an
+ * `audit.log` grown to 29165 bytes by a suite run and by no real `sugarcrush`.
+ * `AuditHookTest` was rewritten at E298 to stop driving writes at that path
+ * and no longer does; the leak was every OTHER suite.
+ *
+ * THE `putenv()` ABOVE CANNOT MOVE IT, which is why this needs a seam of its
+ * own. MEASURED, PHP 8.3.6: `sys_get_temp_dir()` still answers `/tmp` after
+ * `putenv('TMPDIR=…')`, because PHP resolves and caches it once per process —
+ * the same fact `ToolIpcFiles::sweep()`'s doc-block records for its `$dir`
+ * parameter.
+ *
+ * THE GUARDS ARE NOT SWITCHED OFF BY THIS, only pointed elsewhere:
+ * `AuditHook::append()` still refuses a directory that is a symlink, is not a
+ * directory, is not this euid's, or is reachable by anybody else, and the
+ * suite's own tests of those arms pass their own paths in. What moves is where
+ * an UNCONFIGURED hook writes.
+ *
+ * `tests/Hooks/AuditHookProductionPathIsolationTest.php` asserts this line did
+ * its job, because deleting it fails as a file quietly appearing under /tmp
+ * rather than as a red.
+ */
+AuditHook::pinDefaultLogDirectory($sandbox . '/audit');
 
 /*
  * The suite never reads the runner's own descriptor 0 (E212).
