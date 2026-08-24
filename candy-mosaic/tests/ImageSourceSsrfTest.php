@@ -29,6 +29,9 @@ final class ImageSourceSsrfTest extends TestCase
     private string $tmpDir = '';
     private int $port = 0;
 
+    /** proc_open()'s direct child — the server itself, never a wrapping shell. */
+    private int $serverPid = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -51,7 +54,8 @@ final class ImageSourceSsrfTest extends TestCase
             proc_terminate($this->proc);
             proc_close($this->proc);
         }
-        $this->proc = null;
+        $this->proc      = null;
+        $this->serverPid = 0;
 
         if ($this->tmpDir !== '' && is_dir($this->tmpDir)) {
             @unlink($this->tmpDir . '/router.php');
@@ -59,6 +63,51 @@ final class ImageSourceSsrfTest extends TestCase
         }
 
         parent::tearDown();
+    }
+
+    /**
+     * THE SERVER MUST BE proc_open()'s OWN CHILD, or tearDown() cannot kill it.
+     *
+     * This asserts the shape of the fixture rather than any behaviour of
+     * ImageSource, and it is here because the fixture had the defect: a
+     * command STRING makes proc_open() spawn `/bin/sh -c`, which on this box
+     * stays in place instead of exec-ing the server away, so
+     * `proc_terminate()` signals the shell and the server survives as an
+     * orphan holding its port and its inherited descriptors.
+     *
+     * Two assertions, because either alone is weak. "No children" alone would
+     * pass on a process that failed to start anything; "comm is php" alone
+     * would pass on the shell if the shell had exec-ed. Together they say the
+     * one thing that matters: the pid tearDown() will signal IS the server.
+     *
+     * Linux-only, because that is what `/proc` needs. The behaviour it pins
+     * is not Linux-specific — an array command is the right shape everywhere
+     * — but the observation is.
+     */
+    public function testTheServerIsProcOpensDirectChildSoTearDownCanReachIt(): void
+    {
+        if (!is_dir('/proc/self/fd')) {
+            self::markTestSkipped('/proc is not available; cannot observe the child process shape');
+        }
+
+        self::assertGreaterThan(0, $this->serverPid, 'the fixture recorded no server pid');
+
+        $comm = trim((string) @file_get_contents('/proc/' . $this->serverPid . '/comm'));
+        self::assertStringStartsWith(
+            'php',
+            $comm,
+            "proc_open()'s child is '" . $comm . "', not the server. A wrapping shell means "
+                . 'proc_terminate() signals the shell and leaks the server onto init.',
+        );
+
+        $children = glob('/proc/' . $this->serverPid . '/task/' . $this->serverPid . '/children');
+        if ($children !== [] && $children !== false) {
+            self::assertSame(
+                '',
+                trim((string) @file_get_contents($children[0])),
+                'the server pid has children of its own, so it is a wrapper rather than the server',
+            );
+        }
     }
 
     public function testFollowsSameSchemeRedirect(): void
@@ -161,12 +210,25 @@ final class ImageSourceSsrfTest extends TestCase
                 continue;
             }
 
-            $cmd = sprintf(
-                '%s -S 127.0.0.1:%d %s',
-                escapeshellarg(PHP_BINARY),
-                $port,
-                escapeshellarg($router),
-            );
+            // An ARGV ARRAY, not a command string, and the reason is a leak
+            // rather than a style preference. MEASURED, PHP 8.3.6, three
+            // takes: with a string, proc_open() spawns `/bin/sh -c` and the
+            // shell does NOT exec the server away — `proc_get_status()`
+            // reports a child whose `comm` is `sh`, with the `php -S` as ITS
+            // child. tearDown()'s `proc_terminate()` then signals the shell,
+            // the server is orphaned onto init, and it keeps its port and its
+            // inherited descriptors for the life of the box. Driving this
+            // file alone left four `php -S` processes at PPID 1, one per
+            // test; a box that had been running the suite for a day carried
+            // 140 of them. With an array the server IS proc_open()'s child
+            // and the same `proc_terminate()` reaches it.
+            //
+            // The inherited-descriptor half is the part that bites someone
+            // else: an orphan holds the write end of whatever pipe the runner
+            // used, so `phpunit | tail` on this package appears to hang long
+            // after the suite has finished. It cost this lane thirteen
+            // minutes before the cause was found.
+            $cmd = [PHP_BINARY, '-S', '127.0.0.1:' . $port, $router];
 
             $descriptors = [
                 0 => ['pipe', 'r'],
@@ -183,6 +245,8 @@ final class ImageSourceSsrfTest extends TestCase
 
             $this->proc = $proc;
             $this->port = $port;
+            $status     = proc_get_status($proc);
+            $this->serverPid = \is_array($status) ? (int) $status['pid'] : 0;
 
             if ($this->waitForHealth($port)) {
                 return true;
