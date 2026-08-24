@@ -52,6 +52,11 @@ use PHPUnit\Framework\TestCase;
  * lands. A NEW site fails because it is unjudged; a REMOVED site fails because
  * its row is stale. Both failures name the resolution in their message.
  *
+ * "A NEW site fails" includes one whose spelling is ALREADY in the roster for
+ * that same file: {@see self::indexByKey()} gives the second occurrence its
+ * own key rather than letting it overwrite the first. It did not always, and
+ * the paragraph above was measured false for that shape before it did.
+ *
  * ## And the instrument is proved alive in the same run
  *
  * {@see testTheScannerReportsEveryShapeIncludingTheOnesItCannotName()} pushes
@@ -81,6 +86,12 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      * rot within a round and the spelling is what this census is about. The KEY
      * already pins the argument text, so a site respelled from `open(0)` to
      * `open((int) STDIN)` fails on set equality alone.
+     *
+     * A spelling that occurs TWICE in one file gets ` #2`, ` #3` on the second
+     * and later occurrences -- see {@see self::indexByKey()} for what happened
+     * before it did. No row needs one today (13 sites, 13 distinct spellings),
+     * and a row that grows one is telling you a same-spelled sibling appeared
+     * beside it.
      *
      * The KIND is held separately because one spelling can carry two shapes:
      * `query($fd)` is `INT_CAST_VIA_VARIABLE` while the cast sits in the
@@ -195,6 +206,8 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             "A call consuming a file descriptor is not in this test's ROSTER.\n"
                 . "RESOLUTION: add a row keyed exactly as printed below, whose value states\n"
                 . "whether the descriptor is genuine and why. Do NOT relax the assertion.\n"
+                . "A key ending in ' #2' is a SECOND call in that file spelled exactly like\n"
+                . "one already rostered -- it needs its own judgement, not a shrug.\n"
                 . $this->describe($found, $unjudged),
         );
 
@@ -220,8 +233,15 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
                 $expected[$key][0],
                 $hit['kind'],
                 $key . ' is classified ' . $hit['kind'] . ' but its roster row expects '
-                    . $expected[$key][0] . ".\nRESOLUTION: rewrite that row -- both its kind and "
-                    . 'the judgement under it, which was written about the old shape.',
+                    . $expected[$key][0] . ".\nRESOLUTION: usually, rewrite that row -- both its "
+                    . "kind and the judgement under it, which was written about the old shape.\n"
+                    . "BUT CHECK ONE FUNCTION UP FIRST when the move is to or from "
+                    . DescriptorSinkScanner::INT_CAST_VIA_VARIABLE . ".\nThat kind is decided by "
+                    . "lastAssignmentTo(), which walks the WHOLE FILE backwards and is not \n"
+                    . "scope-aware -- deliberately, see its doc-block. So an unrelated \n"
+                    . '`$fd = (int) $x;` added anywhere above this call moves THIS row without '
+                    . "touching\nit. Observed live in round 53. The right fix is then at the new "
+                    . 'assignment, not here.',
             );
         }
     }
@@ -426,6 +446,60 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
     }
 
     /**
+     * A spelling that occurs twice in ONE file is two rows, and the FIRST
+     * keeps its own kind.
+     *
+     * A pin for {@see self::indexByKey()}, driven with hand-built hits rather
+     * than with the tree: the tree has 13 sites and 13 distinct spellings, so
+     * it cannot exercise this at all, and it must not have to. A defect that
+     * only appears once a second same-spelled sibling lands would otherwise be
+     * pinned by nothing until the day it bit someone.
+     *
+     * The second row asserts the ORDINAL, and the first asserts that the
+     * earlier hit was not overwritten by the later one -- which is the half
+     * that mattered, because the collapse reported a defective site placed
+     * above a correct one AS correct.
+     */
+    public function testTwoSitesSpelledIdenticallyInOneFileEachGetTheirOwnRow(): void
+    {
+        $indexed = self::indexByKey(
+            [
+                [
+                    'sink' => 'posix_isatty', 'kind' => DescriptorSinkScanner::INT_CAST_VIA_VARIABLE,
+                    'argument' => '$fd', 'file' => '/root/lib/src/A.php', 'line' => 10,
+                ],
+                [
+                    'sink' => 'posix_isatty', 'kind' => DescriptorSinkScanner::VARIABLE,
+                    'argument' => '$fd', 'file' => '/root/lib/src/A.php', 'line' => 20,
+                ],
+                [
+                    'sink' => 'posix_isatty', 'kind' => DescriptorSinkScanner::LITERAL_INT,
+                    'argument' => '$fd', 'file' => '/root/lib/src/A.php', 'line' => 30,
+                ],
+                // Same spelling, DIFFERENT file: no ordinal, the file is
+                // already in the key.
+                [
+                    'sink' => 'posix_isatty', 'kind' => DescriptorSinkScanner::VARIABLE,
+                    'argument' => '$fd', 'file' => '/root/lib/src/B.php', 'line' => 10,
+                ],
+            ],
+            '/root',
+        );
+
+        self::assertSame(
+            [
+                'lib/src/A.php::posix_isatty($fd)'    => DescriptorSinkScanner::INT_CAST_VIA_VARIABLE,
+                'lib/src/A.php::posix_isatty($fd) #2' => DescriptorSinkScanner::VARIABLE,
+                'lib/src/A.php::posix_isatty($fd) #3' => DescriptorSinkScanner::LITERAL_INT,
+                'lib/src/B.php::posix_isatty($fd)'    => DescriptorSinkScanner::VARIABLE,
+            ],
+            array_map(static fn (array $row): string => $row['kind'], $indexed),
+            'same-spelled sinks in one file collapsed into one row, so an unjudged site beside '
+                . 'a judged one is invisible and the later of two kinds wins',
+        );
+    }
+
+    /**
      * Every library beside candy-core that has a `src/`, sorted.
      *
      * Discovered rather than listed, which is the whole point: a census that
@@ -469,22 +543,69 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             return self::$scanned;
         }
 
-        $root  = $this->monorepoRoot();
-        $found = [];
+        $root = $this->monorepoRoot();
+        $hits = [];
 
         foreach ($this->presentLibraries() as $lib) {
             foreach (DescriptorSinkScanner::scanTree($root . '/' . $lib . '/src') as $hit) {
-                $relative = substr($hit['file'], \strlen($root) + 1);
-                $key      = $relative . '::' . $hit['sink'] . '(' . $hit['argument'] . ')';
-                $found[$key] = [
-                    'sink'     => $hit['sink'],
-                    'kind'     => $hit['kind'],
-                    'argument' => $hit['argument'],
-                ];
+                $hits[] = $hit;
             }
         }
 
-        return self::$scanned = $found;
+        return self::$scanned = self::indexByKey($hits, $root);
+    }
+
+    /**
+     * Index the scanner's hits by `<lib>/<path>::<sink>(<argument>)`, and give
+     * a REPEATED spelling in one file its own key rather than letting the
+     * later hit overwrite the earlier one.
+     *
+     * WHAT THIS USED TO BE: a plain `$found[$key] = ...`, on the reasoning
+     * that the spelling is what the census is about.
+     *
+     * WHAT IS TRUE NOW: two sites in one file CAN share a spelling, and the
+     * plain assignment collapsed them. MEASURED (round-53 mutation R4b): a
+     * second, entirely unjudged `posix_isatty(STDOUT)` added to
+     * candy-shine/src/Theme.php, whose one rostered site is spelled
+     * identically, left this census green -- 4 tests, 22 assertions, rc 0.
+     * The class doc-block's "a NEW site fails because it is unjudged" was
+     * false for that shape. Worse, because the later hit won, two same-spelled
+     * sites of DIFFERENT kinds reported whichever came last: a defective site
+     * placed above a correct one read as correct.
+     *
+     * WHY THE ORIGINAL REASONING STILL EARNS ITS PLACE: keying on the spelling
+     * rather than on a line number is right, and for the stated reason --
+     * line numbers rot within a round and would make every roster row a
+     * maintenance chore that teaches nothing. The conclusion drawn from it was
+     * what was wrong. So the key stays the spelling and gains an ORDINAL,
+     * which is stable under every edit that does not add or remove a
+     * same-spelled sibling.
+     *
+     * @param  list<array{sink:string, kind:string, argument:string, file:string, line:int}> $hits
+     * @return array<string, array{sink:string, kind:string, argument:string}>
+     */
+    private static function indexByKey(array $hits, string $root): array
+    {
+        $found = [];
+
+        foreach ($hits as $hit) {
+            $relative = substr($hit['file'], \strlen($root) + 1);
+            $key      = $relative . '::' . $hit['sink'] . '(' . $hit['argument'] . ')';
+
+            $unique   = $key;
+            $ordinal  = 1;
+            while (isset($found[$unique])) {
+                $unique = $key . ' #' . (++$ordinal);
+            }
+
+            $found[$unique] = [
+                'sink'     => $hit['sink'],
+                'kind'     => $hit['kind'],
+                'argument' => $hit['argument'],
+            ];
+        }
+
+        return $found;
     }
 
     /**
