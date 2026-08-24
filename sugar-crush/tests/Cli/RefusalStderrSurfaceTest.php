@@ -122,13 +122,24 @@ final class RefusalStderrSurfaceTest extends TestCase
      * one in which nothing ran. This one has a DIFFERENT expected value in
      * both columns — empty prompt text, {@see DenialKind::Hook} reason — so a
      * harness stuck on one answer cannot satisfy it.
+     *
+     * THE EMPTY STRING ONLY MEANS SOMETHING BECAUSE THE PROMPT IS THERE TO
+     * WRITE IT. WHAT THE HELPER USED TO DO: attach the approver only on the
+     * `ask` arm, so this row ran with no `HeadlessPermissionPrompt` in
+     * existence and `''` was what the ABSENCE of the instrument returned — the
+     * rule-25 shape, and the assertion would have survived this class writing
+     * to stderr unconditionally. WHAT IS TRUE NOW: the approver is attached on
+     * both arms, MEASURED on PHP 8.3.6 as still producing `''` here, so the
+     * emptiness is the gate returning on the DENY before `settleAsk()` is
+     * reached rather than nobody being wired up.
      */
     public function testAPlainHookDenyNeverReachesThePromptAndStillReachesTheObserver(): void
     {
         [$promptText, $refusal] = $this->refuse(interactive: true, verdict: 'deny');
 
-        self::assertSame('', $promptText, 'a hook DENY went through the approver, which returns out of the '
-            . 'gate before settleAsk() is reached');
+        self::assertSame('', $promptText, 'a hook DENY reached the attached approver. The gate is supposed '
+            . 'to return on the DENY before settleAsk() is reached, so the prompt should never have been '
+            . 'consulted at all');
         self::assertNotNull($refusal);
         self::assertStringStartsWith(DenialKind::Hook->value, $refusal['reason']);
     }
@@ -156,11 +167,17 @@ final class RefusalStderrSurfaceTest extends TestCase
         fwrite($in, "n\n");
         rewind($in);
 
-        if ($verdict === 'ask') {
-            $backend = $backend->withPermissionApprover(
-                (new HeadlessPermissionPrompt(PermissionMode::Default, $in, $err, $interactive))->approver(),
-            );
-        }
+        // THE APPROVER IS ATTACHED ON BOTH ARMS, AND THAT IS THE WHOLE POINT
+        // OF THE DENY ROW. It used to be attached only when $verdict === 'ask',
+        // which made that row's `assertSame('', $promptText)` true by
+        // construction: no prompt existed, so nothing could have written. The
+        // expected value was what an ABSENT instrument returns, so the
+        // assertion would have held with this class writing to stderr on every
+        // call. Attached unconditionally, the empty string is evidence that a
+        // hook DENY returns out of the gate before the approver is consulted.
+        $backend = $backend->withPermissionApprover(
+            (new HeadlessPermissionPrompt(PermissionMode::Default, $in, $err, $interactive))->approver(),
+        );
 
         $refusalFrom = new \ReflectionMethod(NonInteractive::class, 'refusalFrom');
         $refusalFrom->setAccessible(true);
