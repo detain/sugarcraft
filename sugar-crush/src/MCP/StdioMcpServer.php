@@ -477,10 +477,24 @@ final class StdioMcpServer implements McpServer
      * One 8192-byte read frees 8192 bytes and the child immediately writes 8192
      * more, so a fixed number of reads is the wrong instrument at any count: the
      * bound has to be "until the write completes", which is what the loop below
-     * is. NOT DEADLINE-BOUNDED, matching this class's existing contract — see
-     * {@see callTool()} for why a wall clock does not belong on a tool call. The
-     * liveness is no worse than the blocking `fwrite()` it replaces, and the
-     * deadlock is gone.
+     * is.
+     *
+     * NOT DEADLINE-BOUNDED, AND THAT IS AN ASYMMETRY RATHER THAN A CONTRACT. An
+     * earlier version of this sentence said "matching this class's existing
+     * contract", which is only half true and the half it gets wrong is the one
+     * that matters: {@see readLine()} takes a `?float $deadline` and
+     * {@see readResponse()} threads it from {@see request()}, so on
+     * {@see start()}'s path the handshake budget bounds the READ half of every
+     * exchange and never reaches this loop. It is only on {@see callTool()}'s
+     * path — which passes no deadline at all, deliberately, see that method —
+     * that the two halves genuinely match.
+     *
+     * WHY THIS STILL EARNS ITS PLACE UNBOUNDED: liveness here is no worse than
+     * the blocking `fwrite()` this loop replaced, which had no bound either, and
+     * the deadlock the loop exists to close is gone. Accepting the deadline the
+     * caller already holds is a real improvement, but it is a change to
+     * `start()`'s failure semantics rather than part of a deadlock fix, so it is
+     * recorded in the hardening backlog instead of being smuggled in here.
      */
     private function writeLine(string $json): bool
     {

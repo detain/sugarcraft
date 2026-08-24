@@ -75,6 +75,17 @@ final class McpMessageResultTypeTest extends TestCase
      * without a zero cannot see a falsiness defect; see
      * {@see testAZeroResultReachesTheModelAsZeroAndNotAsEmptyText()}.
      *
+     * `{}` AND `[]` ARE ONE ROW IN THE SECOND CONSUMER, NOT TWO, and the row
+     * names promise slightly more than that. `json_decode('{}', true)` and
+     * `json_decode('[]', true)` are both PHP `[]`, so the parse consumer really
+     * does distinguish the two WIRE forms — it is handed the literal — while the
+     * round-trip consumer is handed only the decoded value and emits `[]` for
+     * both. The `{}` wire form is therefore never round-tripped, and it cannot
+     * be without a `stdClass`, which `parse()` could not give back anyway
+     * (`json_decode(..., true)` never produces one). Recorded rather than
+     * papered over: the gap is in what the row NAME implies, not in the
+     * behaviour.
+     *
      * FLOAT ZERO IS DELIBERATELY NOT A ROW HERE, and the reason is JSON's own
      * number model rather than anything this package does: `json_encode(0.0)`
      * is `"0"` on PHP 8.3.6 with the default `serialize_precision=-1`, so the

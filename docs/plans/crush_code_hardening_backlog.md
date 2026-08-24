@@ -14237,3 +14237,48 @@ their own `MAX_STDERR_BYTES = 65536` and their own tail-clipping. They are NOT t
 loop-terminator vs tracked flag, bounded vs unbounded caller) — so this is explicitly not a
 "deduplicate them" step. It is a note that a third site must read those differences before copying
 either one, the way this round had to.
+
+### Eb54-8 — the undrained blocking stdin write exists in two more classes, OUT OF LANE b
+
+**Recorded 2026-08-24 by round 54 lane b (found by its reviewer).** Severity: `LspConnection` major,
+`ClaudeCodeMcpClient` minor. Neither file is in lane b's ownership list, so both are reported and not
+touched.
+
+`StdioMcpServer` was the third member of a family, and the fix this round is narrower than the family.
+Verified in the tree at the time of writing rather than inherited from prose:
+
+- **`src/LSP/LspConnection.php`.** The other long-lived stdio-framed session class. It already has the
+  READ-side drain (`drainStderr()`, called before stdout on every poll pass), but `connect()` calls
+  `stream_set_blocking(..., false)` on `pipes[1]` and `pipes[2]` and NOT on `pipes[0]`, and
+  `writeMessage()` is a bare `@fwrite($this->pipes[0], $message)` with no drain and no partial-write
+  loop. That is verbatim the stdin half this round measured (`N=100000 D=1 M=200000 -> WEDGED`) and
+  rewrote `writeLine()` to close. An LSP `textDocument/didOpen` or `didChange` carries a file's contents
+  and routinely exceeds 64 KiB, and `LspConnection`'s own doc-block already argues that a
+  `rust-analyzer`/`gopls`/`jdtls` log storm is ordinary traffic — so both sides of the deadlock are
+  reachable there for the same reasons they were reachable here.
+- **`src/ClaudeCodeMcpClient.php::sendMessage()`.** Third member, different symptom. `pipes[0]` IS
+  non-blocking there (`connect()` sets fds 0, 1 and 2), so there is no hang; instead the method throws
+  when `$written !== strlen($json)`. By then a PARTIAL message is already in the child's pipe, which
+  desynchronises the newline-framed JSON-RPC stream for the remainder of the session — every subsequent
+  reply is parsed against a leading fragment.
+
+**STEP:** port `StdioMcpServer::writeLine()`'s select-driven, stderr-draining, partial-write loop to both
+sites, in the owning lane. Read `absorbStderr()`'s doc-block first: the three differences recorded in
+Eb54-7 apply, and `LspConnection`'s framing is `Content-Length`, not newline, so its resync story on a
+short write differs from both.
+
+### Eb54-9 — `writeLine()`'s EINTR branch has no liveness check
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: minor, not reachable via any current caller.
+
+When `@stream_select()` returns `false`, `writeLine()` does `usleep(1000); continue;` with no check of
+any kind. `readLine()`'s equivalent branch checks `feof($this->pipes[1])` before retrying. A
+persistently failing `select()` therefore spins at 1 ms in `writeLine()` with no exit, on a path that is
+already unbounded (see Eb54-4). The dead-child case is caught by `$written === false` further down —
+measured this round, `feof()` on a write pipe does NOT report the reader's exit — so a `feof()` copy of
+`readLine()`'s check would be the WRONG fix here.
+
+**STEP:** bound the consecutive-`false` retries and return `false` past the bound, or thread the
+deadline from Eb54-4 through and let it terminate the loop. Pin with a fixture that makes `select()`
+fail repeatedly; note that a coverage-only test here is very hard to write without a signal harness, so
+this may be a documented seam rather than a guarded one.
