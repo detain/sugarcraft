@@ -44,12 +44,17 @@ use PHPUnit\Metadata\Parser\Registry;
  * what it guards would be the defect wearing the fix's clothes.
  *
  * WHAT THE POPULATION REACHES THAT IS NOT IN IT. The walk visits only the files
- * the suite collects, but it asks about every public method those classes
- * expose, and a method imported from a TRAIT reports the USING class as its
- * declaring class. So a directive quoted in a shared trait's doc-comment -
- * which is where an explanatory paragraph is most likely to end up, and whose
- * own file this walk never opens - is reported against every test class that
- * uses it. Louder than necessary, and the right direction to err in.
+ * the suite collects, and within each it asks about every public method the
+ * class DECLARES OR IMPORTS FROM A TRAIT — not every method it exposes, since
+ * one INHERITED from a parent is filtered out by the declaring-class check in
+ * {@see requirementsOf()}. A trait method survives that check because reflection
+ * answers with the USING class for it, so a directive quoted in a shared trait's
+ * doc-comment - which is where an explanatory paragraph is most likely to end
+ * up, and whose own file this walk never opens - is reported against every test
+ * class that uses it. Louder than necessary, and the right direction to err in.
+ * An inherited one is the gap: nothing in this tree populates it today (no
+ * collected class extends an in-tree base), and closing it means walking the
+ * parents rather than trusting the filter.
  *
  * @see \SugarCraft\Crush\Tests\Support\Fixtures\AnnotationSkipProvenance\ProseQuotingADirectiveFixture
  * @see \SugarCraft\Crush\Tests\Support\Fixtures\AnnotationSkipProvenance\ProseWithoutTheSigilFixture
@@ -73,6 +78,28 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
     /** The suffix `phpunit.xml`'s test suite collects. */
     private const COLLECTED_SUFFIX = 'Test.php';
+
+    /**
+     * THE WALL CLOCK FOR THE ONE REAL CHILD THIS FILE SPAWNS.
+     *
+     * The child below is a whole second `phpunit`. An unbounded one that hangs
+     * stalls this test until PHPUnit's own per-test alarm aborts it, which
+     * sheds the assertions and replaces a specific red with "aborted after N
+     * seconds" — the failure mode this suite has spent a round arguing about,
+     * reproduced here in the same round by a file that added a new spawn
+     * without a bound. So it is bounded, and the bound is named.
+     *
+     * Measured on this host, PHP 8.3.6 / PHPUnit 10.5.64: the child run costs
+     * 0.079s, so this is ~250x the thing it bounds. It stays well under
+     * `phpunit.xml`'s per-test limit for the reason
+     * {@see \SugarCraft\Crush\Tests\Cli\BootstrapSkillSkipsTest} sets out
+     * and pins: a budget at or above that limit loses the race to PHPUnit's
+     * alarm, and the alarm's verdict is the generic one.
+     */
+    private const CHILD_WALL_CLOCK_BUDGET_SECONDS = 20;
+
+    /** What a shell reports when `timeout -s KILL` kills the child: 128 + SIGKILL. */
+    private const KILLED_BY_THE_BUDGET = 137;
 
     /** The suffix the fixtures below carry, chosen so the suite does NOT collect them. */
     private const FIXTURE_SUFFIX = 'Fixture.php';
@@ -105,10 +132,18 @@ final class RequirementDirectiveProvenanceTest extends TestCase
     {
         $predicates = self::requirementPredicates();
 
-        // RULE 15: an assertion of an absence is not evidence unless something
-        // proves the instrument still works. The derivation below is the whole
-        // instrument, and a derivation that returns nothing reports every file
-        // as clean.
+        // RULE 15: AN ASSERTION OF AN ABSENCE IS NOT EVIDENCE UNLESS SOMETHING
+        // IN THE SAME TEST PROVES THE INSTRUMENT STILL WORKS — and this walk
+        // has FOUR components, not one. WHAT THIS COMMENT SAID: "the derivation
+        // below is the whole instrument". WHAT IS TRUE NOW: the derivation is
+        // the first of four. The scanner is requirementsOf(), the population is
+        // collectedTestFiles(), the split is partitionByResolvability(), and
+        // each was separately mutable to nothing while this test stayed green —
+        // measured, filtered to this method: the scanner stubbed out left it
+        // GREEN at 1 test / 6 assertions, and the population sliced to a single
+        // file left the whole guard file green and byte-identical. Every one of
+        // the four is now controlled below, HERE, because the sibling tests
+        // that also cover some of them are separately deletable units.
         self::assertNotSame([], $predicates, 'no requirement predicate could be derived from '
             . Metadata::class . ', so the walk below asks nothing of every file it visits and '
             . 'would report a tree full of directives as clean');
@@ -116,17 +151,22 @@ final class RequirementDirectiveProvenanceTest extends TestCase
             . 'observed defect used — is not among the derived ones, so the derivation is '
             . 'answering about something other than requirements');
 
-        [$resolved, $unresolvable] = self::partitionByResolvability(
-            array_keys(self::collectedTestFiles()),
-            static fn (string $class): bool => class_exists($class),
+        // COMPONENT 2: the scanner, through the same call the walk makes.
+        self::assertSame(
+            ['*' => 'isRequiresPhp'],
+            self::requirementsOf(self::classFor(self::SKIPPING_FIXTURE), $predicates),
+            'the scanner this walk uses reported nothing for the fixture whose class doc-comment '
+            . 'carries a directive, so it is dead and every file it visits comes back clean',
         );
 
-        $found = [];
-        foreach ($resolved as $relative => $class) {
-            foreach (self::requirementsOf($class, $predicates) as $key => $what) {
-                $found[$relative . '::' . $key] = $what;
-            }
-        }
+        // COMPONENT 3: the population.
+        $files = self::collectedTestFiles();
+        self::assertTheCollectedPopulationIsTheWholeTree($files);
+
+        [$resolved, $unresolvable] = self::partitionByResolvability(
+            array_keys($files),
+            static fn (string $class): bool => class_exists($class),
+        );
 
         // RULE: GO RED ON WHAT YOU CANNOT PARSE.
         self::assertSame([], $unresolvable, \sprintf(
@@ -137,8 +177,20 @@ final class RequirementDirectiveProvenanceTest extends TestCase
             \implode("\n  ", $unresolvable),
         ));
 
-        self::assertNotSame([], self::collectedTestFiles(), 'the walk found no test file at all, '
-            . 'so this census is a statement about a directory listing that is not running');
+        // COMPONENT 4: the split. With nothing unresolvable, the resolved half
+        // has to be the WHOLE population — a split that dropped files silently
+        // would leave both halves consistent and the census asking about less
+        // than it claims.
+        self::assertSame(array_keys($files), array_keys($resolved), 'the resolvability split '
+            . 'handed on fewer files than it was given while reporting none of them as '
+            . 'unresolvable, so the walk below asks about a subset of the tree');
+
+        $found = [];
+        foreach ($resolved as $relative => $class) {
+            foreach (self::requirementsOf($class, $predicates) as $key => $what) {
+                $found[$relative . '::' . $key] = $what;
+            }
+        }
 
         [$unrostered, $stale] = self::rosterVerdicts($found, self::DELIBERATE_REQUIREMENTS);
 
@@ -213,7 +265,9 @@ final class RequirementDirectiveProvenanceTest extends TestCase
         $status = 0;
         $output = [];
         exec(\sprintf(
-            '%s %s --no-configuration --bootstrap %s --test-suffix %s --log-junit %s %s 2>&1',
+            'timeout -s KILL %d %s %s --no-configuration --bootstrap %s --test-suffix %s '
+            . '--log-junit %s %s 2>&1',
+            self::CHILD_WALL_CLOCK_BUDGET_SECONDS,
             escapeshellarg(\PHP_BINARY),
             escapeshellarg($root . '/vendor/bin/phpunit'),
             escapeshellarg($root . '/vendor/autoload.php'),
@@ -223,6 +277,16 @@ final class RequirementDirectiveProvenanceTest extends TestCase
         ), $output, $status);
 
         try {
+            self::assertNotSame(self::KILLED_BY_THE_BUDGET, $status, \sprintf(
+                "the child phpunit exited %d, which is what a shell reports for a process "
+                . "killed by SIGKILL — here almost certainly its own %d-second budget, though "
+                . "any other SIGKILL reports the same number. Nothing below this line is a "
+                . "statement about what PHPUnit reads out of a comment.\n%s",
+                self::KILLED_BY_THE_BUDGET,
+                self::CHILD_WALL_CLOCK_BUDGET_SECONDS,
+                implode("\n", $output),
+            ));
+
             self::assertFileExists($log, "the child phpunit wrote no JUnit log, so this arm read "
                 . "nothing at all:\n" . implode("\n", $output));
 
@@ -233,8 +297,8 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
         self::assertSame(
             [
-                self::METHOD_SKIPPING_FIXTURE => 'testTheBodyNeverRuns',
-                self::SKIPPING_FIXTURE => 'testTheBodyNeverRuns',
+                self::METHOD_SKIPPING_FIXTURE . '::testTheBodyNeverRuns' => true,
+                self::SKIPPING_FIXTURE . '::testTheBodyNeverRuns' => true,
             ],
             $skipped,
             "PHPUnit did not report exactly the quoted-directive fixture as skipped. If it "
@@ -571,10 +635,20 @@ final class RequirementDirectiveProvenanceTest extends TestCase
     }
 
     /**
-     * The tests PHPUnit reported skipped in a JUnit log, keyed by the file it
-     * attributes each one to.
+     * The tests PHPUnit reported skipped in a JUnit log, as sorted
+     * `<relative file>::<method>` keys.
      *
-     * @return array<string,string>
+     * THE KEY IS THE PAIR, NOT THE FILE. Keyed on the file alone, two skipped
+     * tests in one fixture collapsed into one entry and the exact-match arm
+     * that reads this stayed green — an instrument that cannot represent its
+     * input has a hole shaped like the next defect, and silently dropping half
+     * of it is the worst version of that.
+     *
+     * SORTED because the order is the child PHPUnit's file iteration order and
+     * `assertSame()` on an associative array is order-sensitive. Alphabetical
+     * today; a false red waiting on an ordering change otherwise.
+     *
+     * @return array<string,true>
      */
     private static function skippedTestsIn(string $junit): array
     {
@@ -595,8 +669,11 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
         foreach ($document->xpath('//testcase[skipped]') ?: [] as $case) {
             $file = (string) $case['file'];
-            $skipped[str_starts_with($file, $root) ? substr($file, \strlen($root)) : $file] = (string) $case['name'];
+            $relative = str_starts_with($file, $root) ? substr($file, \strlen($root)) : $file;
+            $skipped[$relative . '::' . (string) $case['name']] = true;
         }
+
+        ksort($skipped);
 
         return $skipped;
     }
@@ -628,6 +705,108 @@ final class RequirementDirectiveProvenanceTest extends TestCase
         ksort($files);
 
         return $files;
+    }
+
+    /**
+     * THE POPULATION IS THE WHOLE TREE, AND "NOT EMPTY" DOES NOT SAY THAT.
+     *
+     * WHAT THE ARM THIS REPLACES SAID: `assertNotSame([], collectedTestFiles())`
+     * — at least one file was found. WHAT IS TRUE NOW: a census that visits ONE
+     * file out of several hundred satisfies that and then reports, with total
+     * confidence, that no test in the tree carries a directive. Measured:
+     * slicing {@see collectedTestFiles()} to its first entry left the whole
+     * guard file GREEN at 17 tests / 42 assertions, byte-identical to the
+     * unmutated run, and green at `tests/Support` scope too. That is rule 15
+     * one level out — the assertion of an absence survived an instrument that
+     * was 99.7% dead.
+     *
+     * WHY THIS EARNS ITS PLACE. The map is cross-checked against a SECOND
+     * enumeration written from a different primitive — `scandir()` and an
+     * explicit stack rather than `RecursiveIteratorIterator` — so a walk that
+     * loses files disagrees with one that does not. Two DEAD walks would agree
+     * on the empty set, which is what the anchor is for: this file has to be in
+     * the map, and it is derived from `__FILE__` so a rename follows it.
+     *
+     * NO CARDINALITY IS WRITTEN DOWN. A count taken in one lane's worktree is
+     * wrong at master the moment a sibling merges a test file; the two walks
+     * and the anchor are all derived at run time.
+     *
+     * @param array<string,string> $files
+     */
+    private static function assertTheCollectedPopulationIsTheWholeTree(array $files): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $self = substr(__FILE__, \strlen($root) + 1);
+
+        self::assertArrayHasKey($self, $files, 'the population does not contain the file this '
+            . 'assertion is written in, so it is not a walk of the tree — and an empty or '
+            . 'truncated population reports every test in the tree as clean');
+
+        self::assertSame(
+            self::collectedTestFilesByASecondRoute(),
+            array_keys($files),
+            'the two independent enumerations of the collected tests disagree. Whichever is '
+            . 'short, the census that uses it asks about less than the tree it claims to cover, '
+            . 'and reports the files it never opened as carrying nothing',
+        );
+
+        $directories = [];
+        foreach (array_keys($files) as $relative) {
+            $directories[\dirname($relative)] = true;
+        }
+
+        self::assertGreaterThan(1, \count($directories), 'every collected file the walk found '
+            . 'lives in one directory, so the recursion is not recursing');
+    }
+
+    /**
+     * The same population as {@see collectedTestFiles()}, enumerated from a
+     * different primitive so the two can disagree.
+     *
+     * Deliberately NOT a refactor of the other walk: a control that shares the
+     * mechanism it controls fails in the same direction at the same moment.
+     * There are no symlinks under `tests/` (checked when this was written), so
+     * the recursion difference between an explicit stack and
+     * `RecursiveIteratorIterator`'s default of not following them cannot make
+     * the two disagree for a reason that is not a defect.
+     *
+     * @return list<string>
+     */
+    private static function collectedTestFilesByASecondRoute(): array
+    {
+        $root = \dirname(__DIR__, 2);
+        $found = [];
+        $stack = [$root . '/tests'];
+
+        while ($stack !== []) {
+            $directory = array_pop($stack);
+
+            foreach (scandir($directory) ?: [] as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+
+                $path = $directory . '/' . $entry;
+
+                if (is_link($path)) {
+                    continue;
+                }
+
+                if (is_dir($path)) {
+                    $stack[] = $path;
+
+                    continue;
+                }
+
+                if (str_ends_with($entry, self::COLLECTED_SUFFIX)) {
+                    $found[] = substr($path, \strlen($root) + 1);
+                }
+            }
+        }
+
+        sort($found);
+
+        return $found;
     }
 
     /** `tests/Support/X.php` => the PSR-4 class Composer maps it to. */
