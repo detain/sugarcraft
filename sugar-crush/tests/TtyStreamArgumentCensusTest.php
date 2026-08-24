@@ -26,24 +26,41 @@ use PHPUnit\Framework\TestCase;
  *   stream_set_blocking($s, false)    O_NONBLOCK SET   (fd 0 NON-BLOCKING)
  *   stream_set_blocking($s, true)     O_NONBLOCK clear (fd 0 BLOCKING)
  *
- * So `tests/bootstrap.php`'s `stream_set_blocking(\STDIN, false)` SETS
- * `O_NONBLOCK`, and that set flag IS the repair. `PosixBackend::restore()`'s
- * `@stream_set_blocking($this->stream, true)` CLEARS it, and that clearing is
- * what erases the repair. Below, `O_NONBLOCK` is only ever "set" or "cleared",
- * and the descriptor is only ever "blocking" or "non-blocking".
+ * So `stream_set_blocking($s, false)` SETS `O_NONBLOCK`, and
+ * `PosixBackend::restore()`'s `@stream_set_blocking($this->stream, true)`
+ * CLEARS it. Below, `O_NONBLOCK` is only ever "set" or "cleared", and the
+ * descriptor is only ever "blocking" or "non-blocking".
+ *
+ * WHAT THIS SAID: "`tests/bootstrap.php`'s `stream_set_blocking(\STDIN, false)`
+ * SETS `O_NONBLOCK`, and that set flag IS the repair … and that clearing is
+ * what erases the repair." WHAT IS TRUE NOW: that file holds no flag. It
+ * REPLACES descriptor 0 — `fclose(\STDIN)` plus a `/dev/null` handle on the
+ * freed fd — because the flag closed only the half of E212 where a child
+ * BLOCKS, and left the half where bytes already on the runner's stdin are read
+ * and prepended to a spawned child's prompt (E296). So no `new Tty(null, …)`
+ * can erase the fd-0 repair any more; there is no flag on descriptor 0 to
+ * erase. WHY THE PARAGRAPH STILL EARNS ITS PLACE: the polarity above is a
+ * property of `stream_set_blocking()`, not of that one call site, and every
+ * `enableRawMode()`/`restore()` sentence in this file and in four others still
+ * depends on reading it the right way round.
  *
  * WHY THIS STILL EARNS ITS PLACE: the mechanism was right in every measurement
  * and wrong in every sentence, which is the failure that is hardest to see on
  * re-reading — the reader who "corrects" the code to match the prose is the
  * one this paragraph exists for.
  *
- * WHY THIS IS A GUARD AND NOT A STYLE RULE. `tests/bootstrap.php` repairs the
- * suite's descriptor 0 by SETTING `O_NONBLOCK` on it — making it non-blocking
- * — so a spawned `bin/sugarcrush` cannot park in `stream_get_contents()` on
- * the runner's stdin (E212's other half). `O_NONBLOCK` lives on the open file
- * DESCRIPTION, which is what makes it reach inherited children — and also what
- * makes it erasable by anything else holding that description. The shape that
- * holds it:
+ * WHY THIS IS A GUARD AND NOT A STYLE RULE — and the reason has MOVED, which
+ * is worth saying because the old one is the reason a reader would expect.
+ * WHAT THIS SAID: `tests/bootstrap.php` repairs the suite's descriptor 0 by
+ * SETTING `O_NONBLOCK` on it, `O_NONBLOCK` lives on the open file DESCRIPTION
+ * — which is what makes it reach inherited children and also what makes it
+ * erasable by anything else holding that description — so this census exists to
+ * catch the next thing that erases it. WHAT IS TRUE NOW: the fd-0 repair is a
+ * descriptor replacement and holds no flag, so that specific consequence is
+ * gone. WHY THE GUARD STILL EARNS ITS PLACE: the shape below wraps THIS
+ * process's descriptor 0 and puts it in RAW MODE — it is a test reconfiguring a
+ * descriptor it does not own, which was always the larger half of the hazard
+ * and is unaffected by which repair `tests/bootstrap.php` uses. The shape:
  *
  *   new Tty(null, $injectedTermios)
  *

@@ -8523,6 +8523,13 @@ same comment, which assumes one sandbox per uid. `tests/bootstrap.php` is shared
 there reds every lane at merge, so this wants its own round rather than a corner of one.
 ### E243 — `HeadlessPermissionPrompt`'s `?? \STDIN` default is the second half of E212's hazard family
 
+🟢 **CLOSED before round 50 started; marked here in round 51 by lane a (E311).** Option one of the Step
+below was taken and the entry was never updated. `HeadlessPermissionPrompt::__construct()` is
+`$this->in = $in ?? NonInteractive::stdinDefault();` — verified by symbol in this lane at `8882092d` —
+so the class shares E212's one pin instead of reading the constant, `NonInteractive::stdinDefault()`'s
+doc-block records the change in three-part form ("TWO READERS NOW, NOT ONE (E243)"), and
+`tests/Cli/HeadlessPermissionPromptStdinDefaultTest.php` pins it.
+
 **Recorded 2026-08-23 by round-48 lane c (fix stage).** Severity: latent hang, bounded. **Measured, PHP 8.3.6.**
 
 **What.** E212 closed one `?? \STDIN` default — `NonInteractive::readStdinIfPiped()` now resolves through
@@ -8542,10 +8549,11 @@ tty — the callers of `Bootstrap::backendFor()` with `$consolePermissionPrompt:
 If one does, running the suite interactively is a latent block; if none does, that dormancy is worth
 pinning rather than leaving to be rediscovered.
 
-**Step.** Either extend the E212 seam to this class (a `pinStdinDefault()` equivalent, or pass the pinned
-stream at the `Bootstrap` construction site), or write the `stream_isatty()` bound down as an intentional
-property with a test that pins it. Do NOT close it by making `fgets` non-blocking; the tty arm answering a
-human is the feature.
+**Step — DONE, kept for the record rather than as work.** It read: "either extend the E212 seam to this
+class (a `pinStdinDefault()` equivalent, or pass the pinned stream at the `Bootstrap` construction site), or
+write the `stream_isatty()` bound down as an intentional property with a test that pins it. Do NOT close it
+by making `fgets` non-blocking; the tty arm answering a human is the feature." The first option was taken
+and the `fgets` warning was respected. Nothing further to do here.
 
 ---
 
@@ -9951,6 +9959,14 @@ one of two grounds.
 
 ### E296 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half — REOPENED
 
+🟢 **CLOSED in round 51 by lane a.** Option (a) shipped: `tests/bootstrap.php` does `fclose(\STDIN)` plus a
+`/dev/null` handle on the freed fd, parked in `$GLOBALS`. Full suite after the bootstrap change alone:
+`9661 tests / 142165 assertions / 1 skipped / rc 0` **measured at `c2b6cafb`**, identical to the observed
+baseline at `a85fcfd6`. That figure is pinned to its commit on purpose and must not be read as the suite's
+present size — later commits in the same lane added tests, and a headcount over `tests/` is stale the hour
+a sibling lane merges (rule 18). See E310 for the price and E318 for the precondition that had to land
+first.
+
 **Recorded 2026-08-24 by round-49 lane e (review pass); CLOSED the same round.** Severity was
 test-hermeticity. **Measured, PHP 8.3.6.**
 
@@ -10439,6 +10455,11 @@ tree-wide change and wants its own plan.
 
 ### E310 — E296 OPTION (a) IS NOW AVAILABLE: the descriptor replacement costs THREE named assertions, not 107 errors
 
+🟢 **IMPLEMENTED in round 51 by lane a, and this entry's measurement REPRODUCED EXACTLY.** The bootstrap
+change alone, against a green `9661 / 142165 / 1 skipped / rc 0` baseline at `a85fcfd6`: `9661 tests, 1
+error, 2 failures, 1 skipped` — the same three named assertions this entry predicted, and not one
+candy-mosaic error. A reviewer prescription that measured true; the first in a while.
+
 **Recorded 2026-08-24 by round-50 lane b.** Severity: this is the answer E296 has been blocked on for a
 round. **MEASURED, full suite, PHP 8.3.6, at `a43d4f94` in lane b.** Not shipped — see "why not here".
 
@@ -10514,8 +10535,9 @@ name, in another repository, fixed by a different lane, in the same round.
 
 ### E311 — E243 was CLOSED before round 50 started, and two places still say "narrowed"
 
-**Recorded 2026-08-24 by round-50 lane b.** Severity: doc accuracy on an item that was re-issued as work.
-**Measured by symbol at `906fa666`.**
+**Recorded 2026-08-24 by round-50 lane b. 🟢 DONE in round 51 by lane a** — E243 is marked above, its
+Step retired, and `tests/bootstrap.php`'s "E243 stays NARROWED" paragraph rewritten in three-part form.
+Severity: doc accuracy on an item that was re-issued as work. **Measured by symbol at `906fa666`.**
 
 **What.** Lane b's brief carried E243 as carried-forward work ("Round 49 narrowed it rather than closing
 it; close it if the fd-0 work above makes that possible"), and E243's own entry still ends with a Step
@@ -10531,7 +10553,11 @@ taken and the entry was never marked. A backlog item that is done but still read
 its start-of-round orientation, and this is the second round in which a brief has re-issued work already
 in the tree (E190's shape, one level up: there the commits were unreported, here the entry was).
 
-**Step.** Mark E243 🟢 and delete the Step. Nothing in the code changes.
+**Step — DONE.** E243 is marked 🟢 and its Step is retired in place rather than deleted (a Step that is
+gone reads as a Step that was never written). The second place was
+`sugar-crush/tests/bootstrap.php`, whose "WHAT IT DOES TO E243 … E243 stays NARROWED, not closed"
+paragraph said the terminal case was still live; it is not, because the default is the suite's
+`php://memory` pin whether or not fd 0 is a tty. Nothing in the code changed.
 
 ---
 
@@ -10616,6 +10642,12 @@ the other six by reading is exactly the reasoning-instead-of-measuring that kill
 
 ### E314 — E296's PREPEND residual now executes, and option (a)'s viability is MEASURED rather than argued
 
+🟢 **The residual is CLOSED (round 51, lane a), and the test was INVERTED rather than deleted.** Its
+doc-block's own instruction was "delete it and record what closed it"; deleting it would have discarded the
+only executable apparatus for the question, and inverting is not the widening that instruction forbade. It
+now has THREE arms, because the claim became an absence: an un-bootstrapped known-positive that must come
+back WITH the marker, plus the two guarded arms that must not.
+
 **Recorded 2026-08-24 by round-50 lane b.** Severity: test-hermeticity, unchanged; provenance, improved.
 **Measured, PHP 8.3.6.**
 
@@ -10638,6 +10670,10 @@ means someone closed the prepend half, which is the outcome E296 wants.
 ---
 
 ### E315 — the prepend residual is a data path from the runner's stdin to a model provider
+
+🟢 **CLOSED for the SUITE in round 51 by lane a**, by the descriptor replacement E296 needed. NOT closed,
+and deliberately not, for a real `sugarcrush`: piped stdin reaching the prompt is that binary's documented
+contract. What changed is that the suite no longer inherits the runner's fd 0.
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: security shape, recorded not fixed
 (functionality-before-hardening). **Measured, PHP 8.3.6.**
@@ -10706,6 +10742,12 @@ that looks like good news.
 ---
 
 ### E318 — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
+
+🟢 **FIXED in round 51 by lane a, in `candy-mosaic` (NOT candy-palette — see the round report).**
+`stdinFd()` answers null for a dead handle; `drainStdin()`/`readStdinTimed()` treat null as their existing
+no-answer case; the two inline `?? STDIN` spellings route through the guard; a closed INJECTED probe stream
+no longer short-circuits `isInteractiveTty()` to true. candy-mosaic suite: 451/7707/6-skipped before,
+457/7744/6-skipped after, rc 0 both.
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: the remaining blocker on E296 option (a).
 **Measured by symbol at `906fa666`. Out of lane — `candy-mosaic/` belongs to no lane.**
@@ -10854,6 +10896,10 @@ whose scanner is well-tested is where this hides, because the fixture table look
 ---
 
 ### E323 — `SuiteChildStdinIsolationTest`'s failure message still prices option (a) at 107 errors
+
+🟢 **DONE in round 51 by lane a.** Option (a) shipped, so the assertion was INVERTED rather than
+re-worded, with the three-part history in its doc-block: what it said, the re-measured price, and why the
+inverse is worth holding rather than relaxing.
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: doc accuracy on the decision E296 turns
 on. **Out of this lane's file list** — `sugar-crush/tests/SuiteChildStdinIsolationTest.php` is lane e's.
@@ -11079,3 +11125,286 @@ arrives already two spellings apart, which is how the previous four-copy familie
 cannot read as a clean one, and three copies of that arm is three places for it to be quietly reverted.
 
 ---
+
+---
+
+### Ea51-1 — my brief named `candy-palette/src/Probe/Detect.php`, and there is no such file
+
+**Recorded 2026-08-24 by round-51 lane a.** Severity: brief accuracy, on the item's whole subject.
+**Measured by `find`.**
+
+The round-51 lane a brief's ITEM 2 read "Close this one, in `candy-palette`, with its own guard", and its
+file list carried `candy-palette/src/Probe/Detect.php` and `candy-palette/tests/`. Neither exists. There is
+exactly ONE `Detect.php` outside `vendor/` in this monorepo and it is `candy-mosaic/src/Detect.php`, which
+is what E318 — the entry the brief cites — names correctly. `candy-palette/src` and `candy-palette/tests`
+contain zero references to `STDIN`, `php://stdin`, `php://fd/0` or `/dev/stdin`, measured.
+
+**Why the confusion is worth an entry rather than a shrug.** E302 spans both libraries — the FAULT was a
+candy-mosaic caller naming `Capability::Iterm2Image`, and the enum it named wrongly is
+`candy-palette/src/Probe/Capability.php`. A summary that keeps "Probe" and "Capability" and swaps the
+library is the exact error a two-library finding invites. E318's own text is unambiguous ("Out of lane —
+`candy-mosaic/` belongs to no lane"), so the brief is the only place that was wrong.
+
+**What was done.** The fix landed in `candy-mosaic`, with a new `candy-mosaic/tests/DetectClosedStdinTest.php`.
+candy-palette's suite was run anyway, before and after: `266 tests, 529 assertions, 0 skipped, rc 0` both
+times, unchanged.
+
+**Step.** None. Recorded so the next brief writer does not re-derive the same swap from E302.
+
+---
+
+### Ea51-2 — the flag repair produced two 60-second RISKY aborts in one full run of two, and the replacement produced none
+
+**Recorded 2026-08-24 by round-51 lane a.** Severity: evidence, NOT mechanism. **Measured, PHP 8.3.6, two
+takes, and it did not reproduce.**
+
+While mutation-testing the descriptor replacement, the revert-to-the-flag mutation (`B1`) was run twice as
+a full suite from a runner whose own stdin was an open, never-written pipe:
+
+    take 1   9661 tests, 2 failures, 1 skipped, RISKY 2   (BootstrapSkillSkipsTest, both -p cases,
+                                                           "aborted after 60 seconds")
+    take 2   9662 tests, 4 failures, 1 skipped, RISKY 0
+
+The two failures/four failures difference is accounted for: take 2 ran after a new tty-branch test landed.
+The RISKY difference is not accounted for, and it is interesting because `BootstrapSkillSkipsTest`'s two
+`-p` cases are the EXACT instance `tests/bootstrap.php`'s doc-block names as the observed E212 symptom. The
+green baseline at `a85fcfd6` — same runner, same held-open stdin, the flag repair shipped — had zero risky.
+
+**What this is and is not.** It is one observation that the flag repair is not reliably sufficient under a
+held-open runner stdin, which would mean something clears `O_NONBLOCK` mid-run in some orderings. It is NOT
+a mechanism: n=1 of 2, and rule 3 says three takes before a delta is signal. The descriptor replacement
+cannot have this failure mode at all (there is no flag to clear), so the finding does not block anything —
+it is recorded because it is cheap to lose and would be expensive to re-discover.
+
+**Step.** If anyone ever needs to justify the descriptor replacement over the flag beyond the prepend half,
+run the flag shape five times under a held-open stdin and count RISKY. Do not cite the observation above as
+a rate.
+
+---
+
+### Ea51-3 — `TtyDetect::isAtty()` casts a stream to `(int)` and treats the result as a file descriptor
+
+**Recorded 2026-08-24 by round-51 lane a.** Severity: correctness, latent. **Measured, PHP 8.3.6.
+Out of lane — `candy-core/src/Util/TtyDetect.php` belongs to no lane this round. Reported, not fixed.**
+
+`candy-core/src/Util/TtyDetect::isAtty($stream)` is `$fd = (int) $stream;` followed by
+`TermiosFactory::open($fd)->isAtty()`. `(int)` on a PHP stream yields its RESOURCE ID, not its file
+descriptor, and the two coincide only by accident of allocation order. Observed while measuring the fd-0
+replacement: immediately after `fclose(\STDIN)` and `fopen('/dev/null', 'r')`, `/proc/self/fd/0` reads
+`/dev/null` — the descriptor really is 0 — while `(int)` on that same handle is **5**. So a caller asking
+"is this stream a tty" can be answered about an unrelated descriptor.
+
+**Why it is latent rather than live, and the mechanism is an OFF-BY-ONE rather than an alignment — this
+paragraph originally said the ids "happen to line up", which is the wrong description of a correct
+conclusion.** Measured in a fresh CLI process, three takes, PHP 8.3.6: `(int) STDIN` is **1**, `(int) STDOUT`
+is **2**, `(int) STDERR` is **3**, while the descriptors behind them are 0, 1 and 2 — every one of the three
+is off by one, and none of them "lines up". The answers have nevertheless been right because all three
+usually address the SAME terminal, so asking about fd 1 when you meant fd 0 returns the same verdict, and
+because `TermiosFactory::open()` is wrapped in a `try`/`catch (\Throwable)` that degrades to false. Nothing
+in this tree is known to be wrong today.
+The hazard is that the coincidence is not a property of anything — any process that opens streams before
+asking gets a different id, and the E296 replacement is precisely such a process.
+
+**Step.** Give `TtyDetect` a real descriptor. There is no portable PHP call for "the fd behind this stream",
+but the three constants can be special-cased by identity (`$stream === \STDIN` => 0, and so on) and
+everything else answered `false` rather than guessed, or the whole thing routed through
+`stream_isatty($stream)`, which takes the stream and needs no fd at all. Note that `stream_isatty()` THROWS
+on a closed resource, so an `is_resource()` guard has to come first — which `isAtty()` already has.
+
+---
+
+### Ea51-4 — RETRACTED BEFORE IT SHIPPED: the two `composer.lock` files are NOT committed, and `ls` cannot tell
+
+**Recorded and refuted 2026-08-24 by round-51 lane a, in that order.** Severity: none — there is no defect.
+Kept as a methodology instance, because the refutation came from the entry's own stated generator.
+
+**WHAT THIS ENTRY SAID**, drafted and committed: "`candy-mosaic/composer.lock` and
+`candy-palette/composer.lock` are present in the tree at `a85fcfd6`", filed against the rule that
+`AGENTS.md` and `CONTRIBUTING.md` both state — never commit a per-lib `composer.lock`, because
+`composer install` then resolves from it and silently ignores CI's path-repo injection.
+
+**WHAT IS TRUE.** `git ls-files '*/composer.lock'` returns **nothing**. Both files exist on disk and both
+are UNTRACKED: `/*/composer.lock` is gitignored, and these are ordinary local build artefacts of the sort
+every lib with a `vendor/` has. No rule is broken and there is nothing to remove.
+`php tools/check-path-repos.php --no-lib-path-repos` exits 0 ("scanned 58 libs … no sibling path-repos in
+per-lib manifests").
+
+**WHY IT IS KEPT RATHER THAN DELETED.** The evidence was `ls candy-palette/` — a listing of the WORKING
+TREE — used to support a claim about what is COMMITTED. Those are different questions and the cheap command
+answers the wrong one, silently and in the direction that looks like a finding. It is the same shape as
+round 44's `ls -l | grep -c '^l'` printing a correct-looking 18 over real directories, and as round 44's
+`grep -c` reporting a confident zero on binary output: an instrument that answers a nearby question. The
+entry was written, committed, and then refuted by running the generator it had itself named — which is the
+only reason it did not ship as a finding, and an argument for naming the generator even when the claim
+feels obvious.
+
+**Step.** None.
+
+---
+
+### Ea51-5 — the fd-0 replacement made `NonInteractive::readStdinIfPiped()` a latent `TypeError`, and guarding only the call the reviewer named would move the throw rather than remove it
+
+**Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, latent — introduced by this
+lane's own change. **Measured, PHP 8.3.6. Out of lane — `sugar-crush/src/Cli/NonInteractive.php` is a `src/`
+file this lane does not own. Reported, not fixed.**
+
+`NonInteractive::stdinDefault()` is `self::$stdinDefault ?? \STDIN`. `readStdinIfPiped()` is
+`$stream ??= self::stdinDefault();` and then `\stream_isatty($stream)` with no `is_resource()` guard. Before
+E296's option (a), the `?? \STDIN` fallback handed back a LIVE handle; inside the suite it now hands back a
+CLOSED one, because `tests/bootstrap.php` does `fclose(\STDIN)` on every non-tty run.
+
+**Measured.** `stream_isatty()` on a closed resource throws
+`TypeError: stream_isatty(): supplied resource is not a valid stream resource`. **And so does the
+`@\stream_get_contents($stream, …)` two lines later** — `@` suppresses diagnostics, not a thrown `TypeError`
+(same measurement, same box). A fix that guards only the `stream_isatty()` call, which is the one shape a
+reader spots first, relocates the throw to the next line. Both need the guard, or the resolution does.
+
+**Why it is not live today.** `pinStdinDefault(null)` has exactly two callers —
+`NonInteractiveStdinPinTest::testClearingThePinRestoresTheRealStdinAsTheDefault()` and
+`HeadlessPermissionPromptStdinDefaultTest::testWithNoPinInstalledTheDefaultIsTheRealStdin()` — and neither
+then reads. That is the whole of the reachability, so it is one new test away from being live: the next
+test that unpins and reads gets a `TypeError` where it used to get `null`.
+
+**Step.** Either guard both reads in `readStdinIfPiped()` with `is_resource($stream)` (answering `null`,
+which is already the method's no-answer value for every caller), or — better, because it fixes every
+consumer at once — make `stdinDefault()` itself answer the way `Detect::stdinFd()` now does after E318:
+resolve `?? \STDIN`, then hand back the handle only when `is_resource()` says it is live. Note that
+`stdinDefault()` is declared as returning a resource and `HeadlessPermissionPrompt::__construct()` also
+consumes it, so the null-answering shape needs its two callers checked, not just this one.
+
+---
+
+### Ea51-6 — `EnvDetect::isConsoleStdin()` is an unguarded `stream_isatty(STDIN)` with no caller anywhere
+
+**Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, dormant. **Measured,
+PHP 8.3.6. Out of lane — `candy-core/src/Util/Tty/EnvDetect.php` belongs to no lane this round. Reported,
+not fixed, and NOT to be removed.**
+
+`SugarCraft\Core\Util\Tty\EnvDetect::isConsoleStdin()` is a bare `return stream_isatty(STDIN);`. After
+E296's option (a) that call throws inside the suite (see Ea51-5 for the measurement). It is dormant rather
+than live: grepped across `sugar-crush`'s `src`, `bin` and `tests` and across `src`/`bin` of every sibling
+in the 18-lib closure, the only occurrence of the name is its own declaration — `Tty::backend()` reaches
+`isWsl()`, `isMintty()` and `isCygwin()` from the same class but never this one.
+
+**Do not delete it** (standing no-removal rule): it is the native-Windows console probe the `WindowsBackend`
+path would use, and its own doc-block describes that role. The dormancy is now recorded as a judged row in
+`sugar-crush/tests/StdinConstantReaderCensusTest`'s doc-block, which is the guard that will surface it again
+if a caller appears.
+
+**Step.** Give it the same `is_resource()` guard the rest of the family has, so that wiring it later cannot
+introduce a throw; or wire it, if the Windows console path is being taken up. Either counts.
+
+---
+
+### Ea51-7 — `Program::runExec()`'s closed-stream guard now falls back to a closed stream
+
+**Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: correctness, dormant. **Measured,
+PHP 8.3.6. Out of lane — `candy-core/src/Program.php` belongs to no lane this round. Reported, not fixed.**
+
+`Program::runExec()` builds its child's descriptor array from
+`$childIn = is_resource($this->input) ? $this->input : STDIN;`, and its own comment says the guard exists to
+"fall back to STDIN/STDOUT/STDERR when those resources are gone (e.g. tests that closed the streams)". The
+constructor sets `$this->input = $options->input ?? STDIN`. Once the suite closes the constant, BOTH arms of
+that ternary are dead handles for any program constructed without an explicit input — the guard's fallback
+is the very thing it was guarding against.
+
+**Measured.** `proc_open()` with a closed resource in the descriptor array throws
+`TypeError: proc_open(): supplied resource is not a valid stream resource`. So the shape degrades by
+exception rather than by falling back, which is the opposite of the guard's stated intent.
+
+**Why it is dormant.** `runExec()` is private and driven only by an `ExecRequest` command, and `ExecRequest`
+appears nowhere in `sugar-crush`'s `src` or `bin` (verified). No test in this package reaches it.
+
+**Step.** Fall back to a freshly opened `/dev/null` (or answer with an explicit error) rather than to a
+constant whose liveness is exactly what the guard already doubted. The same reasoning applies to the
+`$childOut`/`STDERR` arms on the next lines, which were not measured here.
+
+---
+
+### Ea51-8 — `Detect::stdinFd()` can now answer null into a `@param resource` at `candy-core`
+
+**Recorded 2026-08-24 by round-51 lane a (fix pass), confirming the reviewer's NOTE.** Severity:
+documentation/type accuracy, not a defect. **Verified by symbol. Out of lane — `candy-core/src/Util/TtyDetect.php`.**
+
+E318 made `SugarCraft\Mosaic\Detect::stdinFd()` nullable. `Detect::isInteractiveTty()` passes its result
+straight to `TtyDetect::isAtty(self::stdinFd())`, whose signature documents `@param resource $stream`. The
+runtime behaviour is correct and unchanged — `isAtty()` opens with `is_resource($stream)` and
+`is_resource(null)` is false, which is the identical answer the old closed-`\STDIN` argument produced — so
+there is nothing to fix in the code. The doc-block is simply now narrower than the call sites.
+
+**Step.** Widen `TtyDetect::isAtty()`'s `@param` to `resource|null`. Cheap, and it stops a future static-
+analysis pass reporting a false positive on a correct call. Related to Ea51-3, which wants the same method
+changed for a different reason; do both together.
+
+---
+
+### Ea51-9 — E319's inverted `O_NONBLOCK` prose is live in three files, and the counts previously recorded for it were half right
+
+**Recorded 2026-08-24 by round-51 lane a (fix pass).** Severity: documentation, misleading.
+**Counts re-derived by `grep -n O_NONBLOCK` per file at this lane's HEAD. Out of lane — none of the three
+files is this lane's. Reported, not fixed.**
+
+The polarity, restated so nobody re-derives it: `PosixBackend::enableRawMode()` ends in
+`@stream_set_blocking($this->stream, false)`, which SETS `O_NONBLOCK`; `restore()` does `(…, true)`, which
+CLEARS it. So a failure message saying `enableRawMode() did not clear O_NONBLOCK` is backwards, and so is
+`restore() did not put O_NONBLOCK back`.
+
+Live occurrences, measured rather than carried over — an earlier note recorded "×2" for all three files and
+that is wrong for the first:
+
+| File | inverted failure messages |
+| --- | --- |
+| `sugar-crush/tests/Support/ForkedChildTest.php` | **4** |
+| `sugar-crush/tests/ChatTest.php` | 2 |
+| `sugar-crush/tests/Backend/EngineBackendTest.php` | 2 |
+
+**AND `EngineBackendTest.php` CARRIES A THIRD, DIFFERENT DEFECT THAT THE COUNT ABOVE DOES NOT COVER**, of
+exactly the class this round has been closing elsewhere: its inline comment states that "the descriptor-0
+repair in `tests/bootstrap.php` IS an `O_NONBLOCK` flag on fd 0, and `restore()` here was clearing it back
+for every later test in the run". That was true of the flag repair and is false at HEAD — the repair is
+`fclose(\STDIN)` plus a `/dev/null` reopen, holds no flag, and `PosixBackend::restore()`'s
+`stream_set_blocking()` is `is_resource()` guarded so it cannot touch the closed constant at all. The TEST
+is still worth keeping — "the seam writes to the stream it was given, not to fd 0" is a real property — but
+its stated WHY is now a mechanism that does not exist. This is the same stale-justification shape that was
+repaired in `TtyStreamArgumentCensusTest` during the implement pass; that sweep did not reach this file.
+
+**Step.** Invert the eight failure messages, and rewrite the `EngineBackendTest` comment in three-part form
+(WHAT IT SAID / WHAT IS TRUE NOW / WHY IT STILL EARNS ITS PLACE) rather than deleting it. **Do not do this
+with a blanket regex** (rule 26): the files that now DESCRIBE the inversion must keep the wrong wording
+inside their own history paragraphs, and a pattern sweep cannot tell an offender from a description of one.
+
+---
+
+### Ea51-10 — the stderr census resolves a descriptor spec only within the enclosing function, and nothing says so at the call sites that depend on it
+
+**Recorded 2026-08-24 by round-51 lane a (fix pass), found while refuting a doc-block claim.** Severity:
+guard sharpness, latent. **Measured by pushing known-answer sources through
+`ChildStderrCaptureScanner::scan()` itself, PHP 8.3.6.**
+
+`ChildStderrCaptureScanner` resolves a `proc_open()` descriptor spec passed as a VARIABLE when that variable
+is assigned an array literal in the SAME function, and reports `unclassified` when it is not. Four
+known-answer controls in one probe:
+
+| spec spelling | scanner answer |
+| --- | --- |
+| variable assigned an array literal in the same function | `captured` |
+| same literal assigned in ANOTHER function | `unclassified` |
+| same-function literal whose fd 2 is `/dev/null` | `discarded` |
+| variable never assigned | `unclassified` |
+
+The behaviour is right, and the scope bound is deliberate — `ChildStderrCaptureTest` has a test about it.
+The hazard is that the bound is invisible where it bites. A spawn site whose spec is a same-function local
+passes today; the ordinary next refactor — lifting that spec to a property or a class constant so two
+methods can share it — crosses the bound and turns the site `unclassified`, which
+`testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor()` refuses. That reds a guard for a change that did not
+alter what any child does with fd 2.
+
+**Why this is filed rather than fixed.** It is arguably correct as-is (rule 14: report what you cannot read
+rather than passing it), and widening resolution to properties and class constants is real work in another
+lane's file. What is cheap and was NOT there is the warning: `SuiteChildStdinIsolationTest::bootstrapUnder()`
+now records the bound in its own doc-block, which is where a reader tempted to hoist those two specs will
+be standing.
+
+**Step.** Either resolve class-constant and property specs too (they are as literal as a local), or have the
+`unclassified` failure message name the scope bound explicitly, so the reader is told why a spec they can
+plainly read came back unreadable.

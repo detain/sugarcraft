@@ -85,7 +85,23 @@ final class NonInteractiveStdinPinTest extends TestCase
         // KNOWN-POSITIVE THROUGH THE SAME PROBE (rule 15): the metadata read
         // above has to be able to tell the two apart, or the assertion proves
         // nothing about which stream is in place.
-        self::assertSame('php://stdin', stream_get_meta_data(\STDIN)['uri'] ?? null);
+        //
+        // A FRESH `php://stdin` HANDLE, NOT THE `\STDIN` CONSTANT.
+        // WHAT THIS SAID: `stream_get_meta_data(\STDIN)`. WHAT IS TRUE NOW:
+        // `tests/bootstrap.php` replaces descriptor 0 outright — `fclose(\STDIN)`
+        // then `/dev/null` onto the freed fd — so the constant is a CLOSED
+        // resource for the rest of the run and that call is a `TypeError`, not
+        // an assertion. WHY THE CONTROL STILL EARNS ITS PLACE: what it checks is
+        // that this probe distinguishes a `php://memory` stream from a stdin
+        // one, and a handle opened by name does that without depending on the
+        // constant's liveness. Measured, PHP 8.3.6: after the replacement,
+        // `fopen('php://stdin')` succeeds and its `uri` is `php://stdin` while
+        // `/proc/self/fd/0` reads `/dev/null` — the name is the wrapper's, not
+        // the descriptor's, which is exactly what makes it usable here.
+        $byName = fopen('php://stdin', 'r');
+        self::assertIsResource($byName);
+        self::assertSame('php://stdin', stream_get_meta_data($byName)['uri'] ?? null);
+        fclose($byName);
     }
 
     /**
