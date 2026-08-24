@@ -143,10 +143,11 @@ final class SglangProviderReachabilityTest extends TestCase
      * Run `$body` with `error_log()` diverted to a scratch file, and return
      * what it wrote there.
      *
-     * `tempnam()` and not a `uniqid()`-built name: five suites share one
-     * uid-keyed TMPDIR during an audit round, and `uniqid()` with no arguments
-     * is microtime-derived rather than process-unique — the mechanism behind
-     * the cross-process collision db90e768 swept out of `tests/`.
+     * `tempnam()` and not a hand-built name: five suites share one uid-keyed
+     * TMPDIR during an audit round, and the argument-less `uniqid` form is
+     * microtime-derived rather than process-unique — the mechanism behind the
+     * cross-process collision db90e768 swept out of `tests/`. The bare call is
+     * deliberately not spelled here; that sweep ate the prose describing it.
      */
     private static function withErrorLogDiscarded(callable $body): string
     {

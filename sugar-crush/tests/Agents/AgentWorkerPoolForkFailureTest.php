@@ -58,9 +58,13 @@ final class AgentWorkerPoolForkFailureTest extends TestCase
             messages: [['role' => 'user', 'content' => 'Hello!']],
         );
 
-        // `tempnam()` and not a `uniqid()`-built name: five suites share one
-        // uid-keyed TMPDIR during an audit round, and `uniqid()` with no
-        // arguments is microtime-derived rather than process-unique.
+        // `tempnam()` and not a hand-built name: five suites share one
+        // uid-keyed TMPDIR during an audit round, and the argument-less
+        // `uniqid` form is microtime-derived rather than process-unique. The
+        // bare call is deliberately not spelled anywhere in this file —
+        // {@see \SugarCraft\Crush\Tests\Support\ProcessUniqueTempNameTest}
+        // records what a blanket rewrite of that pattern did to the prose
+        // describing it.
         $log = tempnam(sys_get_temp_dir(), 'sc_r49b_forkfail_');
         self::assertIsString($log);
         $this->logFile = $log;

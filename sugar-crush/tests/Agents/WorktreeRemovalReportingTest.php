@@ -55,9 +55,11 @@ final class WorktreeRemovalReportingTest extends TestCase
     {
         parent::setUp();
 
-        // getmypid() in the name, not a bare uniqid(): five suites share one
-        // uid-keyed TMPDIR during an audit round and uniqid() is
-        // microtime-derived rather than process-unique (db90e768).
+        // getmypid() in the name rather than the argument-less `uniqid`
+        // form: five suites share one uid-keyed TMPDIR during an audit round
+        // and that form is microtime-derived, not process-unique (db90e768).
+        // The bare call is deliberately not spelled here — a blanket rewrite
+        // of the pattern has already eaten prose describing it once.
         $this->tmpRoot = sys_get_temp_dir() . '/sc_r49b_wt_' . getmypid() . '_' . bin2hex(random_bytes(6));
         mkdir($this->tmpRoot, 0755, true);
 
