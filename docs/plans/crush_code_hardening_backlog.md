@@ -8706,7 +8706,8 @@ a copy is added.
 elimination.
 
 **What.** `TeamTest::tearDown()` asserts that the real `~/.sugar-crush` footprint is unchanged across each
-test. During lane d's full run it failed at `TeamTest.php:77` with a diff listing **2,522** entries under
+test. During lane d's full run it failed in that `tearDown()` footprint assertion, on
+`testAddTeammateOverwritesExistingWithSameId`, with a diff listing **2,522** entries under
 `/home/my/.sugar-crush/teams/` named `throwing-*`. Re-run alone, the same file is green — 26 tests, 78
 assertions. Nothing in lane d touches `Agents/`.
 
