@@ -432,7 +432,17 @@ final class WorktreeRemovalReportingTest extends TestCase
 
         $sites = [];
         foreach ($files as $file) {
-            $source = file_get_contents($file);
+            // `is_file()` FIRST AND NOT FOLDED INTO THE READ. MEASURED on this
+            // box (PHP 8.3.6), `file_get_contents()` on a DIRECTORY answers the
+            // EMPTY STRING rather than `false` — `''` is a string, so
+            // `assertIsString()` alone lets a non-file roster entry scan as zero
+            // construction sites, which is the silent zero this arm exists to
+            // prevent. The discovery half of phpSources() filters `isFile()`,
+            // but `bin/sugarcrush` is APPENDED unconditionally, so the roster
+            // can carry an entry nothing checked.
+            self::assertTrue(is_file($file), $file . ' is not a file, so this scan cannot speak for it');
+
+            $source = @file_get_contents($file);
             self::assertIsString($source, $file . ' could not be read, so this scan cannot speak for it');
             foreach (self::constructionShapes('WorktreeManager', $source) as $shape) {
                 $sites[] = substr($file, \strlen($root) + 1) . ': ' . $shape;
