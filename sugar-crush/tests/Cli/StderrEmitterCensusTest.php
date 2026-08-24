@@ -618,7 +618,7 @@ final class StderrEmitterCensusTest extends TestCase
         foreach (self::RUNTIME_NOTICE_SITES as $file => $sites) {
             self::assertGreaterThan(0, $sites, "{$file} is on the channel-6 roster with no sites");
 
-            $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/' . $file);
+            $source = self::readOrFail(\dirname(__DIR__, 2) . '/' . $file);
 
             // KNOWN-POSITIVE, IN THE SAME TEST AND IN THE SAME SCANNER (rule
             // 15). Every other assertion in this method is an absence, and an
@@ -643,7 +643,7 @@ final class StderrEmitterCensusTest extends TestCase
         // The sink itself is the one place the two channels legitimately meet:
         // it holds channel 3's single site for the whole family, and none of
         // channel 6's.
-        $sink = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Diagnostics/RuntimeNoticeSink.php');
+        $sink = self::readOrFail(\dirname(__DIR__, 2) . '/src/Diagnostics/RuntimeNoticeSink.php');
         self::assertSame(1, self::scan('error_log', $sink), 'the sink stopped writing stderr, or writes twice');
         self::assertSame(0, self::scan('runtime_notice', $sink), 'the sink calls its own warn()');
 
@@ -771,7 +771,7 @@ final class StderrEmitterCensusTest extends TestCase
         $instance = [];
 
         foreach (self::sources() as $relative => $absolute) {
-            $source = (string) file_get_contents($absolute);
+            $source = self::readOrFail($absolute);
             $all = self::methodCallSites('warn', $source);
             $viaScope = self::methodCallSites('warn', $source, self::SCOPED_CALL_OPERATORS);
             $viaObject = self::methodCallSites('warn', $source, self::INSTANCE_CALL_OPERATORS);
@@ -934,7 +934,7 @@ final class StderrEmitterCensusTest extends TestCase
 
         $built = [];
         foreach (self::sources() as $relative => $absolute) {
-            $sites = self::constructionSites('WorktreeManager', (string) file_get_contents($absolute));
+            $sites = self::constructionSites('WorktreeManager', self::readOrFail($absolute));
             if ($sites > 0) {
                 $built[$relative] = $sites;
             }
@@ -1097,7 +1097,7 @@ final class StderrEmitterCensusTest extends TestCase
      */
     public function testTheWarnFamilyDecomposesIntoItsThreeEntryPoints(): void
     {
-        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        $source = self::readOrFail(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
 
         $direct = self::scan('prefixed:warnPermissionConfig', $source);
         $once = self::scan('prefixed:warnPermissionConfigOnce', $source);
@@ -1240,7 +1240,7 @@ final class StderrEmitterCensusTest extends TestCase
         $withArrayTokenOpener = 0;
 
         foreach (self::sources() as $relative => $absolute) {
-            $significant = self::significantTokens((string) file_get_contents($absolute));
+            $significant = self::significantTokens(self::readOrFail($absolute));
 
             foreach ($significant as $i => $token) {
                 if (self::callableName($token) !== 'error_log' || ($significant[$i + 1] ?? null) !== '(') {
@@ -1371,7 +1371,7 @@ final class StderrEmitterCensusTest extends TestCase
         $examined = 0;
 
         foreach (self::sources() as $relative => $absolute) {
-            $source = (string) file_get_contents($absolute);
+            $source = self::readOrFail($absolute);
             $naive = substr_count($source, 'error_log(');
 
             // NO `if ($naive === 0) { continue; }` HERE, deliberately. It read
@@ -1514,7 +1514,7 @@ final class StderrEmitterCensusTest extends TestCase
         $path = \dirname(__DIR__, 2) . '/tests/Integration/BinSugarcrushAutoloadGuardTest.php';
         self::assertFileExists($path, 'the file carrying the prose census has moved');
 
-        $flat = self::flattened((string) file_get_contents($path));
+        $flat = self::flattened(self::readOrFail($path));
 
         $matched = preg_match_all(
             '/call sites across `src\/` and `bin\/` is ([A-Z]+)/',
@@ -2159,7 +2159,7 @@ final class StderrEmitterCensusTest extends TestCase
             'flattened() no longer joins a wrapped doc-block sentence; every anchor below would fail open',
         );
 
-        $own = self::flattened((string) file_get_contents(__FILE__));
+        $own = self::flattened(self::readOrFail(__FILE__));
 
         foreach (self::selfCountAnchors() as $site) {
             $matched = preg_match_all($site['anchor'], $own, $all, PREG_SET_ORDER);
@@ -2329,12 +2329,65 @@ final class StderrEmitterCensusTest extends TestCase
         );
     }
 
+    /**
+     * RULE 14 AT THE READ. `(string) file_get_contents()` turns an unreadable
+     * file into an empty one, an empty one into "the scan found nothing", and
+     * "nothing" into a clean census — three silent steps from a permission bit
+     * or a mid-run rename to a green suite. This census reads every source in
+     * `src/` on every run and had no arm for any of them: a file it could not
+     * open simply dropped out of the count, which for a file with NO roster row
+     * is indistinguishable from a file with no sites.
+     */
+    private static function readOrFail(string $path): string
+    {
+        $text = file_get_contents($path);
+        self::assertIsString($text, $path . ' is unreadable, so this census is void: an '
+            . 'unreadable source scans as empty text, empty text scans as no sites, and no '
+            . 'sites is what a clean file looks like');
+
+        return $text;
+    }
+
+    /**
+     * THE READ ARM IS PINNED, because nothing in the tree can exercise it.
+     *
+     * No source under `src/` is unreadable, so reverting {@see readOrFail()} to
+     * the cast is a mutation every other assertion in this class survives. This
+     * fixture is the only input that reaches it.
+     */
+    public function testTheCensusRefusesASourceItCannotOpenInsteadOfScanningItAsEmpty(): void
+    {
+        $absent = \dirname(__DIR__, 2) . '/src/no_such_source_'
+            . \getmypid() . '_' . \bin2hex(\random_bytes(6)) . '.php';
+
+        self::assertFileDoesNotExist($absent);
+
+        // The PHP-level warning from the failed open is not the thing under
+        // test, and this suite runs with failOnWarning. It is swallowed HERE
+        // rather than with an `@` inside readOrFail(), where it would also
+        // swallow the diagnosis on a real unreadable source.
+        $previous = \set_error_handler(static fn (): bool => true);
+        $refused = false;
+
+        try {
+            self::readOrFail($absent);
+        } catch (\PHPUnit\Framework\AssertionFailedError) {
+            $refused = true;
+        } finally {
+            \set_error_handler($previous);
+        }
+
+        self::assertTrue($refused, 'the read returned instead of refusing a file it could not '
+            . 'open, so an unreadable source now reaches this census as empty text and is '
+            . 'counted as a file with no sites');
+    }
+
     /** @return array<string, int> file => count, files with zero omitted */
     private static function census(string $channel): array
     {
         $out = [];
         foreach (self::sources() as $relative => $absolute) {
-            $n = self::scan($channel, (string) file_get_contents($absolute));
+            $n = self::scan($channel, self::readOrFail($absolute));
             if ($n > 0) {
                 $out[$relative] = $n;
             }

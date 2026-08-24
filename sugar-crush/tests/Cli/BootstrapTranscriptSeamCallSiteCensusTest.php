@@ -459,7 +459,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
             $path = \dirname(__DIR__, 2) . '/' . $site['file'];
             self::assertFileExists($path, "{$label}: the file quoting the count has moved");
 
-            $source = (string) file_get_contents($path);
+            $source = self::readOrFail($path);
 
             // preg_match_ALL, and the count asserted. `preg_match()` returns 1
             // for "the first of two", so it is a presence check wearing a
@@ -655,7 +655,7 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         foreach (self::SELF_COUNT_ANCHORS as $site) {
             $path = \dirname(__DIR__, 2) . '/' . $site['file'];
             self::assertFileExists($path, "{$site['file']}: the file stating the site count has moved");
-            $flat[$site['file']] ??= self::flattened((string) file_get_contents($path));
+            $flat[$site['file']] ??= self::flattened(self::readOrFail($path));
 
             $anchor = $site['anchor'];
             $matched = preg_match_all($anchor, $flat[$site['file']], $all, PREG_SET_ORDER);
@@ -695,12 +695,65 @@ final class BootstrapTranscriptSeamCallSiteCensusTest extends TestCase
         );
     }
 
+    /**
+     * RULE 14 AT THE READ. `(string) file_get_contents()` turns an unreadable
+     * file into an empty one, an empty one into "the scan found nothing", and
+     * "nothing" into a clean census — three silent steps from a permission bit
+     * or a mid-run rename to a green suite. This census reads every source in
+     * `src/` on every run and had no arm for any of them: a file it could not
+     * open simply dropped out of the count, which for a file with NO roster row
+     * is indistinguishable from a file with no sites.
+     */
+    private static function readOrFail(string $path): string
+    {
+        $text = file_get_contents($path);
+        self::assertIsString($text, $path . ' is unreadable, so this census is void: an '
+            . 'unreadable source scans as empty text, empty text scans as no sites, and no '
+            . 'sites is what a clean file looks like');
+
+        return $text;
+    }
+
+    /**
+     * THE READ ARM IS PINNED, because nothing in the tree can exercise it.
+     *
+     * No source under `src/` is unreadable, so reverting {@see readOrFail()} to
+     * the cast is a mutation every other assertion in this class survives. This
+     * fixture is the only input that reaches it.
+     */
+    public function testTheCensusRefusesASourceItCannotOpenInsteadOfScanningItAsEmpty(): void
+    {
+        $absent = \dirname(__DIR__, 2) . '/src/no_such_source_'
+            . \getmypid() . '_' . \bin2hex(\random_bytes(6)) . '.php';
+
+        self::assertFileDoesNotExist($absent);
+
+        // The PHP-level warning from the failed open is not the thing under
+        // test, and this suite runs with failOnWarning. It is swallowed HERE
+        // rather than with an `@` inside readOrFail(), where it would also
+        // swallow the diagnosis on a real unreadable source.
+        $previous = \set_error_handler(static fn (): bool => true);
+        $refused = false;
+
+        try {
+            self::readOrFail($absent);
+        } catch (\PHPUnit\Framework\AssertionFailedError) {
+            $refused = true;
+        } finally {
+            \set_error_handler($previous);
+        }
+
+        self::assertTrue($refused, 'the read returned instead of refusing a file it could not '
+            . 'open, so an unreadable source now reaches this census as empty text and is '
+            . 'counted as a file with no sites');
+    }
+
     private static function bootstrapSource(): string
     {
         $path = \dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php';
         self::assertFileExists($path);
 
-        return (string) file_get_contents($path);
+        return self::readOrFail($path);
     }
 
     /**

@@ -39,11 +39,21 @@ use PHPUnit\Framework\TestCase;
  *
  *   * TWO TOKENS APART OR MORE. Every name inside the bound is a row of
  *     {@see ACCEPTED_DIVERGENCE} below, so that population is countable from
- *     this file and is not written into prose a merge invalidates. Relaxing
- *     {@see DRIFT_BOUND} to two or three tokens brings in further names;
- *     sampled on PHP 8.3.6 those are mostly `self::` against `$this->`, which
- *     is noise, but nothing here proves they all are. Widening the bound is a
- *     round of its own with rows to argue, not a constant to nudge.
+ *     this file and is not written into prose a merge invalidates. WHAT THIS
+ *     SAID about the next token out: "sampled on PHP 8.3.6 those are mostly
+ *     `self::` against `$this->`, which is noise, but nothing here proves they
+ *     all are". WHAT IS TRUE NOW: it is no longer a sample and no longer a
+ *     mostly. {@see DRIFT_BOUND} is a parameter of {@see driftReport()}, and
+ *     {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}
+ *     runs the wider bound over the whole suite every time and checks each
+ *     newcomer against a PREDICATE — is this core nothing but how the two files
+ *     spell their receiver — rather than against a list of names a merge would
+ *     invalidate. The first run of that measurement found one newcomer that was
+ *     not: two copies of `significantTokens()`, one dropping `T_WHITESPACE` and
+ *     one not, feeding a walk that reads token neighbours by index. WHY THE
+ *     BOUND STILL EARNS ITS PLACE AT ONE: everything two brings in today is a
+ *     receiver spelling, and the day it is not, that test names the pair and
+ *     says to widen the bound rather than to exempt the name.
  *   * SAME NAME, TWO CLASSES, ONE FILE. Comparison is cross-FILE, so two
  *     classes in one file are never compared with each other. Measured on PHP
  *     8.3.6 at the commit that added this file, no file in `tests/` declared
@@ -67,15 +77,24 @@ use PHPUnit\Framework\TestCase;
  *     the restriction deletes itself rather than being argued again.
  *   * A COPY THAT WAS RENAMED. Nothing here matches bodies across different
  *     names, so a helper copied and renamed is out of reach by construction.
- *   * THE SIGNATURE. {@see bodyOf()} starts at the body's opening brace, so a
- *     divergence in the PARAMETER LIST - an added parameter, a changed default,
- *     a widened type - is invisible, and two copies whose signatures disagree
- *     can still compare as byte-identical bodies. This is not hypothetical:
- *     `reviewerAgent`'s row below is exactly that shape, and it is only in the
- *     report at all because the divergence reaches the body as well. Including
- *     the signature would fold every promoted-property and named-argument
- *     spelling difference into the core and push most real pairs past
- *     {@see DRIFT_BOUND}, which is a different guard, not a wider one.
+ *   * THE SIGNATURE, IN THE BODY REPORT. WHAT THIS SAID: "{@see bodyOf()}
+ *     starts at the body's opening brace, so a divergence in the PARAMETER LIST
+ *     is invisible... including the signature would fold every promoted-property
+ *     and named-argument spelling difference into the core and push most real
+ *     pairs past {@see DRIFT_BOUND}, which is a different guard, not a wider
+ *     one". WHAT IS TRUE NOW: the objection was right and the conclusion was
+ *     too broad. Folding the signature into the CORE really is the wrong
+ *     widening — it costs the body report pairs it catches today — but there
+ *     was a third option nobody had measured: gate on body IDENTITY and compare
+ *     the signatures then. Two byte-identical bodies are the same helper by
+ *     this file's own definition, so no bound is needed and no spelling
+ *     difference can crowd anything out.
+ *     {@see testNoCopiedHelperHasDriftedInItsSignatureAlone()} does that, with
+ *     {@see ACCEPTED_SIGNATURE_DIVERGENCE} carrying the rows. WHY THE
+ *     RESTRICTION ON THE CORE STILL EARNS ITS PLACE: it is unchanged, for the
+ *     reason it always gave; what has gone is the assumption that the core was
+ *     the only place the signature could be looked at. The RETURN TYPE is still
+ *     out of both — see {@see signatureOf()} for why.
  */
 final class DuplicatedTestHelperDriftTest extends TestCase
 {
@@ -160,6 +179,178 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             'Different temp-name prefixes, and they must stay different for the same reason as '
             . '`isRaw` above.',
     ];
+
+    /**
+     * Same-named private helpers whose BODIES are byte-identical and whose
+     * PARAMETER LISTS are not, each with the reason.
+     *
+     * A SEPARATE MAP FROM {@see ACCEPTED_DIVERGENCE} BECAUSE IT ANSWERS A
+     * DIFFERENT QUESTION, and merging them would make both rows lie. That map
+     * says "these two bodies differ by one token and that is deliberate"; this
+     * one says "these two bodies do not differ at all and their signatures do".
+     * A name can legitimately be in both — with three copies, one pair can
+     * disagree on a body and another on a signature.
+     *
+     * @var array<string,string>
+     */
+    private const ACCEPTED_SIGNATURE_DIVERGENCE = [
+        'awaitPromise' =>
+            'A fully-qualified parameter type against the imported short name. Same interface, '
+            . 'two spellings, decided by whether the file already imports it — the signature '
+            . 'twin of the `createAskHook` row above.',
+        'block' =>
+            'THE ROW THAT IS A REAL SEMANTIC DIFFERENCE AND THE REASON THIS MAP EXISTS: one '
+            . 'copy gives the second parameter a default and the other requires it. The bodies '
+            . 'are byte-identical, so every body-based check in this file compares them as one '
+            . 'helper and reports nothing — which is exactly the hole E285 described. It is '
+            . 'deliberate, and checked rather than assumed: PermissionsCommandTest passes no '
+            . 'second argument at ANY of its call sites, so the default is the only value that '
+            . 'copy ever uses, while PermissionGateReadOnlyInspectionTest passes one at every '
+            . 'call site and at two of them passes a value that varies per iteration — a '
+            . 'default there would be dead. If a third copy appears, give it the parameter its '
+            . 'own suite needs and say so here.',
+    ];
+
+    /**
+     * NO COPIED HELPER HAS DRIFTED IN ITS SIGNATURE ALONE without a row saying
+     * so.
+     *
+     * WHY THIS IS NOT A WIDER {@see DRIFT_BOUND}, and the prescription it was
+     * measured against said it should be. Folding the parameter list into the
+     * divergence core was the obvious widening and it is the wrong one: every
+     * promoted-property, default-value and type-spelling difference joins the
+     * core, most real pairs go past the bound, and the body report LOSES pairs
+     * it reports today. Measured on PHP 8.3.6 before writing this: gating on
+     * body IDENTITY instead needs no bound at all, because two byte-identical
+     * bodies are the same helper by this file's own definition, and it reports
+     * two pairs — one a type spelling, one a defaulted parameter that no
+     * body-based check in this file could ever see.
+     */
+    public function testNoCopiedHelperHasDriftedInItsSignatureAlone(): void
+    {
+        $this->assertTheSignatureReportIsAlive();
+
+        $sources = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $sources[$relative] = (string) file_get_contents($path);
+        }
+
+        [, , , , $signatureDrift] = self::driftReport($sources);
+
+        $unrecorded = [];
+        foreach ($signatureDrift as $name => $pairs) {
+            if (isset(self::ACCEPTED_SIGNATURE_DIVERGENCE[$name])) {
+                continue;
+            }
+            $unrecorded[] = $name . ': ' . implode('; ', $pairs);
+        }
+
+        self::assertSame(
+            [],
+            $unrecorded,
+            'two files declare a private helper of the same name, their bodies are byte-'
+                . 'identical, and their PARAMETER LISTS are not. Every other check in this file '
+                . 'starts at the body\'s opening brace, so it compares these two as one helper '
+                . 'and says nothing: an added parameter, a changed default or a widened type is '
+                . 'invisible to all of them. Make the two copies agree — or extract the helper — '
+                . 'or add the name to ACCEPTED_SIGNATURE_DIVERGENCE with the reason the '
+                . 'difference is deliberate. The row is checked back against the tree, so it '
+                . 'cannot become a rubber stamp.',
+        );
+
+        $overtaken = [];
+        foreach (self::ACCEPTED_SIGNATURE_DIVERGENCE as $name => $reason) {
+            self::assertNotSame('', trim($reason), $name . ' is accepted without a reason');
+
+            if (!isset($signatureDrift[$name])) {
+                $overtaken[] = $name;
+            }
+        }
+
+        self::assertSame(
+            [],
+            $overtaken,
+            'this name is recorded as a helper whose copies have identical bodies and different '
+                . 'signatures, and they no longer do. Delete the row. AND IF YOU DID NOT TOUCH '
+                . 'EITHER FILE THIS IS STILL NOT A BUG, for the reason the body map\'s own '
+                . 'staleness check gives at length: the two files a row names routinely sit in '
+                . 'two different lanes, and the fix here is a DATA edit rather than a change to '
+                . 'either helper.',
+        );
+    }
+
+    /**
+     * KNOWN-ANSWER CONTROL FOR THE SIGNATURE REPORT, in the same test that uses
+     * it to assert an absence.
+     *
+     * The positive is load-bearing (rule 15): a signature walk that returned
+     * nothing, or one that never compared, satisfies "nothing drifted"
+     * perfectly. The two negatives stop the predicate being stuck at yes — the
+     * second especially, because a report that fired on every shared name would
+     * be answered with exemptions.
+     */
+    private function assertTheSignatureReportIsAlive(): void
+    {
+        $original = <<<'PHP'
+            <?php
+            final class A
+            {
+                private function probe(string $device): bool
+                {
+                    return $device !== '';
+                }
+            }
+            PHP;
+
+        $defaulted = str_replace('string $device)', "string \$device = 'x')", $original);
+        [, , , , $report] = self::driftReport(['a/A.php' => $original, 'b/B.php' => $defaulted]);
+        self::assertArrayHasKey(
+            'probe',
+            $report,
+            'two copies of one helper with identical bodies and a parameter default on only one '
+                . 'were not reported. Until this passes, the absence asserted above is a '
+                . 'statement about a walk that is not running.',
+        );
+
+        [, , , , $report] = self::driftReport(['a/A.php' => $original, 'b/B.php' => $original]);
+        self::assertSame([], $report, 'two byte-identical copies were reported as signature drift');
+
+        // RULE 14 FOR THE SIGNATURE HALF, and it needs its own input: the
+        // truncated-body fixture in assertTheScannerIsAlive() trips the BODY
+        // arm before the signature arm is ever reached, so dropping the
+        // signature arm survives it. A declaration with no parameter list at
+        // all is the shape that separates them — bodyOf() finds the brace and
+        // returns a body, signatureOf() meets that same brace before any `(`
+        // and cannot answer. Without this, a helper whose signature this walk
+        // cannot read would be compared as though its parameter list were
+        // empty, which is a hole shaped exactly like the next signature drift.
+        $noParameterList = <<<'PHP'
+            <?php
+            final class G
+            {
+                private function probe { return 1; }
+            }
+            PHP;
+        [, $unparseable] = self::driftReport(['g/G.php' => $noParameterList]);
+        self::assertNotSame(
+            [],
+            $unparseable,
+            'a declaration whose parameter list this scanner cannot find was accepted rather '
+                . 'than reported, so its signature reaches the comparison as the empty list and '
+                . 'any real divergence against it is silently cleared',
+        );
+
+        // A pair whose BODIES already differ belongs to the body report, not
+        // this one, and reporting it in both would double every real drift.
+        $bodyDrift = str_replace("!== ''", "=== ''", $original);
+        [, , , , $report] = self::driftReport(['a/A.php' => $original, 'b/B.php' => $bodyDrift]);
+        self::assertSame(
+            [],
+            $report,
+            'a pair whose bodies differ was reported as signature drift, so every body drift '
+                . 'will now be reported twice and the two maps will each be asked to carry it',
+        );
+    }
 
     /**
      * No same-named private helper has drifted without a row saying so.
@@ -362,6 +553,166 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'which empties both sides and is the failure this comparison is shaped to '
                 . 'catch',
         );
+    }
+
+    /**
+     * WHAT A SECOND TOKEN OF SLACK BRINGS IN IS A RECEIVER SPELLING AND
+     * NOTHING ELSE — derived from the tree, in the shape E287 established for
+     * the visibility alphabet.
+     *
+     * WHAT THE CLASS DOC-BLOCK SAID: "sampled on PHP 8.3.6 those are mostly
+     * `self::` against `$this->`, which is noise, but nothing here proves they
+     * all are". WHAT IS TRUE NOW: the sample is gone and the whole population
+     * is checked, every run, by a PREDICATE rather than a roster of names — a
+     * roster would have to be re-argued at every merge, and a count taken in a
+     * lane worktree is void at the next one. WHY THE RESTRICTION STILL EARNS
+     * ITS PLACE: {@see DRIFT_BOUND} stays at one because everything two brings
+     * in is how a file spells its own receiver, and the day that stops being
+     * true this test names the pair and says to widen the bound.
+     *
+     * IT ALREADY PAID FOR ITSELF ONCE. The first run of this measurement
+     * reported a fourth name that was NOT a receiver spelling:
+     * `significantTokens()`, where one copy dropped `T_WHITESPACE` and the
+     * copy it came from did not — and the copy that did not fed a walk that
+     * reads the neighbours of a `::` BY INDEX, so a spaced call was skipped
+     * before it was examined and an "there is no indirect call" assertion was
+     * an assertion about the unspaced spelling alone. Bound one could not see
+     * it. That is the whole argument for measuring rather than sampling.
+     */
+    public function testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling(): void
+    {
+        $this->assertTheScannerIsAlive();
+
+        $sources = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $sources[$relative] = (string) file_get_contents($path);
+        }
+
+        [$narrow] = self::driftReport($sources);
+        [$wide, , , $wideCores] = self::driftReport($sources, [\T_PRIVATE], self::DRIFT_BOUND + 1);
+
+        $unargued = [];
+        foreach ($wideCores as $name => $pairs) {
+            if (isset($narrow[$name])) {
+                continue;
+            }
+            foreach ($pairs as [$left, $right]) {
+                if (self::isReceiverSpelling($left) && self::isReceiverSpelling($right)) {
+                    continue;
+                }
+                $unargued[] = $name . ': [' . implode(' ', $left) . '] vs [' . implode(' ', $right) . ']';
+            }
+        }
+
+        self::assertSame(
+            [],
+            $unargued,
+            'relaxing the bound by one token brings in a pair whose divergence is NOT how the '
+                . 'two files spell their receiver. That is a copied helper two edits apart, '
+                . 'which is this file\'s own subject sitting just outside its bound and '
+                . 'invisible to every check above. Read the pair: if it is a real drift, fix it '
+                . 'or record it, and if the shape recurs, raise DRIFT_BOUND and argue the rows '
+                . 'the wide run brings with it. Do NOT add the name to ACCEPTED_DIVERGENCE — '
+                . 'that map is checked against the NARROW report and a bound-two pair is not in '
+                . 'it, so the row would be stale on arrival.',
+        );
+
+        // RULE 15, ONE LEVEL DOWN (E228): the assertion above is an absence, and
+        // an EMPTY wide report satisfies it perfectly. This is the component
+        // that fails when the bound parameter stops doing anything.
+        $count = static fn (array $report): int => array_sum(array_map('count', $report));
+
+        self::assertGreaterThan(
+            $count($narrow),
+            $count($wide),
+            'the wider bound no longer brings in more pairs than the narrow one, so either the '
+                . 'bound parameter has stopped being honoured — in which case the assertion '
+                . 'above is measuring nothing — or every pair in this suite is now exactly one '
+                . 'token apart, which would be a fact worth writing down rather than a green',
+        );
+    }
+
+    /**
+     * KNOWN-ANSWER CONTROL FOR THE BOUND PARAMETER, because the measurement
+     * above is a negative and a bound that silently ignored its argument would
+     * satisfy it.
+     *
+     * The fixture is a two-token divergence that is NOT a receiver spelling, so
+     * it must be absent at bound one and present at bound two. Both directions
+     * matter: absent at both means the parameter is dead, present at both means
+     * the narrow report is not narrow.
+     */
+    public function testTheBoundParameterReallyChangesWhatIsReported(): void
+    {
+        $original = <<<'PHP'
+            <?php
+            final class A
+            {
+                private function probe(string $device): bool
+                {
+                    $slack = -1;
+
+                    return str_contains((string) shell_exec('stty -F ' . $device), '-icanon')
+                        && $slack < 0;
+                }
+            }
+            PHP;
+
+        // TWO CONTIGUOUS tokens per side, and neither is a receiver: the sign
+        // and the magnitude of one literal. Contiguity matters — divergenceCore
+        // trims the common prefix and suffix, so two edits in DIFFERENT places
+        // give a core spanning everything between them, which is a far wider
+        // divergence than the bound this fixture is built to probe.
+        $drifted = str_replace('= -1;', '= +2;', $original);
+
+        $sources = ['a/A.php' => $original, 'b/B.php' => $drifted];
+
+        [$atOne] = self::driftReport($sources, [\T_PRIVATE], 1);
+        self::assertArrayNotHasKey('probe', $atOne, 'a two-token divergence was reported at a bound of one');
+
+        [$atTwo, , , $cores] = self::driftReport($sources, [\T_PRIVATE], 2);
+        self::assertArrayHasKey('probe', $atTwo, 'a two-token divergence was not reported at a bound of two, '
+            . 'so the bound argument is not reaching the comparison and the measurement beside '
+            . 'this fixture is a statement about a constant');
+
+        self::assertFalse(
+            self::isReceiverSpelling($cores['probe'][0][0]),
+            'the fixture meant to be a NON-receiver divergence is classified as a receiver one, '
+                . 'so the predicate the measurement rests on would pass it either way',
+        );
+    }
+
+    /**
+     * Whether a divergence core is nothing but how one file spells the receiver
+     * of a call.
+     *
+     * THE FOUR SPELLINGS ARE THE LANGUAGE'S, not a list of what the tree
+     * happens to contain: an instance receiver is `$this` with `->`, and a
+     * scoped one is `self`, `static` or `parent` with `::`. A core that is one
+     * of those, opposite a core that is another, is the same call written two
+     * ways. Anything else is a difference in what the code DOES.
+     *
+     * An EMPTY core is a receiver spelling too, and deliberately: it is the
+     * side of a pair where the receiver is simply absent — `foo()` against
+     * `self::foo()` — which is the third way the same call gets written.
+     *
+     * @param list<string> $core normalised `id:text` tokens
+     */
+    private static function isReceiverSpelling(array $core): bool
+    {
+        $text = [];
+        foreach ($core as $token) {
+            $at = strpos($token, ':');
+            $text[] = $at === false ? $token : substr($token, $at + 1);
+        }
+
+        return \in_array($text, [
+            [],
+            ['$this', '->'],
+            ['self', '::'],
+            ['static', '::'],
+            ['parent', '::'],
+        ], true);
     }
 
     /**
@@ -621,21 +972,43 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * different alphabet would be a second definition of "drifted", which is
      * the seam this whole file is about.
      *
+     * THE BOUND IS A PARAMETER FOR THE SAME REASON THE ALPHABET IS. E279 asked
+     * what two tokens brings in and the honest answer was that nobody had run
+     * it; a constant buried in the comparison cannot be asked. It is measured
+     * through this same report by
+     * {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}.
+     *
      * @param array<string,string> $sources
      * @param list<int>            $visibility token ids one of which must carry the declaration
+     * @param int|null             $bound      per-side divergence bound; null means {@see DRIFT_BOUND}
      *
-     * @return array{array<string,list<string>>, list<string>, int}
-     *         name => pair descriptions, unparseable declarations, declarations read
+     * @return array{array<string,list<string>>, list<string>, int, array<string,list<array{list<string>,list<string>}>>, array<string,list<string>>}
+     *         name => pair descriptions, unparseable declarations, declarations
+     *         read, name => the raw divergence cores of each reported pair, and
+     *         name => pairs whose BODIES are identical and whose SIGNATURES are
+     *         not.
+     *         The cores are returned rather than re-derived because
+     *         {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}
+     *         has to ask WHAT a pair diverges on, and parsing that back out of
+     *         the description string would be a second reading of this walk's
+     *         answer — the seam this whole file exists to close.
      */
-    private static function driftReport(array $sources, array $visibility = [\T_PRIVATE]): array
-    {
+    private static function driftReport(
+        array $sources,
+        array $visibility = [\T_PRIVATE],
+        ?int $bound = null,
+    ): array {
+        $bound ??= self::DRIFT_BOUND;
+
         $declarations = [];
         $unparseable = [];
         $read = 0;
 
+        $signatures = [];
+
         foreach ($sources as $relative => $source) {
             foreach (self::declarationsIn($source, $visibility) as $declaration) {
-                if ($declaration['body'] === null) {
+                if ($declaration['body'] === null || $declaration['signature'] === null) {
                     $unparseable[] = $relative . ': ' . $declaration['problem'];
 
                     continue;
@@ -656,11 +1029,14 @@ final class DuplicatedTestHelperDriftTest extends TestCase
 
                 $read++;
                 $declarations[$declaration['name']][$relative] = $declaration['body'];
+                $signatures[$declaration['name']][$relative] = $declaration['signature'];
             }
         }
 
         ksort($declarations);
         $drifted = [];
+        $cores = [];
+        $signatureDrift = [];
 
         foreach ($declarations as $name => $byFile) {
             $files = array_keys($byFile);
@@ -671,21 +1047,40 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                     $left = $byFile[$files[$a]];
                     $right = $byFile[$files[$b]];
                     if ($left === $right) {
+                        // E285: THE BODIES AGREE EXACTLY, SO THE TWO ARE THE
+                        // SAME HELPER BY THIS FILE'S OWN DEFINITION — and any
+                        // divergence in the PARAMETER LIST is then invisible to
+                        // every check above, because bodyOf() starts at the
+                        // opening brace. Reported HERE rather than folded into
+                        // the divergence core, which is what makes it a wider
+                        // guard instead of a different one: folding the
+                        // signature in would push every promoted-property and
+                        // named-argument spelling past DRIFT_BOUND and take
+                        // real pairs out of the body report with it. Gating on
+                        // body IDENTITY needs no bound at all.
+                        $leftSignature = $signatures[$name][$files[$a]] ?? [];
+                        $rightSignature = $signatures[$name][$files[$b]] ?? [];
+                        if ($leftSignature !== $rightSignature) {
+                            $signatureDrift[$name][] = $files[$a] . ' ' . implode(' ', $leftSignature)
+                                . ' vs ' . $files[$b] . ' ' . implode(' ', $rightSignature);
+                        }
+
                         continue;
                     }
 
                     [$leftCore, $rightCore] = self::divergenceCore($left, $right);
-                    if (\count($leftCore) > self::DRIFT_BOUND || \count($rightCore) > self::DRIFT_BOUND) {
+                    if (\count($leftCore) > $bound || \count($rightCore) > $bound) {
                         continue;
                     }
 
                     $drifted[$name][] = $files[$a] . ' [' . implode(' ', $leftCore) . '] vs '
                         . $files[$b] . ' [' . implode(' ', $rightCore) . ']';
+                    $cores[$name][] = [$leftCore, $rightCore];
                 }
             }
         }
 
-        return [$drifted, $unparseable, $read];
+        return [$drifted, $unparseable, $read, $cores, $signatureDrift];
     }
 
     /**
@@ -748,7 +1143,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      *
      * @param list<int> $visibility token ids one of which must carry the declaration
      *
-     * @return list<array{name:string, body:list<string>|null, problem:string}>
+     * @return list<array{name:string, body:list<string>|null, signature:list<string>|null, problem:string}>
      */
     private static function declarationsIn(string $source, array $visibility): array
     {
@@ -783,6 +1178,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 $found[] = [
                     'name' => '',
                     'body' => null,
+                    'signature' => null,
                     'problem' => 'a private function declaration whose name this scanner cannot read',
                 ];
 
@@ -790,12 +1186,17 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             }
 
             $body = self::bodyOf($tokens, $i);
+            $signature = self::signatureOf($tokens, $i);
             $found[] = [
                 'name' => $name,
                 'body' => $body,
-                'problem' => $body === null
-                    ? $name . '(): the scanner found no closing brace for this body'
-                    : '',
+                'signature' => $signature,
+                'problem' => match (true) {
+                    $body === null => $name . '(): the scanner found no closing brace for this body',
+                    $signature === null => $name . '(): the scanner found no closing parenthesis '
+                        . 'for this parameter list',
+                    default => '',
+                },
             ];
         }
 
@@ -918,6 +1319,72 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             }
 
             $body[] = $id === null ? $text : $id . ':' . $text;
+        }
+
+        return null;
+    }
+
+    /**
+     * The normalised parameter list of the method whose `function` token is at
+     * $at, from its `(` to the matching `)` inclusive, or null when this
+     * scanner cannot find where it ends.
+     *
+     * THE RETURN TYPE IS DELIBERATELY OUT. A widened `?string` against `string`
+     * is a real divergence and a `: static` against `: self` is not, and this
+     * guard has no way to tell them apart; including it would put every
+     * spelling difference on the hook and be answered with exemptions, which is
+     * where the next real one hides. Say so rather than let a reader assume the
+     * signature means the whole declaration.
+     *
+     * @param list<array{int,string,int}|string> $tokens
+     *
+     * @return list<string>|null
+     */
+    private static function signatureOf(array $tokens, int $at): ?array
+    {
+        $count = \count($tokens);
+        $open = null;
+
+        for ($i = $at; $i < $count; $i++) {
+            $text = \is_array($tokens[$i]) ? $tokens[$i][1] : $tokens[$i];
+            if ($text === '(') {
+                $open = $i;
+
+                break;
+            }
+            if ($text === '{' || $text === ';') {
+                return null;
+            }
+        }
+
+        if ($open === null) {
+            return null;
+        }
+
+        $depth = 0;
+        $out = [];
+
+        for ($i = $open; $i < $count; $i++) {
+            $token = $tokens[$i];
+            $id = \is_array($token) ? $token[0] : null;
+            $text = \is_array($token) ? $token[1] : $token;
+
+            if ($text === '(') {
+                $depth++;
+            } elseif ($text === ')') {
+                $depth--;
+                if ($depth === 0) {
+                    $out[] = $text;
+
+                    return $out;
+                }
+            }
+
+            if ($id !== null && \in_array($id, [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            $out[] = $id === null ? $text : $id . ':' . $text;
         }
 
         return null;

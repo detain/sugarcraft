@@ -491,6 +491,99 @@ final class InterpolationOpenerTokenTest extends TestCase
             'a walker that names every opener the running PHP produces was still reported as '
                 . 'incomplete',
         );
+
+        // A `switch`-BASED DEPTH COUNTER IS A BRACE WALKER, and it is the most
+        // ordinary spelling of one. It puts no comparison operator anywhere
+        // near the literal, so the predicate could not select it: a walker
+        // spelled this way could be missing every opener and never appear as a
+        // gap, because it was never asked. MEASURED, PHP 8.3.6: no file under
+        // `tests/` or `src/` writes one today, which is precisely why the
+        // fixture is synthetic and why it is worth having - the population this
+        // arm covers is currently empty, and an empty population is what a
+        // sentence in a doc-block guards until the first file joins it.
+        $switched = <<<'PHP'
+            <?php
+            final class Switched
+            {
+                public function depth(array $tokens): int
+                {
+                    $d = 0;
+                    foreach ($tokens as $t) {
+                        switch ($t) {
+                            case '{':
+                                $d++;
+                                break;
+                            case '}':
+                                $d--;
+                                break;
+                        }
+                    }
+                    return $d;
+                }
+            }
+            PHP;
+        $this->assertSame(
+            $openers,
+            self::missingOpenersIn($switched, $openers),
+            'a depth counter written as a `switch` on the bare braces was not selected as a '
+                . 'brace walker, so it can be missing every opener and never be reported. That '
+                . 'is the same hole the bare-comparison walker used to sit in, one spelling '
+                . 'over.',
+        );
+
+        // ...AND ITS MODERN SIBLING.
+        $matched = <<<'PHP'
+            <?php
+            final class Matched
+            {
+                public function depth(array $tokens): int
+                {
+                    $d = 0;
+                    foreach ($tokens as $t) {
+                        $d += match ($t) {
+                            '{' => 1,
+                            '}' => -1,
+                            default => 0,
+                        };
+                    }
+                    return $d;
+                }
+            }
+            PHP;
+        $this->assertSame(
+            $openers,
+            self::missingOpenersIn($matched, $openers),
+            'a depth counter written as a `match` on the bare braces was not selected as a '
+                . 'brace walker',
+        );
+
+        // ...AND AN ARRAY KEYED BY A BRACE IS NOT A DEPTH COUNTER. This is the
+        // negative that makes the arrow arm safe rather than merely wider, and
+        // the fixture had to be MEASURED into its final shape: the first
+        // version put the braces in VALUE position - `['name' => '{']`, which
+        // is what this tree's three real arrow-adjacent braces are - and the
+        // arm looks FORWARD, so it never fired and un-gating it SURVIVED. A
+        // fixture that does not reach the code it is written for is a green
+        // that means nothing (rule 2: suspect the assertion's window before the
+        // mutation's relevance). Both braces are keys here, which is the only
+        // shape the arm can see.
+        $keyed = <<<'PHP'
+            <?php
+            final class Keyed
+            {
+                public function weights(): array
+                {
+                    return ['{' => 1, '}' => -1];
+                }
+            }
+            PHP;
+        $this->assertNull(
+            self::missingOpenersIn($keyed, $openers),
+            'an array literal keyed by brace characters was selected as a depth counter. The '
+                . '`match`-arm arm of comparesAgainstBrace() must be gated on really sitting '
+                . 'inside a `match` body, or every table in the tree that maps a brace to '
+                . 'something joins the roster.',
+        );
     }
 
     /**
@@ -1117,6 +1210,39 @@ final class InterpolationOpenerTokenTest extends TestCase
      * and outside the other one. Nothing in the tree does that today,
      * measured, and the honest statement is that this alphabet is wider than
      * it was rather than complete.
+     *
+     * WHAT THAT SENTENCE MISSED, and it is the most ordinary spelling of a
+     * depth counter there is: `switch ($text) { case '{': $depth++; ... }`, and
+     * its modern sibling `match`. Neither puts a comparison operator next to
+     * the literal, so both were invisible to this predicate AND to the
+     * `T_CURLY_OPEN`-naming half beside it - a walker spelled that way was not
+     * SELECTED at all, so it could be missing every opener and never appear as
+     * a gap. {@see comparesAgainstBrace()} now takes `case` and a `match` arm
+     * too. MEASURED, PHP 8.3.6, over every `.php` under `tests/` and `src/`:
+     * the population both arms bring in is EMPTY - no brace literal in the tree
+     * neighbours a `T_CASE`, and the three that neighbour a `T_DOUBLE_ARROW`
+     * all carry the arrow BEFORE them, so all three sit in VALUE position and
+     * none is an arm subject.
+     *
+     * WHAT THIS PARAGRAPH SAID: "every one that neighbours a `T_DOUBLE_ARROW`
+     * is an array key rather than a match arm, which is exactly why the arrow
+     * arm is gated on sitting inside a `match` body". WHAT IS TRUE NOW, and was
+     * true when that was written: the measurement above, which inverts it. The
+     * consequence inverts with it - because those three are VALUES the arrow
+     * arm never looks at them at all, so the `match` gate is not what spares
+     * them and cannot be justified by them. WHY THE GATE STILL EARNS ITS PLACE:
+     * it guards a shape the tree does not have YET. An ordinary lookup table
+     * `['{' => 1, '}' => -1]` puts a brace in KEY position and is
+     * indistinguishable from a `match` walker on the arrow alone; ungated, the
+     * arm would select it and report it missing every opener. That is argued in
+     * full on {@see comparesAgainstBrace()}, whose twin of this paragraph was
+     * corrected first - the same inversion survived here one doc-block away,
+     * which is what a correction applied to the sentence you were looking at
+     * rather than to the claim costs.
+     *
+     * So this widening changes no answer today and is pinned by synthetic
+     * fixtures instead; the point is that the first `switch`-based walker
+     * anyone writes now arrives selected rather than unguarded.
      */
     private static function countsBareBraces(string $source): bool
     {
@@ -1127,7 +1253,32 @@ final class InterpolationOpenerTokenTest extends TestCase
     }
 
     /**
-     * Whether any one-byte string literal $brace sits next to a comparison.
+     * Whether any one-byte string literal $brace is DISPATCHED ON - compared
+     * against, or used as a `switch` case or a `match` arm.
+     *
+     * THE THREE ARMS ARE THREE SPELLINGS OF ONE THING and not three rules. A
+     * depth counter asks "is this token a brace"; PHP lets it ask with `===`,
+     * with `case`, or with a `match` arm, and a predicate that knew only the
+     * first covered the shape its author happened to have written.
+     *
+     * THE ARROW ARM LOOKS FORWARD ONLY, because a `match` arm's subject is the
+     * KEY: `'{' => 1`. A brace in VALUE position - `['T_CURLY_OPEN' => '{']` -
+     * has its arrow BEFORE it and is not a dispatch on the brace at all.
+     * Measured, PHP 8.3.6, over every `.php` under `tests/` and `src/`: three
+     * brace literals neighbour a `T_DOUBLE_ARROW` and all three are values,
+     * NONE is a key. So the arrow arm selects nothing in the tree today.
+     *
+     * THE `match` GATE IS THEREFORE GUARDING A SHAPE THAT IS NOT HERE YET, and
+     * saying so is the point rather than a caveat: an array literal `['{' => 1,
+     * '}' => -1]` - a perfectly ordinary table mapping a brace to something -
+     * is indistinguishable from a `match` walker on the arrow alone, and an
+     * ungated arm would select it and report it missing every opener. That the
+     * tree has no such table today is a fact about today. The gate is pinned by
+     * a fixture rather than by this paragraph.
+     *
+     * `case` needs no gate: `T_CASE` appears in `switch` and in enum
+     * declarations, and an enum case spells its value after an `=`, never
+     * adjacent to the name.
      *
      * @param list<array{int,string,int}|string> $tokens
      */
@@ -1155,9 +1306,90 @@ final class InterpolationOpenerTokenTest extends TestCase
                     if (\is_array($neighbour) && \in_array($neighbour[0], $comparisons, true)) {
                         return true;
                     }
+                    if ($direction === -1 && \is_array($neighbour) && $neighbour[0] === \T_CASE) {
+                        return true;
+                    }
+                    if ($direction === 1 && \is_array($neighbour) && $neighbour[0] === \T_DOUBLE_ARROW
+                        && self::sitsInsideAMatch($tokens, $i)) {
+                        return true;
+                    }
 
                     break;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the token at $at sits inside the body of a `match`.
+     *
+     * The walk is backwards over unmatched openers: every `{` or `(` that has
+     * not been closed by the time it reaches $at is an enclosing construct, and
+     * the question is whether any of them is a `match`'s. That is cheaper and
+     * more honest than a forward parse - it answers "which constructs am I
+     * inside", which is exactly the question - and it costs nothing on the
+     * common case, because it only runs for a brace literal that already has an
+     * arrow beside it.
+     *
+     * @param list<array{int,string,int}|string> $tokens
+     */
+    private static function sitsInsideAMatch(array $tokens, int $at): bool
+    {
+        $skippable = [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT];
+        $closed = 0;
+
+        for ($j = $at - 1; $j >= 0; $j--) {
+            $text = \is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+
+            if ($text === '}' || $text === ')') {
+                $closed++;
+
+                continue;
+            }
+            if ($text !== '{' && $text !== '(') {
+                continue;
+            }
+            if ($closed > 0) {
+                $closed--;
+
+                continue;
+            }
+
+            // An unmatched opener: is it a `match`'s? `match` is followed by
+            // `(subject)` and then the body brace, so the keyword sits two
+            // significant tokens back from the body's `{` and immediately
+            // before the subject's `(`.
+            for ($k = $j - 1; $k >= 0; $k--) {
+                if (\is_array($tokens[$k]) && \in_array($tokens[$k][0], $skippable, true)) {
+                    continue;
+                }
+                if (\is_array($tokens[$k]) && $tokens[$k][0] === \T_MATCH) {
+                    return true;
+                }
+                if ($text === '{' && \is_string($tokens[$k]) && $tokens[$k] === ')') {
+                    // Step over the subject to reach the keyword.
+                    $subjectDepth = 0;
+                    for ($m = $k; $m >= 0; $m--) {
+                        $subject = \is_array($tokens[$m]) ? $tokens[$m][1] : $tokens[$m];
+                        if ($subject === ')') {
+                            $subjectDepth++;
+                        } elseif ($subject === '(') {
+                            $subjectDepth--;
+                            if ($subjectDepth === 0) {
+                                $k = $m;
+
+                                break;
+                            }
+                        }
+                    }
+                    $text = '';
+
+                    continue;
+                }
+
+                break;
             }
         }
 
