@@ -112,6 +112,24 @@ final class AgentWorkerPoolForkFailureTest extends TestCase
         self::assertStringContainsString('RLIMIT_NPROC', $log);
         self::assertStringContainsString('maxConcurrent, currently 3', $log);
 
+        // THE ERRNO GUARD, pinned on the one thing its own comment says the
+        // line must never say. Through the testing seam `pcntl_fork()` was
+        // never called, so `pcntl_get_last_error()` is 0 and `pcntl_strerror(0)`
+        // is the word below (VERIFIED, PHP 8.3.6) — a failure report whose
+        // parenthetical claims the call succeeded is worse than one carrying no
+        // errno at all. Asserted as an ABSENCE rather than as the presence of
+        // the fallback sentence, because a pcntl call in an earlier test can
+        // legitimately leave a non-zero errno behind and then the OTHER branch
+        // is the correct one; `pcntl_strerror()` of a non-zero errno never
+        // returns it, so the absence holds on both branches while the presence
+        // of either sentence does not.
+        self::assertStringNotContainsString(
+            'Success',
+            $log,
+            'the failed-fork report is rendering pcntl_strerror(0), so a fork that FAILED is '
+                . 'announcing itself as a success',
+        );
+
         // THE ROUTING ARGUMENT'S OWN PREMISE. Both agents still ran and both
         // results are still stored and reapable, which is why this is an
         // error_log() and not a RuntimeNoticeSink row.

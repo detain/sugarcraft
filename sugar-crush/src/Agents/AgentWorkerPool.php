@@ -1319,6 +1319,7 @@ final class AgentWorkerPool
             $this->maxConcurrent,
         ));
     }
+
     /**
      * Log a visible warning the first time this pool falls back to
      * sequential (non-parallel) execution because pcntl_fork() is
@@ -1360,7 +1361,6 @@ final class AgentWorkerPool
      * remedy differs. A future change that moves one onto the seam and leaves
      * the other here has almost certainly got the rule wrong.
      */
-
     protected function warnSequentialFallback(): void
     {
         if ($this->sequentialFallbackWarned) {
