@@ -9,8 +9,9 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
 /**
- * No `proc_open()` child in `src/` may outlive the call that spawned it
- * without a row here saying why that is acceptable.
+ * No `proc_open()` child in this package's `src/`, or in a reachable sibling
+ * library's, may outlive the call that spawned it without a row here saying
+ * why that is acceptable.
  *
  * WHY LIFETIME AND NOT THE SPEC. `proc_open()` remaps only the fds its spec
  * names; the child inherits every other descriptor the parent had open. For a
@@ -59,7 +60,18 @@ use RecursiveIteratorIterator;
 final class DescriptorInheritanceGuardTest extends TestCase
 {
     /**
-     * Spawns whose child outlives the call with nothing said about fd 3+.
+     * Spawns whose child outlives the call, and that no other row covers.
+     *
+     * WHAT THIS LINE USED TO SAY: "...with nothing said about fd 3+". WHAT IS
+     * TRUE NOW: {@see exposedIn()} stopped reading the spec as a condition in
+     * round 54, so membership here is decided by the child's LIFETIME alone -
+     * a row can perfectly well hold a site whose spec names fd 3, fd 9, or
+     * nothing at all. WHY THE OLD SENTENCE COULD NOT SIMPLY BE LEFT STANDING:
+     * it is still true of all seven rows below, by accident, because no site
+     * here happens to name a high fd. A definition that has stopped matching
+     * its code but still matches today's data is precisely the kind that
+     * survives a careful reading, and the reader it misleads is the one adding
+     * the eighth row.
      *
      * A ROW IS NOT AN EXCUSE, IT IS A RECORD. Everything here is E366's own
      * finding, kept where the instrument can see it go stale rather than in a
@@ -490,9 +502,16 @@ final class DescriptorInheritanceGuardTest extends TestCase
         }
 
         self::assertSame([], $unaccounted, <<<'TEXT'
-            A proc_open() child here outlives the call and its descriptor spec says
-            nothing about fd 3 and above, so it inherits every descriptor this
-            process had open at spawn - E365's shape.
+            A proc_open() child here outlives the call that spawned it, and no row
+            in ACCOUNTED_FOR covers it. For as long as that child runs it holds
+            every descriptor this process had open at the moment of the spawn -
+            E365's shape.
+
+            WHAT THE SPEC NAMES IS NOT WHY THE SITE IS LISTED. The bracket in each
+            line below reports the fds the spec does name, because it is useful
+            detail when you go and read the code. It is detail only: this guard
+            stopped testing it in round 54, and no addition to it will take a site
+            off this list.
 
             ⚠️ NAMING FDS IN THE SPEC IS NOT A RESOLUTION, and this message used
             to say it was - in capitals, as the first of two. proc_open() REPLACES
@@ -577,9 +596,11 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
         self::assertSame([], $unaccounted, <<<'TEXT'
             A proc_open() child in a SIBLING LIBRARY outlives the call that spawned
-            it and its descriptor spec says nothing about fd 3 and above, so it
-            inherits every descriptor this process had open at spawn - E365's shape,
-            in a package sugar-crush cannot edit from here.
+            it, and no row in ACCOUNTED_FOR_IN_LIBS covers it. For as long as that
+            child runs it holds every descriptor this process had open at the moment
+            of the spawn - E365's shape, in a package sugar-crush cannot edit from
+            here. What the spec names is reported in the bracket beside the finding
+            as detail, never as the reason it is listed.
 
             YOU ARE PROBABLY RESOLVING A MERGE. This guard reads through
             vendor/sugarcraft, which in the monorepo is a symlink into the tree, so
@@ -595,9 +616,15 @@ final class DescriptorInheritanceGuardTest extends TestCase
                  that spawned it is the fix; naming high fds in the spec is NOT one,
                  for the reason testNamingAHighFdDoesNotStopTheInheritance() measures.
 
-            NARROWING LIB_SCOPE IS NOT A RESOLUTION. It is how the defect class got
-            to live in five libraries unobserved for the fifty-three rounds before
-            this guard could see them.
+            NARROWING LIB_SCOPE IS NOT A RESOLUTION - widening it is the only reason
+            a sibling's spawn is visible from here at all, and every round before
+            round 54 had none of them in view.
+
+            DO NOT READ THIS GUARD AS COVERING THE MONOREPO. It covers the REACHABLE
+            closure, which is a strict subset of it, and there are exposed spawns in
+            libraries outside that closure which no guard anywhere is watching.
+            ACCOUNTED_FOR_IN_LIBS' doc-block says what the scope does and does not
+            reach.
             TEXT);
     }
 
