@@ -13235,7 +13235,10 @@ Round 48 found `classifySpec()` answering `inherited` for every POSITIONAL spec 
 fixed it with `positionalShape()`. The same hole survived one branch further in. `positionalShape()`
 returned `SHAPE_INHERITED` on the first element it saw carrying a `=>`, reasoning that a keyed spec not
 naming `2` leaves fd 2 alone. True of an all-keyed spec; false of one that MIXES the spellings, because
-PHP hands a positional element the next free integer key. Measured with `array_keys()` on **PHP 8.3.6**:
+PHP gives a positional element **one greater than the largest integer key it has assigned so far** —
+NOT "the next free integer key", which this entry originally said and which is a different rule that
+agrees with the real one on all three rows below and disagrees on `[5 => 'a', 0 => 'b', 'c']` (keys 5, 0
+and 6; "next free" predicts 1). Measured with `array_keys()` on **PHP 8.3.6**:
 
 | spec | keys | fd 2 |
 | --- | --- | --- |
@@ -13243,8 +13246,17 @@ PHP hands a positional element the next free integer key. Measured with `array_k
 | `[1 => a, b]` | 1,2 | **is `b`** |
 | `[5 => a, b, c]` | 5,6,7 | untouched |
 
-Three truths, one answer. `inherited` is the shape this scanner's guards FLAG, so a wrong one reds correct
-code, and an exemption row written for correct code is where the next real offender hides.
+Three truths, one answer. **THE REASON FIRST RECORDED HERE WAS WRONG, and round 53's review caught it.** WHAT
+THIS SAID: "`inherited` is the shape this scanner's guards FLAG, so a wrong one reds correct code, and an
+exemption row written for correct code is where the next real offender hides." WHAT IS TRUE NOW, measured
+rather than argued: `testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()` treats everything that is not
+`captured` — and not an exempted `discarded` — as an offender, `unclassified` **included**, and says so in
+its own failure text. The same correct mixed spec injected into a file in that guard's scope reds it
+either way: as `(proc_open -> unclassified)` with the fix and as `(proc_open -> inherited)` with the arrow
+branch reverted. The change **relabels** an offender; it does not stop one. WHY THE FIX STILL EARNS ITS
+PLACE, on the two grounds that survive the measurement: `inherited` is a DEFINITE claim about where fd 2
+goes while `unclassified` is an admission that the splitter cannot tell, which is rule 14; and it removes
+a disagreement between two instruments walking one syntax.
 
 Fixed to `SHAPE_UNCLASSIFIED` for a mixed spec — the answer `ChildLifetimeScanner::keysOf()` already gives
 the same shape, reached independently and documented there as "a mixed spec is unreadable, not half-read".
@@ -13279,21 +13291,175 @@ call the scanner cannot follow now reports **that, naming the callee**, rather t
 one level in — already true in this tree, where `ProcessExecutor::spawnWorker` hands its handle to
 `is_resource`); and the reason names the closer actually found instead of always printing `proc_close`.
 
-**MERGE INSTRUCTION for `DescriptorInheritanceGuardTest::ACCOUNTED_FOR`, once lane b lands.** This is a
-DATA edit in the roster, never a weakening of the check, and the guard's own failure text says the same:
+**⚠️ THE MERGE INSTRUCTION FIRST RECORDED HERE WAS WRONG IN ITS FIRST HALF, AND EXECUTING IT WOULD HAVE
+DELETED E366's OWN HIGH.** WHAT IT SAID: *"DELETE the row `'Sessions/BackgroundSupervisor.php::spawnSession'`.
+Lane b reaps it unconditionally through `ProcessReaper::terminateAndClose($proc)`; the scanner now reads it
+as short-lived."* WHAT IS TRUE NOW, and it was already true when the sentence was written:
 
-1. **DELETE** the row `'Sessions/BackgroundSupervisor.php::spawnSession'`. Lane b reaps it
-   unconditionally through `ProcessReaper::terminateAndClose($proc)`; the scanner now reads it as
-   short-lived and `testNoAccountedForRowIsStale` will red on the stale row. **That red means lane b fixed
-   it.**
-2. **ADD** a row `'Providers/ClaudeCodeProvider.php::completeStream'`. On lane b the reap runs only inside
-   a nested block, so it does not cover every path out of the function; the scanner reports
-   `unclassified` with that reason and `testEveryExposedSpawnIsHandledOrAccountedFor` will red.
+- The call the scanner actually found at that site is **`ProcessReaper::reapIfExited($proc)`**, on the
+  happy path. `terminateAndClose` appears in `spawnSession` only inside the `if ($clientSocket === false)`
+  branch that throws. The prediction's *arithmetic* was right and its *mechanism* was inverted, which is
+  how the underlying defect got past its own author.
+- `reapIfExited()` does **not** reap unconditionally. Read off its source: it waits WITHOUT signalling and,
+  when the child is still running at the end of the budget, `return null`s with the handle untouched. It
+  was nevertheless rostered in `CLOSING_HELPERS`, under that constant's own warning that a row there "is a
+  claim that the helper really closes" — see Ec53-9.
+- So "the scanner reads it as short-lived" was correct, and that was the **bug**, not the fix.
+  `exposedIn()` drops every short site without a trace, so following instruction 1 would have removed
+  E366's HIGH from the guard entirely: not reported and exempted — gone.
 
-Every other row is unchanged. Measured at lane c `d00b9b05` against lane b `b1e732e9`; **if lane b commits
-further after that sha, re-run the prediction rather than trusting this list** — the generator is
-`predict_merge.php` in lane c's scratchpad, and it is twenty lines over the scanner's public `scan()`.
+**RE-MEASURED at lane c `ad149a3e` against lane b's current HEAD `5561bee1`** (six commits past the
+`b1e732e9` the original prediction used, and lane b's tree was dirty in `LSP/LspConnection.php` at the time
+of measurement, so re-run this rather than trusting it):
+
+| symbol | old scanner (`69ee23e9`) | fixed scanner |
+| --- | --- | --- |
+| `Sessions/BackgroundSupervisor.php::spawnSession` | `short` — **silently dropped** | `unclassified`, exposed |
+| `Providers/ClaudeCodeProvider.php::completeStream` | `unclassified`, exposed | `unclassified`, exposed |
+
+**THE CORRECTED MERGE INSTRUCTION.** A DATA edit in the roster, never a weakening of the check:
+
+1. **KEEP** `'Sessions/BackgroundSupervisor.php::spawnSession'`, count 1. Lane b did not make this site
+   short-lived and the row is not stale. Its reason should be updated to name what the scanner now says —
+   `ProcessReaper::terminateAndClose($proc)` runs only in the nested throw branch, and the happy path's
+   `reapIfExited($proc)` is a best-effort reap.
+2. **ADD** `'Providers/ClaudeCodeProvider.php::completeStream' => ['count' => 1, 'reason' => …]`. On lane b
+   the reap runs only inside a nested block, so it does not cover every path out of the function; the
+   scanner reports `unclassified` with that reason and `testEveryExposedSpawnIsHandledOrAccountedFor` reds.
+
+Every other row is unchanged. The generator is `census.php` in lane c's round-53 scratchpad — thirty lines
+over the scanner's public `scan()`, and it prints per-symbol counts because the roster now carries them.
 
 **Step:** a guard whose subject another lane is editing should be run against that lane's tree before the
 merge, not after. It cost four minutes here and turned two merge-time red herrings into a two-line data
 edit written down in advance.
+
+---
+
+### Ec53-9 — a best-effort reaper was rostered as a close, and it deleted E366's own HIGH from the guard
+
+**Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: **BLOCKING — guard hole in the
+hiding polarity.** **FIXED** in `tests/Support/ChildLifetimeScanner.php`.
+
+`ChildLifetimeScanner::CLOSING_HELPERS` carried a bolded contract: *"⚠️ A ROW HERE IS A CLAIM THAT THE
+HELPER REALLY CLOSES. Adding the name of something that merely inspects a handle would wave a genuine leak
+through, which is the polarity this class exists to avoid."* The commit that wrote that sentence also
+added `'processreaper::reapifexited'` underneath it.
+
+Read off the helper's own source rather than its name — lane b's `Support/ProcessReaper::reapIfExited()`
+waits WITHOUT signalling and, on the branch where the child is still running at the end of the budget,
+`return null`s with the handle untouched. Its own doc-block says so: *"otherwise leave the handle to the
+destructor."* It is a conditional best-effort reap by construction, deliberately so, for a launcher that
+must not SIGTERM a process mid-double-fork.
+
+**MEASURED consequence, at lane c `69ee23e9` over lane b HEAD `5561bee1`:**
+`Sessions/BackgroundSupervisor.php::spawnSession` — E366's own HIGH, a launcher that double-forks a
+detached daemon which inherits fd 3+ for its whole life — read as `short`. `exposedIn()` `continue`s past
+every short site, so the row would have vanished from the guard on the merge. Not reported and exempted:
+**gone.** And the row was entirely unpinned: deleting it survived both guards, 41 tests / 99 assertions /
+rc 0, because no fixture spelled any roster row but `terminateAndClose`.
+
+**Fixed by splitting the roster, so the safe answer is the easy one.** `CLOSING_HELPERS` is now
+`name => measured reason` and holds only helpers that reap on EVERY path. `BEST_EFFORT_REAPERS` is the
+safe half: its rows produce `LIFETIME_UNCLASSIFIED`, which the guard treats as exposed, so **a wrong row
+there cannot delete a finding.** The unfollowable-call reason no longer ends *"roster it in
+CLOSING_HELPERS"* full stop — that sentence prescribed this exact defect to the next reader. Every row in
+both rosters is now spent by a data-provider fixture, and the two rosters may not overlap.
+
+**Step:** when a roster's rows can HIDE findings rather than raise them, one row per fixture is the floor,
+and a second roster with the safe polarity is worth more than a stronger warning comment. A warning asks
+a reader to judge a method in another package from its name; a second list lets them decline to.
+
+---
+
+### Ec53-10 — an exemption keyed by function was a licence for the function, not for the spawn
+
+**Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: **BLOCKING — the guard's headline
+invariant did not hold.** **FIXED** in `tests/Support/DescriptorInheritanceGuardTest.php`.
+
+`ACCOUNTED_FOR` and `NOT_A_SPAWN` were keyed `File.php::function` with boolean membership, so one row
+absorbed unboundedly many spawns in that function — and a rostered function is precisely where a new
+offender is least likely to be looked at.
+
+**MEASURED.** Injecting a second long-lived `proc_open()` with nothing said about fd 3+ into
+`MCP/StdioMcpServer::start()`, which has a row, left the guard **green**: 5 tests, 13 assertions, rc 0.
+The identical spawn in a method with no row reddened it, so the guard was live everywhere except behind
+its own exemptions. Not hypothetical: `Hooks/ScriptHook.php::executeStaged()` holds two `proc_open()`
+sites in one function today, both short-lived, and the day one is not, nobody hears about it.
+
+The correct pattern was already one directory away in `ChildStderrCaptureTest::ACCEPTED_DISCARDED_STDERR`,
+which carries a per-file `count` and comments it: *"Spent one at a time, so a second discarded site in an
+exempted file is still reported."* The new guard regressed off its own sibling.
+
+Both rosters now carry `{count, reason}`; all seven current counts measured at 1. The spending rule lives
+in ONE method that the synthetic fixture and the real scan both go through — a rule verified against a
+fixture and re-implemented inline for the tree is two rules, and the one that matters is the untested one.
+Staleness now compares counts rather than membership, so a row is wrong in both directions.
+
+**Step:** an exemption's KEY is its scope. Ask what else that key admits before writing the row.
+
+---
+
+### Ec53-11 — DEFERRED: no fixture pins what a `CLOSING_HELPERS` row MEANS, and a syntactic check cannot supply one
+
+**Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: residual of Ec53-9. Reported, not
+hidden.
+
+Ec53-9's fixtures make every roster row non-deletable and pin its polarity. They do **not** prove that the
+named helper really closes on every path — that is a fact about a method in `src/`, in another package,
+and it cannot be settled from a synthetic string. The review's prescription was a per-row semantic
+fixture. **Measured against the tree, a purely syntactic version of that check cannot work**, and this is
+worth writing down because it will be proposed again:
+
+- "the method contains a `proc_close()` at its own top brace level" — `reapIfExited()` **passes** this. Its
+  `return \proc_close($process);` is at body top level; the conditionality comes from an earlier guard.
+- "the method has no early return" — **both** helpers fail it. `terminateAndClose()` opens with
+  `if (!\is_resource($process)) { return null; }` exactly as `reapIfExited()` does.
+
+The genuine discriminator is *what the early return is guarding*: an idempotency check on a value that is
+not a live handle (safe) versus a timing check on one that is (not safe). No token walk tells those apart.
+
+**What would actually close it**, when the symbol is present in the same tree — i.e. **post-merge with
+lane b**: a check that every rostered helper name RESOLVES to a method that exists in `src/`, so a row
+naming a symbol that never arrives, or one left behind by a rename, is dead rather than silently
+decorative. That much is mechanical and safe. Paired, per rule 15, with a synthetic known-positive and
+known-negative pushed through the same resolver in the same test. It cannot be written in lane c today —
+`ProcessReaper` does not exist here, so the assertion would red pre-merge and go green after, which is
+backwards.
+
+---
+
+### Ec53-12 — DEFERRED: `exposedIn()` drops `LIFETIME_SHORT` silently, which is the entire attack surface of `CLOSING_HELPERS`
+
+**Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: guard observability. Reported, not
+hidden.
+
+Ec53-9 was findable only because someone read a roster row against its helper's source. The mechanism that
+made it costly is structural and is still there: `DescriptorInheritanceGuardTest::exposedIn()` `continue`s
+past every `LIFETIME_SHORT` site, so any future roster row that is wrong in the `reapIfExited` direction
+removes a site from the guard **with no trace anywhere in the output**. There is no assertion, anywhere,
+about the set of sites the guard decided not to look at.
+
+A cheap improvement: assert that the count of `short` sites in `src/` matches a recorded number, or —
+better, since a cardinality in a lane worktree is invalidated by the next merge (rule 18) — that every
+`short` site's named closer is a member of one of the two rosters or the literal `proc_close`. The second
+form is derived from the tree and carries no number.
+
+Not done this round: it is a new assertion over `src/` in a round where two other lanes are editing
+`src/`, and it would red on their merges for reasons unrelated to their changes.
+
+---
+
+### Ec53-13 — DEFERRED: `ForkedChildExitScanner`'s roster may share Ec53-10's key-collision shape
+
+**Recorded 2026-08-24 by round-53 lane c (review stage).** Severity: unknown, one grep to find out.
+Reported, not hidden.
+
+Ec53-10 was a boolean-keyed exemption roster absorbing multiple sites per key. `ChildStderrCaptureTest`
+was checked and is fine (it carries counts). `ForkedChildExitScanner` and its guard are in this package,
+walk the same family of syntax, and were not examined — they are outside this round's diff and in no
+lane's file list. The question is one grep: is any exemption roster there keyed by file or by function
+with boolean membership? If so it has the same hole.
+
+**Step:** a defect found in one exemption roster is a question to ask of every exemption roster in the
+package, and the asking is cheap enough that not doing it needs a reason.
