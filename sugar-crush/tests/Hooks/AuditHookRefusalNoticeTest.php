@@ -186,18 +186,46 @@ final class AuditHookRefusalNoticeTest extends TestCase
     }
 
     /**
-     * THE LATCH: three refused calls, one line.
+     * THE LATCH: three refused calls, one line — and the three refusals are
+     * deliberately about THREE DIFFERENT DIRECTORIES.
      *
      * This is the assertion that answers E345's cost objection, so it is made
-     * against three real `execute()` calls rather than against the latch flag.
+     * against real `execute()` calls rather than against the latch flag.
+     *
+     * WHY THE THREE DIRECTORIES, WHICH IS THE WHOLE POINT OF THE TEST AND WAS
+     * NOT IN ITS FIRST VERSION. That version drove three calls at ONE bad
+     * directory and asserted one notice, and it PASSED with the latch deleted
+     * — found by mutation, not by reading. {@see RuntimeNoticeSink::drain()}
+     * de-duplicates identical rows before it returns them, so three identical
+     * messages arrive as one whatever this class does. The assertion was
+     * measuring the sink's dedup and reporting it as evidence about a latch it
+     * never touched.
+     *
+     * Three distinct directories produce three distinct messages, which
+     * `drain()` cannot merge — so the count that comes back is the number of
+     * times THIS class decided to speak, which is the property under test.
      */
-    public function testThreeRefusedCallsProduceExactlyOneNotice(): void
+    public function testThreeRefusalsAboutDifferentDirectoriesStillProduceOneNotice(): void
     {
-        $directory = $this->scratchDirectory();
-        mkdir($directory, 0o777, true);
-        chmod($directory, 0o755);
+        $directories = [];
+        for ($i = 0; $i < 3; $i++) {
+            $directory = $this->scratchDirectory();
+            mkdir($directory, 0o777, true);
+            chmod($directory, 0o755);
+            $directories[] = $directory;
+        }
 
-        $notices = $this->drainAfterUnconfiguredWriteTo($directory, times: 3);
+        $notices = [];
+        foreach ($directories as $directory) {
+            $notices = [...$notices, ...$this->drainAfterUnconfiguredWriteTo($directory)];
+        }
+
+        // THE CONTROL FOR THE CONTROL: the three messages really are distinct,
+        // so a `1` below cannot be `drain()`'s dedup wearing the latch's hat.
+        // Derived by asking the class, not by re-spelling its format.
+        $reason = new \ReflectionMethod(AuditHook::class, 'directoryRefusalReason');
+        $spoken = array_map(static fn (string $d): string => (string) $reason->invoke(null, $d), $directories);
+        self::assertCount(3, array_unique($spoken), 'the three refusals say the same thing, so dedup could explain a 1');
 
         self::assertCount(1, $notices, 'the notice is per call rather than per process');
     }
