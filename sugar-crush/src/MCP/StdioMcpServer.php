@@ -509,9 +509,24 @@ final class StdioMcpServer implements McpServer
             }
 
             if ($written === 0) {
-                // Reported writable and took nothing. EOF on the read end means
-                // the child is gone; otherwise it is a spurious wakeup, so yield
+                // Reported writable and took nothing: a spurious wakeup. Yield
                 // rather than spinning.
+                //
+                // ⚠️ THE `feof()` BELOW IS NOT THE DEAD-CHILD DETECTOR, AND AN
+                // EARLIER DRAFT OF THIS COMMENT SAID IT WAS. MEASURED on this
+                // host (PHP 8.3.6, Linux 6.8), three consecutive takes, writing
+                // to the stdin pipe of a child that has already exited:
+                // `stream_select()` reports the pipe WRITABLE, `fwrite()`
+                // returns `false`, and `feof()` returns **false** — a write pipe
+                // does not report the reader's exit through `feof()` at all. So
+                // the branch that actually catches a dead child is the
+                // `$written === false` above it, every time.
+                //
+                // WHY THIS STILL EARNS ITS PLACE: it is the only exit this
+                // branch has. If some stream ever does answer `feof()` true here
+                // while still accepting a zero-length write, the alternative is
+                // an unbounded loop; and the cost when it never fires is one
+                // `feof()` per spurious wakeup.
                 if (feof($this->pipes[0])) {
                     return false;
                 }
