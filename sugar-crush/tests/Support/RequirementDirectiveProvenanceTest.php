@@ -83,6 +83,15 @@ final class RequirementDirectiveProvenanceTest extends TestCase
 
     private const RUNNING_FIXTURE = self::FIXTURE_DIR . '/ProseWithoutTheSigilFixture.php';
 
+    private const METHOD_SKIPPING_FIXTURE = self::FIXTURE_DIR . '/MethodProseQuotingADirectiveFixture.php';
+
+    /** Every fixture this guard owns, so no arm can quietly cover a subset. */
+    private const FIXTURES = [
+        self::SKIPPING_FIXTURE,
+        self::METHOD_SKIPPING_FIXTURE,
+        self::RUNNING_FIXTURE,
+    ];
+
     /**
      * NO TEST IN THIS TREE OWES ITS SKIPPABILITY TO A COMMENT.
      *
@@ -107,18 +116,13 @@ final class RequirementDirectiveProvenanceTest extends TestCase
             . 'observed defect used — is not among the derived ones, so the derivation is '
             . 'answering about something other than requirements');
 
+        [$resolved, $unresolvable] = self::partitionByResolvability(
+            array_keys(self::collectedTestFiles()),
+            static fn (string $class): bool => class_exists($class),
+        );
+
         $found = [];
-        $unresolvable = [];
-
-        foreach (self::collectedTestFiles() as $relative => $absolute) {
-            $class = self::classFor($relative);
-
-            if (!class_exists($class)) {
-                $unresolvable[] = $relative . ' (expected class ' . $class . ')';
-
-                continue;
-            }
-
+        foreach ($resolved as $relative => $class) {
             foreach (self::requirementsOf($class, $predicates) as $key => $what) {
                 $found[$relative . '::' . $key] = $what;
             }
@@ -136,15 +140,15 @@ final class RequirementDirectiveProvenanceTest extends TestCase
         self::assertNotSame([], self::collectedTestFiles(), 'the walk found no test file at all, '
             . 'so this census is a statement about a directory listing that is not running');
 
-        $unrostered = array_diff_key($found, self::DELIBERATE_REQUIREMENTS);
+        [$unrostered, $stale] = self::rosterVerdicts($found, self::DELIBERATE_REQUIREMENTS);
+
         self::assertSame([], $unrostered, self::unrosteredMessage($unrostered));
 
-        $stale = array_diff_key(self::DELIBERATE_REQUIREMENTS, $found);
         self::assertSame([], $stale, \sprintf(
             "%d row(s) describe a requirement that is no longer there. Delete them — a row that "
             . "outlives the thing it permits is a standing permission nobody re-argued.\n  %s",
             \count($stale),
-            \implode("\n  ", array_keys($stale)),
+            \implode("\n  ", $stale),
         ));
     }
 
@@ -162,15 +166,33 @@ final class RequirementDirectiveProvenanceTest extends TestCase
     {
         $predicates = self::requirementPredicates();
 
-        $skipping = self::requirementsOf(self::classFor(self::SKIPPING_FIXTURE), $predicates);
-        self::assertNotSame([], $skipping, 'the parser reported NO requirement for a fixture '
-            . 'whose doc-comment carries one, so the walk above is looking through a dead '
-            . 'instrument and every file it visits comes back clean');
+        self::assertSame(
+            ['*' => 'isRequiresPhp'],
+            self::requirementsOf(self::classFor(self::SKIPPING_FIXTURE), $predicates),
+            'the CLASS-level walk reported nothing for a fixture whose class doc-comment carries '
+            . 'a directive, so it is a dead instrument and every file it visits comes back clean',
+        );
 
-        $running = self::requirementsOf(self::classFor(self::RUNNING_FIXTURE), $predicates);
-        self::assertSame([], $running, 'the parser reported a requirement for a fixture whose '
-            . 'paragraph names one only in words, so the walk above reports every explanatory '
-            . 'paragraph in the tree and the remedy it recommends does not work');
+        // THE SECOND GRAMMATICAL SHAPE, AND IT IS A SEPARATE PARSER CALL. With
+        // only the class-level row above, disabling the method walk entirely
+        // was GREEN — measured. A control table whose every row wears one shape
+        // cannot tell you about the shape it omits, and a directive on a METHOD
+        // is the commoner of the two.
+        self::assertSame(
+            ['testTheBodyNeverRuns' => 'isRequiresPhp'],
+            self::requirementsOf(self::classFor(self::METHOD_SKIPPING_FIXTURE), $predicates),
+            'the METHOD-level walk did not report exactly the one method carrying a directive. '
+            . 'Nothing means the method walk is dead; the neighbour method appearing too means '
+            . 'it attributes a directive to methods that do not carry one',
+        );
+
+        self::assertSame(
+            [],
+            self::requirementsOf(self::classFor(self::RUNNING_FIXTURE), $predicates),
+            'the parser reported a requirement for a fixture whose paragraph names one only in '
+            . 'words, so the walk above reports every explanatory paragraph in the tree and the '
+            . 'remedy it recommends does not work',
+        );
     }
 
     /**
@@ -210,7 +232,10 @@ final class RequirementDirectiveProvenanceTest extends TestCase
         }
 
         self::assertSame(
-            [self::SKIPPING_FIXTURE => 'testTheBodyNeverRuns'],
+            [
+                self::METHOD_SKIPPING_FIXTURE => 'testTheBodyNeverRuns',
+                self::SKIPPING_FIXTURE => 'testTheBodyNeverRuns',
+            ],
             $skipped,
             "PHPUnit did not report exactly the quoted-directive fixture as skipped. If it "
             . "reported NOTHING, a comment no longer becomes metadata and this whole guard has "
@@ -227,9 +252,9 @@ final class RequirementDirectiveProvenanceTest extends TestCase
      * — which is a number this project reads as evidence that the local
      * dependency closure is intact, so moving it costs more than a stray skip.
      */
-    public function testNeitherFixtureIsCollectedByThisSuite(): void
+    public function testNoFixtureIsCollectedByThisSuite(): void
     {
-        foreach ([self::SKIPPING_FIXTURE, self::RUNNING_FIXTURE] as $fixture) {
+        foreach (self::FIXTURES as $fixture) {
             self::assertStringEndsWith(self::FIXTURE_SUFFIX, $fixture, $fixture . ' does not carry '
                 . 'the fixture suffix');
             self::assertStringEndsNotWith(self::COLLECTED_SUFFIX, $fixture, $fixture . ' ends in '
@@ -249,13 +274,13 @@ final class RequirementDirectiveProvenanceTest extends TestCase
      * That is the shape where a fixture's expected value is also what a dead
      * instrument returns, and it is worth one assertion to close.
      */
-    public function testNeitherFixtureContainsASkipMarkingCall(): void
+    public function testNoFixtureContainsASkipMarkingCall(): void
     {
         // Built by concatenation so this file does not itself carry the token
         // a later census may sweep for.
         $marker = 'markTest' . 'Skipped';
 
-        foreach ([self::SKIPPING_FIXTURE, self::RUNNING_FIXTURE] as $fixture) {
+        foreach (self::FIXTURES as $fixture) {
             $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/' . $fixture);
 
             self::assertStringNotContainsString($marker, $source, $fixture . ' calls a '
@@ -264,6 +289,209 @@ final class RequirementDirectiveProvenanceTest extends TestCase
             self::assertStringNotContainsString('markTest' . 'Incomplete', $source, $fixture
                 . ' marks itself incomplete, which PHPUnit reports alongside skips');
         }
+    }
+
+    /**
+     * What the roster says about a scan: the requirements that owe a row, and
+     * the rows that have outlived the requirement they permit.
+     *
+     * EXTRACTED BECAUSE THE ARMS IT REPLACES WERE UNPINNED, and that is a
+     * measurement rather than a suspicion. Emptying the found set immediately
+     * before the roster diff left this file GREEN — 6 tests, 25 assertions, OK,
+     * run filtered to this file, so the verdict is a claim about the guards in
+     * it. The reason is the one E322 gives: the census asserts an ABSENCE over
+     * a population that produces none, so an arm reporting nothing and an arm
+     * that is right are the same green.
+     *
+     * @param  array<string,string> $found  key => predicate name
+     * @param  array<string,string> $roster key => reason
+     * @return array{list<string>, list<string>}
+     */
+    private static function rosterVerdicts(array $found, array $roster): array
+    {
+        $unrostered = [];
+        foreach ($found as $key => $kind) {
+            if (!isset($roster[$key])) {
+                $unrostered[$key] = $kind;
+            }
+        }
+
+        $stale = [];
+        foreach ($roster as $key => $reason) {
+            if (!\array_key_exists($key, $found)) {
+                $stale[] = $key;
+            }
+        }
+
+        return [$unrostered, $stale];
+    }
+
+    /**
+     * KNOWN-ANSWER TABLE FOR {@see rosterVerdicts()}, in both polarities.
+     *
+     * The rows that must report nothing are as load-bearing as the rows that
+     * must report: without the first an arm that reports everything passes,
+     * without the second an arm that reports nothing passes. Keys are written
+     * in BOTH shapes the walk produces — `::*` for a class-level requirement
+     * and `::<method>` for a method-level one — because a classifier keyed on
+     * the wrong half of that string would answer correctly for one and not the
+     * other.
+     *
+     * @param array<string,string> $found
+     * @param array<string,string> $roster
+     * @param array<string,string> $unrostered
+     * @param list<string>         $stale
+     *
+     * @dataProvider rosterCases
+     */
+    public function testTheRosterArmAnswersCasesWhoseAnswerIsKnown(
+        string $why,
+        array $found,
+        array $roster,
+        array $unrostered,
+        array $stale,
+    ): void {
+        self::assertSame([$unrostered, $stale], self::rosterVerdicts($found, $roster), $why);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: array<string,string>, 2: array<string,string>, 3: array<string,string>, 4: list<string>}>
+     */
+    public static function rosterCases(): iterable
+    {
+        $why = 'a fixture reason, not a claim about the tree';
+
+        yield 'a method-level requirement with no row is reported' => [
+            'the arm stopped reporting the one thing this guard exists to report',
+            ['a/ATest.php::testX' => 'isRequiresPhp'], [],
+            ['a/ATest.php::testX' => 'isRequiresPhp'], [],
+        ];
+        yield 'a class-level requirement with no row is reported' => [
+            'the class-level key shape is not reported, so a directive in a class doc-comment '
+                . 'is invisible to the roster arm',
+            ['a/ATest.php::*' => 'isRequiresPhp'], [],
+            ['a/ATest.php::*' => 'isRequiresPhp'], [],
+        ];
+        yield 'a requirement WITH a row is spared' => [
+            'the roster does nothing, so every deliberate requirement is reported as an offender',
+            ['a/ATest.php::testX' => 'isRequiresPhp'], ['a/ATest.php::testX' => $why], [], [],
+        ];
+        yield 'a row keyed on the same FILE does not spare another method in it' => [
+            'the roster lookup is keyed on the file rather than on the test, so one row spares '
+                . 'every requirement in a file',
+            ['a/ATest.php::testX' => 'isRequiresPhp'], ['a/ATest.php::testY' => $why],
+            ['a/ATest.php::testX' => 'isRequiresPhp'], ['a/ATest.php::testY'],
+        ];
+        yield 'a class-level row does not spare a method-level requirement in the same file' => [
+            'the two key shapes collapse into one, so a rostered class-level directive licenses '
+                . 'every method in the file',
+            ['a/ATest.php::testX' => 'isRequiresPhp'], ['a/ATest.php::*' => $why],
+            ['a/ATest.php::testX' => 'isRequiresPhp'], ['a/ATest.php::*'],
+        ];
+        yield 'a row whose requirement is gone is stale' => [
+            'a row that outlived its requirement was not reported, so the roster can never be '
+                . 'cleaned and grows into a permanent exemption list',
+            [], ['a/ATest.php::testX' => $why], [], ['a/ATest.php::testX'],
+        ];
+        yield 'an empty scan against an empty roster reports nothing' => [
+            'the arm invented an offender out of nothing',
+            [], [], [], [],
+        ];
+    }
+
+    /**
+     * The collected files split into the ones that resolve to a loadable class
+     * and the ones that do not.
+     *
+     * EXTRACTED FOR THE SAME REASON AS {@see rosterVerdicts()}: deleting the
+     * unresolvable append was GREEN, because every file in this tree resolves.
+     * An arm that reports what a clean population never produces cannot be
+     * pinned by that population — only by a table. `$exists` is a parameter so
+     * the table can supply a population that does not resolve without putting
+     * a broken file in the tree.
+     *
+     * @param  list<string>                 $relatives
+     * @param  callable(string): bool       $exists
+     * @return array{array<string,string>, list<string>}
+     */
+    private static function partitionByResolvability(array $relatives, callable $exists): array
+    {
+        $resolved = [];
+        $unresolvable = [];
+
+        foreach ($relatives as $relative) {
+            $class = self::classFor($relative);
+
+            if (!$exists($class)) {
+                $unresolvable[] = $relative . ' (expected class ' . $class . ')';
+
+                continue;
+            }
+
+            $resolved[$relative] = $class;
+        }
+
+        return [$resolved, $unresolvable];
+    }
+
+    /**
+     * KNOWN-ANSWER TABLE FOR {@see partitionByResolvability()}.
+     *
+     * RULE: GO RED ON WHAT YOU CANNOT PARSE. A collected file that does not
+     * resolve to a class is a file this guard asked nothing about, which is
+     * indistinguishable from a clean one unless the walk says so — and saying
+     * so is the branch a tree where everything resolves can never exercise.
+     *
+     * @dataProvider resolvabilityCases
+     *
+     * @param list<string>         $relatives
+     * @param list<string>         $unresolvable
+     * @param array<string,string> $resolved
+     */
+    public function testTheResolvabilitySplitAnswersCasesWhoseAnswerIsKnown(
+        string $why,
+        array $relatives,
+        array $missing,
+        array $resolved,
+        array $unresolvable,
+    ): void {
+        [$actualResolved, $actualUnresolvable] = self::partitionByResolvability(
+            $relatives,
+            static fn (string $class): bool => !\in_array($class, $missing, true),
+        );
+
+        self::assertSame([$resolved, $unresolvable], [$actualResolved, $actualUnresolvable], $why);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: list<string>, 2: list<string>, 3: array<string,string>, 4: list<string>}>
+     */
+    public static function resolvabilityCases(): iterable
+    {
+        yield 'a file that resolves is handed on with its class' => [
+            'a resolvable file was dropped, so the walk asks nothing about most of the tree',
+            ['tests/Support/ATest.php'], [],
+            ['tests/Support/ATest.php' => 'SugarCraft\\Crush\\Tests\\Support\\ATest'], [],
+        ];
+        yield 'a file that does not resolve is REPORTED, not skipped' => [
+            'an unresolvable file was silently dropped, which reads exactly like a clean one',
+            ['tests/Support/GhostTest.php'], ['SugarCraft\\Crush\\Tests\\Support\\GhostTest'],
+            [], ['tests/Support/GhostTest.php (expected class SugarCraft\\Crush\\Tests\\Support\\GhostTest)'],
+        ];
+        yield 'the two are separated within one population' => [
+            'one unresolvable file took its resolvable neighbours down with it, or vice versa',
+            ['tests/A/OneTest.php', 'tests/B/GhostTest.php', 'tests/C/TwoTest.php'],
+            ['SugarCraft\\Crush\\Tests\\B\\GhostTest'],
+            [
+                'tests/A/OneTest.php' => 'SugarCraft\\Crush\\Tests\\A\\OneTest',
+                'tests/C/TwoTest.php' => 'SugarCraft\\Crush\\Tests\\C\\TwoTest',
+            ],
+            ['tests/B/GhostTest.php (expected class SugarCraft\\Crush\\Tests\\B\\GhostTest)'],
+        ];
+        yield 'an empty population produces two empty halves' => [
+            'the split invented a file out of nothing',
+            [], [], [], [],
+        ];
     }
 
     /**
