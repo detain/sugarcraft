@@ -48,11 +48,45 @@ final class Renderer
      * When adaptive size is set, the renderer clamps the output grid to the
      * available rows and columns so the GIF never overflow the viewport.
      *
+     * ## WHAT THIS ASKED ABOUT, AND WHY IT CHANGED
+     *
+     * WHAT IT SAID: `SizeIoctl::query((int) STDOUT)`, under a `@throws` line
+     * promising the exception means STDOUT is not a TTY.
+     *
+     * WHAT IS TRUE: an `(int)` cast of a PHP stream yields its RESOURCE ID,
+     * not its file descriptor. MEASURED, PHP 8.3.6, three takes, identical
+     * every time: `(int) STDOUT` is **2**, and descriptor 2 is STDERR. So it
+     * asked the kernel for STDERR's window size while its own doc-block
+     * promised an answer about STDOUT.
+     *
+     * That is harmless only while stderr happens to be the same terminal.
+     * Redirect stderr and keep stdout on the terminal — `php demo.php
+     * 2>err.log`, an entirely routine invocation — and the two descriptors
+     * stop naming the same thing. MEASURED under a real tty, PHP 8.3.6,
+     * three takes, identical every time:
+     *
+     *     posix_isatty(1)  [real STDOUT] = true
+     *     posix_isatty(2)  [real STDERR] = false
+     *     SizeIoctl::query(1) -> succeeds
+     *     SizeIoctl::query(2) -> RuntimeException: Cannot query size of non-tty fd
+     *
+     * — so the method threw on a live terminal, and the diagnostic a caller
+     * saw pointed at STDOUT, which was demonstrably fine. Unlike the rest of
+     * this cast family it needed no unusual process state, only a shell
+     * redirection.
+     *
+     * WHY THE CAST IS NOT SIMPLY DELETED: `SizeIoctl::query()` takes an `int`
+     * descriptor and there is no portable way to get one out of a PHP stream.
+     * The defect was the wrong number, not the presence of a number. STDOUT's
+     * descriptor is the literal 1, which is correct and total.
+     *
      * @throws \RuntimeException if STDOUT is not a TTY
      */
     public static function withAdaptiveSize(): self
     {
-        $size = SizeIoctl::query((int) STDOUT);
+        // Descriptor 1, spelled as the literal. NOT `(int) STDOUT`, which is
+        // the resource id 2 and names STDERR. See the doc-block above.
+        $size = SizeIoctl::query(1);
         return new self($size['rows'], $size['cols']);
     }
 

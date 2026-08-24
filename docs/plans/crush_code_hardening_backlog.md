@@ -13101,3 +13101,459 @@ box" and its reviewer found **0** and flagged the discrepancy. Both are correct.
 claim, and the backlog should not record it as one.
 
 ---
+
+### Ea53-1 — E368's step for site 3 is not implementable as written, and the reason generalises
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: prescription refuted. **Measured, PHP 8.3.6.**
+
+E368's STEP says of the `/dev/tty` arm of `PosixBackend::size()`: *"Site 3 should ask about the handle it
+just opened rather than a number derived from it."* That cannot be done. `SizeIoctl::query()` is
+`query(int $fd)` and `TermiosFactory::open()` is `open(int $fd)` — **neither accepts a resource**, and PHP
+publishes no portable call that maps a stream handle to its descriptor. `TtyDetect::isAtty()` could take
+the prescription because `stream_isatty()` accepts a resource; the ioctl and termios sinks cannot.
+
+So the shipped fix asks **libc** to open the device, which returns a genuine descriptor:
+`PosixBackend::openDeviceDescriptor()` / `closeDeviceDescriptor()`. Measured, three takes, in a plain
+non-tty CLI process: `open("/dev/tty", O_RDONLY)` = -1 (ENXIO, no controlling terminal),
+`open("/dev/ptmx", O_RDONLY)` = descriptor 3 with `posix_isatty(3) === true`.
+
+**The generalisable part**: a prescription phrased as "pass the object instead of the number" is only
+available where the SINK has a resource-accepting overload. Before writing that step for sites 2 and 4,
+check the sink's signature — for both of them it is `int`, so the same prescription will fail there too.
+
+**And a stronger measurement than the backlog carried.** E368 called site 3 "wrong on every run". It is
+worse than that: `SizeIoctl::query()` opens with `\posix_isatty($fd)` and throws when it fails, and the
+resource id never names a tty. Measured under a real pty (`script -qec`), PHP 8.3.6, three takes: the
+handle's resource id and its real descriptor were different numbers, `posix_isatty()` answered false
+for the resource id and true for the descriptor, and `SizeIoctl::query(<resource id>)` threw.
+*The resource id is not quoted on purpose* — an earlier revision of this entry named one and called it
+measured; it counts the streams the measuring process opened first, so it moves with the harness (5 in
+the original take, 15 on re-measure, into the hundreds under the suite). `candy-core`'s pre-existing
+`TtyDetectTest` had already recorded exactly that about the same cast. The invariant is only that the
+two numbers differ. **The arm therefore
+threw on every invocation it ever had and silently fell through to the `stty` shell-out below it — it had
+never once returned an answer in its life.** The `stty -F /dev/tty size` arm has been doing that arm's job
+throughout.
+
+---
+
+### Ea53-2 — sites 2 and 4 are still open, and closing them is a constructor change
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: correctness, latent. **Deliberately deferred;
+judged in the census roster rather than left unrecorded.**
+
+E368 sites 2 (`PosixBackend::size()`'s first arm) and 4 (`PosixBackend::enableRawMode()`) both spell the
+descriptor `$fd = (int) $this->stream` one to two lines above the sink. They are latent because
+`$this->stream` defaults to `STDIN`, whose resource id is 1 and whose descriptor is 0, and 0 and 1 name
+the same device in an ordinary terminal.
+
+They were not fixed with the rest because the fix is not local: `$this->stream` is an arbitrary caller
+supplied resource, so the only correct answers are (a) carry the descriptor alongside the stream through
+the constructor, or (b) resolve `STDIN`/`STDOUT`/`STDERR` to 0/1/2 and refuse an injected stream. Both
+change `PosixBackend::__construct()`, which `SugarCraft\Core\Util\Tty` and every `new Tty(null, …)` call
+site reach — a wider blast radius than the two one-line fixes shipped beside them, and one that
+`TtyStreamArgumentCensusTest` in `sugar-crush` already has opinions about.
+
+Both now carry a judged roster row in
+`candy-core/tests/Util/Tty/DescriptorSinkArgumentCensusTest::ROSTER`, classified
+`INT_CAST_VIA_VARIABLE`. **That row is itself the guard**: if someone fixes the assignment above the sink,
+the classification changes to `VARIABLE` and the census fails until the judgement is rewritten.
+
+---
+
+### Ea53-3 — the `finally` that closes the `/dev/tty` descriptor is not behaviourally pinnable here
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: unpinned invariant. **Stated because the gap is
+structural, not because the guard was skipped.**
+
+`PosixBackend::size()`'s third arm now closes its descriptor in a `finally`. The pair
+`openDeviceDescriptor()`/`closeDeviceDescriptor()` IS pinned — 25 open/close cycles with an fd-set
+comparison, and removing the close reds it (and, incidentally, reds `TtyDetectTest` too, because leaked
+ptmx handles make its dev+inode walk ambiguous, which is that helper failing loudly exactly as its
+doc-block promises). What is NOT pinned is the `finally` in `size()` itself.
+
+The reason is measurable rather than a matter of effort: on a host with no controlling terminal — which is
+every CI runner and this box's PHPUnit process — `open("/dev/tty")` returns -1, the arm acquires no
+descriptor, and there is nothing to leak. A test cannot distinguish a present `finally` from an absent one
+there. Reaching the arm at all also requires arms 1 and 2 to fail first, and arm 4 (`stty -F /dev/tty
+size`) returns the same answer arm 3 does, so even under a terminal the two arms are not separable from
+outside.
+
+**Step, if it is ever judged worth it**: give `size()` the device path as an `@internal` parameter the way
+`openDeviceDescriptor()` has one, so a test can point the arm at `/dev/ptmx` and count descriptors
+across repeated calls. That is a test seam on a public method and was not judged worth the API surface
+for a two-line `finally`.
+
+---
+
+### Ea53-4 — `PosixBackendRestoreLastTest` asserts almost nothing, and one of its two tests is `assertTrue(true)`
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: dead guard. **Verified by symbol. Not edited — the
+file is pre-existing and the new coverage was added alongside rather than folded into it.**
+
+`candy-core/tests/Util/Tty/PosixBackendRestoreLastTest`:
+
+  - `testRestoreLastNoOpWithoutTtyStdin()` ends `$this->assertTrue(true, 'restoreLast completed without
+    throwing')`. Its doc-comment claims it "verifies no stty -g shell-out is attempted"; nothing in it
+    can observe a shell-out. It passes against a deleted method body.
+  - `testRestoreLastRoundTripsViaPtyMaster()` opens a pty, applies raw mode to the MASTER, calls
+    `restoreLast()`, then asserts `isAtty()` is unchanged — a property of the device, not of anything
+    `restoreLast()` did. `restoreLast()` never touches that master: it reads descriptor 0. The test
+    passed identically before and after this round's fix moved that descriptor from 1 to 0, which is the
+    plainest possible demonstration that it does not observe the thing it is named for.
+
+The descriptor question is now pinned by `PosixBackendRestoreLastDescriptorTest` (two child processes,
+descriptors 0 and 1 arranged both ways round a `/dev/ptmx` handle). **What remains unpinned is the
+round-trip itself** — that a second `restoreLast()` call actually re-applies the snapshot. Closing that
+needs the same child-process shape plus a way to read a termios mode back, which candy-pty deliberately
+does not expose (`struct termios` is opaque there); `stty -F <pts> -a` is the available route.
+
+---
+
+### Ea53-5 — a census's alphabet trap caught in the act, one level down
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: instrument. **Found while building the replacement
+census for E368, before it was ever trusted.**
+
+The replacement scanner (`candy-core/tests/Util/Tty/DescriptorSinkScanner`) was first written to match a
+sink name as a `T_STRING` token. Run against a known-answer fixture it looked perfect. Run against
+`candy-pty/src/` it found `posix_isatty` in `PosixTermios` and `SttyTermios` — and **missed the one in
+`SizeIoctl::query()`**, which is the guard every other member of this defect family ultimately trips over.
+
+The reason: `\posix_isatty(...)`, with the leading backslash the tree uses in that file, is a **single
+`T_NAME_FULLY_QUALIFIED` token in PHP 8**, not a `T_NS_SEPARATOR` followed by a `T_STRING`. A scanner
+matching `T_STRING` alone sees nothing there.
+
+This is E368's own lesson recurring inside the instrument written to fix it, and it was caught only
+because the scanner was pushed over real trees and its output read line by line, not because the fixture
+went green. **A known-answer fixture cannot contain the spelling its author did not think of** — which is
+the same sentence as "a classifier's alphabet is a transcript of the cases it already knows", one level
+down. The census now carries `T_NAME_QUALIFIED`, `T_NAME_FULLY_QUALIFIED` and `T_NAME_RELATIVE`, and
+removing them reds it (mutation M11).
+
+---
+
+### Ea53-6 — E368's population re-derived tree-wide with the corrected instrument: closed but for sites 2 and 4
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: measurement. **The generator is committed this time
+— that is the point of the entry.**
+
+E368's replacement generator was a scratch script and did not survive the round, so its "1832 files across
+58 libraries, 10 sink calls" could not be re-run by anyone. The instrument now lives at
+`candy-core/tests/Util/Tty/DescriptorSinkScanner`, is exercised by
+`candy-core/tests/Util/Tty/DescriptorSinkArgumentCensusTest`, and the census walks **every** `<lib>/src`
+it can find rather than a listed few — a census that enumerates the libraries it looks in can only find
+the defect where someone already suspected it, which is the same failure it was written to replace.
+
+Re-derived, PHP 8.3.6, over this lane's worktree: **58 libraries with a `src/`, 13 sink calls.** *Do not
+trust those two numbers — re-derive them; the census is set-equality on a judged roster precisely so that
+no count is load-bearing.* Of the 13:
+
+  - **2 remain defect-shaped**, both `INT_CAST_VIA_VARIABLE` in `candy-core`'s `PosixBackend` — E368 sites
+    2 and 4, deferred with reasons in Ea53-2 and judged in the roster.
+  - **3 were the sites fixed this round** (E368 sites 3, 5, 6), now `VARIABLE` off a real descriptor,
+    `LITERAL_INT` and `LITERAL_INT`.
+  - **8 were already correct.** Five match E368's carve-out list. **Two do not appear in it at all** —
+    `candy-log/src/Log.php`'s `posix_isatty(\STDERR)` and `candy-vcr/src/Cli/RecordCommand.php`'s
+    `posix_ttyname(\STDIN)`. Both pass the STREAM uncast, which `posix_isatty()` and `posix_ttyname()`
+    accept, so both are correct — but the carve-out list was a hand-read snapshot and it was incomplete,
+    which is the fourth time in this family that a hand-maintained roster of "the ones we know about"
+    has turned out to be a subset.
+  - The remaining one is `candy-pty/src/SizeIoctl.php`'s own `\posix_isatty($fd)` guard, i.e. the check
+    the whole family ultimately trips over.
+
+**No seventh instance exists tree-wide.** That is a claim the first census could not have made, because it
+searched on operand shape; this one searches on the sink and reports anything it cannot classify.
+
+**CORRECTION (round 53, fix pass) — "tree-wide" means two narrower things than it sounds.** First, in the
+FUNCTION spelling only; Ea53-10 covers the method spelling. Second, **in `<lib>/src` only**:
+`presentLibraries()` globs `*/src` and nothing else, so `bin/`, `examples/`, `tools/`, `scripts/` and the
+repo-root `bin`/`tools`/`scripts` are outside it. MEASURED, this lane's worktree, PHP 8.3.6 —
+`grep -rEn 'posix_isatty|posix_ttyname|SizeIoctl::query|TermiosFactory::open' --include=*.php bin tools
+scripts */bin */examples */tools` returns **0 matches**, so the claim happens to hold today; it is not
+guarded, and a descriptor sink added to a `bin/` script would not red anything. Widening the glob is
+cheap; the reason not to do it in this round is Ea53-10's merge hazard, unchanged.
+
+**AND A STANDING CROSS-LANE HAZARD, recorded because it will fire on somebody.** This census reads
+**every** library's `src/`, `sugar-crush/src` included. It lives in candy-core. So a sibling lane that
+adds a `posix_isatty(...)`, `posix_ttyname(...)`, `fcntl(...)`, `SizeIoctl::query(...)` or
+`TermiosFactory::open(...)` call anywhere in the monorepo reds **candy-core's** suite at merge, with no
+candy-core change on either side of the merge. The failure text names the resolution (add a judged roster
+row), which is the point of writing it that way — but the person who hits it will be looking at a red
+package they never touched.
+
+Mutation-verified against the census alone (`--filter DescriptorSinkArgumentCensusTest`): reintroducing
+the cast in `candy-flip/src/Renderer.php`, in `candy-pty/src/SizeIoctl.php`, and in
+`candy-shine/src/Theme.php` each reds it — the last of those being a library no earlier scoping of this
+census would have looked at.
+
+---
+
+### Ea53-7 — the replacement census had the alphabet trap AGAIN, one level further down
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument. **Found and fixed
+this round; recorded because it is the third recurrence of one pattern inside work written to fix that
+pattern.**
+
+Ea53-5 recorded the alphabet trap caught inside the scanner. The scanner's **control fixture** had it too.
+
+`DescriptorSinkScanner::classify()` has TWO returns that answer `UNCLASSIFIED` for a shape it has no word
+for: one inside the accessor-chain walk, and a terminal fallthrough at the end of the method. The fixture
+exercised the first (via a `? :` operand rooted in a variable) and never the second.
+
+**MEASURED — round-53 mutation M8.** Rewriting the terminal fallthrough to answer `VARIABLE` — i.e.
+"silently absorb the operand I cannot name as a benign one", the exact defect the scanner exists to make
+impossible — left the whole census **green**, four tests, twenty-one assertions. Mutating the *other*
+`UNCLASSIFIED` return (M8b) killed it. The two returns were not interchangeable and only one was pinned.
+
+Six operand shapes reach the unpinned branch, isolated by re-running a probe with and without M8 and
+keeping the ones whose classification changed: `0 + 1`, `(0)`, `+1`, `[0][0]`, `'0' . '1'`, `- $x`. What
+they have in common is that they are **rooted in a literal or an operator rather than in a variable or a
+name** — and the fixture's author reached for a variable-rooted example, because every real site in this
+family is variable-rooted. *The fixture's alphabet was a transcript of the tree it was written against.*
+`0 + 1` is now a fixture case and M8 kills.
+
+**The generalisable form**: it is not enough to have a case per CLASSIFICATION. A classifier needs a case
+per RETURN. Two returns answering the same enum value are two separate branches, and a positional
+`assertSame` over kinds cannot tell you which one it walked.
+
+**CORRECTION (round 53, fix pass) — this entry states the rule and then miscounts the returns it applies
+it to, which is the same defect one level up again.** `classify()` has **FOUR** returns answering
+`UNCLASSIFIED`, not two:
+
+  1. the empty-argument guard at the top of the method;
+  2. the single-token fallthrough, after the ladder naming a lone number / variable / constant;
+  3. the return inside the accessor-chain walk (the one this entry called "the first");
+  4. the terminal fallthrough (the one this entry called "the second").
+
+MEASURED, **whole candy-core suite** (not `--filter`), each rewritten to answer `VARIABLE`:
+return 1 (mutation R2) → `818 / 7384 / 25 / rc 0`, **SURVIVED**; return 2 (mutation R9) →
+`818 / 7384 / 25 / rc 0`, **SURVIVED**. Both are reachable: `<sink>()` takes return 1, `<sink>("x")` and
+`<sink>(1.5)` take return 2. Both now have a fixture case, and both mutations kill.
+
+A fifth unpinned branch was found in the same pass and is not a `classify()` return at all —
+`scanSource()`'s "could not bracket the argument list" arm, the one both class doc-blocks name as the
+scanner's whole reason for existing. MEASURED (mutation R3), whole candy-core suite, with the row it
+records deleted and a bare `continue;` left in its place: `818 / 7384 / 25 / rc 0`, **SURVIVED**. The
+scanner could be made to swallow in silence exactly what it cannot read. `scanSource("<?php\n<sink>(")`
+is now a fixture case.
+
+**The rule, restated so it covers what it missed:** a case per return, *counted by reading the returns*,
+and the count includes the ones that are not in the classifier.
+
+---
+
+### Ea53-8 — the census's absence assertion passed on its own against a dead scanner
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: dead-guard shape. **Fixed this
+round.**
+
+`DescriptorSinkArgumentCensusTest::testNoSiteIsSpelledInAWayTheScannerCannotClassify()` asserted `[]`
+across every library's `src/`, and the file's known-positive control lived in a *different test method*.
+
+**MEASURED — round-53 mutation M9a.** With `scanSource()` gutted to walk no tokens at all, that test run
+under `--filter <its own method name>` passed: **1 test, 1 assertion, rc 0**, against an instrument that
+could no longer see anything. Run at file scope (M9) the same mutation reds three of the four tests, so
+the file as a whole was protected — but only for as long as all four run together, which `--filter`, a
+split, or a skip each break.
+
+This is the standing rule about known-positive fixtures at a finer grain than it is usually applied: the
+control must be in the **same test** as the absence, not merely in the same file. The positive now runs
+inside that method, and M9 filtered to it alone kills.
+
+**CORRECTION (round 53, fix pass) — the control was put in the right test and pointed at the wrong entry
+point, so the hole this entry claims to close was still open.** The absence is computed through
+`scanLibraries()` → `DescriptorSinkScanner::scanTree()`. The control added here called
+`DescriptorSinkScanner::scanSource()`. Those are two different entry points and only one was watched.
+
+MEASURED (mutation R1): `scanTree()`'s `if (!is_dir($dir))` rewritten to `if (true)` — the directory walk
+returns `[]` unconditionally — run under `--filter` on the absence test's own method name:
+**`OK (1 test, 2 assertions)`, rc 0, SURVIVED.** Two green assertions, one of them the new control, beside
+an absence computed by a dead walk. At file scope the same mutation reds, which is exactly the protection
+that existed *before* this entry's fix.
+
+The closing sentence above — "M9 filtered to it alone kills" — is true of the `scanSource()` mutation it
+was measured against and false of the entry point the absence uses. **A control kills the mutation you
+aimed it at; that is not the same as covering the assertion you put it next to.** The control now runs a
+fixture directory through `scanTree()`, keeps a `scanSource()` component, and additionally asserts the
+real walk reached something. R1, an equivalent that empties the per-file loop, and the original M9 all
+kill it filtered to that one method.
+
+---
+
+### Ea53-9 — a resource id is not a measurement, and this family's own older doc-block already said so
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: false precision in shipped
+prose. **Corrected this round in three places.**
+
+Three doc-blocks written earlier this round stated the `/dev/tty` divergence as *"MEASURED, PHP 8.3.6,
+under a real pty, three takes, identical each time: the handle's resource id was 5 while the descriptor
+behind it was 4"*. The brief that commissioned the work said 5 and 3. **Re-measured on this box, PHP
+8.3.6, under `script -qec`, three takes: 15 and 4.**
+
+All three readings are correct in their own harness and none of them is a property of the defect. A PHP
+resource id counts the streams the process opened before that one, so it moves with the measuring
+program — the composer autoloader alone accounts for the 5-vs-15 gap. Only the *divergence* is invariant.
+
+The sharp part: `candy-core/tests/Util/TtyDetectTest`, which predates this round, already carried the
+correct framing — it labels its own numbers *"illustrative"* and states that the gap "is a property of how
+many streams happen to be open, and of nothing else". **A more careful sentence about the same cast, in
+the same library, was three files away and was not read.** The three new paragraphs now state the
+invariant, name their harness, and explicitly tell the reader not to take an id out of them.
+
+---
+
+### Ea53-10 — the descriptor census is blind to the METHOD-CALL spelling of its own sinks
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument blind spot, **no
+defect behind it today**. **Deliberately deferred — see the merge hazard at the bottom.**
+
+`DescriptorSinkScanner` reports a sink only in its FUNCTION spelling. Its control fixture asserts, on
+purpose, that `$obj->posix_isatty(0)` is NOT reported — the reasoning being that a method that merely
+shares a name with a POSIX function is not a POSIX function. That reasoning is right for `posix_isatty`
+and wrong for the one sink in the list that is *normally* reached as a method.
+
+**MEASURED, this lane's worktree, generator = `grep -rEn '(->|::)<sink>\s*\(' --include=*.php */src/`
+for each of `DescriptorSinkScanner::FUNCTION_SINKS`:** `posix_isatty` and `posix_ttyname` have **zero**
+method-shaped call sites tree-wide. `fcntl` has **two**, both in
+`candy-pty/src/Posix/PosixPtySystem.php`, both spelled `$libc->fcntl($masterFd, …)` /
+`$libc->fcntl($slaveFd, …)` against candy-pty's FFI `Libc` binding, whose cdef declares
+`int fcntl(int fd, int cmd, int arg)` — a genuine descriptor sink by the census's own definition.
+
+**Both are currently CORRECT** (`$masterFd` and `$slaveFd` come from `posix_openpt()` and the
+`grantpt`/`unlockpt` path, i.e. real descriptors, no cast anywhere). So this is a hole in the instrument,
+not a seventh defect, and Ea53-6's "no seventh instance exists tree-wide" survives it — but that claim
+should be read as *"no seventh instance in the function spelling"*, which is narrower than it sounds.
+
+Widening further, the same `Libc` binding exposes `open`/`close`/`ioctl`/`read`/`write`, all fd-taking:
+**18 `lib()->…` / `$libc->…` call sites tree-wide** by the generator
+`grep -rEn 'lib\(\)->(open|close|ioctl|fcntl|read|write|dup2)\s*\(|\$libc->(…)\s*\(' --include=*.php */src/`.
+*Re-derive both numbers before acting on them — they are a property of this worktree, not of master.*
+
+**STEP**: give the scanner a third sink class, `METHOD_SINKS`, matched as
+`T_OBJECT_OPERATOR`/`T_DOUBLE_COLON` + name, and seed it from candy-pty's `Libc` cdef rather than by
+hand, so the sink roster stops being the same kind of hand-maintained list this whole family keeps
+getting caught by.
+
+**WHY NOT THIS ROUND (merge hazard, read before implementing).** `DescriptorSinkArgumentCensusTest::ROSTER`
+is a **set-equality** census: widening the sink shape adds roster rows, and a roster row is a judgement
+someone has to write, not a count someone can bump. Adding ~20 of them in a lane while four sibling lanes
+are editing `src/` is how a census merges cleanly and is wrong afterwards. Do it in a round that owns the
+census alone.
+
+**CORRECTION 1 (round 53, fix pass) — THIS ROUND'S OWN FIX IS INSIDE THE BLIND SPOT, and the entry did not
+say so.** `candy-core/src/Util/Tty/PosixBackend.php` gained two method-shaped libc calls in the same
+commit series this entry was written beside:
+
+  - `openDeviceDescriptor()` — `Libc::lib()->open($device, self::O_RDONLY)`;
+  - `closeDeviceDescriptor()` — `Libc::lib()->close($fd)`, **which takes a descriptor as its first
+    argument and is therefore a sink by this census's own definition**.
+
+Neither has a roster row, and neither can have one until `METHOD_SINKS` exists. Naming candy-pty's two
+`fcntl` sites as the blind spot's live instances, while the fix in the library the census *lives in* sat
+in the same hole, understated it. `closeDeviceDescriptor()`'s `close($fd)` is also the cheapest available
+known-positive seed for the `METHOD_SINKS` step, being one file away from the test.
+
+**CORRECTION 2 — the `lib()->…` generator printed above does not run, and its alphabet is short in two
+ways.** It contains a literal `…` inside its second alternation, so it is not a command. Reconstructed and
+re-derived, this lane's worktree, PHP 8.3.6:
+
+```sh
+# every receiver spelling, every fd-taking libc symbol
+grep -rEn '(Libc::lib\(\)|\$libc|self::libc\(\)|libc\(\))->(open|close|ioctl|fcntl|read|write|dup|dup2)\s*\(' \
+  --include=*.php */src/          # -> 23 lines
+```
+
+Of those 23: **1 is a doc-comment reference**, not a call (`candy-pty/src/ControllingTerminal.php`'s
+`{@see Libc::lib()->ioctl()}`), and **2 are `open()`, whose FIRST argument is a path and not a descriptor**
+(`candy-core/src/Util/Tty/PosixBackend.php` and `candy-pty/src/Posix/PosixPtySystem.php`). That leaves
+**20 method-shaped calls whose first argument is a file descriptor** — the population `METHOD_SINKS` would
+have to judge. Not 18.
+
+The two things the original alternation could not express are worth more than the corrected number:
+
+  - the receiver spelling **`self::libc()->`** — four sites in `candy-pty/src/Posix/PosixMasterPty.php`,
+    which neither `lib\(\)->` (that needs a literal `lib(`) nor `$libc->` matches;
+  - the symbol **`dup`** — `PosixMasterPty.php`'s `self::libc()->dup($this->fd)`, a live fd sink.
+
+Both were absent from the alternation, and the alternation was written from the sites already in hand.
+**That is this family's own recurring failure, committed inside the entry recording it.** The discount
+step (drop doc-comments, drop path-first symbols) is stated here because a raw grep count that needs an
+unstated correction is not re-derivable, which was the entire complaint against E368's scratch script.
+
+---
+
+### Ea53-11 — the census de-duplicated its own sites, so an unjudged one hid behind a judged one
+
+**Recorded 2026-08-24 by round-53 lane a (fix pass).** Severity: dead-guard shape in the one property the
+census exists to have. **Fixed this round.**
+
+`DescriptorSinkArgumentCensusTest` indexed hits as `$found[$key] = [...]` with
+`$key = "<file>::<sink>(<argument>)"`. Two sites in one file spelled the same way collapsed into one row,
+and the later hit won.
+
+**MEASURED — round-53 mutation R4b.** A second, entirely unjudged `posix_isatty(STDOUT)` added to
+`candy-shine/src/Theme.php` — whose one rostered site is spelled identically — left the census
+**green**: `OK (4 tests, 22 assertions)`, rc 0. The class doc-block's *"A NEW site fails because it is
+unjudged"* was simply false for that shape.
+
+The second-order consequence is worse than the first. Because the later hit overwrote the earlier one,
+two same-spelled sites of DIFFERENT kinds reported whichever came last — so a **defective** site placed
+above a **correct** one was reported as correct, in a census whose entire job is to notice exactly that.
+
+Nothing was hidden in the tree as it stood: 13 hits, 13 distinct keys. This was latent, and it was latent
+in the property the instrument exists to have, which is the kind of hole that is only ever found by
+someone attacking the instrument rather than the tree.
+
+**The fix, and why the original reasoning was kept.** The doc-block's stated reason for keying on the
+spelling rather than on a line number — line numbers rot within a round — is *right*, and deleting it
+would invite the next reader to key on line numbers. What was wrong was the conclusion drawn from it. So
+the key stays the spelling and the second and later occurrences take ` #2`, ` #3`. Pinned by
+`testTwoSitesSpelledIdenticallyInOneFileEachGetTheirOwnRow()`, driven with hand-built hits, **because the
+tree cannot exercise this at all** — 13 sites, 13 distinct spellings — and a defect that only appears once
+a second same-spelled sibling lands would otherwise stay pinned by nothing until the day it bit someone.
+R4b now reds, and collapsing the ordinal back out reds at suite scope.
+
+**The generalisable form**: *when a guard reduces a list to a map, the reduction is a claim about
+uniqueness, and that claim needs its own test.* Set equality over keys is only as good as the keying, and
+a colliding key does not announce itself — it silently produces the smaller, greener answer.
+
+---
+
+### Ea53-12 — a test file's FFI gate tested for the extension being loaded, which is not the condition that matters
+
+**Recorded 2026-08-24 by round-53 lane a (fix pass).** Severity: red tests for contributors, invisible in
+CI. **Fixed this round.**
+
+`PosixBackendTerminalDescriptorTest` gated on `extension_loaded('ffi')`, and two of its five tests reached
+libc without calling the gate at all.
+
+**MEASURED, PHP 8.3.6.** `php -d ffi.enable=0 -r 'var_dump(extension_loaded("ffi"));'` prints
+**`bool(true)`** — the check does not see a disabled extension. Running the file that way:
+`Tests: 5, Assertions: 9, Failures: 3` — *failures, not skips*:
+
+  - `testTheNumberItAnswersIsADescriptorAndNotAStreamResourceId` — "/dev/ptmx is openable but the helper
+    answered null";
+  - `testItAnswersNullExactlyWhenTheDeviceCannotBeOpened` — no gate at all, and `/dev/null` and
+    `/dev/ptmx` always `fopen`, so the cross-check went one-sided;
+  - `testRepeatedOpenAndCloseLeaksNoDescriptors` — "cycle 0 failed to open".
+
+**Why nobody saw it.** `.github/workflows/ci.yml` puts `ffi` in `PHP_EXTENSIONS`, and the Windows/macOS
+jobs set `ini-values: ffi.enable=true`. The suite is green on every machine that runs it in anger. The
+audience for the three red tests is a contributor on a stock distro PHP — the worst possible one.
+
+**The fix, and the trap inside it.** `requireLibcDescriptors()` probes the *capability*:
+`Libc::lib()->open('/dev/null', 0)` in a try/catch, skipping when libc is unreachable or will not open.
+It deliberately does **NOT** probe through `PosixBackend::openDeviceDescriptor()`, which would have been
+the obvious one-liner: probing the code under test converts every failure of that code into a skip.
+MEASURED — with `openDeviceDescriptor()` gutted to `return null` (mutation R7) the file still reds three
+tests, and with the probe itself broken it skips four. Those two verdicts have to be checked separately;
+a gate that is right about the environment and wrong about the subject is a suite that reports "all
+green, 4 skipped" over a broken helper.
+
+**Also corrected**: two doc-blocks claimed the positive half of the descriptor contract is *"assertable
+everywhere"*. It is assertable wherever libc can be reached, which is narrower. Rewritten in both, with
+the reasoning kept — the original point, that the contract does not need a *controlling terminal*, is
+true and is why the helper takes a device path.
+
+---

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Util\Tty;
 
 use SugarCraft\Pty\Contract\Termios;
+use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\SizeIoctl;
 use SugarCraft\Pty\TermiosFactory;
 
@@ -120,24 +121,61 @@ final class PosixBackend implements Backend
         }
 
         // 3. /dev/tty — the controlling terminal (always has the real size)
-        $tty = self::openTty();
-        if ($tty !== null) {
+        //
+        // WHAT THIS ARM USED TO DO, AND WHY IT CHANGED
+        //
+        // WHAT IT DID: `$tty = self::openTty(); $ttyFd = (int) $tty[0];` and
+        // then `SizeIoctl::query($ttyFd)`. An `(int)` cast of a PHP stream
+        // yields its RESOURCE ID, which is not a file descriptor.
+        //
+        // WHAT IS TRUE NOW: the other members of this family are latent
+        // because descriptors 0/1/2 name the same device in an ordinary
+        // terminal, so asking the wrong number still returns the right
+        // answer. This arm could never be: `openTty()` FRESHLY OPENS
+        // /dev/tty, and a fresh handle's resource id can never equal its own
+        // descriptor once the low numbers are taken. MEASURED, PHP 8.3.6,
+        // under a real pty (`script -qec`), three takes: the handle's
+        // resource id and its actual descriptor were different numbers, and
+        // `posix_isatty()` gave OPPOSITE answers for the two — false for the
+        // resource id, true for the descriptor (4 in that harness).
+        //
+        // DO NOT READ A PARTICULAR RESOURCE ID OUT OF THIS PARAGRAPH. An
+        // earlier revision of it named one and called it identical across
+        // takes. It is identical within one harness and nowhere else: the
+        // number counts how many streams the process opened first, so it
+        // moves with the harness. Re-measured it was 15; under this suite it
+        // runs into the hundreds, which
+        // {@see \SugarCraft\Core\Tests\Util\TtyDetectTest} already recorded
+        // about the same cast. The INVARIANT the fix rests on is only that
+        // the two numbers differ. `SizeIoctl::query()` opens with
+        // exactly that `posix_isatty()` check, so this arm THREW on every
+        // single invocation it ever had and fell through to the `stty`
+        // shell-out below. It had never returned an answer.
+        //
+        // WHY THIS ARM STILL EARNS ITS PLACE: the reasoning above it is
+        // correct and unchanged — the controlling terminal is the one device
+        // that always carries the real size, and reaching it by ioctl rather
+        // than by shelling out to `stty` is the whole point of arms 1 and 3.
+        // Only the descriptor was wrong. It now asks libc to open /dev/tty,
+        // which hands back a GENUINE descriptor rather than a number derived
+        // from a PHP stream. There is no portable userland call that maps a
+        // PHP stream to its descriptor, which is why the fix opens its own
+        // rather than trying to recover one.
+        //
+        // `self::openTty()` is untouched and is NOT made dormant by this: it
+        // is a {@see Backend} interface method and `Program` reaches it
+        // through `Tty::openTty()` for its `openTty: true` option.
+        $ttyFd = self::openDeviceDescriptor(self::CONTROLLING_TERMINAL);
+        if ($ttyFd !== null) {
             try {
-                $ttyFd = (int) $tty[0];
                 $result = SizeIoctl::query($ttyFd);
-                fclose($tty[0]);
-                fclose($tty[1]);
                 if ($result['cols'] > 0 && $result['rows'] > 0) {
                     return ['cols' => $result['cols'], 'rows' => $result['rows']];
                 }
             } catch (\Throwable $e) {
                 // /dev/tty query failed — fall through
-                if (is_resource($tty[0])) {
-                    @fclose($tty[0]);
-                }
-                if (is_resource($tty[1])) {
-                    @fclose($tty[1]);
-                }
+            } finally {
+                self::closeDeviceDescriptor($ttyFd);
             }
         }
 
@@ -171,6 +209,96 @@ final class PosixBackend implements Backend
 
         // 7. Final fallback — reasonable default for modern terminals
         return ['cols' => 200, 'rows' => 60];
+    }
+
+    /**
+     * The controlling terminal's device path.
+     *
+     * Named rather than inlined so {@see openDeviceDescriptor()} reads as
+     * a general "open this terminal device" helper — which is what makes it
+     * testable on a host that has no controlling terminal at all, by handing
+     * it /dev/ptmx instead. See that method's doc-block.
+     */
+    private const CONTROLLING_TERMINAL = '/dev/tty';
+
+    /**
+     * `O_RDONLY`. Zero on both platforms candy-pty's libc cdef supports
+     * (Linux and Darwin); it is the one open flag whose value is fixed by
+     * POSIX rather than by the platform's <fcntl.h>.
+     */
+    private const O_RDONLY = 0;
+
+    /**
+     * Open a device file and return the GENUINE file descriptor, or null.
+     *
+     * Named for what it GUARANTEES rather than for what it is used for: it
+     * hands back a descriptor for whatever it was pointed at, terminal or
+     * not. `SizeIoctl::query()` does the `posix_isatty()` check, and
+     * duplicating it here would make the "null exactly when the device could
+     * not be opened" contract -- which is what the guard asserts -- two
+     * contracts instead of one.
+     *
+     * This exists because {@see SizeIoctl::query()} and
+     * {@see TermiosFactory::open()} both take an `int` descriptor and PHP
+     * offers no portable way to get one out of a stream handle — an `(int)`
+     * cast yields the resource id, a different number entirely. So rather
+     * than deriving a descriptor from a stream, this asks libc for one
+     * directly.
+     *
+     * @internal Test seam as well as an implementation detail: the parameter
+     *           is what lets a test exercise this on a host with no
+     *           controlling terminal. MEASURED, PHP 8.3.6, in a process whose
+     *           /dev/tty open fails with ENXIO (no controlling terminal),
+     *           three takes: `open('/dev/ptmx', O_RDONLY)` returns descriptor
+     *           3 with `posix_isatty(3) === true`, while `/dev/tty` returns
+     *           -1. So the positive half of this helper's contract is
+     *           assertable without a controlling terminal.
+     *
+     *           NOT "assertable everywhere", which an earlier revision of this
+     *           sentence said: it needs libc, and `ffi.enable=0` -- a stock
+     *           setting on several distributions, and one that leaves
+     *           `extension_loaded('ffi')` answering true -- takes it away. The
+     *           guard probes for the capability; see
+     *           PosixBackendTerminalDescriptorTest::requireLibcDescriptors().
+     *
+     * @return int|null a descriptor the caller MUST hand to
+     *                  {@see closeDeviceDescriptor()}, or null when the
+     *                  device cannot be opened (no controlling terminal, no
+     *                  ext-ffi, no libc)
+     */
+    public static function openDeviceDescriptor(string $device): ?int
+    {
+        try {
+            $fd = Libc::lib()->open($device, self::O_RDONLY);
+        } catch (\Throwable) {
+            // No ext-ffi, or libc would not load. SizeIoctl::query() needs
+            // the same FFI handle, so there is nothing this arm could have
+            // done with a descriptor anyway.
+            return null;
+        }
+
+        return \is_int($fd) && $fd >= 0 ? $fd : null;
+    }
+
+    /**
+     * Close a descriptor obtained from {@see openDeviceDescriptor()}.
+     *
+     * Paired rather than inlined so the `finally` at the call site cannot
+     * drift away from the libc handle that produced the descriptor. A leaked
+     * descriptor here would be per-`size()`-call, and `size()` is called on
+     * every SIGWINCH.
+     *
+     * @internal
+     */
+    public static function closeDeviceDescriptor(int $fd): void
+    {
+        try {
+            Libc::lib()->close($fd);
+        } catch (\Throwable) {
+            // Unreachable in practice: we only get here with a descriptor
+            // that the same libc handle just returned. Swallowed rather than
+            // propagated because size() must always answer.
+        }
     }
 
     public function enableRawMode(): void
@@ -281,10 +409,32 @@ final class PosixBackend implements Backend
             return;
         }
         // First call: save current state from STDIN.
+        //
+        // WHAT THE CODE UNDER THIS SENTENCE USED TO SAY, AND WHY IT MOVED
+        //
+        // WHAT IT SAID: `TermiosFactory::open((int) STDIN)`. The sentence
+        // above it has always read "save current state from STDIN", and the
+        // sentence was the half telling the truth about the intent.
+        //
+        // WHAT IS TRUE: an `(int)` cast of a PHP stream yields its RESOURCE
+        // ID, and for the three standard streams that number is not the
+        // descriptor. MEASURED, PHP 8.3.6, in a fresh CLI process, three
+        // takes, identical every time: `(int) STDIN` is 1, `(int) STDOUT` is
+        // 2 and `(int) STDERR` is 3, over descriptors 0, 1 and 2. So this
+        // snapshotted descriptor 1 — STDOUT — and the whole rescue path was
+        // saving and restoring the wrong end of the terminal. It looked
+        // right in an ordinary terminal only because 0 and 1 name the same
+        // device there.
+        //
+        // WHY THE FIX IS A LITERAL AND NOT A CONSTANT: `TermiosFactory::open()`
+        // takes an `int` descriptor, and STDIN's descriptor is 0. There is no
+        // PHP constant that holds it — `STDIN` holds the stream. candy-vcr's
+        // `Cli\RecordCommand` already spells the same call `open(0)`.
         try {
-            self::$rescueSnapshot = TermiosFactory::open((int) STDIN)->current();
+            self::$rescueSnapshot = TermiosFactory::open(0)->current();
         } catch (\Throwable) {
-            // STDIN closed (CI runner): silently no-op.
+            // Descriptor 0 is closed or is not a terminal (CI runner):
+            // silently no-op.
         }
     }
 }
