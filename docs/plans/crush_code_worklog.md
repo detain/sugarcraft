@@ -11068,7 +11068,54 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
-## ROUND 49 — IN FLIGHT (base `db90e768`, run `wf_0bcbe384-775`, FIVE lanes)
+## ROUND 49 — IN FLIGHT (base `db90e768`, implement `wf_0bcbe384-775` DONE, review+fix `wf_e9f19bf7-612` SERIAL)
+
+### 🔴 THE ROUND WAS RESTRUCTURED MID-FLIGHT — AND THE STOP CAUGHT TWO LANES MUTATING
+
+On 2026-08-24, with all five implementers still running, the user said they were near a session limit and
+asked to drop to one agent at a time. The supervisor stopped run `wf_0bcbe384-775`.
+
+**The implement phase turned out to be essentially complete.** 42 commits across the five lanes — a 12,
+b 8, c 5, d 9, e 8 — and *every* lane had already reached its backlog-recording commit, which the brief
+puts last. Lanes a and d had even landed follow-ups past it (a's `Ea49-8`: E223's "only `Program` calls
+`init()`" premise is false). **No implementer wrote a report; the stop preempted the report, not the
+work.**
+
+**What the moment of death showed.** `git status` in each lane at the kill:
+
+| lane | state at kill |
+|---|---|
+| a | **dirty** — `src/Chat.php`, a `DenialKind::Refused->reason(…)` call reverted to the hard-coded string |
+| b | clean |
+| c | clean |
+| d | 5 dirty on one poll, **0 on the next** — it committed as the kill landed |
+| e | **dirty** — `tests/bootstrap.php`, the stdin-closing block disabled with `false &&` |
+
+Both dirty files were **live mutation probes whose restore step never ran** — E168 observed directly, in
+two lanes simultaneously, on the first round where anyone looked at the instant of death rather than
+after. The supervisor **inspected before reverting**, which the standing rule demands because rounds 47
+and 48 both had dirty lanes holding *real* work and only round 45's was a mutation. These two were
+unambiguously mutations, and only those two files were restored. All five lanes clean, 42 commits intact.
+
+**The transferable part is the inference, not the incident.** If a restore step can fail to run because
+the agent died, it can also fail to run because the agent moved on — so a mutation can be sitting
+**committed** in a lane diff. Every review brief this round now carries that as an explicit search: scan
+for a `false &&`, a commented-out call, an inverted condition, a fixture expectation quietly adjusted to
+match a broken instrument.
+
+### THE SERIAL CONTINUATION
+
+Run `wf_e9f19bf7-612`, task `wyxy94q0k`. The script reuses round 49's `COMMON`, `OWNERSHIP` and `LANES`
+verbatim and replaces `pipeline()` with a serial `for` loop — **exactly one agent alive at any moment**.
+Review and fix are **combined into a single fresh agent per lane**: the independence that makes the review
+worth anything comes from the agent not having written the code, which a fresh agent still satisfies, and
+combining halves the agent count, which was the entire point of the change.
+
+**The reviewers have no implementer report, so the commit messages are the claim set** — and commit
+messages are precisely the artefact this project keeps catching out ("measured" when the figure was
+derived; "fails under mutation" when it does not). That is a *stronger* review position than the usual
+one, and whether this round's findings are better than usual is worth reading for.
+
 
 **Launched 2026-08-23.** The user raised the lane cap from three to five for this step. Five file-disjoint
 lanes × implement → adversarial review → fix, task `wijsgsm5d`.

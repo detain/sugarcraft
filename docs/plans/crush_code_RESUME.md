@@ -8,21 +8,58 @@ Nothing here depends on a prior conversation's context.
 
 ## ⏳ ROUND 49 IS IN FLIGHT RIGHT NOW — read this before starting anything
 
-**Launched 2026-08-23 from master `db90e768`, tree clean.** Run `wf_0bcbe384-775`, **task `wijsgsm5d`**.
-🔴 **FIVE lanes this round, not three** — the user raised the cap explicitly for this step. Each lane is
-implement → adversarial review → fix.
+**Launched 2026-08-23 from master `db90e768`, tree clean.** 🔴 **THE ROUND WAS RESTRUCTURED MID-FLIGHT.**
 
-**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-49-wf_0bcbe384-775.js`
-🔴 **If a limit kills agents mid-round: RESUME if any completed** (`resumeFromRunId: 'wf_0bcbe384-775'`);
-**RELAUNCH if none did**, and improve the brief first. Either way **check every lane for a dirty tree AND
-for commits its report does not mention** (E168, E190), and **inspect before reverting** — rounds 47 and
-48 both had dirty lanes holding real work, and only round 45's was a mutation.
+**Phase 1 — implement, FIVE PARALLEL LANES — RAN AND IS DONE.** Run `wf_0bcbe384-775` (task `wijsgsm5d`),
+**stopped by the supervisor on 2026-08-24** because the user was near a session limit and asked for one
+agent at a time. All five implementers had already committed their briefs — **42 commits, lane a 12,
+b 8, c 5, d 9, e 8** — and each had reached its backlog-recording commit, which is the last step of the
+brief. **Nothing was lost. No implementer wrote a report, because the stop preempted the report.**
+
+**Phase 2 — review + fix, ONE LANE AT A TIME — IS WHAT IS RUNNING NOW.** Run `wf_e9f19bf7-612`,
+**task `wyxy94q0k`**. Script:
+`/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-49b-wf_e9f19bf7-612.js`
+It reuses round 49's `COMMON`/`OWNERSHIP`/`LANES` verbatim and replaces the `pipeline()` with a serial
+`for` loop, so **exactly one agent is alive at any moment**. Review and fix are **combined into one fresh
+agent per lane** — a fresh agent that did not implement still supplies the independent eyes, and combining
+halves the agent count, which was the point.
+🔴 **If it is killed: resume with `resumeFromRunId: 'wf_e9f19bf7-612'`** — completed lanes replay from
+cache, and because the loop is serial a resume genuinely picks up where it stopped.
+
+### 🔴 WHAT THE STOP ITSELF TAUGHT — TWO LANES WERE HOLDING A LIVE MUTATION
+
+`git status` at the kill: **lane a had reverted a `DenialKind::Refused->reason(...)` call in
+`src/Chat.php` to the hard-coded string; lane e had disabled `tests/bootstrap.php`'s stdin-closing block
+with `false &&`.** Both are mutation-harness probes whose restore step never ran — **E168 observed live,
+in two lanes at once, on the first round where anyone looked at the moment of death.** Lane d showed 5
+dirty files on one poll and 0 on the next: it committed as the kill landed. The supervisor **inspected
+before reverting** (rounds 47 and 48 both had dirty lanes holding *real* work) and restored exactly those
+two files. **All five lanes are clean at their HEADs; nothing was discarded.**
+
+The review agents are told this explicitly, because it implies the sharper question: **a harness whose
+restore never ran can also have left a mutation COMMITTED.** Each reviewer is asked to scan its lane's
+diff for mutation residue — a `false &&`, a commented-out call, an inverted condition, a fixture
+expectation quietly adjusted to match a broken instrument.
+
+### 🔴 THE REVIEWERS HAVE NO IMPLEMENTER REPORT — THE COMMIT MESSAGES ARE THE CLAIM SET
+
+Normally the reviewer receives the implementer's report and is told to treat it as a claim set rather than
+evidence. This round there is no report at all. The briefs say so, and point the reviewers at the commit
+messages instead — which are exactly the artefact this project keeps catching out (a commit that says
+"measured" when the figure was derived; a guard whose message asserts it fails under mutation when it does
+not). **This is a stronger review position, not a weaker one**, and it is worth noticing whether the
+findings this round are better than usual.
+
+### THE INVARIANTS THAT STILL HOLD
 
 **Base floor `9499 / 133587 / 1 skipped / rc 0` OBSERVED at `db90e768` itself** (E167); the briefs say so.
 
-**Lane dirs** `/home/sites/crush-lane-{a,b,c,d,e}` are `cp -a` copies at `db90e768`, each verified 18/18
-symlinks resolving INSIDE its own tree by `realpath()`. ⚠️ **DO NOT DELETE until the merged floor is
-measured.**
+**Lane dirs** `/home/sites/crush-lane-{a,b,c,d,e}` are `cp -a` copies branched at `db90e768`, each
+re-verified after the stop: **18/18 symlinks resolving INSIDE its own tree** by `realpath()`, and
+`git status --porcelain` empty. ⚠️ **DO NOT DELETE until the merged floor is measured.**
+
+Master is `a50c48a5`, clean, `check-path-repos --no-lib-path-repos` rc 0, config md5
+`05480c743aff302fd6c06c5a4a4c2210`, **2 commits unpushed** (`origin/master` = `83ddae49`).
 
 ### THE LANES
 
