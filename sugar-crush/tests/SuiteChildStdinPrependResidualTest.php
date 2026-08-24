@@ -9,8 +9,16 @@ use PHPUnit\Framework\TestCase;
 /**
  * E296's RESIDUAL, PINNED AS A FACT RATHER THAN LEFT AS A SENTENCE.
  *
- * `tests/bootstrap.php` repairs the suite's descriptor 0 by clearing
- * `O_NONBLOCK` on it. That closes the BLOCKING half of E212/E290 — a spawned
+ * `tests/bootstrap.php` repairs the suite's descriptor 0 by SETTING
+ * `O_NONBLOCK` on it — `stream_set_blocking(\STDIN, false)` sets that flag,
+ * making the descriptor NON-BLOCKING. (MEASURED, PHP 8.3.6, three takes, from
+ * `/proc/self/fdinfo/0` with fd 0 a pipe: the flag is clear at startup, set
+ * after `stream_set_blocking($s, false)`, clear again after
+ * `stream_set_blocking($s, true)`. The polarity is written out because this
+ * doc-block previously had it backwards, and every reader downstream of a
+ * backwards mechanism sentence inherits it.)
+ *
+ * That set flag closes the BLOCKING half of E212/E290 — a spawned
  * `bin/sugarcrush -p` can no longer park forever in `stream_get_contents()` on
  * a runner stdin nobody will ever write to or close — and it does NOT close
  * the PREPEND half. `O_NONBLOCK` changes when a read RETURNS; it does not
@@ -140,7 +148,8 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
             0,
             $treatment['rc'],
             "the spawned binary did not complete with bytes waiting on the runner's stdin. If it was killed "
-                . "at the bound, tests/bootstrap.php has stopped clearing O_NONBLOCK on descriptor 0.\n"
+                . "at the bound, tests/bootstrap.php has stopped SETTING O_NONBLOCK on descriptor 0 - the "
+                . "repair is the flag being set (stream_set_blocking(\STDIN, false)), not cleared.\n"
                 . $treatment['raw'],
         );
         $this->assertStringContainsString(

@@ -10,12 +10,39 @@ use PHPUnit\Framework\TestCase;
  * Nothing in this tree builds a raw-mode backend over the process's OWN
  * descriptor 0 with an injected `Termios`.
  *
+ * ## THE FLAG, AND ITS POLARITY, STATED ONCE BECAUSE THIS DOC-BLOCK HAD IT
+ * ## BACKWARDS
+ *
+ * WHAT THIS SAID: that `tests/bootstrap.php` repairs descriptor 0 by
+ * "clearing `O_NONBLOCK`", and the measured table below then used "clear" to
+ * mean the opposite — a descriptor whose reads return immediately. One word,
+ * two opposite jobs, in one doc-block.
+ *
+ * WHAT IS TRUE. MEASURED, PHP 8.3.6, three takes, reading `/proc/self/fdinfo/0`
+ * either side of the call, with fd 0 a pipe:
+ *
+ *   at startup                        O_NONBLOCK clear (fd 0 BLOCKING)
+ *   stream_set_blocking($s, false)    O_NONBLOCK SET   (fd 0 NON-BLOCKING)
+ *   stream_set_blocking($s, true)     O_NONBLOCK clear (fd 0 BLOCKING)
+ *
+ * So `tests/bootstrap.php`'s `stream_set_blocking(\STDIN, false)` SETS
+ * `O_NONBLOCK`, and that set flag IS the repair. `PosixBackend::restore()`'s
+ * `@stream_set_blocking($this->stream, true)` CLEARS it, and that clearing is
+ * what erases the repair. Below, `O_NONBLOCK` is only ever "set" or "cleared",
+ * and the descriptor is only ever "blocking" or "non-blocking".
+ *
+ * WHY THIS STILL EARNS ITS PLACE: the mechanism was right in every measurement
+ * and wrong in every sentence, which is the failure that is hardest to see on
+ * re-reading — the reader who "corrects" the code to match the prose is the
+ * one this paragraph exists for.
+ *
  * WHY THIS IS A GUARD AND NOT A STYLE RULE. `tests/bootstrap.php` repairs the
- * suite's descriptor 0 by clearing `O_NONBLOCK` on it, so a spawned
- * `bin/sugarcrush` cannot park in `stream_get_contents()` on the runner's
- * stdin (E212's other half). `O_NONBLOCK` lives on the open file DESCRIPTION,
- * which is what makes it reach inherited children — and also what makes it
- * erasable by anything else holding that description. The shape that holds it:
+ * suite's descriptor 0 by SETTING `O_NONBLOCK` on it — making it non-blocking
+ * — so a spawned `bin/sugarcrush` cannot park in `stream_get_contents()` on
+ * the runner's stdin (E212's other half). `O_NONBLOCK` lives on the open file
+ * DESCRIPTION, which is what makes it reach inherited children — and also what
+ * makes it erasable by anything else holding that description. The shape that
+ * holds it:
  *
  *   new Tty(null, $injectedTermios)
  *
@@ -24,16 +51,17 @@ use PHPUnit\Framework\TestCase;
  * process's descriptor 0. Supplying a `Termios` then makes
  * `PosixBackend::enableRawMode()` take the branch that SKIPS its own
  * `isTty()` guard, so it runs to the end — and the end is
- * `@stream_set_blocking($this->stream, false)`, with `restore()`'s matching
- * `@stream_set_blocking($this->stream, true)` putting the runner's fd 0 back
- * to BLOCKING for the remainder of the run.
+ * `@stream_set_blocking($this->stream, false)`, which sets the same flag the
+ * bootstrap set. That call is not the damage. `restore()`'s matching
+ * `@stream_set_blocking($this->stream, true)` is: it CLEARS `O_NONBLOCK`,
+ * putting the runner's fd 0 back to BLOCKING for the remainder of the run.
  *
  * MEASURED, PHP 8.3.6, three takes each, in a child whose fd 0 is a pipe:
  *
- *   new Tty(null, new PosixTermios($fd))   fd 0 blocked true -> false, and
- *                                          true again after restore()   3/3
- *   new Tty($socketPairEnd, …)             fd 0's flag never moves       3/3
- *   new Tty()  (no Termios at all)         fd 0's flag never moves       3/3
+ *   new Tty(null, new PosixTermios($fd))   fd 0 blocking -> non-blocking, and
+ *                                          BLOCKING again after restore()  3/3
+ *   new Tty($socketPairEnd, …)             fd 0's flag never moves         3/3
+ *   new Tty()  (no Termios at all)         fd 0's flag never moves         3/3
  *
  * — the third row is why this census requires BOTH conditions rather than
  * flagging every null stream: without an injected `Termios`,
@@ -57,9 +85,10 @@ use PHPUnit\Framework\TestCase;
  * anywhere:
  *
  *   new PosixBackend(null, new PosixTermios($slaveFd))
- *       fd 0 clear -> clear after enableRawMode() -> BLOCKED after restore()   3/3
+ *       fd 0 non-blocking -> still non-blocking after enableRawMode()
+ *       -> BLOCKING after restore()                                          3/3
  *   new PosixBackend($socketPairEnd, new PosixTermios($slaveFd))
- *       fd 0 clear -> clear -> clear                                           3/3
+ *       fd 0 non-blocking throughout                                         3/3
  *
  * — the same erasure, one layer down, so the name is in the alphabet.
  *
@@ -260,8 +289,9 @@ final class TtyStreamArgumentCensusTest extends TestCase
             $offenders,
             "a reachable sibling library builds a raw-mode backend over the process's own descriptor 0 with "
                 . "an injected Termios. In THIS process that descriptor belongs to the PHPUnit runner, and "
-                . "restore() puts O_NONBLOCK back on it - which is tests/bootstrap.php's fd-0 repair, erased "
-                . "for every later test in the run:\n  " . implode("\n  ", $offenders),
+                . "restore() CLEARS O_NONBLOCK on it - putting fd 0 back to blocking, which erases "
+                . "tests/bootstrap.php's repair (that repair is the flag being SET) for every later test in "
+                . "the run:\n  " . implode("\n  ", $offenders),
         );
 
         self::assertSame(
