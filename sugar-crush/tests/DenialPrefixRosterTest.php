@@ -135,9 +135,50 @@ final class DenialPrefixRosterTest extends TestCase
      *
      * `not` is only ever matched as part of a two-word phrase, deliberately:
      * bare `not` is what makes `Tool not found:` a false positive.
+     *
+     * FOUR WORDS ADDED AT ROUND 49, AND THE REASON IS THAT A VOCABULARY IS
+     * WRITTEN TO MATCH THE CASES ALREADY KNOWN. `declined`, `prohibited`,
+     * `vetoed` and `barred` are ordinary English for refusing a thing and none
+     * of them was here; MEASURED on PHP 8.3.6 by carrying each as a dead
+     * `private const` in `src/Permissions/ToolRefusal.php`, every one SURVIVED
+     * the whole of this file. Adding them cost nothing measurable: re-scanned
+     * over `src/` with the wider list, the whole-tree map
+     * ({@see self::testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException()})
+     * names the same two files and the same four literals. The list is still
+     * a list, so this paragraph is an admission as much as a fix — the next
+     * invented verb that is not on it is invisible in exactly this way, and
+     * {@see self::ROSTER_CASE_VARIANTS_ARE_CAUGHT_BY} covers only the one
+     * sub-case that can be closed mechanically.
      */
     private const DENIAL_TERMS = '/\b(?:den(?:y|ied|ial)|refus(?:e|ed|al)|block(?:ed)?|reject(?:ed)?'
+        . '|declin(?:e|ed)|prohibited|vetoed|barred'
         . '|forbidden|disallowed|unauthori[sz]ed|required|not (?:allowed|permitted|granted))\b/i';
+
+    /**
+     * A NOTE, NOT A PATTERN: the frame above requires a CAPITALISED opener, so
+     * a lowercase respelling of a roster entry — `permission denied:` — is a
+     * shape it cannot express, and that one is sharp:
+     * {@see Chat::isDeniedResult()} matches case-sensitively, so a producer
+     * writing it lowercase has authored a refusal that renders as an ordinary
+     * tool error on both surfaces.
+     *
+     * WHY NOT SIMPLY WIDEN THE OPENER TO `[A-Za-z]`, which is the obvious fix
+     * and was the one prescribed. MEASURED on PHP 8.3.6: it works, and it
+     * costs the lookbehind. With the capitalised opener, `(?<![A-Za-z])`
+     * changes the verdict on 639-691 of 200,000 random strings built from a
+     * 21-token alphabet of this tree's own denial words (four seeds:
+     * 49491/20260824/777/1); with an `[A-Za-z]` opener it changes the verdict
+     * on ZERO of the same 200,000, four times over, because a frame that may
+     * begin with any letter always has a leftmost match at a word start
+     * anyway. Widening the frame would leave a live-looking assertion in the
+     * pattern doing nothing at all.
+     *
+     * So the case gap is closed by
+     * {@see self::isCaseVariantOfARosterPrefix()} instead, which is narrower
+     * and is tied to the actual mechanism: a literal that spells a ROSTER
+     * PREFIX in a case the roster does not carry.
+     */
+    private const ROSTER_CASE_VARIANTS_ARE_CAUGHT_BY = 'isCaseVariantOfARosterPrefix';
 
     private ProviderInterface $provider;
     private HookRegistry $hookRegistry;
@@ -431,6 +472,50 @@ final class DenialPrefixRosterTest extends TestCase
                 "the scanner cannot express {$why}, so its emptiness says nothing about that shape",
             );
         }
+
+        // AND THE FOUR SHAPES THE SECOND ALPHABET COULD NOT EXPRESS EITHER,
+        // found by the round-49 review widening this scan's own word list
+        // (rule 11). Each was MEASURED as a SURVIVING mutation on PHP 8.3.6 —
+        // carried as a dead `private const` in src/Permissions/ToolRefusal.php
+        // with `--filter DenialPrefixRoster` green — before the vocabulary
+        // grew and the case-variant rule landed. Assembled from parts so this
+        // file is never matched by its own scan set.
+        foreach ([
+            'a verb the vocabulary had never heard' => 'Tool call ' . 'declined: nope',
+            'a second one' => 'Tool call ' . 'prohibited: nope',
+            'a one-word opener that is one of them' => 'Vet' . 'oed: nope',
+        ] as $why => $shape) {
+            self::assertSame(
+                [$shape],
+                self::denialLiteralsIn('<?php $v = ' . var_export($shape, true) . ';'),
+                "the scanner cannot express {$why}, so its emptiness says nothing about that shape",
+            );
+        }
+
+        // AND THE SHARP ONE, which is not a vocabulary gap but a CASE gap: a
+        // roster entry respelled in lowercase is a refusal that
+        // Chat::isDeniedResult() will not recognise, because it compares with
+        // str_starts_with. The capitalised frame cannot see it at all, so this
+        // row is the only thing that pins
+        // self::isCaseVariantOfARosterPrefix() — kill that helper and nothing
+        // else in this file goes red.
+        $lowercased = 'permis' . 'sion denied: rm -rf';
+        self::assertSame(
+            [$lowercased],
+            self::denialLiteralsIn('<?php $w = ' . var_export($lowercased, true) . ';'),
+            'the scanner cannot see a roster prefix respelled in a case the roster does not carry, which '
+            . 'is a BLOCKED call rendered as an ordinary tool ERROR on both surfaces',
+        );
+
+        // AND ITS NEGATIVE: the correctly-cased prefix must not be reported
+        // TWICE, once by the frame and once by the case rule.
+        $exact = 'Permis' . 'sion denied: rm -rf';
+        self::assertSame(
+            [$exact],
+            self::denialLiteralsIn('<?php $u = ' . var_export($exact, true) . ';'),
+            'a correctly-spelled prefix is now reported twice, so the whole-src map counts one literal as '
+            . 'two and reds on a tree that is right',
+        );
 
         // AND THE SHAPES THE `^` ANCHOR COULD NOT EXPRESS (round 49). Each is
         // a DECORATED literal — the frame is present, but something precedes
@@ -1073,10 +1158,53 @@ final class DenialPrefixRosterTest extends TestCase
             if (preg_match(self::DENIAL_SHAPE, $value, $m) === 1
                 && preg_match(self::DENIAL_TERMS, $m[0]) === 1) {
                 $out[] = $value;
+
+                continue;
+            }
+
+            if (self::isCaseVariantOfARosterPrefix($value)) {
+                $out[] = $value;
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Whether $value spells a roster prefix in a case the roster does not
+     * carry.
+     *
+     * THE ONE OFF-CASE SHAPE THAT CAN BE CAUGHT WITHOUT GUESSING AT VOCABULARY
+     * (round 49). {@see DenialKind::classify()} and
+     * {@see Chat::isDeniedResult()} both use `str_starts_with`, which is
+     * case-SENSITIVE, so `permission denied: rm` is not a denial to either of
+     * them — it renders as an ordinary tool error, which is the exact failure
+     * {@see DenialKind}'s own doc-block names. The frame in
+     * {@see self::DENIAL_SHAPE} cannot see it, and widening the frame is
+     * measured against in {@see self::ROSTER_CASE_VARIANTS_ARE_CAUGHT_BY}'s
+     * doc-block.
+     *
+     * PER OCCURRENCE AND NOT PER LITERAL, deliberately: a literal that quotes
+     * the roster correctly once and incorrectly once is exactly the drift this
+     * is for, and a whole-literal `str_contains` would clear it on the strength
+     * of the correct half.
+     *
+     * DERIVED FROM {@see DenialKind::prefixes()}, so it cannot list a fourth
+     * spelling the roster does not have.
+     */
+    private static function isCaseVariantOfARosterPrefix(string $value): bool
+    {
+        foreach (DenialKind::prefixes() as $prefix) {
+            $at = 0;
+            while (($pos = stripos($value, $prefix, $at)) !== false) {
+                if (substr($value, $pos, \strlen($prefix)) !== $prefix) {
+                    return true;
+                }
+                $at = $pos + 1;
+            }
+        }
+
+        return false;
     }
 
     /**
