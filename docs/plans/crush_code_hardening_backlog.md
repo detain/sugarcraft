@@ -8660,6 +8660,16 @@ strictly more correct for the boolean E222 added: `rmdir()` on a symlink fails, 
 containing one can never report `true` no matter how much was removed. Add a fixture with a symlink to a
 populated directory and assert the target's contents SURVIVE.
 
+**CLOSED IN THE SAME ROUND — read this before acting on the paragraphs above.** WHAT THIS ENTRY SAID: the
+finding was "deferred under functionality-before-hardening" and the Step was outstanding. WHAT IS TRUE NOW:
+round-49 lane b's review pass implemented exactly that Step. `removeDirectory()` refuses a symlinked
+`$path` at the top and `unlink()`s a link inside the loop instead of recursing through it; the fixtures are
+`WorktreeRemovalReportingTest::testADirectorySymlinkIsUnlinkedAndItsTargetIsLeftAlone()` and
+`::testASymlinkGivenAsThePathIsRefusedRatherThanFollowed()`, and both mutations (dropping the loop guard,
+dropping the top-level guard) were KILLED. WHY THE ENTRY STILL EARNS ITS PLACE: the mechanism paragraph is
+the only written record of what the traversal used to do and why `is_dir()` was the wrong predicate — delete
+it and the next reader deletes the `is_link()` checks as redundant belt-and-braces.
+
 **CLOSED IN ROUND 49 BY LANE b's REVIEW-AND-FIX PASS — and the entry is rewritten rather than deleted,
 because the reasoning is what stops the guard being removed again.** WHAT THIS ENTRY SAID: deferred under
 "functionality before hardening", on the grounds that E222 was a reporting change and altering what gets
@@ -8735,6 +8745,18 @@ by.
 that points it at one unreadable scratch file and asserts the test-level failure. The same parameter also
 makes the existing roster control non-tautological for `bin/sugarcrush`.
 
+**CLOSED IN THE SAME ROUND, AND THE FIXTURE FOUND A SECOND HOLE IN THE ARM IT WAS WRITTEN FOR.** WHAT THIS
+ENTRY SAID: no fixture existed and the roster-parameter shape was too invasive while three lanes were
+obliged by the guard. WHAT IS TRUE NOW: the loop is `stackedPairsIn($files, $root)` and
+`testARosterEntryTheScanCannotReadFailsRatherThanScoringZero()` drives it. Writing that fixture established,
+**MEASURED on this box, PHP 8.3.6**, that `file_get_contents()` on a DIRECTORY returns the **empty string**
+and not `false` (warning: `Read of N bytes failed with errno=21 Is a directory`) — so `assertIsString()`
+alone, which was the whole arm, let a non-file roster entry scan as zero stacked pairs. That is precisely
+the silent zero the arm existed to prevent, present inside the arm. An `is_file()` check now precedes the
+read in both this guard and `WorktreeRemovalReportingTest`. WHY THE ENTRY STILL EARNS ITS PLACE: it is the
+worked example of rule 25 one level down — the arm was *there*, was *correct-looking*, and was *wrong*, and
+only writing the fixture showed it.
+
 ---
 
 ### Eb49-7 — `removeDirectory()`'s `$emptied = false` on a failed `unlink()` is unkillable by construction
@@ -8756,5 +8778,105 @@ false-negative is the safe direction for a caller that deletes a registry entry 
 **Step.** None proposed. Leave the assignment; do not spend a fixture on it. If someone ever wants the race
 handled, the shape is `!@unlink($itemPath) && file_exists($itemPath)` — and that needs its own
 `clearstatcache()`, which is a bigger change than the case deserves.
+
+---
+
+### Eb49-8 — the process-unique-temp-name guard is blind to the fully-qualified call, which is the codebase's own style
+
+**Recorded 2026-08-24 by round-49 lane b's review pass. MUTATION-PROVEN.** Severity: an instrument that
+reports zero while the offender is present. **Measured, PHP 8.3.6.** Not any lane's file this round
+(`tests/Support/ProcessUniqueTempNameTest.php`), so recorded rather than fixed.
+
+**What.** `ProcessUniqueTempNameTest::offendingLines()` gates on `$token[0] === T_STRING &&
+$token[1] === 'uniqid'`. On PHP 8.3.6 a leading-backslash call does not lex that way: `token_get_all()`
+reports **`T_NAME_FULLY_QUALIFIED`** with the value `\uniqid`, so the gate rejects it and the line-level
+regex is never consulted. The argument-less form written with a leading `\` is therefore invisible to the
+guard that exists to catch it.
+
+**Proven on the real tree, not on a synthetic source.** Two mutations of one call site in
+`tests/Agents/AgentWorkerPoolForkFailureTest.php`, each introducing a genuine argument-less temp-name call
+and each run against `tests/Support/ProcessUniqueTempNameTest.php`:
+
+| mutation | verdict |
+| --- | --- |
+| bare form (control, known answer) | **KILLED** rc 1 |
+| identical offender, fully-qualified form | **SURVIVED** rc 0 |
+
+The control is what makes the survival readable: the harness and the guard both work, and the guard still
+did not see it.
+
+**Why it matters more than a lexer curiosity.** The blind spelling is not hypothetical and is not rare —
+`tests/` already contains the fully-qualified form of this very function, 22 call sites across 6 files
+(`tests/Cli/ArgvParserTest.php`, `tests/Cli/BootstrapConfigPathOverrideTest.php`,
+`tests/Integration/BinSugarcrushDispatchTest.php` among them). They are all the entropic, argument-carrying
+form, so the guard is right not to flag them — but they are sites the **pre-round sweep itself wrote in the
+spelling the guard cannot police**, and a later edit that drops their arguments would pass in silence. The
+leading-backslash house style is general in this suite, not an idiosyncrasy of one file. Generators, not
+pinned counts (they move on every merge, rule 18):
+
+```sh
+cd sugar-crush
+grep -rlE '\\uniqid\(' tests/ | wc -l                 # files using the blind spelling
+grep -rhoE '\\uniqid\(' tests/ | wc -l                # call sites in it
+grep -rlE '\\(strlen|count|sprintf|dirname|implode|file_get_contents|preg_match|sort)\(' tests/ | wc -l
+```
+
+⚠️ **AND A MEASUREMENT OF MINE THAT WAS WRONG, LEFT HERE ON PURPOSE (rule 3).** The first version of this
+entry said "exactly ONE file uses the `\`-prefixed style". That came from an ERE with a doubled escape —
+`'\\\\(strlen|…'` inside shell single quotes is TWO literal backslashes, which matches essentially
+nothing and returned `1`. Written correctly it is **83 of the 398 PHP files under `tests/`**. The wrong
+figure would have made this entry read as an edge case; it is the dominant idiom. The lesson is rule 13's:
+the harness built to check a claim carried the defect the claim was about, and only re-deriving it with a
+known answer in mind caught it.
+
+**Step.** Accept `T_NAME_FULLY_QUALIFIED` whose value is `\` + the function name alongside the `T_STRING`
+case, and extend the line regex to allow an optional leading backslash. Then add the fully-qualified form to
+`testTheScannerSeesTheBadFormAndSparesTheGoodOnes()`'s fixture — built by concatenation like the existing
+one, for rule 26's reason.
+
+---
+
+### Eb49-9 — that guard's SCOPE is `tests/` only, and `src/` has five argument-less sites
+
+**Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: NOTE — an alphabet gap with low current
+exposure, recorded so the zero is not read as a clean bill. **Measured, PHP 8.3.6.** Same unowned file.
+
+**What.** `ProcessUniqueTempNameTest::SCOPE` is `['tests']`. The five argument-less sites in
+`src/Workflows/WorkflowEngine.php` — the stage, nested-stage, task, verifier and indexed-agent id builders —
+are outside it and always have been. They are **ids, not paths**, so the collision the guard was written for
+(two suites opening one file under a shared uid-keyed TMPDIR) does not apply to them directly; what does
+apply is that two stages built in the same microtime under the same stage name get the same id. Every
+argument-carrying site in `src/` is fine, and `AgentWorkerPool`'s path-building site already uses the
+more-entropy form.
+
+**Step.** Either widen SCOPE to `['tests', 'src', 'bin']` and give the five sites a prefix — they cost
+nothing to fix — or leave SCOPE alone and say in the doc-block that `src/` is deliberately unscanned and
+why, so the next reader does not take the guard's green as covering the application. Do not leave it silent:
+rule 11 — a census's scope is part of its coverage, and this one's is narrower than its prose implies.
+
+---
+
+### Eb49-10 — lane c's census reads all 291 sources with `(string) file_get_contents()` and has no rule-14 arm at all
+
+**Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: instrument coverage. **Measured, PHP
+8.3.6.** Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`), in flight this round.
+
+**What.** Eleven read sites in that file are of the form `(string) file_get_contents($absolute)`. `(string)
+false` is `''`, so a file the census cannot read contributes zero occurrences on every channel and the exact
+per-file cardinalities the whole design rests on silently lose a row. There is no `assertIsString()`, no
+`is_file()`, and no fixture — the arm does not exist rather than being untested. `testEveryFileTheRostersNameExists()`
+catches a DELETED file; it does not catch an unreadable one, and on PHP 8.3.6 it would not catch a directory
+either, because that reads as `''` and not as `false`.
+
+**Why this is worth a step and not a shrug.** Round 44's finding was an emptied census passing green with a
+dead scanner. This is the same failure mode reached by a different door: the scanner is alive and is handed
+nothing. It is also the sibling of the hole round-49 lane b just closed in two of its own guards — same
+`(string)`/`assertIsString()` shape, same empty-string-from-a-directory measurement.
+
+**Step.** Give the census one shared reader — `private static function source(string $absolute): string`
+with `is_file()` + `assertIsString()` arms — and route all eleven sites through it, then drive both arms once
+with `$root` (a directory: guaranteed to exist, guaranteed not to be a file, no chmod, no uid dependence,
+nothing left on disk). That is the shape `WorktreeRemovalReportingTest::sitesIn()` uses now and it can be
+lifted directly.
 
 ---
