@@ -967,29 +967,41 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'to review and bury the ones who do.',
         );
 
-        $seen = [];
-        foreach ($this->sourceFiles() as $relative => $source) {
-            foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
-                if ($site['closedBy'] === null) {
-                    continue;
-                }
-                $key = $relative . '::' . $site['function'];
-                $seen[$key] = ($seen[$key] ?? 0) + 1;
-            }
-        }
+        // THE ACCOUNTING'S OWN CONTROL, through the SAME helper the tree goes
+        // through and in this test. Measured, and it is why this block exists:
+        // with the "not recorded at all" arm deleted outright, the assertion
+        // over the tree stayed GREEN (mutation M7 SURVIVED) - because the one
+        // promotion in src/ today is rostered, so that arm never fires on real
+        // input. An arm that only runs when the tree is already broken is an
+        // arm nothing has ever executed.
+        $fixture = ['fixture.php' => self::KNOWN_SHORT_VIA_HELPER];
+        self::assertSame(
+            ['fixture.php::viaHelper: not recorded at all, found 1'],
+            $this->unrecorded($fixture, []),
+            'an UNROSTERED helper promotion must be reported. If this returns [] a new '
+                . 'CLOSING_HELPERS row can hide a spawn from this guard with nothing written '
+                . 'down anywhere, which is E425 exactly.',
+        );
+        self::assertSame(
+            [],
+            $this->unrecorded($fixture, ['fixture.php::viaHelper' => 1]),
+            'a receipt for one must cover one, or every real row below reads as a defect.',
+        );
+        self::assertSame(
+            ['fixture.php::viaHelper: recorded 2, found 1'],
+            $this->unrecorded($fixture, ['fixture.php::viaHelper' => 2]),
+            'a stale receipt must be reported too - a row that outlived its site is how a dead '
+                . 'scanner goes unnoticed.',
+        );
 
-        $wrong = [];
         foreach (self::SHORT_VIA_HELPER as $key => $row) {
             self::assertNotSame('', \trim($row['reason']), $key . ' has no reason recorded.');
-            $found = $seen[$key] ?? 0;
-            if ($found !== $row['count']) {
-                $wrong[] = $key . ': recorded ' . $row['count'] . ', found ' . $found;
-            }
-            unset($seen[$key]);
         }
-        foreach ($seen as $key => $count) {
-            $wrong[] = $key . ': not recorded at all, found ' . $count;
-        }
+
+        $wrong = $this->unrecorded(
+            $this->sourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::SHORT_VIA_HELPER),
+        );
 
         self::assertSame([], $wrong, <<<'TEXT'
             A spawn in src/ is being treated as short-lived - and therefore dropped
@@ -1009,6 +1021,46 @@ final class DescriptorInheritanceGuardTest extends TestCase
             stamping provenance and this row is the only thing that noticed. Find
             out which before deleting anything.
             TEXT);
+    }
+
+    /**
+     * Helper-promoted short sites whose receipts do not match, both directions.
+     *
+     * ONE FUNCTION FOR THE FIXTURE AND FOR THE TREE, for the reason
+     * {@see overspent()} gives: a rule verified against a synthetic pair and
+     * then re-implemented inline for the real scan is two rules, and the one
+     * that matters is the untested one.
+     *
+     * @param iterable<string,string> $sources relative path => source
+     * @param array<string,int> $receipts key => how many promotions are recorded
+     * @return list<string>
+     */
+    private function unrecorded(iterable $sources, array $receipts): array
+    {
+        $seen = [];
+        foreach ($sources as $relative => $source) {
+            foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
+                if ($site['closedBy'] === null) {
+                    continue;
+                }
+                $key = $relative . '::' . $site['function'];
+                $seen[$key] = ($seen[$key] ?? 0) + 1;
+            }
+        }
+
+        $wrong = [];
+        foreach ($receipts as $key => $count) {
+            $found = $seen[$key] ?? 0;
+            if ($found !== $count) {
+                $wrong[] = $key . ': recorded ' . $count . ', found ' . $found;
+            }
+            unset($seen[$key]);
+        }
+        foreach ($seen as $key => $count) {
+            $wrong[] = $key . ': not recorded at all, found ' . $count;
+        }
+
+        return $wrong;
     }
 
     /** @return iterable<string, string> relative path => source */
