@@ -8786,3 +8786,92 @@ with confidence and was inverted in fact (E-rule 8).
 in it beside the two `init()`/`update()` obligations.
 
 ---
+
+### Ea49-9 — the denial-literal scanner's `^` anchor could not see this tree's own refusal note
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
+
+**What.** `DenialPrefixRosterTest::FAMILY_SPELLINGS` asserts `'src/Chat.php' => 0` — no denial prefix
+spelled outside the leaf. `DENIAL_SHAPE` was `/^[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/`, anchored at the
+start of the literal. `Chat::answerPermission()`'s refusal note was written
+`Message::system("_Permission denied: {$name} was not run._")`, whose `T_ENCAPSED_AND_WHITESPACE` run
+opens with `_`, so the frame never matched it.
+
+MEASURED on PHP 8.3.6 by re-introducing that exact line and running the guard: **SURVIVED**, green on
+`0`. The guard could not see the one producer its own row is named after. A leading space and a frame
+following a sentence were invisible for the same reason.
+
+The doc-block above it asserted "the scan over that file is now exactly the six real spellings". Counted
+at `db90e768`, `src/Chat.php` carried **seven** denial spellings outside comments; the scan saw six. The
+rounding was in the direction that makes an incomplete guard read as an exhaustive one, and it is why the
+hole stood for a round.
+
+**Fixed** in `de2394bb`: the frame is `(?<![A-Za-z])`-guarded instead of `^`-anchored; three
+known-positive fixtures cover the decorated shapes; the completeness sentence is rewritten in the
+three-part form. Acceptance MEASURED by mutating the FIX — the same re-introduction is now **KILLED**.
+Cost of the widening, measured over the whole of `src/`: both alphabets name the same three files and the
+same seven literals, and all five family rows are unmoved.
+
+**Step.** None. Recorded because rule 11 keeps producing this shape: the alphabet was written to match the
+cases already known, and the case it could not express was the one in the tree.
+
+---
+
+### Ea49-10 — `RefusalStderrSurfaceTest`'s hook-DENY row asserted `''` with no instrument attached
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: test-coverage. **Measured; fixed same round.**
+
+**What.** `testAPlainHookDenyNeverReachesThePromptAndStillReachesTheObserver` asserts the prompt wrote
+nothing. Its helper attached the approver only when the verdict was `ask`, so on the deny arm no
+`HeadlessPermissionPrompt` was ever constructed: `''` was what the ABSENCE of the instrument returned.
+The failure message additionally claimed the DENY "went through the approver", which was false — there
+was no approver. Rule 25 exactly, and the row was itself written as the file's rule-15 control.
+
+MEASURED on PHP 8.3.6: with `approver()` mutated to write to its `$err` unconditionally, the pre-fix
+version was **SURVIVED** (green, 3 tests / 22 assertions); with the approver attached on both arms it is
+**KILLED** on that row.
+
+**Fixed** in `e8045036`: the approver is attached unconditionally, so the empty string now says the gate
+returns on the DENY before `settleAsk()` is reached.
+
+**Step.** None.
+
+---
+
+### Ea49-11 — E240's byte/line figures live only in two doc-blocks and no test derives them
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process. **Partly measured.**
+
+**What.** `HeadlessPermissionPrompt`'s and `RefusalStderrSurfaceTest`'s doc-blocks both carry "526 bytes
+over 9 lines" for the no-tty arm and "266 over 8" for the terminal arm, MEASURED in a child process with
+fd 2 on a plain file. The shipped test uses `php://memory` handles and asserts neither figure, so the
+generator is described but not runnable, and the numbers will rot silently the first time either message
+is reworded. The adjacent structural claim WAS re-derived this round and holds: `refusal()` emits exactly
+eight `\n`, so "eight-line refusal block" is correct.
+
+**Step.** Either derive the two figures in the test (which needs the child-process harness
+`NonInteractiveRefusalDocumentTest` already pays for) or reduce them to the structural claim that is
+checkable — "the no-tty arm writes strictly more than the terminal arm, and both are doubled by the
+observer's line".
+
+---
+
+### Ea49-12 — adding one `src/` file moves the suite total by +1 beyond the lane's own test methods
+
+**Recorded 2026-08-24 by round-49 lane a's reviewer.** Severity: process (merge arithmetic). **Measured.**
+
+**What.** Round 49 lane a added 14 test methods and the suite total moved by 15 (9499 → 9514, MEASURED by
+`--list-tests` at both revisions). The fifteenth is
+`Integration\BinSugarcrushWiringTest::testNoRootResolvingSiteFallsBackToBareGetcwd`, whose
+`@dataProvider crushSourceFiles` yields one case per file under `src/`. The usual
+`grep -c '^+ *yield '` cross-check closes nothing here, because the provider walks a directory rather
+than spelling cases in the diff.
+
+Combined with Ea49-7, ONE new `src/` file therefore costs a lane: +1 suite test, three literal
+cardinalities in `tests/Tools/BuiltInToolCorpusTest.php`, and two restated figures in
+`src/Context/RepoMapBlock.php` — five edits in two files, neither in any lane's ownership map.
+
+**Step.** Worth stating at the top of `BuiltInToolCorpusTest` alongside Ea49-7's option (a), so a lane
+adding a `src/` file learns the cost before a four-minute run tells it.
+
+---
