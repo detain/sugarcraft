@@ -8923,3 +8923,41 @@ which is loud.
 went. Do NOT copy the literals.
 
 ---
+### Ee49-12 — `new Tty(null, $injectedTermios)` writes O_NONBLOCK onto the RUNNER's descriptor 0
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test cross-contamination, live.
+**Measured, PHP 8.3.6, three takes.** One of the sites fixed this round; the rest are out of lane.
+
+**What.** `SugarCraft\Core\Util\Tty::__construct()` is `self::backend($stream ?? STDIN, $termios)`, so a
+`null` first argument wraps the calling process's descriptor 0. With an injected `Termios`,
+`PosixBackend::enableRawMode()` takes the branch that SKIPS its own `isTty()` guard, and then runs
+`@stream_set_blocking($this->stream, false)`; `restore()` runs the matching `(…, true)`. Both therefore
+land on the runner's fd 0 — for a test whose entire intent is to drive a PTY it opened itself.
+
+**The generator, not a count** (rule 18): `grep -rn 'new Tty(' src/ tests/ bin/` under `sugar-crush/`;
+every hit whose first argument is `null` is an instance. At `5c5501f1` that is
+`tests/Backend/EngineBackendTest.php` (FIXED this round) and `tests/Support/ForkedChildTest.php` twice
+(lane d's file — not touched). `src/Tui/Renderer.php` passes `STDOUT` explicitly and is not an instance.
+
+**Measured.** A child whose fd 0 is an open pipe, three takes each: with `new Tty(null, new
+PosixTermios($slaveFd))`, fd 0's `blocked` flag goes `true` → `false` across `enableRawMode()` (3/3); with
+an explicit `stream_socket_pair()` end instead, fd 0's flag never moves and the PAIR's flag moves instead
+(3/3).
+
+**Why it matters beyond tidiness.** This is what refuted attempt 2 of Ee49-1: an `O_NONBLOCK` repair on
+descriptor 0 in `tests/bootstrap.php` is silently undone by `restore()` at any of these sites, which makes
+any guard written against that flag ORDER-DEPENDENT. The `ForkedChildTest` instances are worse than the
+one that was fixed: they `pcntl_fork()` while holding the `Tty`, so the child inherits it too.
+
+**Fixed at one site, and pinned there.** `EngineBackendTest::testCompleteAsyncDoesNotResetTheRealTerminals
+RawMode()` now passes one end of a `stream_socket_pair()` and asserts the flag moves on THAT stream in
+both directions — so a revert to `null` is red, not merely unnoticed. A socket pair rather than
+`php://memory` is forced: PHP reports a memory stream as blocked whatever is set on it, so it cannot
+distinguish "the seam wrote here" from "the seam wrote elsewhere".
+
+**Step.** Give `tests/Support/ForkedChildTest.php`'s two constructions an explicit stream the same way.
+Then consider whether candy-core's `Tty` should refuse `null` when an injected `Termios` is supplied at
+all — the combination means "drive this fd" and "wrap that stream", and there is no caller for which the
+process's own descriptor 0 is the right answer to both.
+
+---

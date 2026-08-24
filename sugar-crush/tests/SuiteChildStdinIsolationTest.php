@@ -126,6 +126,16 @@ final class SuiteChildStdinIsolationTest extends TestCase
      * before that seam and failing after it, so the assertion moved off the
      * flag altogether.
      *
+     * THAT ONE SITE HAS SINCE BEEN GIVEN AN EXPLICIT STREAM, and the paragraph
+     * stays because the site was never the point. `new Tty(` with a `null`
+     * stream and an injected `Termios` is a SHAPE rather than one line, and
+     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest} still has it —
+     * in forking tests, so their children inherit the runner's descriptor 0
+     * too. The assertion below deliberately does not depend on any of those
+     * being fixed. (No count is quoted: it would be stale the next time one is
+     * added or repaired. The generator is `grep -rn 'new Tty(' src/ tests/
+     * bin/`.)
+     *
      * So the assertion is on the DESCRIPTOR's identity, read off
      * `/proc/self/fd/0`, which no stream flag can change — with a
      * known-positive through the same probe, because `readlink()` returning

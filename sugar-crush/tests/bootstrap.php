@@ -245,11 +245,27 @@ NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
  * on descriptor 0. MEASURED, PHP 8.3.6, three takes, that exact seam driven
  * from a process whose fd 0 is an open pipe: after `stream_set_blocking(\STDIN,
  * false)` the flag reads clear, it is STILL clear after `enableRawMode()`, and
- * after `restore()` it is BLOCKED again — 3/3. So a guard on the flag is not
- * merely wrong, it is ORDER-DEPENDENT: it passes when its own file runs alone
- * or before that seam and fails after it, which is the worst shape a guard can
- * have. A closed descriptor cannot be un-closed by either of those lines,
- * because both sit behind `is_resource($this->stream)`.
+ * after `restore()` it is BLOCKED again — 3/3, and with an explicit stream
+ * instead of `null` fd 0's flag never moves at all, also 3/3. So a guard on the
+ * flag is not merely wrong, it is ORDER-DEPENDENT: it passes when its own file
+ * runs alone or before that seam and fails after it, which is the worst shape a
+ * guard can have. A closed descriptor cannot be un-closed by either of those
+ * lines, because both sit behind `is_resource($this->stream)`.
+ *
+ * AND THAT SEAM IS A CLASS, NOT AN INSTANCE — which is the half worth carrying
+ * forward, because a single named offender invites someone to fix it and go
+ * back to the flag. `new Tty(` with a `null` stream and an injected `Termios`
+ * is a SHAPE, and the site above is not its only instance: no number is given
+ * here on purpose, because a count over `tests/` is stale the next time
+ * somebody adds or fixes one — the generator is
+ * `grep -rn 'new Tty(' src/ tests/ bin/`, and every hit whose first argument is
+ * `null` is one. The `EngineBackendTest` instance was given an explicit stream
+ * this round and that test now asserts it stays explicit.
+ * {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest} still has the
+ * shape, in FORKING tests whose children inherit the same `Tty`; it belongs to
+ * another lane this round and was left alone. So the hazard is live in the tree
+ * regardless, and the next one anyone writes re-arms it silently. A descriptor
+ * cannot be re-armed.
  *
  * ONLY WHEN FD 0 IS NOT A TERMINAL. A developer running the suite from a shell
  * keeps their terminal, and a tty is harmless anyway (`stream_isatty()` is the
