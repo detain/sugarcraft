@@ -59,7 +59,9 @@ use PHPUnit\Framework\TestCase;
  * ## What the roster does NOT do
  *
  * It does not classify. Whether a given reader BREAKS on a closed descriptor
- * is a per-site question, and three of the nine are already answered:
+ * is a per-site question. Three of the roster's entries are already answered,
+ * and they are named rather than counted — a count of a roster the test itself
+ * derives rots silently the next time an entry is added (rule 18):
  *
  *  - `candy-mosaic/src/Detect.php` — UNGUARDED. This is the one that produced
  *    the 107 errors. Verified by symbol: `stdinFd()` returns `?? STDIN` and
@@ -75,7 +77,7 @@ use PHPUnit\Framework\TestCase;
  *    silently drop what it cannot judge (rule 14), and this line is the
  *    judgement.
  *
- * The other six are unclassified on purpose. Classifying them is the work
+ * Every other entry is unclassified on purpose. Classifying them is the work
  * E296's option (a) actually requires, and doing it here — without running the
  * descriptor replacement behind a full suite — would be the same reasoning-
  * instead-of-measuring that killed the first three attempts.
@@ -84,13 +86,13 @@ use PHPUnit\Framework\TestCase;
  *
  * `src` and `bin` of this package, and `src` of each reachable sibling. Not a
  * sibling's `tests`, which never execute in this process. Not this package's
- * `tests`: four test files read the constant, every one of them deliberately
- * and as the subject of its own assertions, and pinning them here would make
- * this file a merge conflict for every lane that adds one while telling nobody
- * anything they did not already assert. MEASURED at the commit that added this
- * file, so the exclusion is a decision and not an oversight — and the
- * generator is in this class, so anyone can re-derive the wider answer by
- * adding `tests` to {@see PACKAGE_SCOPE}.
+ * `tests`: the files there that read the constant do so deliberately and as
+ * the subject of their own assertions, and pinning them here would make this
+ * file a merge conflict for every lane that adds one while telling nobody
+ * anything they did not already assert. No count, on purpose (rule 18) — one
+ * taken over `tests/` in a lane worktree is wrong the hour a sibling lane
+ * merges. The generator is in this class, so the wider answer is one edit
+ * away: add `tests` to {@see PACKAGE_SCOPE} and read what it reports.
  */
 final class StdinConstantReaderCensusTest extends TestCase
 {

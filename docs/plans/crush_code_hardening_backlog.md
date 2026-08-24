@@ -10253,3 +10253,296 @@ it was spelled.
 believed on the strength of its output rather than on the strength of a known-answer control.**
 
 ---
+
+---
+
+### Eb49-0 — E296 OPTION (a) IS NOW AVAILABLE: the descriptor replacement costs THREE named assertions, not 107 errors
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: this is the answer E296 has been blocked on for a
+round. **MEASURED, full suite, PHP 8.3.6, at `a43d4f94` in lane b.** Not shipped — see "why not here".
+
+**WHAT E296 SAID.** "Option (a) is not merely a trade, it is unavailable while any reachable library
+reads that constant without a guard." The evidence was round 49's attempt 3: a full suite with fd 0
+replaced produced `9500 tests, 107 errors, rc 2`, every error
+`Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`.
+
+**WHAT IS TRUE NOW.** That was never 107 costs. It was ONE defect — `candy-mosaic`'s `autoFromPalette()`
+naming an enum case that does not exist — multiplied by every test that reached it. E302 fixed it at
+`1a2caebb`, which is IN the round-50 baseline, and nobody re-ran the experiment afterwards.
+
+**THE MEASUREMENT.** `tests/bootstrap.php`'s repair replaced by E290 attempt 1's shape, with the handle
+parked in `$GLOBALS` per E299:
+
+    if (!stream_isatty(\STDIN)) {
+        fclose(\STDIN);
+        $GLOBALS['__sugarcrushSuiteStdin'] = fopen('/dev/null', 'r');
+    }
+
+Full suite, PHP 8.3.6, lane b, one run:
+**`Tests: 9604, Assertions: 135499, Errors: 1, Failures: 2, Skipped: 1, rc 2`** — against a green
+baseline at the same head (9604 tests, 1 skipped, rc 0; the exact assertion total is in lane b's round
+report, and the three failures below account for the difference). **Not one
+`Capability::Iterm2Image`. Not one candy-mosaic error of any kind.**
+
+**All three are in tests whose entire subject is this repair, and all three are EXPECTED:**
+
+ 1. `NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne` —
+    `TypeError: stream_get_meta_data(): supplied resource is not a valid stream resource`. This is the
+    known-positive control E290 attempt 1 already tripped over; it reads `\STDIN`'s metadata to prove the
+    probe can tell the two streams apart. Attempt 3's repair for it — repoint the control at a fresh
+    `php://stdin` handle — is still the right one and is a two-line edit.
+ 2. `SuiteChildStdinIsolationTest::testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking` —
+    `is_resource(\STDIN)` false. That assertion exists to forbid exactly this change; if the change is
+    made deliberately, the assertion is what has to be rewritten, and its message currently cites the 107
+    errors as the reason, which is the sentence this entry retires.
+ 3. `SuiteChildStdinPrependResidualTest::testBytesOnTheRunnersStdinAreStillPrependedToASpawnedChildsPrompt`
+    — fired its own designed message, "E296's PREPEND residual is CLOSED … delete it and record what
+    closed it". Child output under the replacement was `You said:` / `> hi` with the marker gone. **That
+    is the residual closing, observed.** Delete the file.
+
+**WHY NOT SHIPPED IN THIS LANE, and the reason is not file ownership** (rule 23 says a forced
+out-of-lane edit is reportable, not prohibited):
+
+ - **The Step's own precondition is unmet.** E296's revised Step reads "(a) fix `Detect::stdinFd()` to
+   guard its `?? STDIN` with `is_resource()` **and** fix the fallback it falls into, THEN re-try the
+   descriptor replacement". Only the second half is done. With the fallback repaired the throw is now
+   caught rather than fatal, so the suite is green-ish — but candy-mosaic still leaves its normal path
+   by exception on every call, and "no test noticed" is not the same as "the library is fine". See
+   Eb49-8.
+ - **Five lanes are live on `tests/bootstrap.php` this round** and lane e shipped attempt 4 into it
+   hours ago. Attempt 5, landed concurrently by a different lane, is the single highest-conflict edit
+   available in this tree, and it touches three more files to absorb its costs.
+
+**Step, and it is now one commit rather than a research project.** Guard `Detect::stdinFd()`'s three
+consumers (Eb49-8), then apply the four-line bootstrap change above, repoint
+`NonInteractiveStdinPinTest`'s control at a fresh `php://stdin` handle, rewrite
+`SuiteChildStdinIsolationTest`'s live-resource assertion into its opposite with the reason, and delete
+`tests/SuiteChildStdinPrependResidualTest.php`. `tests/StdinConstantReaderCensusTest.php` is the roster
+of everything else that would have to be looked at, and it is a test, so it will red on its own if that
+set changes before someone gets to this.
+
+**And the general lesson, which is why this is the first entry and not the last.** A cost that was
+measured ONCE, before a dependency was fixed, was carried forward for a round as a property of the
+design. Nobody re-ran it because 107 is a number that ends a conversation. **A blocking measurement
+should be re-taken after anything in its causal chain changes** — the chain here was one enum case
+name, in another repository, fixed by a different lane, in the same round.
+
+---
+
+---
+
+### Eb49-1 — E243 was CLOSED before round 50 started, and two places still say "narrowed"
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: doc accuracy on an item that was re-issued as work.
+**Measured by symbol at `906fa666`.**
+
+**What.** Lane b's brief carried E243 as carried-forward work ("Round 49 narrowed it rather than closing
+it; close it if the fd-0 work above makes that possible"), and E243's own entry still ends with a Step
+offering two options. Neither is true any more.
+`HeadlessPermissionPrompt::__construct()` is `$this->in = $in ?? NonInteractive::stdinDefault();` — the
+`?? \STDIN` is gone and the class shares E212's one pin. `NonInteractive::stdinDefault()`'s doc-block
+already records the change in three-part form ("TWO READERS NOW, NOT ONE (E243)"), and
+`tests/Cli/HeadlessPermissionPromptStdinDefaultTest.php` pins it.
+
+**Why it is worth an entry rather than a silent fix.** E243's Step said "either extend the E212 seam to
+this class ... or write the `stream_isatty()` bound down as an intentional property". Option one was
+taken and the entry was never marked. A backlog item that is done but still reads as open costs a lane
+its start-of-round orientation, and this is the second round in which a brief has re-issued work already
+in the tree (E190's shape, one level up: there the commits were unreported, here the entry was).
+
+**Step.** Mark E243 🟢 and delete the Step. Nothing in the code changes.
+
+---
+
+### Eb49-2 — the `new Tty(null, …)` census's alphabet was ONE CLASS NAME, and the backend under it has the same constructor
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: guard coverage, latent. **Measured, PHP 8.3.6,
+three takes. FIXED this round** in `tests/TtyStreamArgumentCensusTest.php`.
+
+**What E301/E303 fixed and what they did not.** E303 correctly replaced a `grep` with a token walk,
+because a grep for `new Tty(` cannot express `new \Fully\Qualified\Tty(`. That fixed the SPELLING hole
+and left the ALPHABET one: the scanner matched the short name `Tty` and nothing else. `Tty` is a façade.
+`SugarCraft\Core\Util\Tty\PosixBackend::__construct()` is `$this->stream = $stream ?? STDIN;` — the
+identical resolution — and it is the class that owns BOTH `@stream_set_blocking()` calls, so it is the
+one that does the damage. A caller who wants the backend without the façade's platform dispatch
+constructs it directly and the census reports the tree clean.
+
+**MEASURED, PHP 8.3.6, three takes each**, in a process whose fd 0 is an open never-written pipe with
+`O_NONBLOCK` already set (the shape `tests/bootstrap.php` leaves), driving the backend directly with no
+`Tty` anywhere in the process: `new PosixBackend(null, new PosixTermios($slaveFd))` → fd 0 clear, clear
+after `enableRawMode()`, **BLOCKED after `restore()` 3/3**; `new PosixBackend($socketPairEnd, …)` → fd 0
+never moves 3/3. Identical to the `Tty` shape, one layer down.
+
+**No live instance today** — measured over the package and every reachable sibling — so this was a latent
+hole, not a live defect.
+
+**`WindowsBackend` is deliberately NOT in the alphabet, checked rather than assumed by symmetry.** Its
+constructor is the same `$stream ?? STDIN` with an injected `Kernel32Interface` in the second slot, so it
+LOOKS like the third member of the set. It contains no `stream_set_blocking` call anywhere — verified
+over `candy-core/src/Util/Tty/WindowsBackend.php`, whose `enableRawMode()`/`restore()` go through the
+console-mode API — so it cannot erase the flag this guard protects. Named in the census doc-block and
+pinned by a NEGATIVE fixture, so anyone who "completes" the roster reds and reads the reason first. This
+box is Linux, PHP 8.3.6, and that backend is never selected here: it is a source claim, not a
+measurement, and it is the only one in that doc-block that is not.
+
+**Acceptance, and it is a PAIR rather than a single verdict** (rule 16). Injecting
+`new \SugarCraft\Core\Util\Tty\PosixBackend(null, $termios)` into a package test file KILLS the widened
+census; the same injection with `HAZARD_CLASSES` reverted to `['Tty']` SURVIVES the census arm. Scope:
+both filtered to the single census method, so each is a claim about that guard and not about the suite.
+
+---
+
+### Eb49-3 — the fd-0 reader roster nobody had, and the scanner that reported a confident false zero
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: the missing input to E296. **Measured, PHP 8.3.6.
+FIXED this round** by `tests/StdinConstantReaderCensusTest.php`.
+
+**What E296 needs and did not have.** Option (a) — replace descriptor 0 instead of flagging it — is the
+only repair that closes the PREPEND half. PHP has no `dup2`, so replacing fd 0 means `fclose(\STDIN)`,
+and the question that decides the cost is "what reads descriptor 0 in this process". Round 49 answered it
+twice by grepping `sugar-crush/`, and both times the reader that mattered was in a sibling library.
+
+**The scope is REACHABILITY, and the two numbers are what make that the right choice rather than a
+convenient one.** Measured, token-based, controls first: the whole monorepo has **15** libs naming the
+`STDIN` constant under `*/src` or `*/bin`; only **2** of them (`candy-core`, `candy-mosaic`) are in
+`sugar-crush`'s 18-lib reachable closure. "The monorepo" would have added thirteen libraries that cannot
+run in this process; `sugar-crush/` dropped the two that can. Neither directory was the alphabet — the
+DEPENDENCY CLOSURE was.
+
+**THE ALPHABET'S FOURTH SPELLING WAS FOUND BY THE SCANNER BEING WRONG, and that is the part worth
+keeping (rule 13 again).** The obvious alphabet is the `STDIN` constant, because that is what every known
+instance used. It cannot express `fopen('php://fd/0')`, `fopen('php://stdin')` or `fopen('/dev/stdin')`.
+All four are in now — and the first version compared each string token to the name for EQUALITY and
+reported **zero** stream-name hits while `grep` found one. A heredoc/nowdoc body arrives from
+`token_get_all()` as ONE token holding the whole block, so `candy-core/src/WorkerPool.php` — which builds
+a worker script whose first line is `fopen('php://fd/0', 'rb')` — read as a string that simply was not
+equal to `php://fd/0`. Green, confident, false. It is containment now, with nowdoc and heredoc fixtures.
+
+**The roster is its own dead-instrument control** (rule 15/E228): the expectation is a NON-EMPTY exact
+set of nine (file, spelling) pairs, so a scanner that matches nothing fails on the first assertion rather
+than reporting a clean tree. Reverting containment to equality KILLS it; injecting `?? STDIN` into
+`candy-buffer` — the E296 scenario itself, a reachable sibling growing a reader — KILLS it and names the
+file.
+
+**Three of the nine are classified in the guard's doc-block; six deliberately are not.** Classified:
+`candy-mosaic/src/Detect.php` unguarded (the 107-error path); `PosixBackend`'s
+`TermiosFactory::open((int) STDIN)` already inside a `try`/`catch (\Throwable)` that says "STDIN closed
+(CI runner): silently no-op"; `candy-core/src/WorkerPool.php` NOT a reader of this process's fd 0 at all
+(the nowdoc is written to a temp file and run as a CHILD whose fd 0 is a `proc_open()` pipe). Classifying
+the other six by reading is exactly the reasoning-instead-of-measuring that killed three attempts.
+
+---
+
+### Eb49-4 — E296's PREPEND residual now executes, and option (a)'s viability is MEASURED rather than argued
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: test-hermeticity, unchanged; provenance, improved.
+**Measured, PHP 8.3.6.**
+
+**The residual is a test now** — `tests/SuiteChildStdinPrependResidualTest.php`. It had been written down
+twice, in prose, and prose does not go red. Control and treatment share one harness and differ in one
+byte string: a pipe never written → the child answers, the marker is absent, and the offline echo
+provider is provably reached; the same pipe with a marker written and **the write end left open** → the
+child still answers (that is the flag) and the marker comes back BEFORE the prompt text (that is the
+residual). Leaving the writer open is load-bearing: an EOF lets even a blocking read return, so a closed
+writer would prove nothing about the flag.
+
+It also covers a case `SuiteChildStdinIsolationTest` does not. That file's pipe is never written, so it
+pins the blocking half only for an EMPTY stdin. Removing the fd-0 repair kills the new test at rc 137
+(SIGKILL at the bound) — i.e. a runner stdin carrying DATA and no EOF blocks the child too, and that is
+now guarded.
+
+**Its doc-block tells a future reader to DELETE it rather than widen it**, because a red here most likely
+means someone closed the prepend half, which is the outcome E296 wants.
+
+---
+
+### Eb49-5 — the prepend residual is a data path from the runner's stdin to a model provider
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: security shape, recorded not fixed
+(functionality-before-hardening). **Measured, PHP 8.3.6.**
+
+**What.** The residual is usually described as untidiness. It is also an unbounded read of whatever
+handed this process descriptor 0, concatenated into a prompt and sent to whatever provider is configured.
+Reproduced directly: `printf 'R49B-STDIN-MARKER\n' | php bin/sugarcrush -p "hi"` echoes
+`> R49B-STDIN-MARKER` back inside the turn. In a suite that is a hermeticity bug; on a CI runner that
+pipes a build log into `phpunit`, or any supervisor that passes its own stdin down, it is that content
+going to a provider — and `NonInteractive::MAX_STDIN_BYTES` is 10MB, so the bound is generous rather than
+absent.
+
+**Not fixed here on purpose.** The only repair that closes it is the descriptor replacement (Eb49-3's
+roster is its input), and that is one decision, not two. Recorded so it is not re-discovered as a
+surprise.
+
+---
+
+### Eb49-6 — E299 re-derived independently, and nothing else in `tests/bootstrap.php` assumes a local is a global
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: informational, closing an open question.
+**Measured, PHP 8.3.6, PHPUnit 10.5.64, three takes.**
+
+**Re-derived rather than inherited** (rule 12), with lane b's own fixtures: two three-line bootstraps
+identical but for `$GLOBALS['__keep']` versus a bare `$keep`, each `include_once`d from inside a private
+METHOD of a throwaway class (PHPUnit's `Application::loadBootstrapScript()` shape), in a child whose fd 0
+is a pipe, then `readlink('/proc/self/fd/0')`. **`$GLOBALS` → `/dev/null` 3/3; the bare local → `false`,
+i.e. fd 0 closed, 3/3.** E299's measurement reproduces exactly.
+
+**The open question E299 left — "check what else in that file assumes otherwise" — is answered NO.** At
+`906fa666` the file has exactly two top-level assignments. `$sandbox` is a string consumed inside the
+include (`mkdir`, `sweepOnce`, `putenv`), so its lifetime is irrelevant. The one value that must outlive
+the include is the `php://memory` handle passed to `NonInteractive::pinStdinDefault()`, and it is held by
+`NonInteractive::$stdinDefault`, a **static property** — not by a local. The `$GLOBALS` line E299 was
+written about is gone with the repair it belonged to, and nothing replaced it.
+
+**It is also already pinned, by accident of a good assertion.**
+`NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()` opens with
+`assertIsResource($pinned)`, and `is_resource()` is FALSE for a closed resource — so if that handle were
+ever parked in a bare local and freed on the include's return, that assertion reds. Worth knowing before
+someone "tidies" it into `assertNotNull()`.
+
+---
+
+### Eb49-7 — round 44's `grep` binary-detection trap reproduced live, on a PHPUnit log in this lane
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: methodology, reproduced on demand.
+**Measured, GNU grep on this box.**
+
+**What.** Round 44 recorded that `grep -c` on PHPUnit output can report **nothing at all** (exit 1)
+because the output contains control bytes and grep switches to binary mode — indistinguishable from a
+real zero, and it was nearly written into two doc-blocks as a finding. It happened again here, on the
+first attempt to count `E`/`F` markers in a full-suite log: `grep -o "[EF]" <log> | wc -l` → **0**;
+`grep -ao "[EF]" <log> | wc -l` → **25**, on the same bytes, same second. The brief's own warning is what
+made it get checked.
+
+**Why it is worth a second entry rather than a pointer to the first.** The first instance was described as
+a property of one log. It is a property of ANY full-suite log this tree produces — the launch notices
+carry control bytes early, so every subsequent grep of that file is in binary mode. Anyone counting
+anything out of a `phpunit` capture needs `-a`, every time, and the failure is silent in the direction
+that looks like good news.
+
+**Step.** None beyond remembering it. Recorded because it is the third instance of the same class
+(round 43's fuzz alphabet, round 44's `grep -c`, round 48's unexecuted scanner) and the cheapest to avoid.
+
+---
+
+### Eb49-8 — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
+
+**Recorded 2026-08-24 by round-50 lane b.** Severity: the remaining blocker on E296 option (a).
+**Measured by symbol at `906fa666`. Out of lane — `candy-mosaic/` belongs to no lane.**
+
+**What.** E302 recorded two defects and `1a2caebb` fixed the first (`autoFromPalette()` named a
+`Capability` case candy-palette does not have). The second is untouched:
+`SugarCraft\Mosaic\Detect::stdinFd()` is `return self::$probeStdin ?? STDIN;`, and `drainStdin()` passes
+that straight into `stream_select()` with no `is_resource()`; `probeXtwinoSize()` and
+`probeXtwinoCellCount()` each spell `self::$probeStdin ?? STDIN` inline and hand it to
+`readStdinTimed()`. A closed descriptor 0 is a legitimate state for a process to be in — a daemon, a
+hook, a `sugarcrush` invoked with `0<&-` — and it should degrade rather than throw.
+
+**Why it matters to E296 specifically.** With defect 1 fixed the throw is now CAUGHT and the fallback
+runs, so a closed `\STDIN` no longer fatals — but the library still leaves its normal path on an
+exception rather than on a decision, and that is the difference between "we replaced the descriptor and
+measured the result" and "we replaced the descriptor and a library quietly changed renderer".
+
+**Step.** Guard the three sites with `is_resource()`, and give `Detect` a test that drives them with a
+closed resource directly rather than through a thrown probe. Worth a candy-mosaic PR of its own.
+
+---
