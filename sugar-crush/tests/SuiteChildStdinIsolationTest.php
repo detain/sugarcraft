@@ -271,13 +271,54 @@ final class SuiteChildStdinIsolationTest extends TestCase
      * report what it did to that descriptor.
      *
      * THE TWO DESCRIPTOR SPECS ARE SPELLED OUT AT THEIR `proc_open()` CALLS
-     * rather than built into one `$spec` variable, and that is a requirement
-     * rather than a style: {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureTest}
-     * reads the spec as a literal at the call site to decide whether fd 2 has
-     * somewhere to go, and it reports a variable as `unclassified` — which it
-     * treats as an offence, correctly, because a scanner that quietly passes
-     * what it cannot read has a hole shaped like the next defect. Both shapes
-     * below send fd 2 to a pipe this method reads back into `raw`.
+     * rather than hoisted into one `$spec` variable, and that is a STYLE
+     * rather than the requirement this paragraph used to claim it was.
+     *
+     * WHAT THIS SAID: that the literal spelling is "a requirement rather than
+     * a style", because
+     * {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureTest} "reads the
+     * spec as a literal at the call site … and it reports a variable as
+     * `unclassified`", which that guard refuses.
+     *
+     * WHAT IS TRUE NOW, and it was never true of THIS file — the claim was
+     * carried over from the general case without being driven against the site
+     * it annotates. Two independent measurements, PHP 8.3.6, both by pushing
+     * source through {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureScanner}
+     * itself rather than by reading its diff:
+     *
+     *  - THE SCANNER RESOLVES A VARIABLE ASSIGNED AN ARRAY LITERAL IN THE SAME
+     *    FUNCTION. Hoisting both specs below into `$ptySpec`/`$pipeSpec` and
+     *    re-scanning this file reports `captured` for both sites, exactly as
+     *    the literal spelling does — not `unclassified`. The `unclassified`
+     *    answer is for a spec the scanner cannot FOLLOW: a variable assigned
+     *    in another function scope, a variable never assigned, or an opaque
+     *    call. Known-answer controls through the same scanner in the same
+     *    probe: same-function literal → `captured`, other-function literal →
+     *    `unclassified`, same-function `/dev/null` → `discarded`, never
+     *    assigned → `unclassified`.
+     *  - AND THE OFFENCE-FINDING HALF OF THAT GUARD DOES READ THIS FILE, which
+     *    is the half the old sentence should have named.
+     *    {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureTest::testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()}
+     *    walks only `ChildStderrCaptureTest::SCOPE`, a list of SUBDIRECTORIES
+     *    of `tests/`, and this file is at the ROOT, so that one never sees it.
+     *    But its sibling
+     *    {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureTest::testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor()}
+     *    walks ALL of `tests/` and says so — it simply only flags OFFENDING
+     *    sites, and both spellings here are `captured`. So the reason the
+     *    hoisted form survives is not that nothing reads this file; it is that
+     *    there is no offence in either form.
+     *
+     * WHY THE LITERAL SPELLING STILL EARNS ITS PLACE, now that it is not being
+     * held up by a guard: the resolution above is bounded by the enclosing
+     * FUNCTION, and that bound is invisible at the call site. A later reader
+     * lifting these specs to a property or a class constant — the obvious next
+     * refactor once they are variables at all — crosses that bound and turns
+     * both sites `unclassified`, which the totality guard above DOES refuse.
+     * Spelling them at the call site keeps the shape the scanner can always
+     * read. That is a reason to prefer it, not a reason it cannot be changed,
+     * and this paragraph is now the difference between the two.
+     *
+     * Both shapes below send fd 2 to a pipe this method reads back into `raw`.
      *
      * @return array{TTY?: string, LIVE?: string, FD0?: string, raw: string}
      */

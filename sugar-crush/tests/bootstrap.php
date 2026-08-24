@@ -174,11 +174,42 @@ putenv('TMPDIR=' . $sandbox);
  * `readStdinIfPiped()` answers null in bounded time whatever the runner's
  * stdin is doing.
  *
- * Not a redirect of fd 0: `\STDIN` is a constant bound at startup and PHP has
- * no `dup2`, so the descriptor itself cannot be replaced from here. The pin is
- * on the DEFAULT only — a test that passes its own stream still gets it, and
- * `src/`/`bin/` never call `pinStdinDefault()`, so production reads `\STDIN`
- * exactly as before.
+ * THIS LINE IS NOT THE REDIRECT OF FD 0 — but it is no longer true that there
+ * ISN'T one, and this paragraph used to say there could not be.
+ *
+ * WHAT THIS SAID: "Not a redirect of fd 0: `\STDIN` is a constant bound at
+ * startup and PHP has no `dup2`, so the descriptor itself cannot be replaced
+ * from here."
+ *
+ * WHAT IS TRUE NOW: the second half is false, and the block at the FOOT of
+ * this file does exactly the thing it forbids. `fclose(\STDIN)` frees
+ * descriptor 0 and the next `fopen()` lands on the lowest free descriptor,
+ * which is 0 — no `dup2` required. The half that survives is the premise, not
+ * the conclusion: `\STDIN` really is bound at startup, which is why the repair
+ * has to close the CONSTANT rather than re-point it, and why
+ * `is_resource(\STDIN)` is false afterwards while `defined('STDIN')` stays
+ * true. See "THE REPAIR IS THE DESCRIPTOR ITSELF" below, which carries the
+ * measurements and the five attempts.
+ *
+ * WHY THIS PARAGRAPH STILL EARNS ITS PLACE: the two repairs are independent,
+ * both are needed, and the descriptor replacement did NOT make this line
+ * redundant — which is the first thing a reader who has just met the block
+ * below will wonder. Two reasons, neither of them about spawned children:
+ *
+ *  - THE REPLACEMENT IS SKIPPED ON A TERMINAL, on purpose — it is guarded by
+ *    `!stream_isatty(\STDIN)` so a developer running the suite from a shell
+ *    keeps their own stdin. On that run fd 0 is the terminal, and without this
+ *    pin `readStdinIfPiped()` would answer through the TTY SHORT-CIRCUIT
+ *    instead of the read path production takes, which is precisely what the
+ *    `php://memory` stream above is chosen to avoid.
+ *  - AND THE PIN IS ON THE DEFAULT ONLY. A test that passes its own stream
+ *    still gets it, and `src/`/`bin/` never call `pinStdinDefault()`, so
+ *    production reads `\STDIN` exactly as before. The descriptor replacement
+ *    has no such seam: it is process-wide.
+ *
+ * Deleting either repair leaves a real hole, and they fail differently — this
+ * one as a test that quietly stops exercising the production path, the other
+ * as a hang.
  *
  * `tests/Cli/NonInteractiveStdinPinTest.php` asserts this line did its job,
  * because deleting it fails as a HANG rather than as a red.
