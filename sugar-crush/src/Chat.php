@@ -1098,6 +1098,30 @@ final class Chat implements Model
      * reason: {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::drain()}
      * is destructive, so a second listening `Chat` would take rows out from
      * under the real transcript.
+     *
+     * ## A HOST THAT DRIVES `update()` ITSELF OWNS THE PUMPING (E223)
+     *
+     * THIS METHOD IS CALLED BY `SugarCraft\Core\Program` AND, IN THIS
+     * APPLICATION, BY NOTHING ELSE. An embedder driving this model directly —
+     * the hosted-pane shape {@see withSize()}'s doc-block describes — gets the
+     * seam's idle wake-up only if it does what a `Program` does, in two parts:
+     *
+     *  1. CALL THIS AND RUN WHAT IT HANDS BACK. The return is the arming
+     *     `Cmd`; a host that never runs it never installs the watcher, and the
+     *     seam is back to "the notice waits for whatever `Msg` arrives next",
+     *     which on an idle session is the user's next keystroke.
+     *  2. KEEP RUNNING THE Cmd `update()` RETURNS. Handling a
+     *     {@see RuntimeNoticePumpMsg} drains the inbox AND hands back a
+     *     RE-arm; drop it and the seam delivers one notice per session.
+     *
+     * NOT EXPOSED AS ITS OWN ACCESSOR, deliberately. Everything above is
+     * already reachable through the `Model` contract, and a second public door
+     * onto the same `Cmd` would be a second thing to keep in step with
+     * whatever `init()` grows next. The gap E223 records is a missing
+     * SENTENCE, not a missing capability, and
+     * {@see \SugarCraft\Crush\Tests\Chat\HostedRuntimeNoticeWakeTest} pins
+     * the whole loop running with no `Program` anywhere — including the
+     * dormancy, which a doc-block on its own leaves unasserted.
      */
     public function init(): ?\Closure
     {
