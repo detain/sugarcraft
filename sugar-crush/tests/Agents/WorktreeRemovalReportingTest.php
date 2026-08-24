@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Agents;
 
+use PHPUnit\Framework\ExpectationFailedException;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\WorktreeConfig;
 use SugarCraft\Crush\Agents\WorktreeIsolationMode;
@@ -430,26 +431,31 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertContains($root . '/bin/sugarcrush', $files);
         self::assertFileExists($root . '/bin/sugarcrush');
 
-        $sites = [];
-        foreach ($files as $file) {
-            // `is_file()` FIRST AND NOT FOLDED INTO THE READ. MEASURED on this
-            // box (PHP 8.3.6), `file_get_contents()` on a DIRECTORY answers the
-            // EMPTY STRING rather than `false` — `''` is a string, so
-            // `assertIsString()` alone lets a non-file roster entry scan as zero
-            // construction sites, which is the silent zero this arm exists to
-            // prevent. The discovery half of phpSources() filters `isFile()`,
-            // but `bin/sugarcrush` is APPENDED unconditionally, so the roster
-            // can carry an entry nothing checked.
-            self::assertTrue(is_file($file), $file . ' is not a file, so this scan cannot speak for it');
+        self::assertSame([], self::sitesIn($files, $root));
 
-            $source = @file_get_contents($file);
-            self::assertIsString($source, $file . ' could not be read, so this scan cannot speak for it');
-            foreach (self::constructionShapes('WorktreeManager', $source) as $shape) {
-                $sites[] = substr($file, \strlen($root) + 1) . ': ' . $shape;
-            }
+        // AND THE REFUSAL ARM IS DRIVEN, at a roster entry that is a DIRECTORY.
+        // Without this line, mutating `is_file($file)` to `true` SURVIVES this
+        // file's suite (MEASURED) — the arm would be present and never seen to
+        // work, which is the shape rule 15 is about. `$root` is used as the
+        // unscannable entry precisely because it is guaranteed to exist and
+        // guaranteed not to be a file: no fixture file, no chmod, no uid
+        // dependence, and nothing left behind if this process dies.
+        $refused = null;
+
+        try {
+            self::sitesIn([$root], $root);
+        } catch (ExpectationFailedException $e) {
+            $refused = $e->getMessage();
         }
 
-        self::assertSame([], $sites);
+        self::assertIsString(
+            $refused,
+            'sitesIn() accepted a DIRECTORY as a roster entry. On PHP 8.3.6 '
+                . "file_get_contents() answers '' for one, which IS a string, so it scans as zero "
+                . 'construction sites — indistinguishable from a file that builds nothing, and '
+                . 'the dormancy claim above would then rest on a scan that read nothing.',
+        );
+        self::assertStringContainsString('is not a file', $refused);
 
         // KNOWN-POSITIVE THROUGH THE SAME SCANNER IN THE SAME TEST. Every shape
         // it must catch, including the named factory a `new`-only walk misses,
@@ -480,6 +486,45 @@ final class WorktreeRemovalReportingTest extends TestCase
     {
         return (bool) (new \ReflectionMethod(WorktreeManager::class, 'removeDirectory'))
             ->invoke($manager, $path);
+    }
+
+    /**
+     * Every construction site of a `WorktreeManager` in `$files`, as
+     * `path-relative-to-$root: shape` strings.
+     *
+     * EXTRACTED SO THE ROSTER IS A PARAMETER, for one reason: the two refusal
+     * arms below assert an ABSENCE of readable-file problems, and an absence
+     * arm that nothing drives is an arm nobody has seen work. With the roster
+     * passed in, the guard can hand this a directory and watch it refuse —
+     * without writing anything into the tree under test.
+     *
+     * TWO ARMS AND NOT ONE. `file_get_contents()` answers `''` for a directory
+     * on PHP 8.3.6 (MEASURED) rather than `false`, so `assertIsString()` cannot
+     * see one; `is_file()` catches that, and the read catches an entry that is
+     * a file and still cannot be opened. `phpSources()` filters `isFile()` on
+     * its discovery half but APPENDS `bin/sugarcrush` unconditionally, so the
+     * roster really can carry an entry nothing checked.
+     *
+     * @param list<string> $files
+     *
+     * @return list<string>
+     */
+    private static function sitesIn(array $files, string $root): array
+    {
+        $sites = [];
+
+        foreach ($files as $file) {
+            self::assertTrue(is_file($file), $file . ' is not a file, so this scan cannot speak for it');
+
+            $source = @file_get_contents($file);
+            self::assertIsString($source, $file . ' could not be read, so this scan cannot speak for it');
+
+            foreach (self::constructionShapes('WorktreeManager', $source) as $shape) {
+                $sites[] = substr($file, \strlen($root) + 1) . ': ' . $shape;
+            }
+        }
+
+        return $sites;
     }
 
     /** @return list<string> absolute paths, sorted */
