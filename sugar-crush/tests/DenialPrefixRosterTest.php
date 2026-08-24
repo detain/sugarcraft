@@ -372,7 +372,9 @@ final class DenialPrefixRosterTest extends TestCase
      *
      * Named files rather than a walk of `src/`, and that is a measurement
      * rather than timidity. Running {@see denialLiteralsIn()} over the whole
-     * of `src/` on PHP 8.3.6 returns a fourth file —
+     * of `src/` on PHP 8.3.6 returns hits in exactly THREE files: the two this
+     * map already accounts for (`src/Runtime.php`, whose three constants the
+     * tests above cover, and the leaf) and one more —
      * `src/Agents/TaskBlockedException.php`, whose `'Task creation blocked: '`
      * is an exception message and matches the vocabulary's `block(ed)?` term.
      * It is not a tool-result prefix and is not on any roster, so a whole-tree
