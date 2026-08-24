@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * A READER THAT SLICES A LINE ARRAY WITH REFLECTION'S LINE NUMBERS MUST BE
- * ADDRESSING THE FILE THOSE NUMBERS CAME FROM, AND ELEVEN OF THEM DO IT.
+ * ADDRESSING THE FILE THOSE NUMBERS CAME FROM.
  *
  * WHERE THIS CAME FROM. `VhsTapeContractTest::modelMethodTokens()` took
  * `getStartLine()`/`getEndLine()` off a `ReflectionMethod` and sliced
@@ -26,14 +26,37 @@ use PHPUnit\Framework\TestCase;
  * derived by {@see readers()} on every run.
  *
  * WHAT COUNTS AS SAFE HERE, and the bound is stated rather than implied. A
- * reader is safe when its enclosing function NAMES `getFileName` at all, which
- * covers both honest spellings: slicing `file($reflection->getFileName())`
- * directly, which cannot be wrong, and slicing `__FILE__` after asserting the
- * two agree. IT DOES NOT CHECK WHAT THE FUNCTION DOES WITH THE NAME — one that
- * fetched it and ignored it would pass. That is a coarser question than the
- * real one and it is the one that can be answered from tokens; the alternative
- * is a dataflow analysis whose own correctness nobody could check. The bound is
- * here so the next reader knows what the green means.
+ * reader is safe when its COVERAGE SET names `getFileName` at all, which covers
+ * both honest spellings: slicing `file($reflection->getFileName())` directly,
+ * which cannot be wrong, and slicing `__FILE__` after asserting the two agree.
+ * IT DOES NOT CHECK WHAT THE FUNCTION DOES WITH THE NAME — one that fetched it
+ * and ignored it would pass. That is a coarser question than the real one and
+ * it is the one that can be answered from tokens; the alternative is a dataflow
+ * analysis whose own correctness nobody could check. The bound is here so the
+ * next reader knows what the green means.
+ *
+ * THE SLICE DOES NOT HAVE TO SIT IN THE SAME FUNCTION AS THE LINE NUMBERS, and
+ * assuming it did is how the first cut of this census came to be blind to the
+ * one reader it was written about. {@see VhsTapeContractTest} reads the line
+ * numbers in `modelMethodTokens()` and hands them to `declaredSlice()` to do
+ * the indexing. A scanner keyed on "`getStartLine` AND `array_slice` in one
+ * function" drops BOTH halves of that pair — the caller for want of a slice,
+ * the callee for want of a reflection call — so the exemplar this file was
+ * built from was the one file it could not see, and re-opening the exemplar's
+ * original defect in it left this census green. Selection is therefore on the
+ * reflection read ALONE, and the slice is looked for one call hop deep among
+ * the functions declared in the SAME FILE. A reader's COVERAGE SET is its own
+ * body plus the bodies of the same-file functions it delegates the slice to,
+ * because those two are jointly responsible for the pairing.
+ *
+ * AND A REFLECTION READ WHOSE SLICE IS OUT OF REACH IS REPORTED, NOT DROPPED.
+ * One hop within one file is a bound, and a bound has an outside: a slice
+ * lifted into a shared helper class is past it. Rather than reading such a site
+ * as clean — which is what silently skipping it would say — the scanner returns
+ * it separately and {@see SLICE_UNREACHABLE} must carry a row for it. That
+ * roster is EMPTY today and both directions are checked, so it costs nothing
+ * until the day it is the only thing standing between a moved helper and a
+ * census that has quietly stopped covering anything.
  *
  * THE SECOND HALF OF THE ORIGINAL DEFECT IS NOT COVERED BY THIS FILE, and the
  * omission is deliberate and recorded. Reflection's line numbers are fixed when
@@ -41,10 +64,10 @@ use PHPUnit\Framework\TestCase;
  * in between shifts every slice WHILE THE FILE NAME STILL MATCHES. That half
  * was the one actually OBSERVED. Only `VhsTapeContractTest` guards it, through
  * a `declaredSlice()` that refuses unless the slice's first line spells
- * `function <name>`. Every other reader here is open to it. Rostering ten
- * readers in nine files across five concurrently-merging lanes would red on
- * every rename, so it is a backlog entry rather than a guard — see the round-49
- * lane c report.
+ * `function <name>`. Every other reader here is open to it. Rostering every
+ * reader by `<file>::<method>` across five concurrently-merging lanes would red
+ * on every rename, so it is a backlog entry rather than a guard — see the
+ * round-49 lane c report.
  */
 final class ReflectionLineSliceReaderCensusTest extends TestCase
 {
@@ -71,11 +94,28 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             . 'one. Delete this row with the fix.',
     ];
 
+    /**
+     * Functions that read reflection line numbers whose SLICE this scanner
+     * cannot reach — the indexing is more than one call hop away, or lives in
+     * another file — each with the reason it is left that way.
+     *
+     * EMPTY IS THE CORRECT STATE AND IT IS NOT THE SAME AS UNCHECKED. Every
+     * such read is currently either indexing in its own body or delegating one
+     * hop inside its own file, so nothing needs a row. The roster exists
+     * because the alternative to it is a `continue`, and a `continue` here
+     * would read a reader the scanner has lost track of as a reader that is
+     * fine. Both directions are checked, so a row that outlives its site fails
+     * exactly like a site that arrives without a row.
+     *
+     * @var array<string,string>
+     */
+    private const SLICE_UNREACHABLE = [];
+
     public function testEveryReflectionLineSliceReaderNamesTheDeclaringFile(): void
     {
         $this->assertTheScannerIsAlive();
 
-        [$readers, $problems] = self::readers(self::everyTestFile());
+        [$readers, $problems, $unreachable] = self::readers(self::everyTestFile());
 
         // RULE: GO RED ON WHAT YOU CANNOT PARSE. A slice site this scanner
         // cannot attribute to a function is not "clean" — it is a reader that
@@ -88,6 +128,30 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
 
         self::assertNotSame([], $readers, 'no reader was found anywhere under tests/, so this '
             . 'census is a statement about a walk that is not running rather than about the tree');
+
+        // RULE: GO RED ON WHAT YOU CANNOT PARSE, the second arm. A reflection
+        // read whose slice this scanner cannot reach is not a clean function;
+        // it is a reader it has lost, and losing one silently is the shape of
+        // the defect that made this file necessary in the first place.
+        $unrostered = array_diff_key($unreachable, self::SLICE_UNREACHABLE);
+        self::assertSame([], $unrostered, \sprintf(
+            "%d function(s) read reflection line numbers whose slice is out of this scanner's "
+            . "reach — not in the function, and not in a same-file function it calls. That is a "
+            . "reader this census can no longer say anything about, which is what happens when "
+            . "the indexing is lifted into a shared helper. Route the read and the slice back "
+            . "into reach of one another, or add a row to SLICE_UNREACHABLE with the reason.\n  %s",
+            \count($unrostered),
+            \implode("\n  ", array_map(
+                static fn (string $key, string $at): string => $key . ' (' . $at . ')',
+                array_keys($unrostered),
+                $unrostered,
+            )),
+        ));
+
+        $staleRows = array_diff_key(self::SLICE_UNREACHABLE, $unreachable);
+        self::assertSame([], $staleRows, 'a SLICE_UNREACHABLE row describes a site that is no '
+            . 'longer out of reach (or no longer exists). Delete it — a row that outlives its '
+            . 'site is a standing permission nobody re-argued.');
 
         $unrecorded = [];
         foreach ($readers as $key => $namesTheFile) {
@@ -194,11 +258,12 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             }
             PHP;
 
-        [$readers, $problems] = self::readers(['a/A.php' => $unchecked]);
+        [$readers, $problems, $unreachable] = self::readers(['a/A.php' => $unchecked]);
         self::assertSame(['a/A.php::body' => false], $readers, 'an unchecked reader was not '
             . 'reported as one. Until this passes, every answer this census gives is a '
             . 'statement about a dead walk.');
         self::assertSame([], $problems);
+        self::assertSame([], $unreachable);
 
         // ...AND THE CHECKED FORM IS SPARED, or the predicate is stuck at yes
         // and every reader in the tree is on the hook.
@@ -207,14 +272,81 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
         self::assertSame(['a/A.php::body' => true], $readers, 'a reader that slices the file '
             . 'reflection named was reported as unchecked');
 
-        // ...AND A FUNCTION THAT ASKS FOR A LINE NUMBER WITHOUT SLICING
-        // ANYTHING IS NOT A READER. Selection is on the SLICE: a test that
-        // merely asserts a declaration's line has nothing to address wrongly.
-        [$readers] = self::readers([
+        // ...AND A READER THAT DELEGATES THE INDEXING IS STILL A READER. THIS
+        // IS THE FIXTURE THE FIRST CUT OF THIS CENSUS DID NOT HAVE, and its
+        // absence is why the census could not see the very reader it was
+        // written about: `VhsTapeContractTest::modelMethodTokens()` takes the
+        // line numbers and hands them to `declaredSlice()`. Keyed on
+        // both-in-one-function, the caller fell out for want of `array_slice`
+        // and the callee fell out for want of a reflection call, so re-opening
+        // the caller's original defect left this file green. Both halves of the
+        // delegating pair are exercised here, in both polarities.
+        $delegatedUnchecked = <<<'PHP'
+            <?php
+            final class A
+            {
+                private function body(string $method): string
+                {
+                    $r = new \ReflectionMethod(self::class, $method);
+
+                    return self::cut(file(__FILE__) ?: [], $r->getStartLine(), $r->getEndLine());
+                }
+
+                private static function cut(array $lines, int $from, int $to): string
+                {
+                    return implode('', array_slice($lines, $from - 1, $to - $from + 1));
+                }
+            }
+            PHP;
+
+        [$readers, $problems, $unreachable] = self::readers(['a/A.php' => $delegatedUnchecked]);
+        self::assertSame(['a/A.php::body' => false], $readers, 'a reader that hands the line '
+            . 'numbers to a same-file helper to do the indexing was not selected at all. That '
+            . 'is the exact blindness this census shipped with: the caller has no array_slice '
+            . 'and the callee has no reflection call, so keying on both-in-one-function drops '
+            . 'the pair entirely and the census reports on a tree it cannot see.');
+        self::assertSame([], $problems);
+        self::assertSame([], $unreachable, 'a delegating reader was filed as out-of-reach rather '
+            . 'than followed one hop, which is the hop this scanner claims to make');
+
+        $delegatedChecked = str_replace(
+            'file(__FILE__)',
+            'file((string) $r->getFileName())',
+            $delegatedUnchecked,
+        );
+        [$readers] = self::readers(['a/A.php' => $delegatedChecked]);
+        self::assertSame(['a/A.php::body' => true], $readers, 'a delegating reader that names '
+            . 'the declaring file was reported as unchecked');
+
+        // ...AND THE CHECK COUNTS FROM EITHER HALF OF THE PAIR. The reader and
+        // the helper it delegates to are jointly responsible for the pairing,
+        // so the assertion may honestly live in the helper.
+        [$readers] = self::readers(['a/A.php' => str_replace(
+            'return implode(\'\', array_slice(',
+            'assert($lines === file((string) (new \ReflectionClass(self::class))->getFileName()));'
+                . "\n        return implode('', array_slice(",
+            $delegatedUnchecked,
+        )]);
+        self::assertSame(['a/A.php::body' => true], $readers, 'the check was ignored because it '
+            . 'sits in the helper that does the slicing rather than in the function that reads '
+            . 'the line numbers, which is one of the two places it can honestly be');
+
+        // ...AND A READ WHOSE SLICE IS OUT OF REACH IS REPORTED, NOT DROPPED.
+        // A function that reads a line number and reaches no slice — because
+        // it never slices, or because the indexing was lifted into a shared
+        // class past this scanner's one-hop bound — is a reader this scanner
+        // has LOST. Filing it is what makes the bound honest; a `continue`
+        // here would make an out-of-reach reader indistinguishable from a
+        // clean one, which is rule 14 exactly.
+        [$readers, $problems, $unreachable] = self::readers([
             'a/A.php' => "<?php\nfinal class A { private function n(\$r): int { return \$r->getStartLine(); } }\n",
         ]);
-        self::assertSame([], $readers, 'a function that reads a line number without slicing was '
-            . 'selected as a reader, which puts every reflection assertion in the tree on the hook');
+        self::assertSame([], $readers, 'a function with no slice in reach was reported as a '
+            . 'reader whose file check can be judged, which it cannot be');
+        self::assertSame([], $problems);
+        self::assertSame(['a/A.php::n' => 'a/A.php:2'], $unreachable, 'a reflection read with no '
+            . 'slice in reach was dropped instead of being filed. An expected-empty assertion '
+            . 'here would survive the scanner being deleted outright; this one does not.');
 
         // ...AND A SLICE SITE THIS SCANNER CANNOT ATTRIBUTE IS REPORTED.
         [, $problems] = self::readers([
@@ -225,22 +357,43 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
     }
 
     /**
-     * Every function that slices a line array with reflection's line numbers,
-     * keyed `<relative path>::<function>`, valued by whether it names the
-     * declaring file.
+     * Every function that reaches a line-array slice with reflection's line
+     * numbers, keyed `<relative path>::<function>`, valued by whether its
+     * coverage set names the declaring file.
+     *
+     * SELECTION IS ON THE REFLECTION READ, NOT ON THE SLICE, and that is the
+     * whole correction. Keying on both-in-one-function looks tighter and is
+     * strictly blinder: it cannot see a reader that delegates the indexing, and
+     * it drops the delegate too, because the delegate holds no reflection call.
+     * The slice is therefore chased ONE HOP into the functions declared in the
+     * same file, and a read whose slice is not reachable that way comes back in
+     * the third return rather than being skipped.
+     *
+     * ONE HOP, WITHIN ONE FILE, AND NO FURTHER. Two hops or a cross-file
+     * resolution would need a call graph over the whole suite, which is a
+     * second instrument nobody could check. The bound is honest because
+     * overrunning it is REPORTED — see the third return — rather than read as
+     * a clean file.
      *
      * @param array<string,string> $sources relative path => source
      *
-     * @return array{array<string,bool>, list<string>} readers, problems
+     * @return array{array<string,bool>, list<string>, array<string,string>}
+     *         readers, unattributable sites, reads whose slice is out of reach
      */
     private static function readers(array $sources): array
     {
         $readers = [];
         $problems = [];
+        $unreachable = [];
 
         foreach ($sources as $relative => $source) {
             $tokens = \token_get_all($source);
             $ranges = TokenFunctionRanges::scan($tokens);
+
+            $sameFile = [];
+            foreach ($ranges as $range) {
+                $sameFile[$range['name']] = $range;
+            }
 
             foreach ($tokens as $i => $token) {
                 if (!\is_array($token) || $token[0] !== \T_STRING || $token[1] !== 'getStartLine') {
@@ -256,25 +409,49 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
                     continue;
                 }
 
+                $key = $relative . '::' . $enclosing['name'];
                 $names = self::namesIn($tokens, $enclosing['from'], $enclosing['to']);
 
-                // SELECTION IS ON THE SLICE. A function that reads a line
-                // number and never indexes a line array with it has nothing to
-                // address wrongly, and taking every reflection call would put
-                // half the suite on the hook — which is answered with
-                // exemptions, which is where the next real one hides.
-                if (!isset($names['array_slice'])) {
+                // THE COVERAGE SET: this function, plus every same-file
+                // function it calls that does the indexing for it. Both are
+                // responsible for the pairing, so a check in either one counts.
+                $coverage = [$names];
+
+                foreach (array_keys($names) as $called) {
+                    if ($called === $enclosing['name'] || !isset($sameFile[$called])) {
+                        continue;
+                    }
+
+                    $hop = self::namesIn($tokens, $sameFile[$called]['from'], $sameFile[$called]['to']);
+                    if (isset($hop['array_slice'])) {
+                        $coverage[] = $hop;
+                    }
+                }
+
+                if (!isset($names['array_slice']) && \count($coverage) === 1) {
+                    $unreachable[$key] = $relative . ':' . $token[2];
+
                     continue;
                 }
 
-                $readers[$relative . '::' . $enclosing['name']] = isset($names['getFileName']);
+                $namesTheFile = false;
+                foreach ($coverage as $set) {
+                    if (isset($set['getFileName'])) {
+                        $namesTheFile = true;
+
+                        break;
+                    }
+                }
+
+                $readers[$key] = $namesTheFile;
             }
         }
 
         ksort($readers);
         sort($problems);
+        ksort($unreachable);
 
-        return [$readers, $problems];
+        return [$readers, $problems, $unreachable];
     }
 
     /**
