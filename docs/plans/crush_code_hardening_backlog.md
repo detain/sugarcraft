@@ -11218,19 +11218,30 @@ edit hiding in a refactor.
 **Recorded 2026-08-24 by round-49 lane c.** Severity: entry accuracy. **Measured, PHP 8.3.6, by
 `tests/Support/NonBlockingVocabularyTest`, which derives it on every run.**
 
-E319 lists `tests/Support/ForkedChildTest.php (×2)`. The tree has **four** — two copies of the pair.
-E319 lists `tests/SuiteChildStdinIsolationTest.php (×2)` as inverted. Of its two sites, one is
-**CONSISTENT** (`assertTrue($meta['blocked'])` beside a sentence naming the clearing verb, which is the
-correct pairing), and the other names BOTH directions in one sentence — the wording IS in the inverted
-vocabulary, but a direction-word scanner that picked one of the two would be reporting a coin flip, so it
-is rostered as `unreadable` rather than as inverted.
+E319 lists `tests/Support/ForkedChildTest.php (×2)`. The tree has **four** — two copies of the pair. That
+correction stands.
 
-Measured total over `tests/` and `src/`: **eight** contradictory sentences in three files, one
-unrankable, one consistent. All rostered in both directions.
+**⚠️ THE SECOND HALF OF THIS ENTRY WAS ITSELF WRONG, and the entry was the output of the instrument that
+was wrong.** It said of `tests/SuiteChildStdinIsolationTest.php`'s two sites that one is CONSISTENT —
+`assertTrue($meta['blocked'])` beside a sentence naming the clearing verb, "which is the correct
+pairing". It is not the correct pairing, and E319 was RIGHT to list that file. The site is the tree's
+only AFFIRMATIVELY-phrased message, `rank()` graded affirmative messages backwards (see Ec49-7), and this
+entry faithfully reported what the broken scanner returned. Deriving a figure instead of quoting one
+protects against a stale figure; it does not protect against a wrong instrument, and this is what that
+looks like from the inside.
+
+Verified against the CODE and not against the rule (rule 8): `tests/bootstrap.php` ends in
+`if (!stream_isatty(\STDIN)) { stream_set_blocking(\STDIN, false); }`, so the only act it could perform
+on a tty is a flag SET. The sentence says "cleared". Inverted.
+
+Measured total over `tests/` and `src/` after the `rank()` repair: **nine** contradictory sentences in
+four files, and one unrankable (the `:189` sentence naming both directions, which is a different defect
+and is rostered as its own kind). All rostered in both directions.
 
 **Step.** The supervisor sweep E319 asks for still wants doing — this lane owns none of the four files.
 When it happens, the roster rows red and must be DELETED, which is the success case and is said so in the
-failure text.
+failure text. `tests/SuiteChildStdinIsolationTest.php` needs BOTH of its sentences repaired and BOTH of
+its rows deleted, in the same commit as the repair.
 
 ---
 
