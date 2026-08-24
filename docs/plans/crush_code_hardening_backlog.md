@@ -12039,8 +12039,10 @@ to keep that one (rule 26).
 
 **Generator**, PHP 8.3.6, whole-population walk, no sampling: `token_get_all()` over every `.php` under
 `*/src`, collect every `T_INT_CAST`, record the next significant token, and report every hit rather than
-only the ones that match a shape (rule 14). 1042 int-casts across 58 libs; the three above are the ones whose
-operand is a stream.
+only the ones that match a shape (rule 14). Run at `b9abd2fb`: 1042 int-casts across 58 libs, of which the
+three above are the ones whose operand is a stream. The 1042 and the 58 are a snapshot of that commit and
+will rot (rule 18); the load-bearing claim is the THREE, and re-deriving it is the generator's job, not this
+paragraph's.
 
 **Step.** Give both sites the same treatment `TtyDetect::isAtty()` got where the question allows it —
 `size()` cannot, because `ioctl` genuinely needs a descriptor number. For `size()` the honest options are to
