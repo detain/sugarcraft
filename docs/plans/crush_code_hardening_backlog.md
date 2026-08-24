@@ -13343,3 +13343,43 @@ the same library, was three files away and was not read.** The three new paragra
 invariant, name their harness, and explicitly tell the reader not to take an id out of them.
 
 ---
+
+### Ea53-10 — the descriptor census is blind to the METHOD-CALL spelling of its own sinks
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument blind spot, **no
+defect behind it today**. **Deliberately deferred — see the merge hazard at the bottom.**
+
+`DescriptorSinkScanner` reports a sink only in its FUNCTION spelling. Its control fixture asserts, on
+purpose, that `$obj->posix_isatty(0)` is NOT reported — the reasoning being that a method that merely
+shares a name with a POSIX function is not a POSIX function. That reasoning is right for `posix_isatty`
+and wrong for the one sink in the list that is *normally* reached as a method.
+
+**MEASURED, this lane's worktree, generator = `grep -rEn '(->|::)<sink>\s*\(' --include=*.php */src/`
+for each of `DescriptorSinkScanner::FUNCTION_SINKS`:** `posix_isatty` and `posix_ttyname` have **zero**
+method-shaped call sites tree-wide. `fcntl` has **two**, both in
+`candy-pty/src/Posix/PosixPtySystem.php`, both spelled `$libc->fcntl($masterFd, …)` /
+`$libc->fcntl($slaveFd, …)` against candy-pty's FFI `Libc` binding, whose cdef declares
+`int fcntl(int fd, int cmd, int arg)` — a genuine descriptor sink by the census's own definition.
+
+**Both are currently CORRECT** (`$masterFd` and `$slaveFd` come from `posix_openpt()` and the
+`grantpt`/`unlockpt` path, i.e. real descriptors, no cast anywhere). So this is a hole in the instrument,
+not a seventh defect, and Ea53-6's "no seventh instance exists tree-wide" survives it — but that claim
+should be read as *"no seventh instance in the function spelling"*, which is narrower than it sounds.
+
+Widening further, the same `Libc` binding exposes `open`/`close`/`ioctl`/`read`/`write`, all fd-taking:
+**18 `lib()->…` / `$libc->…` call sites tree-wide** by the generator
+`grep -rEn 'lib\(\)->(open|close|ioctl|fcntl|read|write|dup2)\s*\(|\$libc->(…)\s*\(' --include=*.php */src/`.
+*Re-derive both numbers before acting on them — they are a property of this worktree, not of master.*
+
+**STEP**: give the scanner a third sink class, `METHOD_SINKS`, matched as
+`T_OBJECT_OPERATOR`/`T_DOUBLE_COLON` + name, and seed it from candy-pty's `Libc` cdef rather than by
+hand, so the sink roster stops being the same kind of hand-maintained list this whole family keeps
+getting caught by.
+
+**WHY NOT THIS ROUND (merge hazard, read before implementing).** `DescriptorSinkArgumentCensusTest::ROSTER`
+is a **set-equality** census: widening the sink shape adds roster rows, and a roster row is a judgement
+someone has to write, not a count someone can bump. Adding ~18 of them in a lane while four sibling lanes
+are editing `src/` is how a census merges cleanly and is wrong afterwards. Do it in a round that owns the
+census alone.
+
+---
