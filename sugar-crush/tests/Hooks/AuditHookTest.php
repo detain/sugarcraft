@@ -134,15 +134,15 @@ final class AuditHookTest extends TestCase
      */
     public function testTheDefaultLogFileIsThePerUserProductionPathWithoutWritingToIt(): void
     {
-        $hook = new AuditHook();
-
         $expected = sys_get_temp_dir() . '/sugar-crush-audit-' . posix_geteuid() . '/audit.log';
 
-        self::assertSame($expected, AuditHook::defaultLogFile());
-        self::assertSame(
-            $expected,
-            (new \ReflectionProperty(AuditHook::class, 'logFile'))->getValue($hook),
-        );
+        [$actual, $constructed] = $this->withNoDirectoryPin(static fn (): array => [
+            AuditHook::defaultLogFile(),
+            (new \ReflectionProperty(AuditHook::class, 'logFile'))->getValue(new AuditHook()),
+        ]);
+
+        self::assertSame($expected, $actual);
+        self::assertSame($expected, $constructed);
     }
 
     /**
@@ -154,11 +154,45 @@ final class AuditHookTest extends TestCase
      */
     public function testTheDefaultIsNoLongerTheLeafEveryUserOnTheBoxShared(): void
     {
-        self::assertNotSame(sys_get_temp_dir() . '/sugar-crush-audit.log', AuditHook::defaultLogFile());
-        self::assertStringContainsString(
-            '/sugar-crush-audit-' . posix_geteuid() . '/',
-            AuditHook::defaultLogFile(),
-        );
+        $actual = $this->withNoDirectoryPin(static fn (): string => AuditHook::defaultLogFile());
+
+        self::assertNotSame(sys_get_temp_dir() . '/sugar-crush-audit.log', $actual);
+        self::assertStringContainsString('/sugar-crush-audit-' . posix_geteuid() . '/', $actual);
+    }
+
+    /**
+     * Run $probe with {@see AuditHook::pinDefaultLogDirectory()} cleared, then
+     * put back whatever `tests/bootstrap.php` installed.
+     *
+     * WHY THE TWO TESTS ABOVE NEED THIS (E351). They are the only assertions
+     * in the tree about the PRODUCTION default, and the bootstrap now points
+     * the unconfigured default at the suite sandbox so a phpunit run stops
+     * creating and populating the real audit directory on the developer's box.
+     * Clearing the pin for the length of one probe is what keeps the
+     * production claim assertable without giving the claim back the side
+     * effect it was rewritten (E298) to lose: nothing here WRITES, it only
+     * constructs.
+     *
+     * RESTORED TO THE INSTALLED VALUE AND NOT TO NULL, and `finally` rather
+     * than a trailing line: a throw inside the probe would otherwise leave
+     * every later test in the process writing to the production path, which is
+     * the exact leak this seam closed.
+     *
+     * @template T
+     * @param \Closure():T $probe
+     * @return T
+     */
+    private function withNoDirectoryPin(\Closure $probe): mixed
+    {
+        $installed = AuditHook::defaultLogDirectoryPin();
+        self::assertIsString($installed, 'tests/bootstrap.php stopped pinning the audit directory');
+        AuditHook::pinDefaultLogDirectory(null);
+
+        try {
+            return $probe();
+        } finally {
+            AuditHook::pinDefaultLogDirectory($installed);
+        }
     }
 
     /**

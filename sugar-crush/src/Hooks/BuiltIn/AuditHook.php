@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Hooks\BuiltIn;
 
+use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Hooks\HookContext;
 use SugarCraft\Crush\Hooks\HookEvent;
 use SugarCraft\Crush\Hooks\HookInterface;
@@ -20,8 +21,21 @@ use SugarCraft\Crush\Hooks\HookResult;
  * {@see \SugarCraft\Crush\Backend\EngineBackend} both call it — so an
  * ordinary run writes every tool call it makes to whatever
  * {@see defaultLogFile()} answers. It is not a fallback nothing reaches.
+ *
+ * WHY THIS CLASS IS NO LONGER `final readonly` (E345, E351). It carries two
+ * pieces of PROCESS state now — the once-per-process notice latch behind
+ * {@see noticeRefusalOnce()} and the test-only directory seam behind
+ * {@see pinDefaultLogDirectory()} — and MEASURED on PHP 8.3.6, a `readonly`
+ * class cannot declare a static property AT ALL: both
+ * `private static bool $x = false;` and `private static bool $x;` are fatal
+ * ("Readonly property cannot have default value" / "Static property cannot be
+ * readonly"). E345 anticipated this cost as "process state on a class that has
+ * none". NOTHING ABOUT AN INSTANCE CHANGED: `$logFile` and `$ownsPath` are
+ * each declared `readonly` individually, so the immutability a caller can
+ * observe is exactly what it was; what moved is the keyword, not the
+ * guarantee.
  */
-final readonly class AuditHook implements HookInterface
+final class AuditHook implements HookInterface
 {
     /**
      * Leaf-name stem of the per-user directory {@see defaultLogFile()} lives
@@ -59,7 +73,7 @@ final readonly class AuditHook implements HookInterface
      */
     private const FOREIGN_ACCESS_BITS = 0o077;
 
-    private string $logFile;
+    private readonly string $logFile;
 
     /**
      * True when no caller named a path, so this class chose one and is
@@ -71,7 +85,66 @@ final readonly class AuditHook implements HookInterface
      * a log-rotation directory is an ordinary thing to want — would be this
      * class overruling its own API.
      */
-    private bool $ownsPath;
+    private readonly bool $ownsPath;
+
+    /**
+     * A directory {@see defaultLogDirectory()} answers with instead of the
+     * production one, or null for the production one (E351).
+     *
+     * THE SUITE WAS WRITING TO THE PRODUCTION PATH AND NOTHING REMOVED IT.
+     * OBSERVED on this box during round 49: `/tmp/sugar-crush-audit-1000/`,
+     * `drwx------`, its `audit.log` grown to 29165 bytes by a phpunit run and
+     * by no real `sugarcrush`. `AuditHookTest` was rewritten at E298
+     * specifically to stop driving writes at this default and no longer does;
+     * the leak is every OTHER suite that reaches
+     * {@see \SugarCraft\Crush\Hooks\HookManager::registerBuiltIns()}, which
+     * constructs `new BuiltIn\AuditHook()` with no argument.
+     *
+     * WHY A SEAM AND NOT `TMPDIR`. MEASURED, PHP 8.3.6: `putenv('TMPDIR=…')`
+     * followed by `sys_get_temp_dir()` still answers `/tmp`, because PHP
+     * resolves and caches the temp directory once per process. That is the
+     * same fact {@see \SugarCraft\Crush\Support\ToolIpcFiles::sweep()}
+     * records for its own `$dir` parameter, and the remedy is the same one:
+     * an explicit seam a test process points somewhere harmless.
+     *
+     * NOT NULLABLE-BY-DEFAULT AS A FEATURE FLAG. Nothing in `src/` or `bin/`
+     * assigns this, so a shipped run always takes the production arm — the
+     * same shape and the same guarantee as
+     * {@see \SugarCraft\Crush\Cli\NonInteractive::pinStdinDefault()}.
+     */
+    private static ?string $directoryPin = null;
+
+    /**
+     * Whether this process has already announced a refused audit write.
+     *
+     * See {@see noticeRefusalOnce()} for why once and not per call.
+     */
+    private static bool $noticed = false;
+
+    /**
+     * Point {@see defaultLogDirectory()} at $directory instead of the
+     * production one, or pass null to put it back.
+     *
+     * Spent once from `tests/bootstrap.php`. Public for the same reason
+     * `pinStdinDefault()` is: the seam is worth ASSERTING rather than
+     * trusting, and a bootstrap that quietly stopped installing it would put
+     * the suite back on the production path with every test still green.
+     */
+    public static function pinDefaultLogDirectory(?string $directory): void
+    {
+        self::$directoryPin = $directory;
+    }
+
+    /**
+     * The pin {@see pinDefaultLogDirectory()} installed, or null.
+     *
+     * Read rather than reflected, so a test can assert the bootstrap did its
+     * job without reaching into a private.
+     */
+    public static function defaultLogDirectoryPin(): ?string
+    {
+        return self::$directoryPin;
+    }
 
     public function __construct(?string $logFile = null)
     {
@@ -170,10 +243,18 @@ final readonly class AuditHook implements HookInterface
      * log rather than reading the first's — but a reader who believed the old
      * mechanism would have gone looking for a uid comparison to fix and found
      * none.
+     *
+     * IT DEFERS TO {@see pinDefaultLogDirectory()} FIRST (E351), and the pin
+     * is a test seam that production never sets. The guards below are NOT
+     * skipped for a pinned directory: {@see append()} still refuses one that
+     * is a symlink, is not a directory, is not this euid's, or is reachable by
+     * anybody else — so pointing the suite somewhere else moves WHERE it
+     * writes without turning off WHAT is being tested.
      */
     public static function defaultLogDirectory(): string
     {
-        return self::directoryFor(\function_exists('posix_geteuid') ? \posix_geteuid() : null);
+        return self::$directoryPin
+            ?? self::directoryFor(\function_exists('posix_geteuid') ? \posix_geteuid() : null);
     }
 
     /**
@@ -246,6 +327,8 @@ final readonly class AuditHook implements HookInterface
     private function append(string $entry): bool
     {
         if ($this->ownsPath && !self::directoryIsOurs(\dirname($this->logFile))) {
+            self::noticeRefusalOnce(self::directoryRefusalReason(\dirname($this->logFile)));
+
             return false;
         }
 
@@ -257,6 +340,12 @@ final readonly class AuditHook implements HookInterface
         // race-free in the case that matters because a 0700 directory this
         // uid owns is one nobody else can create an entry in.
         if ($this->ownsPath && \is_link($this->logFile)) {
+            self::noticeRefusalOnce(\sprintf(
+                'audit log disabled: %s is a symbolic link, and this hook will not append through one '
+                . 'to a file it did not create. Nothing is being recorded. Remove or replace the link.',
+                $this->logFile,
+            ));
+
             return false;
         }
 
@@ -295,6 +384,131 @@ final readonly class AuditHook implements HookInterface
                 \umask($previous);
             }
         }
+    }
+
+    /**
+     * Announce, ONCE PER PROCESS, that this hook is not recording.
+     *
+     * WHY IT IS NOT SILENT ANY MORE (E345). {@see append()} answers `false`
+     * and {@see execute()} discards the answer, so an operator whose audit
+     * directory has been squatted — or merely made by hand — learned nothing
+     * until they went looking. An audit log that silently stops recording is
+     * strictly worse than one that never existed, because it looks
+     * authoritative.
+     *
+     * WHY IT IS NOT A `deny()` OR A THROW, which is the reasoning `append()`
+     * already carried and which is unchanged: this is a `PostToolUse` hook, so
+     * the tool has already run and there is no verdict left for a failed log
+     * write to influence; a `HookResult::deny()` would be a lie about a call
+     * that happened, and throwing would take down a run over a log line.
+     *
+     * WHY NOT `HookResult::allow('<message>')`, WHICH E345 OFFERED AS THE
+     * ALTERNATIVE — MEASURED, AND IT HAS NO CONSUMER. The `HookResult` a
+     * `PostToolUse` run answers with is DISCARDED at both of its call sites:
+     * {@see \SugarCraft\Crush\Runtime}'s `postToolUse()` call ignores the
+     * return value entirely, and {@see \SugarCraft\Crush\Chat::applyPostToolUse()}
+     * calls it and then returns the tool result unchanged. A message put there
+     * reaches nobody. E345 said to check before designing; this is the check.
+     *
+     * WHY ONCE, WHICH IS THE WHOLE REASON THE COST ARGUMENT DIES. E345's
+     * objection to a notice was that on a squatted box it is one line per tool
+     * call for the whole run — the shape that trains an operator to ignore
+     * stderr. Every condition this method reports is a property of a directory
+     * that does not change mid-run, so the second line would carry no
+     * information the first did not. One line is the whole of what needs
+     * saying, and the latch is what makes that true rather than hoped for.
+     *
+     * THROUGH {@see RuntimeNoticeSink::warn()} AND NOT A BARE `fwrite`. That
+     * funnel writes the complete text to stderr via `error_log()` AND puts a
+     * clipped row on the mid-session transcript seam, which is the surface an
+     * interactive operator is actually looking at — a raw `fwrite` to fd 2
+     * during a TUI session lands in a frame the renderer believes it owns.
+     * It also means this file does not become a new raw-stderr emitter; it
+     * joins the funnel {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}
+     * counts as channel 6.
+     */
+    private static function noticeRefusalOnce(string $message): void
+    {
+        if (self::$noticed) {
+            return;
+        }
+
+        self::$noticed = true;
+        RuntimeNoticeSink::warn($message);
+    }
+
+    /**
+     * WHICH arm of {@see directoryIsOurs()} refused $directory, in words an
+     * operator can act on.
+     *
+     * A SEPARATE INSPECTION AND NOT A SECOND RETURN VALUE FROM
+     * {@see directoryIsOurs()}, deliberately: that method is driven directly
+     * by several tests and by {@see append()}'s hot path, and widening its
+     * contract to carry a reason would make every caller pay for a string
+     * nobody reads on the accept path. This runs only after a refusal, at most
+     * once per process.
+     *
+     * THE MODE ARM IS SPELLED WITH ITS REMEDY AND THE OTHER TWO ARE NOT, and
+     * that asymmetry is the point (E345's amendment). The symlink and
+     * foreign-owner arms fire only when something is genuinely amiss and an
+     * operator has a reason to go looking. The MODE arm fires on a directory
+     * the operator created themselves, by hand, with an ordinary `mkdir -p`
+     * under umask 0022 — no attacker, nothing visibly wrong — and the fix
+     * (`chmod 700`) is invisible from the symptom.
+     *
+     * IT RE-INSPECTS RATHER THAN REMEMBERING. Between the refusal and this
+     * call the directory could in principle have changed, in which case this
+     * names the state a reader will actually find when they look — which is
+     * more useful than naming the state that caused the refusal and no longer
+     * exists.
+     */
+    private static function directoryRefusalReason(string $directory): string
+    {
+        \clearstatcache(true, $directory);
+
+        if (\is_link($directory)) {
+            return \sprintf(
+                'audit log disabled: %s is a symbolic link rather than a directory, so this hook will '
+                . 'not write through it. Nothing is being recorded.',
+                $directory,
+            );
+        }
+
+        if (!\is_dir($directory)) {
+            return \sprintf(
+                'audit log disabled: %s could not be created as a directory. Nothing is being recorded.',
+                $directory,
+            );
+        }
+
+        $uid = \function_exists('posix_geteuid') ? \posix_geteuid() : null;
+        $owner = @\fileowner($directory);
+        if ($uid !== null && ($owner === false || $owner !== $uid)) {
+            return \sprintf(
+                'audit log disabled: %s is owned by uid %s and this process is uid %d, so it is not a '
+                . 'directory this user can be sure of. Nothing is being recorded.',
+                $directory,
+                $owner === false ? 'unknown' : (string) $owner,
+                $uid,
+            );
+        }
+
+        $mode = @\fileperms($directory);
+        if ($mode !== false && ($mode & self::FOREIGN_ACCESS_BITS) !== 0) {
+            return \sprintf(
+                'audit log disabled: %s is mode %04o, which lets other users on this box reach a log of '
+                . 'every tool call and its arguments. Nothing is being recorded. Fix it with: chmod 700 %s',
+                $directory,
+                $mode & 0o7777,
+                $directory,
+            );
+        }
+
+        return \sprintf(
+            'audit log disabled: %s could not be verified as a directory this user owns exclusively. '
+            . 'Nothing is being recorded.',
+            $directory,
+        );
     }
 
     /**

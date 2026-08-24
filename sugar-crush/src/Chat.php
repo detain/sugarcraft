@@ -3183,13 +3183,6 @@ final class Chat implements Model
      * still wins over whatever id the callback set, matching ok()'s
      * previous behaviour of always stamping the real id.
      *
-     * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
-     *     output (only meaningful when $succeeded), succeeded]
-     */
-    /**
-     * Run one registered tool callback and shape whatever it did into a
-     * `[ToolResult, mixed $raw, bool $succeeded]` triple.
-     *
      * THE TWO BRANCHES ARE TRUSTED DIFFERENTLY ON PURPOSE, and the reason is
      * recorded here because E348 found the tree said nothing about it.
      *
@@ -3214,7 +3207,8 @@ final class Chat implements Model
      * only written down, by
      * {@see \SugarCraft\Crush\Tests\Chat\CallbackAuthoredRefusalTest}.
      *
-     * @return array{0:ToolResult,1:mixed,2:bool}
+     * @return array{0: ToolResult, 1: mixed, 2: bool} [result, raw callback
+     *     output (only meaningful when $succeeded), succeeded]
      */
     private function invokeTool(ToolCall $toolCall): array
     {
