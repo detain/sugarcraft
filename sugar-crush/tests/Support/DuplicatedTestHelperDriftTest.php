@@ -315,6 +315,31 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         [, , , , $report] = self::driftReport(['a/A.php' => $original, 'b/B.php' => $original]);
         self::assertSame([], $report, 'two byte-identical copies were reported as signature drift');
 
+        // RULE 14 FOR THE SIGNATURE HALF, and it needs its own input: the
+        // truncated-body fixture in assertTheScannerIsAlive() trips the BODY
+        // arm before the signature arm is ever reached, so dropping the
+        // signature arm survives it. A declaration with no parameter list at
+        // all is the shape that separates them — bodyOf() finds the brace and
+        // returns a body, signatureOf() meets that same brace before any `(`
+        // and cannot answer. Without this, a helper whose signature this walk
+        // cannot read would be compared as though its parameter list were
+        // empty, which is a hole shaped exactly like the next signature drift.
+        $noParameterList = <<<'PHP'
+            <?php
+            final class G
+            {
+                private function probe { return 1; }
+            }
+            PHP;
+        [, $unparseable] = self::driftReport(['g/G.php' => $noParameterList]);
+        self::assertNotSame(
+            [],
+            $unparseable,
+            'a declaration whose parameter list this scanner cannot find was accepted rather '
+                . 'than reported, so its signature reaches the comparison as the empty list and '
+                . 'any real divergence against it is silently cleared',
+        );
+
         // A pair whose BODIES already differ belongs to the body report, not
         // this one, and reporting it in both would double every real drift.
         $bodyDrift = str_replace("!== ''", "=== ''", $original);
