@@ -202,6 +202,21 @@ final class PosixBackendRestoreLastTest extends TestCase
         self::assertIsArray($decoded, 'the probe child wrote something that is not JSON: ' . $raw);
         self::assertSame('PROBE-RAN', $decoded['control'] ?? null, 'the probe body did not run to the end');
 
+        // THE CHILD'S INSTRUMENT, not just its output. Every raw/not-raw row
+        // the child reports is a claim about what its flag matcher did NOT
+        // see, and a matcher that matched nothing would answer "not raw"
+        // forever -- which the restore assertion would then pass for free.
+        // The child computes this from a synthetic reading carrying the
+        // ECHO-lookalike trap, so it is a fact about the matcher rather than
+        // about the host's stty. See SttyReading for what the trap is and for
+        // the mutation that proved the previous substring form asserted
+        // nothing.
+        self::assertTrue(
+            $decoded['matcher_discriminates'] ?? null,
+            'the probe child\'s raw-mode matcher cannot tell a cleared ECHO from the '
+                . 'ECHO-prefixed flags that look like one, so none of its state rows are evidence',
+        );
+
         return $decoded;
     }
 }

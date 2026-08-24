@@ -26,6 +26,7 @@ declare(strict_types=1);
  * Usage: `php restore_last_round_trip_probe.php <mode> <slave-path> <result-file>`
  */
 
+use SugarCraft\Core\Tests\Util\Tty\SttyReading;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Pty\TermiosFactory;
 
@@ -35,18 +36,27 @@ $mode       = $argv[1] ?? '';
 $slavePath  = $argv[2] ?? '';
 $resultFile = $argv[3] ?? '';
 
-/** Is the device at $path in raw mode? */
+/**
+ * Is the device at $path in raw mode?
+ *
+ * The flag matching is {@see SttyReading}'s, not this file's. It used to be a
+ * private copy of a substring test that is TRUE on a cooked terminal -- the
+ * negated ECHO spelling occurs inside the negated ECHONL and ECHOPRT tokens
+ * -- so the ECHO half of the round trip below asserted nothing. MEASURED
+ * (mutation MA2_PROBE), whole candy-core suite: deleting that half outright
+ * SURVIVED, 827 tests / 7512 assertions / rc 0.
+ *
+ * An unreadable device still answers null and never false: every flag query
+ * against an empty reading says "not set", i.e. "not raw", which must not be
+ * reportable as an observation of a cooked terminal.
+ */
 $isRaw = static function (string $path): ?bool {
-    // GNU coreutils takes -F, BSD/macOS takes -f. The wrong one prints
-    // nothing, which would read as "not raw" whatever the device is doing --
-    // so an empty reading is reported as null and never as false.
-    $flag = \PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
-    $out  = trim((string) shell_exec('stty ' . $flag . ' ' . escapeshellarg($path) . ' -a 2>/dev/null'));
-    if ($out === '') {
+    $reading = SttyReading::of($path);
+    if ($reading === '') {
         return null;
     }
 
-    return str_contains($out, '-icanon') && str_contains($out, '-echo');
+    return SttyReading::isRaw($reading);
 };
 
 $snapshot = static function (): bool {
@@ -56,6 +66,16 @@ $snapshot = static function (): bool {
 $out = [
     'mode'     => $mode,
     'isatty_0' => \function_exists('posix_isatty') ? posix_isatty(0) : null,
+
+    // THE CHILD'S OWN INSTRUMENT CONTROL. Every state row below is a claim
+    // about what the matcher did not see; a matcher that matched nothing
+    // would answer "not raw" forever and the restore half of the round trip
+    // would pass for free. Computed from a synthetic reading that carries the
+    // lookalike trap, so it is a fact about the matcher and not about this
+    // host's stty vocabulary. The parent asserts on it.
+    'matcher_discriminates' => SttyReading::isRaw(SttyReading::cookedFixture()) === false
+        && SttyReading::isOn(SttyReading::cookedFixture(), 'echo')
+        && str_contains(SttyReading::cookedFixture(), '-echo'),
 ];
 
 if ($mode === 'round-trip') {

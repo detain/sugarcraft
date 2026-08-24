@@ -401,6 +401,12 @@ final class PosixBackendStreamDescriptorTest extends TestCase
             self::markTestSkipped('TermiosFactory::open() needs ext-ffi for the FFI backend.');
         }
 
+        // The instrument first: every assertion below is a claim about what
+        // the matcher did not see, so a dead matcher must red here and not
+        // pass quietly. Called from inside this test as well as standing as
+        // its own, so a `--filter` on this method name cannot strand it.
+        $this->testTheRawModeMatcherIsNotFooledByTheEchoLookalikes();
+
         $slave = $this->openPtySlave();
         $path  = $this->slavePath;
 
@@ -419,6 +425,67 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         }
 
         self::assertFalse($this->isRaw($path), 'restore() did not take the terminal back out of raw mode');
+    }
+
+    /**
+     * THE CONTROL FOR THE ASSERTIONS ABOVE: the raw-mode matcher can tell a
+     * cleared ECHO from the ECHO-prefixed flags that merely look like one.
+     *
+     * Every raw-mode assertion in this file is a claim about what
+     * {@see SttyReading::isRaw()} did NOT see. A matcher that matched nothing
+     * would answer "not raw" forever and half of those assertions would pass
+     * for free -- which is the failure this test exists to make impossible,
+     * one level below the thing being tested.
+     *
+     * MEASURED, PHP 8.3.6, GNU coreutils stty, real pty slave: a terminal set
+     * to `-icanon echo` -- canonical mode off, ECHO still ON -- was reported
+     * RAW by the substring form this replaced, and dropping its ECHO conjunct
+     * outright SURVIVED the whole candy-core suite (mutation MA_ISRAW).
+     *
+     * Driven from a synthetic reading rather than from a live terminal so the
+     * discrimination is pinned even on a host whose `stty` prints a different
+     * flag vocabulary, and so the trap is guaranteed present in the input:
+     * the first assertion proves the fixture really does contain the
+     * substring the naive test matched on, which is what stops the rest of
+     * this method being a tautology.
+     */
+    public function testTheRawModeMatcherIsNotFooledByTheEchoLookalikes(): void
+    {
+        $cooked = SttyReading::cookedFixture();
+
+        self::assertStringContainsString(
+            '-echo',
+            $cooked,
+            'the control fixture no longer carries the lookalike trap, so the assertions below '
+                . 'prove nothing about the matcher',
+        );
+
+        // The trap itself: present as a substring, absent as a flag.
+        self::assertFalse(
+            SttyReading::isOff($cooked, 'echo'),
+            'the matcher read a cooked terminal as having ECHO cleared -- it is matching inside '
+                . 'the negated ECHONL/ECHOPRT tokens, which is the defect this replaced',
+        );
+        self::assertTrue(
+            SttyReading::isOn($cooked, 'echo'),
+            'the matcher cannot see a flag that IS set, so its negative answers are worthless',
+        );
+        self::assertFalse(SttyReading::isRaw($cooked), 'a cooked terminal was reported raw');
+
+        // The lookalike is still readable in its own right, i.e. the fix did
+        // not buy word matching by refusing to match the longer names.
+        self::assertTrue(SttyReading::isOff($cooked, 'echonl'), 'a genuinely negated flag was not seen');
+        self::assertTrue(SttyReading::isOn($cooked, 'icanon'), 'a set ICANON was not seen');
+        self::assertFalse(SttyReading::isOff($cooked, 'icanon'), 'a set ICANON was read as cleared');
+
+        // And the positive polarity: a raw reading must come back raw.
+        $raw = str_replace(
+            'isig icanon iexten echo echoe echok',
+            '-isig -icanon -iexten -echo echoe echok',
+            $cooked,
+        );
+        self::assertNotSame($cooked, $raw, 'the raw fixture was not actually derived from the cooked one');
+        self::assertTrue(SttyReading::isRaw($raw), 'a raw terminal was not reported raw');
     }
 
     // ------------------------------------------------------------------
@@ -533,17 +600,25 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         self::markTestSkipped('this host publishes no descriptor table; the fixture cannot observe one');
     }
 
+    /**
+     * Is the fixture terminal in raw mode?
+     *
+     * The flag matching lives on {@see SttyReading}, whose doc-block records
+     * why a substring test for the negated ECHO spelling is true on a COOKED
+     * terminal and therefore asserts nothing. This method used to carry its
+     * own copy of that substring test, as did the child probe beside it, and
+     * both were wrong in the same way.
+     */
     private function isRaw(string $slavePath): bool
     {
-        // BSD/macOS stty takes the device flag lowercase; GNU/Linux uses
-        // uppercase. The wrong one produces empty output, which reads as
-        // "not raw" whatever the terminal is actually doing.
-        $flag = \PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
-        $out  = trim((string) shell_exec('stty ' . $flag . ' ' . escapeshellarg($slavePath) . ' -a 2>/dev/null'));
+        $reading = SttyReading::of($slavePath);
 
-        self::assertNotSame('', $out, 'stty could not read the fixture terminal; no reading is possible');
+        // An unreadable device gives '' -- which every flag query would then
+        // answer "not set" for, i.e. "not raw", whatever the terminal is
+        // actually doing. That must not be mistaken for an observation.
+        self::assertNotSame('', $reading, 'stty could not read the fixture terminal; no reading is possible');
 
-        return str_contains($out, '-icanon') && str_contains($out, '-echo');
+        return SttyReading::isRaw($reading);
     }
 
     private function restoreEnv(string $name, string|false $previous): void
