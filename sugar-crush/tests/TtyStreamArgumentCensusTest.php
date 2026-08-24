@@ -28,6 +28,17 @@ use PHPUnit\Framework\TestCase;
  * `@stream_set_blocking($this->stream, true)` putting the runner's fd 0 back
  * to BLOCKING for the remainder of the run.
  *
+ * MEASURED, PHP 8.3.6, three takes each, in a child whose fd 0 is a pipe:
+ *
+ *   new Tty(null, new PosixTermios($fd))   fd 0 blocked true -> false, and
+ *                                          true again after restore()   3/3
+ *   new Tty($socketPairEnd, …)             fd 0's flag never moves       3/3
+ *   new Tty()  (no Termios at all)         fd 0's flag never moves       3/3
+ *
+ * — the third row is why this census requires BOTH conditions rather than
+ * flagging every null stream: without an injected `Termios`,
+ * `enableRawMode()` returns at `!isTty()` and never reaches the flag.
+ *
  * ## THE ALPHABET IS THE SHAPE, NOT ONE CLASS NAME (round 50)
  *
  * WHAT THIS GUARD SAID: "Exactly one shape in this codebase holds it", and
@@ -66,17 +77,6 @@ use PHPUnit\Framework\TestCase;
  * The measured instance count is deliberately absent (rule 18): a cardinality
  * over `tests/` is stale the next time one is added, and the assertions below
  * derive their own.
- *
- * MEASURED, PHP 8.3.6, three takes each, in a child whose fd 0 is a pipe:
- *
- *   new Tty(null, new PosixTermios($fd))   fd 0 blocked true -> false, and
- *                                          true again after restore()   3/3
- *   new Tty($socketPairEnd, …)             fd 0's flag never moves       3/3
- *   new Tty()  (no Termios at all)         fd 0's flag never moves       3/3
- *
- * — the third row is why this census requires BOTH conditions rather than
- * flagging every null stream: without an injected `Termios`,
- * `enableRawMode()` returns at `!isTty()` and never reaches the flag.
  *
  * WHY A TOKEN CENSUS AND NOT A GREP, stated because the grep is what failed.
  * The three sites this originally found came from
