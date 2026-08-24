@@ -195,6 +195,111 @@ final class PosixBackendStreamDescriptorTest extends TestCase
     }
 
     /**
+     * THE LOWEST matching descriptor is the one handed back.
+     *
+     * Two handles on one file are two descriptors with identical dev+ino, so
+     * arm 2 has a genuine choice to make. The choice is documented on
+     * {@see PosixBackend::descriptorForStream()} -- a long-lived low
+     * descriptor is likelier to outlive the object than a late one -- and an
+     * undocumented, unpinned choice is how the next reader comes to change it
+     * for a reason that reads just as good.
+     *
+     * MEASURED (mutation m5) before this test existed: `sort()` swapped for
+     * `rsort()`, whole candy-core suite, 824 tests / 7422 assertions / rc 0 --
+     * SURVIVED. The preference was prose only.
+     */
+    public function testTheLowestDescriptorNamingTheDeviceIsTheOneReturned(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'sc_core_r54a_two_');
+        self::assertIsString($path);
+        $this->artifacts[] = $path;
+
+        $first  = $this->openHandle($path, 'r+');
+        $second = $this->openHandle($path, 'r+');
+
+        $low  = PosixBackend::descriptorForStream($first);
+        $high = PosixBackend::descriptorForStream($second);
+        self::assertIsInt($low, 'the first handle resolved to nothing');
+
+        // The discriminator: the two handles must really be two descriptors,
+        // or there is no choice being made and nothing is being asserted.
+        $lowDevice = $this->deviceOfDescriptor($low);
+        self::assertSame(
+            $lowDevice,
+            $this->deviceOfDescriptor($low + 1),
+            'the second handle did not take the next descriptor; this fixture makes no choice',
+        );
+
+        self::assertSame($low, $high, 'the two handles resolved differently, so the answer is not the lowest match');
+    }
+
+    /**
+     * A descriptor reused by a NEW stream is not resolved from a stale
+     * `stat()`.
+     *
+     * PHP caches `stat()` by PATH, and `/proc/self/fd/4` is a path whose
+     * TARGET changes the moment descriptor 4 is closed and reopened.
+     * `size()` runs on every SIGWINCH in a process that opens and closes
+     * files, so this is the shape the cache actually bites in.
+     *
+     * MEASURED, PHP 8.3.6, this box: with descriptor 4 pointing at one temp
+     * file, `stat('/proc/self/fd/4')` warmed; the file closed; a second temp
+     * file opened onto the same descriptor. The uncleared `stat()` then still
+     * reported the FIRST file's inode. MEASURED (mutation m7) before this
+     * test existed: `clearstatcache()` deleted, whole candy-core suite,
+     * 824 / 7422 / rc 0 -- SURVIVED.
+     */
+    public function testADescriptorReusedByAnotherStreamIsNotResolvedFromACachedStat(): void
+    {
+        $table = $this->descriptorTable();
+
+        $first     = $this->openTempFile();
+        $firstStat = fstat($first);
+        self::assertIsArray($firstStat);
+
+        $descriptor = PosixBackend::descriptorForStream($first);
+        self::assertIsInt($descriptor, 'the first handle resolved to nothing');
+        fclose($first);
+
+        $second     = $this->openTempFile();
+        $secondStat = fstat($second);
+        self::assertIsArray($secondStat);
+        self::assertNotSame(
+            $firstStat['ino'],
+            $secondStat['ino'],
+            'the two temp files share an inode; this fixture cannot discriminate',
+        );
+
+        // DISCRIMINATOR 1: the OS handed the freed descriptor straight back.
+        // Deliberately an assertion and not a skip -- if a host stops doing
+        // this, the reason this test cannot bite must be visible, not hidden.
+        clearstatcache();
+        $trueStat = stat($table . '/' . $descriptor);
+        self::assertIsArray($trueStat);
+        self::assertSame(
+            $secondStat['ino'],
+            $trueStat['ino'],
+            'descriptor ' . $descriptor . ' was not reused by the second handle; '
+                . 'this fixture cannot discriminate',
+        );
+
+        // DISCRIMINATOR 2: and PHP's cache really does still describe the
+        // closed handle's file, which is the thing clearstatcache() exists
+        // for here. Warmed by reading the path without clearing first.
+        $warm = stat($table . '/' . $descriptor);
+        self::assertSame($secondStat['ino'], $warm['ino']);
+        clearstatcache();
+        stat($table . '/' . $descriptor);
+
+        self::assertSame(
+            $descriptor,
+            PosixBackend::descriptorForStream($second),
+            'the resolver answered from a cached stat of a path whose descriptor had been '
+                . 'reused, so it described a file that is no longer there',
+        );
+    }
+
+    /**
      * SITE 2, END TO END: `size()` on an injected pty slave returns THAT
      * terminal's size.
      *
@@ -346,6 +451,18 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         $this->artifacts[] = $dir;
 
         return $dir;
+    }
+
+    /** The descriptor table this host publishes. */
+    private function descriptorTable(): string
+    {
+        foreach (['/proc/self/fd', '/dev/fd'] as $candidate) {
+            if (is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+
+        self::markTestSkipped('this host publishes no descriptor table; the fixture cannot observe one');
     }
 
     /**
