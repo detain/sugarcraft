@@ -41,12 +41,39 @@ use PHPUnit\Framework\TestCase;
  * good thing and the outcome E296 wants. The correct response is to delete
  * this test and say in the commit what closed it; it is not to widen the
  * assertion until it passes again. The only repair that closes it is replacing
- * descriptor 0 rather than flagging it, and E290's attempts 1 and 3 are what
- * that costs: PHP has no `dup2`, so replacing fd 0 means closing the `\STDIN`
- * constant, and `SugarCraft\Mosaic\Detect` reads that constant unguarded from
- * a sibling library. MEASURED there, full suite, PHP 8.3.6: `9500 tests, 107
- * errors, rc 2`. {@see \SugarCraft\Crush\Tests\StdinConstantReaderCensusTest}
- * derives which libraries would have to be looked at first.
+ * descriptor 0 rather than flagging it: PHP has no `dup2`, so replacing fd 0
+ * means closing the `\STDIN` constant, and other libraries in this process
+ * read that constant. {@see \SugarCraft\Crush\Tests\StdinConstantReaderCensusTest}
+ * derives which ones would have to be looked at first.
+ *
+ * ## AND THE PRICE OF THAT REPLACEMENT IS NOT WHAT THIS FILE FIRST SAID
+ *
+ * WHAT THIS SAID: `9500 tests, 107 errors, rc 2` — the figure that priced the
+ * descriptor replacement out of reach for a round.
+ *
+ * WHAT IS TRUE NOW. That run predated E302. It was never 107 costs: it was ONE
+ * defect multiplied by every test that reached it — `candy-mosaic` naming an
+ * enum case (`Capability::Iterm2Image`) that candy-palette spells `ITerm2`, in
+ * a fallback nothing had ever entered before fd 0 was closed. Verified by
+ * symbol: `candy-palette/src/Probe/Capability.php` declares `case ITerm2`, and
+ * `1a2caebb` fixed the caller. That commit is an ancestor of this tree.
+ *
+ * RE-MEASURED here after it, PHP 8.3.6, full suite, with the bootstrap's
+ * flag repair replaced by the descriptor replacement (`fclose(\STDIN)` plus a
+ * `/dev/null` handle parked in `$GLOBALS`): ONE error and TWO failures, and
+ * not one `candy-mosaic` error of any kind. All three are assertions whose
+ * entire subject is this repair —
+ * `NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne`
+ * (its control reads `\STDIN`'s metadata),
+ * `SuiteChildStdinIsolationTest::testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking`
+ * (it exists to forbid exactly this change), and this test firing its own
+ * designed "the residual is CLOSED" message below.
+ *
+ * WHY THIS STILL EARNS ITS PLACE. The replacement is still the only repair
+ * that closes the prepend half, it still has to be paid for deliberately, and
+ * the roster test is still its input. What changed is the price, not the
+ * decision — and the reason the old price stood for a round is that nobody
+ * re-ran it after the dependency in its causal chain was fixed.
  *
  * ## The security shape, stated because it is not only untidiness
  *

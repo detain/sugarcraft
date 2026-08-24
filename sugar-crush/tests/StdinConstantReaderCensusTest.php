@@ -20,10 +20,32 @@ use PHPUnit\Framework\TestCase;
  *   MATTERED WAS IN A SIBLING LIBRARY.
  *
  * `SugarCraft\Mosaic\Detect::stdinFd()` is `self::$probeStdin ?? STDIN` and
- * hands the result to `stream_select()` with no `is_resource()` guard.
- * MEASURED, full suite, PHP 8.3.6: `9500 tests, 107 errors, rc 2`. A census's
- * ALPHABET includes the directory it was pointed at, and that one was a
- * package.
+ * hands the result to `stream_select()` with no `is_resource()` guard. A
+ * census's ALPHABET includes the directory it was pointed at, and that one was
+ * a package.
+ *
+ * ## WHAT THAT COST, AND WHY THE NUMBER THIS FILE FIRST CARRIED IS RETIRED
+ *
+ * WHAT THIS SAID: `9500 tests, 107 errors, rc 2`, presented as the price of
+ * option (a).
+ *
+ * WHAT IS TRUE NOW: that run predated E302, and it was never 107 costs. It was
+ * ONE defect multiplied by every test that reached it — `candy-mosaic` naming
+ * `Capability::Iterm2Image`, a case candy-palette spells `ITerm2`, in a
+ * fallback that nothing entered until fd 0 was closed. The unguarded read
+ * below was the TRIGGER; the enum name was the FAULT, and `1a2caebb` fixed it.
+ * Verified by symbol: `candy-palette/src/Probe/Capability.php` declares
+ * `case ITerm2`, and that commit is an ancestor of this tree. RE-MEASURED
+ * here after it, PHP 8.3.6, full suite, with the descriptor replacement
+ * applied to `tests/bootstrap.php`: one error and two failures, all three in
+ * tests whose entire subject is that repair, and not one `candy-mosaic` error
+ * of any kind.
+ *
+ * WHY THIS ROSTER STILL EARNS ITS PLACE: the price fell, the question did not.
+ * Closing the `\STDIN` constant still hands a closed resource to every site
+ * below, and "no test noticed" is not the same as "the library is fine" —
+ * `Detect` still leaves its normal path by exception on every call. The
+ * roster is what says which sites those are.
  *
  * ## What this file asserts, and why it is a roster rather than a count
  *
@@ -63,9 +85,12 @@ use PHPUnit\Framework\TestCase;
  * and they are named rather than counted — a count of a roster the test itself
  * derives rots silently the next time an entry is added (rule 18):
  *
- *  - `candy-mosaic/src/Detect.php` — UNGUARDED. This is the one that produced
- *    the 107 errors. Verified by symbol: `stdinFd()` returns `?? STDIN` and
- *    `drainStdin()` passes it straight to `stream_select()`.
+ *  - `candy-mosaic/src/Detect.php` — UNGUARDED, and it is the site that
+ *    TRIGGERED round 49's 107 errors rather than the site that caused them:
+ *    the fault was the enum case name in the fallback it dropped into, fixed
+ *    by E302 (above). Verified by symbol: `stdinFd()` returns `?? STDIN` and
+ *    `drainStdin()` passes it straight to `stream_select()`, so this is still
+ *    an unguarded read — it just no longer ends in a fatal.
  *  - `candy-core/src/Util/Tty/PosixBackend.php` — one of its two sites is
  *    already guarded, and says so: `TermiosFactory::open((int) STDIN)` sits in
  *    a `try`/`catch (\Throwable)` whose comment reads "STDIN closed (CI
@@ -152,8 +177,8 @@ final class StdinConstantReaderCensusTest extends TestCase
             "the set of reachable places that name descriptor 0 has changed.\n\n"
                 . "This is not automatically a defect. It is the input to E296: replacing the suite's fd 0 "
                 . "means closing the \\STDIN constant, and every entry here is a site that has to be checked "
-                . "first. A reader added in a SIBLING LIBRARY is what cost round 49 a full suite run and 107 "
-                . "errors, and no census scoped to sugar-crush/ could see it.\n\n"
+                . "first. A reader in a SIBLING LIBRARY is what cost round 49 two refuted attempts and a "
+                . "full suite run, and no census scoped to sugar-crush/ could see it.\n\n"
                 . 'Look at the new site, decide whether a closed descriptor 0 degrades or throws there, record '
                 . "that judgement in this class's doc-block, and then add the row.",
         );
