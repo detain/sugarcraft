@@ -317,9 +317,22 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * the reliance, for the same reason {@see ACCOUNTED_FOR}'s is.
      *
      * A ROW HERE IS NOT AN EXEMPTION FROM ANYTHING - the site is already not
-     * reported. It is a receipt. Adding a CLOSING_HELPERS row now costs a row
-     * here too, which is the point: the promotion has to be written down
-     * somewhere a reviewer reads.
+     * reported. It is a receipt. Adding a CLOSING_HELPERS row costs a row in a
+     * receipt roster too, which is the point: the promotion has to be written
+     * down somewhere a reviewer reads.
+     *
+     * THIS ROSTER IS THIS PACKAGE'S HALF ONLY. WHAT THE SENTENCE ABOVE USED TO
+     * SAY: that adding a CLOSING_HELPERS row costs a row HERE. WHAT IS TRUE
+     * NOW: E418 widened the exposure arm to the reachable closure and this
+     * receipt arm was not widened with it, so for the length of one round a
+     * promotion inside a sibling library cost nothing anywhere - E425 reopened
+     * at the scope the same round had just created. Measured: an exposed spawn
+     * appended to candy-mosaic's src and closed by a rostered helper left this
+     * guard green; the byte-identical injection into this package's own src
+     * reddened it. WHY THE SENTENCE STILL EARNS ITS PLACE: the argument was
+     * always right and only its scope was wrong. The sibling half now lives in
+     * {@see SHORT_VIA_HELPER_IN_LIBS}, kept separate for the reason the two
+     * exposure rosters are kept separate.
      *
      * @var array<string, array{count:int, reason:string}>
      */
@@ -334,6 +347,32 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'in this file would say so.',
         ],
     ];
+
+    /**
+     * The same receipt, for a reachable sibling library. E425 at E418's scope.
+     *
+     * EMPTY BY MEASUREMENT, NOT BY OMISSION, and that distinction is why the
+     * constant exists now rather than being invented when the first row is
+     * needed. Measured over the reachable closure: no spawn in any sibling
+     * library is promoted to short by a CLOSING_HELPERS row today - every
+     * short verdict out there rests on a literal proc_close().
+     *
+     * AN EMPTY ROSTER ASSERTED AGAINST A TREE THAT HAPPENS TO BE EMPTY IS
+     * WORTH NOTHING, which is the whole of rule 15 and the reason
+     * {@see testEveryHelperPromotedShortVerdictInAReachableLibIsRecorded()}
+     * pushes a known-positive fixture through the SAME accounting function in
+     * the same test, and refuses to believe the walk until it has seen a
+     * closure's worth of files.
+     *
+     * SEPARATE FROM {@see SHORT_VIA_HELPER} for the reason the two exposure
+     * rosters are separate. A row there is a promotion inside code this
+     * package owns and could undo. A row here is a promotion inside code it
+     * cannot edit, where the CLOSING_HELPERS claim being wrong is somebody
+     * else's bug and this package's leak.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    private const SHORT_VIA_HELPER_IN_LIBS = [];
 
     /**
      * Appearances of the name that are not calls, and what each one is.
@@ -360,6 +399,21 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'reason' => 'function_exists() capability probe for a build with proc_open disabled',
         ],
     ];
+
+    /**
+     * The rule-14 half, for a reachable sibling library.
+     *
+     * EMPTY BY MEASUREMENT: the reachable closure holds no appearance of the
+     * name that is not a direct global call today. This arm was the last one
+     * left reading `src/` only after E418 widened the exposure arm, and an
+     * indirectly-reached spawn is the one shape whose descriptor spec nothing
+     * can see at all - so leaving it narrow meant the least visible defect
+     * class kept the narrowest scope. Its liveness rests on the same fixture
+     * control the src twin uses, run in the same test.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    private const NOT_A_SPAWN_IN_LIBS = [];
 
     /**
      * A synthetic spawn whose answer is known before the scanner is asked.
@@ -638,12 +692,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
         // The walk finding no files at all would satisfy the assertion below
         // perfectly, and is exactly what a renamed vendor directory looks like.
-        self::assertGreaterThan(
-            100,
-            $scanned,
-            'only ' . $scanned . ' sibling source files were scanned, which is too few for this '
-                . 'closure - the walk is pointed somewhere wrong and every absence below is empty.',
-        );
+        $this->assertLibWalkIsLive($scanned);
 
         self::assertSame([], $unaccounted, <<<'TEXT'
             A proc_open() child in a SIBLING LIBRARY outlives the call that spawned
@@ -844,20 +893,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'would make every real call need a NOT_A_SPAWN row.',
         );
 
-        $unaccounted = [];
-        foreach ($this->sourceFiles() as $relative => $source) {
-            $allowance = [];
-            foreach (ChildLifetimeScanner::scan($source)['unresolved'] as $appearance) {
-                $key = $relative . '::' . $appearance['function'];
-                $allowance[$key] ??= self::NOT_A_SPAWN[$key]['count'] ?? 0;
-                if ($allowance[$key] > 0) {
-                    $allowance[$key]--;
-
-                    continue;
-                }
-                $unaccounted[] = $key . ': ' . $appearance['kind'];
-            }
-        }
+        $unaccounted = $this->unaccountedAppearances(
+            $this->sourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::NOT_A_SPAWN),
+        );
 
         self::assertSame([], $unaccounted, <<<'TEXT'
             The name proc_open appears here as something other than a direct global
@@ -1345,6 +1384,202 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * Appearances of the name that are not calls and that no licence covers.
+     *
+     * ONE FUNCTION FOR THE FIXTURE AND FOR THE TREE, and now for both scopes,
+     * for the reason {@see overspent()} gives: a licence-spending rule
+     * verified against a synthetic pair and then re-implemented inline for the
+     * real scan is two rules, and the one that matters is the untested one.
+     * This was inline in the src arm until the lib arm needed the same rule.
+     *
+     * @param iterable<string,string> $sources relative path => source
+     * @param array<string,int> $licences key => how many appearances the row covers
+     * @param ?int $scanned out-param, meaningful only after this returns
+     * @return list<string>
+     */
+    private function unaccountedAppearances(
+        iterable $sources,
+        array $licences,
+        ?int &$scanned = null,
+    ): array {
+        $scanned = 0;
+        $allowance = [];
+        $unaccounted = [];
+
+        foreach ($sources as $relative => $source) {
+            $scanned++;
+            foreach (ChildLifetimeScanner::scan($source)['unresolved'] as $appearance) {
+                $key = $relative . '::' . $appearance['function'];
+                $allowance[$key] ??= $licences[$key] ?? 0;
+
+                if ($allowance[$key] > 0) {
+                    $allowance[$key]--;
+
+                    continue;
+                }
+
+                $unaccounted[] = $key . ': ' . $appearance['kind'];
+            }
+        }
+
+        return $unaccounted;
+    }
+
+    /**
+     * The sibling walk actually walked something.
+     *
+     * THE ONE CARDINALITY THIS FILE ASSERTS, and the class doc-block explains
+     * why it is the exception rather than a lapse: a LOWER BOUND far beneath
+     * what the closure holds cannot be carried across by a fix or a merge,
+     * only by a walk pointed at nothing - which is precisely what every lib
+     * arm's empty result would otherwise be indistinguishable from. Shared by
+     * all three lib arms so there is one place to read and one to change.
+     */
+    private function assertLibWalkIsLive(int $scanned): void
+    {
+        self::assertGreaterThan(
+            100,
+            $scanned,
+            'only ' . $scanned . ' sibling source files were scanned, which is too few for this '
+                . 'closure - the walk is pointed somewhere wrong and every absence it reports is '
+                . 'empty. Check LIB_SCOPE, and check that the libraries still declare the '
+                . 'autoload roots libSourceFiles() derives their files from.',
+        );
+    }
+
+    /**
+     * Every helper-promoted short verdict in a sibling library has a receipt.
+     *
+     * E425 HAD A SCOPE HOLE FOR EXACTLY ONE ROUND AND THIS IS IT. Round 54
+     * widened the exposure arm to the reachable closure and left the receipt
+     * arm reading `src/` only, so a spawn in a sibling library hidden behind a
+     * new CLOSING_HELPERS row was invisible with nothing written down
+     * anywhere - which is the sentence E425 was filed to make impossible,
+     * reopened at the scope the same round had just created.
+     *
+     * MEASURED, BOTH DIRECTIONS, BEFORE THIS ARM EXISTED: an exposed spawn
+     * appended to candy-mosaic's src and closed by a rostered helper left the
+     * guard green at 10 tests; the byte-identical injection into this
+     * package's own src reddened it. The asymmetry was the finding.
+     *
+     * SEPARATE FROM ITS SRC TWIN rather than a widened loop inside it, for the
+     * reason the exposure arms are separate: this one reds when SOMEBODY ELSE
+     * changes a file, and a reader who has just been handed a red suite needs
+     * to be told that in the message rather than work it out.
+     */
+    public function testEveryHelperPromotedShortVerdictInAReachableLibIsRecorded(): void
+    {
+        // Rule 15, in THIS test: everything below asserts an absence, and the
+        // roster it checks is empty today - so without a known positive pushed
+        // through the same function, a dead scanner and a clean closure are
+        // the same observation.
+        $fixture = ['fixture.php' => self::KNOWN_SHORT_VIA_HELPER];
+        self::assertSame(
+            ['fixture.php::viaHelper: not recorded at all, found 1'],
+            $this->unrecorded($fixture, []),
+            'the accounting is dead - an unrostered helper promotion was not reported. Every '
+                . 'absence below is worthless until this passes.',
+        );
+        self::assertSame(
+            [],
+            $this->unrecorded($fixture, ['fixture.php::viaHelper' => 1]),
+            'a receipt for one must cover one, or a real row would read as a defect.',
+        );
+
+        $scanned = 0;
+        $wrong = $this->unrecorded(
+            $this->libSourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::SHORT_VIA_HELPER_IN_LIBS),
+            $scanned,
+        );
+        $this->assertLibWalkIsLive($scanned);
+
+        foreach (self::SHORT_VIA_HELPER_IN_LIBS as $key => $row) {
+            self::assertNotSame('', \trim($row['reason']), $key . ' has no reason recorded.');
+        }
+
+        self::assertSame([], $wrong, <<<'TEXT'
+            A spawn in a SIBLING LIBRARY is being treated as short-lived - and so
+            dropped from this guard entirely - on the strength of a
+            ChildLifetimeScanner::CLOSING_HELPERS row rather than a literal
+            proc_close(). That is allowed. It is not allowed to be invisible.
+
+            YOU ARE PROBABLY RESOLVING A MERGE. This arm reads through
+            vendor/sugarcraft, so a change in candy-pty or candy-core reds THIS
+            suite and the diff in front of you is very likely not the cause.
+
+            NOT RECORDED AT ALL: a CLOSING_HELPERS row was added, or a library
+            changed a spawn to use one. Read that helper's source and satisfy
+            yourself it closes on EVERY path out of itself - if it closes only
+            sometimes it belongs in BEST_EFFORT_REAPERS, which reports the site
+            instead of hiding it - then add a row to SHORT_VIA_HELPER_IN_LIBS
+            naming the library and what you checked.
+
+            RECORDED BUT NOT FOUND: the library fixed it, renamed it, or switched
+            to a literal proc_close() (all good - delete the row), OR the scanner
+            stopped stamping provenance and this row is the only thing that
+            noticed. Find out which before deleting anything.
+            TEXT);
+    }
+
+    /**
+     * The rule-14 arm, asked of every reachable sibling library.
+     *
+     * THE LAST ARM LEFT AT THE OLD SCOPE. E418 widened the exposure arm and
+     * E425's receipt followed it; this one did not, and it is the arm about
+     * the shape whose descriptor spec nothing can read AT ALL - a spawn
+     * reached through a variable function, a callable string or a method.
+     * Leaving it narrow gave the least visible defect class the narrowest
+     * scope, which is the wrong way round.
+     *
+     * The closure holds no such appearance today, so this arm is green on an
+     * empty set - which is why the fixture control below is not optional.
+     */
+    public function testEveryAppearanceThatIsNotACallInAReachableLibIsAccountedFor(): void
+    {
+        $fixture = ['fixture.php' => self::KNOWN_POSITIVE_NOT_A_CALL];
+        self::assertSame(
+            [
+                'fixture.php::probe: ' . ChildLifetimeScanner::REF_STRING,
+                'fixture.php::probe: ' . ChildLifetimeScanner::REF_METHOD,
+            ],
+            $this->unaccountedAppearances($fixture, []),
+            'the unresolved half of the instrument is dead; the absence asserted below is '
+                . 'worthless until this passes.',
+        );
+        self::assertSame(
+            [],
+            $this->unaccountedAppearances(['fixture.php' => self::KNOWN_NEGATIVE_PLAIN_CALL], []),
+            'a plain global call is a SITE, not an unresolved appearance; reporting it here '
+                . 'would make every real call in every library need a row.',
+        );
+
+        $scanned = 0;
+        $unaccounted = $this->unaccountedAppearances(
+            $this->libSourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::NOT_A_SPAWN_IN_LIBS),
+            $scanned,
+        );
+        $this->assertLibWalkIsLive($scanned);
+
+        self::assertSame([], $unaccounted, <<<'TEXT'
+            The name proc_open appears in a SIBLING LIBRARY as something other than
+            a direct global call - a method, a static, a string. It is not counted
+            as a spawn and it is not dropped silently either, because an alphabet
+            written to match only the cases already known has a hole shaped exactly
+            like the next defect.
+
+            YOU ARE PROBABLY RESOLVING A MERGE: this arm reads through
+            vendor/sugarcraft, so another library's change reds THIS suite.
+
+            If it really is not a spawn, add a row to NOT_A_SPAWN_IN_LIBS saying
+            what it is. If it IS a spawn reached indirectly, then nothing anywhere
+            can see its descriptor spec, and that is the finding - file it against
+            the library that owns the file.
+            TEXT);
+    }
+
+    /**
      * Helper-promoted short sites whose receipts do not match, both directions.
      *
      * ONE FUNCTION FOR THE FIXTURE AND FOR THE TREE, for the reason
@@ -1354,12 +1589,18 @@ final class DescriptorInheritanceGuardTest extends TestCase
      *
      * @param iterable<string,string> $sources relative path => source
      * @param array<string,int> $receipts key => how many promotions are recorded
+     * @param ?int $scanned out-param: how many sources were consumed, which the
+     *                      lib arms need because a walk over nothing satisfies
+     *                      an empty result exactly as well as a clean tree does.
+     *                      Only meaningful once this function has returned.
      * @return list<string>
      */
-    private function unrecorded(iterable $sources, array $receipts): array
+    private function unrecorded(iterable $sources, array $receipts, ?int &$scanned = null): array
     {
+        $scanned = 0;
         $seen = [];
         foreach ($sources as $relative => $source) {
+            $scanned++;
             foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
                 if ($site['closedBy'] === null) {
                     continue;
