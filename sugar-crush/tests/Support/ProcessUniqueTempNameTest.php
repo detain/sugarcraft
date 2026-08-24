@@ -10,8 +10,13 @@ use PHPUnit\Framework\TestCase;
  * TWO WAYS A TEMP PATH COLLIDES BETWEEN PROCESSES, AND THE SECOND ONE IS THE
  * ONE THIS GUARD USED TO BE UNABLE TO EXPRESS.
  *
- * THE FIRST. An argument-less `uniqid` call is derived from the current
- * microtime and NOTHING else, so it is not unique across processes. Two suites
+ * THE FIRST. A `uniqid` call with no more-entropy flag is derived from the
+ * current microtime and NOTHING else, so it is not unique across processes.
+ * THAT INCLUDES A CALL WITH A PREFIX, and mistaking arity for entropy is how
+ * four `src/` sites sat outside this guard while its own sentence described
+ * them: `uniqid($p)` returns `$p` followed by the SAME 13-hex microtime suffix
+ * the bare call returns, so a literal prefix moves the collision without
+ * removing it. Two suites
  * running as the same user at the same moment can produce the SAME value. That
  * matters here because `tests/bootstrap.php` points `TMPDIR` at a sandbox keyed
  * by uid alone — every concurrent suite writes into one directory — so a
@@ -60,10 +65,11 @@ final class ProcessUniqueTempNameTest extends TestCase
     private const SCOPE = ['tests', 'src', 'bin/sugarcrush'];
 
     /**
-     * Sites that make the argument-less call and are meant to, with the reason.
+     * Sites that build the name with no more-entropy flag and are meant to,
+     * with the reason.
      *
      * NOT AN EXEMPTION LIST. Both directions are checked against the tree by
-     * {@see testEveryArgumentlessInventoryRowStillDescribesTheSitesItClaims()}:
+     * {@see testEveryEntropylessInventoryRowStillDescribesTheSitesItClaims()}:
      * a row whose sites have been fixed fails and must be deleted, and a site
      * with no row fails and must be argued or fixed. A deferral is a claim
      * about the tree, so the tree is asked.
@@ -71,9 +77,21 @@ final class ProcessUniqueTempNameTest extends TestCase
      * THE COUNT IS EXACT AND THAT IS DELIBERATE. A range would let a sixth site
      * arrive unremarked in a file that already has five.
      *
+     * WHAT THIS ROSTER SAID: it was called ARGUMENTLESS_INVENTORY and held one
+     * row, because the scanner beside it asked "does this call take no
+     * arguments". WHAT IS TRUE NOW: a constant literal prefix is not an entropy
+     * source — `uniqid($p)` is `$p` followed by the SAME 13-hex microtime
+     * suffix the bare call returns — so four `src/` sites carrying one were
+     * spared by a guard whose own stated subject describes them exactly, and
+     * ONE OF THEM BUILDS A SubAgent ID IN THE SAME SHAPE the WorkflowEngine row
+     * below spends six hundred words on. The predicate is now "no more-entropy
+     * flag" and those four are rostered. WHY THE ROSTER STILL EARNS ITS PLACE
+     * UNCHANGED IN FORM: the argument that a site is safe is a claim about the
+     * tree, and the tree is still asked in both directions.
+     *
      * @var array<string,array{sites:int,why:string}>
      */
-    private const ARGUMENTLESS_INVENTORY = [
+    private const NO_ENTROPY_FLAG_INVENTORY = [
         'src/Workflows/WorkflowEngine.php' => [
             'sites' => 5,
             'why' =>
@@ -93,6 +111,58 @@ final class ProcessUniqueTempNameTest extends TestCase
                 . 'to makeResultDirPath() away from being untrue. That edit is out of this '
                 . 'lane (tests only) and is recorded as a deferred finding rather than done '
                 . 'here.',
+        ],
+        'src/Agents/AgentManager.php' => [
+            'sites' => 1,
+            'why' =>
+                'THE SAME SHAPE AS THE WorkflowEngine ROW ABOVE, AND IT WAS INVISIBLE TO THIS '
+                . 'GUARD UNTIL THE PREDICATE STOPPED MEANING "no arguments". `uniqid(\'subagent_\')` '
+                . 'builds a SubAgent id, and a literal prefix adds no cross-process entropy '
+                . 'whatever — same 13-hex microtime suffix, measured on PHP 8.3.6. TRACED, not '
+                . 'assumed: the id reaches disk through AgentWorkerPool::resultFile() and '
+                . 'progressFile(), both `$this->resultDir . "/" . hash("sha256", $agentId)`, and '
+                . '`$resultDir` is makeResultDirPath() — `sys_get_temp_dir() . "/sc_pool_" . '
+                . 'getmypid() . "_" . bin2hex(random_bytes(8))`. The DIRECTORY carries the pid '
+                . 'and 64 bits, so two processes cannot meet on that path. What is left is '
+                . 'intra-process uniqueness, which the microtime does give. Same conclusion and '
+                . 'same caveat as WorkflowEngine: the safety is a property of the enclosing '
+                . 'directory, one edit away from being untrue, and the fix is out of a '
+                . 'tests-only lane. Recorded as a deferred finding.',
+        ],
+        'src/App/App.php' => [
+            'sites' => 1,
+            'why' =>
+                'THE THIRD INSTANCE OF THE SubAgent-ID SHAPE. `uniqid(\'skill_fork_\')` names a '
+                . 'skill-fork SubAgent, and the id reaches the same AgentWorkerPool result and '
+                . 'progress paths under the same pid+64-bit directory, so the same measured '
+                . 'argument applies unchanged. Rostered together with AgentManager rather than '
+                . 'argued separately BECAUSE THEY ARE ONE FAMILY: the day makeResultDirPath() '
+                . 'stops carrying entropy, all three rows go live at once, and three rows saying '
+                . 'so is what makes that visible.',
+        ],
+        'src/Hooks/ScriptHook.php' => [
+            'sites' => 1,
+            'why' =>
+                'NOT A PATH AT ALL, TRACED RATHER THAN ASSUMED. `uniqid(\'hook_\')` is the LAST '
+                . 'fallback for a hook\'s display NAME when the config supplies neither a name '
+                . 'nor a command. The hook payload file this class does write is built by '
+                . '`@tempnam(sys_get_temp_dir(), ToolIpcFiles::HOOK_PAYLOAD_PREFIX)` at a '
+                . 'different site, and tempnam() is what guarantees that name, not this one. A '
+                . 'collision here would give two hooks the same label in a listing. FIX IT '
+                . 'ANYWAY WHEN THE FAMILY IS FIXED — the cost is a flag — but it is not the '
+                . 'hazard the other rows describe, and saying it is would be the kind of '
+                . 'inherited sentence this file exists to stop.',
+        ],
+        'src/Providers/ClaudeCodeProvider.php' => [
+            'sites' => 1,
+            'why' =>
+                'ALSO NOT A PATH, TRACED. `uniqid(\'tool_\')` fills in a tool call\'s id when the '
+                . 'provider\'s payload omits one. The `sc_runtime_tool_*` and `sc_chat_tool_*` '
+                . 'files that this tree really does race on are named by '
+                . 'ToolIpcFiles::reserve(), not by a tool-call id, so this value never reaches '
+                . 'a filename. The exposure is a duplicate id WITHIN one response, which the '
+                . 'microtime already prevents. Rostered rather than fixed for the same '
+                . 'lane reason as the rest, and it belongs in the same edit.',
         ],
     ];
 
@@ -141,7 +211,7 @@ final class ProcessUniqueTempNameTest extends TestCase
     ];
 
     // =========================================================================
-    // Channel 1 — the argument-less call
+    // Channel 1 — the call with no more-entropy flag
     // =========================================================================
 
     public function testNoFileMakesAProcessColludingTempNameOutsideTheInventory(): void
@@ -153,7 +223,7 @@ final class ProcessUniqueTempNameTest extends TestCase
         $counts    = [];
 
         foreach (self::filesInScope() as $relative => $absolute) {
-            [$lines, $unparseable] = self::argumentlessSites(self::readOrFail($absolute));
+            [$lines, $unparseable] = self::entropylessSites(self::readOrFail($absolute));
 
             foreach ($unparseable as $problem) {
                 $problems[] = $relative . ': ' . $problem;
@@ -163,7 +233,7 @@ final class ProcessUniqueTempNameTest extends TestCase
             }
 
             $counts[$relative] = \count($lines);
-            if (isset(self::ARGUMENTLESS_INVENTORY[$relative])) {
+            if (isset(self::NO_ENTROPY_FLAG_INVENTORY[$relative])) {
                 continue;
             }
             foreach ($lines as $line) {
@@ -176,18 +246,18 @@ final class ProcessUniqueTempNameTest extends TestCase
         // hole shaped exactly like the next colliding temp name.
         self::assertSame([], $problems, \sprintf(
             "%d call site(s) this scanner could not read. It found the name and then could not "
-            . "find where its arguments end, so it cannot say whether the call is argument-less. "
+            . "find where its arguments end, so it cannot say whether the call carries the flag. "
             . "Reported rather than skipped: a site silently dropped is one this guard has "
             . "stopped covering, which is indistinguishable from one it has cleared.\n  %s",
             \count($problems),
             \implode("\n  ", $problems),
         ));
 
-        self::assertSame([], $offenders, self::argumentlessMessage($offenders));
+        self::assertSame([], $offenders, self::entropylessMessage($offenders));
 
-        foreach (self::ARGUMENTLESS_INVENTORY as $file => $row) {
+        foreach (self::NO_ENTROPY_FLAG_INVENTORY as $file => $row) {
             self::assertSame($row['sites'], $counts[$file] ?? 0, $file
-                . ' has a different number of argument-less calls than its inventory row claims. '
+                . ' has a different number of flagless calls than its inventory row claims. '
                 . 'A row with a stale count lets a new site arrive unremarked in a file that '
                 . 'already had some. Re-count and rewrite the row, or fix the new site.');
         }
@@ -200,21 +270,21 @@ final class ProcessUniqueTempNameTest extends TestCase
      * looked at, and the census above keeps passing because a stale row still
      * matches the name.
      */
-    public function testEveryArgumentlessInventoryRowStillDescribesTheSitesItClaims(): void
+    public function testEveryEntropylessInventoryRowStillDescribesTheSitesItClaims(): void
     {
         $this->assertTheUniqidScannerIsAlive();
 
         $files = self::filesInScope();
 
-        foreach (self::ARGUMENTLESS_INVENTORY as $relative => $row) {
+        foreach (self::NO_ENTROPY_FLAG_INVENTORY as $relative => $row) {
             self::assertNotSame('', trim($row['why']), $relative . ' is inventoried without a reason');
             self::assertArrayHasKey($relative, $files, $relative
                 . ' is inventoried and is no longer in the census scope at all. Delete the row.');
 
-            [$lines] = self::argumentlessSites(self::readOrFail($files[$relative]));
+            [$lines] = self::entropylessSites(self::readOrFail($files[$relative]));
 
             self::assertNotSame([], $lines, $relative
-                . ' is inventoried as making the argument-less call and no longer makes it. '
+                . ' is inventoried as making the flagless call and no longer makes it. '
                 . 'Either the sites were fixed — delete the row — or this scanner has stopped '
                 . 'seeing them, in which case every "nothing found" answer beside it is a '
                 . 'statement about a dead walk.');
@@ -225,12 +295,22 @@ final class ProcessUniqueTempNameTest extends TestCase
      * KNOWN-ANSWER CONTROL FOR EVERY SPELLING, POSITIVE AND NEGATIVE.
      *
      * The two spellings that matter are the bare name and the FULLY QUALIFIED
-     * one, and the second is this codebase's own house style. The scanner keyed
-     * on `T_STRING` alone, and PHP 8 lexes a leading-backslash call as
-     * `T_NAME_FULLY_QUALIFIED`, so the house spelling was invisible to it: a
-     * guard covering the minority of its own subject. How much of the tree that
-     * is, is NOT written down here — a cardinality taken in a lane worktree is
-     * void at the next merge — it is derived by
+     * one. The scanner keyed on `T_STRING` alone, and PHP 8 lexes a
+     * leading-backslash call as `T_NAME_FULLY_QUALIFIED`, so the qualified
+     * spelling was invisible to it.
+     *
+     * WHAT THIS SAID: that the qualified spelling "is this codebase's own house
+     * style", making the old scanner "a guard covering the minority of its own
+     * subject". WHAT IS TRUE, measured through {@see callSpellings()} over
+     * {@see filesInScope()} on PHP 8.3.6: the qualified spelling is the
+     * MINORITY by a wide margin and the bare one is the house style, so the old
+     * scanner covered the large majority of its subject and the widening closes
+     * the remainder. WHY THE WIDENING STILL EARNS ITS PLACE: a hole is not
+     * excused by being small — the sites it left open are ordinary calls in
+     * ordinary files, and the arm costs one token id. The reason was wrong; the
+     * change was not. NEITHER SHARE IS WRITTEN DOWN HERE — a cardinality taken
+     * in a lane worktree is void at the next merge — and the RELATIONSHIP this
+     * paragraph now rests on is asserted rather than narrated by
      * {@see testTheHouseSpellingIsPresentSoTheWideningIsLoadBearing()}.
      *
      * The negatives matter as much. A predicate stuck at "any call of this
@@ -242,22 +322,50 @@ final class ProcessUniqueTempNameTest extends TestCase
     {
         $bare = 'uniq' . 'id';
 
-        $source = "<?php\n"                                   // 1
-            . "\$a = {$bare}();\n"                            // 2  bare, offending
-            . "\$b = \\{$bare}();\n"                          // 3  fully qualified, offending
-            . "\$c = {$bare} (   );\n"                        // 4  spaced, offending
-            . "\$d = {$bare}(\n);\n"                          // 5  split over lines, offending
-            . "\$e = {$bare}('prefix');\n"                    // 7  spared
-            . "\$f = \\{$bare}((string) \\getmypid(), true);\n" // 8  spared
-            . "\$g = \$o->{$bare}();\n"                       // 9  spared: a method
-            . "\$h = Foo::{$bare}();\n"                       // 10 spared: a static method
-            . "\$i = '{$bare}';\n"                            // 11 spared: a string
-            . "function {$bare}() { return 1; }\n";           // 12 spared: a declaration
+        $source = "<?php\n"                                    // 1
+            . "\$a = {$bare}();\n"                             // 2  bare, offending
+            . "\$b = \\{$bare}();\n"                           // 3  fully qualified, offending
+            . "\$c = {$bare} (   );\n"                         // 4  spaced, offending
+            . "\$d = {$bare}(\n);\n"                           // 5  split over lines, offending
+            . "\$e = {$bare}('prefix');\n"                     // 7  LITERAL PREFIX, offending
+            . "\$e2 = {$bare}('a' . 'b');\n"                   // 8  literal concat, offending
+            . "\$e3 = {$bare}('prefix' , false );\n"           // 9  flag false, offending
+            . "\$f = \\{$bare}((string) \\getmypid(), true);\n"  // 10 spared: the flag
+            . "\$f2 = {$bare}('', true);\n"                    // 11 spared: the flag
+            . "\$g = \$o->{$bare}();\n"                        // 12 spared: a method
+            . "\$h = Foo::{$bare}();\n"                        // 13 spared: a static method
+            . "\$i = '{$bare}';\n"                             // 14 spared: a string
+            . "function {$bare}() { return 1; }\n";            // 15 spared: a declaration
 
-        [$lines, $problems] = self::argumentlessSites($source);
+        [$lines, $problems] = self::entropylessSites($source);
 
-        self::assertSame([2, 3, 4, 5], $lines, 'the scanner does not see every offending spelling');
+        self::assertSame([2, 3, 4, 5, 7, 8, 9], $lines, 'the scanner does not see every '
+            . 'offending spelling. A LITERAL PREFIX IS ONE OF THEM: it is not an entropy '
+            . 'source, so a call carrying one collides across processes exactly as the bare '
+            . 'call does, and the four src/ sites shaped that way were spared by a predicate '
+            . 'that asked about arity instead of about entropy.');
         self::assertSame([], $problems, 'a well-formed fixture was reported as unparseable');
+
+        // ...AND WHAT THE SCANNER CANNOT DECIDE, IT SAYS SO ABOUT. A computed
+        // prefix may or may not carry cross-process entropy and a computed flag
+        // may or may not be set; clearing either would be a guess in the
+        // direction that leaves a hole, and condemning either would be a guess
+        // in the direction that trains people to write exemptions.
+        [$lines, $problems] = self::entropylessSites(
+            "<?php\n"
+            . "\$a = {$bare}(\$prefix);\n"                    // 2 undecidable prefix
+            . "\$b = {$bare}('p', \$flag);\n"                 // 3 undecidable flag
+            . "\$c = {$bare}(self::PREFIX);\n",               // 4 undecidable: a constant
+        );
+
+        self::assertSame([], $lines, 'a call this scanner cannot evaluate was reported as a '
+            . 'definite offender, which is a guess dressed as a finding');
+        self::assertCount(3, $problems, 'a call this scanner cannot evaluate was walked past '
+            . 'instead of being reported. A guard that quietly ignores the undecidable has a '
+            . 'hole shaped exactly like the next defect.');
+        self::assertStringContainsString('$prefix', $problems[0]);
+        self::assertStringContainsString('$flag', $problems[1]);
+        self::assertStringContainsString('self::PREFIX', $problems[2]);
     }
 
     /**
@@ -269,7 +377,20 @@ final class ProcessUniqueTempNameTest extends TestCase
      * occurs, so the claim moves when the tree does instead of being re-read as
      * still true. The day it reads zero, ask whether the alphabet still needs
      * the arm before deleting it — the answer is probably yes, because the next
-     * file written in the house style puts it back.
+     * file written that way puts it back.
+     *
+     * AND IT ASSERTS THE RELATIONSHIP THE PARAGRAPH BESIDE IT RESTS ON, not
+     * merely that the arm is non-dormant. The doc-block on
+     * {@see testTheUniqidScannerSeesEverySpellingAndSparesTheGoodOnes()} used
+     * to claim the qualified spelling was the house style, and a test asserting
+     * only "more than zero" passes whether that is true or false — which is how
+     * the claim stood, repeated into a commit message and a report, while the
+     * tree said the opposite. A RELATIONSHIP rather than a share is what can
+     * honestly be asserted here: a percentage taken in a lane worktree is void
+     * at the next merge, but "the bare spelling outnumbers the qualified one"
+     * is a fact about the tree that survives a merge and reds if the house
+     * style ever really does flip — at which point the paragraph gets rewritten
+     * instead of quietly becoming true by accident.
      */
     public function testTheHouseSpellingIsPresentSoTheWideningIsLoadBearing(): void
     {
@@ -289,16 +410,28 @@ final class ProcessUniqueTempNameTest extends TestCase
             0,
             $qualified,
             'the fully-qualified spelling no longer occurs anywhere in scope. Nothing is broken, '
-                . 'but the T_NAME_FULLY_QUALIFIED arm in argumentlessSites() is now dormant and '
+                . 'but the T_NAME_FULLY_QUALIFIED arm in entropylessSites() is now dormant and '
                 . 'the next reader will take it for dead code. Leave it — the arm is what makes '
-                . 'the guard cover the house style — and rewrite this test\'s reason rather '
+                . 'the guard cover every spelling — and rewrite this test\'s reason rather '
                 . 'than deleting the arm.',
+        );
+
+        self::assertGreaterThan(
+            $qualified,
+            $bare,
+            'the fully-qualified spelling now outnumbers the bare one. Nothing is broken, but '
+                . 'the doc-block on testTheUniqidScannerSeesEverySpellingAndSparesTheGoodOnes() '
+                . 'says the bare spelling is the house style, and that is no longer what the '
+                . 'tree says. Rewrite the paragraph against a fresh measurement — do NOT relax '
+                . 'this assertion to make the old sentence true again, which is the repair this '
+                . 'failure invites and the one that left an inverted claim standing in a '
+                . 'doc-block, a commit message and a report at the same time.',
         );
     }
 
     /**
      * `qualified` or `bare` per call site of the name, for the measurement
-     * above. Shares {@see argumentlessSites()}'s notion of what a call is, so
+     * above. Shares {@see entropylessSites()}'s notion of what a call is, so
      * the two cannot drift into two definitions.
      *
      * @return list<string>
@@ -345,7 +478,7 @@ final class ProcessUniqueTempNameTest extends TestCase
     {
         $bare = 'uniq' . 'id';
 
-        [$lines, $problems] = self::argumentlessSites("<?php\n\$a = {$bare}(\n");
+        [$lines, $problems] = self::entropylessSites("<?php\n\$a = {$bare}(\n");
 
         self::assertSame([], $lines, 'an unterminated call was counted as a clean answer');
         self::assertNotSame([], $problems, 'an unterminated call was dropped instead of reported');
@@ -492,8 +625,8 @@ final class ProcessUniqueTempNameTest extends TestCase
     // =========================================================================
 
     /**
-     * The 1-indexed lines of every argument-less call, plus the sites this
-     * scanner could not delimit.
+     * The 1-indexed lines of every call with no more-entropy flag, plus the
+     * sites this scanner could not delimit or could not evaluate.
      *
      * TOKENS AND NOT A LINE REGEX. The line-regex form this replaced could not
      * see a call split across lines, could not see the fully-qualified
@@ -503,7 +636,7 @@ final class ProcessUniqueTempNameTest extends TestCase
      *
      * @return array{list<int>, list<string>} offending lines, problems
      */
-    private static function argumentlessSites(string $source): array
+    private static function entropylessSites(string $source): array
     {
         $tokens = \token_get_all($source);
         $count  = \count($tokens);
@@ -544,12 +677,181 @@ final class ProcessUniqueTempNameTest extends TestCase
                 continue;
             }
 
-            if (self::significantNeighbour($tokens, $open, 1) === $close) {
-                $lines[] = $token[2];
+            // THE PREDICATE IS "NO MORE-ENTROPY FLAG", NOT "NO ARGUMENTS".
+            // `uniqid($p)` is `$p . sprintf('%08x%05x', sec, usec)` — the SAME
+            // 13-hex microtime suffix the bare call returns — so a constant
+            // literal prefix contributes exactly zero cross-process entropy and
+            // a call carrying one is the very thing this guard's own sentence
+            // describes. Measured on PHP 8.3.6: 20000/20000 prefixed values
+            // carry a bare 13-char suffix, and two prefixes at one instant give
+            // `A_6a8bc9d22f617` / `B_6a8bc9d22f618`. The flag is the only
+            // argument that changes the answer.
+            $arguments = self::argumentSlices($tokens, $open, $close);
+
+            if (isset($arguments[1])) {
+                $flag = self::sliceText($tokens, $arguments[1][0], $arguments[1][1]);
+
+                if (\strtolower($flag) === 'true') {
+                    continue;
+                }
+
+                if (\strtolower($flag) !== 'false') {
+                    // RULE 14: the flag decides the verdict and this one is not
+                    // a literal, so the verdict is unknown. Saying so is the
+                    // whole difference between a guard and a filter.
+                    $problems[] = 'line ' . $token[2] . ': the more-entropy flag is `' . $flag
+                        . '`, which this scanner cannot evaluate, so it can say neither that '
+                        . 'this call is safe nor that it is not';
+
+                    continue;
+                }
             }
+
+            if (!isset($arguments[0])) {
+                $lines[] = $token[2];
+
+                continue;
+            }
+
+            [$from, $to] = $arguments[0];
+            if (self::isConstantStringExpression($tokens, $from, $to)) {
+                // A literal prefix. Same microtime suffix, same collision.
+                $lines[] = $token[2];
+
+                continue;
+            }
+
+            // A computed prefix MIGHT carry cross-process entropy — a pid, a
+            // session id — and might be a constant reached through a name.
+            // Neither is decidable here, so it is reported rather than guessed
+            // in either direction.
+            $problems[] = 'line ' . $token[2] . ': the prefix is `'
+                . self::sliceText($tokens, $from, $to) . '` and carries no more-entropy flag. '
+                . 'This scanner can only prove a LITERAL prefix contributes nothing; whether '
+                . 'this one carries cross-process entropy is a question about its value';
         }
 
         return [$lines, $problems];
+    }
+
+    /**
+     * The `[from, to]` token index pair of each argument in the call whose
+     * parentheses are $open..$close, splitting on depth-0 commas.
+     *
+     * Shares {@see argumentEnd()}'s notion of where one argument stops, so the
+     * two cannot drift into two definitions of an argument list.
+     *
+     * @param  list<array{int,string,int}|string> $tokens
+     * @return list<array{int,int}>
+     */
+    private static function argumentSlices(array $tokens, int $open, int $close): array
+    {
+        $slices = [];
+        $from   = self::significantNeighbour($tokens, $open, 1);
+
+        if ($from === null || $from >= $close) {
+            return $slices;
+        }
+
+        while ($from < $close) {
+            $to = self::argumentEnd($tokens, $from, $close);
+
+            // argumentEnd() stops BEFORE the delimiter, so the slice can end in
+            // a whitespace or comment run — `uniqid('x' )`. Leaving it there
+            // made a one-literal argument look like a multi-token expression
+            // and reported a decidable call as undecidable.
+            while ($to > $from && \is_array($tokens[$to])
+                && \in_array($tokens[$to][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                $to--;
+            }
+
+            if ($to < $from) {
+                break;
+            }
+
+            $slices[] = [$from, $to];
+
+            $next = self::significantNeighbour($tokens, $to, 1);
+            if ($next === null || $next >= $close || self::text($tokens[$next]) !== ',') {
+                break;
+            }
+
+            $after = self::significantNeighbour($tokens, $next, 1);
+            if ($after === null || $after >= $close) {
+                // A trailing comma. `uniqid('x',)` is one argument, not two.
+                break;
+            }
+
+            $from = $after;
+        }
+
+        return $slices;
+    }
+
+    /**
+     * Whether tokens $from..$to are nothing but quoted literals joined by `.`.
+     *
+     * THE BOUND IS "PROVABLY CONSTANT", not "looks constant". A concatenation
+     * of literals is decidable from the tokens alone and contributes no
+     * cross-process entropy, so it belongs with the bare call. A name, a call
+     * or a variable anywhere in the expression is NOT decidable here and takes
+     * the other branch, where it is reported rather than guessed at — a
+     * constant reached through a class constant would be wrongly cleared, and a
+     * pid reached through a variable wrongly condemned, if this tried.
+     *
+     * @param list<array{int,string,int}|string> $tokens
+     */
+    private static function isConstantStringExpression(array $tokens, int $from, int $to): bool
+    {
+        $sawLiteral = false;
+
+        for ($j = $from; $j <= $to; $j++) {
+            $token = $tokens[$j] ?? null;
+            if ($token === null) {
+                return false;
+            }
+            if (\is_array($token)
+                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+            if (\is_array($token) && $token[0] === \T_CONSTANT_ENCAPSED_STRING) {
+                $sawLiteral = true;
+
+                continue;
+            }
+            if (self::text($token) === '.') {
+                continue;
+            }
+
+            return false;
+        }
+
+        return $sawLiteral;
+    }
+
+    /**
+     * The source text of tokens $from..$to with insignificant runs dropped, for
+     * comparing an argument against a literal and for quoting it in a message.
+     *
+     * @param list<array{int,string,int}|string> $tokens
+     */
+    private static function sliceText(array $tokens, int $from, int $to): string
+    {
+        $text = '';
+
+        for ($j = $from; $j <= $to; $j++) {
+            if (!isset($tokens[$j])) {
+                break;
+            }
+            if (\is_array($tokens[$j])
+                && \in_array($tokens[$j][0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            $text .= self::text($tokens[$j]);
+        }
+
+        return $text;
     }
 
     /**
@@ -744,14 +1046,17 @@ final class ProcessUniqueTempNameTest extends TestCase
      *
      * @param list<string> $offenders
      */
-    private static function argumentlessMessage(array $offenders): string
+    private static function entropylessMessage(array $offenders): string
     {
         return \sprintf(
-            "%d argument-less call(s) found outside the inventory. That form is microtime-derived "
-            . "and NOT unique across processes; under the shared TMPDIR two concurrent suites "
-            . "collide on one path. Pass a pid prefix and the more-entropy flag — or, if the "
-            . "collision genuinely cannot happen, add the file to ARGUMENTLESS_INVENTORY with "
-            . "the MEASUREMENT that shows so.\n  %s",
+            "%d call(s) with no more-entropy flag found outside the inventory. That form is "
+            . "microtime-derived and NOT unique across processes, and a CONSTANT LITERAL PREFIX "
+            . "does not change that — the suffix is the same 13 hex characters the bare call "
+            . "returns, so `uniqid('a_')` and `uniqid('b_')` in two processes at one instant "
+            . "differ only where you told them to. Under the shared TMPDIR two concurrent "
+            . "suites collide on one path. Pass a pid prefix AND the more-entropy flag — or, if "
+            . "the collision genuinely cannot happen, add the file to NO_ENTROPY_FLAG_INVENTORY "
+            . "with the MEASUREMENT that shows so.\n  %s",
             \count($offenders),
             \implode("\n  ", $offenders),
         );
@@ -785,23 +1090,23 @@ final class ProcessUniqueTempNameTest extends TestCase
     {
         $rows = ['src/One.php:11', 'tests/Two.php:22'];
 
-        foreach ([self::argumentlessMessage($rows), self::staticPathMessage($rows)] as $message) {
+        foreach ([self::entropylessMessage($rows), self::staticPathMessage($rows)] as $message) {
             self::assertStringContainsString('2 ', $message, 'the count is not the population\'s');
             self::assertStringContainsString('src/One.php:11', $message, 'the first row is not named');
             self::assertStringContainsString('tests/Two.php:22', $message, 'the second row is not named');
         }
 
-        self::assertStringContainsString('ARGUMENTLESS_INVENTORY', self::argumentlessMessage($rows));
+        self::assertStringContainsString('NO_ENTROPY_FLAG_INVENTORY', self::entropylessMessage($rows));
         self::assertStringContainsString('entropy', self::staticPathMessage($rows));
 
         // The two texts must not be the same text. They are handed to a reader
         // who has to tell which of the two hazards fired, and a copy-paste that
         // left one of them naming the other is invisible on a green run.
-        self::assertNotSame(self::argumentlessMessage($rows), self::staticPathMessage($rows));
+        self::assertNotSame(self::entropylessMessage($rows), self::staticPathMessage($rows));
 
         // AND THE EMPTY CASE, which is the one the green suite really does hand
         // them on every run, still reads as prose rather than crashing.
-        self::assertStringContainsString('0 ', self::argumentlessMessage([]));
+        self::assertStringContainsString('0 ', self::entropylessMessage([]));
         self::assertStringContainsString('0 ', self::staticPathMessage([]));
     }
 
@@ -822,11 +1127,21 @@ final class ProcessUniqueTempNameTest extends TestCase
     {
         $bare = 'uniq' . 'id';
 
-        [$lines] = self::argumentlessSites("<?php\n\$a = \\{$bare}();\n");
-        self::assertSame([2], $lines, 'the argument-less scanner is not reporting a known offender');
+        [$lines] = self::entropylessSites("<?php\n\$a = \\{$bare}();\n");
+        self::assertSame([2], $lines, 'the flagless-call scanner is not reporting a known offender');
 
-        [$spared] = self::argumentlessSites("<?php\n\$a = {$bare}('p', true);\n");
-        self::assertSame([], $spared, 'the argument-less scanner reports a call that carries entropy');
+        // THE PREFIXED FORM IS PART OF THE KNOWN-POSITIVE, not only of the
+        // fixture table. The predicate that shipped first asked about ARITY,
+        // and every control beside it used the bare call — so a scanner that
+        // had silently gone back to counting arguments would still pass its own
+        // liveness check while four real sites walked past it.
+        [$prefixed] = self::entropylessSites("<?php\n\$a = {$bare}('subagent_');\n");
+        self::assertSame([2], $prefixed, 'the flagless-call scanner does not report a LITERAL '
+            . 'PREFIX with no more-entropy flag, which is the same microtime value with a '
+            . 'different first few bytes and the shape four src/ sites are in');
+
+        [$spared] = self::entropylessSites("<?php\n\$a = {$bare}('p', true);\n");
+        self::assertSame([], $spared, 'the flagless-call scanner reports a call that carries entropy');
     }
 
     /** The same, for the static-path scanner. */
