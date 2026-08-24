@@ -645,6 +645,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
         self::assertIsArray($stat);
         $identity = $stat['dev'] . ':' . $stat['ino'];
 
+        $nullStat = \fstat($dummy);
+        self::assertIsArray($nullStat);
+        $devNull = $nullStat['dev'] . ':' . $nullStat['ino'];
+
         try {
             $withBareSpec = $this->descriptorsVisibleToAChild([]);
             $withHighFdNamed = $this->descriptorsVisibleToAChild([3]);
@@ -654,6 +658,26 @@ final class DescriptorInheritanceGuardTest extends TestCase
             \fclose($dummy);
             \unlink($marker);
         }
+
+        // THE CONTROL FOR THE CONTROL. Without it the refutation below is
+        // vacuous in the one way that matters: if proc_open had ignored the
+        // high-fd entry entirely, "the marker is still visible with fd 3
+        // named" would be true and would say nothing at all. This asserts the
+        // named spec DID take effect - the child's fd 3 is /dev/null and is
+        // not what the bare run had there - so the surviving marker is a
+        // statement about fd 4 and above rather than about a spec nobody read.
+        self::assertSame(
+            $devNull,
+            $withHighFdNamed[3] ?? 'absent',
+            'the spec naming fd 3 did not take effect, so nothing below is a measurement of '
+                . 'anything. Re-check the probe before reading the refutation.',
+        );
+        self::assertNotSame(
+            $withHighFdNamed[3] ?? 'absent',
+            $withBareSpec[3] ?? 'absent',
+            'the bare run and the named run put the SAME thing on fd 3, so the two cases are '
+                . 'not actually different and the comparison is empty.',
+        );
 
         self::assertContains(
             $identity,
@@ -705,7 +729,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * 3 and above.
      *
      * @param list<int> $highFds fd numbers to point at /dev/null in the child
-     * @return list<string>
+     * @return array<int, string> child fd number => `dev:ino` of what it reaches
      */
     private function descriptorsVisibleToAChild(array $highFds): array
     {
@@ -715,10 +739,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 $f = @fopen('php://fd/' . $n, 'r');
                 if ($f === false) { continue; }
                 $s = @fstat($f);
-                if (is_array($s)) { $seen[] = $s['dev'] . ':' . $s['ino']; }
+                if (is_array($s)) { $seen[] = $n . '=' . $s['dev'] . ':' . $s['ino']; }
                 @fclose($f);
             }
-            echo implode(" ", array_unique($seen));
+            echo implode(" ", $seen);
             CHILD;
 
         $spec = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
@@ -739,7 +763,13 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
         self::assertSame('', \trim($err), 'the descriptor probe wrote to stderr: ' . $err);
 
-        return \array_values(\array_filter(\explode(' ', \trim($out))));
+        $reached = [];
+        foreach (\array_filter(\explode(' ', \trim($out))) as $pair) {
+            [$fd, $identity] = \explode('=', $pair, 2);
+            $reached[(int) $fd] = $identity;
+        }
+
+        return $reached;
     }
 
     /**
