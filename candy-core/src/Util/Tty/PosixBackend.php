@@ -420,18 +420,29 @@ final class PosixBackend implements Backend
             return null;
         }
 
-        // The stat cache is keyed by path, and `/proc/self/fd/1` is a path
-        // whose TARGET changes when the process redirects. size() runs on
-        // every SIGWINCH, so a cached answer here would outlive the thing it
-        // described.
-        clearstatcache();
-
         $candidates = [];
         foreach ((array) @scandir($directory) as $entry) {
             if (!\ctype_digit((string) $entry)) {
                 continue;
             }
-            $stat = @stat($directory . '/' . $entry);
+
+            // The stat cache is keyed by path, and `/proc/self/fd/1` is a
+            // path whose TARGET changes when the process redirects. size()
+            // runs on every SIGWINCH, so a cached answer here would outlive
+            // the thing it described.
+            //
+            // Evicted PER ENTRY rather than by a bare clearstatcache(). The
+            // bare call empties the cache for the WHOLE PROCESS, and this
+            // method is on the SIGWINCH path: a user dragging a window edge
+            // would repeatedly throw away stat entries belonging to code that
+            // has nothing to do with terminals, to fix a staleness that only
+            // ever affects the handful of paths read on the next four lines.
+            // MEASURED, PHP 8.3.6, 3 takes: clearstatcache(true, $path)
+            // evicts exactly that path, which is all this walk needs.
+            $path = $directory . '/' . $entry;
+            clearstatcache(true, $path);
+
+            $stat = @stat($path);
             if (!\is_array($stat)) {
                 continue;
             }
