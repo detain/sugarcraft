@@ -10005,6 +10005,12 @@ round brief; this is the third round to produce an instance.
 
 ### E298 — `uniqid` was not the whole of E242: a FIXED shared temp path fails 2-3 runs in 6
 
+🟢 **FIXED pre-round-50 by the supervisor.** The write half now runs at a pid+entropy path and the
+default is asserted as CONSTRUCTED rather than written. Probe validated against a known-answer control
+first (rule 27): the supervisor's FIRST probe gave each concurrent run its own launch `TMPDIR`, so they
+could not collide and the pre-fix code passed 6/6 — a dead instrument. Re-run with ONE shared private
+`TMPDIR`: pre-fix **2, 1, 1 of 6 failed**; post-fix **0, 0, 0 of 6**.
+
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test-infrastructure, reproduced.
 **Out of lane — `tests/Hooks/AuditHookTest.php` and `src/Hooks/BuiltIn/AuditHook.php` belong to neither
 lane e nor any lane's list this round.** Reported, not fixed.
@@ -10173,6 +10179,9 @@ process's own descriptor 0 is the right answer to both.
 
 ---
 ### E302 — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
+
+🟢 **FIXED at `1a2caebb`**, with `candy-mosaic/tests/PaletteCapabilityReferenceTest.php` as a SOURCE-SCAN
+guard plus a known-positive control. candy-mosaic: 451 tests, 7707 assertions, rc 0.
 
 **Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: live crash on a reachable path.
 **Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.**

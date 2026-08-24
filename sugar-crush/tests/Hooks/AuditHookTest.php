@@ -71,20 +71,52 @@ final class AuditHookTest extends TestCase
         $this->assertFileExists($this->tempLogFile);
     }
 
-    public function testExecuteCreatesDefaultLogFileWhenNoneProvided(): void
+    /**
+     * THE DEFAULT PATH IS ASSERTED AS CONSTRUCTED, NOT AS WRITTEN, AND THAT IS
+     * THE WHOLE POINT OF THIS TEST'S SHAPE (E298).
+     *
+     * The old version ran the real `execute()` against `AuditHook`'s production
+     * default — one FIXED name on the machine's real temp dir, since the
+     * suite's `TMPDIR` sandbox does not move `sys_get_temp_dir()` in-process —
+     * asserted the file existed, and then UNLINKED it. Two concurrent copies
+     * race: one deletes the file between the other's write and its
+     * `assertFileExists`. MEASURED at three takes of six concurrent runs: 3, 2
+     * and 2 failures out of 6, every one `Failed asserting that file
+     * ".../sugar-crush-audit.log" exists`.
+     *
+     * It was also cross-process VANDALISM rather than mere self-interference:
+     * the name is the production default, so the suite deleted the audit log of
+     * any real `sugarcrush` on the same box, and of any sibling lane's suite.
+     *
+     * A shared-name hazard is not a `uniqid` hazard, which is why the round-49
+     * pre-round sweep could not see it: that sweep's alphabet was the token
+     * `uniqid`, and this path has no entropy source at all (rule 11).
+     */
+    public function testTheDefaultLogFileIsTheProductionPathWithoutWritingToIt(): void
     {
         $hook = new AuditHook();
-        $context = $this->createContext();
 
-        $result = $hook->execute($context);
+        self::assertSame(
+            sys_get_temp_dir() . '/sugar-crush-audit.log',
+            (new \ReflectionProperty(AuditHook::class, 'logFile'))->getValue($hook),
+        );
+    }
+
+    /**
+     * The WRITE half, driven at a private path so no two processes can collide
+     * and nothing outside the test is touched.
+     */
+    public function testExecuteCreatesTheLogFileWhenNoneExistsYet(): void
+    {
+        $logFile = sys_get_temp_dir() . '/sc_audit_default_' . getmypid() . '_' . bin2hex(random_bytes(6)) . '.log';
+        self::assertFileDoesNotExist($logFile);
+
+        $result = (new AuditHook($logFile))->execute($this->createContext());
 
         $this->assertTrue($result->isAllowed());
-        $defaultLogFile = sys_get_temp_dir() . '/sugar-crush-audit.log';
-        $this->assertFileExists($defaultLogFile);
-        // Clean up default log file
-        if (file_exists($defaultLogFile)) {
-            unlink($defaultLogFile);
-        }
+        $this->assertFileExists($logFile);
+
+        @unlink($logFile);
     }
 
     // =========================================================================
