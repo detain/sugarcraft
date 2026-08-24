@@ -11068,6 +11068,53 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 50 — IN FLIGHT (base `906fa666`, THREE lanes, script `crush-round-50.js`)
+
+**Launched 2026-08-24.** The user set the cap at three lanes for this round. Three file-disjoint lanes ×
+implement → adversarial review → fix, from a DURABLE script path.
+
+**Base floor `9582 / 135473 / 1 skipped / rc 0` observed at `906fa666`** — not round 49's `9581 / 135471`,
+because the pre-round E298 fix replaced one racing test with two.
+
+**Lane `a` — finish the denial roster.** Round 49 gave the roster a home (`src/Permissions/DenialKind.php`)
+and routed `Chat`'s producers through it, then stopped. **Three readers were never told**: `Runtime`'s
+three literal `DENIAL_*` constants (E246), the background daemon's classifier reading
+`Chat::DENIED_ERROR_PREFIXES` — the very constant that moved (E300) — and the classifier duplicated in two
+headless callers (E292). Those are one defect and are briefed as one change. Then E247 (the vocabulary
+matches a `TaskBlockedException` string — fourth kind or coincidence?), E250 (`DenialKind` is a TYPE
+nothing consumes as one), E249 and E256.
+
+**Lane `b` — the fd-0 / `Tty` family, and 🔴 E296 IS REOPENED.** The suite's fd-0 repair closes the
+BLOCKING half of E212 and not the PREPEND half. E296, E290, E301 and E303 are one mechanism from four
+angles. The brief carries round 49's two hard-won lessons on this ground: lane e's census for the repair
+was scoped to `sugar-crush/{src,bin,tests}` and **the reader that mattered was in `candy-mosaic`** — rule
+11 at LIBRARY scope, the alphabet was a DIRECTORY; and the widened `grep` written to check it had doubled
+backslashes inside single quotes and matched nothing, so **the harness carried the defect the claim was
+about** (rule 13). Census by token walk, validated against a known-answer control.
+
+**Lane `c` — scanner alphabets, tests only.** The temp-name guard has a scope hole (E266/E293) AND an
+alphabet hole (E265) **and missed E298's shape entirely** — a path with no entropy source at all, which a
+guard whose alphabet is the token `uniqid` cannot express. The duplicated-helper drift guard earned its
+keep at the round-49 merge and is now the most load-bearing guard in the suite, so its own alphabet
+matters: E285 (compares BODIES, signature divergence invisible), E279 (bound is one token), E287
+(visibility alphabet defended by a feeling). Plus E289/E286, E267, E270.
+
+### THE PRE-ROUND FIXES, AND THE DEAD PROBE THAT NEARLY HID ONE
+
+**E298** — `AuditHookTest` wrote and then unlinked `sys_get_temp_dir() . '/sugar-crush-audit.log'`, a fixed
+name with no entropy on the real temp dir. Concurrent copies race, and it deletes the audit log of any
+real `sugarcrush` on the box. Supervisor-fixed pre-round for the same reason E242 was: shared
+infrastructure, so a lane doing it would red its siblings.
+
+🔴 **The verification nearly shipped on a dead instrument.** The first probe gave each of six concurrent
+runs its OWN launch `TMPDIR` — so they could not collide, and the **pre-fix** code passed 6/6. Re-run with
+one shared private `TMPDIR`: control **2, 1, 1 of 6**; fixed **0, 0, 0 of 6**. This is rule 27 catching the
+supervisor rather than a lane, and lane c's brief carries it as a worked example.
+
+**E302** — `candy-mosaic`'s `Mosaic::autoFromPalette()` named `PaletteCapability::Iterm2Image`; the enum
+spells it `ITerm2`. Enum cases resolve at USE time, so it parsed, loaded, and threw for every terminal
+that missed the Kitty branch. Fixed with a source-scan guard.
+
 ## ROUND 49 — CLOSED (`504d9a43`, floor `9581 / 135471 / 1 skipped / rc 0`, FIVE lanes, three runs)
 
 ### THE CLOSE

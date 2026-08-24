@@ -6,6 +6,65 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 50 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-24 from master `906fa666`, tree clean. THREE lanes** (the user set the cap at three
+for this round), each implement → adversarial review → fix.
+
+**Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-50.js`
+🔴 **A DURABLE PATH, NOT THE SCRATCHPAD** — round 49's run 2 died with **"adopt scriptPath rejected"**
+because its resume target was under `/tmp/.../scratchpad/`. This is that rule applied.
+
+🔴 **If a limit kills agents mid-round: RESUME if any completed** (`resumeFromRunId`), **RELAUNCH if none
+did**. Either way **check every lane for a dirty tree AND for commits its report does not mention**
+(E168, E190), and **inspect before reverting** — round 49 had two lanes holding live mutation probes and
+two holding real work, and only reading the diffs told them apart. **And check `git branch` / `git reflog`
+before believing a lane lost anything**: round 49's lane d came back `HEAD detached` with 0 commits while
+`master` still held all 16.
+
+🔴 **DO NOT EDIT THE SCRIPT'S `COMMON` WHILE THE RUN IS RESUMABLE.** The resume cache key is
+`(prompt, opts)`; one character in `COMMON` re-runs every lane, including ones already paid for.
+
+**Base floor `9582 / 135473 / 1 skipped / rc 0` OBSERVED at `906fa666` itself** (E167), supervisor-measured
+in the live tree (04:50.504, 300.12 MB) before the lanes were copied. The briefs carry that figure and the
+lanes are asked to reproduce it themselves before starting. ⚠️ It is NOT round 49's close of
+`9581 / 135471`: the pre-round E298 fix replaced one racing test with two, and that is the +1/+2.
+
+**Lane dirs** `/home/sites/crush-lane-{a,b,c}` are `cp -a` copies at `906fa666`.
+⚠️ **DO NOT DELETE until the merged floor is measured.**
+
+### THE LANES
+
+- **a — denial roster completion.** E246 + E300 + E292 as ONE change (round 49 gave the roster a home in
+  `src/Permissions/DenialKind.php` and three readers were never told: `Runtime`'s literal constants, the
+  daemon's classifier reading `Chat::DENIED_ERROR_PREFIXES`, and the classifier duplicated in two headless
+  callers), then E247, E250, E249, E256.
+- **b — the fd-0 / `Tty` family. 🔴 E296 IS REOPENED and is the round's most important item.** The suite's
+  fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half. With E290, E301, E303, E299, E243.
+- **c — scanner alphabets. Tests only; edits no `src/` file.** E265/E266/E293 (the temp-name guard has a
+  scope hole AND an alphabet hole AND missed E298's no-entropy shape), E285/E279/E287 (the drift guard that
+  earned its keep at the round-49 merge is now the most load-bearing guard in the suite, so its own
+  alphabet matters), E289/E286, E267, E270.
+
+### 🔴 SUPERVISOR ACTIONS TAKEN BEFORE LAUNCH
+
+**E298 fixed pre-round, for the same reason E242 was**: `AuditHookTest` wrote and then unlinked
+`sys_get_temp_dir() . '/sugar-crush-audit.log'` — a FIXED name with no entropy, on the real temp dir, so
+concurrent copies race and the suite deletes the audit log of any real `sugarcrush` on the box. Shared
+infrastructure; a lane doing it would red its siblings.
+
+🔴 **AND THE VERIFICATION NEARLY SHIPPED ON A DEAD PROBE.** The first attempt gave each of six concurrent
+runs its own launch `TMPDIR`, so they could not collide — and the **pre-fix** code passed 6/6. Re-run with
+ONE shared private `TMPDIR`: control **2, 1, 1 of 6 failed**; fixed **0, 0, 0 of 6**. **Rule 27 is not
+optional: run the instrument against a known-answer control before believing its verdict.** Lane c's brief
+carries this as a worked example.
+
+**E302 fixed**: `candy-mosaic`'s `Mosaic::autoFromPalette()` named `PaletteCapability::Iterm2Image` where
+the enum spells it `ITerm2` — a live fatal, invisible because nothing reached the line until a lane closed
+descriptor 0. Guarded by a source scan, since the failure mode is a NAME.
+
+---
+
 ## 0-NOW-50. ROUND 49 CLOSED (floor 9581) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR: `9581 / 135471 / 1 skipped / rc 0` at `1a2caebb`** (merges `2cd49de9` a, `92aaa179` b,
