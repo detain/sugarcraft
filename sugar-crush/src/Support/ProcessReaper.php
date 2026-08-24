@@ -97,6 +97,44 @@ final class ProcessReaper
     }
 
     /**
+     * Reap a child that has ALREADY EXITED, and NEVER signal one that has not.
+     *
+     * The counterpart to {@see terminateAndClose()}, for the one shape where
+     * signalling would be actively wrong: a launcher whose whole job is to fork
+     * and get out of the way. {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::spawnSession()}
+     * has exactly that — a `php -r` process that double-forks a detached daemon
+     * and exits. It always exits within milliseconds, so a plain `proc_close()`
+     * would in practice be free; but "in practice" is a race, and if the reap
+     * ever landed before the second fork, `terminateAndClose()` would SIGTERM
+     * the very process that is in the middle of creating the session.
+     *
+     * So: wait WITHOUT signalling, up to $budgetSeconds. If the child exited,
+     * `proc_close()` it — that call cannot block, because the wait already
+     * established the child is gone — and return its status. If it has NOT
+     * exited, return null and LEAVE THE HANDLE ALONE. Dropping the handle is
+     * safe and is what happens next: MEASURED on this host (PHP 8.3.6), the
+     * `proc_open()` resource destructor reaps an already-exited child instantly
+     * (state `Z` -> `GONE`) and abandons a still-running one in 0.000s without
+     * waiting. For a launcher that is the correct outcome either way — the thing
+     * that must survive is the daemon, and the daemon is not this process.
+     *
+     * @param mixed $process the value a `proc_open()` call returned
+     * @return int|null the exit status, or null if the child was still running
+     */
+    public static function reapIfExited(mixed $process, float $budgetSeconds = self::TERMINATE_GRACE_SECONDS): ?int
+    {
+        if (!\is_resource($process)) {
+            return null;
+        }
+
+        if (!self::waitForExit($process, $budgetSeconds)) {
+            return null;
+        }
+
+        return \proc_close($process);
+    }
+
+    /**
      * Poll `proc_get_status()` until the child is gone or the budget runs out;
      * true if it exited. A bounded poll rather than a blocking wait, for the
      * reason this class exists at all: an unflagged wait is precisely the thing
