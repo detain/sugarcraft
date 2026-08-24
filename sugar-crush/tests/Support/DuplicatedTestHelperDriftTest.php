@@ -39,11 +39,21 @@ use PHPUnit\Framework\TestCase;
  *
  *   * TWO TOKENS APART OR MORE. Every name inside the bound is a row of
  *     {@see ACCEPTED_DIVERGENCE} below, so that population is countable from
- *     this file and is not written into prose a merge invalidates. Relaxing
- *     {@see DRIFT_BOUND} to two or three tokens brings in further names;
- *     sampled on PHP 8.3.6 those are mostly `self::` against `$this->`, which
- *     is noise, but nothing here proves they all are. Widening the bound is a
- *     round of its own with rows to argue, not a constant to nudge.
+ *     this file and is not written into prose a merge invalidates. WHAT THIS
+ *     SAID about the next token out: "sampled on PHP 8.3.6 those are mostly
+ *     `self::` against `$this->`, which is noise, but nothing here proves they
+ *     all are". WHAT IS TRUE NOW: it is no longer a sample and no longer a
+ *     mostly. {@see DRIFT_BOUND} is a parameter of {@see driftReport()}, and
+ *     {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}
+ *     runs the wider bound over the whole suite every time and checks each
+ *     newcomer against a PREDICATE — is this core nothing but how the two files
+ *     spell their receiver — rather than against a list of names a merge would
+ *     invalidate. The first run of that measurement found one newcomer that was
+ *     not: two copies of `significantTokens()`, one dropping `T_WHITESPACE` and
+ *     one not, feeding a walk that reads token neighbours by index. WHY THE
+ *     BOUND STILL EARNS ITS PLACE AT ONE: everything two brings in today is a
+ *     receiver spelling, and the day it is not, that test names the pair and
+ *     says to widen the bound rather than to exempt the name.
  *   * SAME NAME, TWO CLASSES, ONE FILE. Comparison is cross-FILE, so two
  *     classes in one file are never compared with each other. Measured on PHP
  *     8.3.6 at the commit that added this file, no file in `tests/` declared
@@ -365,6 +375,166 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     }
 
     /**
+     * WHAT A SECOND TOKEN OF SLACK BRINGS IN IS A RECEIVER SPELLING AND
+     * NOTHING ELSE — derived from the tree, in the shape E287 established for
+     * the visibility alphabet.
+     *
+     * WHAT THE CLASS DOC-BLOCK SAID: "sampled on PHP 8.3.6 those are mostly
+     * `self::` against `$this->`, which is noise, but nothing here proves they
+     * all are". WHAT IS TRUE NOW: the sample is gone and the whole population
+     * is checked, every run, by a PREDICATE rather than a roster of names — a
+     * roster would have to be re-argued at every merge, and a count taken in a
+     * lane worktree is void at the next one. WHY THE RESTRICTION STILL EARNS
+     * ITS PLACE: {@see DRIFT_BOUND} stays at one because everything two brings
+     * in is how a file spells its own receiver, and the day that stops being
+     * true this test names the pair and says to widen the bound.
+     *
+     * IT ALREADY PAID FOR ITSELF ONCE. The first run of this measurement
+     * reported a fourth name that was NOT a receiver spelling:
+     * `significantTokens()`, where one copy dropped `T_WHITESPACE` and the
+     * copy it came from did not — and the copy that did not fed a walk that
+     * reads the neighbours of a `::` BY INDEX, so a spaced call was skipped
+     * before it was examined and an "there is no indirect call" assertion was
+     * an assertion about the unspaced spelling alone. Bound one could not see
+     * it. That is the whole argument for measuring rather than sampling.
+     */
+    public function testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling(): void
+    {
+        $this->assertTheScannerIsAlive();
+
+        $sources = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $sources[$relative] = (string) file_get_contents($path);
+        }
+
+        [$narrow] = self::driftReport($sources);
+        [$wide, , , $wideCores] = self::driftReport($sources, [\T_PRIVATE], self::DRIFT_BOUND + 1);
+
+        $unargued = [];
+        foreach ($wideCores as $name => $pairs) {
+            if (isset($narrow[$name])) {
+                continue;
+            }
+            foreach ($pairs as [$left, $right]) {
+                if (self::isReceiverSpelling($left) && self::isReceiverSpelling($right)) {
+                    continue;
+                }
+                $unargued[] = $name . ': [' . implode(' ', $left) . '] vs [' . implode(' ', $right) . ']';
+            }
+        }
+
+        self::assertSame(
+            [],
+            $unargued,
+            'relaxing the bound by one token brings in a pair whose divergence is NOT how the '
+                . 'two files spell their receiver. That is a copied helper two edits apart, '
+                . 'which is this file\'s own subject sitting just outside its bound and '
+                . 'invisible to every check above. Read the pair: if it is a real drift, fix it '
+                . 'or record it, and if the shape recurs, raise DRIFT_BOUND and argue the rows '
+                . 'the wide run brings with it. Do NOT add the name to ACCEPTED_DIVERGENCE — '
+                . 'that map is checked against the NARROW report and a bound-two pair is not in '
+                . 'it, so the row would be stale on arrival.',
+        );
+
+        // RULE 15, ONE LEVEL DOWN (E228): the assertion above is an absence, and
+        // an EMPTY wide report satisfies it perfectly. This is the component
+        // that fails when the bound parameter stops doing anything.
+        $count = static fn (array $report): int => array_sum(array_map('count', $report));
+
+        self::assertGreaterThan(
+            $count($narrow),
+            $count($wide),
+            'the wider bound no longer brings in more pairs than the narrow one, so either the '
+                . 'bound parameter has stopped being honoured — in which case the assertion '
+                . 'above is measuring nothing — or every pair in this suite is now exactly one '
+                . 'token apart, which would be a fact worth writing down rather than a green',
+        );
+    }
+
+    /**
+     * KNOWN-ANSWER CONTROL FOR THE BOUND PARAMETER, because the measurement
+     * above is a negative and a bound that silently ignored its argument would
+     * satisfy it.
+     *
+     * The fixture is a two-token divergence that is NOT a receiver spelling, so
+     * it must be absent at bound one and present at bound two. Both directions
+     * matter: absent at both means the parameter is dead, present at both means
+     * the narrow report is not narrow.
+     */
+    public function testTheBoundParameterReallyChangesWhatIsReported(): void
+    {
+        $original = <<<'PHP'
+            <?php
+            final class A
+            {
+                private function probe(string $device): bool
+                {
+                    $slack = -1;
+
+                    return str_contains((string) shell_exec('stty -F ' . $device), '-icanon')
+                        && $slack < 0;
+                }
+            }
+            PHP;
+
+        // TWO CONTIGUOUS tokens per side, and neither is a receiver: the sign
+        // and the magnitude of one literal. Contiguity matters — divergenceCore
+        // trims the common prefix and suffix, so two edits in DIFFERENT places
+        // give a core spanning everything between them, which is a far wider
+        // divergence than the bound this fixture is built to probe.
+        $drifted = str_replace('= -1;', '= +2;', $original);
+
+        $sources = ['a/A.php' => $original, 'b/B.php' => $drifted];
+
+        [$atOne] = self::driftReport($sources, [\T_PRIVATE], 1);
+        self::assertArrayNotHasKey('probe', $atOne, 'a two-token divergence was reported at a bound of one');
+
+        [$atTwo, , , $cores] = self::driftReport($sources, [\T_PRIVATE], 2);
+        self::assertArrayHasKey('probe', $atTwo, 'a two-token divergence was not reported at a bound of two, '
+            . 'so the bound argument is not reaching the comparison and the measurement beside '
+            . 'this fixture is a statement about a constant');
+
+        self::assertFalse(
+            self::isReceiverSpelling($cores['probe'][0][0]),
+            'the fixture meant to be a NON-receiver divergence is classified as a receiver one, '
+                . 'so the predicate the measurement rests on would pass it either way',
+        );
+    }
+
+    /**
+     * Whether a divergence core is nothing but how one file spells the receiver
+     * of a call.
+     *
+     * THE FOUR SPELLINGS ARE THE LANGUAGE'S, not a list of what the tree
+     * happens to contain: an instance receiver is `$this` with `->`, and a
+     * scoped one is `self`, `static` or `parent` with `::`. A core that is one
+     * of those, opposite a core that is another, is the same call written two
+     * ways. Anything else is a difference in what the code DOES.
+     *
+     * An EMPTY core is a receiver spelling too, and deliberately: it is the
+     * side of a pair where the receiver is simply absent — `foo()` against
+     * `self::foo()` — which is the third way the same call gets written.
+     *
+     * @param list<string> $core normalised `id:text` tokens
+     */
+    private static function isReceiverSpelling(array $core): bool
+    {
+        $text = [];
+        foreach ($core as $token) {
+            $at = strpos($token, ':');
+            $text[] = $at === false ? $token : substr($token, $at + 1);
+        }
+
+        return \in_array($text, [
+            [],
+            ['$this', '->'],
+            ['self', '::'],
+            ['static', '::'],
+            ['parent', '::'],
+        ], true);
+    }
+
+    /**
      * ONLY ONE OF {@see bodyOf()}'s TWO OPENER DISJUNCTS DOES ANY WORK, and
      * which one is a fact about the LEXER rather than about this file.
      *
@@ -631,8 +801,14 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * @param list<int>            $visibility token ids one of which must carry the declaration
      * @param int|null             $bound      per-side divergence bound; null means {@see DRIFT_BOUND}
      *
-     * @return array{array<string,list<string>>, list<string>, int}
-     *         name => pair descriptions, unparseable declarations, declarations read
+     * @return array{array<string,list<string>>, list<string>, int, array<string,list<array{list<string>,list<string>}>>}
+     *         name => pair descriptions, unparseable declarations, declarations
+     *         read, and name => the raw divergence cores of each reported pair.
+     *         The cores are returned rather than re-derived because
+     *         {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}
+     *         has to ask WHAT a pair diverges on, and parsing that back out of
+     *         the description string would be a second reading of this walk's
+     *         answer — the seam this whole file exists to close.
      */
     private static function driftReport(
         array $sources,
@@ -673,6 +849,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
 
         ksort($declarations);
         $drifted = [];
+        $cores = [];
 
         foreach ($declarations as $name => $byFile) {
             $files = array_keys($byFile);
@@ -693,11 +870,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
 
                     $drifted[$name][] = $files[$a] . ' [' . implode(' ', $leftCore) . '] vs '
                         . $files[$b] . ' [' . implode(' ', $rightCore) . ']';
+                    $cores[$name][] = [$leftCore, $rightCore];
                 }
             }
         }
 
-        return [$drifted, $unparseable, $read];
+        return [$drifted, $unparseable, $read, $cores];
     }
 
     /**
