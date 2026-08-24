@@ -104,58 +104,86 @@ final class SuiteChildStdinIsolationTest extends TestCase
     }
 
     /**
-     * `\STDIN` SURVIVES THE BOOTSTRAP AS A LIVE RESOURCE, and it is here
-     * because the FIRST version of the fix in `tests/bootstrap.php` did not
-     * leave it that way.
+     * DESCRIPTOR 0 IS `/dev/null` AFTERWARDS, AND NOTHING IN THE RUN CAN
+     * UNDO THAT — which is the property the repair was chosen for.
      *
-     * That version closed descriptor 0 and reopened `/dev/null` onto it, on
-     * the reasoning that PHP has no `dup2` — which is true — and that nothing
-     * in the suite reads the constant, which is not.
-     * {@see \SugarCraft\Crush\Tests\Cli\NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()}
-     * reads `stream_get_meta_data(\STDIN)` as its own known-positive control,
-     * and on a closed resource that is a `TypeError`. It reddened the suite on
-     * every non-tty runner and stayed green from a terminal, because the tty
-     * guard skips the block there.
+     * Round 49 tried the gentler mechanism first: `stream_set_blocking(\STDIN,
+     * false)`, which reaches inherited children through the shared open file
+     * description and leaves the constant alive. It works and it does not
+     * last.
+     * {@see \SugarCraft\Crush\Tests\Backend\EngineBackendTest::testCompleteAsyncDoesNotResetTheRealTerminalsRawMode()}
+     * builds `new Tty(null, new PosixTermios($slaveFd))` — the
+     * injected-Termios seam with a null stream, which candy-core resolves to
+     * `\STDIN` — and that seam makes `PosixBackend::enableRawMode()` skip its
+     * own `isTty()` guard, so its trailing `stream_set_blocking(…, false)` and
+     * `restore()`'s matching `stream_set_blocking(…, true)` both land on
+     * descriptor 0. (Spelled on ONE line above on purpose: the first draft of
+     * this paragraph wrapped that method name across two, which makes the
+     * symbol ungreppable from the very file that names it.) MEASURED, PHP
+     * 8.3.6, three takes: the flag reads clear once set, STILL clear after
+     * `enableRawMode()`, and BLOCKED again after `restore()` — 3/3. A guard on
+     * that flag is therefore order-dependent, passing when this file runs
+     * before that seam and failing after it, so the assertion moved off the
+     * flag altogether.
      *
-     * So the mechanism moved to `O_NONBLOCK` on the open file description,
-     * which children inherit just the same, and this test is the thing that
-     * would have caught the first version — a live constant, and the flag
-     * actually cleared, with a blocking stream run through the same probe as
-     * the control so "blocked is false" cannot be what a probe that reads
-     * nothing says.
+     * So the assertion is on the DESCRIPTOR's identity, read off
+     * `/proc/self/fd/0`, which no stream flag can change — with a
+     * known-positive through the same probe, because `readlink()` returning
+     * something unexpected and `readlink()` not working at all look identical
+     * from one call.
+     *
+     * The closed constant is asserted too rather than left implicit: it is the
+     * documented cost of this mechanism and it has already reddened the suite
+     * once, so it is better pinned as a fact than rediscovered as a surprise.
      */
-    public function testTheBootstrapLeavesTheRunnersStdinConstantUsable(): void
+    public function testTheRunnersDescriptorZeroIsDevNullAndNoStreamFlagCanUndoIt(): void
     {
-        self::assertTrue(
-            is_resource(\STDIN),
-            'tests/bootstrap.php closed the \STDIN constant; every in-process read of it now fatals',
-        );
-
-        // Would itself throw a TypeError on a closed resource, which is the
-        // exact failure this pins.
-        $meta = stream_get_meta_data(\STDIN);
-        self::assertSame('php://stdin', $meta['uri'] ?? null);
-
-        // KNOWN-POSITIVE THROUGH THE SAME PROBE: a stream nobody has touched
-        // reports blocked === true, so the assertion below is reading a flag
-        // rather than reporting a missing key as false.
-        $fresh = fopen('php://memory', 'r+');
-        self::assertTrue(stream_get_meta_data($fresh)['blocked'], 'the probe cannot see a blocking stream at all');
-        fclose($fresh);
-
-        if (stream_isatty(\STDIN)) {
-            self::assertTrue(
-                $meta['blocked'],
-                "the bootstrap cleared O_NONBLOCK on a TERMINAL - it must leave a developer's tty alone",
+        // `is_resource()` BEFORE `stream_isatty()`, and in that order for the
+        // same reason this whole test exists: `stream_isatty()` on a closed
+        // resource is a TypeError, so probing the tty first cannot tell the
+        // two states apart - it just fatals in the one that is correct.
+        if (is_resource(\STDIN)) {
+            $this->assertTrue(
+                stream_isatty(\STDIN),
+                'descriptor 0 is not a terminal and the bootstrap left it open anyway, so a spawned '
+                    . "binary can still park in stream_get_contents() on the runner's stdin",
             );
 
+            // A developer's terminal is deliberately left alone, and there is
+            // nothing further to assert about it.
             return;
         }
 
-        self::assertFalse(
-            $meta['blocked'],
-            'the bootstrap did not clear O_NONBLOCK on descriptor 0, so a spawned binary can still park '
-                . 'in stream_get_contents() on the runner\'s stdin',
+        if (!is_link('/proc/self/fd/0')) {
+            // No procfs to read: the closed constant above is the whole
+            // available evidence, and it is evidence rather than a skip.
+            return;
+        }
+
+        // KNOWN-POSITIVE THROUGH THE SAME PROBE: readlink() has to be able to
+        // name a descriptor this test opened itself, or "it says /dev/null" is
+        // indistinguishable from "it says nothing".
+        $probe = tempnam(sys_get_temp_dir(), 'sc_fd_probe_' . getmypid() . '_');
+        self::assertIsString($probe);
+        $this->paths[] = $probe;
+        $handle = fopen($probe, 'r');
+        self::assertIsResource($handle);
+        $probeFd = null;
+        foreach ((array) scandir('/proc/self/fd') as $entry) {
+            if (!ctype_digit((string) $entry)) {
+                continue;
+            }
+            if (@readlink('/proc/self/fd/' . $entry) === $probe) {
+                $probeFd = (int) $entry;
+            }
+        }
+        fclose($handle);
+        self::assertNotNull($probeFd, 'readlink() over /proc/self/fd cannot see a descriptor this test opened');
+
+        self::assertSame(
+            '/dev/null',
+            readlink('/proc/self/fd/0'),
+            'descriptor 0 is not /dev/null, so whatever the runner was started with is still what children read',
         );
     }
 

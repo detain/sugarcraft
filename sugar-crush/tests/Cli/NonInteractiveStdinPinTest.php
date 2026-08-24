@@ -85,7 +85,20 @@ final class NonInteractiveStdinPinTest extends TestCase
         // KNOWN-POSITIVE THROUGH THE SAME PROBE (rule 15): the metadata read
         // above has to be able to tell the two apart, or the assertion proves
         // nothing about which stream is in place.
-        self::assertSame('php://stdin', stream_get_meta_data(\STDIN)['uri'] ?? null);
+        //
+        // A FRESH `php://stdin` HANDLE RATHER THAN THE `\STDIN` CONSTANT, and
+        // that is forced rather than stylistic: `tests/bootstrap.php` retires
+        // descriptor 0 (it closes it and reopens `/dev/null` onto it, so a
+        // binary this suite spawns cannot park reading the runner's stdin), so
+        // the constant is a CLOSED resource and `stream_get_meta_data()` on a
+        // closed resource is a TypeError, not a null. Opening the wrapper again
+        // answers the same question — `php://memory` is not `php://stdin` — off
+        // a live handle. See the descriptor-0 write-up at the bottom of
+        // `tests/bootstrap.php`.
+        $realStdin = fopen('php://stdin', 'r');
+        self::assertIsResource($realStdin);
+        self::assertSame('php://stdin', stream_get_meta_data($realStdin)['uri'] ?? null);
+        fclose($realStdin);
     }
 
     /**

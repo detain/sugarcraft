@@ -221,80 +221,102 @@ NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
  * attributed to concurrency; it reproduces with ONE process on an idle box and
  * has nothing to do with how many suites are running.
  *
- * THE REPAIR IS A FLAG ON THE OPEN FILE DESCRIPTION, NOT SURGERY ON THE
- * DESCRIPTOR — and that is a correction, not a preference.
+ * THE REPAIR HAS TO BE A REAL DESCRIPTOR, and round 49 spent one attempt
+ * finding out why. PHP has no `dup2` and the `\STDIN` constant is bound at
+ * startup, so the descriptor itself cannot be replaced from here by anything
+ * gentler than closing it: close fd 0, then open `/dev/null`, which lands on
+ * the lowest free descriptor — 0, the one just freed.
  *
- * WHAT THIS SAID, AND DID: "PHP has no `dup2` and the `\STDIN` constant is
- * bound at startup, [so] close fd 0, then open `/dev/null`, which lands on the
- * lowest free descriptor", and then, of the consequence: "the `\STDIN`
- * CONSTANT IS NOW A CLOSED RESOURCE for the rest of the run ... Nothing in the
- * suite reaches it today, and the two things that could are both already
- * safe."
+ * WHY NOT `stream_set_blocking(\STDIN, false)`, WHICH IS GENTLER AND LEAVES
+ * THE CONSTANT ALIVE. It works, and it does not LAST. `O_NONBLOCK` is a flag
+ * on the open file description, so it reaches inherited children — MEASURED,
+ * PHP 8.3.6, three takes, a parent whose fd 0 is an open never-written pipe
+ * `exec()`ing a child that calls `stream_get_contents(\STDIN)`: inherited
+ * as-is the child was SIGKILLed at 8s (3/3), with the flag it read 0 bytes in
+ * 0.000s (3/3), and with close + reopen `/dev/null` also 0 bytes in 0.000s
+ * (3/3). But a flag can be cleared by anything holding the same description,
+ * and something in this suite does:
+ * {@see \SugarCraft\Crush\Tests\Backend\EngineBackendTest::testCompleteAsyncDoesNotResetTheRealTerminalsRawMode()}
+ * builds `new Tty(null, new PosixTermios($slaveFd))` — the INJECTED-Termios
+ * test seam with a null stream, which candy-core resolves to `\STDIN` — and
+ * that seam makes `PosixBackend::enableRawMode()` skip its own `isTty()`
+ * guard, so its trailing `@stream_set_blocking($this->stream, false)` and
+ * `restore()`'s matching `@stream_set_blocking($this->stream, true)` both land
+ * on descriptor 0. MEASURED, PHP 8.3.6, three takes, that exact seam driven
+ * from a process whose fd 0 is an open pipe: after `stream_set_blocking(\STDIN,
+ * false)` the flag reads clear, it is STILL clear after `enableRawMode()`, and
+ * after `restore()` it is BLOCKED again — 3/3. So a guard on the flag is not
+ * merely wrong, it is ORDER-DEPENDENT: it passes when its own file runs alone
+ * or before that seam and fails after it, which is the worst shape a guard can
+ * have. A closed descriptor cannot be un-closed by either of those lines,
+ * because both sit behind `is_resource($this->stream)`.
  *
- * WHAT IS TRUE NOW: something does reach it.
+ * ONLY WHEN FD 0 IS NOT A TERMINAL. A developer running the suite from a shell
+ * keeps their terminal, and a tty is harmless anyway (`stream_isatty()` is the
+ * first thing `readStdinIfPiped()` checks, and it returns null on it).
+ *
+ * THE FAILURE MODE IS BENIGN, WHICH IS WHY THE SURGERY IS ACCEPTABLE HERE. If
+ * the reopen does not land on fd 0, children inherit a CLOSED descriptor 0 —
+ * measured above at 0.105s, i.e. the same answer as `/dev/null`. `/dev/null`
+ * is checked BEFORE the close so the descriptor is never freed without a
+ * replacement to hand.
+ *
+ * WHAT THIS COSTS, and it is a cost that has already been paid once: the
+ * `\STDIN` CONSTANT IS A CLOSED RESOURCE for the rest of the run.
+ * `is_resource(\STDIN)` is false and `stream_get_meta_data(\STDIN)` /
+ * `stream_isatty(\STDIN)` FATAL with a TypeError — measured.
+ *
+ * WHAT THIS SAID ABOUT THAT: "Nothing in the suite reaches it today, and the
+ * two things that could are both already safe." WHAT IS TRUE: one thing did.
  * `tests/Cli/NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()`
- * calls `stream_get_meta_data(\STDIN)` as its OWN known-positive control — the
- * assertion that the probe can tell the pinned `php://memory` stream from the
- * real one — and on a closed resource that is a `TypeError`, not a null.
- * MEASURED at 85a34cc1 from a non-tty runner: that one file, 5 tests, 1 error,
- * `stream_get_meta_data(): supplied resource is not a valid stream resource`.
- * So the close reddened the whole suite on every runner whose fd 0 is not a
- * terminal, and left it green from a terminal, because the tty guard skips the
- * block there — invisible to whoever ran it by hand, which is how it shipped.
+ * called `stream_get_meta_data(\STDIN)` as its OWN known-positive control, and
+ * that is a TypeError on a closed resource — MEASURED at 85a34cc1 from a
+ * non-tty runner: that one file, 5 tests, 1 error, and therefore the whole
+ * suite red on every runner whose fd 0 is not a terminal while staying green
+ * from a terminal, because the tty guard skips this block there. That control
+ * now opens its own `php://stdin` handle instead of reading the constant,
+ * which answers the same question (`php://memory` is not `php://stdin`)
+ * without depending on a descriptor this file has deliberately retired.
  *
- * WHY THE FIX STILL EARNS ITS PLACE, in a different shape: `O_NONBLOCK` lives
- * on the open file DESCRIPTION, and a description is exactly what `fork(2)`
- * and `exec(2)` share. Setting it here therefore reaches every child that
- * inherits fd 0 without touching the descriptor or the constant. MEASURED on
- * PHP 8.3.6, three takes each, a parent whose own fd 0 is an open
- * never-written pipe `exec()`ing a child that calls
- * `stream_get_contents(\STDIN)`:
+ * WHY THE SURGERY STILL EARNS ITS PLACE AFTER THAT: it is the only version
+ * that survives the paragraph above about `stream_set_blocking`, and the cost
+ * is now a KNOWN cost with exactly one site rather than an assumed absence.
+ * The two remaining in-process readers of the constant are both already safe:
+ * `NonInteractive::readStdinIfPiped()` resolves through the pin above and
+ * never sees it, and
+ * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt::isInteractive()}
+ * guards with `is_resource()` FIRST, so its `?? \STDIN` default takes the
+ * no-tty refusal arm instead of blocking on `fgets()`. That is E243 NARROWED,
+ * not closed: a developer running the suite from a real terminal skips this
+ * whole block, `\STDIN` stays open and interactive, and the block E243
+ * describes is still live for them.
  *
- *   inherited as-is                     child SIGKILLed at 8s, rc 137   3/3
- *   stream_set_blocking(\STDIN, false)  child read 0 bytes in 0.000s    3/3
- *   close fd 0 + reopen /dev/null       child read 0 bytes in 0.000s    3/3
+ * A fatal is the right failure here rather than a silent null. A future test
+ * that starts reading the constant is doing the thing this block exists to
+ * stop, and it should find out at the call site rather than sixty seconds
+ * later in someone else's test.
  *
- * — the two repairs are indistinguishable to the child, and after the flag
- * `is_resource(\STDIN)` is still true where after the close it is false. That
- * is the whole difference and it is the whole reason.
- *
- * WHAT THIS COSTS, which is a DIFFERENT edge from the one the close had and is
- * stated because it is invisible until something steps on it:
- *
- *  - The flag is on the description, so it is shared with whatever else holds
- *    that description — this process's children, and the process that handed
- *    fd 0 down. A reader of it elsewhere gets `EAGAIN` where it used to block.
- *  - It is NOT hermetic the way `/dev/null` was. Bytes already sitting in the
- *    pipe stay readable, so a runner started with data on stdin can still leak
- *    them into a spawned `-p` child's prompt. That is the PREPEND half of the
- *    hazard above, still open one process down; the BLOCKING half is what this
- *    line closes. Closing the prepend half needs the descriptor itself gone,
- *    and the descriptor cannot go without the constant going with it — which
- *    is the trade this block has now been on both sides of.
- *
- * ONLY WHEN FD 0 IS NOT A TERMINAL, for two reasons rather than one. A
- * developer running the suite from a shell keeps their terminal, and a tty is
- * harmless anyway (`stream_isatty()` is the first thing `readStdinIfPiped()`
- * checks, and it returns null on it). It is also where descriptors 0, 1 and 2
- * most often ARE one description, and `O_NONBLOCK` set through fd 0 would
- * then reach this suite's stdout.
- *
- * WHAT IT DOES TO E243, restated because the mechanism moved: nothing changes
- * in the outcome. {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt::isInteractive()}
- * is `is_resource($this->in) && stream_isatty($this->in)`, so its `?? \STDIN`
- * default took the no-tty refusal arm under the close via the FIRST clause and
- * takes it under the flag via the SECOND — and a non-blocking `fgets()` cannot
- * park either way. E243 stays NARROWED, not closed: a developer running the
- * suite from a real terminal skips this whole block, `\STDIN` stays open,
- * blocking and interactive, and the block E243 describes is still live there.
+ * THE HANDLE IS PARKED IN `$GLOBALS` BECAUSE IT HAS TO BE, and the reason is
+ * not the one it looks like. PHPUnit 10 does not include this file at file
+ * scope: {@see \PHPUnit\TextUI\Application::loadBootstrapScript()} runs
+ * `include_once $filename` from inside a private METHOD, so a bare
+ * `$keep = fopen('/dev/null', 'r')` in here would be that METHOD's local and
+ * would be freed the moment it returns — taking fd 0 with it, back to CLOSED
+ * rather than to `/dev/null`. MEASURED, PHP 8.3.6, three takes each, the same
+ * two includes driven from a method scope: parked in `$GLOBALS`,
+ * `readlink('/proc/self/fd/0')` answers `/dev/null` 3/3; as a bare local it
+ * answers `false` 3/3. This line is load-bearing, not a note to a future
+ * tidy-up.
  *
  * Pinned by `tests/SuiteChildStdinIsolationTest.php`, which spawns the real
  * binary from a runner whose own stdin is an open, never-written pipe — and
  * runs the un-bootstrapped control through the same harness first, because
  * "it did not hang" is also what a harness that never started the child says.
- * The same file pins that `\STDIN` survives this block as a live resource,
- * which is the assertion the close would have failed.
+ * The same file pins that descriptor 0 IS `/dev/null` afterwards, read off
+ * `/proc/self/fd/0` — a fact `stream_set_blocking()` cannot undo, which is the
+ * assertion the flag version could not make.
  */
-if (!stream_isatty(\STDIN)) {
-    stream_set_blocking(\STDIN, false);
+if (!stream_isatty(\STDIN) && is_readable('/dev/null')) {
+    fclose(\STDIN);
+    $GLOBALS['__sugarcrushSuiteStdin'] = fopen('/dev/null', 'r');
 }
