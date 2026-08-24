@@ -13101,3 +13101,128 @@ box" and its reviewer found **0** and flagged the discrepancy. Both are correct.
 claim, and the backlog should not record it as one.
 
 ---
+
+### Ea53-1 — E368's step for site 3 is not implementable as written, and the reason generalises
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: prescription refuted. **Measured, PHP 8.3.6.**
+
+E368's STEP says of the `/dev/tty` arm of `PosixBackend::size()`: *"Site 3 should ask about the handle it
+just opened rather than a number derived from it."* That cannot be done. `SizeIoctl::query()` is
+`query(int $fd)` and `TermiosFactory::open()` is `open(int $fd)` — **neither accepts a resource**, and PHP
+publishes no portable call that maps a stream handle to its descriptor. `TtyDetect::isAtty()` could take
+the prescription because `stream_isatty()` accepts a resource; the ioctl and termios sinks cannot.
+
+So the shipped fix asks **libc** to open the device, which returns a genuine descriptor:
+`PosixBackend::openTerminalDescriptor()` / `closeTerminalDescriptor()`. Measured, three takes, in a plain
+non-tty CLI process: `open("/dev/tty", O_RDONLY)` = -1 (ENXIO, no controlling terminal),
+`open("/dev/ptmx", O_RDONLY)` = descriptor 3 with `posix_isatty(3) === true`.
+
+**The generalisable part**: a prescription phrased as "pass the object instead of the number" is only
+available where the SINK has a resource-accepting overload. Before writing that step for sites 2 and 4,
+check the sink's signature — for both of them it is `int`, so the same prescription will fail there too.
+
+**And a stronger measurement than the backlog carried.** E368 called site 3 "wrong on every run". It is
+worse than that: `SizeIoctl::query()` opens with `\posix_isatty($fd)` and throws when it fails, and the
+resource id never names a tty. Measured under a real pty, PHP 8.3.6: handle resource id 5, real descriptor
+4, `posix_isatty(5)` false, `posix_isatty(4)` true, `SizeIoctl::query(5)` throws. **The arm therefore
+threw on every invocation it ever had and silently fell through to the `stty` shell-out below it — it had
+never once returned an answer in its life.** The `stty -F /dev/tty size` arm has been doing that arm's job
+throughout.
+
+---
+
+### Ea53-2 — sites 2 and 4 are still open, and closing them is a constructor change
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: correctness, latent. **Deliberately deferred;
+judged in the census roster rather than left unrecorded.**
+
+E368 sites 2 (`PosixBackend::size()`'s first arm) and 4 (`PosixBackend::enableRawMode()`) both spell the
+descriptor `$fd = (int) $this->stream` one to two lines above the sink. They are latent because
+`$this->stream` defaults to `STDIN`, whose resource id is 1 and whose descriptor is 0, and 0 and 1 name
+the same device in an ordinary terminal.
+
+They were not fixed with the rest because the fix is not local: `$this->stream` is an arbitrary caller
+supplied resource, so the only correct answers are (a) carry the descriptor alongside the stream through
+the constructor, or (b) resolve `STDIN`/`STDOUT`/`STDERR` to 0/1/2 and refuse an injected stream. Both
+change `PosixBackend::__construct()`, which `SugarCraft\Core\Util\Tty` and every `new Tty(null, …)` call
+site reach — a wider blast radius than the two one-line fixes shipped beside them, and one that
+`TtyStreamArgumentCensusTest` in `sugar-crush` already has opinions about.
+
+Both now carry a judged roster row in
+`candy-core/tests/Util/Tty/DescriptorSinkArgumentCensusTest::ROSTER`, classified
+`INT_CAST_VIA_VARIABLE`. **That row is itself the guard**: if someone fixes the assignment above the sink,
+the classification changes to `VARIABLE` and the census fails until the judgement is rewritten.
+
+---
+
+### Ea53-3 — the `finally` that closes the `/dev/tty` descriptor is not behaviourally pinnable here
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: unpinned invariant. **Stated because the gap is
+structural, not because the guard was skipped.**
+
+`PosixBackend::size()`'s third arm now closes its descriptor in a `finally`. The pair
+`openTerminalDescriptor()`/`closeTerminalDescriptor()` IS pinned — 25 open/close cycles with an fd-set
+comparison, and removing the close reds it (and, incidentally, reds `TtyDetectTest` too, because leaked
+ptmx handles make its dev+inode walk ambiguous, which is that helper failing loudly exactly as its
+doc-block promises). What is NOT pinned is the `finally` in `size()` itself.
+
+The reason is measurable rather than a matter of effort: on a host with no controlling terminal — which is
+every CI runner and this box's PHPUnit process — `open("/dev/tty")` returns -1, the arm acquires no
+descriptor, and there is nothing to leak. A test cannot distinguish a present `finally` from an absent one
+there. Reaching the arm at all also requires arms 1 and 2 to fail first, and arm 4 (`stty -F /dev/tty
+size`) returns the same answer arm 3 does, so even under a terminal the two arms are not separable from
+outside.
+
+**Step, if it is ever judged worth it**: give `size()` the device path as an `@internal` parameter the way
+`openTerminalDescriptor()` has one, so a test can point the arm at `/dev/ptmx` and count descriptors
+across repeated calls. That is a test seam on a public method and was not judged worth the API surface
+for a two-line `finally`.
+
+---
+
+### Ea53-4 — `PosixBackendRestoreLastTest` asserts almost nothing, and one of its two tests is `assertTrue(true)`
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: dead guard. **Verified by symbol. Not edited — the
+file is pre-existing and the new coverage was added alongside rather than folded into it.**
+
+`candy-core/tests/Util/Tty/PosixBackendRestoreLastTest`:
+
+  - `testRestoreLastNoOpWithoutTtyStdin()` ends `$this->assertTrue(true, 'restoreLast completed without
+    throwing')`. Its doc-comment claims it "verifies no stty -g shell-out is attempted"; nothing in it
+    can observe a shell-out. It passes against a deleted method body.
+  - `testRestoreLastRoundTripsViaPtyMaster()` opens a pty, applies raw mode to the MASTER, calls
+    `restoreLast()`, then asserts `isAtty()` is unchanged — a property of the device, not of anything
+    `restoreLast()` did. `restoreLast()` never touches that master: it reads descriptor 0. The test
+    passed identically before and after this round's fix moved that descriptor from 1 to 0, which is the
+    plainest possible demonstration that it does not observe the thing it is named for.
+
+The descriptor question is now pinned by `PosixBackendRestoreLastDescriptorTest` (two child processes,
+descriptors 0 and 1 arranged both ways round a `/dev/ptmx` handle). **What remains unpinned is the
+round-trip itself** — that a second `restoreLast()` call actually re-applies the snapshot. Closing that
+needs the same child-process shape plus a way to read a termios mode back, which candy-pty deliberately
+does not expose (`struct termios` is opaque there); `stty -F <pts> -a` is the available route.
+
+---
+
+### Ea53-5 — a census's alphabet trap caught in the act, one level down
+
+**Recorded 2026-08-24 by round-53 lane a.** Severity: instrument. **Found while building the replacement
+census for E368, before it was ever trusted.**
+
+The replacement scanner (`candy-core/tests/Util/Tty/DescriptorSinkScanner`) was first written to match a
+sink name as a `T_STRING` token. Run against a known-answer fixture it looked perfect. Run against
+`candy-pty/src/` it found `posix_isatty` in `PosixTermios` and `SttyTermios` — and **missed the one in
+`SizeIoctl::query()`**, which is the guard every other member of this defect family ultimately trips over.
+
+The reason: `\posix_isatty(...)`, with the leading backslash the tree uses in that file, is a **single
+`T_NAME_FULLY_QUALIFIED` token in PHP 8**, not a `T_NS_SEPARATOR` followed by a `T_STRING`. A scanner
+matching `T_STRING` alone sees nothing there.
+
+This is E368's own lesson recurring inside the instrument written to fix it, and it was caught only
+because the scanner was pushed over real trees and its output read line by line, not because the fixture
+went green. **A known-answer fixture cannot contain the spelling its author did not think of** — which is
+the same sentence as "a classifier's alphabet is a transcript of the cases it already knows", one level
+down. The census now carries `T_NAME_QUALIFIED`, `T_NAME_FULLY_QUALIFIED` and `T_NAME_RELATIVE`, and
+removing them reds it (mutation M11).
+
+---
