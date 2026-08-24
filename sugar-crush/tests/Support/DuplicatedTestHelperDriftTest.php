@@ -55,6 +55,15 @@ use PHPUnit\Framework\TestCase;
  *     subject of tests rather than their machinery.
  *   * A COPY THAT WAS RENAMED. Nothing here matches bodies across different
  *     names, so a helper copied and renamed is out of reach by construction.
+ *   * THE SIGNATURE. {@see bodyOf()} starts at the body's opening brace, so a
+ *     divergence in the PARAMETER LIST - an added parameter, a changed default,
+ *     a widened type - is invisible, and two copies whose signatures disagree
+ *     can still compare as byte-identical bodies. This is not hypothetical:
+ *     `reviewerAgent`'s row below is exactly that shape, and it is only in the
+ *     report at all because the divergence reaches the body as well. Including
+ *     the signature would fold every promoted-property and named-argument
+ *     spelling difference into the core and push most real pairs past
+ *     {@see DRIFT_BOUND}, which is a different guard, not a wider one.
  */
 final class DuplicatedTestHelperDriftTest extends TestCase
 {
@@ -81,9 +90,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * moment one of the three moved directory - which is a rename, not a drift.
      *
      * MOST OF THESE ARE NOT BUGS, AND THAT IS THE POINT. The value of the map
-     * is not its current contents; it is that the THIRTEENTH name - the next
-     * helper somebody fixes in one copy and not the other - arrives as a red
-     * test naming both files, instead of as a green suite.
+     * is not its current contents; it is that the NEXT name - the next helper
+     * somebody fixes in one copy and not the other - arrives as a red test
+     * naming both files, instead of as a green suite. (An ordinal stood here
+     * and was retired: it counted the rows below, so every row a later round
+     * argues would have made the sentence wrong, and the count was never the
+     * claim.)
      *
      * @var array<string,string>
      */
@@ -162,9 +174,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         $this->assertSame(
             [],
             $unparseable,
-            'this scanner could not read a private method declaration, so it cannot say whether '
-                . 'that helper has a twin anywhere. It is reported rather than skipped: a '
-                . 'declaration silently dropped is a helper this guard has stopped covering, '
+            'this scanner could not read a private method declaration, or could not place it - '
+                . 'a body whose closing brace it cannot find, a declaration whose name it '
+                . 'cannot read, or a second declaration of one name in one file, which the '
+                . 'name => file => body report has nowhere to put. Either way it cannot say '
+                . 'whether that helper has a twin anywhere. It is reported rather than skipped: '
+                . 'a declaration silently dropped is a helper this guard has stopped covering, '
                 . 'which is indistinguishable from one it has cleared.',
         );
 
@@ -234,6 +249,77 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'deleted, or the divergence grew past the bound. Delete the row. An accepted '
                 . 'divergence that has been overtaken is how a helper silently stops being '
                 . 'compared.',
+        );
+    }
+
+    /**
+     * ONLY ONE OF {@see bodyOf()}'s TWO OPENER DISJUNCTS DOES ANY WORK, and
+     * which one is a fact about the LEXER rather than about this file.
+     *
+     * WHY THIS IS A TEST AND NOT A COMMENT. Rule: never remove dormant code -
+     * wire it, or document it as an intentional seam with a measured reason
+     * and PIN THE DORMANCY. The `T_CURLY_OPEN` disjunct in that walk is
+     * unreachable, because the arm beside it matches on the token's TEXT and
+     * that token's text is the same one byte; measured, dropping it changes no
+     * body and survives both real-tree tests in this file. A dormancy nobody
+     * pinned is a line the next reader deletes as dead - and it is dead only
+     * for as long as the text holds.
+     *
+     * BOTH DIRECTIONS, derived from the running interpreter rather than
+     * written down, because the two disjuncts are dormant and live for
+     * opposite reasons and either can flip on a language change alone.
+     */
+    public function testTheBodyWalkKeysOnTokenTextSoOnlyOneOpenerDisjunctDoesWork(): void
+    {
+        $textOf = static function (string $source): array {
+            $found = [];
+            foreach (\token_get_all($source) as $token) {
+                if (\is_array($token) && str_ends_with($token[1], '{')) {
+                    $found[\token_name($token[0])] = $token[1];
+                }
+            }
+
+            return $found;
+        };
+
+        // The everyday spelling, written as code because it is not deprecated.
+        $this->assertSame(
+            ['T_CURLY_OPEN' => '{'],
+            $textOf('<?php $b = 1; $s = "a{$b}c";'),
+            'the `{` that opens an interpolation no longer reports its text as that one byte. '
+                . 'bodyOf() increments on `$text === \'{\'`, so until now its T_CURLY_OPEN '
+                . 'disjunct was dormant - this is the change that makes it load-bearing, and '
+                . 'any walker that dropped it as dead code is now losing a level.',
+        );
+
+        // ...and the deprecated one, supplied as a nowdoc so this file never
+        // compiles it and carries no occurrence of the syntax.
+        $deprecated = <<<'PHP'
+            <?php $b = 1; $s = "a${b}c";
+            PHP;
+        $openers = $textOf($deprecated);
+
+        if (!\defined('T_DOLLAR_OPEN_CURLY_BRACES')) {
+            // On the PHP that removed the syntax there is no second disjunct to
+            // reason about, and the walk is correct with the text arm alone.
+            $this->assertSame(['T_CURLY_OPEN' => '{'], $openers);
+
+            return;
+        }
+
+        $this->assertArrayHasKey(
+            'T_DOLLAR_OPEN_CURLY_BRACES',
+            $openers,
+            'this PHP still defines the deprecated opener but no longer lexes the spelling into '
+                . 'one, so the fixture that pins the LIVE disjunct has stopped exercising it',
+        );
+        $this->assertNotSame(
+            '{',
+            $openers['T_DOLLAR_OPEN_CURLY_BRACES'],
+            'the deprecated opener now reports its text as the same one byte T_CURLY_OPEN does, '
+                . 'which would make bodyOf()\'s text arm cover it and its disjunct dormant too. '
+                . 'The behavioural fixture in assertTheScannerIsAlive() would then be pinning '
+                . 'nothing, and this file would have no live opener disjunct at all.',
         );
     }
 
@@ -320,6 +406,75 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             'two unrelated helpers that happen to share a name were reported as drifted copies',
         );
 
+        // THE BODY WALK'S ONE LOAD-BEARING OPENER DISJUNCT, pinned by what it
+        // does rather than by what it names. The helper interpolates in the
+        // 8.2-deprecated spelling and the one-token divergence sits AFTER it,
+        // so dropping `T_DOLLAR_OPEN_CURLY_BRACES` from {@see bodyOf()} ends
+        // both bodies at that interpolation's bare `}` - and the two truncated
+        // bodies are then IDENTICAL, which this report treats as "no drift".
+        // Measured: without this fixture that mutation SURVIVED both tests in
+        // this file, caught only by the spelling roster in another one.
+        //
+        // The source is a NOWDOC, so the deprecated spelling is a single
+        // T_ENCAPSED_AND_WHITESPACE token in THIS file and costs the tree no
+        // occurrence - which is what
+        // {@see InterpolationOpenerTokenTest::testNoFileUsesTheDeprecatedInterpolationSyntax()}
+        // checks, over this file too.
+        $deprecatedLeft = <<<'PHP'
+            <?php
+            final class D
+            {
+                private function probe(string $device): string
+                {
+                    $label = "dev${device}end";
+
+                    return $label . 'left';
+                }
+            }
+            PHP;
+        $deprecatedRight = str_replace("'left'", "'right'", $deprecatedLeft);
+        [$report] = self::driftReport([
+            'a/D.php' => $deprecatedLeft,
+            'b/D.php' => $deprecatedRight,
+        ]);
+        $this->assertArrayHasKey(
+            'probe',
+            $report,
+            'two copies of a helper that interpolates in the 8.2-deprecated spelling, one token '
+                . 'apart AFTER the interpolation, were not reported as drifted. The body walk '
+                . 'lost a level at that interpolation\'s bare closer, truncated both bodies to '
+                . 'the same prefix, and a pair that agrees is not drift - so this guard goes '
+                . 'quiet on every helper that interpolates, which is the failure it exists to '
+                . 'catch in other scanners.',
+        );
+
+        // AND A SAME-NAMED PRIVATE HELPER DECLARED TWICE IN ONE FILE IS
+        // REPORTED, not silently deduplicated. Comparison is by file, so the
+        // report keeps one body per file per name: a second declaration would
+        // overwrite the first and the guard would quietly compare the wrong
+        // one. No file in `tests/` does this today, which is exactly why the
+        // fixture is synthetic.
+        $twice = <<<'PHP'
+            <?php
+            final class E
+            {
+                private function probe(): string { return 'a'; }
+            }
+            final class F
+            {
+                private function probe(): string { return 'b'; }
+            }
+            PHP;
+        [, $collision] = self::driftReport(['e/E.php' => $twice]);
+        $this->assertNotSame(
+            [],
+            $collision,
+            'one file declared the same private helper name twice and the scanner kept only one '
+                . 'of the two bodies without saying so. A declaration silently dropped is a '
+                . 'helper this guard has stopped covering, which is indistinguishable from one '
+                . 'it has cleared.',
+        );
+
         // AND THE SCANNER SAYS SO WHEN IT CANNOT PARSE. A declaration whose
         // body never closes must reach the caller as a problem, not be dropped.
         $truncated = <<<'PHP'
@@ -365,6 +520,20 @@ final class DuplicatedTestHelperDriftTest extends TestCase
 
                     continue;
                 }
+                if (isset($declarations[$declaration['name']][$relative])) {
+                    // RULE: GO RED ON WHAT YOU CANNOT EXPRESS. The report is
+                    // keyed name => file => body, so a second declaration of
+                    // one name in one file has nowhere to go: it would
+                    // overwrite the first and every later comparison would be
+                    // against whichever body happened to be last.
+                    $unparseable[] = $relative . ': ' . $declaration['name']
+                        . '() is declared twice in this file, and this report keeps one body '
+                        . 'per file per name - so one of the two would be compared and the '
+                        . 'other silently dropped';
+
+                    continue;
+                }
+
                 $read++;
                 $declarations[$declaration['name']][$relative] = $declaration['body'];
             }
@@ -541,13 +710,33 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * The normalised body of the method whose `function` token is at $at, or
      * null when this scanner cannot find where the body ends.
      *
-     * THE BRACE WALK NAMES EVERY OPENER THE RUNNING PHP PRODUCES, not just
-     * `{`: an interpolation opens with an ARRAY token and closes with a bare
-     * `}`, so a depth count matching only the bare string goes one closer over
-     * and ends the body early - inside the helper rather than at its end,
-     * which would make two identical helpers look different. The roster is
-     * enforced across the whole suite by
-     * {@see InterpolationOpenerTokenTest::testEveryBraceWalkingScannerNamesEveryOpener()}.
+     * WHAT THIS SAID: "the brace walk names every opener the running PHP
+     * produces, not just `{`: an interpolation opens with an ARRAY token and
+     * closes with a bare `}`, so a depth count matching only the bare string
+     * goes one closer over". WHAT IS TRUE NOW, and it is why the paragraph was
+     * rewritten rather than kept: that mechanism is real, but it is NOT the
+     * mechanism at THIS site. This walk keys on the token's TEXT, not on the
+     * bare one-byte string, and `T_CURLY_OPEN`'s text IS `{` - so the
+     * `$text === '{'` arm already increments on it and the `T_CURLY_OPEN`
+     * disjunct beside it does nothing at all. Measured, both ways: dropping
+     * that disjunct leaves the body byte-identical on a modern-interpolation
+     * helper, and the mutation SURVIVES this file's own two tests (it is
+     * caught only by the SPELLING roster in
+     * {@see InterpolationOpenerTokenTest::testEveryBraceWalkingScannerNamesEveryOpener()},
+     * which reads what a walker NAMES and cannot tell whether the walk works).
+     * `T_DOLLAR_OPEN_CURLY_BRACES` is the opposite: its text is `${`, the text
+     * arm cannot see it, and dropping it truncates a body at the wrong brace.
+     *
+     * WHY THE DORMANT DISJUNCT STAYS. It is one token, it makes this walker's
+     * roster identical to every other walker's, and it stops being dormant the
+     * moment `T_CURLY_OPEN`'s text stops being that one byte - which is
+     * precisely the kind of change a future PHP makes without telling anyone.
+     * The dormancy is not left to a reader to rediscover: it is derived from
+     * the running interpreter and pinned by
+     * {@see testTheBodyWalkKeysOnTokenTextSoOnlyOneOpenerDisjunctDoesWork()},
+     * which reds if the text ever changes. The LIVE disjunct is pinned
+     * behaviourally instead, by the deprecated-spelling fixture in
+     * {@see assertTheScannerIsAlive()}.
      *
      * A `;` at parameter-list depth zero before any `{` means the declaration
      * has no body. PHP does not allow a private abstract method, so in this
