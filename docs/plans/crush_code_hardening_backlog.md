@@ -8843,3 +8843,112 @@ different guard rather than a wider one. Widening wants its own round with rows 
 conclusion Ed49-4 reaches for the bound itself, and probably the same round.
 
 ---
+
+### Ed49-11 — a reader that slices `file(__FILE__)` with reflection's line numbers, unchecked in both directions
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: correctness of an instrument.
+**FIXED**, with mutation proof in both halves.
+
+**What.** `VhsTapeContractTest::modelMethodTokens()` took `getStartLine()`/`getEndLine()` from
+`ReflectionMethod` and sliced `file(__FILE__)` with them. Nothing checked that the two addressed the same
+text, and the two ways they can disagree have different mechanisms:
+
+  * **Another file.** For a method imported from a trait, `getFileName()` is the TRAIT's file and the line
+    numbers are the trait's lines. Measured on PHP 8.3.6: slicing the using class's file with them returns
+    unrelated source with no error of any kind. Reachability is not theoretical — extracting a duplicated
+    test helper into a trait is a thing this tree is actively doing.
+  * **The same file, shifted.** Reflection's line numbers are fixed when the class loads; `file(__FILE__)`
+    is read on every call. An edit to the file in between shifts every slice while the file name still
+    matches. **This half was OBSERVED**: in a run where the file changed on disk mid-suite, every body came
+    back one declaration out of step and the census reported `directiveValues()`'s figures under
+    `scanRegex()`'s name — under a message blaming "a docblock that has gone stale two screens away",
+    which invites the reader to edit the figures.
+
+**Fix.** `assertSame(__FILE__, $reflection->getFileName())` for the first; a `declaredSlice()` that refuses
+unless the slice's first line spells `function <name>` for the second. The second takes its lines as an
+argument so a fixture can hand it offsets that no longer match, which a live reflection cannot be asked to
+produce. Both are pinned by positives: an inherited PHPUnit assertion pushed through the reader, and a
+synthetic nine-line source sliced at the wrong declaration.
+
+**The generalisable part.** A guard whose failure message names a likely cause is a guard that will be
+believed. When the diagnosis and the real cause differ, the message is worse than silence — so the reader
+must refuse states it cannot interpret rather than describe one it has not verified.
+
+### Ed49-12 — the drift guard's visibility alphabet was defended by a feeling
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED** (measured, and the
+measurement is now derived by a test rather than written down).
+
+**What.** `DuplicatedTestHelperDriftTest`'s class doc-block lists what its alphabet deliberately cannot
+see. Two bullets carry generators. The third — protected and public helpers — carried "a protected helper
+is usually inherited rather than copied, which is a different failure". Rule 11: an alphabet is coverage,
+and a restriction argued that way is a zero nobody has asked what it cannot express.
+
+**Measured** through the same `driftReport()` with the alphabet widened, PHP 8.3.6: the `protected` run
+brings in **no helper name at all**. Every pair belongs to a PHPUnit lifecycle hook the framework declares
+protected — two classes overriding `setUp()` have implemented the same hook, not copied a helper — and it
+brings them in many times more often than the private run finds anything, so widening would be answered
+by exempting them, which is where the next real drift hides. The conclusion was right; the argument was
+not.
+
+**Fix.** The alphabet is a parameter of `driftReport()` rather than a constant inside the walk, so the
+restriction is measured through the shipped code. `testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()`
+runs the wide alphabet and reds the day a protected NON-hook helper drifts, with a message saying to widen
+the default rather than exempt the name. The hook roster is read off `TestCase` by reflection so a PHPUnit
+upgrade cannot red it for the wrong reason.
+
+**And a rule-15 hole inside the fix, caught by mutating the fix.** The wide-run assertion is
+`assertSame([], nonHookNames)`, which an EMPTY wide report satisfies perfectly. A mutation that neutralises
+the alphabet parameter so the wide run yields nothing gets past it untouched; only the pair-count
+comparison beside it reds, and with that comparison deleted the mutation survives the whole file. The
+doc-block first credited that comparison with catching a dead report — which
+`assertTheScannerIsAlive()` already owns three assertions earlier — and was corrected to the mechanism it
+really covers.
+
+### Ed49-13 — a partition guard with one direction, carried by a loop that runs zero times
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED.**
+
+**What.** `ForkedChildReaperAdoptionTest` keeps a `SCOPE`/`OUT_OF_SCOPE` pair. Its
+`testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()` asserts `!inScope($prefix)` per row, which refuses a
+row whose own key SCOPE covers. Two things get past that. `OUT_OF_SCOPE` is `[]`, so the loop carrying the
+assertion runs zero times and it has never executed against anything. And `inScope()` matches with
+`str_starts_with($relative, $entry)`, so it can only ask whether a ROW sits inside a SCOPE entry — the
+reverse, a SCOPE entry that is a prefix OF a row's key (`Agents/` in SCOPE against an
+`Agents/AgentManagerTest.php` row), is an overlap it cannot express. In that state the SCOPE half satisfies
+the jointly-total test and the row can never be reported.
+
+**Fix.** `testNeitherMapClaimsADirectoryTheOtherAlreadyClaims()` runs both directions through one
+`overlappingClaims()`. Its load-bearing assertions are synthetic, because a real-tree control over an empty
+map is what a deleted predicate returns; the near-miss negative (`Chat/` in SCOPE against a `ChatTest.php`
+row — neither contains the other) stops the predicate being stuck at yes.
+
+**The generalisable part.** `str_starts_with()` is directional, and a containment check written once
+covers one order. Every `SCOPE`/`OUT_OF_SCOPE` pair in this tree should be read for the second order.
+`ChildStderrCaptureTest` grew it this round; the sibling had not, and the sentence recording that gap has
+been rewritten rather than deleted, because the mechanism it names is what both second loops are for.
+
+### Ed49-14 — the brace-walker predicate cannot express a `switch` or `match` depth counter
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured, not fixed.**
+
+**What.** `InterpolationOpenerTokenTest::comparesAgainstBrace()` selects a bare-brace depth counter by
+looking for a one-byte `'{'`/`'}'` literal with a COMPARISON OPERATOR
+(`T_IS_IDENTICAL`/`T_IS_NOT_IDENTICAL`/`T_IS_EQUAL`/`T_IS_NOT_EQUAL`) as its nearest significant
+neighbour. Its own doc-block names the escape as "a token id it computed, or a regex over text". There is
+a third, and it is the most ordinary spelling of a depth counter there is: `switch ($text) { case '{':
+$depth++; ... }`, and its modern sibling `match`. Neither puts a comparison operator next to the literal,
+so both are invisible to the predicate AND to the `T_CURLY_OPEN`-naming half beside it — a brace walker
+spelled that way is not selected at all, so it can be missing every opener and never appear as a gap.
+
+**Measured today, PHP 8.3.6**, over every `.php` under `tests/` and `src/` in the lane worktree: the files
+holding a bare-brace literal at all are a small set, every literal in them sits next to `,`, `)`, `]`,
+`=>` or `(`, and **no `case` or `match` arm on a brace occurs anywhere**. So the gap is real and currently
+unoccupied. The generator walks `token_get_all()` per file and prints each brace literal's two nearest
+significant neighbours with a CMP/other verdict; it is a dozen lines and is worth shipping as the test
+rather than as a script, because a cardinality taken in a lane worktree is void at the next merge.
+
+**Step.** Add `T_CASE` and a `match`-arm shape to `comparesAgainstBrace()`'s neighbour alphabet, and pin
+the currently-empty population with a synthetic known-positive in the same test (a nowdoc `switch`-based
+walker must be SELECTED and reported as missing `${`). Until then the doc-block's "nothing in the tree
+does that today" is true but unpinned — the first `switch`-based walker anyone writes lands unguarded.
