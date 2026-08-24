@@ -9,6 +9,7 @@ use SugarCraft\Crush\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Crush\Providers\ProviderFactory;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait;
 
 /**
  * `SglangProvider` IS REACHABLE, AND A CONSTRUCTION SCAN SAYS IT IS NOT.
@@ -49,6 +50,8 @@ use SugarCraft\Crush\Providers\SglangProvider;
  */
 final class SglangProviderReachabilityTest extends TestCase
 {
+    use DiscardsErrorLogTrait;
+
     /**
      * A base URL that resolves to nothing. Construction performs no I/O — the
      * Guzzle client is built, not used — so the chain can be driven for real
@@ -121,7 +124,7 @@ final class SglangProviderReachabilityTest extends TestCase
         // the seam round 48 moved, and it is the one that has to be reachable.
         $logged = self::withErrorLogDiscarded(static function () use ($decoder): void {
             self::assertSame([], $decoder('12', 'Read'));
-        });
+        }, 'sc_r49b_sglang_');
         self::assertStringContainsString('decoded to int', $logged, 'the refusal no longer reaches stderr either');
 
         $notices = RuntimeNoticeSink::drain();
@@ -134,39 +137,9 @@ final class SglangProviderReachabilityTest extends TestCase
         // arrives as an empty payload and must stay quiet — on BOTH channels.
         $quiet = self::withErrorLogDiscarded(static function () use ($decoder): void {
             self::assertSame([], $decoder('', 'Read'));
-        });
+        }, 'sc_r49b_sglang_');
         self::assertSame('', $quiet);
         self::assertSame([], RuntimeNoticeSink::drain());
-    }
-
-    /**
-     * Run `$body` with `error_log()` diverted to a scratch file, and return
-     * what it wrote there.
-     *
-     * `tempnam()` and not a hand-built name: five suites share one uid-keyed
-     * TMPDIR during an audit round, and the argument-less `uniqid` form is
-     * microtime-derived rather than process-unique — the mechanism behind the
-     * cross-process collision db90e768 swept out of `tests/`. The bare call is
-     * deliberately not spelled here; that sweep ate the prose describing it.
-     */
-    private static function withErrorLogDiscarded(callable $body): string
-    {
-        $log = tempnam(sys_get_temp_dir(), 'sc_r49b_sglang_');
-        self::assertIsString($log);
-        $previous = ini_set('error_log', $log);
-
-        try {
-            $body();
-        } finally {
-            if ($previous !== false) {
-                ini_set('error_log', $previous);
-            }
-        }
-
-        $contents = (string) file_get_contents($log);
-        @unlink($log);
-
-        return $contents;
     }
 
     /**

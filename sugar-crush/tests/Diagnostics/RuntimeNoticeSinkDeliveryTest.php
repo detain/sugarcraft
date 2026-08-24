@@ -16,6 +16,7 @@ use SugarCraft\Crush\Role;
 use SugarCraft\Crush\RuntimeNoticePumpMsg;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
+use SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait;
 
 /**
  * THE WHOLE PATH, and the reason this file is separate from
@@ -58,6 +59,8 @@ use SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait;
  */
 final class RuntimeNoticeSinkDeliveryTest extends TestCase
 {
+    use DiscardsErrorLogTrait;
+
     /**
      * ADOPTED AT MERGE, not by the lane that wrote this file. Round 47's lane
      * b widened ForkedChildReaperAdoptionTest::SCOPE while lane a was adding
@@ -151,27 +154,6 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         return new Chat(inFlight: $inFlight, drainsRuntimeNotices: true);
     }
 
-    /** Silence `error_log()`'s half for the duration; only the seam is under test here. */
-    private static function withErrorLogDiscarded(callable $body): string
-    {
-        $log = tempnam(sys_get_temp_dir(), 'sc_lane_a_delivery_');
-        self::assertIsString($log);
-        $previous = ini_set('error_log', $log);
-
-        try {
-            $body();
-        } finally {
-            if ($previous !== false) {
-                ini_set('error_log', $previous);
-            }
-        }
-
-        $contents = (string) file_get_contents($log);
-        @unlink($log);
-
-        return $contents;
-    }
-
     public function testAParserNoticeRaisedInThisProcessReachesTheTranscript(): void
     {
         // arm(false) is the in-process backend on purpose: this is the path an
@@ -184,7 +166,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
         self::withErrorLogDiscarded(static function (): void {
             DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
-        });
+        }, 'sc_lane_a_delivery_');
 
         $subscriptions = $chat->subscriptions();
         self::assertNotNull($subscriptions, 'a pending notice did not arm the poll');
@@ -228,7 +210,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
         self::withErrorLogDiscarded(static function (): void {
             DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
-        });
+        }, 'sc_lane_a_delivery_');
 
         [$once] = self::ownerChat()->update(new RuntimeNoticePumpMsg());
         [$twice, $cmd] = $once->update(new RuntimeNoticePumpMsg());
@@ -257,7 +239,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
         $log = self::withErrorLogDiscarded(static function (): void {
             DsmlToolCallParser::new()->parse(['content' => self::quotedEnvelope()]);
-        });
+        }, 'sc_lane_a_delivery_');
 
         // The emitter really did fire — otherwise the empty transcript below
         // would be an artefact of a fixture that stopped triggering it.
@@ -1518,7 +1500,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
 
         self::withErrorLogDiscarded(static function (): void {
             RuntimeNoticeSink::warn('a bare sentence with no envelope');
-        });
+        }, 'sc_lane_a_delivery_');
 
         [$next] = self::ownerChat()->update(new RuntimeNoticePumpMsg());
 
