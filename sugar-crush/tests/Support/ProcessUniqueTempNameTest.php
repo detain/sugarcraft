@@ -199,11 +199,45 @@ final class ProcessUniqueTempNameTest extends TestCase
         ],
     ];
 
-    /** Calls whose first argument being a fixed shared path is the hazard. */
+    /** Global calls for which a fixed shared path in ANY argument is the hazard. */
     private const MUTATING_CALLS = [
         'file_put_contents', 'mkdir', 'touch', 'unlink', 'rmdir',
         'copy', 'rename', 'symlink', 'link', 'fopen', 'chmod',
     ];
+
+    /**
+     * Classes that OPEN a path from their constructor, which a list of global
+     * function names cannot express.
+     *
+     * E242 — the incident in this file's own first paragraph — was two
+     * processes meeting on one `tasklist_test_<id>.sqlite3`, and
+     * `src/Agents/TaskList.php` reaches SQLite through `new \SQLite3($dbPath)`.
+     * A scanner whose whole alphabet was global calls would not have seen that
+     * shape EVEN WITH A FULLY FIXED PATH: the incident this census exists to
+     * describe was outside the census. Rule 11 — a scanner's alphabet is part
+     * of its coverage, and this one had been written to match the sites already
+     * known.
+     */
+    private const MUTATING_CONSTRUCTORS = ['SQLite3', 'PDO'];
+
+    /** {@see classifyStaticPath()}: not a static temp path at all. */
+    private const PATH_NOT_STATIC = 0;
+
+    /**
+     * {@see classifyStaticPath()}: the temp ROOT and nothing appended.
+     *
+     * NOT A HAZARD BY ITSELF, and conflating it with one is the defect this
+     * three-way answer replaced. `$d = sys_get_temp_dir();` used to bind `$d`
+     * as a fixed shared path, after which EVERY later appearance of `$d` in a
+     * mutating call's argument list was reported — including
+     * `$d . '/x_' . bin2hex(random_bytes(8))`, whose whole point is that it is
+     * not fixed. The author of the next entropic path would have been told
+     * their entropic path has no entropy source.
+     */
+    private const PATH_TEMP_ROOT = 1;
+
+    /** {@see classifyStaticPath()}: a temp root plus a fixed leaf — the hazard. */
+    private const PATH_FIXED_FILE = 2;
 
     /** Token ids that make a following name a member call rather than a global one. */
     private const MEMBER_OPERATORS = [
@@ -854,7 +888,7 @@ final class ProcessUniqueTempNameTest extends TestCase
 
     /**
      * The lines at which a FULLY STATIC temp path reaches a filesystem-mutating
-     * call — inline as the first argument, or through one binding in the file.
+     * call — inline in any argument, or through a binding in the file.
      *
      * ONE BINDING AND NOT A DATAFLOW ANALYSIS, stated so nobody mistakes the
      * bound for an answer. `$x = <static temp path>;` anywhere in the file, and
@@ -871,7 +905,8 @@ final class ProcessUniqueTempNameTest extends TestCase
         $tokens = self::significantTokens($source);
         $count  = \count($tokens);
 
-        $bound = [];
+        $roots = [];
+        $paths = [];
         $depth = 0;
 
         for ($i = 0; $i < $count; $i++) {
@@ -899,33 +934,45 @@ final class ProcessUniqueTempNameTest extends TestCase
             }
 
             $end = self::statementEnd($tokens, $i + 1);
-            if (self::anyStaticBranchIsATempPath($tokens, $i + 1, $end)) {
-                $bound[$target] = true;
+
+            // A BINDING CARRIES ITS CLASSIFICATION, it does not collapse to a
+            // yes. A name bound to the bare temp ROOT is a directory, and what
+            // gets appended to it at the write site is what decides; a name
+            // bound to a COMPLETE fixed path is the hazard wherever it appears.
+            switch (self::classifyAnyStaticBranch($tokens, $i + 1, $end, $roots, $paths)) {
+                case self::PATH_FIXED_FILE:
+                    $paths[$target] = true;
+
+                    break;
+                case self::PATH_TEMP_ROOT:
+                    $roots[$target] = true;
+
+                    break;
             }
         }
 
         $lines = [];
 
         for ($i = 0; $i < $count; $i++) {
-            $name = self::globalCallName($tokens, $i);
-            if ($name === null || !\in_array($name, self::MUTATING_CALLS, true)) {
+            $open = self::mutatingCallOpener($tokens, $i);
+            if ($open === null) {
                 continue;
             }
 
-            $close = self::matching($tokens, $i + 1);
+            $close = self::matching($tokens, $open);
             if ($close === null) {
                 continue;
             }
 
-            $firstEnd = self::argumentEnd($tokens, $i + 2, $close);
-            if ($firstEnd >= $i + 2 && self::isStaticTempPath($tokens, $i + 2, $firstEnd)) {
-                $lines[] = self::lineOf($tokens, $i);
-            }
+            // EVERY argument, not only the first: `rename($from, $fixed)` puts
+            // the shared path second, and `symlink()` puts the one that gets
+            // created second.
+            foreach (self::argumentSlices($tokens, $open, $close) as [$from, $to]) {
+                if (self::classifyAnyStaticBranch($tokens, $from, $to, $roots, $paths)
+                    === self::PATH_FIXED_FILE) {
+                    $lines[] = self::lineOf($tokens, $i);
 
-            for ($j = $i + 2; $j < $close; $j++) {
-                $candidate = self::referenceAt($tokens, $j);
-                if ($candidate !== null && isset($bound[$candidate])) {
-                    $lines[] = self::lineOf($tokens, $j);
+                    break;
                 }
             }
         }
@@ -947,10 +994,16 @@ final class ProcessUniqueTempNameTest extends TestCase
      *
      * @param list<array{int,string,int}|string> $tokens
      */
-    private static function anyStaticBranchIsATempPath(array $tokens, int $from, int $to): bool
-    {
+    private static function classifyAnyStaticBranch(
+        array $tokens,
+        int $from,
+        int $to,
+        array $rootVariables,
+        array $pathVariables,
+    ): int {
         $depth = 0;
         $start = $from;
+        $best  = self::PATH_NOT_STATIC;
 
         for ($j = $from; $j <= $to; $j++) {
             $token = $tokens[$j];
@@ -972,39 +1025,144 @@ final class ProcessUniqueTempNameTest extends TestCase
                     || (!\is_array($token) && ($text === '?' || $text === ':')));
 
             if ($splits) {
-                if ($start <= $j - 1 && self::isStaticTempPath($tokens, $start, $j - 1)) {
-                    return true;
+                if ($start <= $j - 1) {
+                    $best = max($best, self::classifyStaticPath(
+                        $tokens,
+                        $start,
+                        $j - 1,
+                        $rootVariables,
+                        $pathVariables,
+                    ));
                 }
                 $start = $j + 1;
             }
         }
 
-        return $start <= $to && self::isStaticTempPath($tokens, $start, $to);
+        if ($start <= $to) {
+            $best = max($best, self::classifyStaticPath(
+                $tokens,
+                $start,
+                $to,
+                $rootVariables,
+                $pathVariables,
+            ));
+        }
+
+        return $best;
+    }
+
+    /**
+     * The index of the `(` opening a filesystem-mutating call at $at, or null.
+     *
+     * Covers a global function from {@see MUTATING_CALLS} and a `new` of a
+     * class from {@see MUTATING_CONSTRUCTORS}, because the shape E242 actually
+     * took was a constructor and a list of function names cannot say so.
+     *
+     * @param list<array{int,string,int}|string> $tokens
+     */
+    private static function mutatingCallOpener(array $tokens, int $at): ?int
+    {
+        $name = self::globalCallName($tokens, $at);
+        if ($name !== null && \in_array($name, self::MUTATING_CALLS, true)) {
+            return $at + 1;
+        }
+
+        if (!\is_array($tokens[$at]) || $tokens[$at][0] !== \T_NEW) {
+            return null;
+        }
+
+        $classAt = $at + 1;
+        if (!isset($tokens[$classAt]) || !\is_array($tokens[$classAt])) {
+            return null;
+        }
+        if (!\in_array($tokens[$classAt][0], [\T_STRING, \T_NAME_FULLY_QUALIFIED], true)) {
+            return null;
+        }
+        if (!\in_array(\ltrim($tokens[$classAt][1], '\\'), self::MUTATING_CONSTRUCTORS, true)) {
+            return null;
+        }
+        if (!isset($tokens[$classAt + 1]) || self::text($tokens[$classAt + 1]) !== '(') {
+            return null;
+        }
+
+        return $classAt + 1;
     }
 
     /**
      * Whether tokens[$from..$to] is a temp root concatenated with literals and
-     * nothing else — no variable, no call, no constant this scanner cannot
-     * evaluate.
+     * nothing else, and if so whether anything is appended to the root.
      *
-     * @param list<array{int,string,int}|string> $tokens
+     * THE ANSWER IS THREE-WAY BECAUSE A DIRECTORY IS NOT A FILE. Returning a
+     * bare yes/no made `sys_get_temp_dir()` on its own indistinguishable from
+     * `sys_get_temp_dir() . '/fixed.log'`, and since a binding of the former is
+     * the ordinary idiom, every write through that name was reported however
+     * much entropy the write site added. See {@see PATH_TEMP_ROOT}.
+     *
+     * WHAT THIS ALPHABET STILL CANNOT EXPRESS, measured rather than assumed and
+     * pinned by {@see testTheStaticPathScannerSaysWhatItCannotSee()}: a path
+     * built in a heredoc, one reached through a class constant, and a path
+     * handed to a call outside {@see MUTATING_CALLS} and
+     * {@see MUTATING_CONSTRUCTORS} — `proc_open()`'s cwd, a unix socket URI.
+     * Each reads as NOT_STATIC, which is the safe direction for a false
+     * negative and the reason the bound is written down here rather than
+     * discovered later. A REBINDING IS NOT ON THAT LIST, and the first draft of
+     * this paragraph said it was: `$b = $a;` classifies `$a` and carries the
+     * answer to `$b`, so a chain of plain bindings is followed to any depth.
+     * Checked before shipping the sentence, not after.
+     *
+     * @param  list<array{int,string,int}|string> $tokens
+     * @param  array<string,true>                 $rootVariables names bound to a bare temp root
+     * @param  array<string,true>                 $pathVariables names bound to a complete fixed path
+     * @return self::PATH_*
      */
-    private static function isStaticTempPath(array $tokens, int $from, int $to): bool
-    {
+    private static function classifyStaticPath(
+        array $tokens,
+        int $from,
+        int $to,
+        array $rootVariables = [],
+        array $pathVariables = [],
+    ): int {
         $sawRoot = false;
+        $sawLeaf = false;
 
         for ($j = $from; $j <= $to; $j++) {
             $token = $tokens[$j];
 
             if (\is_array($token) && $token[0] === \T_CONSTANT_ENCAPSED_STRING) {
-                if (preg_match('#^.[\'"]?/tmp/#', $token[1]) === 1) {
+                $content = \substr($token[1], 1, -1);
+
+                if (preg_match('#^/(?:var/)?tmp/#', $content) === 1) {
                     $sawRoot = true;
+                }
+                if (trim(preg_replace('#^/(?:var/)?tmp/#', '', $content) ?? '', '/') !== '') {
+                    $sawLeaf = true;
                 }
 
                 continue;
             }
+
             if (\is_array($token) && $token[0] === \T_VARIABLE) {
-                return false;
+                $reference = self::referenceAt($tokens, $j);
+                if ($reference === null) {
+                    return self::PATH_NOT_STATIC;
+                }
+
+                if (isset($pathVariables[$reference])) {
+                    $sawRoot = true;
+                    $sawLeaf = true;
+                } elseif (isset($rootVariables[$reference])) {
+                    $sawRoot = true;
+                } else {
+                    return self::PATH_NOT_STATIC;
+                }
+
+                // `$this->logFile` is three tokens; stepping over only the
+                // first would hand `logFile` to the callable-name arm below.
+                if ($reference !== $token[1]) {
+                    $j += 2;
+                }
+
+                continue;
             }
 
             $name = self::callableName($token);
@@ -1013,17 +1171,25 @@ final class ProcessUniqueTempNameTest extends TestCase
 
                 continue;
             }
+            if ($name === 'DIRECTORY_SEPARATOR') {
+                // A separator carries no entropy and is not a leaf on its own.
+                continue;
+            }
             if ($name !== null) {
-                return false;
+                return self::PATH_NOT_STATIC;
             }
             if (\in_array(self::text($token), ['.', '(', ')'], true)) {
                 continue;
             }
 
-            return false;
+            return self::PATH_NOT_STATIC;
         }
 
-        return $sawRoot;
+        if (!$sawRoot) {
+            return self::PATH_NOT_STATIC;
+        }
+
+        return $sawLeaf ? self::PATH_FIXED_FILE : self::PATH_TEMP_ROOT;
     }
 
     // =========================================================================
@@ -1145,7 +1311,7 @@ final class ProcessUniqueTempNameTest extends TestCase
     /** The same, for the static-path scanner. */
     private function assertTheStaticPathScannerIsAlive(): void
     {
-        // Inline, as the first argument.
+        // Inline, in the first argument.
         self::assertSame([2], self::staticTempPathWrites(
             "<?php\nfile_put_contents(sys_get_temp_dir() . '/fixed.log', 'x');\n",
         ), 'the static-path scanner is not reporting a fixed path written to inline');
@@ -1164,6 +1330,71 @@ final class ProcessUniqueTempNameTest extends TestCase
             . "    file_put_contents(\$this->log, 'x');\n"
             . "  }\n}\n",
         ), 'the static-path scanner cannot follow a defaulted property, which is the tree\'s only real site');
+
+        // A CONSTRUCTOR, because the incident this census narrates was one.
+        self::assertSame([2], self::staticTempPathWrites(
+            "<?php\n\$db = new \\SQLite3(sys_get_temp_dir() . '/tasklist.sqlite3');\n",
+        ), 'the static-path scanner does not see a fixed path opened by a constructor, which is '
+            . 'the shape E242 actually took — src/Agents/TaskList.php reaches SQLite through '
+            . 'new \\SQLite3($dbPath), and a scanner whose alphabet is global function names '
+            . 'would have missed that incident even with a fully fixed path');
+
+        // AND THE NEGATIVE THAT THE THREE-WAY ANSWER EXISTS FOR. A name bound
+        // to the bare temp ROOT is a directory; what the write site appends is
+        // what decides. Reporting this was M5: the author of an entropic path
+        // would have been told their entropic path has no entropy source.
+        self::assertSame([], self::staticTempPathWrites(
+            "<?php\n\$d = sys_get_temp_dir();\n"
+            . "file_put_contents(\$d . '/x_' . bin2hex(random_bytes(8)), 'y');\n",
+        ), 'a bare temp-root binding still condemns every write through that name, whatever the '
+            . 'write site concatenates');
+
+        self::assertSame([3], self::staticTempPathWrites(
+            "<?php\n\$d = sys_get_temp_dir();\nfile_put_contents(\$d . '/fixed.log', 'x');\n",
+        ), 'a bare temp-root binding followed by a FIXED leaf at the write site is the hazard '
+            . 'and must still be reported — sparing the root must not spare the file');
+    }
+
+    /**
+     * THE ALPHABET'S OUTSIDE, ASSERTED RATHER THAN NARRATED.
+     *
+     * Rule 11: a scanner's alphabet is part of its coverage, and it is usually
+     * written to match the cases already known. A paragraph listing what a
+     * scanner cannot see is prose, and prose is not a measurement — it drifts
+     * silently in both directions, and a hole that quietly CLOSES is how a
+     * stated bound becomes a lie that reads as modesty.
+     *
+     * Each shape here is checked to be genuinely missed. THE POINT IS NOT THAT
+     * MISSING THEM IS RIGHT — it is not; three of them are real hazards. The
+     * point is that the bound is derived on every run, so widening the alphabet
+     * reds this test and forces the paragraph above to be rewritten with it.
+     */
+    public function testTheStaticPathScannerSaysWhatItCannotSee(): void
+    {
+        $missed = [
+            'a heredoc path' =>
+                "<?php\nfile_put_contents(<<<T\n/tmp/fixed.log\nT, 'x');\n",
+            'a path reached through a class constant' =>
+                "<?php\nfile_put_contents(self::LOG_PATH, 'x');\n",
+            'a unix socket URI, whose literal does not begin at the root' =>
+                "<?php\nstream_socket_server('unix:///tmp/fixed.sock');\n",
+            'a proc_open() cwd' =>
+                "<?php\nproc_open('ls', [], \$pipes, '/tmp/fixed-dir');\n",
+        ];
+
+        foreach ($missed as $why => $source) {
+            self::assertSame([], self::staticTempPathWrites($source), $why . ' is now SEEN by the '
+                . 'static-path scanner. That is an improvement, not a failure — widen the '
+                . 'paragraph on classifyStaticPath() that lists this as outside the alphabet, '
+                . 'and delete this row. Do not narrow the scanner to make this pass.');
+        }
+
+        // ...AND THE CONTROL THAT KEEPS THE FOUR ABOVE FROM BEING VACUOUS.
+        // Rule 25: `[]` is also what a deleted scanner returns, so every one of
+        // those rows would pass in a tree where this instrument is dead.
+        self::assertSame([2], self::staticTempPathWrites(
+            "<?php\nfile_put_contents('/tmp/fixed.log', 'x');\n",
+        ), 'the scanner is dead, so the four "cannot see" rows above prove nothing at all');
     }
 
     // =========================================================================
