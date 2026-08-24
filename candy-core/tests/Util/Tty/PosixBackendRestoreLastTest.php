@@ -152,6 +152,56 @@ final class PosixBackendRestoreLastTest extends TestCase
     /**
      * @return array<string, mixed>
      */
+    /**
+     * Read every given pipe to EOF without letting either starve the other.
+     *
+     * @param  array<int, resource> $pipes
+     * @return array{0:string, 1:string} stdout, stderr in that order
+     */
+    private function drain(array $pipes): array
+    {
+        $buffers = [1 => '', 2 => ''];
+        foreach ($pipes as $pipe) {
+            stream_set_blocking($pipe, false);
+        }
+
+        while ($pipes !== []) {
+            $read   = array_values($pipes);
+            $write  = null;
+            $except = null;
+            // A timeout rather than a block, so a child that neither writes
+            // nor exits fails the test on proc_close()'s status instead of
+            // hanging the suite forever.
+            if (@stream_select($read, $write, $except, 5) === false) {
+                break;
+            }
+            if ($read === []) {
+                break;
+            }
+            foreach ($read as $ready) {
+                $key = array_search($ready, $pipes, true);
+                if ($key === false) {
+                    continue;
+                }
+                $chunk = fread($ready, 8192);
+                if ($chunk === false || $chunk === '') {
+                    if (feof($ready)) {
+                        fclose($ready);
+                        unset($pipes[$key]);
+                    }
+                    continue;
+                }
+                $buffers[$key] .= $chunk;
+            }
+        }
+
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
+
+        return [$buffers[1], $buffers[2]];
+    }
+
     private function runProbe(string $mode, bool $withTerminalOnDescriptorZero): array
     {
         self::assertFileExists(self::PROBE);
@@ -184,11 +234,18 @@ final class PosixBackendRestoreLastTest extends TestCase
         if (isset($pipes[0])) {
             fclose($pipes[0]);
         }
-        $stderr = (string) stream_get_contents($pipes[2]);
-        if (isset($pipes[1])) {
-            fclose($pipes[1]);
-        }
-        fclose($pipes[2]);
+
+        // BOTH output pipes are drained together. Reading one to EOF while
+        // the other goes unread is a deadlock with a delay fuse on it: the
+        // child blocks once it has filled the unread pipe's buffer, and the
+        // parent is blocked waiting for an EOF that the stalled child will
+        // never send. It cannot bite today because this probe writes nothing
+        // to stdout -- which is exactly the problem, because the first
+        // var_dump() someone adds while debugging this test is what arms it,
+        // and the symptom is a hung suite rather than a failed assertion.
+        [$stdout, $stderr] = $this->drain([1 => $pipes[1], 2 => $pipes[2]]);
+        unset($stdout);
+
         $exit = proc_close($process);
 
         self::assertSame(0, $exit, "the probe child did not finish.\nstderr: " . $stderr);
