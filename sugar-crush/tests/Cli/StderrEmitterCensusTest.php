@@ -1070,6 +1070,37 @@ final class StderrEmitterCensusTest extends TestCase
             PHP);
     }
 
+    /**
+     * AND THE OTHER END OF THE SAME WALK: A HEADER THAT NEVER OPENS A BODY.
+     *
+     * {@see refuseUnattributableAnonymousClass()} has two throws and only the
+     * one above was reachable from anything. MEASURED, PHP 8.3.6: replacing
+     * this one with a bare `return` left the whole file GREEN — 92 tests, 4893
+     * assertions, run filtered to this file, so the survival is a claim about
+     * the guards in it. That is E363's shape rather than dead code: a branch
+     * that fires only on input the real population cannot contain is
+     * unpinnable BY that population, and the fixture has to be synthetic.
+     *
+     * The header below extends something that is NOT the class being counted,
+     * so the first throw cannot answer for it, and the token stream simply
+     * stops — which is what a truncated or hand-built stream looks like, and
+     * `token_get_all()` lexes it without complaint. Quietly returning here
+     * would report a construction site the walk never actually resolved.
+     */
+    public function testTheConstructionScanRedsOnAnAnonymousClassHeaderThatNeverOpensABody(): void
+    {
+        // The control first: the SAME shape, terminated, is not an error.
+        self::assertSame(0, self::constructionSites('WorktreeManager', <<<'PHP'
+            <?php
+            $x = new class ($config) extends SomethingElse {};
+            PHP), 'a terminated anonymous class extending something else is not a site and not an error');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('never opens a body');
+
+        self::constructionSites('WorktreeManager', '<?php $x = new class ($config) extends SomethingElse');
+    }
+
     public function testThePrefixedWriterRosterIsUnchanged(): void
     {
         $actual = self::census('prefixed');
@@ -1296,6 +1327,34 @@ final class StderrEmitterCensusTest extends TestCase
         $this->expectExceptionMessage('ARRAY_TOKEN_OPENERS');
 
         self::argumentCount($stream, 1);
+    }
+
+    /**
+     * AND THE OTHER END OF THAT WALK TOO: AN ARGUMENT LIST THAT NEVER CLOSES.
+     *
+     * The twin of the two throws above, and unpinned for the same reason.
+     * MEASURED, PHP 8.3.6: replacing this throw with `return 0` left the file
+     * GREEN — 92 tests, 4893 assertions, filtered to this file. A quiet zero
+     * here is the worst possible answer, because the only caller asks `>= 3`
+     * of it and a zero silently empties a census that asserts an absence.
+     *
+     * Hand-built, like its twin, because every real source that reaches the
+     * end of the stream mid-call is one PHP would refuse to parse — but
+     * `token_get_all()` does not parse, this walk runs on its output, and a
+     * caller slicing a token array by index can hand it a truncated one.
+     */
+    public function testTheArgumentWalkRedsOnACallThatNeverCloses(): void
+    {
+        // The control first: the same stream, CLOSED, answers rather than throws.
+        self::assertSame(1, self::argumentCount(
+            [[T_STRING, 'error_log', 1], '(', [T_LNUMBER, '1', 1], ')'],
+            1,
+        ), 'a closed one-argument call no longer counts as one argument');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('never closes');
+
+        self::argumentCount([[T_STRING, 'error_log', 1], '(', [T_LNUMBER, '1', 1]], 1);
     }
 
     /**
