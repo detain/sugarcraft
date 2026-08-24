@@ -164,6 +164,25 @@ final class EnvDetect
      * non-CLI SAPIs where the constant is never created at all — this
      * method is the Windows-console probe, and a native Windows PHP
      * process is not guaranteed to be running the CLI SAPI.
+     *
+     * THE ASYMMETRY WITH {@see \SugarCraft\Core\Program} IS DELIBERATE,
+     * and is recorded here because it reads like an oversight and is not.
+     * `Program` takes no such precaution: its constructor resolves
+     * `$options->input ?? STDIN` and `$options->output ?? STDOUT`, and
+     * `runExec()` names a bare `STDERR`, so under a SAPI that never
+     * defines those constants a `Program` would fatal at CONSTRUCTION —
+     * earlier than any guard could help, and long before the descriptor
+     * resolution that this family is about. That is fine there: a TEA
+     * program driving an alt-screen terminal has no meaning off the CLI
+     * SAPI, so the constant's existence is a genuine precondition rather
+     * than an assumption. This method is a static probe with no such
+     * precondition; a caller can reach it from anywhere, which is why it
+     * pays for the check and `Program` does not.
+     *
+     * So do NOT "restore consistency" by deleting the `defined()` call
+     * below, and do not go add one to `Program` either. The two differ
+     * because their reachability differs, and that difference is the
+     * whole justification for both choices.
      */
     public static function isConsoleStdin(): bool
     {

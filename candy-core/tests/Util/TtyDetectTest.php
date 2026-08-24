@@ -200,8 +200,34 @@ final class TtyDetectTest extends TestCase
      * the production code does not try to derive one and asks
      * `stream_isatty()` about the stream instead. A test may be less
      * portable than the code it tests, so this walks `/proc/self/fd` and
-     * matches on device + inode, which is exact rather than name-based (two
-     * handles on `/dev/ptmx` are different inodes).
+     * matches on device + inode.
+     *
+     * ## WHAT THIS DOC-BLOCK USED TO SAY, AND WHY IT CHANGED
+     *
+     * WHAT IT SAID: dev+inode is "exact rather than name-based (two handles
+     * on `/dev/ptmx` are different inodes)".
+     *
+     * WHAT IS TRUE NOW: the parenthetical was FALSE, and it was the whole
+     * stated reason the match was safe. MEASURED, PHP 8.3.6: open
+     * `/dev/ptmx` twice and both handles report the SAME dev+inode — the
+     * walk returns `[3, 4]` for each of them, not one descriptor each. The
+     * inode belongs to the `/dev/ptmx` device node, not to the pty master
+     * an open creates. `/dev/null` aliases far more loudly (every handle on
+     * it matches descriptor 0 as well as itself), but ptmx was the case the
+     * justification specifically claimed was safe, and it is not.
+     *
+     * WHY THIS HELPER STILL EARNS ITS PLACE: dev+inode is still the right
+     * comparison — it is exact where a name comparison is not — and the
+     * fixture that uses it holds exactly ONE ptmx handle at a time
+     * ({@see tearDown()} closes each one), so there is exactly one match
+     * and the answer is correct. What was wrong was believing uniqueness
+     * came from the DEVICE rather than from the fixture's discipline. Since
+     * that discipline is the real invariant and nothing in the type system
+     * enforces it, the helper now checks it: more than one match means
+     * dev+inode does not identify a descriptor here, and any number it
+     * returned would be a guess. It fails loudly instead of picking the
+     * first, because a fixture built on a guessed descriptor proves nothing
+     * while looking like it proves something.
      *
      * @param resource $stream
      */
@@ -212,6 +238,7 @@ final class TtyDetectTest extends TestCase
             return null;
         }
 
+        $matches = [];
         foreach ((array) @scandir('/proc/self/fd') as $entry) {
             if (!\is_string($entry) || !ctype_digit($entry)) {
                 continue;
@@ -221,10 +248,24 @@ final class TtyDetectTest extends TestCase
                 continue;
             }
             if ($candidate['dev'] === $target['dev'] && $candidate['ino'] === $target['ino']) {
-                return (int) $entry;
+                $matches[] = (int) $entry;
             }
         }
 
-        return null;
+        if ($matches === []) {
+            return null;
+        }
+
+        if (\count($matches) > 1) {
+            self::fail(
+                'device+inode does not identify a single descriptor here: fds '
+                    . implode(', ', $matches) . ' all match this handle, so the descriptor '
+                    . 'behind it is ambiguous and any answer would be a guess. The fixture '
+                    . 'must hold one handle on a device whose inode is not shared, or '
+                    . 'identify the descriptor some other way.',
+            );
+        }
+
+        return $matches[0];
     }
 }
