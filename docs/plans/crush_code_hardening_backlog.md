@@ -8620,31 +8620,43 @@ which is exactly why it looked like it correlated with a sibling lane.
 
 **Relation to E212.** This is E212's other half. That entry closed the runner's own read and said in terms
 that the pin does not reach `src/` or `bin/`; `exec()`/`proc_open()` hand a child THIS process's fd 0, and
-eighteen test files spawn the real binary.
+a non-empty set of test files spawns the real binary. (WHAT THIS SAID: "eighteen test files". WHAT IS TRUE:
+see Ee49-8 — nobody can re-derive eighteen; three generators answer 41, 15 and 13. WHY THE SENTENCE STILL
+EARNS ITS PLACE: what it is FOR is that the set is not empty and the children are real processes.)
 
-**Fix, second attempt — the first one reddened the suite.** WHAT THIS ENTRY SAID: "the bootstrap closes
-fd 0 and reopens `/dev/null` onto it … Cost: the `\STDIN` constant is a closed resource for the rest of
-the run (`stream_isatty(\STDIN)` fatals). Nothing reaches it today."
+**Fix, THIRD attempt — and the first two are both recorded here because each was refuted by a
+measurement rather than by an opinion.**
 
-WHAT IS TRUE: something reaches it.
-`tests/Cli/NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()` calls
+*Attempt 1: close fd 0 and reopen `/dev/null` onto it.* WHAT THIS ENTRY SAID of it: "Cost: the `\STDIN`
+constant is a closed resource for the rest of the run … Nothing reaches it today." WHAT WAS TRUE:
+something reached it.
+`tests/Cli/NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()` read
 `stream_get_meta_data(\STDIN)` as its OWN known-positive control, and on a closed resource that is a
-`TypeError`. **MEASURED at 85a34cc1 from a non-tty runner: that one file, 5 tests, 1 error.** The suite was
-red on every runner whose fd 0 is not a terminal and green from a terminal, because the tty guard skips
-the block there — which is exactly why it shipped unnoticed.
+`TypeError`. **MEASURED at 85a34cc1 from a non-tty runner: that one file, 5 tests, 1 error.** Red on every
+runner whose fd 0 is not a terminal, green from a terminal, because the tty guard skips the block there —
+which is exactly why it shipped unnoticed.
 
-WHAT THE FIX IS NOW: `stream_set_blocking(\STDIN, false)`, still only when fd 0 is not a tty. `O_NONBLOCK`
-lives on the open file DESCRIPTION, which is what `fork(2)`/`exec(2)` share, so it reaches every inherited
-child without touching the descriptor or the constant. **MEASURED, PHP 8.3.6, three takes each**, a parent
-whose fd 0 is an open never-written pipe `exec()`ing a child that calls `stream_get_contents(\STDIN)`:
-inherited as-is → SIGKILLed at 8s, rc 137 (3/3); `stream_set_blocking(…, false)` → 0 bytes in 0.000s
-(3/3); close + reopen `/dev/null` → 0 bytes in 0.000s (3/3). Indistinguishable to the child, and
-`is_resource(\STDIN)` is still true after the flag where it is false after the close.
+*Attempt 2: `stream_set_blocking(\STDIN, false)`, leaving the constant alive.* `O_NONBLOCK` lives on the
+open file DESCRIPTION, which is what `fork(2)`/`exec(2)` share, so it does reach every inherited child.
+**MEASURED, PHP 8.3.6, three takes each**, a parent whose fd 0 is an open never-written pipe `exec()`ing a
+child that calls `stream_get_contents(\STDIN)`: inherited as-is → SIGKILLed at 8s, rc 137 (3/3);
+`stream_set_blocking(…, false)` → 0 bytes in 0.000s (3/3); close + reopen `/dev/null` → 0 bytes in 0.000s
+(3/3). Indistinguishable to the child. **WHAT REFUTED IT: the flag does not survive this suite.**
+`tests/Backend/EngineBackendTest::testCompleteAsyncDoesNotResetTheRealTerminalsRawMode()` builds
+`new Tty(null, new PosixTermios($slaveFd))`; candy-core resolves the null stream to `\STDIN`, and the
+injected-Termios seam makes `PosixBackend::enableRawMode()` skip its own `isTty()` guard — so its trailing
+`@stream_set_blocking($this->stream, false)` and `restore()`'s matching `@stream_set_blocking($this->stream,
+true)` both land on descriptor 0. **MEASURED, PHP 8.3.6, three takes, that seam driven directly from a
+process whose fd 0 is an open pipe: clear after the flag is set, still clear after `enableRawMode()`,
+BLOCKED again after `restore()` — 3/3.** A guard on the flag is therefore ORDER-DEPENDENT: green when its
+own file runs alone or before that seam, red after it.
 
-**What the second attempt does NOT buy.** The flag is not hermetic the way `/dev/null` was: bytes already
-sitting in the pipe stay readable, so a runner started with data on stdin can still leak them into a
-spawned `-p` child's prompt — E212's PREPEND half, still open one process down. Closing it needs the
-descriptor gone, and the descriptor cannot go without the constant going with it. Recorded as Ee49-7.
+*Attempt 3, shipped:* back to close + reopen `/dev/null`, with attempt 1's one actual casualty repaired —
+that known-positive control now opens its own `php://stdin` handle instead of reading the constant, which
+answers the same question off a live resource. This is Ee49-7's option (a), taken. The assertion pinning it
+moved off the stream flag and onto the DESCRIPTOR's identity, read from `/proc/self/fd/0`, which no stream
+flag can undo. The `\STDIN` constant is a closed resource for the rest of the run, and that is now a
+KNOWN cost with exactly one named site rather than an assumed absence.
 
 **Residual, deliberately not fixed.** In PRODUCTION `sugarcrush -p` still blocks forever on a held-open
 stdin with no bound. That is arguably the correct read-stdin contract, but it is unbounded, and a caller
@@ -8770,28 +8782,31 @@ one of two grounds.
 
 ---
 
-### Ee49-7 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half
+### Ee49-7 — the suite's fd-0 repair now closes BOTH halves of E212 — RESOLVED, option (a) taken
 
-**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test-hermeticity. **Measured, PHP
-8.3.6.** Deliberate residual of Ee49-1's second fix.
+**Recorded 2026-08-24 by round-49 lane e (review pass); CLOSED the same round.** Severity was
+test-hermeticity. **Measured, PHP 8.3.6.**
 
-**What.** `tests/bootstrap.php` now clears `O_NONBLOCK` on descriptor 0 rather than replacing the
-descriptor with `/dev/null`, because replacing it closes the `\STDIN` constant and that reddens
-`NonInteractiveStdinPinTest` (see Ee49-1). A non-blocking read returns what is available; it does not
-return nothing. So a PHPUnit runner started with bytes already on its stdin still hands those bytes to
-every spawned `bin/sugarcrush -p` child, which prepends them to the prompt — the quieter half of the
-hazard E212 named in-process.
+**WHAT THIS ENTRY SAID.** That `tests/bootstrap.php` cleared `O_NONBLOCK` on descriptor 0 rather than
+replacing the descriptor, because replacing it closes the `\STDIN` constant and that reddens
+`NonInteractiveStdinPinTest` — and that a non-blocking read returns what is *available* rather than
+nothing, so bytes already on the runner's stdin still reach every spawned `bin/sugarcrush -p` child and
+get prepended to its prompt. It offered two Steps and called (a) the better trade, declining it only
+because `tests/Cli/NonInteractive*Test.php` is lane a's file.
 
-**Why it was not closed.** The only route to a hermetic fd 0 is freeing the descriptor, and PHP has no
-`dup2`: freeing it means `fclose(\STDIN)`, which is what Ee49-1's first attempt did. The two costs are
-mutually exclusive as long as anything in the suite reads the `\STDIN` constant in-process.
+**WHAT IS TRUE NOW.** Option (a) was taken, and it turned out not to be a preference: the flag repair does
+not survive this suite at all (see Ee49-1's attempt 2 — `EngineBackendTest`'s injected-Termios seam
+re-blocks descriptor 0 through `PosixBackend::restore()`, measured 3/3). So the choice was not
+"hermeticity versus a live constant" but "a working repair versus an order-dependent one". Descriptor 0
+is `/dev/null` for the rest of the run, both halves of E212's hazard are closed one process down, and the
+pin is `readlink('/proc/self/fd/0')` rather than a stream flag.
 
-**Step, one of.** (a) Change `NonInteractiveStdinPinTest`'s known-positive to a freshly `fopen`ed
-`php://stdin` handle instead of the constant, then go back to close + reopen `/dev/null` — one line in
-each file, and it buys full hermeticity. (b) Or leave the flag and pin the residual with a test that
-proves bytes on the runner's stdin reach a spawned child, so the limit is a recorded fact rather than a
-gap. (a) is the better trade; it was not taken this round because `tests/Cli/NonInteractive*Test.php` is
-lane a's file.
+**WHY THIS ENTRY STILL EARNS ITS PLACE.** It records the residual that existed for the length of one
+attempt, and — more usefully — that the reason given here for not fixing it (file ownership) was the
+wrong reason to stop. The edit to `tests/Cli/NonInteractiveStdinPinTest.php` was FORCED by a change in
+`tests/bootstrap.php`, which is lane e's, and a forced out-of-lane edit is reportable rather than
+prohibited (rule 23). It is four lines: the known-positive now opens its own `php://stdin` handle instead
+of reading a constant this suite has deliberately retired.
 
 ---
 
@@ -8850,5 +8865,61 @@ CONSTRUCTED as expected rather than written (or keep the write and use a private
 `TMPDIR` for that one child). Then widen `ProcessUniqueTempNameTest`'s alphabet: a shared-name hazard is
 not a `uniqid` hazard, and the guard as written cannot see this one. See also Ee49-4, which found the
 scope hole; this is the alphabet hole beside it.
+
+---
+### Ee49-10 — PHPUnit includes `tests/bootstrap.php` inside a METHOD, so a bare local there is not a global
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy on a load-bearing line.
+**Measured, PHP 8.3.6, PHPUnit 10.5.64. Fixed this round** in the same commit that found it.
+
+**What.** Ee49-1's shipped repair parks its replacement `/dev/null` handle in
+`$GLOBALS['__sugarcrushSuiteStdin']`. The comment justifying that said it was belt-and-braces — "a local in
+an included file is a global already, but naming the intent stops a future tidy-up from
+garbage-collecting fd 0 back to closed". **That is false, and the line is load-bearing.**
+`PHPUnit\TextUI\Application::loadBootstrapScript()` runs `include_once $filename` from inside a private
+METHOD, so a top-level `$keep = fopen(…)` in the bootstrap is that method's local: it is freed the moment
+`loadBootstrapScript()` returns, which closes the stream and takes descriptor 0 with it.
+
+**The generator.** Two three-line bootstrap fixtures, identical but for `$GLOBALS[...]` versus a bare
+local, each `include_once`d from inside a method of a throwaway class (PHPUnit's own shape) in a child
+whose fd 0 is a pipe, then `readlink('/proc/self/fd/0')`. **Three takes each: `$GLOBALS` answers
+`/dev/null` 3/3; the bare local answers `false` — i.e. fd 0 closed — 3/3.**
+
+**Why it matters beyond the comment.** The two states are not equivalent. `/dev/null` is a descriptor a
+child can read to EOF; a closed fd 0 is a descriptor a child's first `fopen()` will silently CLAIM, so an
+unrelated file handle in a spawned binary can land on descriptor 0. The bootstrap's own prose calls a
+closed fd 0 "benign" on the strength of a timing measurement (0.105s, same as `/dev/null`); that measures
+the blocking hazard only and says nothing about descriptor reuse.
+
+**Pinned by** `tests/SuiteChildStdinIsolationTest::testTheRunnersDescriptorZeroIsDevNullAndNoStreamFlagCanUndoIt()`,
+which asserts the identity rather than the absence of a hang — so the `$GLOBALS`→local regression is a
+red test, not a silent downgrade. Confirmed by mutation this round.
+
+**Step.** None; recorded because the class of error is worth remembering: "an included file is at file
+scope" is an assumption about a HOST, and the host here is a method.
+
+---
+
+### Ee49-11 — the daemon's refusal classifier reads `Chat::DENIED_ERROR_PREFIXES`, which E239 is moving
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: merge-time coordination. **Inherited
+dependency, not a defect.**
+
+**What.** E241's `BackgroundSessionRunner::noticeRefusal()` reads the roster from
+`Chat::DENIED_ERROR_PREFIXES` rather than spelling any prefix literally — deliberately, so the daemon
+cannot drift from the `-p` path or the TUI on what a refusal IS, and so
+`tests/DenialPrefixRosterTest::testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()` keeps covering it.
+Round 49's lane a is moving the denial kinds to `src/Permissions/DenialKind.php` (E239). If that move
+relocates or renames the constant, `src/Sessions/BackgroundSessionRunner.php` and
+`tests/Sessions/BackgroundSessionRunnerTest.php` both need the new symbol — two `use` lines and the
+`foreach` subject, no logic.
+
+**Why it was left as a dependency rather than pre-empted.** Guessing at the destination symbol would hard
+-code a name that does not exist yet, which is worse than a mechanical rename at merge. Nothing here
+duplicates a prefix string, so there is no correctness risk in either ordering — only a compile-time one,
+which is loud.
+
+**Step.** At merge, if `Chat::DENIED_ERROR_PREFIXES` has moved, repoint the two files above at wherever it
+went. Do NOT copy the literals.
 
 ---
