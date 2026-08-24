@@ -179,6 +179,23 @@ final class RefusalStderrSurfaceTest extends TestCase
      * stderr, and the observer's line is byte-identical across the two. That
      * is E249 — the doubling is not tty-only — and it is why the terse line
      * cannot be dropped as a duplicate.
+     *
+     * THE WORDING-INDEPENDENT ASSERTIONS RUN FIRST, AND THAT ORDER IS LOAD-
+     * BEARING RATHER THAN COSMETIC. WHAT THIS DOC-BLOCK SAID when the method
+     * landed: that those two assertions "must not depend on any particular
+     * wording". WHAT WAS WRONG WITH IT: they sat BELOW the exact-figure
+     * `assertSame`, and PHPUnit stops a test at its first failure — so on the
+     * one class of change they exist to survive, they did not execute at all.
+     * MEASURED on PHP 8.3.6 before the reorder, by deleting the three
+     * remedy lines from {@see HeadlessPermissionPrompt::refusal()} (a mutation
+     * that breaks the DOUBLING claim itself, not merely the byte counts): the
+     * failure was reported at the figure `assertSame`, 11 assertions in, and
+     * the `assertGreaterThan` that names the doubling never ran. WHY THIS
+     * STILL EARNS ITS PLACE: the figures are still the generator E256 asked
+     * for and still go red on a reword — they just no longer mask the
+     * structural claim while doing it. A reword now reds ONE assertion with
+     * the new numbers in its message; a change that also breaks the doubling
+     * reds the doubling first, which is the one a reader must not miss.
      */
     public function testBothArmsDoubleAndTheseAreTheBytesTheyWrite(): void
     {
@@ -207,6 +224,24 @@ final class RefusalStderrSurfaceTest extends TestCase
             ];
         }
 
+        // AND THE OBSERVER CANNOT TELL THE ARMS APART, at the byte level.
+        // Asserted from the measurement rather than restated, so it cannot
+        // drift away from the exact figures below. FIRST, and that ordering is
+        // the fix rather than a tidy: see the class of assertion each one is
+        // in this method's doc-block.
+        self::assertSame(
+            $measured['terminal']['observerBytes'],
+            $measured['no-tty']['observerBytes'],
+            'the observer line now differs between the two arms, which is the fact this file exists to '
+            . "deny. If that is deliberate, the prompt's terse line may finally be droppable",
+        );
+        self::assertGreaterThan(
+            $measured['terminal']['totalLines'],
+            $measured['no-tty']['totalLines'],
+            'the no-tty arm no longer writes MORE than the terminal one, so E240\'s "removing the terse '
+            . 'line removes the doubling" would now be arguable',
+        );
+
         self::assertSame(
             [
                 'terminal' => [
@@ -224,22 +259,6 @@ final class RefusalStderrSurfaceTest extends TestCase
             'the stderr surface of a refused ASK has changed size. This is the generator for the figures '
             . "E240 recorded in prose; if the wording moved on purpose, the new numbers are in this test's "
             . 'diff and this is the one place they are written down',
-        );
-
-        // AND THE OBSERVER CANNOT TELL THE ARMS APART, at the byte level.
-        // Asserted from the measurement rather than restated, so it cannot
-        // drift away from the numbers above.
-        self::assertSame(
-            $measured['terminal']['observerBytes'],
-            $measured['no-tty']['observerBytes'],
-            'the observer line now differs between the two arms, which is the fact this file exists to '
-            . "deny. If that is deliberate, the prompt's terse line may finally be droppable",
-        );
-        self::assertGreaterThan(
-            $measured['terminal']['totalLines'],
-            $measured['no-tty']['totalLines'],
-            'the no-tty arm no longer writes MORE than the terminal one, so E240\'s "removing the terse '
-            . 'line removes the doubling" would now be arguable',
         );
     }
 
