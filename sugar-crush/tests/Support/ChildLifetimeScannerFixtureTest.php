@@ -472,6 +472,123 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     }
 
     /**
+     * A tree that grows a reaping helper stops spelling `proc_close()`.
+     *
+     * NOT A HYPOTHETICAL. Scanning a concurrent lane's `src/` with this class
+     * found `Providers/ClaudeCodeProvider.php` reaping through
+     * `ProcessReaper::terminateAndClose($process)` where this tree still
+     * spells `proc_close($process)`; the site read as short-lived here and as
+     * "nothing returns, stores or proc_close()s it" there, on a change that
+     * ADDED a bounded SIGTERM->SIGKILL ladder. A guard that reds the stricter
+     * version of the code earns an exemption row written for correct code,
+     * and that row is where the next real offender hides.
+     */
+    public function testARosteredReapingHelperClosesTheChild(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            use SugarCraft\Crush\Support\ProcessReaper;
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                ProcessReaper::terminateAndClose($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+        self::assertStringContainsString(
+            'ProcessReaper::terminateAndClose($h)',
+            $sites[0]['reason'],
+            'the reason must name the call that actually reaps; a message that always says '
+                . 'proc_close describes a line the reader will not find at the site',
+        );
+    }
+
+    /**
+     * The roster is keyed on `Class::method`, and the class half is load-bearing.
+     *
+     * ⚠️ THE DANGEROUS POLARITY, which is why it is pinned beside the useful
+     * one. A roster matched on the method name alone would let ANY class with
+     * a `terminateAndClose()` reap a handle as far as this scanner is
+     * concerned - and a wrongly-short child is the reading that waves a real
+     * leak through, the one direction this class exists to refuse.
+     */
+    public function testARosteredMethodNameOnAnotherClassIsNotAClose(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                Bookkeeping::terminateAndClose($h);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+    }
+
+    /**
+     * An empty roster is a dead roster, and every row above would still pass.
+     *
+     * Rule 25's shape: the assertions in the two tests above are about what
+     * the roster DOES, so they cannot notice a roster that has been emptied to
+     * make something else green.
+     */
+    public function testTheClosingHelperRosterIsNotEmpty(): void
+    {
+        self::assertNotSame([], ChildLifetimeScanner::CLOSING_HELPERS);
+
+        foreach (ChildLifetimeScanner::CLOSING_HELPERS as $helper) {
+            self::assertSame(
+                \strtolower($helper),
+                $helper,
+                'rows are compared lowercased, so a row with capitals can never match: ' . $helper,
+            );
+            self::assertStringContainsString(
+                '::',
+                $helper,
+                'a bare method name would let any class of that name reap a handle: ' . $helper,
+            );
+        }
+    }
+
+    /**
+     * "Handed to something I cannot follow" is not "nothing happens to it".
+     *
+     * Both are {@see ChildLifetimeScanner::LIFETIME_UNCLASSIFIED}, and the
+     * REASON is the whole difference: one tells a reviewer where to look and
+     * the other is a confident false statement about a function that plainly
+     * does something with the handle. Rule 14 one level in - a scanner that
+     * cannot follow a call must say so rather than report an absence.
+     */
+    public function testAHandleHandedToAnUnknownCallSaysSoRatherThanClaimingNothingHappens(): void
+    {
+        $handed = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+                $this->registry->adopt($h);
+            }
+            PHP);
+        $untouched = $this->sitesIn(<<<'PHP'
+            <?php
+            function m(array $pipes) {
+                $h = proc_open('x', [2 => ['pipe','w']], $pipes);
+            }
+            PHP);
+
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $handed[0]['lifetime']);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $untouched[0]['lifetime']);
+
+        self::assertStringContainsString('->adopt', $handed[0]['reason']);
+        self::assertStringContainsString('nothing in this function', $untouched[0]['reason']);
+        self::assertNotSame(
+            $untouched[0]['reason'],
+            $handed[0]['reason'],
+            'the two must not share a sentence: a reviewer can act on the name of a call and '
+                . 'cannot act on a false absence',
+        );
+    }
+
+    /**
      * @return list<array{line:int,function:string,lifetime:string,reason:string,fds:list<int>|null,highFds:list<int>}>
      */
     private function sitesIn(string $source): array

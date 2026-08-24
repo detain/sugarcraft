@@ -66,6 +66,37 @@ final class ChildLifetimeScanner
     public const LIFETIME_UNCLASSIFIED = 'unclassified';
 
     /** `proc_open` appearing as something other than a direct global call. */
+    /**
+     * Calls that reap a handle, besides `proc_close()` itself.
+     *
+     * WHY THIS IS A ROSTER AND NOT A NAME. A tree that grows a reaping helper
+     * stops spelling `proc_close()` at the call sites, and a scanner that
+     * knows only the builtin then reports every one of those sites as a child
+     * nothing happens to. That is not a missed finding, it is an INVENTED one:
+     * the guard reds code that was just made stricter, and the row somebody
+     * adds to quiet it is an exemption written for correct code - which is
+     * where the next real offender hides.
+     *
+     * MEASURED, not anticipated. Scanning a concurrent lane's `src/` with this
+     * class showed exactly that: `Providers/ClaudeCodeProvider.php` spells its
+     * reap `ProcessReaper::terminateAndClose($process)` where this tree still
+     * spells `proc_close($process)`, and the site went from short-lived to
+     * "nothing returns, stores or proc_close()s it" on a change that added a
+     * bounded SIGTERM->SIGKILL ladder.
+     *
+     * ⚠️ A ROW HERE IS A CLAIM THAT THE HELPER REALLY CLOSES. Adding the name
+     * of something that merely *inspects* a handle would wave a genuine leak
+     * through, which is the polarity this class exists to avoid. Keys are
+     * matched case-insensitively on the trailing `Class::method`, because that
+     * is the part a `use` statement cannot change.
+     *
+     * @var list<string>
+     */
+    public const CLOSING_HELPERS = [
+        'processreaper::terminateandclose',
+        'processreaper::reapifexited',
+    ];
+
     public const REF_METHOD = 'method call';
     public const REF_STATIC = 'static call';
     public const REF_DECLARATION = 'function declaration';
@@ -241,6 +272,8 @@ final class ChildLifetimeScanner
     {
         $closedUnconditionally = false;
         $closedSomewhere = false;
+        $escapes = [];
+        $closer = 'proc_close';
         $depth = 0;
         $floor = 0;
 
@@ -309,24 +342,45 @@ final class ChildLifetimeScanner
 
             if (self::isProcCloseArgument($tokens, $i)) {
                 $closedSomewhere = true;
+                $closer = self::calleeTakingArgument($tokens, $i) ?? 'proc_close';
                 if ($depth === $floor) {
                     $closedUnconditionally = true;
                 }
+
+                continue;
+            }
+
+            // The handle is an argument to something else. That is NOT
+            // "nothing happens to it" - it is this scanner failing to follow
+            // it, and the two must not share a sentence. A reviewer can act on
+            // the name of the call; they cannot act on a false absence.
+            $handedTo = self::calleeTakingArgument($tokens, $i);
+            if ($handedTo !== null) {
+                $escapes[$handedTo] = true;
             }
         }
 
         if ($closedUnconditionally) {
             return [
                 self::LIFETIME_SHORT,
-                'proc_close(' . $variable . ') runs unconditionally in the same function',
+                $closer . '(' . $variable . ') runs unconditionally in the same function',
             ];
         }
 
         if ($closedSomewhere) {
             return [
                 self::LIFETIME_UNCLASSIFIED,
-                'proc_close(' . $variable . ') runs only inside a nested block, so it does not '
+                $closer . '(' . $variable . ') runs only inside a nested block, so it does not '
                     . 'cover every path out of this function',
+            ];
+        }
+
+        if ($escapes !== []) {
+            return [
+                self::LIFETIME_UNCLASSIFIED,
+                $variable . ' is handed to ' . \implode(', ', \array_keys($escapes))
+                    . ', which this scanner cannot follow; if one of those reaps the child, '
+                    . 'roster it in CLOSING_HELPERS',
             ];
         }
 
@@ -352,17 +406,67 @@ final class ChildLifetimeScanner
      */
     private static function isProcCloseArgument(array $tokens, int $at): bool
     {
-        $paren = self::prev($tokens, $at);
-        if ($paren === null || self::tokenText($tokens[$paren]) !== '(') {
+        $callee = self::calleeTakingArgument($tokens, $at);
+
+        if ($callee === null) {
             return false;
         }
 
-        $callee = self::prev($tokens, $paren);
+        return $callee === 'proc_close'
+            || \in_array(\strtolower($callee), self::CLOSING_HELPERS, true);
+    }
 
-        return $callee !== null
-            && \is_array($tokens[$callee])
-            && \in_array($tokens[$callee][0], [\T_STRING, \T_NAME_FULLY_QUALIFIED], true)
-            && \ltrim(\strtolower($tokens[$callee][1]), '\\') === 'proc_close';
+    /**
+     * The callee whose argument list the token at $at sits directly inside, or
+     * null if it is not the first thing after a `(`.
+     *
+     * SPELLED AS `Class::method` OR `->method` WHEN IT IS ONE, because a bare
+     * `terminateAndClose` would let any class of that method name count as a
+     * reap. Only the trailing pair is kept: an import can rewrite everything
+     * to its left and not change which function runs.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function calleeTakingArgument(array $tokens, int $at): ?string
+    {
+        $paren = self::prev($tokens, $at);
+        if ($paren === null || self::tokenText($tokens[$paren]) !== '(') {
+            return null;
+        }
+
+        $name = self::prev($tokens, $paren);
+        if ($name === null || !\is_array($tokens[$name])
+            || !\in_array($tokens[$name][0], [\T_STRING, \T_NAME_FULLY_QUALIFIED, \T_NAME_QUALIFIED], true)) {
+            return null;
+        }
+
+        $callee = \ltrim($tokens[$name][1], '\\');
+        if (\str_contains($callee, '\\')) {
+            $callee = \substr($callee, \strrpos($callee, '\\') + 1);
+        }
+
+        $separator = self::prev($tokens, $name);
+        if ($separator === null || !\is_array($tokens[$separator])) {
+            return $callee;
+        }
+
+        if ($tokens[$separator][0] === \T_DOUBLE_COLON) {
+            $class = self::prev($tokens, $separator);
+            if ($class !== null && \is_array($tokens[$class])) {
+                $owner = \ltrim($tokens[$class][1], '\\');
+                if (\str_contains($owner, '\\')) {
+                    $owner = \substr($owner, \strrpos($owner, '\\') + 1);
+                }
+
+                return $owner . '::' . $callee;
+            }
+        }
+
+        if (\in_array($tokens[$separator][0], [\T_OBJECT_OPERATOR, \T_NULLSAFE_OBJECT_OPERATOR], true)) {
+            return '->' . $callee;
+        }
+
+        return $callee;
     }
 
     /**
