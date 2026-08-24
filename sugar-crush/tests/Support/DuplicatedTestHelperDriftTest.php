@@ -48,11 +48,23 @@ use PHPUnit\Framework\TestCase;
  *     classes in one file are never compared with each other. Measured on PHP
  *     8.3.6 at the commit that added this file, no file in `tests/` declared
  *     one private name twice; the generator is the same
- *     {@see privateDeclarationsIn()} this guard runs, so a reader re-derives
+ *     {@see declarationsIn()} this guard runs, so a reader re-derives
  *     it rather than trusting the sentence.
- *   * PROTECTED AND PUBLIC HELPERS. A protected helper is usually inherited
- *     rather than copied, which is a different failure; public ones are the
- *     subject of tests rather than their machinery.
+ *   * PROTECTED AND PUBLIC HELPERS. WHAT THIS SAID: "a protected helper is
+ *     usually inherited rather than copied, which is a different failure;
+ *     public ones are the subject of tests rather than their machinery". WHAT
+ *     IS TRUE NOW: the conclusion holds and that argument was a feeling, in a
+ *     list whose other bullets carry generators - so it was measured, through
+ *     the same {@see driftReport()} with the alphabet widened. `protected`
+ *     adds NO helper name at all: every pair it brings in belongs to a PHPUnit
+ *     lifecycle hook, which the framework declares protected and which no two
+ *     classes come to share by copying - and it brings them in many times
+ *     over, so the widening would be answered by exempting them, which is
+ *     where the next real drift hides. WHY THE RESTRICTION STILL EARNS ITS
+ *     PLACE: it is no longer defended by prose but by
+ *     {@see testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()},
+ *     which reds on the day a protected helper really does drift and says so -
+ *     the restriction deletes itself rather than being argued again.
  *   * A COPY THAT WAS RENAMED. Nothing here matches bodies across different
  *     names, so a helper copied and renamed is out of reach by construction.
  *   * THE SIGNATURE. {@see bodyOf()} starts at the body's opening brace, so a
@@ -257,6 +269,90 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'here (delete the row, or rewrite its reason for the divergence that is left), '
                 . 'not a change to either helper. That the red arrives at all is the whole point '
                 . 'of the map.',
+        );
+    }
+
+    /**
+     * WIDENING THE VISIBILITY ALPHABET TO `protected` ADDS NO HELPER AT ALL,
+     * ONLY PHPUnit'S OWN LIFECYCLE HOOKS - and that is the argument for the
+     * restriction, standing where a sentence asserting it used to.
+     *
+     * RULE: AN ALPHABET IS COVERAGE, and one chosen to match the cases already
+     * known reports zero for everything it cannot express. The only honest way
+     * to defend a narrow one is to run the WIDE one through the same report and
+     * show what it brings in - so the defence moves when the tree does, instead
+     * of being re-read as still true.
+     *
+     * WHAT THE WIDE ALPHABET BRINGS IN, derived rather than written down: pairs
+     * whose name is a protected method PHPUnit declares on
+     * {@see \PHPUnit\Framework\TestCase} itself. Two classes that both
+     * override `setUp()` have not copied a helper, they have implemented the
+     * same framework hook, and their bodies differing by one temp-name literal
+     * is the framework working as designed. The hook roster is read off the
+     * framework rather than listed here, so a PHPUnit upgrade that adds a hook
+     * cannot turn this red for the wrong reason.
+     *
+     * THE DAY THIS REDS IS THE DAY THE RESTRICTION SHOULD GO. A protected name
+     * that is NOT a framework hook, one token apart across two files, is this
+     * file's own subject wearing a different modifier - so the message says to
+     * widen the alphabet, not to exempt the name.
+     *
+     * AND IT IS THE ONE ASSERTION IN THIS FILE THAT A DEAD REPORT CANNOT
+     * SATISFY BY AGREEING WITH ITSELF: a {@see driftReport()} returning nothing
+     * empties BOTH sides, and the wide side is required to be strictly the
+     * larger.
+     */
+    public function testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll(): void
+    {
+        $this->assertTheScannerIsAlive();
+
+        $sources = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $sources[$relative] = (string) file_get_contents($path);
+        }
+
+        [$narrow] = self::driftReport($sources);
+        [$wide] = self::driftReport($sources, [\T_PROTECTED]);
+
+        $hooks = [];
+        foreach ((new \ReflectionClass(TestCase::class))->getMethods(\ReflectionMethod::IS_PROTECTED) as $method) {
+            $hooks[] = $method->getName();
+        }
+        sort($hooks);
+
+        $this->assertNotSame(
+            [],
+            $hooks,
+            'PHPUnit\'s TestCase declares no protected method any more, so there is no roster '
+                . 'to tell a framework hook from a copied helper and this comparison has lost '
+                . 'its meaning. Re-derive the roster before trusting the assertion below',
+        );
+
+        $this->assertSame(
+            [],
+            array_values(array_diff(array_keys($wide), $hooks)),
+            'a PROTECTED helper that is not a PHPUnit lifecycle hook is one token apart across '
+                . 'two files. That is exactly what this file exists to catch, wearing a '
+                . 'different modifier, and the guard is not looking at it: the real checks run '
+                . 'the private alphabet only. THE FIX IS TO WIDEN THE ALPHABET - add T_PROTECTED '
+                . 'to driftReport()\'s default and argue the rows the wide run brings with it - '
+                . 'and to rewrite the PROTECTED AND PUBLIC HELPERS bullet on this class, whose '
+                . 'whole argument is that this list stays empty. Do NOT exempt the name here; '
+                . 'this test is the measurement the restriction rests on, not a roster of '
+                . 'allowed protected helpers.',
+        );
+
+        $count = static fn (array $report): int => array_sum(array_map('count', $report));
+
+        $this->assertGreaterThan(
+            $count($narrow),
+            $count($wide),
+            'the wide alphabet no longer brings in more pairs than the narrow one. Either the '
+                . 'framework hooks stopped diverging across the suite - in which case the '
+                . '"widening would be answered with exemptions" half of the argument is gone '
+                . 'and the bullet needs rewriting - or the report is returning nothing at all, '
+                . 'which empties both sides and is the failure this comparison is shaped to '
+                . 'catch',
         );
     }
 
@@ -510,19 +606,27 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * and the two real-tree tests go through exactly this code. A second
      * definition of "drifted" is the seam a copied helper would slip through.
      *
+     * THE VISIBILITY ALPHABET IS A PARAMETER rather than a constant inside the
+     * walk, so the restriction on it can be MEASURED by
+     * {@see testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()}
+     * through this same report instead of argued in prose. A second walk with a
+     * different alphabet would be a second definition of "drifted", which is
+     * the seam this whole file is about.
+     *
      * @param array<string,string> $sources
+     * @param list<int>            $visibility token ids one of which must carry the declaration
      *
      * @return array{array<string,list<string>>, list<string>, int}
      *         name => pair descriptions, unparseable declarations, declarations read
      */
-    private static function driftReport(array $sources): array
+    private static function driftReport(array $sources, array $visibility = [\T_PRIVATE]): array
     {
         $declarations = [];
         $unparseable = [];
         $read = 0;
 
         foreach ($sources as $relative => $source) {
-            foreach (self::privateDeclarationsIn($source) as $declaration) {
+            foreach (self::declarationsIn($source, $visibility) as $declaration) {
                 if ($declaration['body'] === null) {
                     $unparseable[] = $relative . ': ' . $declaration['problem'];
 
@@ -624,7 +728,8 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     }
 
     /**
-     * Every `private` (including `private static`) method a source declares.
+     * Every method a source declares that carries one of $visibility (a
+     * `static` one included).
      *
      * The body is normalised to `id:text` per significant token - whitespace
      * and every kind of comment dropped - so that reindenting a helper, or
@@ -633,9 +738,11 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * interpolation opener are different tokens with the same text, and a
      * comparison on text alone would call them equal.
      *
+     * @param list<int> $visibility token ids one of which must carry the declaration
+     *
      * @return list<array{name:string, body:list<string>|null, problem:string}>
      */
-    private static function privateDeclarationsIn(string $source): array
+    private static function declarationsIn(string $source, array $visibility): array
     {
         $tokens = \token_get_all($source);
         $count = \count($tokens);
@@ -647,7 +754,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 continue;
             }
 
-            if (!self::isPrivate($tokens, $i)) {
+            if (!self::carriesVisibility($tokens, $i, $visibility)) {
                 continue;
             }
 
@@ -688,11 +795,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     }
 
     /**
-     * Whether the `function` token at $at carries the `private` modifier.
+     * Whether the `function` token at $at carries one of $visibility.
      *
      * @param list<array{int,string,int}|string> $tokens
+     * @param list<int>                          $visibility
      */
-    private static function isPrivate(array $tokens, int $at): bool
+    private static function carriesVisibility(array $tokens, int $at, array $visibility): bool
     {
         $skippable = [
             \T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT,
@@ -708,7 +816,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 continue;
             }
 
-            return $token[0] === \T_PRIVATE;
+            return \in_array($token[0], $visibility, true);
         }
 
         return false;
