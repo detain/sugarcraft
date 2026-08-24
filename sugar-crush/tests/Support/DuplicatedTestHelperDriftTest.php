@@ -403,13 +403,20 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * What is left of two token bodies once the common prefix and the common
      * suffix are trimmed.
      *
-     * WHY NOT `similar_text()` OR A PERCENTAGE. A percentage answers "how alike
-     * are these" and the question here is "how many edits apart are they",
-     * which a percentage confuses with length: measured on PHP 8.3.6 over
-     * `tests/`, the `isRaw()` pair scores 98.9% and so does a pair of
-     * genuinely different helpers four times its length. Trimming both ends
-     * answers in tokens, is O(n), and is exactly the quantity the bound above
-     * is stated in.
+     * WHY NOT `similar_text()` OR A PERCENTAGE. A percentage answers "how
+     * alike are these" and the question here is "how many edits apart are
+     * they" - and the two ORDER DIFFERENTLY, which is the part that matters.
+     * Measured on PHP 8.3.6 over `tests/` at the commit that added this file:
+     * the `isRaw()` pair, ONE token apart out of a hundred, scores 98.90%. A
+     * `removeDirectory()` pair whose bodies share only their opening and
+     * closing - 66 of 74 tokens in the divergence core, two different helpers
+     * by any reading - scores 98.80%, one tenth of a point below it. And an
+     * `unshrinkablePairs()` pair 22 tokens apart scores 99.42%, HIGHER than
+     * the one-token pair. A threshold on the percentage would admit both and
+     * a stricter one would exclude `isRaw()` itself. Trimming both ends
+     * answers in tokens, is O(n), and is exactly the quantity
+     * {@see DRIFT_BOUND} is stated in. Generator: the same
+     * {@see divergenceCore()} this guard calls.
      *
      * @param list<string> $left
      * @param list<string> $right
