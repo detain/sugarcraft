@@ -537,6 +537,19 @@ final class NonBlockingVocabularyTest extends TestCase
                 . ', though stream_' . $set . '_blocking(STDIN, false) ran'),
             ['inverted'],
         ];
+        // THE ALPHABET'S OWN ROW. The setting side matched `set|sets|back|
+        // restore[sd]?` while the clearing side matched all four of
+        // `clear|clears|cleared|clearing`, so a message using the GERUND named
+        // no direction at all and left the census as `unreadable`. Widening it
+        // and then not fixturing it would be the same defect one level up
+        // (rule 11): an alphabet element nothing exercises is indistinguishable
+        // from one that was never added.
+        yield 'the gerund of the setting verb names a direction, as the clearing gerund always did' => [
+            'a message using the -ing form of the setting verb named NO direction, so it left the '
+                . 'census as unrankable while the same sentence with the clearing gerund is ranked',
+            $call('assertTrue', 'the bootstrap is ' . $set . 'ting ' . $flag . ' on a TERMINAL'),
+            ['consistent'],
+        ];
         yield 'a message containing the word un' . $clear . ' still names one direction' => [
             'the clearing verb was matched inside a longer word, with the same effect in the other '
                 . 'direction',
