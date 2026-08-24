@@ -130,19 +130,6 @@ final class NonBlockingVocabularyTest extends TestCase
                 . 'entry says "(x2)" where the tree has four. Derived here rather than quoted, '
                 . 'which is why the discrepancy is visible at all. Out of this lane.',
         ],
-        'tests/SuiteChildStdinIsolationTest.php' => [
-            'sites' => 1,
-            'why' => 'The TERMINAL arm, and the ONLY affirmatively-phrased site in the tree. The '
-                . 'first rank() graded every message against the direction its assertion DEMANDS, '
-                . 'which is right only for the negated form, so this one came back `consistent` '
-                . 'and the file was rostered as carrying nothing. It is inverted against the code '
-                . 'and not merely against a rule: `tests/bootstrap.php` ends in '
-                . '`if (!stream_isatty(STDIN)) { stream_set_blocking(STDIN, false); }`, so the '
-                . 'only act it could perform on a tty is a flag SET, and the sentence says the '
-                . 'opposite. The same file also owns the one UNREADABLE row below. Out of this '
-                . 'lane — the repair is a prose edit in lane e, and it must land WITH this row\'s '
-                . 'deletion or the census reds at the merge.',
-        ],
     ];
 
     /**
@@ -156,15 +143,6 @@ final class NonBlockingVocabularyTest extends TestCase
      * @var array<string,array{sites:int,why:string}>
      */
     private const UNREADABLE_ROSTER = [
-        'tests/SuiteChildStdinIsolationTest.php' => [
-            'sites' => 1,
-            'why' => 'One sentence names BOTH directions: it asks whether the bootstrap stopped '
-                . 'doing one thing OR whether something in the run undid it, and the two verbs '
-                . 'point opposite ways. The wording IS in the inverted vocabulary — it uses the '
-                . 'clearing verb for the act that sets the flag — but a direction-word scanner '
-                . 'that picked one of two would be reporting a coin flip, so it reports the '
-                . 'ambiguity instead. Out of this lane.',
-        ],
     ];
 
     /**
