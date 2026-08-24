@@ -137,6 +137,16 @@ final class Runtime
     public const DENIAL_UNANSWERED = 'Permission required:';
 
     /**
+     * Memoized project-memory block — see {@see memorySnapshot()}. Not a
+     * constructor parameter the way {@see $environmentBlock} is: the store it
+     * is captured from arrives on the {@see App}, so there is no caller holding
+     * a session-wide block to inject.
+     */
+    private ?MemoryBlock $memoryBlock = null;
+
+    private ?RepoMapBlock $repoMapBlock = null;
+
+    /**
      * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
      *                                            one is captured lazily on first use and
      *                                            reused for the life of this Runtime.
@@ -157,16 +167,6 @@ final class Runtime
      *                                config key, validated in
      *                                {@see \SugarCraft\Crush\Backend\EngineBackend::parallelToolDeadlineSeconds()}
      */
-    /**
-     * Memoized project-memory block — see {@see memorySnapshot()}. Not a
-     * constructor parameter the way {@see $environmentBlock} is: the store it
-     * is captured from arrives on the {@see App}, so there is no caller holding
-     * a session-wide block to inject.
-     */
-    private ?MemoryBlock $memoryBlock = null;
-
-    private ?RepoMapBlock $repoMapBlock = null;
-
     public function __construct(
         private ProviderInterface $provider,
         private HookManager $hookManager,

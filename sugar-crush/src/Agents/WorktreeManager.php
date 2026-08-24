@@ -33,8 +33,15 @@ use SugarCraft\Crush\Support\HomeDirectory;
  *    not exist and the method throws. Nothing the agent was spawned to do can
  *    happen.
  *  - {@see removeWorktree()}'s `git worktree remove` failure: this one LOOKS
- *    like a recovery, because the directory is force-removed below and the
- *    registry entry is dropped, so the method returns normally. It is not one,
+ *    like a recovery, because the directory is force-removed below and — WHEN
+ *    THAT SUCCEEDS — the registry entry is dropped and the method returns
+ *    normally. WHAT THIS BULLET USED TO SAY was that the entry is dropped and
+ *    the method returns normally, full stop; WHAT IS TRUE NOW is that
+ *    {@see removeDirectory()} reports whether the tree actually went, and a
+ *    tree still on disk keeps its registry entry and throws. WHY THE BULLET
+ *    STILL EARNS ITS PLACE, and why this site is still on the seam: the case it
+ *    describes is the one where the fallback SUCCEEDS, which is the common one
+ *    and still returns normally. It is not a recovery,
  *    and the difference was MEASURED rather than argued (git 2.43.0, Linux
  *    6.8, this box): with the worktree directory removed behind git's back,
  *    `git worktree list` still reports the path as `prunable`, and a later
@@ -289,7 +296,10 @@ final class WorktreeManager
      *
      * @param string $agentId The agent whose worktree should be removed.
      * @throws \InvalidArgumentException When agentId is empty.
-     * @throws \RuntimeException When the worktree does not exist.
+     * @throws \RuntimeException When the worktree does not exist, or when it
+     *                           could not be removed from disk — in which case
+     *                           the registry entry is deliberately KEPT rather
+     *                           than dropped over files that are still there.
      */
     public function removeWorktree(string $agentId): void
     {
@@ -328,9 +338,36 @@ final class WorktreeManager
             RuntimeNoticeSink::warn("WorktreeManager: git worktree remove failed for agent \"{$agentId}\" — exit {$exitCode}: {$outputStr}");
         }
 
-        // Remove the directory in case git didn't (e.g., dirty worktree was force-removed)
-        if (is_dir($worktreePath)) {
-            $this->removeDirectory($worktreePath);
+        // PHP'S STAT CACHE IS STALE HERE AND IT IS NOT A DETAIL. `git worktree
+        // remove` deletes the tree in a CHILD PROCESS, so nothing invalidates
+        // the entry `createWorktree()` (or any earlier `is_dir()` on this path)
+        // put in the cache — MEASURED, PHP 8.3.6: after a successful `exec()`
+        // removal, `is_dir($worktreePath)` still answers true while
+        // `file_exists()` on the same path answers false. The old code took the
+        // stale branch too and got away with it because `removeDirectory()`
+        // swallowed the resulting `scandir()` failure; now that the failure is
+        // reported, a stale `true` would throw over a worktree that is already
+        // gone. Scoped to this path rather than a global flush.
+        clearstatcache(true, $worktreePath);
+
+        // Remove the directory in case git didn't (e.g., dirty worktree was
+        // force-removed). Unconditional now that removeDirectory() answers for
+        // a path that is not a directory rather than assuming one.
+        if (!$this->removeDirectory($worktreePath)) {
+            // THE REGISTRY ENTRY STAYS. Dropping it here is what made this
+            // method's failure mode invisible: the registry would say the
+            // worktree was gone while its files were still on disk, and
+            // {@see worktreeExists()} — which is nothing but a registry lookup
+            // — would then agree. Keeping the entry means a later retry can
+            // still find it, and a later createWorktree() for the same agent
+            // id is refused rather than aimed at an occupied path.
+            throw new \RuntimeException(sprintf(
+                'Worktree for agent "%s" is still on disk at %s: neither `git worktree remove` '
+                . 'nor the recursive fallback could empty it. The registry entry has been kept, '
+                . 'so this agent still has a worktree as far as this manager is concerned.',
+                $agentId,
+                $worktreePath,
+            ));
         }
 
         unset($this->registry[$agentId]);
@@ -1050,29 +1087,84 @@ final class WorktreeManager
     }
 
     /**
-     * Recursively remove a directory and its contents.
+     * Recursively remove a directory and its contents, REPORTING whether the
+     * tree is actually gone.
+     *
+     * IT USED TO RETURN `void` AND SWALLOW EVERY FAILURE, on all four of its
+     * exits: an unreadable directory returned early, a failed `unlink()` and a
+     * failed `rmdir()` each raised a PHP warning and carried on. Its one caller
+     * then dropped the registry entry unconditionally, so the registry said the
+     * worktree was gone while its files were still on disk — and the next
+     * {@see createWorktree()} for that agent id would be handed a path it
+     * believed was free.
+     *
+     * `@unlink()` / `@rmdir()` RATHER THAN THE BARE CALLS, which is a
+     * diagnostic being MOVED and not one being removed: the PHP warning those
+     * emitted was the only signal a removal had failed, and it went to fd 2
+     * under an alternate screen with no indication of which path or which
+     * agent. The return value carries the same fact to a caller that can name
+     * both, and {@see removeWorktree()} now refuses to proceed on it.
+     *
+     * SYMLINKS ARE UNLINKED AND NEVER TRAVERSED, which is a change in what
+     * gets DELETED and not only in what gets reported — the one such change
+     * here, made because the reporting fix could not be honest without it.
+     * See the comments at the two `is_link()` checks for the measurement.
+     *
+     * @return bool True when nothing remains at `$path`. A partially emptied
+     *              tree is FALSE, and the surviving parents are deliberately
+     *              left in place — `rmdir()` on a directory known to still have
+     *              contents would fail anyway, and removing what could be
+     *              removed while reporting success is the behaviour this
+     *              replaced.
      */
-    private function removeDirectory(string $path): void
+    private function removeDirectory(string $path): bool
     {
-        if (!is_dir($path)) {
-            return;
+        // `|| is_link($path)` FOR THE SAME REASON THE LOOP HAS IT: `is_dir()`
+        // follows, so a symlinked `$path` would be recursed into and the target
+        // emptied. A link is refused here rather than unlinked — this method's
+        // contract is "empty this tree", and a caller that handed it a link did
+        // not mean the link's target. `removeWorktree()` turning that false into
+        // a thrown refusal is the correct outcome.
+        if (!is_dir($path) || is_link($path)) {
+            // NOT UNCONDITIONALLY TRUE. A dangling symlink or a plain file at
+            // this path is something this method did not remove, and answering
+            // "gone" for it would hand the caller the same lie the void return
+            // used to.
+            return !file_exists($path) && !is_link($path);
         }
 
         $entries = @scandir($path);
         if ($entries === false) {
-            return;
+            return false;
         }
 
-        $items = array_diff($entries, ['.', '..']);
-        foreach ($items as $item) {
+        $emptied = true;
+        foreach (array_diff($entries, ['.', '..']) as $item) {
             $itemPath = $path . '/' . $item;
-            if (is_dir($itemPath)) {
-                $this->removeDirectory($itemPath);
-            } else {
-                unlink($itemPath);
+            // A SYMLINK IS UNLINKED, NEVER FOLLOWED, AND `is_dir()` FOLLOWS.
+            // MEASURED on this box (PHP 8.3.6): with a link inside the tree
+            // pointing at a directory OUTSIDE it, the old traversal recursed
+            // through the link and DELETED THE TARGET'S CONTENTS — a file
+            // outside the worktree destroyed, while the link and the target
+            // directory both survived because `rmdir()` then failed on the link
+            // itself. That last part also made the boolean unwinnable: a
+            // worktree containing one directory symlink could never report
+            // `true` however much was removed.
+            if (is_dir($itemPath) && !is_link($itemPath)) {
+                // Recursion FIRST and the conjunction second: `&&` short-
+                // circuits, and an earlier failure must not stop the remaining
+                // entries being attempted.
+                $emptied = $this->removeDirectory($itemPath) && $emptied;
+            } elseif (!@unlink($itemPath)) {
+                $emptied = false;
             }
         }
-        rmdir($path);
+
+        if (!$emptied) {
+            return false;
+        }
+
+        return @rmdir($path);
     }
 
     /**

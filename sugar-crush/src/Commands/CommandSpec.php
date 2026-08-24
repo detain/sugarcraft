@@ -814,13 +814,6 @@ final class CommandSpec
     }
 
     /**
-     * The notice a non-`$` form gets when no resolver was supplied.
-     *
-     * $verb is "run" or "included" so the sentence names what did not happen to
-     * the form the reader is looking at, rather than announcing that something
-     * generically did not happen.
-     */
-    /**
      * The sentence a `` !`cmd` `` gets when this expansion's shell budget is
      * already spent.
      *
@@ -841,6 +834,13 @@ final class CommandSpec
         );
     }
 
+    /**
+     * The notice a non-`$` form gets when no resolver was supplied.
+     *
+     * $verb is "run" or "included" so the sentence names what did not happen to
+     * the form the reader is looking at, rather than announcing that something
+     * generically did not happen.
+     */
     private static function refusedForm(string $form, string $verb): string
     {
         return sprintf(

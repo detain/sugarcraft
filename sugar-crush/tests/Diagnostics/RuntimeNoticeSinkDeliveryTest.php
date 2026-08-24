@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Diagnostics;
 
+use PHPUnit\Framework\ExpectationFailedException;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Core\ProgramOptions;
@@ -1113,42 +1114,73 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     }
 
     /**
-     * `Chat` CARRIES NO STACKED DOC-COMMENTS, which is a guard this round owes
-     * the file rather than a general style rule.
+     * NO FILE UNDER `src/`, AND NOT `bin/sugarcrush`, CARRIES A STACKED
+     * DOC-COMMENT — two doc-blocks in a row with no declaration between them.
      *
-     * E193's re-arm reasoning landed as a SECOND doc-comment immediately
-     * above {@see \SugarCraft\Crush\Chat::pumpRuntimeNotices()} instead of
-     * being merged into the block already there. PHP attaches only the LAST
-     * doc-comment in such a run, so the earlier one stops documenting anything:
-     * `pumpRuntimeNotices()` lost its `@return array{0:Chat,1:?\Closure}` tag
-     * (VERIFIED at the time by `ReflectionMethod::getDocComment()`, which
-     * returned the re-arm block with no `@return` in it) and the batching and
-     * `Role::System` arguments became prose no tool could resolve.
+     * WHY THE SHAPE COSTS SOMETHING. PHP attaches only the LAST doc-comment in
+     * such a run, so every earlier one stops documenting anything. E193's
+     * re-arm reasoning landed as a second block immediately above
+     * {@see \SugarCraft\Crush\Chat::pumpRuntimeNotices()}: that method lost its
+     * `@return array{0:Chat,1:?\Closure}` tag (VERIFIED at the time by
+     * `ReflectionMethod::getDocComment()`, which returned the re-arm block with
+     * no `@return` in it) and the batching and `Role::System` arguments became
+     * prose no tool could resolve.
      *
-     * IT WAS NOT THE ONLY ONE. Scanning for the shape found THREE pairs in this
-     * file, and the other two were worse: `refuseInFlightCommand()` and
-     * `dispatchCommand()` had each lost their doc-block to the method BELOW
-     * them, so both read as undocumented while their prose sat above an
-     * unrelated declaration — and `expandCustomCommand()`, which returns
-     * `?string`, was preceded by a stranded `@return array{0: self, 1:
-     * ?\Closure}|null`.
+     * THE EXPENSIVE VARIANT IS THE COMMON ONE. A merely-merged pair is cheap;
+     * the costly shape is prose describing method A stranded above method B's
+     * own block, leaving A silently undocumented and A's description attached
+     * to nothing while a reader takes it for B's. `Chat.php` had two of those
+     * three. All FOUR pairs this guard's widening cleared were that kind —
+     * `Runtime::__construct()` (its whole `@param` set, for `$environmentBlock`
+     * / `$parallelToolCalls` / `$parallelToolDeadlineSeconds`, stranded above
+     * the `$memoryBlock` property), {@see \SugarCraft\Crush\Commands\CommandSpec::refusedForm()},
+     * {@see \SugarCraft\Crush\Tools\BuiltIn\Glob::prunedDirs()} and
+     * {@see \SugarCraft\Crush\Tui\Components\MenuBar::activateMenu()}, each of
+     * which `ReflectionMethod::getDocComment()` reported as `false` beforehand
+     * and reports a block for now.
      *
-     * SCOPED TO `Chat.php` DELIBERATELY. The same scan finds four more pairs
-     * elsewhere in `src/`, in files this change does not own; widening the
-     * guard would red on work in flight rather than on this defect. The finding
-     * is recorded in the hardening backlog instead.
+     * WHAT THIS DOC-BLOCK USED TO SAY, and why the sentence is gone (rule 7):
+     * it said "SCOPED TO `Chat.php` DELIBERATELY … widening the guard would red
+     * on work in flight rather than on this defect", and it was right when
+     * written — three sibling lanes were editing `src/` in the same round.
+     * WHAT IS TRUE NOW: those lanes merged, the four pairs the narrow scope
+     * deferred are fixed, and the roster below is the whole of `src/` plus the
+     * binary. WHY IT STILL EARNS ITS PLACE: the reason for the narrow scope was
+     * never that the shape is harmless outside `Chat.php` — it was concurrency,
+     * and a future round narrowing this again for the same reason should say so
+     * here rather than delete the guard.
+     *
+     * A WIDENED GUARD IS A STANDING OBLIGATION ON EVERY OTHER LANE, and that is
+     * the point: it reds on the next stacked pair anyone writes, in any file,
+     * rather than only in the one file that happened to have the bug first.
      */
-    public function testChatCarriesNoStackedDocComments(): void
+    public function testNoSourceFileCarriesStackedDocComments(): void
     {
-        $chat = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Chat.php');
+        $root = \dirname(__DIR__, 2);
+        $files = self::phpSourceRoster($root);
+
+        // THE ROSTER IS THE OTHER HALF OF THE KNOWN-POSITIVE BELOW. A scan of
+        // an EMPTY roster also yields [], so the fixtures alone cannot tell a
+        // working instrument from one pointed at nothing. These three are named
+        // because they exist, not counted: a cardinality over `src/` is stale
+        // the moment any lane adds a file.
+        self::assertContains($root . '/src/Chat.php', $files);
+        self::assertContains($root . '/src/Runtime.php', $files);
+        // AND FOR THE BINARY, `assertContains` ALONE IS A TAUTOLOGY:
+        // phpSourceRoster() appends that path unconditionally rather than
+        // discovering it, so the roster would still "contain" it on a checkout
+        // where the file was gone. The existence check is the half that can fail.
+        self::assertContains($root . '/bin/sugarcrush', $files);
+        self::assertFileExists($root . '/bin/sugarcrush');
 
         self::assertSame(
             [],
-            self::stackedDocCommentLines($chat),
-            'src/Chat.php has doc-comments stacked immediately on top of each other at the lines '
-                . 'listed. PHP attaches only the last of a run, so every earlier one documents '
-                . 'nothing: its @return tag is off the method and its reasoning is orphaned. Merge '
-                . 'them into one block, or move the stranded one down to the declaration it describes.',
+            self::stackedPairsIn($files, $root),
+            'These files have doc-comments stacked immediately on top of each other at the '
+                . 'file:line pairs listed. PHP attaches only the last of a run, so every earlier '
+                . 'one documents nothing: its @return tag is off the method and its reasoning is '
+                . 'orphaned. Merge them into one block, or move the stranded one down to the '
+                . 'declaration it describes.',
         );
 
         // KNOWN-POSITIVE THROUGH THE SAME SCANNER IN THE SAME TEST (rule 15).
@@ -1170,6 +1202,252 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             /** Another block, with a declaration between them. */
             function g(): void {}
             PHP));
+
+        // AND ACROSS AN ATTRIBUTE, which an adjacency walk loses (rule 11: ask
+        // what the alphabet cannot express before believing a zero). PHP still
+        // attaches only the LAST block, so the first is still stranded.
+        //
+        // THE ARGUMENT CARRIES A NESTED ARRAY ON PURPOSE. It makes this one
+        // fixture kill both ways the skip can be wrong: not skipping the
+        // attribute at all leaves `T_ATTRIBUTE` between the blocks, and skipping
+        // to the FIRST `]` instead of counting depth leaves the array's own
+        // closing brackets there. Either way the pair stops being adjacent and
+        // this assertion goes red.
+        self::assertSame([2], self::stackedDocCommentLines(<<<'PHP'
+            <?php
+            /** First, stranded across the attribute. */
+            #[\Deprecated(['a' => [1, 2]])]
+            /** Second, which wins. */
+            function f(): void {}
+            PHP));
+
+        // AND THE SKIP MUST NOT MANUFACTURE A PAIR. A lone attributed block
+        // followed later by an unrelated one is not stacked, and the array
+        // literal in the attribute's argument is what makes the depth count
+        // rather than a scan-to-the-next-bracket necessary.
+        self::assertSame([], self::stackedDocCommentLines(<<<'PHP'
+            <?php
+            /** One attributed block. */
+            #[\Deprecated(['a' => [1, 2]])]
+            function f(): void {}
+            /** Another block. */
+            function g(): void {}
+            PHP));
+    }
+
+    /**
+     * THE RULE-14 ARM HAS A FIXTURE NOW, AND IT DID NOT BEFORE — AND WRITING
+     * ONE FOUND A SECOND HOLE IN THE ARM ITSELF.
+     *
+     * {@see stackedPairsIn()} must refuse a roster entry it cannot scan rather
+     * than let it contribute a silent zero. Nothing exercised that: every other
+     * assertion in the guard above has a known-positive control that has been
+     * watched to fail, and this was the one arm that had never been seen to
+     * work — the arm that matters precisely on the checkout where something is
+     * wrong. Recorded as a deferred finding by this round's own review pass,
+     * then closed here once the scan took its roster as a parameter, which is
+     * what makes an unscannable fixture possible WITHOUT writing a `0000` file
+     * into `src/` in a suite five audit lanes share.
+     *
+     * WHAT THE FIXTURE FOUND. The arm was `assertIsString($source)` alone, and
+     * that is not enough: MEASURED on this box, PHP 8.3.6,
+     * `file_get_contents()` on a DIRECTORY returns the EMPTY STRING and not
+     * `false` (with a `Read of N bytes failed with errno=21 Is a directory`
+     * warning). `''` is a string, so a directory in the roster passed the arm
+     * and scanned as zero stacked pairs — the exact silent zero the arm exists
+     * to prevent. The `is_file()` check is that hole closed, and the directory
+     * case below is what keeps it closed.
+     *
+     * TWO NEGATIVE CASES BECAUSE THEY FAIL AT DIFFERENT ARMS. A directory fails
+     * `is_file()` and runs on every uid; an unreadable file passes `is_file()`
+     * (its own directory is still traversable, so `stat()` succeeds) and fails
+     * the read. The second is CONDITIONAL and deliberately NOT
+     * `markTestSkipped()`: uid 0 reads a `0000` file, and this suite's skipped
+     * count is an invariant the audit uses to detect a broken dependency
+     * closure — an environment-dependent skip would spend it on a coin flip.
+     *
+     * BOTH POLARITIES IN ONE TEST, because an expected failure is exactly the
+     * assertion E228 warns about: "it threw" is also what a helper that threw
+     * for an unrelated reason produces. The positive half runs the SAME helper
+     * over the SAME file while it is readable and asserts the pair is FOUND, so
+     * the negative halves cannot be satisfied by an instrument that refuses
+     * everything.
+     */
+    public function testARosterEntryTheScanCannotReadFailsRatherThanScoringZero(): void
+    {
+        // `tempnam()` CREATES the file, so the name is claimed and then replaced
+        // by a directory of the same name — a process-unique reservation rather
+        // than a name five concurrent audit suites can collide on under one
+        // shared TMPDIR. {@see \SugarCraft\Crush\Tests\Support\ProcessUniqueTempNameTest}
+        // is the guard for that, and it is why the argument-less form is absent.
+        $reserved = tempnam(sys_get_temp_dir(), 'sc_r49b_unread_');
+        self::assertIsString($reserved);
+        self::assertTrue(unlink($reserved));
+        $dir = $reserved;
+        self::assertTrue(mkdir($dir));
+        $file = $dir . '/Stacked.php';
+        self::assertNotFalse(file_put_contents($file, <<<'PHP'
+            <?php
+            /** First block, stranded. */
+            /** Second block, which wins. */
+            function f(): void {}
+            PHP));
+
+        try {
+            // POSITIVE HALF. Without it the failures below would pass on a
+            // helper that refused every roster it was handed.
+            self::assertSame(
+                ['Stacked.php:2'],
+                self::stackedPairsIn([$file], $dir),
+                'the scan no longer finds a stacked pair in a file it CAN read, so the '
+                    . 'unscannable cases below prove nothing about this instrument',
+            );
+
+            // NEGATIVE CASE 1: a directory. Runs on every uid.
+            self::assertStringContainsString(
+                basename($dir),
+                self::refusalMessageFor([$dir], $dir),
+                'stackedPairsIn() accepted a DIRECTORY as a roster entry. On PHP 8.3.6 '
+                    . "file_get_contents() answers '' for one, which is a string, so it scans as "
+                    . 'zero stacked pairs — indistinguishable from a clean file.',
+            );
+
+            // NEGATIVE CASE 2: an unreadable file, when the mode takes.
+            self::assertTrue(chmod($file, 0000));
+            if (!is_readable($file)) {
+                self::assertStringContainsString(
+                    'Stacked.php',
+                    self::refusalMessageFor([$file], $dir),
+                    'stackedPairsIn() accepted a file it could not read, so the guard above '
+                        . 'would pass on a checkout where it had read nothing at all.',
+                );
+            }
+        } finally {
+            @chmod($file, 0644);
+            @unlink($file);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * The message {@see stackedPairsIn()} fails with for `$files`, or a failure
+     * of this test if it did not fail at all.
+     *
+     * Returning the message rather than asserting on the exception's presence is
+     * what lets each caller assert WHICH entry was named — "it threw" is the
+     * assertion E228 warns about, and a helper that threw for an unrelated
+     * reason satisfies it just as well.
+     *
+     * THE `self::fail()` BELOW IS UNKILLABLE BY CONSTRUCTION, recorded here so
+     * the next reviewer does not spend a mutation on it: rewriting it to
+     * `return ''` SURVIVES this file's suite (MEASURED). It cannot be observed
+     * while both refusal arms work, because the callers never reach it — and if
+     * an arm stops refusing, `assertStringContainsString(…, '')` in the caller
+     * reds anyway. What the `fail()` buys is the MESSAGE: "scanned an
+     * unscannable roster without complaining, answering […]" names the defect,
+     * where the caller's own failure would only report a missing substring in an
+     * empty string. Keep it for that; do not read its survival as a hole.
+     *
+     * @param list<string> $files
+     */
+    private static function refusalMessageFor(array $files, string $root): string
+    {
+        try {
+            $scanned = self::stackedPairsIn($files, $root);
+        } catch (ExpectationFailedException $e) {
+            return $e->getMessage();
+        }
+
+        self::fail(sprintf(
+            'stackedPairsIn() scanned an unscannable roster without complaining, answering %s.',
+            var_export($scanned, true),
+        ));
+    }
+
+    /**
+     * The stacked pairs in `$files`, as `path-relative-to-$root:line` strings.
+     *
+     * EXTRACTED FROM THE GUARD SO THE ROSTER IS A PARAMETER, and the roster
+     * being a parameter is the whole point: it lets
+     * {@see testAFileTheScanCannotReadFailsRatherThanScoringZero()} drive the
+     * unreadable-file arm at a scratch path instead of at a `0000` file created
+     * inside `src/`.
+     *
+     * TWO REFUSAL ARMS AND NOT ONE, for the reason
+     * {@see testARosterEntryTheScanCannotReadFailsRatherThanScoringZero()}
+     * records: `file_get_contents()` answers `''` for a directory on PHP 8.3.6,
+     * so `assertIsString()` cannot see one. `is_file()` catches that; the read
+     * catches an entry that is a file and still cannot be opened.
+     *
+     * `@file_get_contents()` AND NOT A BARE CALL. The suppression is what makes
+     * the `assertIsString()` below the reporting mechanism: unsuppressed, an
+     * unreadable file surfaces as a PHP warning whose handling depends on the
+     * suite's error configuration rather than as this test's own named failure.
+     *
+     * @param list<string> $files
+     *
+     * @return list<string>
+     */
+    private static function stackedPairsIn(array $files, string $root): array
+    {
+        $stacked = [];
+
+        foreach ($files as $file) {
+            // NOT FOLDED INTO THE READ BELOW. `file_get_contents()` on a
+            // DIRECTORY answers the EMPTY STRING on PHP 8.3.6 — not `false` —
+            // so `assertIsString()` alone let a directory scan as zero stacked
+            // pairs. This is the arm that catches that; the read is the arm
+            // that catches a permission problem on something that IS a file.
+            self::assertTrue(
+                is_file($file),
+                $file . ' is not a file, so this scan does not speak for it.',
+            );
+
+            $source = @file_get_contents($file);
+
+            // A file this scan could not read must go RED, not silently
+            // contribute zero findings — an unreadable file is a hole shaped
+            // exactly like the next stacked pair.
+            self::assertIsString(
+                $source,
+                $file . ' could not be read, so this scan does not speak for it.',
+            );
+
+            foreach (self::stackedDocCommentLines($source) as $line) {
+                $stacked[] = substr($file, \strlen($root) + 1) . ':' . $line;
+            }
+        }
+
+        return $stacked;
+    }
+    /**
+     * Every PHP file the stacked-doc-comment guard speaks for: all of `src/`,
+     * plus the `bin/sugarcrush` entry point.
+     *
+     * `bin/sugarcrush` is in the roster even though `token_get_all()` finds no
+     * `T_DOC_COMMENT` in it at all as this is written, because the guard exists
+     * for the block someone adds later. Its shebang line tokenises as
+     * `T_INLINE_HTML` (VERIFIED, PHP 8.3.6) rather than breaking the scan, so
+     * including it costs nothing.
+     *
+     * @return list<string> absolute paths, sorted
+     */
+    private static function phpSourceRoster(string $root): array
+    {
+        $files = [];
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
+            $root . '/src',
+            \FilesystemIterator::SKIP_DOTS,
+        ));
+        foreach ($walk as $entry) {
+            if ($entry->isFile() && $entry->getExtension() === 'php') {
+                $files[] = $entry->getPathname();
+            }
+        }
+        $files[] = $root . '/bin/sugarcrush';
+        sort($files);
+
+        return $files;
     }
 
     /**
@@ -1179,13 +1457,38 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * `T_COMMENT` is skipped but `T_DOC_COMMENT` is not, so a `//` line between
      * two blocks does NOT rescue the first — PHP does not attach it either.
      *
+     * AN ATTRIBUTE IS SKIPPED WHOLE, WHICH IS AN ALPHABET FIX AND NOT A TIDY-UP.
+     * `/** A * / #[Attr] /** B * / function f()` is the same defect as the
+     * adjacent pair — MEASURED, PHP 8.3.6: `getDocComment()` returns block B and
+     * block A documents nothing — but the two blocks are not adjacent, so a walk
+     * that counted `#[` as significant scored the pair as ABSENT. Depth-counted
+     * rather than scanned to the next `]`, because an attribute argument can
+     * carry an array literal and its brackets would close the run early.
+     *
      * @return list<int>
      */
     private static function stackedDocCommentLines(string $source): array
     {
         $significant = [];
+        $attributeDepth = 0;
         foreach (token_get_all($source) as $token) {
             if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT], true)) {
+                continue;
+            }
+            if ($attributeDepth > 0) {
+                if ($token === '[') {
+                    $attributeDepth++;
+                } elseif ($token === ']') {
+                    $attributeDepth--;
+                }
+
+                continue;
+            }
+            // `T_ATTRIBUTE` IS the opening `#[`, so the depth starts at one and
+            // the matching `]` closes it.
+            if (\is_array($token) && $token[0] === T_ATTRIBUTE) {
+                $attributeDepth = 1;
+
                 continue;
             }
             $significant[] = $token;
