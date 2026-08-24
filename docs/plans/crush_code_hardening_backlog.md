@@ -12662,3 +12662,385 @@ baseline is measured in has the same property, and a reader finding a grown prod
 **Step.** None on the code. When the lanes are merged, remove
 `/tmp/sugar-crush-audit-<euid>/audit.log` on the build box once — no lane can safely do it while siblings
 are still running suites at pre-pin commits, and no lane should glob-delete under `/tmp` in any case.
+### Ec52-1 — E362's mechanism is refuted: a killed child produces a RED, and the RISKY comes from PHPUnit's own per-test limit
+
+**Recorded 2026-08-24 by round-52 lane c, against its own brief.** Severity: diagnosis.
+**Measured, PHP 8.3.6 / PHPUnit 10.5.64.**
+
+E362 said `BootstrapSkillSkipsTest` goes risky because "under concurrent load a child that would finish
+in a second can miss a 60-second wall clock; the arm that would have asserted never runs, and PHPUnit
+reports the test as risky rather than failed." **The causal chain does not hold.** When
+`timeout -s KILL` kills the child, `exec()` RETURNS — status 137 — and every arm below it runs and
+fails. That path is a red, not a risky.
+
+What produces E362's exact signature is `phpunit.xml`'s own `enforceTimeLimit="true"` +
+`defaultTimeLimit="60"`, enforced through `SebastianBergmann\Invoker\Invoker`: `pcntl_alarm()` plus a
+`SIGALRM` handler that throws. Reproduced in a controlled probe (three tests under a three-second
+limit, two of them spawning a ten-second child): `Tests: 3, Assertions: 1, Risky: 2` — two risky tests
+and **three shed assertions**, which is E333's and E362's number exactly.
+
+**Two things the probe established that change how the next reader should read such a run.** (a) The
+alarm does not interrupt a blocking `exec()`; PHP dispatches the pending signal at the next opcode, so
+the abort lands precisely BETWEEN the child finishing and the assertions running — the shed is total,
+not partial. (b) **`Invoker` interpolates its own configured `$timeout` into the message**, so "This
+test was aborted after 60 seconds" is a statement about the CONFIGURATION and not evidence that sixty
+seconds elapsed. Any stray `SIGALRM` prints the same sentence.
+
+**The load story does not survive either.** One real one-shot child costs **0.28s** (three takes:
+0.28 / 0.28 / 0.28, PHP 8.3.6, load average 6.07 with sibling suites running); the whole file runs in
+0.41s. Reaching a 60s wall clock needs a ~200x slowdown.
+
+**What was fixed.** The budget is now `CHILD_WALL_CLOCK_BUDGET_SECONDS = 20`, named, with the measured
+reason beside it (E362's option (b)), and a guard reads `defaultTimeLimit` out of `phpunit.xml` and reds
+if the budget comes within `BUDGET_HEADROOM_SECONDS` of it.
+
+**CORRECTION, same day, by this round's reviewer and re-measured before acting on it. WHAT THIS ENTRY
+SAID:** "a budget at or above the per-test limit means the file cannot fail at all — it can only be
+aborted", and "above the ceiling it trades the diagnosis for no verdict at all". **WHAT IS TRUE NOW,
+and was true when that was written:** `phpunit.xml` also sets `failOnRisky="true"` — the attribute that
+decides the polarity of the whole argument — and the paragraph was written from `enforceTimeLimit` and
+`defaultTimeLimit` without reading the third attribute two lines below them. The lane's own probe cannot
+have carried it; the probe's rc was never reported. **Re-measured independently, PHP 8.3.6 /
+PHPUnit 10.5.64, two configurations differing in that attribute ALONE, one test whose child outlives a
+three-second limit:**
+
+| `failOnRisky` | banner | rc |
+| --- | --- | --- |
+| `true` (what `phpunit.xml` sets) | `OK, but there were issues!` / `Tests: 2, Assertions: 1, Risky: 1` | **1** |
+| `false` | identical | 0 |
+
+Under the real configuration an abort **fails the run and PHPUnit names the aborted test and its file**
+(`1) RiskyProbeTest::testSpawnsAChildThatOutlivesTheLimit / * This test was aborted after 3 seconds`).
+**WHY THE 60→20 CHANGE STILL EARNS ITS PLACE:** what the abort really costs is (a) the assertions the
+arm would have made, shed from the totals — and a moved assertion count is the signal this project reads
+as evidence its dependency closure is intact — and (b) the diagnosis, which becomes a generic "aborted
+after N seconds / did not perform any assertions" instead of a sentence naming the constant, the child
+and the remedy. **A specific red traded for a generic one, not a red traded for nothing.** The five
+places carrying the wrong version — three doc-blocks, one runtime failure message and this entry — are
+rewritten in the three-part form, and `testAnAbortAtThatCeilingStillFailsTheRun()` now pins
+`failOnRisky` against `phpunit.xml` with a known-answer table, because with it off the original claim
+WOULD be true.
+
+**Generalise it:** the attribute that decides what a failure MODE costs is not always in the paragraph
+you are reading. When an argument turns on "what does the runner do with this verdict", read the whole
+config block, not the two attributes that named your mechanism.
+
+**Step, and this entry does NOT close it.** The stray-`SIGALRM` hypothesis is UNPROVEN.
+`tests/Support tests/Cli tests/Config` contains no `pcntl_alarm()` caller, so if a stray alarm is what
+E362 saw, its source is elsewhere. A test that arms an alarm and dies before cancelling it delivers an
+abort into an arbitrary LATER test, with a message quoting sixty seconds and no relation to the truth.
+**Anyone who sees a risky abort on a fast file should look for the arming test, not at the aborted one.**
+
+---
+
+### Ec52-2 — two tests asserting an ABSENCE from a child's stderr passed on a child that never ran
+
+**Recorded 2026-08-24 by round-52 lane c. FIXED this round.** Severity: rule-15 hole, live.
+
+`BootstrapSkillSkipsTest::testACleanLaunchIsSilent()` and `testACleanOneShotRunIsSilent()` assert
+`assertStringNotContainsString('could not be read', $stderr)`. An empty string contains nothing, and a
+child killed before it writes a byte produces an empty string. **Measured both ways:** with the child
+budget cut to 0.001s and the new arm removed, those two tests are `OK (2 tests, 2 assertions)`; with the
+arm present the file goes to four failures.
+
+**Widened the same day, after this round's reviewer measured that the fix did not deliver its own
+heading.** The arm as first shipped refused only status `137`, the budget's own SIGKILL, and its
+doc-block excused the narrow form on the grounds that "the launch child's exit status is otherwise not
+this file's business — it is a TUI process in a pipe". Both halves were wrong. **Measured:** pointing
+the one-shot helper at a nonexistent binary — a child that never ran, status 127 — left
+`testACleanOneShotRunIsSilent()` GREEN, `OK (1 test, 2 assertions)`; and the one-shot child is
+`bin/sugarcrush -p`, not a TUI in a pipe. Both children exit 0 on this host, three takes each, so the
+arm is now `assertSame(0, …)` and refuses 127 and 255 as well as 137. Re-mutated after the widening:
+the nonexistent-binary mutation is KILLED at 1 test / 2 assertions, in both helpers.
+
+**And the arm itself is now pinned in both polarities**, because every real child in that file exits 0 —
+the population that would exercise a refusal never occurs, which is E322's shape and is how the narrow
+form survived a whole round unnoticed. A five-row table hands the arm 0, 137, 127, 255 and 1 and reads
+the sentence it writes back.
+
+**Generalise it:** every `assertStringNotContainsString` / `assertSame([], …)` over output produced by a
+SUBPROCESS needs an assertion that the subprocess ran, and "ran" means EXITED THE WAY IT WAS SUPPOSED
+TO, not "was not killed by the one signal I thought of". `exec()` already returns the status for free.
+
+---
+
+### Ec52-3 — a control table whose rows all wear ONE grammatical shape left a whole parser walk dead (E360, second instance)
+
+**Recorded 2026-08-24 by round-52 lane c, against its own new guard.** Severity: coverage.
+**Measured, PHP 8.3.6. FIXED before it shipped.**
+
+The new requirement-directive guard walks class metadata AND method metadata. Its rule-15 control was a
+fixture carrying the directive in its CLASS doc-comment. Deleting the entire METHOD walk was **GREEN** —
+the class-level fixture answered for both, and a directive on a method (the commoner placement by far)
+was invisible.
+
+E360's shape one round later in a different file: not a table missing a row for a case it knew about,
+but a table whose every row wears one shape, so the shape it omits is unrepresented by construction.
+**The question to ask of a control table is not "does it cover the cases" but "how many distinct SHAPES
+does it contain, and how many does the code branch on".** Here the code branched on two and the table
+contained one.
+
+---
+
+### Ec52-4 — `BuiltInToolCorpusTest` hard-codes `src/`'s FILE COUNT, so any lane adding a source file reds it
+
+**Recorded 2026-08-24 by round-52 lane c.** Severity: merge hazard, live this round.
+**Measured, PHP 8.3.6, at `b9abd2fb`.**
+
+`tests/Tools/BuiltInToolCorpusTest.php` asserts `assertSame(292, $files, 'php files under src/')` in
+`testTheSymbolKindCensusTheDocBlockQuotes()` and again in `testTheSecondaryDeclarationCensus()`, plus
+`assertSame(311, $declarations, …)` and an exact symbol-kind map
+(`['concrete' => 241, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0]`).
+
+**So a single new file under `src/` reds two assertions there whatever its contents**, and a third
+(`testEverySourceFileDeclaresItsPsr4Symbol`) if it does not declare its PSR-4 symbol. Measured by
+creating one probe file at an exact path and deleting it: bare `<?php` reds three arms; a proper
+`final class` under `SugarCraft\Crush` still reds two.
+
+This is not an argument for deleting the figures — they are derived-and-compared, which is the right
+shape, and E354's rule 18 is why they are computed rather than quoted in prose. It is a note that **a
+lane adding a source file owes those four numbers a bump in the same commit**, and that a red there at
+merge is the guard working. Round 52's lane a adds `src/Permissions/`; nothing else this round adds a
+source file.
+
+---
+
+### Ec52-5 — the per-file assertion cost, measured per census, and the grep that derived its population had the hole it warns about
+
+**Recorded 2026-08-24 by round-52 lane c** as E354's step (a)/(b) made concrete. Severity: prediction.
+
+The table and its generator are in the round-52 lane c report. The load-bearing points:
+
+1. The cost is **not one number**. A file added to `tests/` and a file added to `src/` move DIFFERENT
+   censuses by different amounts, so a lane adding only source files perturbs a set of censuses that a
+   lane adding only tests never touches.
+2. Control taken twice, bookending the run: **identical class-by-class**, so the delta is deterministic
+   and does not need a noise floor. That is a property of these instruments (whole-population walks, no
+   sampling), not a general licence.
+3. **The first population was grep-derived and MISSED A RESPONDER** — every `*Test.php` naming a
+   directory-walk primitive AND a `tests`/`src` path literal. `ReflectionLineSliceReaderCensusTest`
+   walks `\dirname(__DIR__)` and names neither literal, so it was outside the alphabet, and E354's own
+   recorded `+1` for it was therefore missing from the first table. **Rule 11, inside the instrument
+   built to measure rule 18.** The widened population drops the path-literal clause entirely.
+
+---
+
+**THE TABLE, measured at `e8227070`, full suite, PHP 8.3.6 / PHPUnit 10.5.64.** Quote it with that sha
+or re-derive it; never adjust it arithmetically across a commit (E354's step (a)).
+
+Generator — one probe file, created and deleted at an EXACT path, never a glob, with the working tree
+verified empty by `git status --porcelain` before and after:
+
+```sh
+cd sugar-crush
+vendor/bin/phpunit --log-junit control.xml                     # control
+printf '<?php\n' > tests/Support/<a name nothing else uses>.php
+vendor/bin/phpunit --log-junit testsprobe.xml
+rm -f tests/Support/<that exact path>
+# ...and the same with a src/ probe declaring a PSR-4 `final class`
+```
+
+Attribution is per class from the JUnit log's `<testsuite assertions=…>`, NOT by re-running suspects.
+Watch for the double count: a data-provider test emits a nested `<testsuite name="Class::method">`
+whose assertions are already inside its class's, so sum class-level suites only.
+
+ONE ADDED `tests/` FILE — **+5 assertions, +0 tests**:
+
+| census | per added tests/ file |
+| --- | --- |
+| `Support/ProcessUniqueTempNameTest` | +3 |
+| `Support/NonBlockingVocabularyTest` | +1 |
+| `Support/ReflectionLineSliceReaderCensusTest` | +1 |
+
+ONE ADDED `src/` FILE — **+48 assertions and +1 TEST on a run where `BuiltInToolCorpusTest` reds
+(Ec52-4); +53 counting only the classes that stayed green**:
+
+| census | per added src/ file |
+| --- | --- |
+| `Cli/StderrEmitterCensusTest` | +16 |
+| `Config/EnvRosterDriftTest` | +9 |
+| `Config/GlobFigureDriftTest` | +6 |
+| `Integration/BinSugarcrushWiringTest` | +6 assertions AND **+1 test** (a per-src-file provider) |
+| `Config/DocumentParagraphsTest` | +4 |
+| `SymbolCitationDriftTest` | +3 |
+| `Support/ProcessUniqueTempNameTest` | +3 |
+| `Agents/WorktreeRemovalReportingTest` | +2 |
+| `Diagnostics/RuntimeNoticeSinkDeliveryTest` | +2 |
+| `Support/HomeDirectoryPathReaderInventoryTest` | +1 |
+| `Support/NonBlockingVocabularyTest` | +1 |
+| `Tools/BuiltInToolCorpusTest` | **−5, because it FAILS** — see Ec52-4 |
+
+**The asymmetry is the finding.** A source file costs roughly ten times what a test file costs, moves
+four times as many censuses, adds a TEST as well as assertions, and reds a hard-coded figure on the way
+past. A lane that predicts its merged floor by counting the tests it added will be wrong by ~53 per
+source file a sibling adds.
+
+### Ec52-6 — the E355 sweep over `tests/Cli/`'s two censuses: eight killed, two survivors, both E363's shape
+
+**Recorded 2026-08-24 by round-52 lane c. FIXED this round.** Severity: guard coverage.
+**Measured, PHP 8.3.6, each run filtered to the file under mutation — so each verdict is a claim about
+the guards in that file, not about the suite.**
+
+`BootstrapTranscriptSeamCallSiteCensusTest`: all five branches of `countSeamCallSites()` KILLED (the
+T_STRING selection, the scope requirement, the paren requirement, the first-class-callable guard, and
+an off-by-one in the previous-token index). Its provider table already covers every branch, which is
+the result the sweep wanted and is worth recording as a negative.
+
+`StderrEmitterCensusTest`: three of five KILLED (both throws with dedicated fixtures, and the
+`]`/`}` balance check). **Two SURVIVED**, and they are the two END-OF-WALK refusals — the `new class`
+header that never opens a body, and the argument list that never closes. Neither is dead code: both
+fire only on a token stream no well-formed source produces, which is E363's shape exactly, and the real
+population cannot pin them by construction. Both now have a synthetic hand-built fixture with a
+TERMINATED control beside it, so the fixture cannot itself pass on a dead walk.
+
+**The transferable half.** Within one file, the refusals with fixtures were the ones a reader had
+thought about; the ones without were both at the BOTTOM of their loop — the "we fell off the end"
+branch. That position is a good heuristic for where an unpinned refusal is hiding: a guard inside a
+loop gets written with an example in mind, and the one after the loop gets written from a feeling.
+
+---
+
+### Ec52-7 — `readOrFail()` still has no fixture in three `tests/Config/` files (E357 carried forward)
+
+**Recorded 2026-08-24 by round-52 lane c.** Not actioned: `tests/Config/` is not this lane's.
+
+Re-verified at `b9abd2fb`, unchanged from E357: `Config/DocumentParagraphsTest`,
+`Config/ConfigWriteProducerDocumentationDriftTest` and `Config/GlobFigureDriftTest` each declare their
+own `readOrFail()` and none has a fixture reaching the refusal arm, so reverting any of them to
+`(string) file_get_contents()` is a mutation nothing in the tree can kill. E357's step stands verbatim:
+fold the three into `RefusesAnUnreadableSourceTrait` and delete the `readOrFail` row from
+`DuplicatedTestHelperDriftTest::ACCEPTED_DIVERGENCE` in the same commit.
+
+---
+
+### Ec52-8 — a census population with no floor: "at least one file" let a 1-of-N walk report the whole tree clean
+
+**Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: rule-15 hole, live.
+**Measured, PHP 8.3.6 / PHPUnit 10.5.64.**
+
+`RequirementDirectiveProvenanceTest`'s absence census walked every collected test file and asserted that
+none carries a PHPUnit requirement directive. Its only statement about the POPULATION was
+`assertNotSame([], collectedTestFiles())` — at least one file. **Slicing the walk to its first entry,
+one file out of several hundred, left the guard file GREEN at `OK (17 tests, 42 assertions)`,
+byte-identical to the unmutated run, and green at `tests/Support` scope too (`250 tests, 4951
+assertions`).** This is rule 15 one level out: the assertion of an absence survived an instrument that
+was 99.7% dead, because the arm guarding the instrument asked for a floor of one.
+
+**Fixed** by cross-checking the map against a SECOND enumeration written from a different primitive
+(`scandir()` and an explicit stack, not `RecursiveIteratorIterator`) and anchoring both on this test's
+own file, derived from `__FILE__`. Two dead walks would agree on the empty set; the anchor is what
+refuses that. No cardinality is written down — rule 18 — so nothing here rots when a sibling lane merges
+a test file. Re-mutated after the fix, **filtered to the single absence method**: slice-to-one KILLED,
+second walk emptied KILLED, second walk stops recursing KILLED.
+
+**Generalise it:** a floor of "not empty" on a census population is worth almost nothing, because the
+cheapest way for a walk to break is to visit less rather than to visit nothing. Either cross-check the
+population against an independently written enumeration, or anchor it on something the walk must find.
+
+---
+
+### Ec52-9 — a rule-15 control that covers ONE component of four, in a comment claiming it is "the whole instrument"
+
+**Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: rule-15 hole, live.
+
+The same census carried the comment *"The derivation below is the whole instrument, and a derivation
+that returns nothing reports every file as clean"*. The derivation (`requirementPredicates()`) is one of
+four components; the scanner (`requirementsOf()`), the population (`collectedTestFiles()`) and the split
+(`partitionByResolvability()`) are the rest, and none was exercised inside that test. **Measured:
+stubbing the scanner to return nothing, filtered to that one method, SURVIVED at `OK (1 test, 6
+assertions)`.** It was KILLED when the whole file ran — by a sibling test — which is exactly why rule 15
+says the control must be IN THE SAME TEST: a sibling is a separately deletable unit, and a lane deleting
+it would see a green suite.
+
+**Fixed** by running the positive fixture through the scanner inside the absence test, adding the
+population cross-check of Ec52-8, and asserting the split hands on everything it was given when it
+reports nothing unresolvable. All four components now mutate to a red **filtered to that single method**.
+
+**Generalise it:** when writing a rule-15 control, enumerate the instrument's components and say which
+of them the control covers. A control comment that says "the whole instrument" without a list is a claim
+nobody has counted.
+
+---
+
+### Ec52-10 — a known-answer table whose refusal rows all collapse to `assertIsString()`
+
+**Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: instrument hole.
+
+`BootstrapSkillSkipsTest::perTestLimitCases()` distinguishes five refusals in its expected column
+(`'no limit'`, `'unknown'`, `'unparseable'`, `'not xml'`, `'empty'`) and the body asserted only
+`assertIsString($answer)`. The five values were dead data. **Measured: making the unparseable branch
+answer with the "does not set enforceTimeLimit" sentence — literally the confusion the reader's own
+doc-block exists to avoid, and the one that would license any budget at all — SURVIVED, `OK (17 tests,
+26 assertions)`.**
+
+**Fixed:** each refusal now carries a phrase no other refusal carries, and the table asserts the phrase
+with `assertStringContainsString` (a phrase, not a whole sentence, so a rewording that changes nothing
+stays green). Re-mutated: KILLED, two failures. The same shape was then applied to the new
+`failOnRiskyFromConfig()` table.
+
+**Generalise it:** if a provider's expected column has values the test body never reads, the rows are
+decoration and the table only proves the function returned the right TYPE.
+
+---
+
+### Ec52-11 — the lane bounding child processes added an unbounded child process, in the same round
+
+**Recorded 2026-08-24 by round-52 lane c's reviewer, FIXED the same day.** Severity: hygiene, live.
+
+Item 1 of the round exists to argue that a child process needs a named wall clock under the per-test
+limit. Item 2 of the same round added `RequirementDirectiveProvenanceTest::
+testPhpunitItselfReportsTheQuotedDirectiveFixtureAsSkipped()`, which spawns a whole second `phpunit`
+through `exec()` with **no `timeout -s KILL`** — bounded only by the per-test alarm, which is precisely
+the verdict item 1 argues is the worse one. `CHILD_WALL_CLOCK_BUDGET_SECONDS` is a `private const` in
+another file, so there was no shared bound to reach for.
+
+**Fixed:** the spawn is bounded by a named constant in its own file, with the measured cost beside it
+(the child run is 0.079s, so the bound is ~250x) and a cross-reference to the file that pins the ceiling
+argument. Verified by mutation: with the budget cut to 1s and the child replaced by a 30s sleep, the arm
+fires and names the budget.
+
+**Step, open:** the two budgets are two `private const`s in two files with the same name and the same
+argument, and the third, fourth and fifth spawn sites (Ec52-13) will make three and four. A shared
+constant plus one ceiling guard would be better than five copies — but a shared test helper is a
+cross-lane edit and the ceiling guard's home is not settled.
+
+---
+
+### Ec52-12 — the provenance walk cannot see a test method INHERITED from a base class
+
+**Recorded 2026-08-24 by round-52 lane c's reviewer.** Severity: coverage gap, unpopulated today.
+
+`requirementsOf()` skips any method whose `getDeclaringClass()` is not the class under inspection. A
+method imported from a TRAIT survives that filter — reflection answers with the USING class, verified by
+probe — but one INHERITED from a parent does not. So a requirement directive quoted in a base class's
+method doc-comment would be invisible to the census while still skipping the child's run.
+
+**Unpopulated today:** no collected class in this tree extends an in-tree base, and PHPUnit does not
+inherit a CLASS-level directive from an abstract parent either (probed: `forClass(child)` and
+`forClassAndMethod(child, method)` both return nothing for a directive on the parent's class
+doc-comment). The header prose has been corrected to say "declares or imports from a trait" rather than
+"every public method those classes expose", which was false.
+
+**Step:** walk the parent chain in `requirementsOf()` and key an inherited hit on the declaring class,
+with a fixture pair (base carrying the directive, child collecting it) to pin it. Cheap, and it stops
+being unpopulated the first time someone writes an abstract test base.
+
+---
+
+### Ec52-13 — the ten `timeout -s KILL 60` sites, RE-ARGUED under the corrected cost model
+
+**Recorded 2026-08-24 by round-52 lane c; supersedes the same lane's earlier deferred framing.**
+
+Ten child budgets equal to `defaultTimeLimit` sit at 10 sites in 6 files: `tests/Cli/
+BootstrapHookFileTest.php`, `BootstrapLaunchNoticeRoutingTest.php`,
+`BootstrapToolAndPermissionSettingsTest.php`, `BootstrapTrustGateSelfGrantTest.php`,
+`tests/Integration/BinSugarcrushAutoloadGuardTest.php`, `McpToolWiringTest.php`. All outside lane c's
+file list.
+
+**The earlier framing said the payoff is "a red instead of nothing". Under Ec52-1's correction that is
+wrong: with `failOnRisky="true"` a hang at any of those ten sites ALREADY fails the run.** The payoff is
+smaller and still real — a specific message naming the budget and the child instead of "aborted after 60
+seconds", and the assertions below the spawn kept in the totals rather than shed. **Whoever picks this
+up should weigh it as a diagnostics improvement across ten sites, not as closing a hole.** The pattern
+to copy is `BootstrapSkillSkipsTest`'s: a named constant, a ceiling guard reading `phpunit.xml`, and an
+arm refusing every non-zero status rather than only the kill.
