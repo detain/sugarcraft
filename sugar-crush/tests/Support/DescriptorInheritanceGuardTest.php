@@ -155,6 +155,74 @@ final class DescriptorInheritanceGuardTest extends TestCase
     ];
 
     /**
+     * Where a reachable sibling library's sources live.
+     *
+     * `vendor/sugarcraft` IS THE REACHABILITY DEFINITION, not the monorepo
+     * directory beside this package - the same choice, for the same reason, as
+     * {@see \SugarCraft\Crush\Tests\TtyStreamArgumentCensusTest}. A lib
+     * nothing requires cannot spawn anything in this process whatever it
+     * contains, and a lib that IS required is here whether it arrived as a
+     * path-repo symlink (the monorepo, and CI's injection) or as a Packagist
+     * copy (a split-repo clone). Pointing at `../` instead would be a hard
+     * fatal in a split clone, which is the same class of mistake as a
+     * `repositories[]` entry in a published manifest.
+     */
+    private const LIB_SCOPE = 'vendor/sugarcraft';
+
+    /**
+     * Exposed spawns in reachable SIBLING libraries. E418.
+     *
+     * WHY THE GUARD WIDENED. Round 53 built this instrument, rostered seven
+     * sites, and scoped it to `sugar-crush/src` - and the defect class is not
+     * a sugar-crush property. Measured over the reachable closure at the time
+     * of writing: 8 spawn sites outside this package, 3 of them exposed, and
+     * two of those three are in candy-pty, which every PTY-driven child in the
+     * tree goes through.
+     *
+     * A ROW HERE IS A DIFFERENT ANIMAL FROM ONE IN {@see ACCOUNTED_FOR}, and
+     * the split into two rosters is the whole point rather than tidiness.
+     * A sugar-crush row is a deferral: this package could fix it and has
+     * chosen not to yet. A row here is a REPORT: sugar-crush cannot fix
+     * candy-pty from inside its own test suite, and a fix pushed from here
+     * would be an edit to a file this package does not own. What this roster
+     * buys is that the site cannot appear, move or multiply without somebody
+     * seeing it - which is precisely what was missing before.
+     *
+     * ⚠️ THIS ROSTER COUNTS CODE OTHER LANES OWN. It reads through
+     * `vendor/sugarcraft`, whose entries are symlinks into the monorepo, so a
+     * sibling's edit reds THIS suite. That is intended and it is also a merge
+     * hazard, so read {@see testEveryExposedSpawnInAReachableLibIsAccountedFor()}'s
+     * message before touching anything: the resolution is always a data edit
+     * here plus a finding filed against the lib, and never a narrowing of
+     * LIB_SCOPE.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    private const ACCOUNTED_FOR_IN_LIBS = [
+        'candy-core/WorkerPool.php::spawnWorker' => [
+            'count' => 1,
+            'reason' => 'pool worker held in $this->workers and drained from the ReactPHP loop, '
+                . 'so it outlives spawnWorker() by design. The scanner reads it as unclassified '
+                . 'rather than long because the handle goes to is_resource() first. Spec is '
+                . '0,1,2 only. NOT FIXABLE FROM THIS PACKAGE - candy-core owns it.',
+        ],
+        'candy-pty/Spawn.php::proc' => [
+            'count' => 1,
+            'reason' => 'the PTY child, whose three stdio descriptors are all the one open slave '
+                . 'stream; the handle is kept for the life of the pty. Spec names 0,1,2 only, so '
+                . 'anything the parent holds above that goes into a child that by design lives '
+                . 'as long as the terminal does. NOT FIXABLE FROM THIS PACKAGE.',
+        ],
+        'candy-pty/Posix/PosixProcess.php::spawn' => [
+            'count' => 1,
+            'reason' => 'the same shape one layer down, and the spec here is the more '
+                . 'interesting one: it already names fd 0 as a file and routes 1 and 2 to pipes '
+                . 'or the real STDOUT/STDERR, which shows the author thinking about descriptors '
+                . 'and still saying nothing about 3+. NOT FIXABLE FROM THIS PACKAGE.',
+        ],
+    ];
+
+    /**
      * Sites that are short ONLY because a CLOSING_HELPERS row says so.
      *
      * E425, AND IT IS THE STRUCTURAL REASON THE PREVIOUS ROUND'S FINDING WAS
@@ -451,6 +519,113 @@ final class DescriptorInheritanceGuardTest extends TestCase
             If the lifetime reads "unclassified" the scanner could not follow the
             handle. That is a failure, not an absence: work out where the handle
             goes and either fix it or say so in a row.
+            TEXT);
+    }
+
+    /**
+     * The same question, asked of every reachable sibling library. E418.
+     *
+     * SPLIT FROM THE SUGAR-CRUSH ARM RATHER THAN FOLDED INTO IT. The two
+     * rosters mean different things - a deferral this package could act on
+     * versus a report about somebody else's file - and a single failure
+     * message cannot tell a reader which kind they are looking at. They also
+     * go red for different reasons: this one reds when a SIBLING changes,
+     * which a person resolving a sugar-crush merge would otherwise spend a
+     * while blaming on their own diff.
+     */
+    public function testEveryExposedSpawnInAReachableLibIsAccountedFor(): void
+    {
+        // Rule 15, in this test rather than a neighbouring one: what follows is
+        // an assertion that a set is empty, and an empty set is what a walk
+        // over nothing returns just as well as a healthy tree.
+        self::assertSame(
+            ['knownPositive'],
+            \array_column($this->exposedIn(self::KNOWN_POSITIVE), 'function'),
+            'the instrument is dead; the absence asserted below is worthless until this passes.',
+        );
+
+        $licences = \array_map(static fn (array $row): int => $row['count'], self::ACCOUNTED_FOR_IN_LIBS);
+
+        $unaccounted = [];
+        $scanned = 0;
+        foreach ($this->libSourceFiles() as $relative => $source) {
+            $scanned++;
+            foreach ($this->overspent($source, $relative, $licences, true) as $detail) {
+                $unaccounted[] = $detail;
+            }
+        }
+
+        // The walk finding no files at all would satisfy the assertion below
+        // perfectly, and is exactly what a renamed vendor directory looks like.
+        self::assertGreaterThan(
+            100,
+            $scanned,
+            'only ' . $scanned . ' sibling source files were scanned, which is too few for this '
+                . 'closure - the walk is pointed somewhere wrong and every absence below is empty.',
+        );
+
+        self::assertSame([], $unaccounted, <<<'TEXT'
+            A proc_open() child in a SIBLING LIBRARY outlives the call that spawned
+            it and its descriptor spec says nothing about fd 3 and above, so it
+            inherits every descriptor this process had open at spawn - E365's shape,
+            in a package sugar-crush cannot edit from here.
+
+            YOU ARE PROBABLY RESOLVING A MERGE. This guard reads through
+            vendor/sugarcraft, which in the monorepo is a symlink into the tree, so
+            a change in candy-pty or candy-core reds THIS suite. That is deliberate
+            (E418) and the diff in front of you is very likely not the cause.
+
+            THE RESOLUTION IS ALWAYS BOTH HALVES:
+
+              1. A DATA EDIT to ACCOUNTED_FOR_IN_LIBS here - a new row, or a higher
+                 count on the row already there.
+              2. A FINDING FILED AGAINST THAT LIBRARY, because a row here records
+                 the exposure and fixes nothing. Reaping the child in the function
+                 that spawned it is the fix; naming high fds in the spec is NOT one,
+                 for the reason testNamingAHighFdDoesNotStopTheInheritance() measures.
+
+            NARROWING LIB_SCOPE IS NOT A RESOLUTION. It is how the defect class got
+            to live in five libraries unobserved for the fifty-three rounds before
+            this guard could see them.
+            TEXT);
+    }
+
+    /**
+     * No row in {@see ACCOUNTED_FOR_IN_LIBS} may match nothing.
+     *
+     * Separate from the arm above for the reason its sugar-crush twin is: an
+     * assertion that a set is empty cannot notice an instrument that returns
+     * nothing, and a row matching nothing is the only thing that can.
+     */
+    public function testNoReachableLibRowIsStale(): void
+    {
+        $seen = [];
+        foreach ($this->libSourceFiles() as $relative => $source) {
+            foreach ($this->exposedIn($source) as $site) {
+                $key = $relative . '::' . $site['function'];
+                $seen[$key] = ($seen[$key] ?? 0) + 1;
+            }
+        }
+
+        $wrong = [];
+        foreach (self::ACCOUNTED_FOR_IN_LIBS as $key => $row) {
+            self::assertNotSame('', \trim($row['reason']), $key . ' is recorded without a reason.');
+            $found = $seen[$key] ?? 0;
+            if ($found !== $row['count']) {
+                $wrong[] = $key . ': recorded ' . $row['count'] . ', found ' . $found;
+            }
+        }
+
+        self::assertSame([], $wrong, <<<'TEXT'
+            A row about a sibling library no longer matches what the scanner finds
+            there.
+
+            FOUND FEWER (0 included): that library fixed it, renamed it, or removed
+            it - delete the row and say so. OR the scanner stopped seeing it and
+            this row is the only thing that noticed.
+
+            FOUND MORE: the function grew another exposed spawn. Read it before
+            raising the number.
             TEXT);
     }
 
@@ -1061,6 +1236,47 @@ final class DescriptorInheritanceGuardTest extends TestCase
         }
 
         return $wrong;
+    }
+
+    /**
+     * Every reachable sibling library's `src`, keyed `<lib>/<relative path>`.
+     *
+     * @return iterable<string, string>
+     */
+    private function libSourceFiles(): iterable
+    {
+        $base = \dirname(__DIR__, 2) . '/' . self::LIB_SCOPE;
+
+        // Loud rather than skipped: this suite cannot have loaded without it,
+        // so its absence means the walk is being pointed somewhere new - and a
+        // skip here would silently retire every assertion that reads it.
+        self::assertDirectoryExists($base, self::LIB_SCOPE . ' is missing, so no sibling library can be scanned.');
+
+        $libs = \glob($base . '/*', \GLOB_ONLYDIR) ?: [];
+        \sort($libs);
+
+        foreach ($libs as $lib) {
+            $dir = $lib . '/src';
+            if (!\is_dir($dir)) {
+                continue;
+            }
+
+            $files = [];
+            /** @var \SplFileInfo $file */
+            foreach (new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            ) as $file) {
+                if ($file->isFile() && $file->getExtension() === 'php') {
+                    $files[] = $file->getPathname();
+                }
+            }
+            \sort($files);
+
+            foreach ($files as $path) {
+                yield \basename($lib) . '/' . \substr($path, \strlen($dir) + 1)
+                    => (string) \file_get_contents($path);
+            }
+        }
     }
 
     /** @return iterable<string, string> relative path => source */
