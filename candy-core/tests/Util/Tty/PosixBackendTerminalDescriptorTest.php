@@ -28,9 +28,19 @@ use SugarCraft\Pty\SizeIoctl;
  * a fresh handle's resource id can never equal its own descriptor once the low
  * numbers are taken.
  *
- * MEASURED, PHP 8.3.6, under a real pty, three takes, identical each time: the
- * handle's resource id was 5 while the descriptor behind it was 4, and the two
- * give OPPOSITE answers — `posix_isatty(5)` false, `posix_isatty(4)` true.
+ * MEASURED, PHP 8.3.6, under a real pty (`script -qec`), three takes: the
+ * handle's resource id and the descriptor behind it were different numbers,
+ * and the two gave OPPOSITE answers to `posix_isatty()` — false for the
+ * resource id, true for the descriptor (4 in that harness).
+ *
+ * The resource id itself is deliberately NOT quoted. An earlier revision of
+ * this paragraph named one and called it identical across takes; it is
+ * identical within one harness and nowhere else, because it counts the
+ * streams the process opened first. Re-measured it was 15, and under this
+ * suite it reaches the hundreds — which
+ * {@see \SugarCraft\Core\Tests\Util\TtyDetectTest} already recorded about
+ * the same cast. It is also why the guard below DERIVES both numbers at run
+ * time instead of asserting either.
  * `SizeIoctl::query()` opens with exactly that `posix_isatty()` check and
  * throws when it fails, so the arm threw on every invocation it ever had and
  * silently fell through to the `stty` shell-out below it. It had never once

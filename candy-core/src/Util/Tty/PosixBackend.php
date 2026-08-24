@@ -134,9 +134,20 @@ final class PosixBackend implements Backend
         // answer. This arm could never be: `openTty()` FRESHLY OPENS
         // /dev/tty, and a fresh handle's resource id can never equal its own
         // descriptor once the low numbers are taken. MEASURED, PHP 8.3.6,
-        // under a real pty: the handle's resource id was 5 while its actual
-        // descriptor was 4, and `posix_isatty()` gives OPPOSITE answers for
-        // the two — false for 5, true for 4. `SizeIoctl::query()` opens with
+        // under a real pty (`script -qec`), three takes: the handle's
+        // resource id and its actual descriptor were different numbers, and
+        // `posix_isatty()` gave OPPOSITE answers for the two — false for the
+        // resource id, true for the descriptor (4 in that harness).
+        //
+        // DO NOT READ A PARTICULAR RESOURCE ID OUT OF THIS PARAGRAPH. An
+        // earlier revision of it named one and called it identical across
+        // takes. It is identical within one harness and nowhere else: the
+        // number counts how many streams the process opened first, so it
+        // moves with the harness. Re-measured it was 15; under this suite it
+        // runs into the hundreds, which
+        // {@see \SugarCraft\Core\Tests\Util\TtyDetectTest} already recorded
+        // about the same cast. The INVARIANT the fix rests on is only that
+        // the two numbers differ. `SizeIoctl::query()` opens with
         // exactly that `posix_isatty()` check, so this arm THREW on every
         // single invocation it ever had and fell through to the `stty`
         // shell-out below. It had never returned an answer.

@@ -13113,7 +13113,7 @@ publishes no portable call that maps a stream handle to its descriptor. `TtyDete
 the prescription because `stream_isatty()` accepts a resource; the ioctl and termios sinks cannot.
 
 So the shipped fix asks **libc** to open the device, which returns a genuine descriptor:
-`PosixBackend::openTerminalDescriptor()` / `closeTerminalDescriptor()`. Measured, three takes, in a plain
+`PosixBackend::openDeviceDescriptor()` / `closeDeviceDescriptor()`. Measured, three takes, in a plain
 non-tty CLI process: `open("/dev/tty", O_RDONLY)` = -1 (ENXIO, no controlling terminal),
 `open("/dev/ptmx", O_RDONLY)` = descriptor 3 with `posix_isatty(3) === true`.
 
@@ -13123,8 +13123,14 @@ check the sink's signature — for both of them it is `int`, so the same prescri
 
 **And a stronger measurement than the backlog carried.** E368 called site 3 "wrong on every run". It is
 worse than that: `SizeIoctl::query()` opens with `\posix_isatty($fd)` and throws when it fails, and the
-resource id never names a tty. Measured under a real pty, PHP 8.3.6: handle resource id 5, real descriptor
-4, `posix_isatty(5)` false, `posix_isatty(4)` true, `SizeIoctl::query(5)` throws. **The arm therefore
+resource id never names a tty. Measured under a real pty (`script -qec`), PHP 8.3.6, three takes: the
+handle's resource id and its real descriptor were different numbers, `posix_isatty()` answered false
+for the resource id and true for the descriptor, and `SizeIoctl::query(<resource id>)` threw.
+*The resource id is not quoted on purpose* — an earlier revision of this entry named one and called it
+measured; it counts the streams the measuring process opened first, so it moves with the harness (5 in
+the original take, 15 on re-measure, into the hundreds under the suite). `candy-core`'s pre-existing
+`TtyDetectTest` had already recorded exactly that about the same cast. The invariant is only that the
+two numbers differ. **The arm therefore
 threw on every invocation it ever had and silently fell through to the `stty` shell-out below it — it had
 never once returned an answer in its life.** The `stty -F /dev/tty size` arm has been doing that arm's job
 throughout.
@@ -13161,7 +13167,7 @@ the classification changes to `VARIABLE` and the census fails until the judgemen
 structural, not because the guard was skipped.**
 
 `PosixBackend::size()`'s third arm now closes its descriptor in a `finally`. The pair
-`openTerminalDescriptor()`/`closeTerminalDescriptor()` IS pinned — 25 open/close cycles with an fd-set
+`openDeviceDescriptor()`/`closeDeviceDescriptor()` IS pinned — 25 open/close cycles with an fd-set
 comparison, and removing the close reds it (and, incidentally, reds `TtyDetectTest` too, because leaked
 ptmx handles make its dev+inode walk ambiguous, which is that helper failing loudly exactly as its
 doc-block promises). What is NOT pinned is the `finally` in `size()` itself.
@@ -13174,7 +13180,7 @@ size`) returns the same answer arm 3 does, so even under a terminal the two arms
 outside.
 
 **Step, if it is ever judged worth it**: give `size()` the device path as an `@internal` parameter the way
-`openTerminalDescriptor()` has one, so a test can point the arm at `/dev/ptmx` and count descriptors
+`openDeviceDescriptor()` has one, so a test can point the arm at `/dev/ptmx` and count descriptors
 across repeated calls. That is a test seam on a public method and was not judged worth the API surface
 for a two-line `finally`.
 
@@ -13263,5 +13269,77 @@ Mutation-verified against the census alone (`--filter DescriptorSinkArgumentCens
 the cast in `candy-flip/src/Renderer.php`, in `candy-pty/src/SizeIoctl.php`, and in
 `candy-shine/src/Theme.php` each reds it — the last of those being a library no earlier scoping of this
 census would have looked at.
+
+---
+
+### Ea53-7 — the replacement census had the alphabet trap AGAIN, one level further down
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: instrument. **Found and fixed
+this round; recorded because it is the third recurrence of one pattern inside work written to fix that
+pattern.**
+
+Ea53-5 recorded the alphabet trap caught inside the scanner. The scanner's **control fixture** had it too.
+
+`DescriptorSinkScanner::classify()` has TWO returns that answer `UNCLASSIFIED` for a shape it has no word
+for: one inside the accessor-chain walk, and a terminal fallthrough at the end of the method. The fixture
+exercised the first (via a `? :` operand rooted in a variable) and never the second.
+
+**MEASURED — round-53 mutation M8.** Rewriting the terminal fallthrough to answer `VARIABLE` — i.e.
+"silently absorb the operand I cannot name as a benign one", the exact defect the scanner exists to make
+impossible — left the whole census **green**, four tests, twenty-one assertions. Mutating the *other*
+`UNCLASSIFIED` return (M8b) killed it. The two returns were not interchangeable and only one was pinned.
+
+Six operand shapes reach the unpinned branch, isolated by re-running a probe with and without M8 and
+keeping the ones whose classification changed: `0 + 1`, `(0)`, `+1`, `[0][0]`, `'0' . '1'`, `- $x`. What
+they have in common is that they are **rooted in a literal or an operator rather than in a variable or a
+name** — and the fixture's author reached for a variable-rooted example, because every real site in this
+family is variable-rooted. *The fixture's alphabet was a transcript of the tree it was written against.*
+`0 + 1` is now a fixture case and M8 kills.
+
+**The generalisable form**: it is not enough to have a case per CLASSIFICATION. A classifier needs a case
+per RETURN. Two returns answering the same enum value are two separate branches, and a positional
+`assertSame` over kinds cannot tell you which one it walked.
+
+---
+
+### Ea53-8 — the census's absence assertion passed on its own against a dead scanner
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: dead-guard shape. **Fixed this
+round.**
+
+`DescriptorSinkArgumentCensusTest::testNoSiteIsSpelledInAWayTheScannerCannotClassify()` asserted `[]`
+across every library's `src/`, and the file's known-positive control lived in a *different test method*.
+
+**MEASURED — round-53 mutation M9a.** With `scanSource()` gutted to walk no tokens at all, that test run
+under `--filter <its own method name>` passed: **1 test, 1 assertion, rc 0**, against an instrument that
+could no longer see anything. Run at file scope (M9) the same mutation reds three of the four tests, so
+the file as a whole was protected — but only for as long as all four run together, which `--filter`, a
+split, or a skip each break.
+
+This is the standing rule about known-positive fixtures at a finer grain than it is usually applied: the
+control must be in the **same test** as the absence, not merely in the same file. The positive now runs
+inside that method, and M9 filtered to it alone kills.
+
+---
+
+### Ea53-9 — a resource id is not a measurement, and this family's own older doc-block already said so
+
+**Recorded 2026-08-24 by round-53 lane a (verification pass).** Severity: false precision in shipped
+prose. **Corrected this round in three places.**
+
+Three doc-blocks written earlier this round stated the `/dev/tty` divergence as *"MEASURED, PHP 8.3.6,
+under a real pty, three takes, identical each time: the handle's resource id was 5 while the descriptor
+behind it was 4"*. The brief that commissioned the work said 5 and 3. **Re-measured on this box, PHP
+8.3.6, under `script -qec`, three takes: 15 and 4.**
+
+All three readings are correct in their own harness and none of them is a property of the defect. A PHP
+resource id counts the streams the process opened before that one, so it moves with the measuring
+program — the composer autoloader alone accounts for the 5-vs-15 gap. Only the *divergence* is invariant.
+
+The sharp part: `candy-core/tests/Util/TtyDetectTest`, which predates this round, already carried the
+correct framing — it labels its own numbers *"illustrative"* and states that the gap "is a property of how
+many streams happen to be open, and of nothing else". **A more careful sentence about the same cast, in
+the same library, was three files away and was not read.** The three new paragraphs now state the
+invariant, name their harness, and explicitly tell the reader not to take an id out of them.
 
 ---
