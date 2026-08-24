@@ -12197,3 +12197,56 @@ line, on the `$in` property's `@var`, when that file is next in a lane. No code 
 An earlier draft of this Step said "change the two doc-blocks", which followed literally would have made
 one of the two worse — a prescription in a backlog entry is a hypothesis exactly as a prescription in a
 review is (rule 16), and this one was measured against the file rather than counted from memory.
+
+---
+
+### Eb52-6 — the one refusal arm whose remedy is invisible is the one whose remedy gets clipped first
+
+**Recorded 2026-08-24 by round-49 lane b (fix pass), confirming a reviewer NOTE with its own measurement.**
+Severity: observability, not reachable at the production path. Not fixed.
+
+`AuditHook::directoryRefusalReason()`'s mode arm ends `Fix it with: chmod 700 <dir>`, and the directory is
+interpolated TWICE — once to name it and once inside the remedy. `RuntimeNoticeSink::MAX_CHARS` is 400 and
+clips the TRANSCRIPT row (the `error_log()` copy on stderr is never clipped, so the operator always has the
+full text somewhere).
+
+**Measured, PHP 8.3.6.** Generator, run against the format string as the class spells it:
+
+```php
+$fmt = "audit log disabled: %s is mode %04o, which lets other users on this box reach a log of every "
+     . "tool call and its arguments. Nothing is being recorded. Fix it with: chmod 700 %s";
+for ($n = 1; $n < 400; $n++) { $d = '/' . str_repeat('a', $n);
+    if (strlen(sprintf($fmt, $d, 0755, $d)) > 400) { echo strlen($d); break; } }
+```
+
+- production directory (`/tmp/sugar-crush-audit-1000`, 27 chars) → 224-char message, **not clipped**;
+- the message crosses 400 at a directory path of **116 characters**, and because the remedy is the LAST
+  clause it is the first thing to go.
+
+So the arm documented as "the one whose fix is invisible from the symptom" is also the arm that loses its
+fix first, for any caller with a long `TMPDIR` or a long pinned directory. Nothing in production reaches
+116 characters here, which is why this is recorded rather than fixed.
+
+**Step.** If it is ever worth an edit: move the remedy ahead of the explanatory clause rather than raising
+`MAX_CHARS`. The cap is deliberately generous and defends a different threat (a model-supplied tool name
+spending the session's context), and `AuditHookRefusalNoticeTest` asserts the remedy is PRESENT, not where.
+
+---
+
+### Eb52-7 — `tests/Hooks/` now holds an in-process fork and is not in the reaper's SCOPE
+
+**Recorded 2026-08-24 by round-49 lane b, which put the fork there.** Severity: future obligation, no hole
+today. Not fixed — `tests/Support/ForkedChildReaperAdoptionTest.php` is not this lane's file.
+
+`ForkedChildReaperAdoptionTest::SCOPE` is `['Agents/', 'Backend/', 'Diagnostics/', 'Integration/',
+'Support/']` and `OUT_OF_SCOPE` is empty. `tests/Hooks/AuditHookConcurrentAppendTest.php` forks four
+writers in-process and DOES adopt `ReapsForkedChildrenTrait`, so nothing is unaccounted for and the
+catch-all `testNoDirectoryWithUnreapedForksIsUnaccountedFor()` — which reds only on forks with a missing
+reap half — stays green. **Checked, not assumed.**
+
+What is missing is the OBLIGATION: the next fork written under `tests/Hooks/` is not required to adopt, and
+a `pcntl_alarm()` time limit is not inherited across a fork, so an unreaped writer there outlives a
+timed-out parent and goes on appending to a log `tearDown()` has already deleted.
+
+**Step.** Add `'Hooks/'` to `SCOPE`, in alphabetical position between `Diagnostics/` and `Integration/`.
+One word; the only fork in that directory already satisfies it, so it cannot red on landing.
