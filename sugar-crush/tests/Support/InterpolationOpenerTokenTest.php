@@ -130,22 +130,52 @@ final class InterpolationOpenerTokenTest extends TestCase
      * and counted, which an invisible one was not for as long as the guard
      * could not see the directory it lived in.
      *
-     * WHAT THIS SAID while it had a row: `tests/VhsTapeContractTest.php`'s
-     * two depth counters never incremented on the deprecated opener, so both
-     * walks would lose a level inside an interpolation spelled the 8.2 way.
-     * WHAT IS TRUE NOW: both counters name it, the row is gone, and the
-     * constant is empty. WHY THE CONSTANT STILL EARNS ITS PLACE EMPTY: the
-     * mechanism is what matters, not the row - the next round that widens
-     * this walk, or the next brace walker written by a lane that has never
-     * read this file, needs somewhere to record a deferral that the tree
-     * itself will then check. An empty map also makes the reconciliation
-     * below vacuous, which is why
-     * {@see testTheKnownGapReconciliationFailsInBothDirections()} exercises
-     * it on synthetic input rather than trusting an empty loop.
+     * WHAT THIS SAID while it had one row: `tests/VhsTapeContractTest.php`'s
+     * two depth counters never incremented on the deprecated opener. WHAT IS
+     * TRUE NOW: both counters name it, that row is gone - and widening the
+     * SELECTION found three more walkers the guard had never been able to
+     * see, which is why the map is not empty. WHY THE MECHANISM STILL EARNS
+     * ITS PLACE whatever the map holds: a deferral recorded here is checked
+     * against the tree in both directions, and an empty map would still be
+     * the only place the next one can go.
+     *
+     * ALL THREE ROWS BELOW CAME FROM ONE WIDENING, and that is the entry
+     * worth reading twice. Selection used to be "names `T_CURLY_OPEN` as
+     * code", which is a walker that already knows the problem exists. A
+     * walker that counts depth on the BARE one-byte strings knows nothing
+     * about it, misses the everyday `{$x}` spelling as well as the deprecated
+     * one, and was invisible to this guard by construction - the alphabet had
+     * been written to match the cases already known.
      *
      * @var array<string,string>
      */
-    private const KNOWN_GAPS = [];
+    private const KNOWN_GAPS = [
+        'tests/Cli/BootstrapLaunchFormatConstantsTest.php' =>
+            'methodBody() counts depth on the BARE string `{` over a token_get_all() stream, '
+            . 'where T_CURLY_OPEN comes back as an ARRAY token and its closer comes back as a '
+            . 'bare `}` - so it misses the everyday spelling, not just the deprecated one, and '
+            . 'the count goes one closer over. IT FAILS OPEN, which is why this row is first: '
+            . 'measured on PHP 8.3.6 through the shipped private methods by reflection, one '
+            . '`"{$x}"` inserted into a scanned method cut the body from 16 significant tokens '
+            . 'to 6 and made a format literal that '
+            . 'testNoMethodThatOwnsANamedFormatAlsoHoldsALiteralOne() exists to reject '
+            . 'invisible - [] where the offender should have been. Latent only because none of '
+            . 'the eight Bootstrap methods it reads carries an interpolation today: measured, '
+            . 'the shipped walk and a corrected one agree on all eight. tests/Cli/ was in no '
+            . "lane's file list for the round that found this.",
+        'tests/Commands/SlashDispatchTest.php' =>
+            'dispatchArmNames() has the same bare-string shape over a token_get_all() stream, '
+            . 'walking the `match` arms of Chat::dispatchCommand(). Latent: measured on PHP '
+            . '8.3.6, that method contains zero T_CURLY_OPEN tokens today, so nothing '
+            . 'truncates. The failure mode if one appears is the same as the row above.',
+        'tests/Config/ReadmeJsonErrorContractDriftTest.php' =>
+            'Two depth counters keyed on `$token->text === \'{\'`. This one handles '
+            . 'T_CURLY_OPEN BY ACCIDENT and not by design - a PhpToken\'s text for that token '
+            . 'IS `{`, measured on PHP 8.3.6 - while T_DOLLAR_OPEN_CURLY_BRACES\' text is `${` '
+            . 'and is missed. So it is the deprecated spelling alone here, as in '
+            . 'VhsTapeContractTest before it was fixed, and it is latent for the same reason: '
+            . 'the syntax occurs nowhere in the tree.',
+    ];
 
     /**
      * The array-token ids the running PHP uses to OPEN a brace that a plain
@@ -331,6 +361,58 @@ final class InterpolationOpenerTokenTest extends TestCase
             );
         }
 
+        // A BARE-BRACE WALKER, naming no token constant at all: the shape the
+        // selection could not express until it was widened, and the shape
+        // that is wrong for BOTH openers rather than one.
+        $bare = <<<'PHP'
+            <?php
+            final class Bare
+            {
+                public function depth(array $tokens): int
+                {
+                    $d = 0;
+                    foreach ($tokens as $t) {
+                        if ($t === '{') { $d++; }
+                        if ($t === '}') { $d--; }
+                    }
+                    return $d;
+                }
+            }
+            PHP;
+        $bareMissing = self::missingOpenersIn($bare, $openers);
+        $this->assertIsArray(
+            $bareMissing,
+            'a depth counter keyed on the bare one-byte braces was not selected as a brace '
+                . 'walker. It names no token constant, so the original predicate could not see '
+                . 'it - and it is wrong for every opener the lexer produces, not just the '
+                . 'deprecated one.',
+        );
+        $this->assertSame(
+            $openers,
+            $bareMissing,
+            'a bare-brace walker names none of the openers, so all of them are missing',
+        );
+
+        // ...AND A FILE THAT MERELY HANDLES BRACE CHARACTERS IS NOT ONE. This
+        // is the negative the widened predicate needs: selection is on a
+        // COMPARISON, so building or stripping a brace is not a depth count.
+        $handles = <<<'PHP'
+            <?php
+            final class Handles
+            {
+                public function wrap(string $s): string
+                {
+                    return str_replace('{', '', '{' . $s . '}');
+                }
+            }
+            PHP;
+        $this->assertNull(
+            self::missingOpenersIn($handles, $openers),
+            'a file that merely builds and strips brace characters was selected as a depth '
+                . 'counter. Selecting on the presence of the character rather than on a '
+                . 'comparison puts half the tree on the hook for a token it has no use for.',
+        );
+
         // ...and the same walker with the whole roster is clean, so the
         // predicate is not simply stuck at "everything is a gap".
         $complete = str_replace(
@@ -352,10 +434,24 @@ final class InterpolationOpenerTokenTest extends TestCase
     /**
      * Every brace-walking scanner in `tests/` and `src/` names every opener.
      *
-     * The file list is DERIVED, not written: any file that mentions
-     * `T_CURLY_OPEN` AS CODE is walking braces and owes the rest of the
-     * roster. A literal list would go stale on the commit that adds the next
-     * scanner, and a count would go stale on the next merge.
+     * The file list is DERIVED, not written: a literal list would go stale on
+     * the commit that adds the next scanner, and a count would go stale on
+     * the next merge.
+     *
+     * WHAT THE SELECTION SAID: any file that mentions `T_CURLY_OPEN` AS CODE
+     * is walking braces and owes the rest of the roster. WHAT IS TRUE NOW:
+     * that is one of two ways to walk braces, and it is the way taken by a
+     * scanner whose author already knew the problem existed. The other counts
+     * depth on the BARE one-byte strings `{` and `}` - which is wrong for
+     * BOTH openers, since each opens with an array token and closes with a
+     * bare one - and names no token constant at all, so the old predicate
+     * could not express it. Measured on PHP 8.3.6: three such walkers in
+     * `tests/`, one of them failing OPEN, all three invisible to this guard
+     * for as long as its alphabet was the set of files that already agreed
+     * with it. WHY THE ORIGINAL HALF STILL EARNS ITS PLACE: it is still the
+     * only route that can say WHICH opener a walker is missing, because it
+     * reads what the walker names. The bare-brace route can only say "all of
+     * them".
      */
     public function testEveryBraceWalkingScannerNamesEveryOpener(): void
     {
@@ -367,7 +463,7 @@ final class InterpolationOpenerTokenTest extends TestCase
         $walkers = 0;
         $gaps = [];
 
-        foreach (self::phpFilesToScan() as $relative => $path) {
+        foreach (self::everyPhpFile() as $relative => $path) {
             if ($path === __FILE__) {
                 continue;
             }
@@ -766,7 +862,7 @@ final class InterpolationOpenerTokenTest extends TestCase
     private static function missingOpenersIn(string $source, array $openers): ?array
     {
         $named = self::constantsNamedInCode($source);
-        if (!\in_array('T_CURLY_OPEN', $named, true)) {
+        if (!\in_array('T_CURLY_OPEN', $named, true) && !self::countsBareBraces($source)) {
             return null;
         }
 
@@ -778,6 +874,79 @@ final class InterpolationOpenerTokenTest extends TestCase
         }
 
         return $missing;
+    }
+
+    /**
+     * Whether a source counts brace depth on the BARE one-byte strings.
+     *
+     * THE SHAPE, and why it is a brace walker even though it names no token
+     * constant: a depth counter that increments on `$token === '{'` and
+     * decrements on `$token === '}'`. Over a `token_get_all()` stream that is
+     * wrong in one direction only, which is what makes it dangerous - the
+     * OPENER of an interpolation is an array token and never `===` the bare
+     * string, while its CLOSER is the bare string and always matches. The
+     * count therefore goes one closer over and the walk ends early. Over a
+     * `PhpToken` stream the same spelling handles `T_CURLY_OPEN` by accident,
+     * because that token's text IS `{`, and still misses `${`.
+     *
+     * SELECTION IS ON A COMPARISON, not on the presence of the character.
+     * `str_replace('{', '', $s)` and `$open = '{';` are not depth counts, and
+     * a predicate that took every `'{'` would put half the tree on the hook
+     * for a token it has no use for - which is answered with an exemption,
+     * which is where the next real gap hides. BOTH braces are required for
+     * the same reason: a file that only ever compares against `{` is not
+     * counting anything.
+     *
+     * THE TRADE-OFF, stated: a walker that counts depth some third way - on a
+     * token id it computed, or by regex over text - is outside this predicate
+     * and outside the other one. Nothing in the tree does that today,
+     * measured, and the honest statement is that this alphabet is wider than
+     * it was rather than complete.
+     */
+    private static function countsBareBraces(string $source): bool
+    {
+        $tokens = \token_get_all($source);
+
+        return self::comparesAgainstBrace($tokens, '{')
+            && self::comparesAgainstBrace($tokens, '}');
+    }
+
+    /**
+     * Whether any one-byte string literal $brace sits next to a comparison.
+     *
+     * @param list<array{int,string,int}|string> $tokens
+     */
+    private static function comparesAgainstBrace(array $tokens, string $brace): bool
+    {
+        $comparisons = [
+            \T_IS_IDENTICAL, \T_IS_NOT_IDENTICAL, \T_IS_EQUAL, \T_IS_NOT_EQUAL,
+        ];
+        $skippable = [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT];
+
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_CONSTANT_ENCAPSED_STRING) {
+                continue;
+            }
+            if (\strlen($token[1]) !== 3 || trim($token[1], '\'"') !== $brace) {
+                continue;
+            }
+
+            foreach ([-1, 1] as $direction) {
+                for ($j = $i + $direction; isset($tokens[$j]); $j += $direction) {
+                    $neighbour = $tokens[$j];
+                    if (\is_array($neighbour) && \in_array($neighbour[0], $skippable, true)) {
+                        continue;
+                    }
+                    if (\is_array($neighbour) && \in_array($neighbour[0], $comparisons, true)) {
+                        return true;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
