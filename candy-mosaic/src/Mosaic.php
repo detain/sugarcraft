@@ -163,7 +163,7 @@ final class Mosaic
         }
 
         // Check for iTerm2 inline image support
-        if ($report->has(PaletteCapability::Iterm2Image)) {
+        if ($report->has(PaletteCapability::ITerm2)) {
             $renderer = new Iterm2Renderer();
             $cap = Capability::universal();
             return new self($renderer, $cap, null, null, null);

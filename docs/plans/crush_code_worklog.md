@@ -11068,7 +11068,86 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
-## ROUND 49 — IN FLIGHT (base `db90e768`, implement `wf_0bcbe384-775` DONE, review+fix `wf_e9f19bf7-612` SERIAL)
+## ROUND 49 — CLOSED (`504d9a43`, floor `9581 / 135471 / 1 skipped / rc 0`, FIVE lanes, three runs)
+
+### THE CLOSE
+
+**Floor `9581 / 135471 / 1 skipped / rc 0` at `504d9a43`**, `sugar-crush` LINKED (04:45.418, 300.12 MB).
+Merges `2cd49de9` a, `92aaa179` b, `3d3b9119` c, `ef46913e` d, `8964bfde` e; census bump `dfb01d2f`;
+renumber `90926b58`; drift fix `504d9a43`. Skip confirmed BY NAME — still
+`MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. 18/18 symlinks by
+`is_link()` **with a `realpath()` prefix check**; `check-path-repos --no-lib-path-repos` rc 0; config md5
+`05480c743aff302fd6c06c5a4a4c2210`; zero tracked per-lib locks. Backlog **239 → 297**, ids **E246–E303**.
+
+**Tests predicted EXACTLY for the seventh consecutive round**: 9499 + (15+18+9+12+28) = 9581.
+**Assertions predicted as a lower bound of 135467 and landed at 135471** — loose by 4, and loose for the
+reason given in advance (E191: lane c owns the `src/`-wide censuses and four siblings write into them).
+The prediction was written to a file before the run finished, not reconstructed after.
+
+### 🔴 THE MERGE RED ON EXACTLY ONE TEST, AND IT WAS A CROSS-LANE CATCH — THE BEST RESULT THE ROUND SYSTEM HAS PRODUCED
+
+`Support\DuplicatedTestHelperDriftTest` — **lane d's** guard — found two copies of a private helper
+`withErrorLogDiscarded()` that **lane b** had written into two of its OWN files, bodies identical except
+the `tempnam()` prefix (`'sc_lane_a_delivery_'` vs `'sc_r49b_sglang_'`).
+
+**Neither lane could have caught it.** Both copies were lane b's, so nothing looked odd from inside lane
+b; the guard was lane d's, and lane d never touched those files. **It reds on the merged tree and nowhere
+else.** That is precisely the defect the drift guard was built for, catching a real instance on its first
+merge — the argument for building guards in one lane against code another lane writes, made by
+demonstration rather than by assertion.
+
+Fixed by EXTRACTING to `tests/Support/DiscardsErrorLogTrait.php`, not by an `ACCEPTED_DIVERGENCE` row, on
+the precedent `FlattensSourceProseTrait` set for E196/E224 **in this same round**. The prefix became a
+parameter — `tempnam()` supplies the uniqueness, the prefix is only a debugging label — and the doc-block
+carries the UNION of both copies' reasons.
+
+### THE SHARED CENSUS FORCED ITS EDIT AGAIN, AND LANE b DID THE RIGHT THING WITH IT
+
+Lane b added a second `error_log()` in `AgentWorkerPool`, which falls inside lane c's `ERROR_LOG_SITES`
+predicate. **Lane b refused to edit lane c's file and reported `rc 1` for its own lane rather than
+hiding it**, escalating the bump to the merge with both halves pre-measured. ⚠️ **The supervisor's first
+reading of that `rc 1` was that the agent had mis-filled its schema field. It had not — the lane really
+was red, by design.** Verified by re-running lane b's suite: `9517 / 134899 / 1 failure`, and the failure
+was that one census row.
+
+Applied at merge and **verified by mutation, not by green**: renaming lane b's new call reds the census
+with `the roster says 2, the scan counts 1`.
+
+### 🔴 A LIVE FATAL IN A SIBLING LIBRARY, FOUND ONLY BECAUSE A LANE BROKE SOMETHING ADJACENT
+
+`candy-mosaic/src/Mosaic.php:166` called `PaletteCapability::Iterm2Image`. `candy-palette`'s enum spells
+that case **`ITerm2`**. PHP resolves an enum case at USE time, so the file parsed, the class loaded, and
+`Mosaic::autoFromPalette()` threw `Error: Undefined constant` for **every terminal that did not match the
+Kitty branch first** — the whole no-TTY fallback was an unconditional fatal.
+
+**It survived because nothing ever reached the line.** Lane e found it from another repository: closing
+descriptor 0 made `Detect::probe()` throw for the first time and drove execution past the Kitty arm.
+Fixed, plus `candy-mosaic/tests/PaletteCapabilityReferenceTest.php` — a SOURCE SCAN rather than more
+branch coverage, because the failure mode is a NAME and the alphabet that matters is "every case named
+anywhere in `src/`". Mutation-verified: reintroducing the bad name reds it and prints
+`Named: KittyKeyboard, Color256, Iterm2Image, TrueColor, NoColor`.
+
+### WHAT THE THREE RUNS COST, AND THE TWO HARNESS LESSONS
+
+Round 49 took three launches. `wf_0bcbe384-775` (five parallel implementers) was stopped by the supervisor
+for a session limit; `wf_e9f19bf7-612` ran lane a serially, lost b–e to the limit, then died on resume
+with **"adopt scriptPath rejected"**; `wf_44d2d1fe-25c` finished b/d/e.
+
+🔴 **LAUNCH FROM A DURABLE SCRIPT PATH.** A resume target under `/tmp/.../scratchpad/` cannot be adopted
+by the background fork. Put scripts in `.../workflows/scripts/`.
+
+🔴 **A RESUME'S CACHE KEY IS `(prompt, opts)`, SO `COMMON` IS UNTOUCHABLE WHILE A RUN IS RESUMABLE.** The
+brief carried two contradictory floors (`9445 / 132167` and `9499 / 133587`); lane a re-ran at the base,
+observed `9499 / 133587`, and refuted it. The correction went into the DURABLE copies only and was
+deliberately reverted in the resume target, because one character in `COMMON` re-runs every lane including
+the ones already cached.
+
+**FINISH, DO NOT RESTART.** The third run's briefs injected each lane's real HEAD, full commit list and
+uncommitted files, observed from the live dirs at launch. A from-scratch re-review would have discarded
+5–7 review commits per lane. Two lanes said the injected state was wrong for them in specific ways
+(lane d had no uncommitted edit and was not detached when it arrived) — **the hazard prose was written
+flat instead of conditional on the injected state, and should be conditional next time.**
+
 
 ### 🔴 THE ROUND WAS RESTRUCTURED MID-FLIGHT — AND THE STOP CAUGHT TWO LANES MUTATING
 
