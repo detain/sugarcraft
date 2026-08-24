@@ -430,6 +430,27 @@ final class BackgroundSessionRunner
      * that the `isError()` guard is load-bearing rather than a tidy early
      * return, which is the fact that would be lost if someone hoisted the
      * classification above it.
+     *
+     * THE RECORD NAMES THE KIND (E307, reopened as E346). WHAT THE TREE SAID
+     * WHEN E307 WAS DECLARED CLOSED: that `ToolRefusal::fromEvent()`'s
+     * `DenialKind` had gained a second consumer, so E307's headline "exactly
+     * one consumer" was no longer accurate. WHAT IS TRUE: the arithmetic
+     * changed and the SURFACE did not — this method still took `->tool` and
+     * `->reason` and threw `->kind` away, and it is the surface with NO
+     * OPERATOR WATCHING, where "which of the three" is hardest to reconstruct
+     * after the fact. The token now sits between the record marker and the
+     * tool name, matching
+     * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalNotice()}'s
+     * `sugarcrush: [<kind>] <tool> was not run - <reason>`, so the daemon's
+     * sidecar and the `-p` console spell one thing one way.
+     *
+     * AFTER THE MARKER RATHER THAN BEFORE IT, AND THAT IS THE LINE PROTOCOL
+     * TALKING. {@see BackgroundSupervisor::restoreOutput()} drops a line only
+     * when THE LINE ITSELF starts with `[session:`, so a token in front of the
+     * marker would make every refusal line fail that test and be restored into
+     * the transcript as model output. {@see \SugarCraft\Crush\Permissions\DenialKind::token()}
+     * and not the enum's value, for the same reason `NonInteractive` uses it:
+     * the value is a human-facing PREFIX and this is a machine key.
      */
     private function noticeRefusal(object $event): void
     {
@@ -439,7 +460,7 @@ final class BackgroundSessionRunner
         }
 
         $this->log(
-            self::REFUSAL_RECORD . ' ' . $this->oneLine($refusal->tool)
+            self::REFUSAL_RECORD . ' [' . $refusal->kind->token() . '] ' . $this->oneLine($refusal->tool)
             . ' was not run - ' . $this->oneLine($refusal->reason),
         );
     }
