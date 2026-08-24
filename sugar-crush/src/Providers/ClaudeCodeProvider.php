@@ -9,10 +9,19 @@ use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Support\ProcessReaper;
 use SugarCraft\Crush\Tools\ToolCall;
 
 final readonly class ClaudeCodeProvider implements ProviderInterface
 {
+    /**
+     * How much of a failing child's stderr is kept for the exception message.
+     * 64 KiB is one pipe buffer on this host, which is the natural unit: it is
+     * what a child can write without any reader at all, so anything under it was
+     * never at risk of being lost to the deadlock this bound's own loop closes.
+     */
+    private const MAX_STDERR_BYTES = 65536;
+
     public function __construct(
         private ClaudeCodeInvocation $invocation,
         private string $defaultModel = 'claude-sonnet-4-6',
@@ -128,38 +137,152 @@ final readonly class ClaudeCodeProvider implements ProviderInterface
 
         fclose($pipes[0]);
 
+        // NON-BLOCKING ON BOTH PIPES, so neither can wedge the other. See the
+        // `try` body for the deadlock this closes.
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
         $buffer = '';
+        $errors = '';
+        $open = [1 => $pipes[1], 2 => $pipes[2]];
 
-        while (!feof($pipes[1])) {
-            $chunk = fread($pipes[1], 8192);
-            if ($chunk === false) {
-                break;
-            }
-            $buffer .= $chunk;
+        try {
+            // BOTH PIPES ARE DRAINED IN THE SAME LOOP. This loop used to read
+            // stdout only, and stderr was read once — after `proc_close()` — so
+            // a child that wrote more than one pipe buffer to stderr blocked in
+            // its own `write()`, never closed stdout, and this loop never
+            // reached EOF. MEASURED on this host (PHP 8.3.6, Linux 6.8, 64 KiB
+            // pipe buffer) with a child that writes N bytes to stderr and then a
+            // line to stdout: N = 1000 and N = 60000 both drain in 0.04s,
+            // N = 100000 never completes. A `claude` invocation that fails
+            // noisily — a stack trace, a node warning storm — is exactly the
+            // case that produces six figures of stderr, so the hang was on the
+            // failure path and only on the failure path.
+            //
+            // NO WALL-CLOCK CAP, deliberately: a completion is allowed to take
+            // as long as it takes, and a blanket total-request timeout on an LLM
+            // call abandons answers the user is paying for. The bound here is
+            // liveness of the pipes, not duration.
+            while ($open !== []) {
+                $read = array_values($open);
+                $write = [];
+                $except = [];
 
-            // Parse complete JSON objects from buffer
-            while (($pos = strpos($buffer, "\n")) !== false) {
-                $line = substr($buffer, 0, $pos);
-                $buffer = substr($buffer, $pos + 1);
+                // `@`, because a signal arriving mid-select (a SIGCHLD, a
+                // suite's `pcntl_alarm()`) makes `stream_select()` return false
+                // with an `Interrupted system call` warning. An EINTR is a retry,
+                // not an error — and under `failOnWarning="true"` the warning
+                // alone would red a passing run.
+                $ready = @stream_select($read, $write, $except, 1, 0);
 
-                if (str_starts_with($line, 'data: ')) {
-                    $data = json_decode(substr($line, 6), true);
-                    if ($data !== null) {
-                        yield $this->parseChunk($data);
+                if ($ready === false) {
+                    // EINTR, or a stream that has genuinely gone away. Drop
+                    // whatever is at EOF so this cannot spin forever on a pipe
+                    // `select()` will never report again, then yield the CPU.
+                    foreach ($open as $fd => $pipe) {
+                        if (feof($pipe)) {
+                            unset($open[$fd]);
+                        }
+                    }
+                    usleep(1000);
+
+                    continue;
+                }
+
+                if ($ready === 0) {
+                    continue;
+                }
+
+                foreach ($open as $fd => $pipe) {
+                    if (!in_array($pipe, $read, true)) {
+                        continue;
+                    }
+
+                    $chunk = fread($pipe, 8192);
+                    if ($chunk === false || ($chunk === '' && feof($pipe))) {
+                        unset($open[$fd]);
+
+                        continue;
+                    }
+                    if ($chunk === '') {
+                        // Readable, nothing there, not EOF: a spurious wakeup.
+                        continue;
+                    }
+
+                    if ($fd === 2) {
+                        $errors = self::clipStderr($errors . $chunk);
+
+                        continue;
+                    }
+
+                    $buffer .= $chunk;
+
+                    while (($pos = strpos($buffer, "\n")) !== false) {
+                        $line = substr($buffer, 0, $pos);
+                        $buffer = substr($buffer, $pos + 1);
+
+                        if (str_starts_with($line, 'data: ')) {
+                            $data = json_decode(substr($line, 6), true);
+                            if ($data !== null) {
+                                yield $this->parseChunk($data);
+                            }
+                        }
                     }
                 }
             }
+        } finally {
+            // A `finally` IN A GENERATOR, and it is load-bearing. A consumer that
+            // `break`s out of `foreach ($provider->completeStream(...) as ...)`
+            // destroys this generator mid-body, and PHP runs this block when it
+            // does. Without it the `proc_open()` handle is simply dropped — and
+            // MEASURED on this host, dropping a handle whose child is still
+            // RUNNING takes 0.000s and leaves the child in state `S`. The
+            // resource destructor reaps an already-exited child but never waits
+            // for a live one, so an abandoned stream left a `claude` process
+            // running under pid 1, holding every descriptor above 2 this process
+            // had open when it spawned (E366). `terminateAndClose()` sends no
+            // signal at all to a child that has already exited, so the normal
+            // completion below pays nothing for this.
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+
+            $exitCode = ProcessReaper::terminateAndClose($process);
         }
 
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        $exitCode = proc_close($process);
-
-        if ($exitCode !== 0 && $exitCode !== -1) {
-            $errors = stream_get_contents($pipes[2]);
+        if ($exitCode !== 0 && $exitCode !== -1 && $exitCode !== null) {
+            // STDERR IS READ ABOVE, NOT HERE, and that ordering is the fix.
+            // This site used to `fclose($pipes[2])` and then call
+            // `stream_get_contents($pipes[2])` on the next reachable line. That
+            // is not an empty diagnostic — MEASURED on PHP 8.3.6, it raises
+            // `TypeError: stream_get_contents(): supplied resource is not a
+            // valid stream resource`, and `@` does not suppress a TypeError. So
+            // the RuntimeException below was never CONSTRUCTED on any non-zero
+            // exit: callers catching `\RuntimeException` caught nothing, and the
+            // one path where the child's stderr is the only diagnostic there is
+            // reported a type error about a stream instead.
             throw new \RuntimeException("Claude Code exited with code $exitCode: $errors");
         }
+    }
+
+    /**
+     * Keep at most {@see MAX_STDERR_BYTES} of a child's stderr, THE TAIL.
+     *
+     * A cap because the buffer grows inside an unbounded read loop and a child
+     * in a warning loop would otherwise be an unbounded allocation. The TAIL
+     * rather than the head because this text exists to answer "why did it exit",
+     * and the reason a process gives is the last thing it says — a truncated
+     * head would reliably keep the banner and drop the error.
+     */
+    private static function clipStderr(string $errors): string
+    {
+        if (strlen($errors) <= self::MAX_STDERR_BYTES) {
+            return $errors;
+        }
+
+        return '[stderr truncated]' . substr($errors, -self::MAX_STDERR_BYTES);
     }
 
     public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
