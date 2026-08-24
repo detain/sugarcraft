@@ -119,9 +119,9 @@ final class SuiteTempSandboxContractTest extends TestCase
     }
 
     /**
+     * @param array<string, string>|null $env launch environment, or null to inherit
      * @return array<string, string>
      */
-    /** @param array<string, string>|null $env launch environment, or null to inherit */
     private function phpProbe(string $code, ?array $env = null): array
     {
         $process = proc_open(

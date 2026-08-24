@@ -532,9 +532,19 @@ final class BackgroundSessionRunnerTest extends TestCase
     }
 
     /**
-     * KNOWN-NEGATIVE. A tool that RAN AND FAILED is not a refusal, and neither
-     * is a tool that succeeded. Without this the roster loop above is
-     * satisfied by a classifier that records everything.
+     * KNOWN-NEGATIVE, WITH A POSITIVE IN THE SAME FIXTURE. A tool that RAN AND
+     * FAILED is not a refusal, and neither is a tool that succeeded. Without
+     * this the roster loop above is satisfied by a classifier that records
+     * everything.
+     *
+     * THE ONE GENUINE REFUSAL IN THE LIST IS NOT DECORATION (rule 25/E228).
+     * MEASURED, round 49: with `noticeRefusal()` mutated to `return;` on its
+     * first line, the version of this test that asserted only the ABSENCE
+     * passed — "no refusal record" is exactly what a dead classifier writes,
+     * so the assertion could not tell a working guard from no guard at all.
+     * The count below is what closes that: it dies when the classifier stops
+     * recording (0 records) AND when it starts over-recording (2 or more), and
+     * the tool name pins WHICH of the five events it picked.
      */
     public function testAToolThatRanAndFailedIsNotRecordedAsARefusal(): void
     {
@@ -550,13 +560,29 @@ final class BackgroundSessionRunnerTest extends TestCase
             new ToolFinished('c3', 'Grep', new ToolResult('c3', 'the hook denied: lower case is not the prefix', true)),
             // Not a ToolFinished at all: the observer sees ToolStarted too.
             new \stdClass(),
+            // THE POSITIVE COMPONENT: one real refusal, last, so it is also
+            // the event a classifier that only ever looks at the first one
+            // would miss.
+            new ToolFinished('c5', 'Write', new ToolResult('c5', Chat::DENIED_ERROR_PREFIXES[0] . ' nope', true)),
         ]);
 
         $this->runner($buffer)->executeTask($backend);
+        $contents = (string) file_get_contents($buffer);
 
-        $this->assertStringNotContainsString(
-            BackgroundSessionRunner::REFUSAL_RECORD,
-            (string) file_get_contents($buffer),
+        $records = array_values(array_filter(
+            explode("\n", $contents),
+            static fn (string $line): bool => str_starts_with($line, BackgroundSessionRunner::REFUSAL_RECORD),
+        ));
+
+        $this->assertCount(
+            1,
+            $records,
+            "exactly one of these six events is a refusal, and the buffer records " . count($records) . ":\n" . $contents,
+        );
+        $this->assertStringContainsString(
+            ' Write was not run - ',
+            $records[0],
+            'the classifier recorded a refusal, but not the event that was one',
         );
     }
 
