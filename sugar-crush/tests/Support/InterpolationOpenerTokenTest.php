@@ -1220,12 +1220,29 @@ final class InterpolationOpenerTokenTest extends TestCase
      * a gap. {@see comparesAgainstBrace()} now takes `case` and a `match` arm
      * too. MEASURED, PHP 8.3.6, over every `.php` under `tests/` and `src/`:
      * the population both arms bring in is EMPTY - no brace literal in the tree
-     * neighbours a `T_CASE`, and every one that neighbours a `T_DOUBLE_ARROW`
+     * neighbours a `T_CASE`, and the three that neighbour a `T_DOUBLE_ARROW`
+     * all carry the arrow BEFORE them, so all three sit in VALUE position and
+     * none is an arm subject.
+     *
+     * WHAT THIS PARAGRAPH SAID: "every one that neighbours a `T_DOUBLE_ARROW`
      * is an array key rather than a match arm, which is exactly why the arrow
-     * arm is gated on sitting inside a `match` body. So this widening changes
-     * no answer today and is pinned by synthetic fixtures instead; the point is
-     * that the first `switch`-based walker anyone writes now arrives selected
-     * rather than unguarded.
+     * arm is gated on sitting inside a `match` body". WHAT IS TRUE NOW, and was
+     * true when that was written: the measurement above, which inverts it. The
+     * consequence inverts with it - because those three are VALUES the arrow
+     * arm never looks at them at all, so the `match` gate is not what spares
+     * them and cannot be justified by them. WHY THE GATE STILL EARNS ITS PLACE:
+     * it guards a shape the tree does not have YET. An ordinary lookup table
+     * `['{' => 1, '}' => -1]` puts a brace in KEY position and is
+     * indistinguishable from a `match` walker on the arrow alone; ungated, the
+     * arm would select it and report it missing every opener. That is argued in
+     * full on {@see comparesAgainstBrace()}, whose twin of this paragraph was
+     * corrected first - the same inversion survived here one doc-block away,
+     * which is what a correction applied to the sentence you were looking at
+     * rather than to the claim costs.
+     *
+     * So this widening changes no answer today and is pinned by synthetic
+     * fixtures instead; the point is that the first `switch`-based walker
+     * anyone writes now arrives selected rather than unguarded.
      */
     private static function countsBareBraces(string $source): bool
     {

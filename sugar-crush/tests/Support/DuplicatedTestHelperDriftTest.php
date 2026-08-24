@@ -976,7 +976,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * what two tokens brings in and the honest answer was that nobody had run
      * it; a constant buried in the comparison cannot be asked. It is measured
      * through this same report by
-     * {@see testRelaxingTheBoundToTwoTokensBringsInOnlyNamesThatAreArgued()}.
+     * {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}.
      *
      * @param array<string,string> $sources
      * @param list<int>            $visibility token ids one of which must carry the declaration
