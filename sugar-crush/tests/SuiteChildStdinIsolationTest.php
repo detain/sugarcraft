@@ -214,6 +214,110 @@ final class SuiteChildStdinIsolationTest extends TestCase
         }
     }
 
+    /**
+     * THE TTY BRANCH, WHICH THIS BOX CANNOT OTHERWISE REACH — pinned with a
+     * real pseudo-terminal rather than left as an untested arm.
+     *
+     * The repair is guarded by `!stream_isatty(\STDIN)`, and every runner in
+     * this tree — CI, this lane, a `vendor/bin/phpunit` from a script — has a
+     * non-tty descriptor 0, so the guard's TRUE arm never executes. MEASURED:
+     * replacing that condition with `if (true)` and running the four stdin
+     * guard classes SURVIVED. An arm no mutation can kill is an arm that is
+     * not being tested, and "it leaves a developer's terminal alone" is a
+     * promise a suite makes to the one environment it never runs in.
+     *
+     * So both arms are driven here, in children, through one harness that
+     * differs in the descriptor spec alone. `proc_open()` accepts `['pty']` for
+     * a single descriptor with ordinary pipes on 1 and 2 — verified on this box,
+     * PHP 8.3.6 — which gives a child whose fd 0 is a genuine `/dev/pts/N`
+     * slave without having to capture its output through the same terminal.
+     *
+     * PIPE ARM (the known-positive, and it is what makes the pty arm mean
+     * anything): the same script, the same bootstrap, fd 0 a pipe. It must
+     * report the descriptor REPLACED. Without it, "the terminal survived" is
+     * also what a child that never loaded the bootstrap reports.
+     */
+    public function testTheBootstrapLeavesARealTerminalsDescriptorZeroAlone(): void
+    {
+        $pipe = $this->bootstrapUnder([0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]);
+        self::assertSame('0', $pipe['TTY'] ?? null, "the known-positive arm's fd 0 was a terminal, so it is "
+            . "not the non-tty case at all.\n" . $pipe['raw']);
+        self::assertSame(
+            '0',
+            $pipe['LIVE'] ?? null,
+            "the child did not replace descriptor 0 with fd 0 a PIPE, so it never ran the bootstrap and the "
+                . "terminal arm below proves nothing.\n" . $pipe['raw'],
+        );
+
+        $pty = $this->bootstrapUnder([0 => ['pty'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]);
+        self::assertSame(
+            '1',
+            $pty['TTY'] ?? null,
+            "proc_open()'s ['pty'] spec did not give the child a terminal on descriptor 0, so this arm is "
+                . "the pipe case again under another name.\n" . $pty['raw'],
+        );
+        self::assertSame(
+            '1',
+            $pty['LIVE'] ?? null,
+            "tests/bootstrap.php closed a real TERMINAL's descriptor 0. The repair must skip an interactive "
+                . "run: fd 0, 1 and 2 are usually one open file description on a terminal, and a developer "
+                . "running the suite from a shell would lose their own stdin.\n" . $pty['raw'],
+        );
+        self::assertStringStartsWith('/dev/pts/', (string) ($pty['FD0'] ?? ''), $pty['raw']);
+    }
+
+    /**
+     * Load `tests/bootstrap.php` in a child with the given descriptor spec and
+     * report what it did to fd 0.
+     *
+     * @param array<int, array<int, string>> $spec
+     *
+     * @return array{TTY?: string, LIVE?: string, FD0?: string, raw: string}
+     */
+    private function bootstrapUnder(array $spec): array
+    {
+        $root = \dirname(__DIR__);
+        $script = "<?php\ndeclare(strict_types=1);\n"
+            // The tty answer is read BEFORE the bootstrap, because afterwards
+            // stream_isatty() throws on the closed constant in the pipe arm.
+            . '$tty = stream_isatty(\STDIN) ? "1" : "0";' . "\n"
+            . 'require ' . var_export($root . '/tests/bootstrap.php', true) . ";\n"
+            . 'printf("TTY=%s LIVE=%s FD0=%s\n", $tty, is_resource(\STDIN) ? "1" : "0", '
+                . '(string) (@readlink("/proc/self/fd/0") ?: "-"));' . "\n";
+
+        $file = tempnam(sys_get_temp_dir(), 'sc_tty_probe_' . getmypid() . '_');
+        self::assertIsString($file);
+        $this->paths[] = $file;
+        file_put_contents($file, $script);
+
+        $process = proc_open(
+            [\PHP_BINARY, $file],
+            $spec,
+            $pipes,
+            $this->home,
+            ['TMPDIR' => (string) (getenv('TMPDIR') ?: sys_get_temp_dir()), 'HOME' => $this->home, 'PATH' => (string) getenv('PATH')],
+        );
+        self::assertIsResource($process);
+
+        $out = (string) @stream_get_contents($pipes[1]);
+        $err = (string) @stream_get_contents($pipes[2]);
+        foreach ($pipes as $pipe) {
+            if (\is_resource($pipe)) {
+                @fclose($pipe);
+            }
+        }
+        proc_close($process);
+
+        $found = ['raw' => trim($out . "\n" . $err)];
+        if (preg_match('/TTY=(\d) LIVE=(\d) FD0=(\S+)/', $out, $m) === 1) {
+            $found['TTY'] = $m[1];
+            $found['LIVE'] = $m[2];
+            $found['FD0'] = $m[3];
+        }
+
+        return $found;
+    }
+
     /** Remove a directory tree this test created, contents and all. */
     private static function removeTree(string $dir): void
     {
