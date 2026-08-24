@@ -8755,3 +8755,34 @@ if that is wanted it should be a named-file roster (the shape round 49's `Denial
 the same reason) rather than a total.
 
 ---
+### Ea49-8 — E223's premise is wrong: the in-tree hosted shell already arms the seam
+
+**Recorded 2026-08-24 by round-49 lane a.** Severity: process (entry correction). **Measured.**
+
+**What.** E223 says `Chat::init()` "is called by `SugarCraft\Core\Program`, and only by it", and that a
+`Chat` driven by an embedder — "the hosted-pane shape `Chat::withSize()`'s doc-block describes" —
+therefore never arms the mid-session seam's watcher. MEASURED by grepping `src/` and `bin/` for the call:
+there are **two** in-tree callers, and the second one is that very shape.
+`SugarCraft\Crush\App\App::init()` batches `$this->chat?->init()` with its own OSC 11 query, and
+`App::delegateToChat()` returns `Chat::update()`'s Cmd through every branch untouched — so the shell that
+hosts the chat pane already discharges both halves of the obligation.
+
+Round 49 wrote the same false sentence into a fresh doc-block before checking it, and caught it only on a
+deliberate re-derivation pass. That is the third round running in which a mechanism claim was written down
+with confidence and was inverted in fact (E-rule 8).
+
+**The residue is real but smaller than the entry states**, and it is now written down and pinned:
+
+  - A THIRD-PARTY embedder outside this tree still owns the pumping, which is what `Chat::init()`'s
+    doc-block now says.
+  - `App`'s forwarding was asserted by NOTHING. Deleting `$this->chat?->init()` from that batch leaves a
+    shell that starts, paints and silently never arms the seam; `Cmd::batch()` drops nulls, so there is no
+    error either. `tests/Chat/HostedRuntimeNoticeWakeTest::testTheHostedShellForwardsTheChatsStartupCmd()`
+    now pins it — and walks the `BatchMsg` by hand, because `Cmd::batch()` does not RUN its children: it
+    returns a Cmd yielding a sentinel that `Program::runCmd()` explodes. A host embedding `App` rather
+    than `Chat` therefore has a second obligation the entry never mentions.
+
+**Step.** None on `Chat`/`App`. If a hosted-embedder guide is ever written, the `BatchMsg` fan-out belongs
+in it beside the two `init()`/`update()` obligations.
+
+---
