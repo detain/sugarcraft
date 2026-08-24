@@ -212,6 +212,32 @@ final class PosixBackendStreamDescriptorTest extends TestCase
      * MEASURED (mutation m5) before this test existed: `sort()` swapped for
      * `rsort()`, whole candy-core suite, 824 tests / 7422 assertions / rc 0 --
      * SURVIVED. The preference was prose only.
+     *
+     * ## Why this drives a fixture table and not two real handles
+     *
+     * WHAT THIS TEST USED TO DO: open one file twice and assert the two
+     * handles resolve to the SAME descriptor. WHAT IS TRUE ABOUT THAT: the
+     * assertion it was named for is INVARIANT under the choice it claims to
+     * pin. Both handles name one dev+ino, so both resolve to whichever end of
+     * the candidate list the sort picks -- the same end for both, under
+     * `sort()` and under `rsort()` alike. MEASURED by mutation at this file's
+     * previous revision: `sort` -> `rsort` did fail, but at the SETUP line
+     * asserting the second handle took the next descriptor, with the message
+     * "this fixture makes no choice". That sends the reader to debug an
+     * incidental property of descriptor allocation while the resolver is what
+     * moved -- a red whose text names the wrong suspect is worse than a red.
+     *
+     * WHAT IT DOES NOW: drives the `$fdDirectory` seam with a table this test
+     * writes, so the candidate list is a fact of the fixture rather than of
+     * how the kernel happened to allocate. Entries `10` and `9` both name one
+     * file; `3` names a different one and must not be chosen.
+     *
+     * The two entry names are chosen so the assertion discriminates TWICE
+     * over, MEASURED, PHP 8.3.6: `rsort()` returns 10, and removing the sort
+     * altogether also returns 10, because scandir() orders its entries as
+     * STRINGS and "10" sorts before "9". So the numeric sort and its
+     * direction are both pinned, by the claim itself rather than by a setup
+     * line.
      */
     public function testTheLowestDescriptorNamingTheDeviceIsTheOneReturned(): void
     {
@@ -219,23 +245,40 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         self::assertIsString($path);
         $this->artifacts[] = $path;
 
-        $first  = $this->openHandle($path, 'r+');
-        $second = $this->openHandle($path, 'r+');
+        $decoy = tempnam(sys_get_temp_dir(), 'sc_core_r54a_decoy_');
+        self::assertIsString($decoy);
+        $this->artifacts[] = $decoy;
 
-        $low  = PosixBackend::descriptorForStream($first);
-        $high = PosixBackend::descriptorForStream($second);
-        self::assertIsInt($low, 'the first handle resolved to nothing');
+        $table = $this->emptyDirectory();
+        foreach (['10' => $path, '9' => $path, '3' => $decoy] as $entry => $target) {
+            self::assertTrue(symlink($target, $table . '/' . $entry));
+            $this->artifacts[] = $table . '/' . $entry;
+        }
 
-        // The discriminator: the two handles must really be two descriptors,
-        // or there is no choice being made and nothing is being asserted.
-        $lowDevice = $this->deviceOfDescriptor($low);
+        $handle = $this->openHandle($path, 'r+');
+
+        // The discriminator, and it is about the FIXTURE's shape rather than
+        // about the kernel's: two entries must really name the file, or there
+        // is no choice for the resolver to make. Asserted on the table we
+        // just wrote, so it cannot fail for a reason outside this test.
+        $target = fstat($handle);
+        self::assertIsArray($target);
+        $naming = [];
+        foreach (['10', '9', '3'] as $entry) {
+            $stat = stat($table . '/' . $entry);
+            self::assertIsArray($stat);
+            if ($stat['dev'] === $target['dev'] && $stat['ino'] === $target['ino']) {
+                $naming[] = $entry;
+            }
+        }
+        self::assertSame(['10', '9'], $naming, 'the fixture table does not offer the resolver a choice');
+
         self::assertSame(
-            $lowDevice,
-            $this->deviceOfDescriptor($low + 1),
-            'the second handle did not take the next descriptor; this fixture makes no choice',
+            9,
+            PosixBackend::descriptorForStream($handle, $table),
+            'the resolver did not return the LOWEST entry naming the device. 10 means either the '
+                . 'preference reversed, or the sort went away and scandir\'s string ordering won.',
         );
-
-        self::assertSame($low, $high, 'the two handles resolved differently, so the answer is not the lowest match');
     }
 
     /**
