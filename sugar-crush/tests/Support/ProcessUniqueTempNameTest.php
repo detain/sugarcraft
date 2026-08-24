@@ -46,8 +46,20 @@ use PHPUnit\Framework\TestCase;
  * and reported success. Rule 11: when a census reports zero, ask what its
  * alphabet cannot say. Both shapes now have a scanner here, and each scanner is
  * proved alive by something OTHER than a green tree — see
- * {@see STATIC_TEMP_PATH_INVENTORY}, whose single row is a real site in `src/`
- * that the second scanner must keep finding.
+ * {@see STATIC_TEMP_PATH_INVENTORY}, whose single row is a file in scope that
+ * the second scanner must keep finding.
+ *
+ * WHAT THAT SENTENCE SAID: the row was "a real site in `src/`", namely
+ * `AuditHook`'s production default. WHAT IS TRUE NOW: E328 fixed that default
+ * — it is a per-user directory the process creates 0700 — so `src/` has no
+ * fixed shared temp path left, and an absence census with no positive input is
+ * exactly the dead instrument rule 15 is about. The row is now
+ * `tests/Support/Fixtures/StaticTempPathWalkControl.php`, a file written to be
+ * found. WHY THE ARRANGEMENT STILL EARNS ITS PLACE, unchanged in form: the
+ * claim being defended was never "a real site exists" — it was "the walk over
+ * real files still reaches the matcher", and a purpose-built file in scope
+ * carries that claim better than a production site, because nobody can close
+ * it by improving production code.
  *
  * ⚠️ THIS FILE MUST SURVIVE A BLANKET REWRITE OF THE PATTERN IT DESCRIBES.
  * The 2026-08-23 sweep that fixed those 91 call sites also ate this test's own
@@ -187,20 +199,32 @@ final class ProcessUniqueTempNameTest extends TestCase
      * @var array<string,array{sites:int,why:string}>
      */
     private const STATIC_TEMP_PATH_INVENTORY = [
-        'src/Hooks/BuiltIn/AuditHook.php' => [
+        'tests/Support/Fixtures/StaticTempPathWalkControl.php' => [
             'sites' => 1,
             'why' =>
-                'THE SITE E298 WAS ABOUT, AND IN PRODUCTION IT IS THE INTENDED BEHAVIOUR. '
-                . 'The default log file is one fixed name on the machine\'s temp dir, and an '
-                . 'audit log that moves every run is not an audit log — a caller who wants a '
-                . 'private one passes it in. What was wrong was never this line: it was a TEST '
-                . 'that drove the production default, wrote it and then unlinked it, so two '
-                . 'concurrent suites raced on it and both deleted the real log of anything '
-                . 'else on the box. That test now asserts the default is CONSTRUCTED and does '
-                . 'its writing at a pid+entropy path. '
-                . 'KEEP THIS ROW EVEN IF THE HOOK MOVES: it is the only real-tree input that '
-                . 'proves the static-path scanner still walks, and the day it stops matching '
-                . 'is the day this whole census goes quiet.',
+                'THIS ROW IS NOT AN EXEMPTION. It is the scanner\'s real-tree control, and the '
+                . 'file exists for no other reason: nothing calls it, its constructor and its '
+                . 'one method are private, and the body spells the exact shape E298 took — a '
+                . 'fully static temp path bound in one statement and written in another. '
+                . 'WHAT THIS ROW SAID BEFORE: src/Hooks/BuiltIn/AuditHook.php, whose production '
+                . 'default was one fixed name on the world-writable temp root, kept because "an '
+                . 'audit log that moves every run is not an audit log" and a caller who wants a '
+                . 'private one passes it in. WHAT IS TRUE NOW (E328): that argument survived and '
+                . 'the path did not. The leaf is still fixed, so tail -f still works across '
+                . 'runs, but it now sits inside a directory scoped to the effective uid which '
+                . 'the hook creates 0700 and refuses to use when it is not its own — because '
+                . 'the hazard was never two sugarcrush processes racing (measured on PHP 8.3.6: '
+                . '8 processes x 200 appends x 9000 bytes under FILE_APPEND|LOCK_EX, three '
+                . 'takes, 1600 intact lines every time and no truncation) but every OTHER user '
+                . 'on the box being able to plant a symlink at that name and to read a log '
+                . 'carrying tool arguments and 200 bytes of every tool output, which under the '
+                . 'ordinary umask 0002 was created mode 0664. WHY A PURPOSE-BUILT FILE RATHER '
+                . 'THAN THE NEXT REAL SITE: the previous row could be — and was — closed by '
+                . 'somebody fixing production code, which is the one event that silently '
+                . 'removes an absence census\'s only positive input. This one cannot be. '
+                . 'DELETING IT IS NOT A FIX FOR ANYTHING: the ten synthetic fixtures in '
+                . 'assertTheStaticPathScannerIsAlive() prove the MATCHER works and say nothing '
+                . 'about whether filesInScope() still enumerates anything.',
         ],
     ];
 
