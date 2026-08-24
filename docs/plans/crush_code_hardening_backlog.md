@@ -11122,6 +11122,16 @@ call for the whole run, which is the shape that trains an operator to ignore std
 none) or a `HookResult::allow('<message>')` carrying the failure, IF a `PostToolUse` allow message has a
 consumer — check before designing, it may have none.
 
+> **Raised in value, same round.** `directoryIsOurs()` now also refuses a directory whose mode lets
+> anybody else in, and that arm has a failure mode the other two do not: it fires on a directory the
+> operator created THEMSELVES, by hand, with an ordinary `mkdir -p` under umask 0022 — no attacker, no
+> squatting, nothing visibly wrong. The symlink and foreign-owner arms only fire when something is
+> genuinely amiss and an operator has a reason to go looking. This one turns a perfectly reasonable
+> setup step into an audit log that silently never appears, and the remedy (`chmod 700`) is invisible
+> from the symptom. **A notice matters more now than when this entry was filed**, and the once-per-
+> process latch is the shape that fits: the mode does not change mid-run, so one line is the whole of
+> what needs saying.
+
 ---
 
 ### Eb51-3 — E307 is still open: `BackgroundSessionRunner::noticeRefusal()` drops `->kind`, and it was out of lane
@@ -11256,5 +11266,72 @@ everybody and a wrong one.
 > a uid comparison to harden and found none. Both the doc-block and this entry now say the same true
 > thing, and the fallback arm has a test (`directoryFor()`) rather than only a paragraph: renaming the
 > literal was a mutation the entire `AuditHook` suite survived when this entry was filed, and now kills.
+
+---
+
+### Eb51-8 — the suite creates and populates the REAL production audit directory, and nothing removes it
+
+**Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 10.** Severity: cross-process
+hygiene. Not fixed — the fix is a wiring change on `HookManager::registerBuiltIns()`, out of this lane.
+
+**Observed on this box during the round.** `/tmp/sugar-crush-audit-1000/` created 09:13, `drwx------`,
+its `audit.log` grown to 6808 bytes by 09:39 — written by the suite, not by any real `sugarcrush`. E328
+is a clear improvement on the shared world-readable leaf it replaced (which was still growing at
+`/tmp/sugar-crush-audit.log` from the lanes sitting at the pre-E328 commit), but the suite still drives
+`new AuditHook()` at the production default through `registerBuiltIns()`.
+
+**`TMPDIR` cannot move it, MEASURED (PHP 8.3.6):** `putenv('TMPDIR=…')` then `sys_get_temp_dir()` still
+answers `/tmp`, because PHP resolves and caches it once per process. This is the same fact
+`ToolIpcFiles::sweep()`'s doc-block records for its own `$dir` parameter, and the same remedy applies —
+a seam the suite can point at.
+
+**Why it is not merely untidy.** `AuditHookTest` was rewritten (E298) specifically to stop driving writes
+at the production default, and it no longer does; the leak is now from every OTHER suite that reaches
+`registerBuiltIns()`. So the guard that exists covers the one file that already behaves.
+
+**Step.** Give `registerBuiltIns()` (or `AuditHook`'s default) the same test-only directory seam
+`ToolIpcFiles::sweep()` has, spent once from `tests/bootstrap.php`. Pin it with a test asserting the
+production directory is not created during a suite run.
+
+---
+
+### Eb51-9 — `uniqid(…, true)` puts a `.` into a tool-call id that goes on the wire
+
+**Recorded 2026-08-24 by round-49 lane b's fix agent, from the review's NOTE 11.** Severity: stated bound,
+low risk. Not fixed.
+
+E329's fix gives `ClaudeCodeProvider`'s fallback id the shape `tool_<pid>_<13hex>.<8hex>` — the
+more-entropy flag appends a period and eight more hex digits. That value is echoed back to the provider
+as `tool_call_id`. The other three E329 sites name local files, where a period is unremarkable; this one
+names a protocol field, and nobody weighed its character set when the flag was added.
+
+**Why it is probably fine and is recorded anyway.** It is the FALLBACK id — reached only when the
+provider did not supply one — and a period is legal in every id field surveyed. But "legal in the fields
+we happen to have looked at" is not the same as a decision, and a downstream consumer that splits on `.`
+would fail intermittently, on the fallback path only, which is the hardest kind of bug to reproduce.
+
+**Step.** Either state the bound in the call site's comment (cheapest, and honest), or spell the id from
+an alphabet chosen for the wire — `bin2hex(random_bytes(…))` already used by `ToolIpcFiles::reserve()`
+gives the same entropy with no period.
+
+---
+
+### Eb51-10 — `sugar-crush/docs/HOOKS.md` documents runtime defaults and no test reads it
+
+**Recorded 2026-08-24 by round-49 lane b's fix agent.** Severity: documentation drift. Partly mitigated.
+
+E328 changed a user-facing default and `HOOKS.md`'s built-in table went on documenting the old path for
+a full round. Grepped `tests/` for the filename: the only hits are `ScriptHook`/`Bootstrap` guards, none
+of which reads this table. **Nothing in the tree can notice when a row here stops being true.**
+
+**What was done rather than left.** The `AuditHook` row now cites `AuditHook::defaultLogFile()` instead
+of restating the literal, so that row cannot rot on the path VALUE. The other rows still restate
+behaviour in prose, and the document has three more tables of the same kind (events, precedence, the
+built-in registration order).
+
+**Step.** Decide whether this document is worth a guard at all. If it is, the cheap version is the shape
+`ProcessUniqueTempNameTest` uses for its inventories — an assertion that each named symbol still exists
+and still has the property the row claims — and not a golden-file comparison, which would red on every
+prose edit.
 
 ---
