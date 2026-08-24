@@ -239,7 +239,7 @@ final class SuiteChildStdinIsolationTest extends TestCase
      */
     public function testTheBootstrapLeavesARealTerminalsDescriptorZeroAlone(): void
     {
-        $pipe = $this->bootstrapUnder([0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]);
+        $pipe = $this->bootstrapUnder(usePty: false);
         self::assertSame('0', $pipe['TTY'] ?? null, "the known-positive arm's fd 0 was a terminal, so it is "
             . "not the non-tty case at all.\n" . $pipe['raw']);
         self::assertSame(
@@ -249,7 +249,7 @@ final class SuiteChildStdinIsolationTest extends TestCase
                 . "terminal arm below proves nothing.\n" . $pipe['raw'],
         );
 
-        $pty = $this->bootstrapUnder([0 => ['pty'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]);
+        $pty = $this->bootstrapUnder(usePty: true);
         self::assertSame(
             '1',
             $pty['TTY'] ?? null,
@@ -267,14 +267,21 @@ final class SuiteChildStdinIsolationTest extends TestCase
     }
 
     /**
-     * Load `tests/bootstrap.php` in a child with the given descriptor spec and
-     * report what it did to fd 0.
+     * Load `tests/bootstrap.php` in a child whose fd 0 is a pty or a pipe, and
+     * report what it did to that descriptor.
      *
-     * @param array<int, array<int, string>> $spec
+     * THE TWO DESCRIPTOR SPECS ARE SPELLED OUT AT THEIR `proc_open()` CALLS
+     * rather than built into one `$spec` variable, and that is a requirement
+     * rather than a style: {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureTest}
+     * reads the spec as a literal at the call site to decide whether fd 2 has
+     * somewhere to go, and it reports a variable as `unclassified` — which it
+     * treats as an offence, correctly, because a scanner that quietly passes
+     * what it cannot read has a hole shaped like the next defect. Both shapes
+     * below send fd 2 to a pipe this method reads back into `raw`.
      *
      * @return array{TTY?: string, LIVE?: string, FD0?: string, raw: string}
      */
-    private function bootstrapUnder(array $spec): array
+    private function bootstrapUnder(bool $usePty): array
     {
         $root = \dirname(__DIR__);
         $script = "<?php\ndeclare(strict_types=1);\n"
@@ -290,13 +297,27 @@ final class SuiteChildStdinIsolationTest extends TestCase
         $this->paths[] = $file;
         file_put_contents($file, $script);
 
-        $process = proc_open(
-            [\PHP_BINARY, $file],
-            $spec,
-            $pipes,
-            $this->home,
-            ['TMPDIR' => (string) (getenv('TMPDIR') ?: sys_get_temp_dir()), 'HOME' => $this->home, 'PATH' => (string) getenv('PATH')],
-        );
+        $env = [
+            'TMPDIR' => (string) (getenv('TMPDIR') ?: sys_get_temp_dir()),
+            'HOME' => $this->home,
+            'PATH' => (string) getenv('PATH'),
+        ];
+
+        $process = $usePty
+            ? proc_open(
+                [\PHP_BINARY, $file],
+                [0 => ['pty'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                $this->home,
+                $env,
+            )
+            : proc_open(
+                [\PHP_BINARY, $file],
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                $this->home,
+                $env,
+            );
         self::assertIsResource($process);
 
         $out = (string) @stream_get_contents($pipes[1]);
