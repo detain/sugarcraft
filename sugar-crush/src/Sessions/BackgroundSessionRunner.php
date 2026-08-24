@@ -200,7 +200,7 @@ final class BackgroundSessionRunner
 
         $worker = \pcntl_fork();
         if ($worker === 0) {
-            exit($this->executeTask($backend));
+            $this->exitWorker($this->executeTask($backend));
         }
         if ($worker < 0) {
             $this->log('[session:fork:error] could not fork task worker');
@@ -209,6 +209,60 @@ final class BackgroundSessionRunner
         }
 
         return $this->supervise($worker);
+    }
+
+    /**
+     * Leave the forked worker with $code, and without republishing whatever
+     * the parent had buffered (E229).
+     *
+     * WHY NOT {@see \SugarCraft\Crush\Support\ForkedChild::exitNow()},
+     * WHICH IS THIS CODEBASE'S ANSWER FOR EVERY OTHER FORKED CHILD. Because
+     * the exit CODE is this fork's whole protocol and `exitNow()` throws it
+     * away: it leaves through `posix_kill(getmypid(), SIGKILL)`, so the
+     * worker is SIGNALLED rather than exited, `pcntl_wifexited()` in
+     * {@see self::supervise()} is false, and `$result` becomes `failed`.
+     *
+     * MEASURED rather than reasoned about, PHP 8.3.6, driving the real
+     * `run()` against a real unix socket server in a plain `php` subprocess
+     * with an `ob_start()` open in the parent:
+     *
+     *  - plain `exit($code)` — the parent's buffered marker is printed TWICE,
+     *    and `run()` returns 0 (the session settles Completed);
+     *  - `ForkedChild::exitNow($code)` — the marker is printed ONCE, and
+     *    `run()` returns 1. A turn that succeeded is reported as a failed
+     *    session, on every background session there is.
+     *
+     * So the obvious conversion is not a fix here, it is a swap of a
+     * harness-only defect for a user-visible one. What IS safe is to drop the
+     * inherited buffers and keep the ordinary exit: the code survives, and the
+     * one consequence of a plain exit that nothing else in this tree defuses
+     * goes away. (The other two are defused already, and neither is reachable
+     * from this particular fork anyway: candy-core's `PosixBackend::restore()`
+     * is PID-aware, and the daemon parent has built no backend — hence no MCP
+     * client, no loop watcher — at the moment it forks, because
+     * {@see self::executeTask()} builds all of that in the CHILD.)
+     *
+     * A NO-OP IN PRODUCTION, deliberately. The daemon runs no output
+     * buffering, so `ob_get_level()` is 0 and this is one function call. It
+     * earns its place in-process: the moment anything drives `run()` past the
+     * handshake inside PHPUnit — which
+     * {@see \SugarCraft\Crush\Tests\Sessions\BackgroundSessionRunnerTest}
+     * now does, in a subprocess — `TestCase::runBare()`'s open buffer is
+     * inherited by this worker and flushed a second time at its shutdown.
+     *
+     * The loop breaks on a buffer that refuses to close rather than spinning
+     * on it: an unremovable handler is a reason to leave anyway, not a reason
+     * never to leave.
+     */
+    private function exitWorker(int $code): never
+    {
+        while (\ob_get_level() > 0) {
+            if (!@\ob_end_clean()) {
+                break;
+            }
+        }
+
+        exit($code);
     }
 
     /**

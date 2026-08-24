@@ -25,6 +25,9 @@ use SugarCraft\Crush\Tools\ToolResult;
  */
 final class BackgroundSessionRunnerTest extends TestCase
 {
+    /** What {@see markerRun()} counts in a child's output; see E229 below. */
+    private const MARKER = 'MARKER-FROM-PARENT';
+
     /** @var list<string> */
     private array $paths = [];
 
@@ -298,6 +301,160 @@ final class BackgroundSessionRunnerTest extends TestCase
         $this->assertSame(1, $exit);
         $this->assertStringContainsString('[session:task:failed] boom second line', $contents);
         $this->assertStringNotContainsString('[session:task:complete]', $contents);
+    }
+
+    // =========================================================================
+    // E229 — a forked child's plain exit() republishes the parent's OUTPUT
+    // BUFFER. It is the one consequence of a plain exit that nothing in this
+    // tree defuses, and run()'s worker was the last plain exit in src/ that
+    // had never been argued for.
+    // =========================================================================
+
+    /**
+     * The worker does not print the parent's buffered output a second time,
+     * AND the session still settles as completed.
+     *
+     * BOTH HALVES, because the obvious fix breaks the second one.
+     * {@see \SugarCraft\Crush\Support\ForkedChild::exitNow()} is this
+     * codebase's answer for every other forked child, and it leaves through
+     * `posix_kill(getmypid(), SIGKILL)` — so the worker is signalled rather
+     * than exited and `pcntl_wifexited()` in `supervise()` is false. MEASURED
+     * on PHP 8.3.6 by driving this very harness against a tree with that
+     * conversion applied: the marker count drops to 1 and `run()` returns 1,
+     * i.e. every background session that succeeded would report as failed. An
+     * assertion on the marker alone would have accepted that.
+     *
+     * THE CONTROL RUNS THROUGH THE SAME HARNESS, in the same test, because a
+     * count of 1 is also what a harness that lost its child, mis-spelled the
+     * marker or never opened a buffer reports (rule 15/E228). The control is
+     * the plain-exit shape this fix exists to avoid; it must report 2.
+     *
+     * Both run in a subprocess, so the demonstration's duplicate lands on a
+     * pipe rather than on this suite's own stdout.
+     */
+    public function testTheWorkerNeitherRepublishesTheParentsBufferNorLosesItsExitCode(): void
+    {
+        $control = $this->markerRun($this->plainExitControlScript());
+        $this->assertSame(
+            2,
+            $control['markers'],
+            'the control did not reproduce the republish, so this harness cannot see one',
+        );
+
+        $site = $this->markerRun($this->runnerWorkerScript());
+        $this->assertSame(1, $site['markers'], "the worker republished the parent's output buffer");
+        $this->assertSame(0, $site['rc'], "the worker's exit code no longer reaches supervise()");
+    }
+
+    /**
+     * The plain-exit shape, with no runner involved: a fork whose child leaves
+     * through `exit()` while an output buffer holding the marker is open.
+     */
+    private function plainExitControlScript(): string
+    {
+        return <<<'PHP'
+            <?php
+            declare(strict_types=1);
+            ob_start();
+            echo MARKER_LINE;
+            $pid = pcntl_fork();
+            if ($pid === 0) {
+                exit(0);
+            }
+            $status = 0;
+            pcntl_waitpid($pid, $status);
+            ob_end_flush();
+            echo RC_ZERO_LINE;
+            PHP;
+    }
+
+    /** The real {@see BackgroundSessionRunner::run()}, against a real socket. */
+    private function runnerWorkerScript(): string
+    {
+        $autoload = \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        $buffer = $this->bufferPath();
+        $socket = $buffer . '.sock';
+        $this->paths[] = $socket;
+
+        return <<<PHP
+            <?php
+            declare(strict_types=1);
+            require {$this->export($autoload)};
+
+            final class MarkerBackend implements SugarCraft\Crush\Backend
+            {
+                public function complete(array \$history, callable \$onToken = null, ?callable \$onEvent = null): SugarCraft\Crush\Message
+                {
+                    return SugarCraft\Crush\Message::assistant('answer');
+                }
+
+                public function completeAsync(array \$history, callable \$onToken = null, ?SugarCraft\Crush\Backend\CancellationToken \$cancellation = null, ?callable \$onEvent = null): React\Promise\PromiseInterface
+                {
+                    throw new LogicException('not used');
+                }
+            }
+
+            // run() connects here, sends its HELLO and closes; supervise() then
+            // unlinks this path and re-binds it as a server of its own.
+            \$server = stream_socket_server('unix://' . {$this->export($socket)}, \$errno, \$errstr);
+            if (\$server === false) {
+                echo MARKER_LINE, 'RC=-1', PHP_EOL;
+                exit(0);
+            }
+
+            \$runner = new SugarCraft\Crush\Sessions\BackgroundSessionRunner(
+                sessionId: 'sess_e229',
+                socketPath: {$this->export($socket)},
+                bufferPath: {$this->export($buffer)},
+                task: 'ship the thing',
+                timeoutSeconds: 20,
+            );
+
+            ob_start();
+            echo MARKER_LINE;
+            \$rc = \$runner->run(new MarkerBackend());
+            fclose(\$server);
+            ob_end_flush();
+
+            echo 'RC=', \$rc, PHP_EOL;
+            PHP;
+    }
+
+    /**
+     * Run one marker script in a bounded subprocess.
+     *
+     * The two constants are injected rather than written into each script:
+     * the marker is what {@see markerRun()} counts, so a script and its
+     * counter disagreeing about the spelling is a silent 0.
+     *
+     * @return array{markers: int, rc: int}
+     */
+    private function markerRun(string $script): array
+    {
+        $defines = "define('MARKER_LINE', " . $this->export(self::MARKER . "\n") . ");\n"
+            . "define('RC_ZERO_LINE', 'RC=0' . PHP_EOL);\n";
+
+        // AFTER the strict_types line, not before it: a declare() must be the
+        // very first statement or PHP fatals before the script runs at all.
+        $withDefines = preg_replace(
+            '/^declare\(strict_types=1\);\R/m',
+            "declare(strict_types=1);\n" . $defines,
+            $script,
+            1,
+            $count,
+        );
+        self::assertSame(1, $count, 'the script carries no strict_types line to inject after');
+
+        $file = tempnam(sys_get_temp_dir(), 'bg_e229_' . getmypid() . '_');
+        self::assertIsString($file);
+        $this->paths[] = $file;
+        file_put_contents($file, (string) $withDefines);
+
+        $out = $this->runBounded([PHP_BINARY, $file], 30.0);
+
+        self::assertSame(1, preg_match('/^RC=(-?\d+)$/m', $out, $m), "no RC line in child output:\n" . $out);
+
+        return ['markers' => substr_count($out, self::MARKER), 'rc' => (int) $m[1]];
     }
 
     // =========================================================================
