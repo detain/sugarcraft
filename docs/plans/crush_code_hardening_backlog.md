@@ -9379,3 +9379,363 @@ holding silently the moment that scanner grows a mode.
 `testEveryChannelInThisProviderHasARowADeadScanWouldRed()` to it in the same commit.
 
 ---
+
+### Ed49-1 — three MORE brace walkers, and the first one FAILS OPEN in a guard nobody owns
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: harness correctness. **Measured**, PHP 8.3.6.
+**Recorded as `KNOWN_GAPS` rows, not fixed** — none of the three files is in any lane's list.
+
+**How they were found, which is the entry rather than the files.** E233's fix closed
+`tests/VhsTapeContractTest.php`. That left `InterpolationOpenerTokenTest::KNOWN_GAPS` empty and the guard
+apparently complete. It was not: its SELECTION predicate is "names `T_CURLY_OPEN` as code", which is a
+brace walker whose author already knew the problem existed. **A walker that counts depth on the BARE
+one-byte strings `'{'` and `'}'` names no token constant at all and was invisible by construction.** The
+alphabet was the set of files that already agreed with the guard — rule 11, in a file whose own doc-block
+had said so twice.
+
+**The widened predicate** — a comparison operator adjacent to a one-byte `'{'` literal AND to a `'}'` one,
+token-based — finds exactly three under `tests/` and zero false positives among the walkers the old
+predicate already covered. **The old predicate covered TEN of them at `db90e768`, not seven** — the round's
+own review re-derived it and the first figure was wrong; generator
+`scratchpad/r49d/r49d_rev_base_walkers.php` reads every `tests/`+`src/` blob out of `git show db90e768:` and
+runs both predicates over it, so the count is not taken from a worktree. Widened-predicate generator:
+`scratchpad/r49d/bare.php`; live re-derivation at HEAD: `scratchpad/r49d/r49d_rev_gaps.php`
+(14 walkers, 3 gaps, all 3 recorded).
+
+**`tests/Cli/BootstrapLaunchFormatConstantsTest.php` FAILS OPEN, and that is why this is severity-real.**
+`methodBody()` counts on the bare `'{'` over a `token_get_all()` stream, where `T_CURLY_OPEN` is an ARRAY
+token that never `===` the bare string while its closer IS the bare string — so the count goes one closer
+over and the body ends early. It misses **the everyday `{$x}` spelling**, not only the deprecated one.
+Measured through the shipped private methods by reflection (`scratchpad/r49d/proof.php`), not a replica:
+one `"{$x}"` inserted into a scanned method cut the body from 16 significant tokens to 6 and made a format
+literal that `testNoMethodThatOwnsANamedFormatAlsoHoldsALiteralOne()` exists to reject **invisible — `[]`
+where the offender should have been**. The direction matters: the sibling assertion
+(`testEveryNamedFormatIsReferencedByTheMethodThatEmitsIt()`) would go RED on truncation, so the file fails
+safe in one direction and open in the other.
+
+**Latent, all three, today.** `scratchpad/r49d/live.php` runs the shipped walk and a corrected one over all
+eight `Bootstrap` methods the file reads: identical on every one, because none carries an interpolation.
+`SlashDispatchTest::dispatchArmNames()` walks `Chat::dispatchCommand()`, which has zero `T_CURLY_OPEN`
+tokens. `ReadmeJsonErrorContractDriftTest` uses `PhpToken` and so handles `T_CURLY_OPEN` **by accident** —
+that token's text IS `{` — and misses only `${`, whose text is `${`.
+
+**Step.** Give each of the three the full opener roster and delete its `KNOWN_GAPS` row in the same
+change-set, exactly as E233 required of `VhsTapeContractTest`. `tests/Cli/` first: it is the one that
+hides a defect rather than inventing one.
+
+**Corrected on review, and the correction is the reusable half.** The first draft of this entry also said
+"none of the **eight** Bootstrap methods it reads carries an interpolation" — derived from a harness
+(`scratchpad/r49d/live.php`) that merged a regex over the test source with a HARD-CODED list of seven names
+and then ran a REPLICA of the walk on both sides. It printed nine rows, two of which were fixture names
+resolving to `null`. Re-derived through the SHIPPED `methodBody()` over the set the SHIPPED `obligations()`
+returns (`scratchpad/r49d/r49d_rev_eight2.php`): **seven** methods, all agreeing with a corrected walk, zero
+interpolation openers. The latency claim survived; the count did not. **A harness that hard-codes half of
+the set it is measuring is measuring the hard-coded half** — rule 13, and the reason the row now ships the
+claim with no number in it at all.
+
+### Ed49-2 — the round-49 brief's stated floor does not reproduce, in both figures
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: process. **Measured** at `db90e768`, PHP 8.3.6.
+
+**What the brief said.** "THE SUITE FLOOR AT `db90e768` IS `9445 tests / 132167 assertions / 1 skipped /
+rc 0` — measured by the supervisor at this exact commit, per E167."
+
+**What is true.** A clean `cp -a` lane at `db90e768`, 18/18 in-lane symlinks verified with `is_link`,
+`vendor/bin/phpunit` with no filter: **`9499 tests / 133587 assertions / 1 skipped / rc 0`**. Both figures
+are higher, so this is not a lane missing tests; it is the brief quoting a stale pair. The RESUME section
+of the same round quotes 9497, which is a third number and also not it.
+
+**Why it matters more than it looks.** The floor is the one figure a lane cannot re-derive from anywhere
+else, and it is what a reviewer checks a lane's delta against. A lane that trusts the brief and reports
+"+54 tests" has mis-stated its own change by an order of magnitude.
+
+### Ed49-3 — E232's live instance was already fixed, and the guard built for it had to find its own positive
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
+
+**What E232 said.** `Backend/EngineBackendTest::isRaw()` "was in no lane's file list and kept the bug for a
+full round, one directory away from its fixed twin."
+
+**What is true at `db90e768`.** Round 48 fixed it. The two copies now differ by exactly one token, and that
+token is the temp-name prefix each uses for the stderr file it reads back — a difference that MUST exist,
+per the same round's process-unique-temp-name work. So the guard E232 asked for could not use its own
+motivating case as a known positive: it is now an ACCEPTED row, not an offender. The positive is synthetic
+instead, and goes through the same `driftReport()` the tree does.
+
+**The general point, which is the reusable half.** A guard commissioned by a finding will usually arrive
+after the finding has been fixed. Round 48's E209 hit this and answered it the same way. **Assume the
+motivating instance will be gone and plan the synthetic positive from the start** — otherwise the guard
+ships with its known-positive slot filled by a case that is about to disappear, and the next round deletes
+it as stale.
+
+### Ed49-4 — `DuplicatedTestHelperDriftTest`'s bound is one token, and two is unexplored
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: coverage. **Measured**, PHP 8.3.6.
+
+**What.** The new drift guard flags same-named private helpers in different files whose bodies agree except
+for at most ONE token per side after the common prefix and suffix are trimmed. Twelve names are inside that
+bound and each carries an argued row. Relaxing `DRIFT_BOUND` to 2 or 3 brings in further names; sampled,
+most are `self::` against `$this->`, which is noise — but "most" is not "all" and nothing has checked.
+
+**Why the bound is where it is.** One token is the shape of the defect the guard was commissioned for: the
+whole helper agrees and a single flag, literal or name does not. Widening is a round of its own with rows
+to argue, not a constant to nudge. Generator: `scratchpad/r49d/core.php` prints every cross-file pair with
+its core size, sorted.
+
+**Also unexplored, and stated because the alphabet is the coverage:** protected and public helpers are out
+of scope; a helper copied and RENAMED is out of reach by construction; and two classes in one file are
+never compared (measured: no file in `tests/` declares one private name twice today).
+
+### Ed49-5 — `awaitPromise()`'s two bounds are the one accepted divergence that is behavioural
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: informational. **Measured.**
+
+**What.** Of the twelve rows in `DuplicatedTestHelperDriftTest::ACCEPTED_DIVERGENCE`, eleven are spelling —
+a leading `\` on a global call, an FQN against an import, a parameter name, a failure-message string, a
+temp-name prefix that must differ. One is not: `awaitPromise()` waits **10.0** seconds in
+`Backend/EngineBackendTest` and `Integration/UsageWiringTest`, and **15.0** in
+`Integration/StreamingWiringTest`. Both are defensible — a streaming wiring test legitimately needs longer
+than an engine unit test — but a timeout is exactly the thing a copied helper drifts in, and the row is the
+only place anybody would notice a fourth copy arriving with a fourth number.
+
+**Step.** Either extract the helper with the bound as a parameter, or leave the row and let it carry the
+argument. No action is required today; the entry exists so the decision is made deliberately the next time
+a copy is added.
+
+### Ed49-6 — `Agents/TeamTest`'s real-home footprint guard reds on a SIBLING LANE's writes
+
+**Recorded 2026-08-24 by round-49 lane d.** Severity: cross-lane harness. **Observed**, then reproduced by
+elimination.
+
+**What.** `TeamTest::tearDown()` asserts that the real `~/.sugar-crush` footprint is unchanged across each
+test. During lane d's full run it failed in that `tearDown()` footprint assertion, on
+`testAddTeammateOverwritesExistingWithSameId`, with a diff listing **2,522** entries under
+`/home/my/.sugar-crush/teams/` named `throwing-*`. Re-run alone, the same file is green — 26 tests, 78
+assertions. Nothing in lane d touches `Agents/`.
+
+**Mechanism.** The guard compares a snapshot taken in `setUp()` against one taken in `tearDown()`. `HOME`
+is redirected per test, but the snapshot is of the REAL home, and five lanes run concurrently on one
+machine with one real home. Another lane's `Team` test writing a `throwing-*` directory between this
+lane's two snapshots is indistinguishable from this lane's own test doing it.
+
+**Why it is not simply "flaky".** The guard is correct and worth keeping — it catches a test writing into
+the real home, which is the failure it was built for. What it cannot do is attribute the write. The cheap
+fix is to compare only entries the test's own process could have created (a per-process name prefix is
+already the convention after E242); the expensive one is a per-lane `HOME`.
+
+**Also worth noting:** the 2,522 leftover directories are themselves evidence that something is not
+cleaning up. They were not deleted — sibling lanes were running and a glob delete under a shared home is
+the hazard this round's brief spends a paragraph on.
+
+---
+
+### Ed49-7 — a TEXT-keyed brace walk makes its token-id disjunct dormant, and a spelling roster cannot tell
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Measured**,
+PHP 8.3.6. **Fixed in the same round** for the one instance found; the shape is the entry.
+
+**What.** `InterpolationOpenerTokenTest::testEveryBraceWalkingScannerNamesEveryOpener()` requires every
+brace walker to NAME every opener the lexer produces. It reads what a walker *names*. It cannot tell
+whether the walk *works* — and for one class of walker the two answers diverge.
+
+**The class.** A walk that keys on the token's TEXT (`$text = is_array($t) ? $t[1] : $t;` then
+`$text === '{'`) already increments on `T_CURLY_OPEN`, because that token's text IS that one byte. The
+explicit `$id === T_CURLY_OPEN` disjunct beside it is then a NO-OP on every input. `T_DOLLAR_OPEN_CURLY_BRACES`
+is the opposite: its text is two bytes, the text arm cannot see it, and its disjunct is load-bearing.
+Measured on `DuplicatedTestHelperDriftTest::bodyOf()`: dropping the first changed no body on any fixture
+and SURVIVED that file's own tests; dropping the second also SURVIVED that file's own tests, and both were
+caught only by the roster guard in another file. So the roster was enforcing a spelling of which one half
+did nothing and the other half was untested.
+
+**Why it matters beyond the one site.** The roster guard is what the tree relies on to keep brace walks
+correct, and its verdict is about spelling. A lane that adds the token to satisfy it has satisfied the
+guard without exercising the walk — and if the walk is text-keyed, the token it added cannot be exercised
+at all. **A spelling guard and a behaviour guard are not substitutes, and this tree has one of each for
+this problem with nothing saying which claim is which.**
+
+**Step.** When auditing a walker's roster, classify the walk first: keyed on TEXT, on the token ID, or on
+the bare string. Only the last two make a `T_CURLY_OPEN` disjunct load-bearing. For a text-keyed walk,
+pin the dormancy from the interpreter (assert the token's text) rather than leaving the line to be deleted
+as dead — and pin the deprecated opener behaviourally, since its truncation makes two drifted copies
+compare EQUAL, which reads as "no drift" rather than as an error.
+
+### Ed49-8 — a deferral keyed on the FILENAME is silent on a partial fix
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Fixed** for
+`InterpolationOpenerTokenTest::KNOWN_GAPS` in the same round; the shape is the entry.
+
+**What.** This tree now has several deferral maps of the form `key => reason`, checked in "both
+directions": a key with no offence is *overtaken*, an offence with no key is *unrecorded*. Both directions
+ask a BOOLEAN question — is there still an offence here. Neither asks whether it is still THE offence the
+row describes.
+
+**The direction that is silent.** A partial fix. A walker missing two openers that gains one of them still
+has a gap, so the row still matches, and the row's argued prose — written about the wider gap — silently
+becomes false. The remaining half is then deferred by accident, under an argument for something else. Same
+applies to any `SCOPE`/`OUT_OF_SCOPE` pair whose rows describe a *cluster* of sites: fix three of four and
+the row survives describing four.
+
+**Step.** Where a row's reason describes a specific extent, record the extent as data and compare it, not
+just its non-emptiness — and intersect the recorded extent with whatever the running environment can still
+produce before comparing, or the map reds wholesale on the language change it was written to survive.
+`ChildStderrCaptureTest::OUT_OF_SCOPE` and `ForkedChildReaperAdoptionTest::OUT_OF_SCOPE` both have rows of
+this shape (`Context/`: "`git init` / `git config` fixture setup with `2>/dev/null` on each line") and
+neither records a count — deliberately, per their own doc-blocks, because a count over `tests/` rots. The
+open question this entry leaves is what a rot-proof extent looks like for those two.
+
+### Ed49-9 — a harness that hard-codes half of the set it measures is measuring the hard-coded half
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: process. **Three figures retracted.**
+
+**What was wrong.** Round 49 lane d's own implementer stage shipped three numbers a review could not
+re-derive. All three are corrected in place with their generators; the mechanism is the entry.
+
+  * "none of the **eight** Bootstrap methods it reads" (shipped in a `KNOWN_GAPS` reason). It is seven.
+    The generator merged a regex over the test source with a HARD-CODED list of seven method names, and
+    ran a REPLICA of the walk on both sides rather than the shipped one. Its table printed nine rows, two
+    of them fixture names resolving to `null`.
+  * "the **seven** walkers the old predicate already covered" (backlog). It is ten, re-derived by running
+    both predicates over every `tests/`+`src/` blob read out of `git show db90e768:`.
+  * "`KNOWN_GAPS` is empty at this commit" (shipped doc-block). It had three rows in the same commit that
+    wrote the sentence — the change-set that emptied it of its one row widened the selection and refilled
+    it.
+
+**The common cause is not carelessness.** Each figure was produced by a harness that was *partly* derived.
+A regex plus a hand-written list; a replica of the walk instead of the walk; a sentence written before the
+last hunk of the same commit. **Rule 13 says the harness can carry the defect the claim is about; this is
+the sub-case where the harness carries HALF the answer as a literal.** The reviewable property is not
+"was it measured" but "is every element of the measured set derived".
+
+**Step.** For any set-valued measurement, print the set and its size, derive both from the shipped code,
+and state the accessor used. A figure whose generator contains a literal list of the things being counted
+is not a measurement of them.
+
+### Ed49-10 — the drift guard compares BODIES, so a signature divergence is invisible
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured**, PHP 8.3.6.
+**Documented, not fixed.**
+
+**What.** `DuplicatedTestHelperDriftTest` compares two same-named private helpers by normalising their
+BODIES, and `bodyOf()` starts at the body's opening brace. A divergence in the PARAMETER LIST — an added
+parameter, a changed default, a widened type — is therefore invisible, and two copies whose signatures
+disagree can compare as byte-identical bodies.
+
+**Not hypothetical.** `reviewerAgent`'s own accepted row is exactly that shape (one copy takes the active
+flag as a parameter, the other hard-codes it) and is in the report only because the divergence also
+reaches the body.
+
+**Why it was not simply widened.** Including the signature folds every promoted-property and default-value
+spelling difference into the divergence core and pushes most real pairs past `DRIFT_BOUND`, which is a
+different guard rather than a wider one. Widening wants its own round with rows to argue — the same
+conclusion Ed49-4 reaches for the bound itself, and probably the same round.
+
+---
+
+### Ed49-11 — a reader that slices `file(__FILE__)` with reflection's line numbers, unchecked in both directions
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: correctness of an instrument.
+**FIXED**, with mutation proof in both halves.
+
+**What.** `VhsTapeContractTest::modelMethodTokens()` took `getStartLine()`/`getEndLine()` from
+`ReflectionMethod` and sliced `file(__FILE__)` with them. Nothing checked that the two addressed the same
+text, and the two ways they can disagree have different mechanisms:
+
+  * **Another file.** For a method imported from a trait, `getFileName()` is the TRAIT's file and the line
+    numbers are the trait's lines. Measured on PHP 8.3.6: slicing the using class's file with them returns
+    unrelated source with no error of any kind. Reachability is not theoretical — extracting a duplicated
+    test helper into a trait is a thing this tree is actively doing.
+  * **The same file, shifted.** Reflection's line numbers are fixed when the class loads; `file(__FILE__)`
+    is read on every call. An edit to the file in between shifts every slice while the file name still
+    matches. **This half was OBSERVED**: in a run where the file changed on disk mid-suite, every body came
+    back one declaration out of step and the census reported `directiveValues()`'s figures under
+    `scanRegex()`'s name — under a message blaming "a docblock that has gone stale two screens away",
+    which invites the reader to edit the figures.
+
+**Fix.** `assertSame(__FILE__, $reflection->getFileName())` for the first; a `declaredSlice()` that refuses
+unless the slice's first line spells `function <name>` for the second. The second takes its lines as an
+argument so a fixture can hand it offsets that no longer match, which a live reflection cannot be asked to
+produce. Both are pinned by positives: an inherited PHPUnit assertion pushed through the reader, and a
+synthetic nine-line source sliced at the wrong declaration.
+
+**The generalisable part.** A guard whose failure message names a likely cause is a guard that will be
+believed. When the diagnosis and the real cause differ, the message is worse than silence — so the reader
+must refuse states it cannot interpret rather than describe one it has not verified.
+
+### Ed49-12 — the drift guard's visibility alphabet was defended by a feeling
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED** (measured, and the
+measurement is now derived by a test rather than written down).
+
+**What.** `DuplicatedTestHelperDriftTest`'s class doc-block lists what its alphabet deliberately cannot
+see. Two bullets carry generators. The third — protected and public helpers — carried "a protected helper
+is usually inherited rather than copied, which is a different failure". Rule 11: an alphabet is coverage,
+and a restriction argued that way is a zero nobody has asked what it cannot express.
+
+**Measured** through the same `driftReport()` with the alphabet widened, PHP 8.3.6: the `protected` run
+brings in **no helper name at all**. Every pair belongs to a PHPUnit lifecycle hook the framework declares
+protected — two classes overriding `setUp()` have implemented the same hook, not copied a helper — and it
+brings them in many times more often than the private run finds anything, so widening would be answered
+by exempting them, which is where the next real drift hides. The conclusion was right; the argument was
+not.
+
+**Fix.** The alphabet is a parameter of `driftReport()` rather than a constant inside the walk, so the
+restriction is measured through the shipped code. `testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()`
+runs the wide alphabet and reds the day a protected NON-hook helper drifts, with a message saying to widen
+the default rather than exempt the name. The hook roster is read off `TestCase` by reflection so a PHPUnit
+upgrade cannot red it for the wrong reason.
+
+**And a rule-15 hole inside the fix, caught by mutating the fix.** The wide-run assertion is
+`assertSame([], nonHookNames)`, which an EMPTY wide report satisfies perfectly. A mutation that neutralises
+the alphabet parameter so the wide run yields nothing gets past it untouched; only the pair-count
+comparison beside it reds, and with that comparison deleted the mutation survives the whole file. The
+doc-block first credited that comparison with catching a dead report — which
+`assertTheScannerIsAlive()` already owns three assertions earlier — and was corrected to the mechanism it
+really covers.
+
+### Ed49-13 — a partition guard with one direction, carried by a loop that runs zero times
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **FIXED.**
+
+**What.** `ForkedChildReaperAdoptionTest` keeps a `SCOPE`/`OUT_OF_SCOPE` pair. Its
+`testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()` asserts `!inScope($prefix)` per row, which refuses a
+row whose own key SCOPE covers. Two things get past that. `OUT_OF_SCOPE` is `[]`, so the loop carrying the
+assertion runs zero times and it has never executed against anything. And `inScope()` matches with
+`str_starts_with($relative, $entry)`, so it can only ask whether a ROW sits inside a SCOPE entry — the
+reverse, a SCOPE entry that is a prefix OF a row's key (`Agents/` in SCOPE against an
+`Agents/AgentManagerTest.php` row), is an overlap it cannot express. In that state the SCOPE half satisfies
+the jointly-total test and the row can never be reported.
+
+**Fix.** `testNeitherMapClaimsADirectoryTheOtherAlreadyClaims()` runs both directions through one
+`overlappingClaims()`. Its load-bearing assertions are synthetic, because a real-tree control over an empty
+map is what a deleted predicate returns; the near-miss negative (`Chat/` in SCOPE against a `ChatTest.php`
+row — neither contains the other) stops the predicate being stuck at yes.
+
+**The generalisable part.** `str_starts_with()` is directional, and a containment check written once
+covers one order. Every `SCOPE`/`OUT_OF_SCOPE` pair in this tree should be read for the second order.
+`ChildStderrCaptureTest` grew it this round; the sibling had not, and the sentence recording that gap has
+been rewritten rather than deleted, because the mechanism it names is what both second loops are for.
+
+### Ed49-14 — the brace-walker predicate cannot express a `switch` or `match` depth counter
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured, not fixed.**
+
+**What.** `InterpolationOpenerTokenTest::comparesAgainstBrace()` selects a bare-brace depth counter by
+looking for a one-byte `'{'`/`'}'` literal with a COMPARISON OPERATOR
+(`T_IS_IDENTICAL`/`T_IS_NOT_IDENTICAL`/`T_IS_EQUAL`/`T_IS_NOT_EQUAL`) as its nearest significant
+neighbour. Its own doc-block names the escape as "a token id it computed, or a regex over text". There is
+a third, and it is the most ordinary spelling of a depth counter there is: `switch ($text) { case '{':
+$depth++; ... }`, and its modern sibling `match`. Neither puts a comparison operator next to the literal,
+so both are invisible to the predicate AND to the `T_CURLY_OPEN`-naming half beside it — a brace walker
+spelled that way is not selected at all, so it can be missing every opener and never appear as a gap.
+
+**Measured today, PHP 8.3.6**, over every `.php` under `tests/` and `src/` in the lane worktree: the files
+holding a bare-brace literal at all are a small set, every literal in them sits next to `,`, `)`, `]`,
+`=>` or `(`, and **no `case` or `match` arm on a brace occurs anywhere**. So the gap is real and currently
+unoccupied. The generator walks `token_get_all()` per file and prints each brace literal's two nearest
+significant neighbours with a CMP/other verdict; it is a dozen lines and is worth shipping as the test
+rather than as a script, because a cardinality taken in a lane worktree is void at the next merge.
+
+**Step.** Add `T_CASE` and a `match`-arm shape to `comparesAgainstBrace()`'s neighbour alphabet, and pin
+the currently-empty population with a synthetic known-positive in the same test (a nowdoc `switch`-based
+walker must be SELECTED and reported as missing `${`). Until then the doc-block's "nothing in the tree
+does that today" is true but unpinned — the first `switch`-based walker anyone writes lands unguarded.

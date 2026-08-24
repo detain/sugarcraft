@@ -670,6 +670,105 @@ final class ForkedChildReaperAdoptionTest extends TestCase
     }
 
     /**
+     * NEITHER MAP MAY CLAIM A DIRECTORY THE OTHER ALREADY CLAIMS, and this file
+     * has never checked the half that matters.
+     *
+     * WHAT IS ALREADY COVERED, and it is only one direction:
+     * {@see testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()} asserts
+     * `!inScope($prefix)` per row - so a row whose OWN key SCOPE covers is
+     * refused. Two things get past it. The first is that
+     * {@see OUT_OF_SCOPE} is empty, so that loop runs zero times and the
+     * assertion has never executed against anything in this tree. The second
+     * survives the map being refilled: `inScope()` matches with
+     * `str_starts_with($relative, $entry)`, so it answers the question "is this
+     * ROW inside a SCOPE entry" and never the reverse one - a SCOPE entry that
+     * is a prefix OF a row's key, `Agents/` in SCOPE against an
+     * `Agents/AgentManagerTest.php` row, is an overlap that direction cannot
+     * see. Both maps then claim the same files, the SCOPE half satisfies the
+     * partition, and the row can never be reported.
+     *
+     * THE SIBLING GUARD GREW THIS CHECK AND THIS ONE DID NOT. Cross-reference
+     * verified rather than assumed:
+     * {@see ChildStderrCaptureTest::testScopeAndOutOfScopeDoNotClaimTheSameDirectory()}
+     * runs both directions over its own pair of maps, whose OUT_OF_SCOPE is not
+     * empty. The two files keep separate maps over the same directories for
+     * different offences, so cleaning a directory for one does not move it in
+     * the other - which is exactly how one of them ends up with a check the
+     * other lacks.
+     *
+     * THE REAL MAPS ARE THE CONTROL HERE, NOT THE CHECK. With OUT_OF_SCOPE
+     * empty the first assertion is true of any predicate whatsoever, including
+     * a deleted one - rule: a fixture whose expected value is what a dead
+     * instrument returns proves nothing. So the load-bearing assertions are
+     * synthetic, they go through the same {@see overlappingClaims()} the real
+     * one calls, and they cover both directions plus the near-miss that a
+     * predicate stuck at "yes" would fail: `Chat/` and `ChatTest.php` are
+     * different claims and neither contains the other.
+     */
+    public function testNeitherMapClaimsADirectoryTheOtherAlreadyClaims(): void
+    {
+        $this->assertSame(
+            [],
+            self::overlappingClaims(self::SCOPE, self::OUT_OF_SCOPE),
+            'SCOPE and OUT_OF_SCOPE claim the same files. If the directory has been cleaned up, '
+                . 'delete the OUT_OF_SCOPE row; if it has not, take the prefix back out of '
+                . 'SCOPE. Leaving it in both makes the deferral unreadable: the partition in '
+                . 'testNoDirectoryWithUnreapedForksIsUnaccountedFor() is satisfied by the SCOPE '
+                . 'half, so nothing ever reports the row and nobody ever reads its reason.',
+        );
+
+        $this->assertNotSame(
+            [],
+            self::overlappingClaims(['Agents/'], ['Agents/AgentManagerTest.php' => 'deferred']),
+            'a SCOPE entry that CONTAINS an OUT_OF_SCOPE row was not called an overlap. This is '
+                . 'the direction inScope() cannot express - it asks whether the row sits inside '
+                . 'a SCOPE entry, which is true here and is exactly why the row goes unreported '
+                . 'rather than refused.',
+        );
+        $this->assertNotSame(
+            [],
+            self::overlappingClaims(['Agents/AgentManagerTest.php'], ['Agents/' => 'deferred']),
+            'an OUT_OF_SCOPE row that CONTAINS a SCOPE entry was not called an overlap, so the '
+                . 'predicate is directional and one of the two orders is unguarded',
+        );
+        $this->assertSame(
+            [],
+            self::overlappingClaims(['Chat/'], ['ChatTest.php' => 'deferred']),
+            'a root-level file whose name merely STARTS like a SCOPE directory was called an '
+                . 'overlap. A predicate this loose would red on a pair of maps that are correct, '
+                . 'and the positives above would then prove nothing.',
+        );
+    }
+
+    /**
+     * Which prefixes the two maps claim in common, as readable pairs.
+     *
+     * Takes both maps as ARGUMENTS rather than reading the constants, so the
+     * synthetic positives above and the real check go through this one
+     * definition. A second spelling of "overlap" inline in the assertion is the
+     * seam the missing direction slipped through in the first place.
+     *
+     * @param list<string>          $scope
+     * @param array<string,string>  $outOfScope
+     *
+     * @return list<string>
+     */
+    private static function overlappingClaims(array $scope, array $outOfScope): array
+    {
+        $found = [];
+
+        foreach (array_keys($outOfScope) as $prefix) {
+            foreach ($scope as $entry) {
+                if (str_starts_with($prefix, $entry) || str_starts_with($entry, $prefix)) {
+                    $found[] = $prefix . ' in OUT_OF_SCOPE and ' . $entry . ' in SCOPE';
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * {@see SCOPE} AND {@see OUT_OF_SCOPE} MUST BE JOINTLY TOTAL over the
      * offenders, or the deferral is a hole rather than a record.
      *

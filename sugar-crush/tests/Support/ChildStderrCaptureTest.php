@@ -948,7 +948,16 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'OUT_OF_SCOPE with the reason it cannot be adopted yet. Both maps are matched '
                 . 'with str_starts_with(), so for a test at the ROOT of tests/ - which has no '
                 . 'directory - the entry is the filename itself. Leaving it in neither is the '
-                . 'only outcome this guard refuses.',
+                . 'only outcome this guard refuses. '
+                . 'WHAT EACH SHAPE ABOVE ASKS OF YOU, since the answer is different for all '
+                . 'three: `inherited` means the command names no destination for fd 2 at all - '
+                . 'send it to a file the helper reads back, or to the same pipe as fd 1 if '
+                . 'nothing parses that pipe. `discarded` means fd 2 goes to /dev/null - capture '
+                . 'it instead, or, if the discard is the point, add a row to '
+                . 'ACCEPTED_DISCARDED_STDERR keyed by this file with the COUNT of discards it '
+                . 'covers and the reason. `unclassified` means this scanner could not read the '
+                . 'descriptor spec - it is NOT a clean bill: spell the spec so it can be read, '
+                . 'or argue it like a discard.',
         );
     }
 
@@ -993,8 +1002,18 @@ final class ChildStderrCaptureTest extends TestCase
                 $stillOffending,
                 $prefix . ' is recorded in OUT_OF_SCOPE as holding a spawn whose stderr reaches '
                     . 'the suite, and it no longer does. Move the prefix into SCOPE and delete '
-                    . 'this row - a deferral that has been overtaken is how a directory '
-                    . 'silently stops being guarded.',
+                    . 'this row, in the SAME change-set - a deferral that has been overtaken is '
+                    . 'how a directory silently stops being guarded, and a prefix left in both '
+                    . 'maps is refused by '
+                    . 'testScopeAndOutOfScopeDoNotClaimTheSameDirectory(). '
+                    . 'WHAT MOVING IT INTO SCOPE COMMITS YOU TO, because it is more than the '
+                    . 'sites you just fixed: from then on EVERY spawn added anywhere under that '
+                    . 'prefix must capture fd 2, and any deliberate discard needs its own '
+                    . 'ACCEPTED_DISCARDED_STDERR row carrying a COUNT. That is the intended '
+                    . 'cost. And check the sibling guard in the same pass - '
+                    . 'ForkedChildReaperAdoptionTest keeps its own SCOPE/OUT_OF_SCOPE pair over '
+                    . 'the same directories for a different offence, and cleaning a directory '
+                    . 'for one of them does not move it in the other.',
             );
         }
 
@@ -1008,6 +1027,119 @@ final class ChildStderrCaptureTest extends TestCase
                     . 'under tests/.',
             );
         }
+    }
+
+    /**
+     * A DIRECTORY CANNOT BE IN BOTH MAPS.
+     *
+     * WHY THIS IS A TEST AND NOT AN INVARIANT NOBODY WOULD BREAK. The two
+     * directions of the partition are satisfied by an overlap, both of them:
+     * {@see accountedFor()} answers true on the SCOPE half and never reaches
+     * the row, and {@see testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn()}
+     * is happy as long as the directory still holds an offender - which, if
+     * the lane widened SCOPE without fixing the sites, it does. What actually
+     * reds in that state is
+     * {@see testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()}, with a
+     * message about a spawn rather than about two maps disagreeing, and the
+     * reader has to work out which of the two edits was the mistake.
+     *
+     * THE SIBLING GUARD HAS HALF OF THIS, AND HAS NEVER RUN IT - checked, not
+     * assumed, because a cross-reference that overstates is worse than none.
+     * {@see ForkedChildReaperAdoptionTest::testEveryOutOfScopeDirectoryStillHasAnUnreapedFork()}
+     * does assert `!inScope($prefix)` per row, so it covers the first loop
+     * below. But that file's `OUT_OF_SCOPE` is EMPTY - the commit that adopted
+     * `Backend/` deleted its last row - so the loop runs zero times and the
+     * assertion has never executed against anything.
+     *
+     * WHAT THIS SAID NEXT: "and it has no equivalent of the SECOND loop at all
+     * ... the day a row goes back into that map, the reverse direction is not
+     * there". WHAT IS TRUE NOW: it has one -
+     * {@see ForkedChildReaperAdoptionTest::testNeitherMapClaimsADirectoryTheOtherAlreadyClaims()},
+     * added in the change-set that corrected this paragraph, running both
+     * directions through one predicate with synthetic positives because its own
+     * map is legitimately empty and a real-tree control there proves nothing.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the finding was the reason the
+     * check exists, and the mechanism it names - `str_starts_with()` is
+     * directional, so `inScope()` can only ask whether a ROW sits inside a
+     * SCOPE entry and never the reverse - is what BOTH files' second direction
+     * is for. Delete the paragraph and the next reader deletes one of the two
+     * loops as a duplicate of the other.
+     */
+    public function testScopeAndOutOfScopeDoNotClaimTheSameDirectory(): void
+    {
+        $this->assertNotSame([], self::OUT_OF_SCOPE, 'the map this test reasons about is empty');
+        // BOTH constants, because both loops below iterate them and an empty
+        // one makes its loop vacuous rather than failing. SCOPE is the easier
+        // of the two to empty by accident: it is a bare list, so a bad merge
+        // leaves `[]` and every "these do not overlap" assertion is then true
+        // of a partition with nothing on one side of it.
+        $this->assertNotSame([], self::SCOPE, 'the other map this test reasons about is empty');
+
+        foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
+            $this->assertFalse(
+                self::inScope($prefix),
+                $prefix . ' is listed in OUT_OF_SCOPE and SCOPE covers it as well - the two '
+                    . 'constants disagree about the same directory. If the directory has been '
+                    . 'cleaned up, delete the OUT_OF_SCOPE row; if it has not, take it back out '
+                    . 'of SCOPE. Leaving it in both makes the deferral unreadable: the partition '
+                    . 'is satisfied by the SCOPE half, so nothing ever reports the row.',
+            );
+        }
+
+        // THE PREDICATE, ON PAIRS WHOSE ANSWER IS KNOWN, IN THIS TEST. Both
+        // loops assert an ABSENCE over real data, and an absence is satisfied
+        // perfectly by a comparison that never fires - so the positives come
+        // first and go through the same {@see overlaps()} the loop below calls.
+        $this->assertTrue(self::overlaps('Cli/', 'Cli/'), 'a prefix does not overlap itself');
+        $this->assertTrue(
+            self::overlaps('Cli/BootstrapTest.php', 'Cli/'),
+            'a row narrower than a SCOPE entry that contains it was not called an overlap',
+        );
+        $this->assertTrue(
+            self::overlaps('Cli/', 'Cli/BootstrapTest.php'),
+            'the same pair the other way round was not called an overlap, so the predicate is '
+                . 'directional and one of the two orders is unguarded',
+        );
+
+        // ...AND THE NEGATIVE, which is a real near-miss in this very tree:
+        // `Chat/` is in SCOPE and `ChatTest.php` is a row, and neither is a
+        // prefix of the other. A predicate stuck at "yes" would red on the
+        // maps as they stand.
+        $this->assertFalse(
+            self::overlaps('ChatTest.php', 'Chat/'),
+            'a root-level file whose name merely STARTS like a SCOPE directory was called an '
+                . 'overlap. Chat/ and ChatTest.php are different claims and both maps hold one '
+                . 'of them, so a predicate this loose reds the tree as it stands.',
+        );
+
+        // AND THE OTHER WAY ROUND, which is not the same statement as the loop
+        // above: a SCOPE entry that is a PREFIX OF an OUT_OF_SCOPE key -
+        // `Cli/` in SCOPE against a `Cli/BootstrapTest.php` row - passes
+        // inScope() there only because the row is the longer string.
+        // str_starts_with() is directional and both directions swallow the row.
+        foreach (self::SCOPE as $scope) {
+            foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
+                $this->assertFalse(
+                    self::overlaps($prefix, $scope),
+                    $prefix . ' in OUT_OF_SCOPE and ' . $scope . ' in SCOPE overlap. One of the '
+                        . 'two contains the other, so every file the narrower one names is '
+                        . 'already claimed by the wider - and the row can never be reported.',
+                );
+            }
+        }
+    }
+
+    /**
+     * Whether two prefixes claim any of the same files.
+     *
+     * A helper rather than an inline expression for one reason: the loop that
+     * uses it asserts an ABSENCE over the real maps, and rule - a guard
+     * asserting an absence needs a known-positive through the SAME code in the
+     * same test. Inline, the fixtures beside it would be testing a copy.
+     */
+    private static function overlaps(string $a, string $b): bool
+    {
+        return str_starts_with($a, $b) || str_starts_with($b, $a);
     }
 
     /**

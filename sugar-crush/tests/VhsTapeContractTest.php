@@ -2961,11 +2961,34 @@ final class VhsTapeContractTest extends TestCase
         self::assertSame(
             ['Set Shell' => 1],
             self::literalHeadArguments($interpolated)['tally'],
-            'and the token stream\'s one asymmetry: the `{` opening an interpolation is an ARRAY '
-            . 'token while the `}` closing it is a bare string, so a depth count that matched '
-            . 'only bare braces would go one closer over and truncate the argument list before '
-            . 'reaching the head. No call site in this file passes an interpolated string today, '
-            . 'which is precisely why the blind spot needs a fixture rather than a reader',
+            'and the FIRST of the token stream\'s three asymmetries: the `{` opening an '
+            . 'interpolation is an ARRAY token while the `}` closing it is a bare string, so a '
+            . 'depth count that matched only bare braces would go one closer over and truncate '
+            . 'the argument list before reaching the head. No call site in this file passes an '
+            . 'interpolated string today, which is precisely why the blind spot needs a fixture '
+            . 'rather than a reader',
+        );
+
+        // The 8.2-DEPRECATED SPELLING of the row above, and the reason it is a
+        // NOWDOC: `${dir}` inside a nowdoc is data, so this file never compiles
+        // it and cannot emit the deprecation on any PHP. `token_get_all()`
+        // lexes rather than compiles, so the scanner under test still sees the
+        // opener it has to handle for as long as PHP emits one.
+        $deprecatedInterpolation = <<<'PHP'
+            <?php
+            self::assertSame([], self::directiveValues("${dir}/x.tape", 'Set Font Size'), 'why');
+            PHP;
+
+        self::assertSame(
+            ['Set Font Size' => 1],
+            self::literalHeadArguments($deprecatedInterpolation)['tally'],
+            'and the SAME asymmetry in its other spelling, which this file did not handle for '
+            . 'four rounds while every other brace walker in the suite was given it one at a '
+            . 'time. `"${dir}"` opens with T_DOLLAR_OPEN_CURLY_BRACES - a THIRD array token, '
+            . 'whose text is `${` and not `{`, measured on PHP 8.3.6 - and closes with the same '
+            . 'bare `}`, so a walker naming only T_CURLY_OPEN loses a level here exactly as one '
+            . 'naming neither loses it above. Latent rather than live: the syntax occurs in no '
+            . 'model call site, which is why it needs a fixture and not a reader',
         );
 
         $nested = <<<'PHP'
@@ -3037,7 +3060,7 @@ final class VhsTapeContractTest extends TestCase
         self::assertSame(
             ['Set Theme' => 1],
             self::literalHeadArguments($attributed)['tally'],
-            'and the token stream\'s SECOND asymmetry, the mirror of the interpolation row '
+            'and the token stream\'s THIRD asymmetry, the mirror of the two interpolation rows '
             . 'above: `#[` comes back as one `T_ATTRIBUTE` token while its `]` comes back bare, '
             . 'so a depth count matching only bare brackets decrements once more than it '
             . 'increments and truncates the argument list before the head. Measured before the '
@@ -3359,7 +3382,7 @@ final class VhsTapeContractTest extends TestCase
         self::assertSame(
             [
                 'literalHeadArguments' => 14,
-                'callArgument' => 16,
+                'callArgument' => 17,
                 'headArgument' => 4,
                 'splitNamedArgument' => 4,
             ],
@@ -3379,7 +3402,7 @@ final class VhsTapeContractTest extends TestCase
         $total = array_sum($leaves);
 
         self::assertSame(
-            38,
+            39,
             $total,
             'and the total the register quotes, which is the sum of the four above and not a '
             . 'figure of its own. The retired version was a literal beside a sentence '
@@ -3446,10 +3469,10 @@ final class VhsTapeContractTest extends TestCase
         }
 
         self::assertSame(
-            21,
+            22,
             $total - \count(self::SWEEP_SURVIVORS),
             'and the KILLED count, DERIVED. It is the one figure in the register a sweeper '
-            . 'cannot measure from the source — it takes 38 runs — so it is the one figure '
+            . 'cannot measure from the source — it takes 39 runs — so it is the one figure '
             . 'that must not be typed independently of the two that can be. Round 19 typed it '
             . 'independently and it was one out',
         );
@@ -3488,10 +3511,161 @@ final class VhsTapeContractTest extends TestCase
     }
 
     /**
+     * REFLECTION ANSWERS ABOUT THE DECLARING FILE AND
+     * {@see modelMethodTokens()} SLICES THIS ONE, so the two have to be checked
+     * against each other rather than assumed to agree.
+     *
+     * WHY A TEST AND NOT A COMMENT. The check inside that method is dormant
+     * today: every method it is asked for is declared here, so deleting the
+     * check changes no figure in this file and a whole-file run stays green.
+     * Rule: pin the dormancy, or the next reader deletes the line as dead. It
+     * stops being dormant the moment a helper this file reads is lifted into a
+     * trait, which is a thing that happens to duplicated test helpers in this
+     * tree on purpose.
+     *
+     * BOTH HALVES ARE DERIVED FROM THE RUNNING INTERPRETER, because the whole
+     * point of the check is that the answer is not the one the reader assumes.
+     * The first half establishes that reflection really does answer about
+     * another file — over a trait `tests/` already has, and one that
+     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildReaperAdoptionTest}
+     * requires that class to keep using, so the pair cannot quietly dissolve.
+     * The second pushes a method declared in ANOTHER FILE through the reader
+     * and requires it to refuse: with the check removed, that call returns
+     * tokens sliced out of this file at PHPUnit's line numbers and every
+     * census built on it measures whatever sits at those offsets.
+     */
+    public function testModelMethodTokensRefusesAMethodDeclaredInAnotherFile(): void
+    {
+        $trait = new \ReflectionClass(\SugarCraft\Crush\Tests\Support\ReapsForkedChildrenTrait::class);
+        $user = new \ReflectionClass(\SugarCraft\Crush\Tests\Support\ForkedChildTest::class);
+        $traitFile = $trait->getFileName();
+
+        self::assertNotSame(
+            [],
+            $trait->getMethods(),
+            'the trait this mechanism is derived from declares no methods any more. Any trait '
+            . 'a class under tests/ uses will do — substitute one, do not delete the check '
+            . 'this pins',
+        );
+
+        $imported = null;
+        foreach ($trait->getMethods() as $method) {
+            $candidate = new \ReflectionMethod($user->getName(), $method->getName());
+            if ($candidate->getFileName() === $traitFile) {
+                $imported = $candidate;
+
+                break;
+            }
+        }
+
+        self::assertNotNull(
+            $imported,
+            'no method of ' . $user->getShortName() . ' reports the trait\'s file, so this half '
+            . 'of the derivation has stopped exercising the mechanism it exists to establish',
+        );
+        self::assertNotSame(
+            $user->getFileName(),
+            $imported->getFileName(),
+            'a method this class reaches through a trait reports the USING class\'s file, so '
+            . 'reflection\'s file and line numbers can no longer disagree with __FILE__ this '
+            . 'way. Re-read modelMethodTokens() before relaxing its check: the failure it '
+            . 'guards against is a silent misread, not an error',
+        );
+
+        try {
+            self::modelMethodTokens('assertTrue');
+            self::fail(
+                'modelMethodTokens() accepted a method declared in another file. It sliced THIS '
+                . 'file at PHPUnit\'s line numbers for it and returned the tokens as that '
+                . 'method\'s body — which is how a census reports one method\'s figures under '
+                . 'another\'s name and blames the docblock two screens away.',
+            );
+        } catch (\PHPUnit\Framework\ExpectationFailedException $refusal) {
+            self::assertStringContainsString(
+                'is not declared in this file',
+                $refusal->getMessage(),
+                'the reader refused, but not for this reason — so this fixture is pinning some '
+                . 'other failure and the declaring-file check could be gone',
+            );
+        }
+    }
+
+    /**
+     * AND THE SAME-FILE HALF, which the declaring-file check cannot see: line
+     * numbers frozen at class load against a file re-read on every call.
+     *
+     * The offsets are supplied here rather than reflected, because the failure
+     * being pinned is precisely offsets that no longer match the file - a state
+     * a live reflection cannot be asked to produce, and the reason the check
+     * lives in a function taking `$lines` instead of reading the file itself.
+     * The correct slice comes first so the refusal below cannot be a predicate
+     * stuck at "no".
+     */
+    public function testASliceIsRefusedUnlessItsFirstLineDeclaresTheMethodAsked(): void
+    {
+        $lines = [
+            "<?php\n",
+            "    private static function alpha(): int\n",
+            "    {\n",
+            "        return 1;\n",
+            "    }\n",
+            "    private static function beta(): int\n",
+            "    {\n",
+            "        return 2;\n",
+            "    }\n",
+        ];
+
+        self::assertStringContainsString(
+            'return 1;',
+            self::declaredSlice($lines, 'alpha', 2, 5),
+            'the reader refused a slice whose first line DOES declare the method asked for, so '
+            . 'it is stuck at no and the refusal below proves nothing',
+        );
+
+        try {
+            self::declaredSlice($lines, 'alpha', 6, 9);
+            self::fail(
+                'the reader accepted one declaration\'s offsets for another declaration\'s name '
+                . 'and returned beta()\'s body as alpha()\'s. That is the shape of the run in '
+                . 'which this file changed on disk mid-suite: every census measured a neighbour '
+                . 'and blamed the prose next to it.',
+            );
+        } catch (\PHPUnit\Framework\ExpectationFailedException $refusal) {
+            self::assertStringContainsString(
+                'does not declare alpha()',
+                $refusal->getMessage(),
+                'the reader refused, but for some other reason, so this fixture is not pinning '
+                . 'the first-line check',
+            );
+        }
+    }
+
+    /**
      * One model method's own tokens, with comments and whitespace dropped.
      *
-     * Located by reflection rather than by line numbers so it cannot drift, and
-     * read through PHP's tokenizer rather than by regex because the thing being
+     * WHAT THIS SAID: "located by reflection rather than by line numbers so it
+     * cannot drift". WHAT IS TRUE NOW: reflection supplies the LINE NUMBERS and
+     * this method slices `file(__FILE__)` with them, so the two agree only while
+     * the method is declared in THIS file. Measured on PHP 8.3.6, a method
+     * imported from a trait reports the TRAIT's file from `getFileName()` and
+     * lines in the trait from `getStartLine()`/`getEndLine()`, and slicing this
+     * file with those returns unrelated source with no error of any kind. WHY
+     * THE REASONING STILL EARNS ITS PLACE: reflection is still the right
+     * locator, and for the reason the sentence gave — but what makes it better
+     * than a written-down line number is that it can be ASKED WHICH FILE IT
+     * ANSWERED ABOUT. The claim keeps its place and gains the check that makes
+     * it true.
+     *
+     * THE MISALIGNMENT IS OBSERVED, not imagined, which is why this is an
+     * assertion and not a paragraph. In a run where this file changed on disk
+     * between class load and this call, every body came back one declaration out
+     * of step: {@see testTheModelsBoundsAndConjunctsAreCountedNotNarrated()}
+     * reported {@see directiveValues()}'s figures under {@see scanRegex()}'s
+     * name, under a message blaming "a docblock that has gone stale two screens
+     * away". A misaligned READ and stale prose are the same red in that message,
+     * and the invited repair — edit the figures — is the wrong one.
+     *
+     * Read through PHP's tokenizer rather than by regex because the thing being
      * counted — a guard, a conjunct — is spelled the same in code, in the comment
      * that discusses it and in the assertion message that quotes it.
      * {@see tokenize()} discusses three of {@see scanRegex()}'s guards in an
@@ -3502,14 +3676,26 @@ final class VhsTapeContractTest extends TestCase
     private static function modelMethodTokens(string $method, bool $keepWhitespace = false): array
     {
         $reflection = new \ReflectionMethod(self::class, $method);
+        self::assertSame(
+            __FILE__,
+            $reflection->getFileName(),
+            $method . '() is not declared in this file, so the line numbers reflection reports '
+                . 'for it do not address this file\'s lines and every census built on them '
+                . 'would be measured over whatever source happens to sit at those offsets. A '
+                . 'method reached through a trait is the ordinary way this happens: reflection '
+                . 'answers with the TRAIT\'s file and the trait\'s lines. Read the tokens from '
+                . 'the declaring file, or keep the method here — do not adjust the figures to '
+                . 'match what came back.',
+        );
         $lines = file(__FILE__);
         self::assertIsArray($lines, 'could not read this file');
 
-        $body = implode('', array_slice(
+        $body = self::declaredSlice(
             $lines,
-            $reflection->getStartLine() - 1,
-            $reflection->getEndLine() - $reflection->getStartLine() + 1,
-        ));
+            $method,
+            $reflection->getStartLine(),
+            $reflection->getEndLine(),
+        );
 
         $dropped = [\T_COMMENT, \T_DOC_COMMENT];
 
@@ -3522,6 +3708,43 @@ final class VhsTapeContractTest extends TestCase
             static fn (array|string $token): bool => !\is_array($token)
                 || !\in_array($token[0], $dropped, true),
         ));
+    }
+
+    /**
+     * Lines $start..$end of $lines, refused unless the first of them declares
+     * $method.
+     *
+     * THE DECLARING-FILE CHECK ABOVE DOES NOT COVER THIS ONE, and the failure
+     * it leaves open is the one actually observed. Reflection's line numbers
+     * are fixed when the class is loaded and `file(__FILE__)` is read on every
+     * call, so an edit to THIS file between those two moments shifts every
+     * slice while the file name still matches. In the run where that happened
+     * each body came back one declaration out of step and the census reported
+     * {@see directiveValues()}'s figures under {@see scanRegex()}'s name.
+     *
+     * ONE LINE IS ENOUGH TO CATCH IT because the slice starts at the
+     * declaration: if the first line does not spell `function <name>`, the
+     * offsets are not addressing the method that was asked for, whatever else
+     * is true. A declaration split across a line break between the keyword and
+     * the name would also be refused - that is a shape this reader does not
+     * understand rather than a false alarm, and saying so is the point.
+     *
+     * @param list<string> $lines
+     */
+    private static function declaredSlice(array $lines, string $method, int $start, int $end): string
+    {
+        self::assertStringContainsString(
+            'function ' . $method,
+            $lines[$start - 1] ?? '',
+            'the first line of the slice reflection points at does not declare ' . $method
+            . '(), so these offsets address some other part of this file and every figure '
+            . 'measured from them is a figure about the wrong method. The ordinary cause is '
+            . 'that this file was EDITED while the suite was running - a mutation harness '
+            . 'rewriting it in place will do it - in which case the run is void rather than '
+            . 'red. Do not adjust the census to match what came back.',
+        );
+
+        return implode('', array_slice($lines, $start - 1, $end - $start + 1));
     }
 
     /**
@@ -3616,6 +3839,62 @@ final class VhsTapeContractTest extends TestCase
     }
 
     /**
+     * {@see statements()} does not split inside EITHER interpolation spelling.
+     *
+     * WHY THIS IS A TEST AND NOT A NOTE. The splitter is one of the two brace
+     * walkers in this file, and unlike {@see callArgument()} it is reached only
+     * through {@see unanchoredConditions()}, which reads this file's OWN method
+     * bodies. Nothing in those bodies is an interpolated string, so both
+     * openers are unreachable from the census that consumes it and a leaf
+     * dropped here is silent in every other test the file has. Measured:
+     * removing `\T_DOLLAR_OPEN_CURLY_BRACES` from the depth condition leaves
+     * the whole file green without this method.
+     *
+     * The two spellings are supplied as SOURCE STRINGS in a nowdoc rather than
+     * written as code, so this file never compiles the 8.2-deprecated one and
+     * cannot emit its deprecation on any PHP; `token_get_all()` lexes rather
+     * than compiles, so the splitter still sees the opener.
+     */
+    public function testTheStatementSplitterSurvivesBothInterpolationSpellings(): void
+    {
+        $plain = <<<'PHP'
+            <?php $x = 'ac'; $y = 1;
+            PHP;
+        $modern = <<<'PHP'
+            <?php $x = "a{$b}c"; $y = 1;
+            PHP;
+        $deprecated = <<<'PHP'
+            <?php $x = "a${b}c"; $y = 1;
+            PHP;
+
+        $count = static fn (string $source): int
+            => \count(self::statements(\token_get_all($source)));
+
+        // The control: two statements, no interpolation, no opener involved.
+        // Without it a splitter that returned one statement for everything
+        // would satisfy both rows below.
+        self::assertSame(2, $count($plain), 'the splitter cannot even split two plain statements');
+
+        self::assertSame(
+            2,
+            $count($modern),
+            'the `{` of `"{$b}"` is an ARRAY token and its `}` is a bare one, so a splitter '
+            . 'that does not increment on T_CURLY_OPEN treats that `}` as a statement boundary '
+            . 'and cuts one statement into two',
+        );
+
+        self::assertSame(
+            2,
+            $count($deprecated),
+            'and the same in the 8.2-deprecated spelling, whose opener is a THIRD array token: '
+            . 'T_DOLLAR_OPEN_CURLY_BRACES, text `${` rather than `{`, measured on PHP 8.3.6. '
+            . 'This walker had it in neither depth condition for four rounds while every other '
+            . 'brace walker in the suite was given it one at a time, because the file sits at '
+            . 'the root of tests/ and was in no lane\'s ownership list',
+        );
+    }
+
+    /**
      * The statements of one method that carry a boolean condition NO anchor
      * introduces — one entry per such statement, each the missing BASE leaf that
      * {@see guardCensus()}'s token count cannot see.
@@ -3689,10 +3968,22 @@ final class VhsTapeContractTest extends TestCase
      * Split a method's token stream into statements at top-level `;`, `{` and `}`.
      *
      * Depth-counted over `(` and `[` so a `for` header's own semicolons do not
-     * split it, and over the SAME two token-stream asymmetries
-     * {@see callArgument()} handles — `T_CURLY_OPEN` and `T_ATTRIBUTE` open with
-     * an array token and close with a bare one, so a splitter matching only bare
-     * braces would treat the `}` of `"{$tape}"` as a statement boundary.
+     * split it, and over the SAME token-stream asymmetries
+     * {@see callArgument()} handles — `T_CURLY_OPEN`,
+     * `T_DOLLAR_OPEN_CURLY_BRACES` and `T_ATTRIBUTE` all open with an array
+     * token and close with a bare one, so a splitter matching only bare braces
+     * would treat the `}` of `"{$tape}"` as a statement boundary.
+     *
+     * WHAT THIS SAID: "the SAME two token-stream asymmetries", naming
+     * `T_CURLY_OPEN` and `T_ATTRIBUTE`. WHAT IS TRUE NOW: there are three, and
+     * the third — the opener of the 8.2-deprecated `${x}` spelling — was
+     * missing from both counters in this file while every other brace walker
+     * in the suite had been given it, because this file sat at the root of
+     * `tests/` and was in no lane's ownership list for the rounds that fixed
+     * the others. WHY THE PARAGRAPH STILL EARNS ITS PLACE: the asymmetry it
+     * describes is the whole reason a bare-brace depth count is wrong here,
+     * and that reasoning is what a reader needs before touching either
+     * counter. Only the roster was stale, not the argument.
      *
      * @param list<array{int, string, int}|string> $tokens
      *
@@ -3708,7 +3999,8 @@ final class VhsTapeContractTest extends TestCase
             $id = \is_array($token) ? $token[0] : $token;
 
             if ($token === '(' || $token === '['
-                || $id === \T_CURLY_OPEN || $id === \T_ATTRIBUTE) {
+                || $id === \T_CURLY_OPEN || $id === \T_DOLLAR_OPEN_CURLY_BRACES
+                || $id === \T_ATTRIBUTE) {
                 ++$depth;
             } elseif ($token === ')' || $token === ']') {
                 --$depth;
@@ -4325,7 +4617,7 @@ final class VhsTapeContractTest extends TestCase
      * it did not before: until
      * {@see testTheHeadScanSweepRegisterIsMeasuredNotNarrated()} existed these
      * four methods were outside every census, so a plain whole-file run read
-     * their kills correctly. It now reports "killed" for all thirty-eight
+     * their kills correctly. It now reports "killed" for all thirty-nine
      * without the flag, and a survivor is green either way.
      *
      * THE THREE FIGURES — leaves, survivors, killed — ARE NOT WRITTEN HERE. They
@@ -4386,10 +4678,19 @@ final class VhsTapeContractTest extends TestCase
      * this file has three times now declared that class of kill gone while one
      * sat in it — the `?? 0` kill sat inside the very method this register
      * documents, unrecorded, while the register said ONE.
-     * SIX of the kills — the accessor gate, both square-bracket depth arms,
-     * the `T_ATTRIBUTE` opener, {@see headArgument()}'s `$name === null` guard
-     * and the `\count($head) === 1` gate just named — were survivors until the
-     * fixture beside each went in, which is the whole reason those fixtures exist.
+     * SEVEN of the kills — the accessor gate, both square-bracket depth arms,
+     * the `T_ATTRIBUTE` opener, the `T_DOLLAR_OPEN_CURLY_BRACES` opener,
+     * {@see headArgument()}'s `$name === null` guard and the
+     * `\count($head) === 1` gate just named — were survivors until the fixture
+     * beside each went in, which is the whole reason those fixtures exist.
+     * THE DEPRECATED OPENER IS THE ONE THAT WAS MISSING FOR FOUR ROUNDS, and it
+     * was missing rather than argued away: {@see callArgument()}'s doc-block
+     * called it "a stated gap, not an unnoticed one" while
+     * `tests/Support/InterpolationOpenerTokenTest.php` was recording this file
+     * as the one brace walker in `tests/` and `src/` that still lacked it. Both
+     * halves are settled in the same change-set — the counters name the token
+     * and that row is gone — because a deferral recorded only inside another
+     * lane's test constant is a deferral nobody outside that lane looks for.
      *
      * ONE OTHER OPERATOR HAS BEEN SWEPT HERE, named because a survivor under an
      * unswept operator is not a gap: NARROW A SET LITERAL. `$callOperators`
@@ -4475,6 +4776,10 @@ final class VhsTapeContractTest extends TestCase
      *
      *   * `T_CURLY_OPEN` — the `{` that opens an interpolation in `"...{$x}..."`,
      *     closed by a bare `}`.
+     *   * `T_DOLLAR_OPEN_CURLY_BRACES` — the `${` that opens the spelling PHP 8.2
+     *     deprecated, also closed by a bare `}`. Its token text is `${` rather
+     *     than `{`, measured on PHP 8.3.6, so a walker keying on the text alone
+     *     misses it as surely as one keying on the bare string does.
      *   * `T_ATTRIBUTE` — the `#[` that opens an attribute, closed by a bare `]`.
      *     This was the SECOND asymmetry while the paragraph above it said "THE ONE
      *     ASYMMETRY", and it is not exotic here: this file's own data-provider
@@ -4488,9 +4793,22 @@ final class VhsTapeContractTest extends TestCase
      *
      * No call site in this file passes an interpolated string or an attribute
      * inside a model call today, which is exactly why both are worth handling now
-     * and pinning in {@see testTheHeadScanSeesACallWrappedAcrossLines()}. The
-     * deprecated `${x}` spelling is genuinely NOT handled and is not used — that
-     * one is a stated gap, not an unnoticed one.
+     * and pinning in {@see testTheHeadScanSeesACallWrappedAcrossLines()}.
+     *
+     * WHAT THIS SAID about the third opener: "the deprecated `${x}` spelling is
+     * genuinely NOT handled and is not used — that one is a stated gap, not an
+     * unnoticed one." WHAT IS TRUE NOW: it is handled, in both counters. The
+     * sentence was accurate when written and became the wrong half of a
+     * trade-off: `tests/Support/InterpolationOpenerTokenTest.php` derives the
+     * opener roster from the running interpreter and requires every brace
+     * walker under `tests/` and `src/` to name all of it, so "stated gap"
+     * stopped being a position this file could hold on its own. WHY THE
+     * REASONING STILL EARNS ITS PLACE: the distinction it draws — between a gap
+     * somebody argued for and a gap nobody noticed — is the one that decides
+     * whether an exemption row or a fix is the right answer, and the next
+     * asymmetry PHP adds will need it again. The syntax still occurs zero times
+     * in `src/` and `tests/`, so handling it costs one token per counter and
+     * buys the walk back if it ever appears.
      *
      * @param list<array{int, string, int}|string> $tokens
      *
@@ -4507,7 +4825,9 @@ final class VhsTapeContractTest extends TestCase
 
             if ($token === '(' || $token === '[' || $token === '{'
                 || (\is_array($token)
-                    && ($token[0] === \T_CURLY_OPEN || $token[0] === \T_ATTRIBUTE))) {
+                    && ($token[0] === \T_CURLY_OPEN
+                        || $token[0] === \T_DOLLAR_OPEN_CURLY_BRACES
+                        || $token[0] === \T_ATTRIBUTE))) {
                 ++$depth;
 
                 if ($depth === 1) {
