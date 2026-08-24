@@ -556,46 +556,51 @@ final class StderrEmitterCensusTest extends TestCase
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
     {
+        $actual = self::census('direct');
         self::assertSame(
             self::DIRECT_SITES,
-            self::census('direct'),
-            self::message('fwrite(STDERR, …)', self::DIRECT_SITES, self::census('direct')),
+            $actual,
+            self::message('fwrite(STDERR, …)', self::DIRECT_SITES, $actual),
         );
     }
 
     public function testTheIndirectStderrHandleRosterIsUnchanged(): void
     {
+        $actual = self::census('indirect');
         self::assertSame(
             self::INDIRECT_SITES,
-            self::census('indirect'),
-            self::message('captured STDERR handle', self::INDIRECT_SITES, self::census('indirect')),
+            $actual,
+            self::message('captured STDERR handle', self::INDIRECT_SITES, $actual),
         );
     }
 
     public function testTheErrorLogRosterIsUnchanged(): void
     {
+        $actual = self::census('error_log');
         self::assertSame(
             self::ERROR_LOG_SITES,
-            self::census('error_log'),
-            self::message('error_log()', self::ERROR_LOG_SITES, self::census('error_log')),
+            $actual,
+            self::message('error_log()', self::ERROR_LOG_SITES, $actual),
         );
     }
 
     public function testTheSugarcrushMessageShapeRosterIsUnchanged(): void
     {
+        $actual = self::census('shape');
         self::assertSame(
             self::MESSAGE_SHAPES,
-            self::census('shape'),
-            self::message('`sugarcrush: ` message', self::MESSAGE_SHAPES, self::census('shape')),
+            $actual,
+            self::message('`sugarcrush: ` message', self::MESSAGE_SHAPES, $actual),
         );
     }
 
     public function testTheRuntimeNoticeSeamRosterIsUnchanged(): void
     {
+        $actual = self::census('runtime_notice');
         self::assertSame(
             self::RUNTIME_NOTICE_SITES,
-            self::census('runtime_notice'),
-            self::message('RuntimeNoticeSink::warn()', self::RUNTIME_NOTICE_SITES, self::census('runtime_notice')),
+            $actual,
+            self::message('RuntimeNoticeSink::warn()', self::RUNTIME_NOTICE_SITES, $actual),
         );
     }
 
@@ -1062,10 +1067,11 @@ final class StderrEmitterCensusTest extends TestCase
 
     public function testThePrefixedWriterRosterIsUnchanged(): void
     {
+        $actual = self::census('prefixed');
         self::assertSame(
             self::PREFIXED_WRITER_SITES,
-            self::census('prefixed'),
-            self::message('warnPermissionConfig*()', self::PREFIXED_WRITER_SITES, self::census('prefixed')),
+            $actual,
+            self::message('warnPermissionConfig*()', self::PREFIXED_WRITER_SITES, $actual),
         );
     }
 
@@ -2218,8 +2224,24 @@ final class StderrEmitterCensusTest extends TestCase
      * and what the scan actually found, so the resolution is a one-line edit
      * with nothing re-derived.
      *
-     * DERIVED, NEVER WRITTEN DOWN (rule 18): both sides come from the same call
-     * the assertion is making, so no cardinality here can go stale.
+     * DERIVED, NEVER WRITTEN DOWN (rule 18): no cardinality in this text is
+     * typed anywhere, so none of it can go stale.
+     *
+     * AND "THE SAME CALL" IS NOW LITERALLY TRUE, WHICH IT WAS NOT WHEN THIS
+     * SENTENCE WAS WRITTEN (rule 8; round 49's review). WHAT IT SAID: "both
+     * sides come from the same call the assertion is making". WHAT WAS ACTUALLY
+     * HAPPENING: every caller passed `self::census($channel)` a SECOND time as
+     * the message argument, which PHP evaluates eagerly on the green path too —
+     * so the map the reader was shown came from an independent re-scan of
+     * `src/`, not from the map the assertion compared, and each roster test
+     * walked and tokenised all of `src/` twice. Harmless here because
+     * {@see census()} is deterministic, and measured at 0.15s per call on PHP
+     * 8.3.6, so ~0.9s of the suite across the six roster tests.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE rather than being dropped as
+     * pedantry: it is the reason each caller hoists the scan into a local
+     * before asserting on it, and a reader who does not know that will inline
+     * it back for tidiness and quietly restore both the double scan and the
+     * gap between what is asserted and what is reported.
      *
      * ITS OWN CORRECTNESS IS TESTED, and it has to be, because a failure
      * message's generator is the one piece of a green suite that never runs. A
