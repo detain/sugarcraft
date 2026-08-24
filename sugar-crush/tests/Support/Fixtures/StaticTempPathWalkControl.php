@@ -25,17 +25,24 @@ namespace SugarCraft\Crush\Tests\Support\Fixtures;
  * code.
  *
  * IT IS NEVER EXECUTED, and that is not an accident of nobody having got round
- * to it. The method below is private, the constructor is private, and the class
- * is not referenced from anywhere outside a doc-block. If a future reader wants
- * to call it, the answer is no: the whole point of the body is that the path in
- * it is a shared name that a running process must never write to.
+ * to it. The class is `abstract` so it cannot be instantiated, the method below
+ * is private, and nothing outside a doc-block names either. If a future reader
+ * wants to call it, the answer is no: the whole point of the body is that the
+ * path in it is a shared name that a running process must never write to.
+ *
+ * ABSTRACT RATHER THAN A `final` CLASS WITH A PRIVATE CONSTRUCTOR, which is how
+ * this was first written. {@see \SugarCraft\Crush\Tests\Support\DuplicatedTestHelperDriftTest}
+ * compares private methods of the same name whose BODIES are byte-identical and
+ * whose parameter lists are not — and an empty private `__construct() {}` is
+ * byte-identical to every other empty one under `tests/`, so this file reported
+ * as a copied helper that had drifted. It is not one; `abstract` says the same
+ * thing about instantiation without putting a same-named empty method in that
+ * census's way.
  *
  * @codeCoverageIgnore
  */
-final class StaticTempPathWalkControl
+abstract class StaticTempPathWalkControl
 {
-    private function __construct() {}
-
     /**
      * The exact shape E298 took: a fully static temp path bound in one
      * statement and written in another.
