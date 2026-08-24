@@ -165,10 +165,44 @@ final class ForkedChildTest extends TestCase
             $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
         }
 
-        $tty = new Tty(null, new PosixTermios($slaveFd));
+        // THE STREAM ARGUMENT IS EXPLICIT, AND USED TO BE `null` (round 49,
+        // lane e — a FORCED out-of-lane edit, named in that lane's report).
+        // WHAT `null` DID: `Tty::__construct()` is `self::backend($stream ??
+        // STDIN, $termios)`, so it wrapped THIS PROCESS's descriptor 0 — and
+        // the injected-Termios branch of `PosixBackend::enableRawMode()` skips
+        // its own `isTty()` guard, so its trailing
+        // `@stream_set_blocking($this->stream, false)` and `restore()`'s
+        // matching `(…, true)` both landed on the runner's fd 0, in a test
+        // whose subject is a PTY it opened itself. Worse here than elsewhere:
+        // this file FORKS while holding the `Tty`, so the child inherited it.
+        //
+        // MEASURED, PHP 8.3.6, three takes: with `null`, fd 0's `blocked` flag
+        // goes true -> false across this seam (3/3); with an explicit stream it
+        // never moves (3/3). `tests/bootstrap.php` repairs descriptor 0 with
+        // exactly that flag, so `restore()` here was silently undoing it for
+        // every later test in the run — see that file's write-up.
+        //
+        // A SOCKET PAIR rather than `php://memory`, and that is forced: PHP
+        // reports a memory stream as blocked whatever is set on it, so it
+        // cannot tell "the seam wrote the flag here" from "the seam wrote it
+        // somewhere else". Asserted in BOTH directions below, which is what
+        // makes a revert to `null` red rather than merely undetected.
+        $flagSink = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        $this->assertIsArray($flagSink, 'no socket pair: this test cannot observe where the seam writes');
+        $this->assertTrue(
+            stream_get_meta_data($flagSink[0])['blocked'],
+            'control: a stream nobody has touched must report blocked, or the probe below reads nothing',
+        );
+
+        $tty = new Tty($flagSink[0], new PosixTermios($slaveFd));
         $tty->enableRawMode();
 
         try {
+            $this->assertFalse(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                'enableRawMode() did not clear O_NONBLOCK on the stream it was GIVEN, so it wrote the flag '
+                    . "somewhere else - on a null stream that somewhere else is the runner's descriptor 0",
+            );
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before forking');
 
             $pid = $this->forkTracked();
@@ -191,6 +225,12 @@ final class ForkedChildTest extends TestCase
             );
         } finally {
             $tty->restore();
+            $this->assertTrue(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                'restore() did not put O_NONBLOCK back on the stream it was given',
+            );
+            fclose($flagSink[0]);
+            fclose($flagSink[1]);
             $libc->close($slaveFd);
             $pair->master()->close();
         }
@@ -214,10 +254,44 @@ final class ForkedChildTest extends TestCase
             $this->markTestSkipped('Could not open slave PTY path: ' . $slavePath);
         }
 
-        $tty = new Tty(null, new PosixTermios($slaveFd));
+        // THE STREAM ARGUMENT IS EXPLICIT, AND USED TO BE `null` (round 49,
+        // lane e — a FORCED out-of-lane edit, named in that lane's report).
+        // WHAT `null` DID: `Tty::__construct()` is `self::backend($stream ??
+        // STDIN, $termios)`, so it wrapped THIS PROCESS's descriptor 0 — and
+        // the injected-Termios branch of `PosixBackend::enableRawMode()` skips
+        // its own `isTty()` guard, so its trailing
+        // `@stream_set_blocking($this->stream, false)` and `restore()`'s
+        // matching `(…, true)` both landed on the runner's fd 0, in a test
+        // whose subject is a PTY it opened itself. Worse here than elsewhere:
+        // this file FORKS while holding the `Tty`, so the child inherited it.
+        //
+        // MEASURED, PHP 8.3.6, three takes: with `null`, fd 0's `blocked` flag
+        // goes true -> false across this seam (3/3); with an explicit stream it
+        // never moves (3/3). `tests/bootstrap.php` repairs descriptor 0 with
+        // exactly that flag, so `restore()` here was silently undoing it for
+        // every later test in the run — see that file's write-up.
+        //
+        // A SOCKET PAIR rather than `php://memory`, and that is forced: PHP
+        // reports a memory stream as blocked whatever is set on it, so it
+        // cannot tell "the seam wrote the flag here" from "the seam wrote it
+        // somewhere else". Asserted in BOTH directions below, which is what
+        // makes a revert to `null` red rather than merely undetected.
+        $flagSink = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        $this->assertIsArray($flagSink, 'no socket pair: this test cannot observe where the seam writes');
+        $this->assertTrue(
+            stream_get_meta_data($flagSink[0])['blocked'],
+            'control: a stream nobody has touched must report blocked, or the probe below reads nothing',
+        );
+
+        $tty = new Tty($flagSink[0], new PosixTermios($slaveFd));
         $tty->enableRawMode();
 
         try {
+            $this->assertFalse(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                'enableRawMode() did not clear O_NONBLOCK on the stream it was GIVEN, so it wrote the flag '
+                    . "somewhere else - on a null stream that somewhere else is the runner's descriptor 0",
+            );
             $this->assertTrue($this->isRaw($slavePath), 'setup: raw mode must be active before forking');
 
             $pid = $this->forkTracked();
@@ -236,6 +310,12 @@ final class ForkedChildTest extends TestCase
             );
         } finally {
             $tty->restore();
+            $this->assertTrue(
+                stream_get_meta_data($flagSink[0])['blocked'],
+                'restore() did not put O_NONBLOCK back on the stream it was given',
+            );
+            fclose($flagSink[0]);
+            fclose($flagSink[1]);
             $libc->close($slaveFd);
             $pair->master()->close();
         }

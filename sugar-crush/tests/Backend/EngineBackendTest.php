@@ -353,9 +353,10 @@ final class EngineBackendTest extends TestCase
         // `restore()`'s matching `(…, true)` both landed on the runner's fd 0.
         // MEASURED, PHP 8.3.6, three takes: with `null`, fd 0's `blocked` flag
         // goes true -> false across this seam (3/3); with an explicit stream it
-        // stays true (3/3). That side effect is what refuted round 49's first
-        // attempt at the descriptor-0 repair in `tests/bootstrap.php`, which
-        // was an `O_NONBLOCK` flag this seam silently cleared again.
+        // stays true (3/3). That side effect is not cosmetic: the descriptor-0
+        // repair in `tests/bootstrap.php` IS an `O_NONBLOCK` flag on fd 0, and
+        // `restore()` here was clearing it back for every later test in the
+        // run. See that file's write-up; it cost a full run to find.
         //
         // A SOCKET PAIR rather than `php://memory`, and that is forced: PHP
         // reports a memory stream as blocked whatever you set, so it cannot

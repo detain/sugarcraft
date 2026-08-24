@@ -104,96 +104,92 @@ final class SuiteChildStdinIsolationTest extends TestCase
     }
 
     /**
-     * DESCRIPTOR 0 IS `/dev/null` AFTERWARDS, AND NOTHING IN THE RUN CAN
-     * UNDO THAT — which is the property the repair was chosen for.
+     * `\STDIN` SURVIVES THE BOOTSTRAP AS A LIVE RESOURCE, AND `O_NONBLOCK` IS
+     * ACTUALLY CLEARED ON IT — the two halves of the repair, and each is here
+     * because a round-49 attempt failed on it.
      *
-     * Round 49 tried the gentler mechanism first: `stream_set_blocking(\STDIN,
-     * false)`, which reaches inherited children through the shared open file
-     * description and leaves the constant alive. It works and it does not
-     * last.
-     * {@see \SugarCraft\Crush\Tests\Backend\EngineBackendTest::testCompleteAsyncDoesNotResetTheRealTerminalsRawMode()}
-     * builds `new Tty(null, new PosixTermios($slaveFd))` — the
-     * injected-Termios seam with a null stream, which candy-core resolves to
-     * `\STDIN` — and that seam makes `PosixBackend::enableRawMode()` skip its
-     * own `isTty()` guard, so its trailing `stream_set_blocking(…, false)` and
-     * `restore()`'s matching `stream_set_blocking(…, true)` both land on
-     * descriptor 0. (Spelled on ONE line above on purpose: the first draft of
-     * this paragraph wrapped that method name across two, which makes the
-     * symbol ungreppable from the very file that names it.) MEASURED, PHP
-     * 8.3.6, three takes: the flag reads clear once set, STILL clear after
-     * `enableRawMode()`, and BLOCKED again after `restore()` — 3/3. A guard on
-     * that flag is therefore order-dependent, passing when this file runs
-     * before that seam and failing after it, so the assertion moved off the
-     * flag altogether.
+     * THE LIVE-RESOURCE HALF. The first attempt closed descriptor 0 and
+     * reopened `/dev/null` onto it, on the reasoning that PHP has no `dup2`
+     * — true — and that nothing reachable reads the `\STDIN` constant, which
+     * is not. `{@see \SugarCraft\Mosaic\Detect}` resolves its probe stream as
+     * `self::$probeStdin ?? STDIN` and hands it on unguarded; `Mosaic::auto()`
+     * swallows the throw and falls into a fallback that names a `Capability`
+     * case candy-palette does not have. MEASURED, full suite, PHP 8.3.6:
+     * `9500 tests, 107 errors, rc 2`. A closed constant is not a local cost.
      *
-     * THAT ONE SITE HAS SINCE BEEN GIVEN AN EXPLICIT STREAM, and the paragraph
-     * stays because the site was never the point. `new Tty(` with a `null`
-     * stream and an injected `Termios` is a SHAPE rather than one line, and
-     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest} still has it —
-     * in forking tests, so their children inherit the runner's descriptor 0
-     * too. The assertion below deliberately does not depend on any of those
-     * being fixed. (No count is quoted: it would be stale the next time one is
-     * added or repaired. The generator is `grep -rn 'new Tty(' src/ tests/
-     * bin/`.)
+     * THE FLAG HALF. `O_NONBLOCK` on the open file DESCRIPTION is what
+     * `fork(2)`/`exec(2)` share, so it reaches inherited children while the
+     * constant stays alive. But a flag can be cleared by anything else holding
+     * that description, and `new Tty(null, $injectedTermios)` is exactly such
+     * a thing: candy-core resolves the null stream to `\STDIN`, and the
+     * injected-Termios branch of `PosixBackend::enableRawMode()` skips its own
+     * `isTty()` guard, so its trailing `stream_set_blocking(…, false)` and
+     * `restore()`'s matching `(…, true)` both land on descriptor 0. MEASURED,
+     * three takes: clear once set, still clear after `enableRawMode()`,
+     * BLOCKED AGAIN after `restore()` — 3/3. It cost a full run before it was
+     * understood: `9513 tests, 1 failure`, this assertion, green when its own
+     * file ran alone.
      *
-     * So the assertion is on the DESCRIPTOR's identity, read off
-     * `/proc/self/fd/0`, which no stream flag can change — with a
-     * known-positive through the same probe, because `readlink()` returning
-     * something unexpected and `readlink()` not working at all look identical
-     * from one call.
+     * Every such site in the tree was given an explicit stream —
+     * {@see \SugarCraft\Crush\Tests\Backend\EngineBackendTest} and
+     * {@see \SugarCraft\Crush\Tests\Support\ForkedChildTest} — and each now
+     * asserts the flag moves on the stream it PASSED, so a revert is red
+     * there. No count is quoted, because a count over `tests/` is stale the
+     * next time one is added; the generator is
+     * `grep -rn 'new Tty(' src/ tests/ bin/` and every hit whose first
+     * argument is `null` is one.
      *
-     * The closed constant is asserted too rather than left implicit: it is the
-     * documented cost of this mechanism and it has already reddened the suite
-     * once, so it is better pinned as a fact than rediscovered as a surprise.
+     * SO THIS ASSERTION IS DELIBERATELY ORDER-DEPENDENT, which is normally the
+     * worst thing a guard can be and is the right thing here: it is the only
+     * thing that goes red when someone writes the next
+     * `new Tty(null, $injectedTermios)`. The order-INDEPENDENT guard is the
+     * spawn test above, which runs the bootstrap in a child of its own where
+     * no in-process seam can reach it. Both, on purpose.
      */
-    public function testTheRunnersDescriptorZeroIsDevNullAndNoStreamFlagCanUndoIt(): void
+    public function testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking(): void
     {
-        // `is_resource()` BEFORE `stream_isatty()`, and in that order for the
-        // same reason this whole test exists: `stream_isatty()` on a closed
-        // resource is a TypeError, so probing the tty first cannot tell the
-        // two states apart - it just fatals in the one that is correct.
-        if (is_resource(\STDIN)) {
-            $this->assertTrue(
-                stream_isatty(\STDIN),
-                'descriptor 0 is not a terminal and the bootstrap left it open anyway, so a spawned '
-                    . "binary can still park in stream_get_contents() on the runner's stdin",
+        self::assertTrue(
+            is_resource(\STDIN),
+            'tests/bootstrap.php closed the \STDIN constant; SugarCraft\Mosaic\Detect reads it unguarded '
+                . 'and 107 tests error out when it is gone',
+        );
+
+        // Would itself throw a TypeError on a closed resource, which is the
+        // exact failure the assertion above pins.
+        $meta = stream_get_meta_data(\STDIN);
+        self::assertSame('php://stdin', $meta['uri'] ?? null);
+
+        // KNOWN-POSITIVE THROUGH THE SAME PROBE: a stream nobody has touched
+        // reports blocked === true, so the assertion below is reading a flag
+        // rather than reporting a missing key as false. A socket pair, not
+        // `php://memory`: PHP reports a memory stream as blocked whatever is
+        // set on it, so it cannot show the probe both states.
+        $pair = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($pair);
+        self::assertTrue(stream_get_meta_data($pair[0])['blocked'], 'the probe cannot see a blocking stream at all');
+        stream_set_blocking($pair[0], false);
+        self::assertFalse(
+            stream_get_meta_data($pair[0])['blocked'],
+            'the probe cannot see a NON-blocking stream either, so neither polarity below means anything',
+        );
+        fclose($pair[0]);
+        fclose($pair[1]);
+
+        if (stream_isatty(\STDIN)) {
+            self::assertTrue(
+                $meta['blocked'],
+                "the bootstrap cleared O_NONBLOCK on a TERMINAL - it must leave a developer's tty alone",
             );
 
-            // A developer's terminal is deliberately left alone, and there is
-            // nothing further to assert about it.
             return;
         }
 
-        if (!is_link('/proc/self/fd/0')) {
-            // No procfs to read: the closed constant above is the whole
-            // available evidence, and it is evidence rather than a skip.
-            return;
-        }
-
-        // KNOWN-POSITIVE THROUGH THE SAME PROBE: readlink() has to be able to
-        // name a descriptor this test opened itself, or "it says /dev/null" is
-        // indistinguishable from "it says nothing".
-        $probe = tempnam(sys_get_temp_dir(), 'sc_fd_probe_' . getmypid() . '_');
-        self::assertIsString($probe);
-        $this->paths[] = $probe;
-        $handle = fopen($probe, 'r');
-        self::assertIsResource($handle);
-        $probeFd = null;
-        foreach ((array) scandir('/proc/self/fd') as $entry) {
-            if (!ctype_digit((string) $entry)) {
-                continue;
-            }
-            if (@readlink('/proc/self/fd/' . $entry) === $probe) {
-                $probeFd = (int) $entry;
-            }
-        }
-        fclose($handle);
-        self::assertNotNull($probeFd, 'readlink() over /proc/self/fd cannot see a descriptor this test opened');
-
-        self::assertSame(
-            '/dev/null',
-            readlink('/proc/self/fd/0'),
-            'descriptor 0 is not /dev/null, so whatever the runner was started with is still what children read',
+        self::assertFalse(
+            $meta['blocked'],
+            'descriptor 0 is blocking again, so a spawned binary can park in stream_get_contents() on the '
+                . "runner's stdin. Either tests/bootstrap.php stopped clearing O_NONBLOCK, or something in "
+                . "this run cleared it back - the usual culprit is a new `new Tty(null, \$injectedTermios)`, "
+                . 'whose restore() writes stream_set_blocking(STDIN, true)',
         );
     }
 
