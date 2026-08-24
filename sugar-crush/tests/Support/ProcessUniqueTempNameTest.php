@@ -464,6 +464,46 @@ final class ProcessUniqueTempNameTest extends TestCase
         ), 'a fixed path that is only compared, never written, was reported');
     }
 
+    /**
+     * RULE 14 AT THE READ IS ALSO PINNED, because a robustness arm nothing
+     * exercises is a robustness arm nobody notices the loss of.
+     *
+     * The alternative — `(string) file_get_contents()` — turns an unreadable
+     * file into an empty one, an empty one into "no hits", and "no hits" into a
+     * clean census. Three silent steps, and every count in this file would then
+     * be a statement about how many files the process happened to be allowed to
+     * open. Reverting {@see readOrFail()} to the cast is a mutation nothing
+     * else here can kill: no real source in the tree is unreadable, so the arm
+     * has no natural input. This is that input.
+     */
+    public function testTheReadRefusesAFileItCannotOpenInsteadOfReadingItAsEmpty(): void
+    {
+        $absent = \dirname(__DIR__, 2) . '/tests/Support/no_such_file_'
+            . \getmypid() . '_' . \bin2hex(\random_bytes(6)) . '.php';
+
+        self::assertFileDoesNotExist($absent);
+
+        // The PHP-level warning from the failed open is the point of the
+        // fixture and is not the thing under test; this suite runs with
+        // failOnWarning, so it is swallowed HERE rather than with an `@` in
+        // readOrFail(), where it would also swallow the diagnosis on a real
+        // unreadable source.
+        $previous = \set_error_handler(static fn (): bool => true);
+        $refused  = false;
+
+        try {
+            self::readOrFail($absent);
+        } catch (\PHPUnit\Framework\AssertionFailedError) {
+            $refused = true;
+        } finally {
+            \set_error_handler($previous);
+        }
+
+        self::assertTrue($refused, 'the read returned instead of refusing a file it could not '
+            . 'open, so an unreadable source now reaches every scanner in this file as empty '
+            . 'text and is reported as a clean one');
+    }
+
     // =========================================================================
     // Scanners
     // =========================================================================
