@@ -6,6 +6,63 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 54 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-24 from master `606a131c`, tree clean. THREE lanes.**
+**Run `wf_945b0ccb-cb9`, task `wpfjwoxt2`.** Script (DURABLE path — never launch from a scratchpad path):
+`/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-54.js`
+
+**BASE FLOORS, OBSERVED at `606a131c` (candy-pty measured fresh for this round):**
+
+| package | tests / assertions / skipped / rc |
+|---|---|
+| sugar-crush | **9946 / 144269 / 1 / rc 0** |
+| candy-core | **819 / 7390 / 25 / rc 0** |
+| candy-flip | **83 / 227 / 2 / rc 0** |
+| candy-pty | **606 / 1476 / 16 / 1 warning / rc 0** |
+| candy-mosaic | **459 / 7753 / 6 / rc 0** (untouched since round 52) |
+
+**Lane dirs** `/home/sites/crush-lane-{a,b,c}` were `git fetch` + `reset --hard` to `606a131c` (NOT
+re-copied). Closure re-verified per lane per package: sugar-crush 18/18, candy-core 3/3, candy-flip 6/6
+in all three. candy-pty's closure is **7**. DO NOT DELETE until the merged floor is measured.
+
+### THE LANES
+
+- **a — finish the candy-core descriptor census.** E396 (sites 2 and 4, which need a descriptor that
+  outlives the call), E404 (the census cannot see the METHOD-CALL spelling of its own sinks — rule 11,
+  attack the ALPHABET), E398 (a test whose two assertions include `assertTrue(true)`).
+- **b — three real runtime bugs, all filed out-of-lane by round 53.** E411 (`MCP/StdioMcpServer` has the
+  identical undrained-stderr wedge round 53 fixed elsewhere), E412 (`McpMessage::parse()` throws a
+  `TypeError` on a conforming `"result": true`), E413 (a second conditional skip would break the
+  skips-exactly-1 invariant every figure in this plan rests on).
+- **c — close the leak the guard now proves.** E417 (name the fds at all seven rostered spawn sites and
+  delete the licence rows as they close), E418 (widen the guard past `sugar-crush/src`), E425, E426.
+
+**LANES B AND C OVERLAP ON PURPOSE, MORE SHARPLY THAN LAST ROUND** — `MCP/StdioMcpServer.php` is on both
+file lists. Four consecutive rounds in which that control found something neither lane could see alone.
+
+### FIXED IN THE SCRIPT ITSELF THIS ROUND
+
+- **Per-round scratchpads `r54{lane}` (E427).** Rounds 49–53 all shared `r49{lane}`.
+- **The OWNERSHIP map was rewritten.** It had been a stale FIVE-lane round-49 map for five rounds, naming
+  lanes `d` and `e` that did not exist — which is exactly E416, a lane finding its brief and the map in
+  contradiction.
+- **Three brief paths did not exist and were corrected before launch (E334):** `SizeIoctl` and
+  `TermiosFactory` live in **candy-pty**, not `candy-core/src/Util/Tty/`, and `McpMessage.php` sits at
+  `sugar-crush/src/`, not under `src/MCP/`.
+- **New standing rule 33** (a guard's exemption row may be the wrong fix — see §0-NOW-54).
+
+### AT THE MERGE
+
+Merge a→b→c. **Renumber from E429.** Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
+Measure the merged floor for **sugar-crush, candy-core, candy-flip** and **candy-pty if lane a touched
+it**. Verify skips stay exactly 1, closure 18/18 · 3/3 · 6/6, `check-path-repos` rc 0, config md5
+`05480c743aff302fd6c06c5a4a4c2210`, zero tracked per-lib locks, and zero orphaned `php -S` servers
+**counted with the `ps` form, not `pgrep` (E428)**. **Write the prediction — figures AND conflicts — to a
+file BEFORE merging;** `round53-prediction.txt` is the template and it called last round's red merge.
+
+---
+
 ## 0-NOW-54. ROUND 53 CLOSED (floor 9946) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR, THREE PACKAGES** (rule 28), all measured at `b8808d5a`, tree clean:
