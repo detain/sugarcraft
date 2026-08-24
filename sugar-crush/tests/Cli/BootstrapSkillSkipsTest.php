@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Cli;
 
+use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Skills\SkillLoader;
@@ -323,6 +324,80 @@ final class BootstrapSkillSkipsTest extends TestCase
             $which,
             $status,
         ));
+    }
+
+    /**
+     * KNOWN-ANSWER TABLE FOR THE ARM ABOVE, IN BOTH POLARITIES.
+     *
+     * The arm exists for statuses this suite's real children never produce, so
+     * the population that exercises it is always the passing one: with every
+     * child exiting 0, an arm that refuses nothing and an arm that is right are
+     * the same green. That is E322's shape, and it is how the narrow form
+     * survived a whole round. The rows below hand the arm the statuses a broken
+     * child WOULD produce and read the sentence it writes.
+     *
+     * The `null` row is the load-bearing other half: an arm that refused
+     * everything would pass every row that expects a refusal.
+     *
+     * @dataProvider childStatusCases
+     */
+    public function testTheChildStatusArmAnswersStatusesWhoseAnswerIsKnown(
+        string $why,
+        int $status,
+        ?string $phrase,
+    ): void {
+        if ($phrase === null) {
+            $this->assertTheChildRanToCompletion($status, 'a probe child');
+
+            return;
+        }
+
+        try {
+            $this->assertTheChildRanToCompletion($status, 'a probe child');
+        } catch (AssertionFailedError $refusal) {
+            self::assertStringContainsString($phrase, $refusal->getMessage(), $why);
+
+            return;
+        }
+
+        self::fail($why);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: int, 2: ?string}>
+     */
+    public static function childStatusCases(): iterable
+    {
+        yield 'a child that ran and exited cleanly is not refused' => [
+            'the arm refuses a child that did exactly what was asked of it, so it cannot '
+                . 'distinguish a broken run from a working one',
+            0,
+            null,
+        ];
+        yield 'the budget\'s own SIGKILL is refused, and named as one' => [
+            'a child killed at its wall-clock budget is not refused, so a hung child reads as '
+                . 'a child with nothing to say',
+            self::KILLED_BY_THE_BUDGET,
+            'SIGKILL',
+        ];
+        yield 'a child that never ran at all is refused' => [
+            'the status a shell reports for a binary it could not find is not refused, which '
+                . 'is the exact hole the heading above promises to close',
+            127,
+            'never ran',
+        ];
+        yield 'a child that died before writing a byte is refused' => [
+            'a PHP fatal in the child is not refused, so the absence assertions pass on a run '
+                . 'that produced nothing because it crashed',
+            255,
+            'exited 255',
+        ];
+        yield 'an ordinary non-zero status is refused too' => [
+            'only the statuses this table happens to name are refused, so the arm is a list '
+                . 'of known failures rather than a demand that the child succeeded',
+            1,
+            'exited 1',
+        ];
     }
 
     /**
