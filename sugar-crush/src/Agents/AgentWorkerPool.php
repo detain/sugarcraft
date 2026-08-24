@@ -1242,47 +1242,6 @@ final class AgentWorkerPool
     }
 
     /**
-     * Log a visible warning the first time this pool falls back to
-     * sequential (non-parallel) execution because pcntl_fork() is
-     * unavailable. Only fires once per pool instance — subsequent agents
-     * hitting the same fallback path would otherwise spam the log.
-     *
-     * DELIBERATELY STILL `error_log()` AND NOT THE MID-SESSION TRANSCRIPT SEAM
-     * (E192), and this class was on E192's list of three emitters to route, so
-     * the reason is recorded rather than left as an omission. The rule the two
-     * tool-call parsers' class doc-blocks state — a notice goes to
-     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} if and
-     * only if the emitter did not produce what the caller asked for — answers
-     * NO here, and it is checkable at the one call site rather than a matter of
-     * taste: {@see startAgent()}'s `pcntlForkAvailable()` arm falls straight
-     * through to `$executor->execute($agent, $request)` and `storeResult()`,
-     * so every agent still runs and every result is still stored and reaped.
-     * THE CITATION WAS `executeOne()` AND THAT WAS WRONG — that method is two
-     * lines, `$this->executor ?? $this->createDefaultExecutor()` then
-     * `$executor->execute(…)`, and contains neither arm. A reader who followed
-     * it would have found no evidence for the argument above and concluded the
-     * reasoning was stale. Both fallback arms live in {@see startAgent()}.
-     * What the caller loses is CONCURRENCY, not an action. A seam row is a
-     * `Role::System` message re-sent to the model on every subsequent turn, and
-     * "your agents ran one after another" is neither something the model can
-     * act on nor something the user cannot infer from the wall clock.
-     *
-     * WHAT WOULD CHANGE THE ANSWER: an agent that does not run at all. Neither
-     * arm does that, which is why neither is on the seam.
-     *
-     * WHAT THIS PARAGRAPH USED TO SAY: it pointed at "the DEFERRED FINDING
-     * recorded against the `pcntl_fork() === -1` arm in {@see startAgent()},
-     * which degrades to the same sequential execution and warns about NOTHING,
-     * not even on stderr." WHAT IS TRUE NOW: that arm warns —
-     * {@see warnForkFailed()} — and the finding is closed. WHY THE SENTENCE
-     * STILL EARNS ITS PLACE: the two arms remain a matched pair that a reader
-     * will compare, and the comparison is the argument. They reach the same
-     * fallback by different causes, they answer the routing rule the same way
-     * for the same reason, and their messages differ only where the operator's
-     * remedy differs. A future change that moves one onto the seam and leaves
-     * the other here has almost certainly got the rule wrong.
-     */
-    /**
      * `pcntl_fork()`, behind a seam so the failure arm can be driven.
      *
      * Factored out for exactly the reason {@see pcntlForkAvailable()} was, and
@@ -1360,6 +1319,47 @@ final class AgentWorkerPool
             $this->maxConcurrent,
         ));
     }
+    /**
+     * Log a visible warning the first time this pool falls back to
+     * sequential (non-parallel) execution because pcntl_fork() is
+     * unavailable. Only fires once per pool instance — subsequent agents
+     * hitting the same fallback path would otherwise spam the log.
+     *
+     * DELIBERATELY STILL `error_log()` AND NOT THE MID-SESSION TRANSCRIPT SEAM
+     * (E192), and this class was on E192's list of three emitters to route, so
+     * the reason is recorded rather than left as an omission. The rule the two
+     * tool-call parsers' class doc-blocks state — a notice goes to
+     * {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} if and
+     * only if the emitter did not produce what the caller asked for — answers
+     * NO here, and it is checkable at the one call site rather than a matter of
+     * taste: {@see startAgent()}'s `pcntlForkAvailable()` arm falls straight
+     * through to `$executor->execute($agent, $request)` and `storeResult()`,
+     * so every agent still runs and every result is still stored and reaped.
+     * THE CITATION WAS `executeOne()` AND THAT WAS WRONG — that method is two
+     * lines, `$this->executor ?? $this->createDefaultExecutor()` then
+     * `$executor->execute(…)`, and contains neither arm. A reader who followed
+     * it would have found no evidence for the argument above and concluded the
+     * reasoning was stale. Both fallback arms live in {@see startAgent()}.
+     * What the caller loses is CONCURRENCY, not an action. A seam row is a
+     * `Role::System` message re-sent to the model on every subsequent turn, and
+     * "your agents ran one after another" is neither something the model can
+     * act on nor something the user cannot infer from the wall clock.
+     *
+     * WHAT WOULD CHANGE THE ANSWER: an agent that does not run at all. Neither
+     * arm does that, which is why neither is on the seam.
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY: it pointed at "the DEFERRED FINDING
+     * recorded against the `pcntl_fork() === -1` arm in {@see startAgent()},
+     * which degrades to the same sequential execution and warns about NOTHING,
+     * not even on stderr." WHAT IS TRUE NOW: that arm warns —
+     * {@see warnForkFailed()} — and the finding is closed. WHY THE SENTENCE
+     * STILL EARNS ITS PLACE: the two arms remain a matched pair that a reader
+     * will compare, and the comparison is the argument. They reach the same
+     * fallback by different causes, they answer the routing rule the same way
+     * for the same reason, and their messages differ only where the operator's
+     * remedy differs. A future change that moves one onto the seam and leaves
+     * the other here has almost certainly got the rule wrong.
+     */
 
     protected function warnSequentialFallback(): void
     {
