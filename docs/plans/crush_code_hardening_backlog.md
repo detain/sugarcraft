@@ -8607,8 +8607,13 @@ alphabet was the set of files that already agreed with the guard — rule 11, in
 had said so twice.
 
 **The widened predicate** — a comparison operator adjacent to a one-byte `'{'` literal AND to a `'}'` one,
-token-based — finds exactly three under `tests/` and zero false positives among the seven walkers the old
-predicate already covered. Generator: `scratchpad/r49d/bare.php`.
+token-based — finds exactly three under `tests/` and zero false positives among the walkers the old
+predicate already covered. **The old predicate covered TEN of them at `db90e768`, not seven** — the round's
+own review re-derived it and the first figure was wrong; generator
+`scratchpad/r49d/r49d_rev_base_walkers.php` reads every `tests/`+`src/` blob out of `git show db90e768:` and
+runs both predicates over it, so the count is not taken from a worktree. Widened-predicate generator:
+`scratchpad/r49d/bare.php`; live re-derivation at HEAD: `scratchpad/r49d/r49d_rev_gaps.php`
+(14 walkers, 3 gaps, all 3 recorded).
 
 **`tests/Cli/BootstrapLaunchFormatConstantsTest.php` FAILS OPEN, and that is why this is severity-real.**
 `methodBody()` counts on the bare `'{'` over a `token_get_all()` stream, where `T_CURLY_OPEN` is an ARRAY
@@ -8630,6 +8635,16 @@ that token's text IS `{` — and misses only `${`, whose text is `${`.
 **Step.** Give each of the three the full opener roster and delete its `KNOWN_GAPS` row in the same
 change-set, exactly as E233 required of `VhsTapeContractTest`. `tests/Cli/` first: it is the one that
 hides a defect rather than inventing one.
+
+**Corrected on review, and the correction is the reusable half.** The first draft of this entry also said
+"none of the **eight** Bootstrap methods it reads carries an interpolation" — derived from a harness
+(`scratchpad/r49d/live.php`) that merged a regex over the test source with a HARD-CODED list of seven names
+and then ran a REPLICA of the walk on both sides. It printed nine rows, two of which were fixture names
+resolving to `null`. Re-derived through the SHIPPED `methodBody()` over the set the SHIPPED `obligations()`
+returns (`scratchpad/r49d/r49d_rev_eight2.php`): **seven** methods, all agreeing with a corrected walk, zero
+interpolation openers. The latency claim survived; the count did not. **A harness that hard-codes half of
+the set it is measuring is measuring the hard-coded half** — rule 13, and the reason the row now ships the
+claim with no number in it at all.
 
 ### Ed49-2 — the round-49 brief's stated floor does not reproduce, in both figures
 

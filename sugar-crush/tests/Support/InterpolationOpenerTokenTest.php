@@ -159,10 +159,14 @@ final class InterpolationOpenerTokenTest extends TestCase
             . '`"{$x}"` inserted into a scanned method cut the body from 16 significant tokens '
             . 'to 6 and made a format literal that '
             . 'testNoMethodThatOwnsANamedFormatAlsoHoldsALiteralOne() exists to reject '
-            . 'invisible - [] where the offender should have been. Latent only because none of '
-            . 'the eight Bootstrap methods it reads carries an interpolation today: measured, '
-            . 'the shipped walk and a corrected one agree on all eight. tests/Cli/ was in no '
-            . "lane's file list for the round that found this.",
+            . 'invisible - [] where the offender should have been. Latent only because no '
+            . 'Bootstrap method it reads carries an interpolation today: measured through the '
+            . 'SHIPPED methodBody() against a corrected walk, over the method set derived from '
+            . 'the shipped obligations(), which agree on every one. A COUNT WAS RETIRED FROM '
+            . 'THIS ROW: an earlier draft said "the eight Bootstrap methods it reads", which '
+            . 'was both wrong - the derived set is smaller - and not the claim, since the set '
+            . 'is derived and a cardinality in prose is wrong by the next merge. tests/Cli/ '
+            . "was in no lane's file list for the round that found this.",
         'tests/Commands/SlashDispatchTest.php' =>
             'dispatchArmNames() has the same bare-string shape over a token_get_all() stream, '
             . 'walking the `match` arms of Chat::dispatchCommand(). Latent: measured on PHP '
@@ -548,14 +552,23 @@ final class InterpolationOpenerTokenTest extends TestCase
     /**
      * THE RECONCILIATION ITSELF, on input whose answer is known.
      *
-     * WHY THIS EXISTS. {@see KNOWN_GAPS} is empty at this commit, and an
-     * empty map makes both directions of the check above loop zero times:
-     * "nothing is unrecorded" and "no row is overtaken" are then true of a
-     * reconciliation that has been deleted outright, which is the same hole
-     * as a fixture whose expected value is what a dead instrument returns.
-     * The tree cannot supply a positive here without re-breaking a file on
-     * purpose, so the positive is synthetic and goes through the SAME
-     * {@see reconcile()} the real check calls.
+     * WHAT THIS SAID: "{@see KNOWN_GAPS} is empty at this commit". WHAT IS
+     * TRUE NOW: it is not, and was not when that sentence was committed - the
+     * same change-set that emptied it of its one row widened the SELECTION and
+     * refilled it with bare-brace walkers the old predicate could not express.
+     * The number is deliberately not repeated here; it is derived by
+     * {@see testEveryBraceWalkingScannerNamesEveryOpener()} and a cardinality
+     * written into prose is wrong by the next merge. WHY THE REASONING STILL
+     * EARNS ITS PLACE, and why it is not simply corrected to "not empty": the
+     * rows exist to be DELETED as their files are fixed, so an empty map is
+     * one commit away in the direction this file is pushing. On the day the
+     * last row goes, both directions of the real check loop zero times, and
+     * "nothing is unrecorded" and "no row is overtaken" become true of a
+     * reconciliation that has been deleted outright - the same hole as a
+     * fixture whose expected value is what a dead instrument returns. The tree
+     * cannot supply a positive here without re-breaking a file on purpose, so
+     * the positive is synthetic and goes through the SAME {@see reconcile()}
+     * the real check calls.
      *
      * BOTH DIRECTIONS, because they fail for opposite reasons and either can
      * be deleted without the other noticing.
