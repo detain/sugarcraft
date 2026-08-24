@@ -284,6 +284,69 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertFileExists($tree . '/inner/hidden.txt');
     }
     /**
+     * A DIRECTORY SYMLINK IS UNLINKED, NOT WALKED, AND ITS TARGET SURVIVES.
+     *
+     * `is_dir()` follows symlinks, so before the `!is_link()` guard the
+     * traversal treated a link to an outside directory as a subdirectory of the
+     * worktree and emptied it. MEASURED on this box before the fix, driving this
+     * exact fixture through `removeDirectory()`: the file below was DELETED,
+     * while the link and the target directory both survived — `rmdir()` fails on
+     * a symlink — so the method also reported `false` for a tree it had
+     * over-removed. Both halves are asserted here: nothing outside was touched,
+     * AND the tree now honestly reports `true`, which it could not have done
+     * while a link was in it.
+     */
+    public function testADirectorySymlinkIsUnlinkedAndItsTargetIsLeftAlone(): void
+    {
+        $outside = $this->tmpRoot . '/outside';
+        mkdir($outside, 0755, true);
+        file_put_contents($outside . '/precious.txt', 'important');
+
+        $tree = $this->tmpRoot . '/withlink';
+        mkdir($tree, 0755, true);
+        file_put_contents($tree . '/own.txt', 'x');
+        self::assertTrue(symlink($outside, $tree . '/link'));
+
+        // THE PREMISE, asserted rather than asserted-about: is_dir() really
+        // does answer true for this link, which is why the guard is needed.
+        self::assertTrue(is_dir($tree . '/link'));
+        self::assertTrue(is_link($tree . '/link'));
+
+        self::assertTrue(self::removeDirectory($this->manager, $tree));
+        self::assertDirectoryDoesNotExist($tree);
+
+        self::assertFileExists(
+            $outside . '/precious.txt',
+            'removeDirectory() walked through a symlink and deleted a file outside the tree it '
+                . 'was asked to remove',
+        );
+        self::assertDirectoryExists($outside);
+    }
+
+    /**
+     * AND A SYMLINK HANDED IN AS `$path` IS REFUSED RATHER THAN FOLLOWED.
+     *
+     * The other end of the same hole: the loop's guard does nothing for a link
+     * passed straight to the method, because the top-level `is_dir()` follows
+     * too. Refused rather than unlinked — the contract is "empty this tree", and
+     * a caller handing over a link did not mean the link's target.
+     */
+    public function testASymlinkGivenAsThePathIsRefusedRatherThanFollowed(): void
+    {
+        $outside = $this->tmpRoot . '/outside-two';
+        mkdir($outside . '/deep', 0755, true);
+        file_put_contents($outside . '/deep/precious.txt', 'important');
+
+        $link = $this->tmpRoot . '/link-as-root';
+        self::assertTrue(symlink($outside, $link));
+        self::assertTrue(is_dir($link));
+
+        self::assertFalse(self::removeDirectory($this->manager, $link));
+        self::assertFileExists($outside . '/deep/precious.txt');
+        self::assertTrue(is_link($link), 'the link itself was removed — this method refuses it, '
+            . 'it does not clean it up');
+    }
+    /**
      * THE REFUSAL ITSELF: an unremovable worktree keeps its registry entry.
      *
      * This is the whole point of the boolean. Before it, this same scenario

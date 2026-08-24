@@ -8660,6 +8660,20 @@ strictly more correct for the boolean E222 added: `rmdir()` on a symlink fails, 
 containing one can never report `true` no matter how much was removed. Add a fixture with a symlink to a
 populated directory and assert the target's contents SURVIVE.
 
+**CLOSED IN ROUND 49 BY LANE b's REVIEW-AND-FIX PASS — and the entry is rewritten rather than deleted,
+because the reasoning is what stops the guard being removed again.** WHAT THIS ENTRY SAID: deferred under
+"functionality before hardening", on the grounds that E222 was a reporting change and altering what gets
+deleted is not one. WHAT IS TRUE NOW: the claim was CONFIRMED by measurement before being acted on — a
+file at `outside/precious/DO_NOT_DELETE.txt`, reached only through a link inside the tree, was deleted,
+while the link and the target directory both survived (PHP 8.3.6, this box). Both ends are now guarded:
+`is_dir($itemPath) && !is_link($itemPath)` in the loop, and `!is_dir($path) || is_link($path)` at the top
+level, since `is_dir()` follows a link handed in as `$path` too. Two tests in
+`WorktreeRemovalReportingTest` pin it, and both mutations die. WHY IT STILL EARNS ITS PLACE: the deferral
+reasoning was sound and the thing that overturned it was the second sentence of the Step — the boolean
+E222 added is UNWINNABLE while a link can be in the tree, so this stopped being purely a hardening item
+and became part of making E222's own report honest. A future reader tempted to simplify the traversal
+back needs that, not just the CVE-shaped half.
+
 ---
 
 ### Eb49-4 — `warnForkFailed()` reports the first fork failure per pool and never the count

@@ -1105,6 +1105,11 @@ final class WorktreeManager
      * agent. The return value carries the same fact to a caller that can name
      * both, and {@see removeWorktree()} now refuses to proceed on it.
      *
+     * SYMLINKS ARE UNLINKED AND NEVER TRAVERSED, which is a change in what
+     * gets DELETED and not only in what gets reported — the one such change
+     * here, made because the reporting fix could not be honest without it.
+     * See the comments at the two `is_link()` checks for the measurement.
+     *
      * @return bool True when nothing remains at `$path`. A partially emptied
      *              tree is FALSE, and the surviving parents are deliberately
      *              left in place — `rmdir()` on a directory known to still have
@@ -1114,7 +1119,13 @@ final class WorktreeManager
      */
     private function removeDirectory(string $path): bool
     {
-        if (!is_dir($path)) {
+        // `|| is_link($path)` FOR THE SAME REASON THE LOOP HAS IT: `is_dir()`
+        // follows, so a symlinked `$path` would be recursed into and the target
+        // emptied. A link is refused here rather than unlinked — this method's
+        // contract is "empty this tree", and a caller that handed it a link did
+        // not mean the link's target. `removeWorktree()` turning that false into
+        // a thrown refusal is the correct outcome.
+        if (!is_dir($path) || is_link($path)) {
             // NOT UNCONDITIONALLY TRUE. A dangling symlink or a plain file at
             // this path is something this method did not remove, and answering
             // "gone" for it would hand the caller the same lie the void return
@@ -1130,7 +1141,16 @@ final class WorktreeManager
         $emptied = true;
         foreach (array_diff($entries, ['.', '..']) as $item) {
             $itemPath = $path . '/' . $item;
-            if (is_dir($itemPath)) {
+            // A SYMLINK IS UNLINKED, NEVER FOLLOWED, AND `is_dir()` FOLLOWS.
+            // MEASURED on this box (PHP 8.3.6): with a link inside the tree
+            // pointing at a directory OUTSIDE it, the old traversal recursed
+            // through the link and DELETED THE TARGET'S CONTENTS — a file
+            // outside the worktree destroyed, while the link and the target
+            // directory both survived because `rmdir()` then failed on the link
+            // itself. That last part also made the boolean unwinnable: a
+            // worktree containing one directory symlink could never report
+            // `true` however much was removed.
+            if (is_dir($itemPath) && !is_link($itemPath)) {
                 // Recursion FIRST and the conjunction second: `&&` short-
                 // circuits, and an earlier failure must not stop the remaining
                 // entries being attempted.
