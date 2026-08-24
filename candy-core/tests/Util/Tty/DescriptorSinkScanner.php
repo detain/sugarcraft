@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Tests\Util\Tty;
 
+use SugarCraft\Pty\Libc;
+
 /**
  * Finds every call to a function that CONSUMES A FILE DESCRIPTOR and reports
  * how its descriptor argument was spelled.
@@ -53,6 +55,83 @@ final class DescriptorSinkScanner
      * are typed `int`, so a stream resource is not a legal answer for them.
      */
     public const STATIC_SINKS = ['TermiosFactory::open', 'SizeIoctl::query'];
+
+    /**
+     * Cache for {@see methodSinks()}. The cdef is a string built per call.
+     *
+     * @var list<string>|null
+     */
+    private static ?array $methodSinks = null;
+
+    /**
+     * Libc symbols whose FIRST parameter is a file descriptor, DERIVED from
+     * candy-pty's own cdef rather than listed here.
+     *
+     * ## Why this is derived and the two lists above are not
+     *
+     * The function and static rosters are short, stable and spelled the same
+     * everywhere. This one is neither: it is reached as a METHOD on an FFI
+     * handle, and the receiver can be written `Libc::lib()->`, `$libc->`,
+     * `self::libc()->` or anything else a class cares to name its accessor.
+     *
+     * Every hand-written attempt at this family has been a transcript of the
+     * sites its author already had. The backlog entry commissioning this step
+     * carried a `grep` alternation with `open|close|ioctl|fcntl|read|write|
+     * dup|dup2` in it. MEASURED against this cdef: `read`, `write` and `dup2`
+     * are not declared in it at all, while `grantpt`, `unlockpt`, `ptsname_r`,
+     * `tcgetattr` and `tcsetattr` ARE fd-first and were absent from the
+     * alternation. Five symbols missing and three imaginary, in the list
+     * written by the entry whose whole subject is that hand-written lists of
+     * this kind are incomplete.
+     *
+     * So the roster is read out of {@see Libc::cdef()}, which is a
+     * declaration of exactly this fact and which candy-pty already keeps
+     * loadable without the FFI runtime for introspection. A symbol added
+     * there appears here on its next commit, and the census then demands a
+     * judgement for every call site of it.
+     *
+     * @return list<string>
+     */
+    public static function methodSinks(): array
+    {
+        return self::$methodSinks ??= self::sinksFromCdef(Libc::cdef());
+    }
+
+    /**
+     * Parse a C declaration block for functions whose first parameter is
+     * `int fd`.
+     *
+     * Split out from {@see methodSinks()} so a control fixture can push a
+     * cdef whose answer is known through the same parser -- including the
+     * near-misses that must NOT come back: a path-first `open()`, a
+     * `pid`-first `waitpid()`, a pointer-first `openpty()`.
+     *
+     * Block comments are stripped first. candy-pty's cdef carries prose
+     * inside them, and a census that reads a comment as a declaration is the
+     * same class of error as one that reads a doc-comment as a call.
+     *
+     * @return list<string>
+     */
+    public static function sinksFromCdef(string $cdef): array
+    {
+        $stripped = preg_replace('#/\*.*?\*/#s', ' ', $cdef) ?? $cdef;
+
+        $names = [];
+        if (preg_match_all(
+            '/([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*int\s+fd\s*[,)]/',
+            $stripped,
+            $matches,
+        )) {
+            foreach ($matches[1] as $name) {
+                $names[$name] = true;
+            }
+        }
+
+        $out = array_keys($names);
+        sort($out);
+
+        return $out;
+    }
 
     /** A literal integer — a genuine descriptor number. */
     public const LITERAL_INT = 'LITERAL_INT';
@@ -217,6 +296,23 @@ final class DescriptorSinkScanner
         // a census is its coverage; this is that lesson applied to itself.
         $shortName = self::shortName($tok[1]);
 
+        // THE METHOD SPELLING, and note what is NOT matched on: the receiver.
+        // `Libc::lib()->close($fd)`, `$libc->close($fd)` and
+        // `self::libc()->close($fd)` are all one shape here, because a census
+        // that enumerates receiver spellings is a transcript of the receivers
+        // its author had in hand -- and the backlog entry that commissioned
+        // this arm demonstrated exactly that, with an alternation that could
+        // not express `self::libc()->` and so missed four live sites in
+        // candy-pty. Anything at all may be on the left of the arrow; the
+        // ROSTER is where a call that turns out not to be a libc call gets
+        // said so.
+        $before     = self::previousSignificant($tokens, $i - 1);
+        $beforeType = $before !== null && \is_array($tokens[$before]) ? $tokens[$before][0] : null;
+
+        if (\in_array($beforeType, [\T_OBJECT_OPERATOR, \T_NULLSAFE_OBJECT_OPERATOR], true)) {
+            return self::methodSinkAt($tokens, $i, $shortName, $open);
+        }
+
         // Class::method(...)
         $doubleColon = self::nextSignificant($tokens, $i + 1);
         if ($doubleColon !== null
@@ -239,6 +335,13 @@ final class DescriptorSinkScanner
             return null;
         }
 
+        // The METHOD half of a `Foo::bar(...)` whose CLASS half was not a
+        // static sink. Reached on the next iteration after the branch above
+        // returned null, so a static sink can never be reported twice.
+        if ($beforeType === \T_DOUBLE_COLON) {
+            return self::methodSinkAt($tokens, $i, $shortName, $open);
+        }
+
         if (!\in_array($shortName, self::FUNCTION_SINKS, true)) {
             return null;
         }
@@ -252,16 +355,13 @@ final class DescriptorSinkScanner
         // unjudged roster row for a call to somebody else's method. It failed
         // safe -- a spurious row reds the census rather than hiding a site --
         // but the two spellings must answer the same, so it is pinned below.
-        $before = self::previousSignificant($tokens, $i - 1);
-        if ($before !== null && \is_array($tokens[$before])
-            && \in_array($tokens[$before][0], [
-                \T_OBJECT_OPERATOR,
-                \T_NULLSAFE_OBJECT_OPERATOR,
-                \T_DOUBLE_COLON,
-                \T_FUNCTION,
-                \T_NEW,
-            ], true)
-        ) {
+        if (\in_array($beforeType, [
+            \T_OBJECT_OPERATOR,
+            \T_NULLSAFE_OBJECT_OPERATOR,
+            \T_DOUBLE_COLON,
+            \T_FUNCTION,
+            \T_NEW,
+        ], true)) {
             return null;
         }
 
@@ -272,6 +372,54 @@ final class DescriptorSinkScanner
         $open = $paren;
 
         return $shortName;
+    }
+
+    /**
+     * A METHOD-shaped libc sink at $i, or null. Sets $open to its `(`.
+     *
+     * ## Arity, and why a zero-argument call is not "unparseable"
+     *
+     * `->close()` with no arguments occurs 56 times in this monorepo and is
+     * never libc's `close`: every symbol in {@see methodSinks()} is DECLARED
+     * with at least one parameter, so a nullary call of that name is a
+     * different method that shares a word. Skipping it is therefore a
+     * CLASSIFICATION -- the parse succeeded and said "not this" -- and not
+     * the silent shrug this class exists to refuse. The shrug would be
+     * dropping a call whose argument could not be read; that still comes back
+     * as {@see UNCLASSIFIED}, as it does for the function spelling.
+     *
+     * A one-argument `->close($x)` on something that is NOT an FFI handle is
+     * reported and needs a roster row saying so. That is the intended cost:
+     * the alternative is discriminating on the receiver, which is the trap
+     * this whole arm was written to get out of.
+     *
+     * @param  list<array{0:int,1:string,2:int}|string> $tokens
+     * @param  int|null                                 $open
+     */
+    private static function methodSinkAt(array $tokens, int $i, string $shortName, ?int &$open): ?string
+    {
+        if (!\in_array($shortName, self::methodSinks(), true)) {
+            return null;
+        }
+
+        $paren = self::nextSignificant($tokens, $i + 1);
+        if ($paren === null || $tokens[$paren] !== '(') {
+            // A property read (`$libc->close`) or a first-class callable
+            // reference, not a call.
+            return null;
+        }
+
+        $first = self::nextSignificant($tokens, $paren + 1);
+        if ($first !== null && $tokens[$first] === ')') {
+            return null;
+        }
+
+        $open = $paren;
+
+        // Reported with the arrow so a roster key, and the failure text that
+        // prints it, says which spelling was found without the reader having
+        // to open the file.
+        return '->' . $shortName;
     }
 
     /** The last segment of a possibly-qualified name. */
