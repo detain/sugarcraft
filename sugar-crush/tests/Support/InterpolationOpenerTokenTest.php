@@ -816,6 +816,18 @@ final class InterpolationOpenerTokenTest extends TestCase
      * iterated - which also covers a scanner naming a constant that was never
      * an opener at all.
      *
+     * WHAT THE SELECTION SAID: any file naming `T_CURLY_OPEN` as code. WHAT IS
+     * TRUE NOW: that missed the walkers the widened predicate exists to see. A
+     * BARE-BRACE walker names no token constant at all, so it was excluded from
+     * this census - and the paragraph above claims the census "also covers a
+     * scanner naming a constant that was never an opener at all", which was
+     * true only of walkers that already named the anchor. It now selects on
+     * {@see missingOpenersIn()}, the same predicate the roster check uses, so
+     * the two guards cover exactly the same population. WHY THE ORIGINAL
+     * REASONING STILL EARNS ITS PLACE: the anchor gate was never about which
+     * files matter, it was a cheap way to say "this file walks braces", and
+     * that is still the question - only now there are two ways to answer it.
+     *
      * The trade-off, stated: a scanner that deliberately names a constant it
      * has guarded with `defined()` would red here. Nothing in the tree does
      * that today, and the polarity is the safe one - it stops on a human
@@ -828,17 +840,17 @@ final class InterpolationOpenerTokenTest extends TestCase
         $openers = array_keys(self::openers());
         $named = [];
 
-        foreach (self::phpFilesToScan() as $relative => $path) {
+        foreach (self::everyPhpFile() as $relative => $path) {
             if ($path === __FILE__) {
                 continue;
             }
 
-            $constants = self::constantsNamedInCode((string) file_get_contents($path));
-            if (!\in_array('T_CURLY_OPEN', $constants, true)) {
+            $source = (string) file_get_contents($path);
+            if (self::missingOpenersIn($source, $openers) === null) {
                 continue;
             }
 
-            foreach ($constants as $name) {
+            foreach (self::constantsNamedInCode($source) as $name) {
                 $named[$name][] = $relative;
             }
         }

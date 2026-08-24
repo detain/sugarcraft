@@ -1052,6 +1052,12 @@ final class ChildStderrCaptureTest extends TestCase
     public function testScopeAndOutOfScopeDoNotClaimTheSameDirectory(): void
     {
         $this->assertNotSame([], self::OUT_OF_SCOPE, 'the map this test reasons about is empty');
+        // BOTH constants, because both loops below iterate them and an empty
+        // one makes its loop vacuous rather than failing. SCOPE is the easier
+        // of the two to empty by accident: it is a bare list, so a bad merge
+        // leaves `[]` and every "these do not overlap" assertion is then true
+        // of a partition with nothing on one side of it.
+        $this->assertNotSame([], self::SCOPE, 'the other map this test reasons about is empty');
 
         foreach (array_keys(self::OUT_OF_SCOPE) as $prefix) {
             $this->assertFalse(
