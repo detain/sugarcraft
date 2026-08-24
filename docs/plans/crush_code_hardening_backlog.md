@@ -8998,9 +8998,27 @@ distinguish "the seam wrote here" from "the seam wrote elsewhere".
 **DONE, all sites, later the same round — and it stopped being optional.** The shipped descriptor-0
 repair in `tests/bootstrap.php` IS the `O_NONBLOCK` flag (Ee49-1 attempt 4), so `restore()` at any of
 these sites was silently undoing it for every later test in the run. `tests/Support/ForkedChildTest.php`
-belongs to lane d this round; both of its constructions were changed anyway, because the alternative was
-shipping a repair that stops working at the first raw-mode test. **FORCED OUT-OF-LANE EDIT, named at the
-top of lane e's report (rule 23).** Both now assert the flag in both directions, so a revert is red.
+belongs to lane d this round and `tests/ChatTest.php` to no lane at all; all three constructions were
+changed anyway, because the alternative was shipping a repair that stops working at the first raw-mode
+test. **FORCED OUT-OF-LANE EDITS, named at the top of lane e's report (rule 23).** Each now asserts the
+flag in both directions, so a revert is red where it happens.
+
+**AND THE COUNT IN THE PARAGRAPH ABOVE WAS WRONG WHEN IT WAS WRITTEN.** WHAT THIS ENTRY SAID: that the
+instances were `tests/Backend/EngineBackendTest.php` and `tests/Support/ForkedChildTest.php` twice, "at
+`5c5501f1`", derived from `grep -rn 'new Tty(' src/ tests/ bin/`. WHAT IS TRUE: there was a FOURTH, in
+`tests/ChatTest.php`, spelled `new \SugarCraft\Core\Util\Tty(null, …)` — **fully qualified, which that
+grep cannot express** (Ee49-14). It was found by the full suite going red at
+`SuiteChildStdinIsolationTest`'s flag guard with the other three already fixed. WHY THE PARAGRAPH STILL
+EARNS ITS PLACE: the generator it names is still the right *idea* and the wrong *instrument*, and that
+distinction is the finding.
+
+**The census is now a test, not a grep.** `tests/TtyStreamArgumentCensusTest.php` walks the token stream,
+so no spelling can hide a site; classifies each construction's first argument; fails on an argument list it
+cannot read to its close (rule 14); and carries thirteen known-answer fixtures including both spellings, so
+an empty result is evidence rather than the silence of a dead scanner (rule 15). Its one honest residual is
+stated in its own doc-block: an expression first argument (`$stream`) is not provably non-null by any
+scanner that does not run the code, and a bare CONSTANT could be defined as null — so the set of constant
+names is asserted rather than their shape.
 
 **Step.** Consider whether candy-core's `Tty` should refuse `null` when an injected `Termios` is supplied
 at all — the combination means "drive this fd" and "wrap that stream", and there is no caller for which the
@@ -9042,5 +9060,40 @@ enum the same way — one wrong name means nobody has executed the method). Guar
 consumers with `is_resource()`. Neither is a sugar-crush change; both are worth a PR of their own, and (1)
 should carry a test that drives `autoFromPalette()` directly rather than through a thrown probe, since
 the throw is what made it unreachable for so long.
+
+---
+### Ee49-14 — a `grep` for `new Tty(` cannot see `new \Fully\Qualified\Tty(`, and it cost a full suite run
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: methodology, with a measured cost.
+**Fixed this round** by replacing the generator with a token-based census test.
+
+**What happened, in order.** (1) Ee49-12's hazardous shape — `new Tty(null, $injectedTermios)` writing
+`O_NONBLOCK` onto the runner's descriptor 0 — was censused with `grep -rn 'new Tty(' src/ tests/ bin/`,
+which found three sites. (2) All three were fixed and the count was written into two doc-blocks and a
+backlog entry. (3) The full suite went RED at `SuiteChildStdinIsolationTest`'s flag guard. (4) The fourth
+site is `tests/ChatTest.php`, written `new \SugarCraft\Core\Util\Tty(null, new \SugarCraft\Pty\Posix\PosixTermios($fd))`.
+**A grep for `new Tty(` is an alphabet that cannot express a fully-qualified constructor call.**
+
+**And the widened grep written to check it had the same hole**, which is the part worth writing down.
+The follow-up was `grep -rnE 'new\s+(\\?[A-Za-z_][A-Za-z0-9_]*\\)*Tty\s*\('` typed inside single quotes,
+where `\\` reaches the regex engine as a literal backslash pair rather than "an optional backslash" — so
+it silently missed the same line, and its output looked like a clean confirmation. **A harness written to
+check a claim can carry the defect the claim is about**, and the only thing that caught it was pushing a
+known-answer fixture (a fully-qualified call) through the generator before trusting it on the tree.
+
+**The working generator, for the record:**
+`grep -rn 'Tty(' src/ tests/ bin/ | grep -vE ':[[:space:]]*(\*|//)' | grep 'new '` — matching the SHORT
+name only, then filtering, rather than trying to spell the qualification in the pattern.
+
+**Why the fix is a test and not a better grep.** Any pattern over source text gets the two polarities
+wrong in both directions: it misses a spelling it did not anticipate, and it matches the same words inside
+a comment or a string — this very entry, and the doc-blocks describing the shape, contain the literal
+`new Tty(null, $injectedTermios)` as prose. `tests/TtyStreamArgumentCensusTest.php` uses `token_get_all()`,
+where `T_NEW` cannot occur in a comment or a string and the class name arrives already assembled however
+it was spelled.
+
+**Step.** None outstanding. Recorded because the pattern recurs: round 43's fuzz alphabet, round 44's
+`grep -c` on control bytes, round 48's unexecuted scanner, and this. **The common shape is a census
+believed on the strength of its output rather than on the strength of a known-answer control.**
 
 ---
