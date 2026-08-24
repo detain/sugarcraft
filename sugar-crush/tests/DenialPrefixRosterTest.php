@@ -65,13 +65,35 @@ use SugarCraft\Crush\Tools\ToolResult;
 final class DenialPrefixRosterTest extends TestCase
 {
     /**
-     * THE FRAME: a capitalised word run of at most four words ending in `:`.
+     * THE FRAME: a capitalised word run of at most four words ending in `:`,
+     * anywhere in the literal that is not mid-word.
      *
      * Four because `Permission required:` is two and the longest invented
      * spelling worth worrying about (`Tool call rejected by policy:`) is four;
      * an unbounded run would swallow the first colon of an entire sentence.
+     *
+     * IT USED TO BE ANCHORED WITH `^`, AND THAT ANCHOR WAS A HOLE THE WIDTH OF
+     * THIS TREE'S OWN PRODUCERS (round 49). WHAT IT SAID: that a denial
+     * spelling is what a literal OPENS with, mirroring
+     * {@see DenialKind::classify()}'s `str_starts_with`. WHAT IS TRUE NOW: the
+     * two are different questions. `classify()` is handed a FINISHED reason,
+     * which does open with its prefix; this scanner is handed a SOURCE
+     * literal, and a producer is free to decorate one — `src/Chat.php`'s
+     * refusal note was written `"_Permission denied: {$name} was not run._"`,
+     * whose interpolated run therefore begins `_`. MEASURED on PHP 8.3.6 by
+     * re-introducing that exact line and running this file: under `^` the
+     * guard stayed GREEN on `'src/Chat.php' => 0`, i.e. it could not see the
+     * very producer E236 removed. A leading space did the same. The lookbehind
+     * costs nothing that was being caught: re-run over the whole of `src/`,
+     * both alphabets name the SAME three files
+     * ({@see self::testTheLeafIsTheOnlyFileInTheFamilyThatSpellsADenialPrefix()}
+     * lists them), and all five family rows are unmoved.
+     *
+     * `(?<![A-Za-z])` and not a bare unanchored match: without it `Refused:`
+     * inside `PermissionRefused:` would count, which is one identifier and not
+     * two spellings.
      */
-    private const DENIAL_SHAPE = '/^[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/';
+    private const DENIAL_SHAPE = '/(?<![A-Za-z])[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/';
 
     /**
      * THE VOCABULARY: at least one of these words must appear inside the
@@ -271,8 +293,21 @@ final class DenialPrefixRosterTest extends TestCase
      * plus `'Permission mode: %s — from %s'`, a `sprintf` template in the
      * permission-summary line that is not a denial prefix at all. Under the
      * widened alphabet that fourth hit is gone (`mode` is not a denial term)
-     * and the interpolated three are seen, so the scan over that file is now
-     * exactly the six real spellings. WHY THE PARAGRAPH STILL EARNS ITS PLACE:
+     * and the interpolated three are seen.
+     *
+     * THAT PARAGRAPH THEN CLAIMED COMPLETENESS AND THE CLAIM WAS FALSE, which
+     * is corrected here because the false half is what hid a live hole for a
+     * round. WHAT IT SAID: "the scan over that file is now exactly the six
+     * real spellings". WHAT IS TRUE, counted at `db90e768` — the commit that
+     * file's pre-E236 state is preserved at — by listing every denial prefix
+     * in `src/Chat.php` outside a comment: there were SEVEN, not six. The
+     * seventh is {@see Chat::answerPermission()}'s system note,
+     * `"_Permission denied: {$name} was not run._"`, whose interpolated run
+     * opens with `_` and which the then-`^`-anchored frame could not match.
+     * So the scan saw six of seven and the sentence rounded that to "exactly
+     * the six real spellings" — the direction that makes an incomplete guard
+     * read as an exhaustive one. The frame is unanchored now and the missing
+     * shape has fixtures below. WHY THE PARAGRAPH STILL EARNS ITS PLACE:
      * the finding it records — that a constant-only scanner is blind to every
      * producer in this tree — is unchanged and is why the scan reads both
      * token kinds. A guard that cannot see the shape the code is actually
@@ -327,6 +362,51 @@ final class DenialPrefixRosterTest extends TestCase
                 "the scanner cannot express {$why}, so its emptiness says nothing about that shape",
             );
         }
+
+        // AND THE SHAPES THE `^` ANCHOR COULD NOT EXPRESS (round 49). Each is
+        // a DECORATED literal — the frame is present, but something precedes
+        // it — which is exactly how this tree's own refusal note was written.
+        // MEASURED as a SURVIVING mutation on PHP 8.3.6: src/Chat.php's
+        // pre-E236 line re-introduced verbatim left FAMILY_SPELLINGS' row for
+        // that file green on 0, so the guard could not see the one producer
+        // its own entry is named after. Assembled from parts so this file is
+        // never matched by its own scan set.
+        foreach ([
+            'an underscore-wrapped note, which is how Chat spelled its refusal'
+                => ['"_Permission ' . 'denied: {$n} was not run._"', '_Permission denied: '],
+            'a leading space'
+                => ['" Permission ' . 'required: {$n}"', ' Permission required: '],
+            'a frame that follows a sentence'
+                => ['"tool stopped. Hook ' . 'denied: {$m}"', 'tool stopped. Hook denied: '],
+        ] as $why => [$fixture, $expected]) {
+            self::assertSame(
+                [$expected],
+                self::denialLiteralsIn('<?php $d = ' . $fixture . ';'),
+                "the scanner cannot see {$why}, so a producer that decorates its prefix is invisible to "
+                . 'every zero in FAMILY_SPELLINGS',
+            );
+        }
+
+        // AND THE LOOKBEHIND'S OWN NEGATIVE, which is the cost of widening.
+        // The frame must not begin MID-WORD: dropping `(?<![A-Za-z])` makes a
+        // bare unanchored match read the tail of a lowercase-led identifier as
+        // a spelling. MEASURED on PHP 8.3.6, and stated honestly: over `src/`
+        // as it stands the two variants name the same three files and the same
+        // seven literals, so this lookbehind is a bound on what the widening
+        // can newly match rather than a fix for anything present today. The
+        // fixture is here because that is a property of the tree and the
+        // lookbehind is a property of the guard.
+        //
+        // NOT `"XPermission denied:"`, which was this fixture's first form and
+        // was wrong: `X` opens a word, so that string is a legitimate
+        // capitalised two-word frame and the scanner is right to see it. The
+        // discriminating case has to be lowercase-led.
+        self::assertSame(
+            [],
+            self::denialLiteralsIn('<?php $z = "errHook ' . 'denied: nope";'),
+            'the scanner matches a frame starting mid-word, so the tail of one identifier now counts as a '
+            . 'denial spelling and the widening has bought a false positive',
+        );
 
         // AND THE NEGATIVE THE FRAME ALONE WOULD HAVE GOT WRONG. `Tool not
         // found:` is the same SHAPE as `Blocked:` and is an ordinary tool
