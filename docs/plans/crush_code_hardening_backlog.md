@@ -13044,3 +13044,60 @@ seconds", and the assertions below the spawn kept in the totals rather than shed
 up should weigh it as a diagnostics improvement across ten sites, not as closing a hole.** The pattern
 to copy is `BootstrapSkillSkipsTest`'s: a named constant, a ceiling guard reading `phpunit.xml`, and an
 arm refusing every non-zero status rather than only the kill.
+
+### E393 — a stage that dies on an API fault can leave the WORK committed and only the REPORT missing
+
+**Recorded 2026-08-24.** Severity: process. **Cost this round: nearly a duplicated fix stage.**
+
+Round 52's `fix:a-core-fd` agent failed with `Please run /login · API Error: 403 Unable to verify
+organization membership`. The workflow reported the lane as errored. **It was not.** The agent had already
+applied every review finding and committed four times; it died on a later API call, before writing its
+report. Lane a's tree was clean at `b9229772` with all four fixes in it.
+
+The reflex — re-run the failed stage, which the harness makes one call away via `resumeFromRunId` — would
+have handed a fresh agent an already-fixed tree and a findings list describing defects that no longer
+exist. Best case it no-ops and wastes a stage; worst case it "fixes" the fixes.
+
+**The rule: on ANY stage failure, `git log <base>..HEAD` in that lane BEFORE deciding what to re-run.**
+Map the commits onto the review's required list; re-run only what is genuinely missing. This is E168 and
+E190 in a new costume — the harness losing the *report* while the *work* survives — and it has now
+appeared three times with three different proximate causes (agent death, stale cached HEAD, API 403), so
+treat the pattern as the expectation rather than the surprise.
+
+What was actually missing here was only the verification, which the supervisor measured directly:
+sugar-crush 9730/143168/1, candy-core 807/7288/25, candy-mosaic 458/7747/6, plus sugar-glow 71/115 and
+sugar-prompt 146/268/2 — all rc 0, closure 18/18. Those figures matched the REVIEWER's independent
+measurement at the pre-fix commit exactly, which is what established that the four fix commits were prose
+and guard corrections adding no tests.
+
+---
+
+### E394 — out-of-band supervisor work during a live round can collide with a lane's brief
+
+**Recorded 2026-08-24.** Severity: process. **Real collision, cost one duplicated fix.**
+
+While round 52 was in flight, a user-reported symptom sent the supervisor to fix E365's `php -S` leak in
+`candy-mosaic` on master (`e7c777b9`). **Lane a fixed the same leak, independently, in the same file**
+(`b928e653` + `71b3ed87`) — because its brief was candy-core/candy-mosaic *fd defects*, and a descriptor
+inherited into a leaked child is exactly that. Neither party was wrong; the supervisor simply did not
+re-read the live briefs before dispatching.
+
+The merge was a genuine resolution rather than a sum: master extracted `Support/LoopbackHttpServer.php`
+and added a dedicated `SsrfServerLeakTest`; lane a patched the test in place. **Master's was kept** — the
+helper is reusable by the two other mosaic tests that spawn their own servers, and its guard was proven
+red-then-green against the wrapper regression. Lane a's contribution (MINOR 4: skip loudly rather than
+self-disable where the kernel publishes no `children` file) was already satisfied there. Its `+1 / +3`
+therefore does NOT appear in the merged candy-mosaic figure, which is why that figure was deliberately
+left unpredicted.
+
+**Two rules out of this.** (1) **Before dispatching any out-of-band fix mid-round, read the live lane
+briefs** — a package named in a brief is claimed. (2) **When two fixes for one defect exist, do not merge
+the implementations.** Pick the better one whole and port only what the other adds; fusing two test
+philosophies in a conflict resolution is how a guard ends up proving nothing.
+
+⚠️ A related figure to not mis-read: lane a's report cited "~136 pre-existing leaked orphans still on this
+box" and its reviewer found **0** and flagged the discrepancy. Both are correct. The supervisor killed all
+136 between the two observations. **The lane's figure was accurate when written**; it is not an inflated
+claim, and the backlog should not record it as one.
+
+---
