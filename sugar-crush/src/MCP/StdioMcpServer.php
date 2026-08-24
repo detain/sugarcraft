@@ -209,6 +209,11 @@ final class StdioMcpServer implements McpServer
         // exists to close (a `select()` may report a pipe readable and still have
         // fewer bytes available than the read asks for).
         stream_set_blocking($this->pipes[2], false);
+
+        // AND FD 0, because {@see writeLine()} drives the write from a
+        // `stream_select()` loop for the same reason {@see readLine()} drives the
+        // read from one — see that method for the measurement.
+        stream_set_blocking($this->pipes[0], false);
         $this->stderrOpen = true;
         $this->stderrTail = '';
 
@@ -430,7 +435,36 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * Write one newline-framed message to the child's stdin.
+     * Write one newline-framed message to the child's stdin, DRAINING STDERR AS
+     * IT GOES.
+     *
+     * STDIN IS THE THIRD PIPE IN THE STDERR DEADLOCK, and this loop is here
+     * because a single drain before a blocking `fwrite()` — which is what this
+     * method briefly was — DOES NOT CLOSE IT. Generator: a child running
+     * `fwrite(STDERR, str_repeat("e", N))` and only then reading stdin; a parent
+     * that performs D non-blocking 8192-byte reads of stderr and then writes M
+     * bytes; 4s bound. PHP 8.3.6, Linux 6.8, three consecutive takes, identical
+     * every time:
+     *
+     *     N=100000  D=0   M=200000  ->  WEDGED (bound hit)
+     *     N=100000  D=1   M=200000  ->  WEDGED (bound hit)   <- the one-shot drain
+     *     N=100000  D=20  M=200000  ->  wrote 200001, 0.35s  <- flood fully drained
+     *     N=1000    D=0   M=200000  ->  wrote 200001, 0.35s  <- stderr under capacity
+     *     N=100000  D=0   M=1000    ->  wrote 1001,    0.35s  <- write under capacity
+     *
+     * The last two rows are the controls: BOTH sides have to be over their pipe
+     * capacity for the deadlock to exist. It is reachable in normal use — a
+     * server that logs progress to stderr while nothing is reading it (the model
+     * is thinking between tool calls) plus a `tools/call` whose arguments carry a
+     * file's contents is exactly the pair.
+     *
+     * One 8192-byte read frees 8192 bytes and the child immediately writes 8192
+     * more, so a fixed number of reads is the wrong instrument at any count: the
+     * bound has to be "until the write completes", which is what the loop below
+     * is. NOT DEADLINE-BOUNDED, matching this class's existing contract — see
+     * {@see callTool()} for why a wall clock does not belong on a tool call. The
+     * liveness is no worse than the blocking `fwrite()` it replaces, and the
+     * deadlock is gone.
      */
     private function writeLine(string $json): bool
     {
@@ -438,20 +472,57 @@ final class StdioMcpServer implements McpServer
             return false;
         }
 
-        // DRAIN BEFORE WRITING, because the write below is BLOCKING and stdin is
-        // the third pipe in the same deadlock. A child wedged in `write()` on a
-        // full stderr is not reading its stdin either, so once the 64 KiB stdin
-        // buffer also fills, `fwrite()` here blocks before `readLine()` — the
-        // only other place that drains — is ever reached. One non-blocking read
-        // costs nothing on the normal path and removes that ordering trap.
-        $this->absorbStderr();
+        $payload = $json . "\n";
 
-        // A dead child (e.g. a bogus command that already exited) closes the pipe;
-        // writing then raises a "broken pipe" notice. Suppress it — the missing
-        // response is what signals start() that the server failed, not the write.
-        if (@fwrite($this->pipes[0], $json . "\n") === false) {
-            return false;
+        while ($payload !== '') {
+            $write = [$this->pipes[0]];
+            $read = $this->stderrOpen ? [$this->pipes[2]] : [];
+            $except = [];
+
+            // `@` for EINTR, same as {@see readLine()}: a signal arriving
+            // mid-select is a retry, and under `failOnWarning="true"` the warning
+            // alone would red a passing run.
+            $ready = @stream_select($read, $write, $except, self::READ_POLL_SECONDS, 0);
+
+            if ($ready === false) {
+                usleep(1000);
+
+                continue;
+            }
+
+            if ($read !== []) {
+                $this->absorbStderr();
+            }
+
+            if ($ready === 0 || $write === []) {
+                continue;
+            }
+
+            // A dead child (e.g. a bogus command that already exited) closes the
+            // pipe; writing then raises a "broken pipe" notice. Suppress it — the
+            // missing response is what signals start() that the server failed,
+            // not the write.
+            $written = @fwrite($this->pipes[0], $payload);
+
+            if ($written === false) {
+                return false;
+            }
+
+            if ($written === 0) {
+                // Reported writable and took nothing. EOF on the read end means
+                // the child is gone; otherwise it is a spurious wakeup, so yield
+                // rather than spinning.
+                if (feof($this->pipes[0])) {
+                    return false;
+                }
+                usleep(1000);
+
+                continue;
+            }
+
+            $payload = substr($payload, $written);
         }
+
         fflush($this->pipes[0]);
 
         return true;

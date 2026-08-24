@@ -52,6 +52,13 @@ final class StdioMcpServerStderrDrainTest extends TestCase
     private const SAFE_BYTES = 1000;
 
     /**
+     * A `tools/call` argument big enough to overfill the parent's OWN stdin pipe
+     * — measured above the same 65536-byte capacity. An MCP tool handed a file's
+     * contents reaches this size routinely.
+     */
+    private const OVERSIZED_ARGUMENT_BYTES = 200000;
+
+    /**
      * Generous next to the 0.035s the drained path measures, tight enough that
      * a 5s handshake budget being paid in full is unambiguous. Five lanes share
      * this box.
@@ -195,6 +202,82 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             ),
         );
         $this->assertStringContainsString('CALLED:pong', $out, 'the tool call returned the wrong thing');
+    }
+
+    // =========================================================================
+    // The third pipe — stdin, which the same flood also wedges
+    // =========================================================================
+
+    /**
+     * STDIN IS PART OF THE SAME DEADLOCK, AND A ONE-SHOT DRAIN DOES NOT CLOSE IT.
+     *
+     * A child blocked writing stderr is not reading its stdin either, so once
+     * the parent's own 64 KiB stdin buffer fills, `writeLine()` blocks BEFORE
+     * `readLine()` — the other place that drains — is ever reached. Generator
+     * for the numbers, PHP 8.3.6, Linux 6.8, three consecutive takes, identical
+     * every time (D = 8192-byte stderr reads performed before a blocking write
+     * of M bytes, against a child that floods N bytes of stderr first, 4s bound):
+     *
+     *     N=100000 D=0  M=200000 -> WEDGED    N=1000   D=0 M=200000 -> ok 0.35s
+     *     N=100000 D=1  M=200000 -> WEDGED    N=100000 D=0 M=1000   -> ok 0.35s
+     *     N=100000 D=20 M=200000 -> ok 0.35s
+     *
+     * The D=1 row is the one that matters: an earlier version of this fix drained
+     * once before the blocking write and would have PASSED review while leaving
+     * the deadlock exactly where it was. Both sides must be over their pipe
+     * capacity, which is why the two control rows are in the table.
+     *
+     * Observed from a child process holding the clock, for the same reason the
+     * `callTool()` row is: unfixed, this hangs forever rather than slowly.
+     */
+    public function testALargeToolCallSurvivesAServerAlreadyBlockedOnStderr(): void
+    {
+        $probe = $this->tempDir . '/bigprobe.php';
+        file_put_contents($probe, sprintf(
+            self::BIG_WRITE_PROBE_TEMPLATE,
+            var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            var_export($this->writeServerScript(self::WEDGE_BYTES, 'big-server'), true),
+            self::OVERSIZED_ARGUMENT_BYTES,
+        ));
+
+        [$rc, $out, $elapsed] = $this->runBounded([PHP_BINARY, $probe], self::BOUND_SECONDS + 6.0);
+
+        $this->assertSame(
+            0,
+            $rc,
+            sprintf(
+                'a %d-byte tools/call against a server that floods stderr did not complete '
+                . '(rc=%d) after %.2fs — stdin and stderr are deadlocked against each other. '
+                . 'Output: %s',
+                self::OVERSIZED_ARGUMENT_BYTES,
+                $rc,
+                $elapsed,
+                trim($out) === '' ? '(none)' : trim($out),
+            ),
+        );
+        $this->assertStringContainsString('BIGCALLED:pong', $out);
+    }
+
+    /**
+     * THE CONTROL for the row above, and it is the row that says the fixture is
+     * discriminating rather than merely passing: the SAME oversized argument
+     * against a server whose stderr stays under the pipe capacity was never at
+     * risk, and the same probe must complete for it too.
+     */
+    public function testTheOversizedCallWasOnlyEverAtRiskBecauseOfTheStderrFlood(): void
+    {
+        $probe = $this->tempDir . '/bigquiet.php';
+        file_put_contents($probe, sprintf(
+            self::BIG_WRITE_PROBE_TEMPLATE,
+            var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            var_export($this->writeServerScript(self::SAFE_BYTES, 'big-quiet-server'), true),
+            self::OVERSIZED_ARGUMENT_BYTES,
+        ));
+
+        [$rc, $out, ] = $this->runBounded([PHP_BINARY, $probe], self::BOUND_SECONDS + 6.0);
+
+        $this->assertSame(0, $rc, 'the probe itself is broken: ' . trim($out));
+        $this->assertStringContainsString('BIGCALLED:pong', $out);
     }
 
     // =========================================================================
@@ -483,6 +566,23 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         $raw = $server->callTool('ping', []);
         $server->stop();
         echo 'CALLED:', $raw['content'][0]['text'] ?? '(nothing)', "\n";
+        PHP;
+
+    /** %s autoloader · %s server script · %d bytes of argument. */
+    private const BIG_WRITE_PROBE_TEMPLATE = <<<'PHP'
+        <?php
+        require %s;
+        $server = new SugarCraft\Crush\MCP\StdioMcpServer(
+            name: 'bigprobe',
+            command: PHP_BINARY,
+            args: [%s],
+            env: [],
+            startTimeoutSeconds: 5.0,
+        );
+        $server->start();
+        $raw = $server->callTool('ping', ['blob' => str_repeat('x', %d)]);
+        $server->stop();
+        echo 'BIGCALLED:', $raw['content'][0]['text'] ?? '(nothing)', "\n";
         PHP;
 
     /** Explains itself on stderr, then exits without ever answering. */
