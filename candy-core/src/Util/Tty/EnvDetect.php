@@ -15,7 +15,7 @@ namespace SugarCraft\Core\Util\Tty;
  * - Mintty / MSYS2 / Git-Bash: Unix-likePTY pipe, use POSIX backend.
  * - Native Windows PHP: no POSIX, use WindowsBackend.
  *
- * Detection order matters (see {@see Tty::backend()}):
+ * Detection order matters (see {@see \SugarCraft\Core\Util\Tty::backend()}):
  *
  * 1. WSL must be checked before native Windows (WSL_INTEROP is set even
  *    when /proc/sys/kernel/osrelease doesn't mention "microsoft").
@@ -117,12 +117,60 @@ final class EnvDetect
      * True when the native Windows PHP process is attached to a
      * console (not redirected / piped).
      *
-     * On native Windows PHP, `stream_isatty(STDIN)` is the primary
-     * check.  The Tty façade also validates the console handle is not
-     * `INVALID_HANDLE_VALUE` via {@see Kernel32}.
+     * On native Windows PHP `stream_isatty()` on descriptor 0 is the
+     * primary check, and {@see WindowsBackend::isTty()} additionally
+     * validates that the console handle is not `INVALID_HANDLE_VALUE`
+     * via {@see Kernel32}.
+     *
+     * ## DORMANT ON PURPOSE — do not wire it, and do not delete it
+     *
+     * WHAT THIS DOC-BLOCK USED TO SAY: "The Tty façade also validates
+     * the console handle …", written in a voice that reads as though the
+     * façade calls this method on its way there.
+     *
+     * WHAT IS TRUE NOW: it has no caller anywhere.  Verified by symbol
+     * across this package's `src`, and across `src`/`bin` of every
+     * sibling reachable from `sugar-crush`'s vendor closure: the only
+     * occurrence of the name is this declaration.  {@see \SugarCraft\Core\Util\Tty::backend()}
+     * and `Tty::concreteBackendClass()` reach {@see isWsl()},
+     * {@see isMintty()} and {@see isCygwin()} out of this same class and
+     * never this one, and {@see WindowsBackend::isTty()} performs its own
+     * `stream_isatty($this->stream)`.
+     *
+     * WHY IT IS AN INTENTIONAL SEAM RATHER THAN A MISSING CALL, measured
+     * against the tree rather than reasoned about: the single place it
+     * would slot into is `WindowsBackend::isTty()`, and that method asks
+     * about `$this->stream` — the stream the backend was CONSTRUCTED
+     * with, via `WindowsBackend::__construct($stream, $kernel32)`.  This
+     * method hard-codes the process-wide standard input.  Wiring it would
+     * silently discard the injected stream, which is the seam that
+     * constructor exists to provide and which the backend's own tests
+     * drive.  So the correct native-Windows console probe is not "call
+     * this from isTty()"; it is "give this a stream parameter first" — a
+     * signature change nobody has needed, because no Windows runner
+     * executes these suites (`scripts/affected-libs.php` decides that).
+     * The method stays as the declaration of intent for whoever takes the
+     * Windows console path up.
+     *
+     * WHY THE GUARD BELOW IS NOT DECORATION: this is a member of the
+     * closed-descriptor-0 family documented on {@see \SugarCraft\Core\Util\TtyDetect}.
+     * Unguarded, this body THROWS rather than answering when descriptor 0
+     * has been closed — measured, PHP 8.3.6, `TypeError: stream_isatty():
+     * supplied resource is not a valid stream resource`, which the `@`
+     * operator cannot suppress because it is thrown rather than raised.
+     * Guarding a dormant method is the cheap half of the no-removal rule:
+     * whoever wires it later inherits a method that cannot introduce a
+     * throw, instead of one that can.  The `defined()` half covers the
+     * non-CLI SAPIs where the constant is never created at all — this
+     * method is the Windows-console probe, and a native Windows PHP
+     * process is not guaranteed to be running the CLI SAPI.
      */
     public static function isConsoleStdin(): bool
     {
-        return stream_isatty(STDIN);
+        if (!\defined('STDIN') || !\is_resource(\STDIN)) {
+            return false;
+        }
+
+        return stream_isatty(\STDIN);
     }
 }

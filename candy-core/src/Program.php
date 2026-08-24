@@ -769,6 +769,38 @@ final class Program
      * the result as `ExecMsg` (and optionally a model-shaped follow-up
      * via the `$onComplete` callback).
      */
+    /**
+     * Resolve one entry of a {@see proc_open()} descriptor array.
+     *
+     * Preference order: the program's own handle, then the process-wide
+     * constant, then a file spec the child process opens for itself. The
+     * third step is what makes this a fallback rather than a restatement of
+     * the problem — see the block comment in {@see runExec()} and the
+     * closed-descriptor-0 family on {@see Util\TtyDetect}.
+     *
+     * Both stream arguments are typed as nullable because the caller passes
+     * a literal null for the error stream (there is no per-program stderr
+     * handle) and because `$this->input`/`$this->output` are documented as
+     * possibly-dead handles; `is_resource(null)` is false, which is the
+     * answer this method wants for every one of those cases.
+     *
+     * @param  resource|null                     $preferred
+     * @param  resource|null                     $fallback
+     * @param  array{0:string,1:string,2:string} $lastResort
+     * @return resource|array{0:string,1:string,2:string}
+     */
+    private static function childDescriptor($preferred, $fallback, array $lastResort)
+    {
+        if (is_resource($preferred)) {
+            return $preferred;
+        }
+        if (is_resource($fallback)) {
+            return $fallback;
+        }
+
+        return $lastResort;
+    }
+
     private function runExec(ExecRequest $req): void
     {
         $this->teardownTerminal();
@@ -778,16 +810,43 @@ final class Program
         $stderr = '';
 
         try {
-            // Use the program's configured input/output where possible — only
-            // fall back to STDIN/STDOUT/STDERR when those resources are gone
-            // (e.g. tests that closed the streams). Mirrors upstream bubbletea
-            // PR #1680 — avoid a panic when the program was started with a
-            // null/closed input handle.
-            $childIn  = is_resource($this->input) ? $this->input : STDIN;
-            $childOut = is_resource($this->output) ? $this->output : STDOUT;
+            // Use the program's configured input/output where possible.
+            //
+            // WHAT THIS COMMENT USED TO SAY: "only fall back to
+            // STDIN/STDOUT/STDERR when those resources are gone (e.g. tests
+            // that closed the streams). Mirrors upstream bubbletea PR #1680 —
+            // avoid a panic when the program was started with a null/closed
+            // input handle."
+            //
+            // WHAT IS TRUE NOW: falling back to the CONSTANTS is not a
+            // fallback at all once the process has closed descriptor 0.
+            // `defined('STDIN')` stays true after the handle is closed while
+            // `is_resource()` goes false, and the constructor already seeds
+            // `$this->input` from `$options->input ?? STDIN` — so for any
+            // program built without an explicit input, BOTH arms of the old
+            // ternary were the same dead handle, and the guard's fallback was
+            // the very thing it was guarding against. MEASURED, PHP 8.3.6:
+            // `proc_open()` with a closed resource in the descriptor array
+            // throws `TypeError: proc_open(): supplied resource is not a valid
+            // stream resource`, which the `@` below cannot suppress because it
+            // is thrown rather than raised. The surrounding try/catch turns
+            // that into `$err` plus exit -1, so the shape degrades by
+            // exception — the opposite of the guard's stated intent.
+            //
+            // WHY THE GUARD STILL EARNS ITS PLACE: the upstream intent (never
+            // fail merely because the input handle is gone) is right, and the
+            // constants are still the correct SECOND choice — they are live in
+            // every ordinary run. Only the last resort changed: a `/dev/null`
+            // file spec, which `proc_open()` opens for itself and which
+            // therefore cannot be closed out from under this call. See the
+            // closed-descriptor-0 family on {@see Util\TtyDetect}.
+            $nul      = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+            $childIn  = self::childDescriptor($this->input, STDIN, ['file', $nul, 'r']);
+            $childOut = self::childDescriptor($this->output, STDOUT, ['file', $nul, 'w']);
+            $childErr = self::childDescriptor(null, STDERR, ['file', $nul, 'w']);
             $descriptors = $req->captureOutput
                 ? [0 => $childIn, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]
-                : [0 => $childIn, 1 => $childOut, 2 => STDERR];
+                : [0 => $childIn, 1 => $childOut, 2 => $childErr];
             $cmd = is_array($req->command) ? $req->command : (string) $req->command;
             $proc = @proc_open($cmd, $descriptors, $pipes);
             if (!is_resource($proc)) {

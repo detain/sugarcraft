@@ -265,6 +265,21 @@ final class Detect
      * return their own no-answer value, which is the same thing they already
      * return on a timeout.
      *
+     * THIS IS ONE MEMBER OF A FAMILY, AND THE FAMILY LIVES AT candy-core.
+     * candy-core and candy-mosaic were both written when descriptor 0 was
+     * always a live terminal; the through-line, the other members, and the
+     * measurements for each of the three standard-library calls that THROW
+     * rather than degrade on a closed handle are on
+     * {@see \SugarCraft\Core\Util\TtyDetect}'s class doc-block. Read it
+     * before adding a caller here.
+     *
+     * The one detail that belongs on this side of the package boundary:
+     * {@see isInteractiveTty()} below passes this method's result straight
+     * into `TtyDetect::isAtty()`, and that method's `@param` reads
+     * `resource|null` for exactly this reason (E341). The null is a real
+     * answer crossing a package boundary, not defensive padding — the kind
+     * of contract no single package's suite is positioned to catch.
+     *
      * @return resource|null
      */
     private static function stdinFd()
