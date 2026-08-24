@@ -5154,6 +5154,16 @@ final class Chat implements Model
      * that an embedder can iterate. Removing it would be a break bought for
      * nothing; deriving it makes drift impossible instead.
      *
+     * AND IT IS NOW TAGGED AS WELL AS DESCRIBED (E304). The paragraph above
+     * has called this a deprecated projection since E239; nothing in the tree
+     * said so to a TOOL, so an embedder grepping for the tag found four fully
+     * supported symbols for three kinds. Iterating this constant still works
+     * and will keep working — the tag names where the supported list is.
+     *
+     * @deprecated Use \SugarCraft\Crush\Permissions\DenialKind::prefixes()
+     *             instead. This constant is a projection of that enum and is
+     *             kept only so an embedder iterating it does not break.
+     *
      * @var list<string>
      */
     public const DENIED_ERROR_PREFIXES = [

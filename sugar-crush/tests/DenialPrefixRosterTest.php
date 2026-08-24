@@ -873,6 +873,85 @@ final class DenialPrefixRosterTest extends TestCase
     }
 
     /**
+     * EVERY ALIAS OF THE ROSTER SAYS SO TO A TOOL, NOT ONLY TO A READER
+     * (E304).
+     *
+     * The tree publishes FOUR public constants for THREE kinds:
+     * `Chat::DENIED_ERROR_PREFIXES` and `Runtime`'s three `DENIAL_*`. All four
+     * derive from {@see DenialKind} in a constant expression, so they cannot
+     * drift — and all four were described as deprecated in prose alone. An
+     * embedder grepping for the tag found nothing; a static analyser saw four
+     * supported symbols. This asserts BOTH halves at once, and the pairing is
+     * the point: a tag can be added to something that has quietly become a
+     * fourth copy, and a copy can be kept honest while the tag says the
+     * opposite of what the paragraph beside it says.
+     *
+     * CONTINUATION MARKERS ARE FLATTENED BEFORE MATCHING. A doc-block wraps at
+     * 80 columns with ` * ` on every continuation, so a phrase is never those
+     * bytes in a row in the raw comment; matching the raw text is how an
+     * assertion about prose passes for the wrong reason.
+     */
+    public function testEveryDeprecatedRosterAliasCarriesTheTagAndStillDerivesFromTheEnum(): void
+    {
+        $aliases = [
+            Chat::class . '::DENIED_ERROR_PREFIXES' => [Chat::class, 'DENIED_ERROR_PREFIXES', DenialKind::prefixes()],
+            Runtime::class . '::DENIAL_HOOK' => [Runtime::class, 'DENIAL_HOOK', DenialKind::Hook->value],
+            Runtime::class . '::DENIAL_REFUSED' => [Runtime::class, 'DENIAL_REFUSED', DenialKind::Refused->value],
+            Runtime::class . '::DENIAL_UNANSWERED' => [Runtime::class, 'DENIAL_UNANSWERED', DenialKind::Unanswered->value],
+        ];
+
+        foreach ($aliases as $label => [$class, $name, $expected]) {
+            $constant = new \ReflectionClassConstant($class, $name);
+
+            self::assertSame($expected, $constant->getValue(), $label
+                . ' no longer holds what DenialKind says it holds. It is declared as a constant '
+                . 'expression over the enum precisely so this cannot happen, so a failure here '
+                . 'means somebody re-spelled it as a literal — which is the fourth copy the '
+                . 'enum was extracted to remove.');
+
+            $doc = self::flattenDocComment($constant->getDocComment());
+
+            self::assertStringContainsString('@deprecated', $doc, $label
+                . ' is a deprecated alias whose deprecation lives only in prose. An embedder '
+                . 'grepping for the tag finds nothing and a static analyser sees a supported '
+                . 'symbol. Add the tag; do not delete the paragraph.');
+            self::assertStringContainsString('SugarCraft\\Crush\\Permissions\\DenialKind', $doc, $label
+                . ' is tagged deprecated without saying what to use instead, which tells an '
+                . 'embedder to stop and not where to go.');
+        }
+
+        // THE KNOWN-NEGATIVE, IN THE SAME TEST (rule 15). Every assertion
+        // above is "this doc-comment contains a string", which a reader that
+        // had started returning the whole FILE would satisfy for any constant
+        // at all. A public const on one of the same classes that is NOT
+        // deprecated must come back without the tag.
+        self::assertStringNotContainsString(
+            '@deprecated',
+            self::flattenDocComment((new \ReflectionClassConstant(Chat::class, 'INTERRUPTED_TOOL_CALL'))->getDocComment()),
+            'the doc-comment reader answers the same thing for a constant that is not '
+                . 'deprecated, so the four assertions above are statements about the reader '
+                . 'rather than about the tags',
+        );
+    }
+
+    /**
+     * A doc-comment as one line of prose: the leading ` * ` of every
+     * continuation removed, and runs of whitespace collapsed.
+     *
+     * Rule 17. Without this, `SugarCraft\Crush\Permissions\DenialKind` split
+     * across a wrap is not present as those bytes and the assertion fails for
+     * a reason that has nothing to do with the tag.
+     */
+    private static function flattenDocComment(string|false $doc): string
+    {
+        if ($doc === false) {
+            return '';
+        }
+
+        return (string) preg_replace('/\s+/', ' ', (string) preg_replace('/^\s*\*\s?/m', '', $doc));
+    }
+
+    /**
      * AND THE TOKEN THE `refusals` DOCUMENT CARRIES IS THE ONE THREE-WORD
      * VOCABULARY A CONSUMER OUTSIDE PHP MATCHES ON (E250).
      *

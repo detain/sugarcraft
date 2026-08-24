@@ -207,7 +207,7 @@ final class RefusalStderrSurfaceTest extends TestCase
             [$promptText, $refusal] = $this->refuse(interactive: $interactive);
             self::assertNotNull($refusal, "the {$arm} arm produced no refusal for the observer to report");
 
-            $observer = (string) $notice->invoke(null, $refusal['tool'], $refusal['reason']);
+            $observer = (string) $notice->invoke(null, $refusal['tool'], $refusal['kind'], $refusal['reason']);
 
             // THE DOUBLING ITSELF, per arm, before any number is compared.
             self::assertNotSame('', $promptText, "the {$arm} arm's prompt wrote nothing, so there is no "
@@ -246,13 +246,13 @@ final class RefusalStderrSurfaceTest extends TestCase
             [
                 'terminal' => [
                     'promptBytes' => 189, 'promptLines' => 7,
-                    'observerBytes' => 77, 'observerLines' => 1,
-                    'totalBytes' => 266, 'totalLines' => 8,
+                    'observerBytes' => 87, 'observerLines' => 1,
+                    'totalBytes' => 276, 'totalLines' => 8,
                 ],
                 'no-tty' => [
                     'promptBytes' => 449, 'promptLines' => 8,
-                    'observerBytes' => 77, 'observerLines' => 1,
-                    'totalBytes' => 526, 'totalLines' => 9,
+                    'observerBytes' => 87, 'observerLines' => 1,
+                    'totalBytes' => 536, 'totalLines' => 9,
                 ],
             ],
             $measured,
