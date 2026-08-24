@@ -1238,29 +1238,78 @@ final class BackgroundSupervisorReapTest extends TestCase
                 . 'this tripwire is not reading the CI pools at all'
             );
 
-            $this->assertStringNotContainsString(
-                "'sugar-crush'",
-                $m[1],
+            $body = self::stripPhpComments($m[1]);
+
+            // THE SHAPE CHECK, and it is rule "red on what you cannot parse"
+            // applied to the pool's CONTENTS rather than to its declaration.
+            // Everything below reasons about quoted slugs; a pool that grew a
+            // heredoc entry, a constant, a variable or a call would satisfy
+            // "does not contain sugar-crush" for a reason that has nothing to
+            // do with sugar-crush being absent. It is also the known-positive
+            // for the comment stripper directly above: MACOS_LIBS carries a
+            // multi-line `//` comment explaining a hold-out, so a stripper that
+            // had stopped working could not produce a body matching this, and a
+            // stripper that ate everything could not produce a non-empty one.
+            $this->assertSame(
+                1,
+                preg_match('/^(?:\s*([\'"])[a-z0-9\-]+\1\s*,?)+\s*$/', $body),
+                "the $pool body is no longer a plain list of quoted lib slugs, so the checks "
+                . 'below are reasoning about a shape that is not there. Body after comment '
+                . "stripping: {$body}"
+            );
+
+            // EITHER QUOTE, because nothing normalises them. The first cut of
+            // this tripwire matched the single-quoted spelling only; MEASURED,
+            // inserting `"sugar-crush",` into MACOS_LIBS left it green. There
+            // is no backstop for that: `.php-cs-fixer.dist.php` enables
+            // @PSR12, strict_param, array_syntax and declare_strict_types and
+            // NOT `single_quote`, and no workflow in .github/workflows runs
+            // php-cs-fixer at all, so a double-quoted entry would simply sit
+            // there. Quotes are still REQUIRED rather than matching the bare
+            // word: MACOS_LIBS' comment names libs in prose, and a guard that
+            // reddened on a sentence would be retired the first time someone
+            // documented why sugar-crush is held out.
+            $this->assertSame(
+                0,
+                preg_match('/([\'"])sugar-crush\1/', $body),
                 "sugar-crush has been added to $pool, so its suite now runs on a runner without "
                 . '/proc. The four platform gates in this file will fire there, and every '
                 . "`1 skipped` figure in docs/plans is a Linux-only figure from that point on."
             );
-        }
 
-        // THE KNOWN-POSITIVE CONTROL. Both assertions above are satisfied by a
-        // `$m[1]` that is empty, or by pools that no longer name anything —
-        // which is also what a gutted generator looks like. `candy-core` is in
-        // BOTH pools, so requiring it proves the extraction returned real
-        // content before the absence above is allowed to mean anything.
-        foreach (['WINDOWS_LIBS', 'MACOS_LIBS'] as $pool) {
-            preg_match('/const\s+' . $pool . '\s*=\s*\[(.*?)\];/s', $source, $m);
-            $this->assertStringContainsString(
-                "'candy-core'",
-                $m[1],
+            // THE KNOWN-POSITIVE CONTROL. The absence assertion above is
+            // satisfied by a `$body` that is empty, or by a pool that no longer
+            // names anything — which is also what a gutted generator looks
+            // like. `candy-core` is in BOTH pools, so requiring it proves the
+            // extraction returned real content before an absence is allowed to
+            // mean anything. It is matched through the SAME quote-agnostic
+            // regex as the absence, so the two cannot drift into testing
+            // different alphabets.
+            $this->assertSame(
+                1,
+                preg_match('/([\'"])candy-core\1/', $body),
                 "the $pool extraction came back without candy-core, which IS in that pool — the "
                 . 'scanner is dead and its "sugar-crush is absent" answer means nothing'
             );
         }
+    }
+
+    /**
+     * Drop `//`, `#` and block comments from a const-array body.
+     *
+     * Deliberately naive — it would corrupt a string literal containing a
+     * comment marker — and that is safe here ONLY because the shape check in
+     * the caller runs on this function's OUTPUT and rejects any body that is
+     * not a list of `[a-z0-9-]` slugs. A pool entry that could confuse this
+     * stripper cannot survive that assertion.
+     */
+    private static function stripPhpComments(string $body): string
+    {
+        return (string) preg_replace(
+            ['~/\*.*?\*/~s', '~(?://|\#)[^\n]*~'],
+            '',
+            $body
+        );
     }
 
     private function requireProcTools(): void
