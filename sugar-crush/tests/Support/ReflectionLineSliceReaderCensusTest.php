@@ -97,18 +97,7 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             $unrecorded[] = $key;
         }
 
-        self::assertSame([], $unrecorded, \sprintf(
-            "%d reader(s) slice a line array with reflection's line numbers and never name the "
-            . "file those numbers came from. For a method reached through a TRAIT, reflection "
-            . "answers with the trait's file and the trait's lines, and slicing some other file "
-            . "with them returns unrelated source with no error of any kind — every figure "
-            . "measured from it is then a figure about the wrong method, reported under the "
-            . "right method's name. Slice `file(\$reflection->getFileName())`, or assert "
-            . "`__FILE__` against it, or add the reader to DECLARING_FILE_UNCHECKED with the "
-            . "reason.\n  %s",
-            \count($unrecorded),
-            \implode("\n  ", $unrecorded),
-        ));
+        self::assertSame([], $unrecorded, self::unrecordedMessage($unrecorded));
 
         $overtaken = [];
         foreach (self::DECLARING_FILE_UNCHECKED as $key => $reason) {
@@ -125,6 +114,58 @@ final class ReflectionLineSliceReaderCensusTest extends TestCase
             . 'Delete the row — a row that outlives the reader it describes is how this census '
             . 'quietly stops covering anything. If the reader was merely RENAMED, re-key the row: '
             . 'the fix has not happened.');
+    }
+
+    /**
+     * The failure text for {@see testEveryReflectionLineSliceReaderNamesTheDeclaringFile()},
+     * EXTRACTED SO SOMETHING CAN RUN IT WITH A NON-EMPTY POPULATION.
+     *
+     * A FAILURE MESSAGE'S GENERATOR IS THE ONE PART OF A GREEN SUITE THAT
+     * NEVER REALLY RUNS (E270). PHP evaluates an assertion's message argument
+     * eagerly, so an inline `sprintf()` here would be executed on every green
+     * run — but only ever over the EMPTY list, which exercises none of the
+     * formatting a reader will actually be handed. The one moment this text
+     * matters is the moment nobody has read it yet.
+     */
+    private static function unrecordedMessage(array $unrecorded): string
+    {
+        return \sprintf(
+            "%d reader(s) slice a line array with reflection's line numbers and never name the "
+            . "file those numbers came from. For a method reached through a TRAIT, reflection "
+            . "answers with the trait's file and the trait's lines, and slicing some other file "
+            . "with them returns unrelated source with no error of any kind — every figure "
+            . "measured from it is then a figure about the wrong method, reported under the "
+            . "right method's name. Slice `file(\$reflection->getFileName())`, or assert "
+            . "`__FILE__` against it, or add the reader to DECLARING_FILE_UNCHECKED with the "
+            . "reason.\n  %s",
+            \count($unrecorded),
+            \implode("\n  ", $unrecorded),
+        );
+    }
+
+    /**
+     * THE FAILURE TEXT IS RUN OVER A REAL POPULATION, which a green suite never
+     * does for it (E270).
+     *
+     * What this catches is small and real: a message that names none of the
+     * offenders, or names the count and not the rows, or interpolates the wrong
+     * variable. All three read as a perfectly green test until the day the
+     * guard fires, and on that day the reader is handed a paragraph with the
+     * evidence missing from it.
+     */
+    public function testTheFailureTextNamesEveryReaderItWasHandedAndCountsThem(): void
+    {
+        $message = self::unrecordedMessage(['a/A.php::one', 'b/B.php::two']);
+
+        self::assertStringContainsString('2 reader(s)', $message, 'the count is not the population\'s');
+        self::assertStringContainsString('a/A.php::one', $message, 'the first offender is not named');
+        self::assertStringContainsString('b/B.php::two', $message, 'the second offender is not named');
+        self::assertStringContainsString('DECLARING_FILE_UNCHECKED', $message, 'the message does not '
+            . 'say what to do, which is the half a reader acts on');
+
+        // AND THE EMPTY CASE STILL READS AS PROSE RATHER THAN AS A CRASH. This
+        // is the population the green suite really does hand it, every run.
+        self::assertStringContainsString('0 reader(s)', self::unrecordedMessage([]));
     }
 
     /**

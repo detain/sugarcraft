@@ -183,15 +183,7 @@ final class ProcessUniqueTempNameTest extends TestCase
             \implode("\n  ", $problems),
         ));
 
-        self::assertSame([], $offenders, \sprintf(
-            "%d argument-less call(s) found outside the inventory. That form is microtime-derived "
-            . "and NOT unique across processes; under the shared TMPDIR two concurrent suites "
-            . "collide on one path. Pass a pid prefix and the more-entropy flag — or, if the "
-            . "collision genuinely cannot happen, add the file to ARGUMENTLESS_INVENTORY with "
-            . "the MEASUREMENT that shows so.\n  %s",
-            \count($offenders),
-            \implode("\n  ", $offenders),
-        ));
+        self::assertSame([], $offenders, self::argumentlessMessage($offenders));
 
         foreach (self::ARGUMENTLESS_INVENTORY as $file => $row) {
             self::assertSame($row['sites'], $counts[$file] ?? 0, $file
@@ -385,16 +377,7 @@ final class ProcessUniqueTempNameTest extends TestCase
             }
         }
 
-        self::assertSame([], $offenders, \sprintf(
-            "%d fixed shared temp path(s) reaching a filesystem-mutating call. A path with NO "
-            . "entropy source is the same name in every process on the box: two concurrent runs "
-            . "write, read and delete one file, and whichever loses the race fails with a "
-            . "message about the file rather than about the race. This is not a `uniqid` "
-            . "hazard and no scan keyed on that name can see it. Give the path a pid and some "
-            . "entropy — or inventory it with the reason a fixed name is correct there.\n  %s",
-            \count($offenders),
-            \implode("\n  ", $offenders),
-        ));
+        self::assertSame([], $offenders, self::staticPathMessage($offenders));
 
         foreach (self::STATIC_TEMP_PATH_INVENTORY as $file => $row) {
             self::assertSame($row['sites'], $counts[$file] ?? 0, $file
@@ -741,6 +724,85 @@ final class ProcessUniqueTempNameTest extends TestCase
         }
 
         return $sawRoot;
+    }
+
+    // =========================================================================
+    // Failure text — extracted so it can be run over a real population
+    // =========================================================================
+
+    /**
+     * A FAILURE MESSAGE'S GENERATOR IS THE ONE PART OF A GREEN SUITE THAT
+     * NEVER REALLY RUNS (E270), and both of this file's censuses build an
+     * elaborate one.
+     *
+     * PHP evaluates an assertion's message argument eagerly, so an inline
+     * `sprintf()` here would execute on every green run — but only ever over
+     * the EMPTY list, which exercises none of the formatting a reader will
+     * actually be handed. The one moment the text matters is the moment nobody
+     * has read it yet. Extracted, both are run over a real population by
+     * {@see testBothFailureTextsNameTheOffendersTheyWereHanded()}.
+     *
+     * @param list<string> $offenders
+     */
+    private static function argumentlessMessage(array $offenders): string
+    {
+        return \sprintf(
+            "%d argument-less call(s) found outside the inventory. That form is microtime-derived "
+            . "and NOT unique across processes; under the shared TMPDIR two concurrent suites "
+            . "collide on one path. Pass a pid prefix and the more-entropy flag — or, if the "
+            . "collision genuinely cannot happen, add the file to ARGUMENTLESS_INVENTORY with "
+            . "the MEASUREMENT that shows so.\n  %s",
+            \count($offenders),
+            \implode("\n  ", $offenders),
+        );
+    }
+
+    /** @param list<string> $offenders */
+    private static function staticPathMessage(array $offenders): string
+    {
+        return \sprintf(
+            "%d fixed shared temp path(s) reaching a filesystem-mutating call. A path with NO "
+            . "entropy source is the same name in every process on the box: two concurrent runs "
+            . "write, read and delete one file, and whichever loses the race fails with a "
+            . "message about the file rather than about the race. This is not a `uniqid` "
+            . "hazard and no scan keyed on that name can see it. Give the path a pid and some "
+            . "entropy — or inventory it with the reason a fixed name is correct there.\n  %s",
+            \count($offenders),
+            \implode("\n  ", $offenders),
+        );
+    }
+
+    /**
+     * Both failure texts, run over a population a green suite never gives them.
+     *
+     * What this catches is small and real: a message that names none of the
+     * offenders, or names the count and not the rows, or interpolates the wrong
+     * variable. All three read as a green test until the day the guard fires,
+     * and on that day the reader is handed a paragraph with the evidence
+     * missing from it.
+     */
+    public function testBothFailureTextsNameTheOffendersTheyWereHanded(): void
+    {
+        $rows = ['src/One.php:11', 'tests/Two.php:22'];
+
+        foreach ([self::argumentlessMessage($rows), self::staticPathMessage($rows)] as $message) {
+            self::assertStringContainsString('2 ', $message, 'the count is not the population\'s');
+            self::assertStringContainsString('src/One.php:11', $message, 'the first row is not named');
+            self::assertStringContainsString('tests/Two.php:22', $message, 'the second row is not named');
+        }
+
+        self::assertStringContainsString('ARGUMENTLESS_INVENTORY', self::argumentlessMessage($rows));
+        self::assertStringContainsString('entropy', self::staticPathMessage($rows));
+
+        // The two texts must not be the same text. They are handed to a reader
+        // who has to tell which of the two hazards fired, and a copy-paste that
+        // left one of them naming the other is invisible on a green run.
+        self::assertNotSame(self::argumentlessMessage($rows), self::staticPathMessage($rows));
+
+        // AND THE EMPTY CASE, which is the one the green suite really does hand
+        // them on every run, still reads as prose rather than crashing.
+        self::assertStringContainsString('0 ', self::argumentlessMessage([]));
+        self::assertStringContainsString('0 ', self::staticPathMessage([]));
     }
 
     // =========================================================================
