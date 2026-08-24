@@ -74,6 +74,43 @@ found none — then discovered `BuiltInToolCorpusTest` asserts that prose via `s
 count, so the literals never appear. Both out-of-lane edits are genuinely forced. **The grep was the wrong
 instrument, and it said so.** No mutation residue found in the diff.
 
+### 🔴 THE PARALLEL RESUME DIED ON A HARNESS FAULT — AND LANE d LOOKED LIKE IT HAD LOST 16 COMMITS
+
+The 01:32 resume (`wrjky6769`) ran ~37 productive minutes, then the workflow itself failed:
+**"checkpointed for the background fork but could not be resumed (adopt scriptPath rejected)"** — the
+resume target lived under `/tmp/claude-1000/.../scratchpad/`, which the background fork could not adopt.
+🔴 **LAUNCH FROM A DURABLE SCRIPT PATH** (`.../workflows/scripts/`), never from the scratchpad.
+
+**Lane `c` completed in that window**: `3d3b9119`, 10 commits, **`9508 / 133610 / 1 skipped / rc 0`**,
+clean. Lanes `b`, `d`, `e` did NOT report — but all three had done substantial review work first.
+
+**Lane `d` came back reading `HEAD detached at db90e768`, 0 commits, clean tree** — as though its 9
+implement commits had been thrown away. **They had not.** Its reviewer had gone to the base to observe the
+baseline (which the brief demands, E167) and died there; `master` still pointed at `70757795` with
+**16 commits** — 9 implement plus 7 review. `git checkout master` restored all of it.
+🔴 **THIS IS A NEW FAILURE MODE AND IT LOOKS EXACTLY LIKE CATASTROPHE: check `git branch` and
+`git reflog` in a lane before believing anything is lost.** The finish briefs now tell lanes to read base
+revisions with `git show ${BASE}:<path>` instead of checking the tree out, and to never stop while
+detached.
+
+**Lanes `b` and `e` were dirty, and both diffs were REAL WORK, not probes** — `b` correcting its own
+census counts (`error_log` sites 21 → 22, `AgentWorkerPool` 1 → 2, which its own E222 change caused), `e`
+replacing a read of the now-closed `\STDIN` with a fresh `php://stdin` handle plus the descriptor-0
+write-up. **Not reverted.** The distinction from the two mutation probes found earlier was made by reading
+the diffs, not by assuming — which is the whole point of the inspect-before-reverting rule.
+
+### ▶ RUNNING NOW: `wt6cd0toc` / `wf_44d2d1fe-25c` — FINISH, NOT RESTART
+
+Script `.../workflows/scripts/crush-round-49c-finish-bde.js` (durable path). Three parallel agents, lanes
+`b`/`d`/`e` only. **They are told they are RESUMING**: the brief injects each lane's real HEAD, its full
+commit list and its uncommitted files, observed from the live lane dirs at launch. A from-scratch
+re-review would have thrown away 5–7 review commits per lane.
+
+Each is told: the uncommitted edit is your own predecessor's, judged real, never yet run through a suite —
+decide, finish, commit. A probe may also be sitting *committed*. And **the floor is `9499 / 133587`**,
+with the warning that a delta computed against the brief's wrong 9445 is inflated by 54 tests / 1420
+assertions.
+
 ### 🔴 WHAT THE STOP ITSELF TAUGHT — TWO LANES WERE HOLDING A LIVE MUTATION
 
 `git status` at the kill: **lane a had reverted a `DenialKind::Refused->reason(...)` call in
