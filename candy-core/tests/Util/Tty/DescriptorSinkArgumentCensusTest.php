@@ -849,13 +849,21 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      * today for one reason only: scanSource() asks for a trace-back solely
      * when the ARGUMENT classified VARIABLE, and a lone name never does.
      *
-     * SCOPE OF WHAT THIS PINS, stated plainly because it is narrow: this test
-     * does NOT kill a mutation of the shape test -- delete that refusal and
-     * `FOO` still comes back CONSTANT, because the gate upstream stopped it
-     * first. What it kills is a mutation of THE GATE. Widen scanSource() to
-     * trace a CONSTANT argument and this goes red, which is precisely the
-     * change that would make the dormant refusal load-bearing and send the
-     * reader back to the doc-block explaining it.
+     * SCOPE OF WHAT THIS PINS, stated plainly because it is narrower than it
+     * looks, and because the first version of this very comment got it wrong
+     * and a mutation run said so. The refusal and the gate are REDUNDANT, not
+     * layered: either one alone stops a constant being traced. MEASURED by
+     * mutation, PHP 8.3.6 --
+     *
+     *   widen the gate to admit CONSTANT, alone      -> this test SURVIVES
+     *   drop the shape test's refusal, alone         -> this test SURVIVES
+     *   both at once                                 -> this test is KILLED
+     *
+     * So it does not guard either defence individually; it guards the
+     * PROPERTY those two defences jointly provide, against the day someone
+     * simplifies away whichever one they happen to be reading. That is worth
+     * having and it is not worth overselling, which is why the table is here
+     * instead of a sentence claiming more.
      */
     public function testABareConstantIsNeverTracedBack(): void
     {

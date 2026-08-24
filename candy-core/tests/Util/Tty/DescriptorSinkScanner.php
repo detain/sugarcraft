@@ -813,10 +813,14 @@ final class DescriptorSinkScanner
      * so the old rule's intent survives; only its hand-rolled second opinion
      * is gone.
      *
-     * The constant branch is therefore DORMANT, not dead: it is unreachable
-     * only because of the caller's gate, and
+     * The constant branch is therefore DORMANT, not dead: it is REDUNDANT
+     * with the caller's gate rather than unreachable in principle, and the
+     * two are independent -- MEASURED, PHP 8.3.6, by mutation: widen the gate
+     * to trace a CONSTANT argument and this refusal still stops it; delete
+     * this refusal and the gate still stops it; remove BOTH and
      * {@see DescriptorSinkArgumentCensusTest::testABareConstantIsNeverTracedBack()}
-     * pins that gate so a future widening of it has to come back here.
+     * goes red. Belt and braces, deliberately, because the cost is one
+     * comparison and the failure it prevents is a silent misclassification.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      */
