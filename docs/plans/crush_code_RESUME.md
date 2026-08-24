@@ -52,6 +52,32 @@ file lists. Four consecutive rounds in which that control found something neithe
   `sugar-crush/src/`, not under `src/MCP/`.
 - **New standing rule 33** (a guard's exemption row may be the wrong fix — see §0-NOW-54).
 
+### 🔴 STANDING OPERATOR INSTRUCTION FOR ROUND 54's CLOSE — THE USER ASKED FOR ALL OF IT, IN ORDER
+
+The user authorised this sequence explicitly on 2026-08-24. **Do not stop between the steps for
+confirmation; stop only for a decision that is genuinely theirs.**
+
+1. **Merge, renumber, measure, verify** — the checklist directly below.
+2. **PUSH `master` to `origin`.** This is the one outward-facing step and it IS authorised for this
+   round. `origin/master` was already at `492352ea` before round 54 finished (no hooks in this repo —
+   another session pushed it), so check `git ls-remote origin master` first rather than assuming a
+   backlog of unpushed work.
+3. **Wait a few minutes** for `sync-sugarcraft.yml` to split the monorepo into `sugarcraft/<lib>` and for
+   Packagist to pick the new versions up. ⚠️ **`splitsh-lite` output SHAs are NOT `git subtree split`
+   SHAs** — anything that targets a per-lib commit must use pinned `splitsh-lite v1.0.1`.
+4. **`composer update` in the root AND in every lib dir.** Script is staged at
+   `<scratchpad>/composer-sweep.sh` (58 lib manifests plus the root; per-dir logs under
+   `<scratchpad>/sweep/`). This is a genuine end-to-end check that the libs resolve the way an outside
+   consumer gets them.
+5. 🔴 **THEN RESTORE THE CLOSURE, BEFORE ANY LANE MEASURES ANYTHING.** `composer update` replaces every
+   `vendor/sugarcraft/*` symlink with a Packagist copy, which is exactly what voids 18/18 · 3/3 · 6/6.
+   Re-inject with `php tools/check-path-repos.php --fix --strict-closure`, `composer update` in the libs
+   that matter, then `git checkout -- '*/composer.json'` so nothing leaks into a commit — and **verify by
+   `is_link()` + `realpath()` prefix, never by `ls`.** ⚠️ **Any figure measured between step 4 and a
+   verified closure is VOID.** Do not quote one, and do not let a lane branch from that state.
+6. **Launch round 55**, then update `crush_code_worklog.md`, this file, and the backlog so the session
+   can be compacted safely.
+
 ### AT THE MERGE
 
 Merge a→b→c. **Renumber from E429.** Renumber **longest-id-first**. Count headings as `^#{2,3} E`.

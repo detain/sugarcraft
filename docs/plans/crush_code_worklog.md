@@ -8,6 +8,35 @@ Summary + Implementation Plan, 209-2160 are the 13 research dossiers.
 
 ---
 
+## Round 54 — IN FLIGHT (this entry is a checkpoint, not a result)
+
+**Base `606a131c` · run `wf_945b0ccb-cb9`, task `wpfjwoxt2` · launched 2026-08-24, three lanes.** Base
+floors: sugar-crush 9946/144269/1, candy-core 819/7390/25, candy-flip 83/227/2, candy-pty 606/1476/16
+(+1 warning), candy-mosaic 459/7753/6 — all rc 0. Lanes: **a** finishes the candy-core descriptor census
+(E396/E404/E398), **b** takes three real runtime bugs round 53 spotted out-of-lane (E411/E412/E413), **c**
+closes the fd 3+ inheritance the round-53 guard proves (E417/E418/E425/E426). Lanes b and c overlap on
+`MCP/StdioMcpServer.php` on purpose.
+
+**Three harness defects were fixed in the script before launch rather than filed for later:**
+
+- **The OWNERSHIP map had been a stale FIVE-lane round-49 map for five rounds**, naming lanes `d` and `e`
+  that had not existed since. That is the direct cause of E416 — a lane finding its own brief and the map
+  in contradiction over who owned a file — and of lane b's round-53 complaint that the round assigned
+  `tests/Sessions/` to a lane that was not running. Rewritten for the actual three lanes.
+- **Three brief paths did not exist (E334, caught pre-launch).** `SizeIoctl` and `TermiosFactory` live in
+  **candy-pty**, not `candy-core/src/Util/Tty/` — which materially changes lane a's brief, since closing
+  E396 may mean editing a third library and owing its figures. `McpMessage.php` sits at `sugar-crush/src/`,
+  not under `src/MCP/`.
+- **Per-round scratchpads `r54{lane}` (E427).** Rounds 49–53 all shared `r49{lane}`.
+
+**Standing rule 33 added to `COMMON`:** when a guard offers you an exemption row, ask first whether the
+code is correct — if it is, the classifier is the defect.
+
+**At this round's close the user authorised, in order:** merge → push → wait for the `sugarcraft/*` sync
+and Packagist → `composer update` in the root and every lib dir → **restore the path-repo closure before
+anything is measured again** → launch round 55. The full instruction lives at the top of
+`crush_code_RESUME.md`.
+
 ## Round 53 — the descriptor family, child reaping, and a guard that reddened correct code
 
 **Base `9ed3e200` · merged `3074d2ec` · floor `b8808d5a` — sugar-crush 9946/144269/1, candy-core
