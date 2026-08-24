@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Diagnostics;
 
+use PHPUnit\Framework\ExpectationFailedException;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Core\ProgramOptions;
@@ -1172,26 +1173,9 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         self::assertContains($root . '/bin/sugarcrush', $files);
         self::assertFileExists($root . '/bin/sugarcrush');
 
-        $stacked = [];
-        foreach ($files as $file) {
-            $source = file_get_contents($file);
-
-            // A file this scan could not read must go RED, not silently
-            // contribute zero findings — an unreadable file is a hole shaped
-            // exactly like the next stacked pair.
-            self::assertIsString(
-                $source,
-                $file . ' could not be read, so the assertion below does not speak for it.',
-            );
-
-            foreach (self::stackedDocCommentLines($source) as $line) {
-                $stacked[] = substr($file, \strlen($root) + 1) . ':' . $line;
-            }
-        }
-
         self::assertSame(
             [],
-            $stacked,
+            self::stackedPairsIn($files, $root),
             'These files have doc-comments stacked immediately on top of each other at the '
                 . 'file:line pairs listed. PHP attaches only the last of a run, so every earlier '
                 . 'one documents nothing: its @return tag is off the method and its reasoning is '
@@ -1251,6 +1235,181 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
             PHP));
     }
 
+    /**
+     * THE RULE-14 ARM HAS A FIXTURE NOW, AND IT DID NOT BEFORE — AND WRITING
+     * ONE FOUND A SECOND HOLE IN THE ARM ITSELF.
+     *
+     * {@see stackedPairsIn()} must refuse a roster entry it cannot scan rather
+     * than let it contribute a silent zero. Nothing exercised that: every other
+     * assertion in the guard above has a known-positive control that has been
+     * watched to fail, and this was the one arm that had never been seen to
+     * work — the arm that matters precisely on the checkout where something is
+     * wrong. Recorded as a deferred finding by this round's own review pass,
+     * then closed here once the scan took its roster as a parameter, which is
+     * what makes an unscannable fixture possible WITHOUT writing a `0000` file
+     * into `src/` in a suite five audit lanes share.
+     *
+     * WHAT THE FIXTURE FOUND. The arm was `assertIsString($source)` alone, and
+     * that is not enough: MEASURED on this box, PHP 8.3.6,
+     * `file_get_contents()` on a DIRECTORY returns the EMPTY STRING and not
+     * `false` (with a `Read of N bytes failed with errno=21 Is a directory`
+     * warning). `''` is a string, so a directory in the roster passed the arm
+     * and scanned as zero stacked pairs — the exact silent zero the arm exists
+     * to prevent. The `is_file()` check is that hole closed, and the directory
+     * case below is what keeps it closed.
+     *
+     * TWO NEGATIVE CASES BECAUSE THEY FAIL AT DIFFERENT ARMS. A directory fails
+     * `is_file()` and runs on every uid; an unreadable file passes `is_file()`
+     * (its own directory is still traversable, so `stat()` succeeds) and fails
+     * the read. The second is CONDITIONAL and deliberately NOT
+     * `markTestSkipped()`: uid 0 reads a `0000` file, and this suite's skipped
+     * count is an invariant the audit uses to detect a broken dependency
+     * closure — an environment-dependent skip would spend it on a coin flip.
+     *
+     * BOTH POLARITIES IN ONE TEST, because an expected failure is exactly the
+     * assertion E228 warns about: "it threw" is also what a helper that threw
+     * for an unrelated reason produces. The positive half runs the SAME helper
+     * over the SAME file while it is readable and asserts the pair is FOUND, so
+     * the negative halves cannot be satisfied by an instrument that refuses
+     * everything.
+     */
+    public function testARosterEntryTheScanCannotReadFailsRatherThanScoringZero(): void
+    {
+        // `tempnam()` CREATES the file, so the name is claimed and then replaced
+        // by a directory of the same name — a process-unique reservation rather
+        // than a name five concurrent audit suites can collide on under one
+        // shared TMPDIR. {@see \SugarCraft\Crush\Tests\Support\ProcessUniqueTempNameTest}
+        // is the guard for that, and it is why the argument-less form is absent.
+        $reserved = tempnam(sys_get_temp_dir(), 'sc_r49b_unread_');
+        self::assertIsString($reserved);
+        self::assertTrue(unlink($reserved));
+        $dir = $reserved;
+        self::assertTrue(mkdir($dir));
+        $file = $dir . '/Stacked.php';
+        self::assertNotFalse(file_put_contents($file, <<<'PHP'
+            <?php
+            /** First block, stranded. */
+            /** Second block, which wins. */
+            function f(): void {}
+            PHP));
+
+        try {
+            // POSITIVE HALF. Without it the failures below would pass on a
+            // helper that refused every roster it was handed.
+            self::assertSame(
+                ['Stacked.php:2'],
+                self::stackedPairsIn([$file], $dir),
+                'the scan no longer finds a stacked pair in a file it CAN read, so the '
+                    . 'unscannable cases below prove nothing about this instrument',
+            );
+
+            // NEGATIVE CASE 1: a directory. Runs on every uid.
+            self::assertStringContainsString(
+                basename($dir),
+                self::refusalMessageFor([$dir], $dir),
+                'stackedPairsIn() accepted a DIRECTORY as a roster entry. On PHP 8.3.6 '
+                    . "file_get_contents() answers '' for one, which is a string, so it scans as "
+                    . 'zero stacked pairs — indistinguishable from a clean file.',
+            );
+
+            // NEGATIVE CASE 2: an unreadable file, when the mode takes.
+            self::assertTrue(chmod($file, 0000));
+            if (!is_readable($file)) {
+                self::assertStringContainsString(
+                    'Stacked.php',
+                    self::refusalMessageFor([$file], $dir),
+                    'stackedPairsIn() accepted a file it could not read, so the guard above '
+                        . 'would pass on a checkout where it had read nothing at all.',
+                );
+            }
+        } finally {
+            @chmod($file, 0644);
+            @unlink($file);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * The message {@see stackedPairsIn()} fails with for `$files`, or a failure
+     * of this test if it did not fail at all.
+     *
+     * Returning the message rather than asserting on the exception's presence is
+     * what lets each caller assert WHICH entry was named — "it threw" is the
+     * assertion E228 warns about, and a helper that threw for an unrelated
+     * reason satisfies it just as well.
+     *
+     * @param list<string> $files
+     */
+    private static function refusalMessageFor(array $files, string $root): string
+    {
+        try {
+            $scanned = self::stackedPairsIn($files, $root);
+        } catch (ExpectationFailedException $e) {
+            return $e->getMessage();
+        }
+
+        self::fail(sprintf(
+            'stackedPairsIn() scanned an unscannable roster without complaining, answering %s.',
+            var_export($scanned, true),
+        ));
+    }
+
+    /**
+     * The stacked pairs in `$files`, as `path-relative-to-$root:line` strings.
+     *
+     * EXTRACTED FROM THE GUARD SO THE ROSTER IS A PARAMETER, and the roster
+     * being a parameter is the whole point: it lets
+     * {@see testAFileTheScanCannotReadFailsRatherThanScoringZero()} drive the
+     * unreadable-file arm at a scratch path instead of at a `0000` file created
+     * inside `src/`.
+     *
+     * TWO REFUSAL ARMS AND NOT ONE, for the reason
+     * {@see testARosterEntryTheScanCannotReadFailsRatherThanScoringZero()}
+     * records: `file_get_contents()` answers `''` for a directory on PHP 8.3.6,
+     * so `assertIsString()` cannot see one. `is_file()` catches that; the read
+     * catches an entry that is a file and still cannot be opened.
+     *
+     * `@file_get_contents()` AND NOT A BARE CALL. The suppression is what makes
+     * the `assertIsString()` below the reporting mechanism: unsuppressed, an
+     * unreadable file surfaces as a PHP warning whose handling depends on the
+     * suite's error configuration rather than as this test's own named failure.
+     *
+     * @param list<string> $files
+     *
+     * @return list<string>
+     */
+    private static function stackedPairsIn(array $files, string $root): array
+    {
+        $stacked = [];
+
+        foreach ($files as $file) {
+            // NOT FOLDED INTO THE READ BELOW. `file_get_contents()` on a
+            // DIRECTORY answers the EMPTY STRING on PHP 8.3.6 — not `false` —
+            // so `assertIsString()` alone let a directory scan as zero stacked
+            // pairs. This is the arm that catches that; the read is the arm
+            // that catches a permission problem on something that IS a file.
+            self::assertTrue(
+                is_file($file),
+                $file . ' is not a file, so this scan does not speak for it.',
+            );
+
+            $source = @file_get_contents($file);
+
+            // A file this scan could not read must go RED, not silently
+            // contribute zero findings — an unreadable file is a hole shaped
+            // exactly like the next stacked pair.
+            self::assertIsString(
+                $source,
+                $file . ' could not be read, so this scan does not speak for it.',
+            );
+
+            foreach (self::stackedDocCommentLines($source) as $line) {
+                $stacked[] = substr($file, \strlen($root) + 1) . ':' . $line;
+            }
+        }
+
+        return $stacked;
+    }
     /**
      * Every PHP file the stacked-doc-comment guard speaks for: all of `src/`,
      * plus the `bin/sugarcrush` entry point.
