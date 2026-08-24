@@ -422,6 +422,57 @@ final class ChildStderrCaptureScanner
      * FEWER THAN THREE ELEMENTS IS A REAL `inherited`, not a failure to read:
      * a spec that supplies only fds 0 and 1 leaves fd 2 pointing wherever the
      * parent's was, which is the definition of the shape.
+     *
+     * WHAT THE ARROW BRANCH SAID, and it is the same hole one branch further
+     * in - the paragraphs above are kept whole because they are still true of
+     * the branch they describe. It said: an element carrying a `=>` means the
+     * spec is keyed, a keyed spec that does not name `2` leaves fd 2 alone,
+     * therefore return {@see SHAPE_INHERITED}. Every clause of that is true of
+     * a spec whose elements ALL carry keys.
+     *
+     * WHAT IS TRUE NOW: it was applied on the FIRST element carrying an arrow,
+     * so a spec that MIXES the two spellings took it too. PHP gives a
+     * positional element ONE GREATER THAN THE LARGEST INTEGER KEY IT HAS
+     * ASSIGNED SO FAR, measured on PHP 8.3.6: `[0 => a, b, c]` has keys 0, 1,
+     * 2, `[1 => a, b]` has keys 1 and 2, and `[5 => a, b, c]` has keys 5, 6
+     * and 7. So in a mixed spec fd 2 may be the second element, the third, or
+     * absent entirely - the position of an element no longer tells you its fd,
+     * and two of those three spellings put a pipe on fd 2 while the branch
+     * answered `inherited` for all three.
+     *
+     * (THAT RULE USED TO BE WRITTEN HERE AS "the next free integer key", which
+     * is a DIFFERENT rule that agrees with the real one on all three examples
+     * above and disagrees elsewhere: `[5 => 'a', 0 => 'b', 'c']` has keys 5, 0
+     * and 6, where "next free" predicts 1. Measured, PHP 8.3.6. Nothing in the
+     * conclusion moves - if anything a running maximum is even less
+     * recoverable from an element's position than occupancy would be.)
+     *
+     * WHY THIS EARNS ITS PLACE, AND IT IS NOT THE REASON FIRST WRITTEN HERE.
+     * WHAT IT SAID: "`inherited` is the shape this scanner's guards FLAG, so a
+     * wrong `inherited` reds correct code, and an exemption row written for
+     * correct code is where the next real offender hides." WHAT IS TRUE NOW:
+     * that is not how the consumer works. {@see ChildStderrCaptureTest}'s
+     * `testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()` treats
+     * everything that is not `captured` - and not an exempted `discarded` - as
+     * an offender, {@see SHAPE_UNCLASSIFIED} included, and says so in its own
+     * failure text. MEASURED: the same correct mixed spec, injected into a file
+     * in that guard's scope, reds it either way - as
+     * `(proc_open -> unclassified)` with this branch and as
+     * `(proc_open -> inherited)` with it reverted. The change relabels an
+     * offender; it does not stop one.
+     *
+     * WHY IT STILL EARNS ITS PLACE ANYWAY, on the two grounds that survive the
+     * measurement: `inherited` is a DEFINITE claim about where fd 2 goes and
+     * `unclassified` is an admission that this splitter cannot tell, which is
+     * rule 14 - what a guard cannot parse must be visible as unparsed rather
+     * than dressed as an answer. And it is the answer
+     * {@see ChildLifetimeScanner::keysOf()} already gives the same shape,
+     * reached independently. Two instruments walking one syntax disagreeing
+     * about what they cannot read is the disagreement worth removing.
+     *
+     * THE ARROW TEST IS TOP-LEVEL, not `str_contains()`. An arrow nested
+     * inside an element is not that element's key separator, and a text search
+     * cannot tell the two apart.
      */
     private static function positionalShape(string $spec): string
     {
@@ -439,12 +490,23 @@ final class ChildStderrCaptureScanner
             return self::SHAPE_INHERITED;
         }
 
+        $keyed = 0;
         foreach ($elements as $element) {
-            // A keyed array that does not name `2` - the caller already
-            // established that - genuinely leaves fd 2 alone.
-            if (\str_contains($element, '=>')) {
-                return self::SHAPE_INHERITED;
+            if (self::hasTopLevelArrow($element)) {
+                $keyed++;
             }
+        }
+
+        if ($keyed > 0 && $keyed === \count($elements)) {
+            // EVERY element carries its own key and none of them is `2` - the
+            // caller already established that - so fd 2 genuinely goes
+            // untouched. This is the one reading of an arrow that survives.
+            return self::SHAPE_INHERITED;
+        }
+
+        if ($keyed > 0) {
+            // MIXED. Position no longer names the fd; see the doc-block.
+            return self::SHAPE_UNCLASSIFIED;
         }
 
         if (!isset($elements[2])) {
@@ -467,6 +529,28 @@ final class ChildStderrCaptureScanner
         }
 
         return \str_contains($entry, '/dev/null') ? self::SHAPE_DISCARDED : self::SHAPE_CAPTURED;
+    }
+
+    /** Whether an array element's own top level carries a `=>`. */
+    private static function hasTopLevelArrow(string $element): bool
+    {
+        $depth = 0;
+
+        foreach (\token_get_all('<?php ' . $element . ';') as $token) {
+            if (\is_array($token) && $token[0] === \T_DOUBLE_ARROW && $depth === 0) {
+                return true;
+            }
+            if (!\is_string($token)) {
+                continue;
+            }
+            if (\in_array($token, ['[', '(', '{'], true)) {
+                $depth++;
+            } elseif (\in_array($token, [']', ')', '}'], true)) {
+                $depth--;
+            }
+        }
+
+        return false;
     }
 
     /**

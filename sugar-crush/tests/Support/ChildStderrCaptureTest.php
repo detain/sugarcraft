@@ -395,6 +395,64 @@ final class ChildStderrCaptureTest extends TestCase
                 . 'be dragged into the positional reading',
         );
 
+        // A MIXED SPEC - some elements keyed, some positional - which the
+        // arrow branch used to answer `inherited` for, on the strength of the
+        // first arrow it saw. PHP gives a positional element ONE GREATER THAN
+        // THE LARGEST INTEGER KEY SO FAR - not "the next free key", which is a
+        // different rule that happens to agree on all three rows below and
+        // disagrees on `[5 => 'a', 0 => 'b', 'c']` (keys 5, 0, 6; "next free"
+        // predicts 1). MEASURED on PHP 8.3.6 with `array_keys()`: the first
+        // two of these three put a PIPE on fd 2 and the third leaves fd 2
+        // untouched, so one answer cannot be right for all three. The honest
+        // answer is that position no longer names the fd.
+        //
+        // ALL THREE ARE PINNED, not just an offender, because the bug was that
+        // three different truths shared one reply - a fixture for a single
+        // spelling would have passed against the broken branch too.
+        foreach ([
+            '[0 => ["pipe","r"], ["pipe","w"], ["pipe","w"]]' => 'keys 0,1,2 - fd 2 is a pipe',
+            '[1 => ["pipe","w"], ["pipe","w"]]' => 'keys 1,2 - fd 2 is a pipe',
+            '[5 => ["pipe","r"], ["pipe","w"], ["pipe","w"]]' => 'keys 5,6,7 - fd 2 is untouched',
+        ] as $spec => $truth) {
+            $this->assertSame(
+                ChildStderrCaptureScanner::SHAPE_UNCLASSIFIED,
+                $one('proc_open("ls", ' . $spec . ', $p);')['shape'],
+                'a mixed keyed/positional spec is unreadable, not half-read (' . $truth . '); '
+                    . 'answering `inherited` here reds correct code, and an exemption row '
+                    . 'written for correct code is where the next real offender hides',
+            );
+        }
+
+        // THE OTHER POLARITY, in the same test. A rule that made everything
+        // carrying an arrow unclassified would satisfy every assertion above
+        // while destroying the one arrow reading that is genuinely sound, so
+        // the all-keyed case is re-asserted here against a THREE-element spec
+        // - the length at which the positional reading would have had an
+        // opinion of its own.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_INHERITED,
+            $one('proc_open("ls", [0 => ["pipe","r"], 1 => ["pipe","w"], 4 => ["pipe","w"]], $p);')['shape'],
+            'every element is keyed and none of them is 2, so fd 2 really is inherited; this '
+                . 'must NOT become unclassified',
+        );
+
+        // The arrow test is TOP-LEVEL. An arrow nested INSIDE an element is
+        // not that element's key separator, and the `str_contains()` the
+        // branch used could not tell the two apart - it would have read this
+        // wholly positional spec as keyed and answered `inherited`.
+        //
+        // THE NESTED ARROW IS IN ELEMENT 1, NOT ELEMENT 2, and that is forced
+        // rather than chosen: element 2 is put through
+        // `fdTwoEntryIsAllLiteral()`, which rejects every `[` and `=>` it
+        // contains, so a nested arrow THERE could never reach the arrow branch
+        // to demonstrate anything. Element 2 here stays a plain literal triple
+        // so that the answer turns on the arrow reading alone.
+        $this->assertSame(
+            ChildStderrCaptureScanner::SHAPE_CAPTURED,
+            $one('proc_open("ls", [["pipe","r"],["file", ["x" => "/tmp/a"]["x"], "w"],["pipe","w"]], $p);')['shape'],
+            'an arrow nested inside an element does not make the spec keyed',
+        );
+
         // THE LIMIT OF THAT RULE, named here rather than left to be
         // discovered: both of these are all-literal, so they are judged by
         // the `/dev/null` text alone and come back `captured`. `redirect`
