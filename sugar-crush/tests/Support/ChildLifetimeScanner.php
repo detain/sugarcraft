@@ -239,10 +239,42 @@ final class ChildLifetimeScanner
      */
     private static function classifyLocal(array $tokens, int $from, int $end, string $variable): array
     {
-        $closed = false;
+        $closedUnconditionally = false;
+        $closedSomewhere = false;
+        $depth = 0;
+        $floor = 0;
 
         for ($i = $from + 1; $i <= $end; $i++) {
             $token = $tokens[$i];
+
+            // Brace depth relative to the spawn statement, against a RUNNING
+            // MINIMUM rather than against zero.
+            //
+            // A `proc_close()` DEEPER than the spawn sits inside an
+            // `if`/`try`/`foreach` the spawn is not inside, so it runs on some
+            // paths out of the function and not others. One at the shallowest
+            // depth seen so far is on the path the spawn itself is on.
+            //
+            // THE MINIMUM IS WHAT MAKES IT RIGHT, and comparing against a
+            // fixed zero got this wrong in the tree, not in theory: the second
+            // spawn in `Hooks/ScriptHook.php::executeStaged()` sits inside an
+            // `if`, and the `proc_close()` that covers it is at the function's
+            // own level - depth MINUS one from the spawn. Against zero that
+            // read as conditional, which is a guard reddening correct code,
+            // and an exemption row for correct code is where the next real
+            // offender hides. Against the running minimum a close that has
+            // merely left the spawn's own block counts, while a close inside a
+            // LATER block does not, because entering one takes depth back
+            // above the floor.
+            if (\is_string($token) && $token === '{') {
+                $depth++;
+            } elseif (\is_array($token)
+                && \in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                $depth++;
+            } elseif (\is_string($token) && $token === '}') {
+                $depth--;
+                $floor = \min($floor, $depth);
+            }
 
             // `return ... $handle ...;` - the variable anywhere in the
             // returned expression is an escape, because `return [$proc,
@@ -253,7 +285,8 @@ final class ChildLifetimeScanner
                     if (\is_string($tokens[$j]) && $tokens[$j] === ';') {
                         break;
                     }
-                    if (\is_array($tokens[$j]) && $tokens[$j][0] === \T_VARIABLE && $tokens[$j][1] === $variable) {
+                    if (\is_array($tokens[$j]) && $tokens[$j][0] === \T_VARIABLE && $tokens[$j][1] === $variable
+                        && !self::isProcCloseArgument($tokens, $j)) {
                         return [self::LIFETIME_LONG, 'the handle in ' . $variable . ' is returned'];
                     }
                 }
@@ -274,27 +307,62 @@ final class ChildLifetimeScanner
                 }
             }
 
-            // `proc_close($handle)`
-            $paren = self::prev($tokens, $i);
-            if ($paren === null || self::text($tokens[$paren]) !== '(') {
-                continue;
-            }
-            $callee = self::prev($tokens, $paren);
-            if ($callee !== null && \is_array($tokens[$callee])
-                && \in_array($tokens[$callee][0], [\T_STRING, \T_NAME_FULLY_QUALIFIED], true)
-                && \ltrim(\strtolower($tokens[$callee][1]), '\\') === 'proc_close') {
-                $closed = true;
+            if (self::isProcCloseArgument($tokens, $i)) {
+                $closedSomewhere = true;
+                if ($depth === $floor) {
+                    $closedUnconditionally = true;
+                }
             }
         }
 
-        if ($closed) {
-            return [self::LIFETIME_SHORT, 'proc_close(' . $variable . ') runs in the same function'];
+        if ($closedUnconditionally) {
+            return [
+                self::LIFETIME_SHORT,
+                'proc_close(' . $variable . ') runs unconditionally in the same function',
+            ];
+        }
+
+        if ($closedSomewhere) {
+            return [
+                self::LIFETIME_UNCLASSIFIED,
+                'proc_close(' . $variable . ') runs only inside a nested block, so it does not '
+                    . 'cover every path out of this function',
+            ];
         }
 
         return [
             self::LIFETIME_UNCLASSIFIED,
             'nothing in this function returns, stores or proc_close()s ' . $variable,
         ];
+    }
+
+    /**
+     * Whether the variable at $at is the argument of a `proc_close()`.
+     *
+     * SHARED BY THE CLOSE TEST AND THE RETURN TEST, and the second use is why
+     * it is a method. `return proc_close($process);` is a function handing
+     * back an EXIT CODE, and the return scan - which deliberately looks
+     * anywhere inside the returned expression, because `return [$proc,
+     * $pipes];` is the tree's commonest escape - read the handle's appearance
+     * there as the handle escaping. It reported a correctly-closed child as
+     * long-lived. Found by a fixture written for a different rule, which is
+     * the argument for having fixtures at all.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function isProcCloseArgument(array $tokens, int $at): bool
+    {
+        $paren = self::prev($tokens, $at);
+        if ($paren === null || self::text($tokens[$paren]) !== '(') {
+            return false;
+        }
+
+        $callee = self::prev($tokens, $paren);
+
+        return $callee !== null
+            && \is_array($tokens[$callee])
+            && \in_array($tokens[$callee][0], [\T_STRING, \T_NAME_FULLY_QUALIFIED], true)
+            && \ltrim(\strtolower($tokens[$callee][1]), '\\') === 'proc_close';
     }
 
     /**

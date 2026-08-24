@@ -113,6 +113,103 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     }
 
     /**
+     * A `proc_close()` reached on some paths and not others does not make the
+     * child short-lived.
+     *
+     * THE LIVE CASE IS `Sessions/BackgroundSupervisor.php::spawnSession()`,
+     * whose only `proc_close()` is inside the branch taken when the IPC
+     * handshake times out. On the happy path nothing reaps the child at all -
+     * which is what E366 recorded by hand - and a scanner that counted the
+     * textual presence of the call said "short", the polarity that reports a
+     * leak as fine.
+     */
+    public function testACloseOnlyOnAFailureBranchIsNotAShortLife(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Supervisor {
+                public function spawn(): void {
+                    $pipes = [];
+                    $proc = proc_open('daemon', [1 => ['pipe', 'w']], $pipes);
+                    if (!is_resource($proc)) {
+                        throw new \RuntimeException('no');
+                    }
+                    $client = @stream_socket_accept($this->server, 5);
+                    if ($client === false) {
+                        proc_close($proc);
+                        throw new \RuntimeException('timeout');
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('nested block', $sites[0]['reason']);
+    }
+
+    /**
+     * A spawn inside a branch, closed at the function's own level, IS short.
+     *
+     * THE GUARD AGAINST OVER-CORRECTING, and it is not hypothetical: the first
+     * version of the depth rule compared against a fixed zero, and the second
+     * spawn in `Hooks/ScriptHook.php::executeStaged()` - a retry inside an
+     * `if`, closed once at the bottom of the method - came back unclassified.
+     * Reddening correct code is how the next real offender buys its exemption,
+     * so the shape that was wrongly flagged is pinned here in its own right.
+     */
+    public function testASpawnInsideABranchClosedAtFunctionLevelIsShortLived(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Retry {
+                public function run(): int {
+                    $pipes = [];
+                    $process = @proc_open('a', [1 => ['pipe', 'w']], $pipes);
+                    if (!is_resource($process)) {
+                        $process = @proc_open('b', [1 => ['pipe', 'w']], $pipes);
+                    }
+                    return proc_close($process);
+                }
+            }
+            PHP);
+
+        self::assertCount(2, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[0]['lifetime']);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $sites[1]['lifetime']);
+    }
+
+    /**
+     * A close inside a LATER block is still conditional.
+     *
+     * Leaving the spawn's own block lowers the floor; entering a new one
+     * raises the depth above it again. Without that second half the running
+     * minimum would wave through any close that happened to follow a closed
+     * brace.
+     */
+    public function testACloseInsideAnUnrelatedLaterBranchIsStillConditional(): void
+    {
+        $sites = $this->sitesIn(<<<'PHP'
+            <?php
+            class Later {
+                public function run(bool $tidy): void {
+                    $pipes = [];
+                    if (true) {
+                        $process = @proc_open('a', [1 => ['pipe', 'w']], $pipes);
+                    }
+                    if ($tidy) {
+                        proc_close($process);
+                    }
+                }
+            }
+            PHP);
+
+        self::assertCount(1, $sites);
+        self::assertSame(ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, $sites[0]['lifetime']);
+        self::assertStringContainsString('nested block', $sites[0]['reason']);
+    }
+
+    /**
      * A handle that leaves the function inside a returned array literal.
      *
      * `return [$proc, $pipes];` is the commonest escape spelling in this tree,
