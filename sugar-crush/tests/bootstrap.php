@@ -229,6 +229,25 @@ NonInteractive::pinStdinDefault(fopen('php://memory', 'r+'));
  * is checked BEFORE the close so the descriptor is never freed without a
  * replacement to hand.
  *
+ * WHAT THIS COSTS, stated because it is a real edge and it is invisible until
+ * something steps on it: the `\STDIN` CONSTANT IS NOW A CLOSED RESOURCE for
+ * the rest of the run. `is_resource(\STDIN)` is false and
+ * `stream_isatty(\STDIN)` FATALS with a TypeError — measured. Nothing in the
+ * suite reaches it today, and the two things that could are both already
+ * safe: `NonInteractive::readStdinIfPiped()` resolves through the pin above
+ * and never sees the constant, and
+ * {@see \SugarCraft\Crush\Cli\HeadlessPermissionPrompt::isInteractive()}
+ * guards with `is_resource()` first, so its `?? \STDIN` default (E243) takes
+ * the no-tty refusal arm instead of blocking on `fgets()`. That is E243
+ * NARROWED, not closed: a developer running the suite from a real terminal
+ * skips this whole block, `\STDIN` stays open and interactive, and the block
+ * E243 describes is still live for them.
+ *
+ * A fatal is the right failure here rather than a silent null. A future test
+ * that starts reading the constant is doing the thing this block exists to
+ * stop, and it should find out at the call site rather than sixty seconds
+ * later in someone else's test.
+ *
  * The handle is parked in `$GLOBALS` rather than a local: a local in an
  * included file is a global already, but naming the intent stops a future
  * tidy-up from garbage-collecting fd 0 back to closed.
