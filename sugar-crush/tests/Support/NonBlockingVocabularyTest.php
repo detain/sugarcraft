@@ -477,6 +477,24 @@ final class NonBlockingVocabularyTest extends TestCase
             ['inverted'],
         ];
 
+        // THE ADJACENCY GUARD, which nothing pinned. `$tokens[$i + 1] === '('`
+        // is what stops the body walk starting from a `T_STRING` that is not a
+        // call; mutating it to never skip SURVIVED the whole of
+        // tests/Support tests/Cli tests/Config, because no such token exists in
+        // the tree. It is a false-positive guard, so its survival was a
+        // coverage gap and not a live defect — but an unpinned guard is one
+        // refactor from being deleted as dead. The shape below is synthetic for
+        // exactly that reason: without the guard the walk starts at the `;`,
+        // runs on until the NEXT call's closing paren, and reports the real
+        // site twice under two different line numbers.
+        yield 'a bare mention of the call name is not itself a site' => [
+            'the walk started a body scan from a token that is not a call, so the one real site '
+                . 'below it is reported twice under two different line numbers',
+            "<?php\n\$n = \$this->assertFalse;\nself::assertFalse(" . $meta
+                . ", 'did not " . $clear . ' ' . $flag . "');\n",
+            ['inverted'],
+        ];
+
         // ── POLARITY. The four rows above are all NEGATED ("did not …"), and
         // that alphabet is what let rank() ship inverted in both directions for
         // the affirmative form (rule 11). All four affirmative combinations are
