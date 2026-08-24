@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\LSP;
 
+use SugarCraft\Crush\Support\ProcessReaper;
+
 /**
  * LSP client connection over stdio using JSON-RPC 2.0.
  *
@@ -27,6 +29,22 @@ final class LspConnection implements LspConnectionInterface
 
     /** Persistent read buffer so partial messages survive across reads. */
     private string $readBuffer = '';
+
+    /**
+     * Content-Length of a message whose HEADER has been consumed but whose body
+     * has not yet fully arrived, or null when the next thing expected is a
+     * header.
+     *
+     * THIS FIELD IS WHAT MAKES A NON-BLOCKING READ SAFE. {@see readMessage()}
+     * strips the header block off {@see $readBuffer} before it reads the body,
+     * so a body that arrives in pieces used to lose its length on the way out:
+     * the method returned null, and the NEXT call went looking for `\r\n\r\n`
+     * in a buffer that now held a raw JSON fragment. On a blocking pipe that was
+     * latent, because the body `fread()` almost always completed in one pass.
+     * Non-blocking makes a short read the normal case, so the framing state has
+     * to outlive the call.
+     */
+    private ?int $pendingContentLength = null;
 
     /** Whether we have completed the LSP initialization handshake. */
     private bool $initialized = false;
@@ -72,6 +90,22 @@ final class LspConnection implements LspConnectionInterface
         if (!is_resource($this->process)) {
             throw new \RuntimeException("Failed to start LSP server: {$command}");
         }
+
+        // NON-BLOCKING STDOUT, which is what makes $timeout mean anything.
+        // {@see readResponse()} bounds itself with a `microtime()` deadline
+        // around {@see readMessage()}, and that bound was DEAD CODE while this
+        // pipe was blocking: the loop never got back to its own condition
+        // because the first `fread()` inside `readMessage()` sat in the kernel
+        // until the server wrote or exited. MEASURED on this host (PHP 8.3.6)
+        // against a fixture that answers nothing and lives 20s, a `connect()`
+        // with $timeout = 2.0 took **20.02s** to return from `disconnect()`.
+        //
+        // `stream_set_timeout()` is the obvious instrument and does NOT work
+        // here — it is documented and measured on
+        // {@see \SugarCraft\Crush\MCP\StdioMcpServer::start()} that it returns
+        // false for a `proc_open()` pipe, which is an STDIO stream and not a
+        // socket. Non-blocking plus the caller's poll is the shape that works.
+        stream_set_blocking($this->pipes[1], false);
 
         // Mark as initialized so isConnected returns true.
         // Caller is responsible for calling initialize() to complete LSP handshake.
@@ -381,15 +415,74 @@ final class LspConnection implements LspConnectionInterface
         return true;
     }
 
+    /**
+     * Bring the language server down in BOUNDED time, and make sure it is DEAD.
+     *
+     * WHAT THIS USED TO BE: `proc_terminate()` immediately followed by
+     * `proc_close()`. E366 asked which of the two failure modes that produces —
+     * an orphan, or an indefinite block — and the answer is MEASURED, not
+     * inferred. On this host (PHP 8.3.6, Linux 6.8), against a direct child that
+     * installs a no-op SIGTERM handler and then loops for eight seconds, the
+     * pair returned after **7.77s** with the child dead. So: it BLOCKS. It does
+     * not orphan, because `proc_close()` waits — it hands the caller's deadline
+     * to a language server, which is by definition somebody else's code and is
+     * routinely a large one. `gopls`, `rust-analyzer` and `jdtls` all do real
+     * work on shutdown.
+     *
+     * THE OTHER HALF OF THE SAME FINDING is {@see __destruct()}, and it is the
+     * opposite failure: this class had none, and MEASURED with the same
+     * instrument, dropping a `proc_open()` handle whose child is still RUNNING
+     * takes **0.000s** and leaves the child in state `S`. The resource
+     * destructor reaps an already-exited child (a zombie goes to `GONE`
+     * instantly) but never WAITS for a live one — it abandons it. So an
+     * `LspConnection` that simply went out of scope left a language server
+     * running, reparented to pid 1, holding every descriptor above 2 that this
+     * process had open when it spawned. That is E366's shape exactly, and it is
+     * why the destructor below exists.
+     *
+     * Now: SIGTERM, a bounded poll, signal 9, then `proc_close()` — the one
+     * ladder in {@see \SugarCraft\Crush\Support\ProcessReaper}, shared with
+     * {@see \SugarCraft\Crush\ClaudeCodeMcpClient::disconnect()} rather than
+     * spelled again here.
+     *
+     * THE SIGNAL REACHES THE SERVER because {@see connect()} passes
+     * `proc_open()` an ARGV. Under a shell STRING, `/bin/sh` on this host is
+     * dash, which does NOT apply the `-c` exec optimisation — MEASURED, the
+     * direct child's `comm` is `(sh)` and the program is a GRANDCHILD, so the
+     * escalation would land on a wrapper. What remains outside this method's
+     * reach is a server that spawns children OF ITS OWN; those are not in this
+     * process's control group and are a property of the server's own process
+     * handling.
+     */
     private function stopProcess(): void
     {
-        if ($this->process !== null && is_resource($this->process)) {
-            proc_terminate($this->process);
-            proc_close($this->process);
-        }
+        ProcessReaper::terminateAndClose($this->process);
+
         $this->process = null;
         $this->pipes = null;
-        $this->readBuffer = '';
+        $this->drainBuffer();
+        $this->pendingContentLength = null;
+    }
+
+    /**
+     * DELIBERATELY `stopProcess()` AND NOT `disconnect()`.
+     *
+     * `disconnect()` speaks the LSP shutdown protocol: a `shutdown` REQUEST,
+     * which blocks in {@see readResponse()} for up to `$this->requestTimeout`
+     * (30s by default), then an `exit` notification. That is the right sequence
+     * when a caller chooses to close the connection, and the wrong thing
+     * entirely in a destructor — it would put a 30s protocol round trip at
+     * whatever arbitrary point the last reference is dropped, including during
+     * PHP's shutdown sequence, to a server that may already be gone.
+     *
+     * The destructor's job is narrower and unconditional: do not leak the
+     * process. A caller that wants the graceful handshake calls
+     * {@see disconnect()} itself, and this then finds nothing to do — the
+     * ladder is a no-op on a null handle.
+     */
+    public function __destruct()
+    {
+        $this->stopProcess();
     }
 
     /**
@@ -443,68 +536,82 @@ final class LspConnection implements LspConnectionInterface
      */
     private function readMessage(): ?array
     {
-        // Read headers byte-by-byte until we find the header-body separator \r\n\r\n.
-        // fgets() is line-oriented and would consume the JSON body if it has no newline,
-        // so we use fread() with a small chunk size to read precisely.
-        while (strpos($this->readBuffer, "\r\n\r\n") === false) {
-            if ($this->pipes === null) {
-                return null;
-            }
-            $chunk = fread($this->pipes[1], 1024);
-            if ($chunk === false || $chunk === '') {
-                if ($this->readBuffer === '') {
+        if ($this->pipes === null) {
+            return null;
+        }
+
+        // HEADER PHASE. Skipped entirely when a previous call already consumed a
+        // header and is still waiting on its body — see {@see $pendingContentLength}.
+        if ($this->pendingContentLength === null) {
+            while (($separator = strpos($this->readBuffer, "\r\n\r\n")) === false) {
+                if (!$this->refill()) {
+                    // Nothing more available RIGHT NOW. Return null and keep the
+                    // partial header buffered; readResponse() sleeps and retries
+                    // until its deadline. The old code drained the buffer here
+                    // and handed the fragment to parseMessage(), which discarded
+                    // a header that had merely not finished arriving.
                     return null;
                 }
-                return $this->parseMessage($this->drainBuffer());
             }
-            $this->readBuffer .= $chunk;
-        }
 
-        // Parse headers.
-        $newline = strpos($this->readBuffer, "\r\n\r\n");
-        $headerBlock = substr($this->readBuffer, 0, $newline);
-        $this->readBuffer = substr($this->readBuffer, $newline + 4);
+            $headerBlock = substr($this->readBuffer, 0, $separator);
+            $this->readBuffer = substr($this->readBuffer, $separator + 4);
 
-        $contentLength = null;
-        foreach (explode("\r\n", $headerBlock) as $header) {
-            if (str_starts_with($header, 'Content-Length:')) {
-                $contentLength = (int) trim(substr($header, 15));
-                break;
+            $contentLength = null;
+            foreach (explode("\r\n", $headerBlock) as $header) {
+                if (str_starts_with($header, 'Content-Length:')) {
+                    $contentLength = (int) trim(substr($header, 15));
+                    break;
+                }
             }
+
+            if ($contentLength === null) {
+                throw new LspProtocolException(
+                    'Missing Content-Length header in LSP message: ' . substr($headerBlock, 0, 200)
+                );
+            }
+
+            $this->pendingContentLength = $contentLength;
         }
 
-        if ($contentLength === null) {
-            throw new LspProtocolException(
-                'Missing Content-Length header in LSP message: ' . substr($this->readBuffer, 0, 200)
-            );
-        }
-
-        // Read body until we have contentLength bytes.
-        // Use fread() (not fgets()) because the JSON body may span multiple lines.
-        // If readBuffer already has enough bytes (fgets consumed body during header phase),
-        // skip the read loop.
-        if (strlen($this->readBuffer) >= $contentLength) {
-            $body = substr($this->readBuffer, 0, $contentLength);
-            $this->readBuffer = substr($this->readBuffer, $contentLength);
-            return $this->parseMessage($body);
-        }
-
-        while (strlen($this->readBuffer) < $contentLength) {
-            if ($this->pipes === null) {
+        // BODY PHASE.
+        while (strlen($this->readBuffer) < $this->pendingContentLength) {
+            if (!$this->refill()) {
                 return null;
             }
-            $remaining = $contentLength - strlen($this->readBuffer);
-            $chunk = fread($this->pipes[1], $remaining);
-            if ($chunk === false || $chunk === '') {
-                return null;
-            }
-            $this->readBuffer .= $chunk;
         }
 
-        $body = substr($this->readBuffer, 0, $contentLength);
-        $this->readBuffer = substr($this->readBuffer, $contentLength);
+        $body = substr($this->readBuffer, 0, $this->pendingContentLength);
+        $this->readBuffer = substr($this->readBuffer, $this->pendingContentLength);
+        $this->pendingContentLength = null;
 
         return $this->parseMessage($body);
+    }
+
+    /**
+     * Pull whatever is available from the server's stdout into
+     * {@see $readBuffer}; false when nothing was.
+     *
+     * On a NON-BLOCKING pipe an empty string means "not yet", not "never" — it
+     * is the same answer at EOF, and the two are deliberately not distinguished
+     * here: {@see readResponse()} checks the process handle on every pass and
+     * gives up at its deadline either way, so a finer distinction would have no
+     * reader.
+     */
+    private function refill(): bool
+    {
+        if ($this->pipes === null) {
+            return false;
+        }
+
+        $chunk = @fread($this->pipes[1], 8192);
+        if ($chunk === false || $chunk === '') {
+            return false;
+        }
+
+        $this->readBuffer .= $chunk;
+
+        return true;
     }
 
     /**
@@ -532,7 +639,25 @@ final class LspConnection implements LspConnectionInterface
         return $decoded;
     }
 
-    /** Consume and return the entire pending buffer as one trimmed line. */
+    /**
+     * Consume and return the entire pending buffer as one trimmed line.
+     *
+     * WHAT THIS USED TO BE FOR: {@see readMessage()}'s header loop called it
+     * when a `fread()` came back empty with bytes already buffered, handing the
+     * fragment to {@see parseMessage()} as though it were a whole message.
+     *
+     * WHAT IS TRUE NOW: on a NON-BLOCKING pipe an empty read means "not yet",
+     * not "never", so treating a partial header as a complete message would
+     * discard messages that had simply not finished arriving. `readMessage()`
+     * keeps the partial buffered instead and returns null, and this method has
+     * no caller on the read path any more.
+     *
+     * WHY IT STILL EARNS ITS PLACE: consuming whatever partial remains is
+     * exactly what teardown wants, and {@see stopProcess()} now calls it for
+     * that — a connection must not carry half a message from a dead server into
+     * whatever reads {@see $readBuffer} next. It is one method with one meaning
+     * rather than a `$this->readBuffer = ''` open-coded beside it.
+     */
     private function drainBuffer(): string
     {
         $line = $this->readBuffer;
