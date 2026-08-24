@@ -187,13 +187,36 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
                 . "Child output was:\n" . $treatment['out'],
         );
         // WHERE the marker landed is the claim, not merely that it is present:
-        // stdin context is prepended to the prompt, so it must appear BEFORE
-        // the prompt text in the echoed turn.
+        // stdin context is PREPENDED to the prompt, so it must sit INSIDE the
+        // echoed turn and BEFORE the prompt line.
+        //
+        // The bound is two-sided on purpose. It used to be a single
+        // `assertLessThan(strrpos($out, 'hi'), …)`, and the last occurrence of
+        // a two-character bigram in the child's whole stdout is a bound that
+        // degrades silently: any banner word carrying it — `this`, `which`,
+        // `architecture` — landing after the echoed turn would quietly reduce
+        // the claim to "the marker is somewhere before the end". Anchoring on
+        // the echo provider's header and on the prompt LINE keeps the window
+        // pinned to the turn itself.
+        $saidAt = strpos($treatment['out'], 'You said:');
+        $promptAt = strrpos($treatment['out'], "\n> hi");
+        $markerAt = strpos($treatment['out'], $marker);
+        $this->assertNotFalse($saidAt, "the echoed turn has no header, so there is no window to place the "
+            . "marker in.\n" . $treatment['out']);
+        $this->assertNotFalse($promptAt, "the echoed turn has no '> hi' prompt line, so there is no window "
+            . "to place the marker in.\n" . $treatment['out']);
+        $this->assertNotFalse($markerAt, 'the marker is not in the child output at all');
+        $this->assertGreaterThan(
+            $saidAt,
+            $markerAt,
+            'the marker is in the child output but BEFORE the echoed turn, so it did not arrive as prompt '
+                . 'context and this test is no longer pinning the shape it was written for',
+        );
         $this->assertLessThan(
-            (int) strrpos($treatment['out'], 'hi'),
-            (int) strpos($treatment['out'], $marker),
-            'the marker reached the child but not as prepended prompt context, so this test is no longer '
-                . 'pinning the shape it was written for',
+            $promptAt,
+            $markerAt,
+            'the marker reached the child but lands AFTER the prompt line rather than prepended to it, so '
+                . 'this test is no longer pinning the shape it was written for',
         );
     }
 

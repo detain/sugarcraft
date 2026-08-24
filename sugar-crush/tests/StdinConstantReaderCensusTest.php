@@ -71,17 +71,48 @@ use PHPUnit\Framework\TestCase;
  * `fopen('php://stdin')` or `fopen('/dev/stdin')`, all of which open the same
  * descriptor without naming the constant. So all four are in.
  *
+ * AND THE CONSTANT ITSELF IS MATCHED INSIDE STRING BODIES TOO, which is not
+ * where a constant normally lives and is the point. Containment was applied
+ * only to the three STREAM NAMES at first, so a nowdoc holding a child script
+ * that says `feof(STDIN)` scanned CLEAN — the same blind spot the stream-name
+ * fix had just closed, left open one spelling over. Widening it found a real
+ * site the narrower alphabet could not see:
+ * `sugar-crush/src/Agents/ProcessExecutor.php`, whose
+ * `createInlineWorkerScript()` returns a nowdoc that reads `STDIN` four times.
+ * Rule 11 in one line — a census's alphabet is usually written to match the
+ * cases already known.
+ *
+ * The cost is that a PROSE string naming the constant — an exception message
+ * that says "cannot read STDIN" — is reported too, and there is no way to tell
+ * it from a worker script without running the code. That is the same trade the
+ * `WorkerPool` row below makes: the scanner reports, the doc-block judges, and
+ * somebody looks once. What is NOT reported is `Foo::STDIN` or `$o->STDIN` —
+ * a `T_STRING` reached through `::` or `->` is a member, not the constant, and
+ * the fixtures pin both.
+ *
  * AND THE FIRST VERSION OF THIS SCANNER REPORTED ZERO FOR THE STREAM NAMES
- * WHILE `grep` FOUND ONE, which is the part worth keeping. It compared each
- * string token to the name for EQUALITY. A heredoc or nowdoc body arrives from
- * `token_get_all()` as ONE token containing the whole block, so
- * `candy-core/src/WorkerPool.php` — which builds a worker script whose first
- * line is `fopen('php://fd/0', 'rb')` — read as a string that simply was not
- * `php://fd/0`. A confident, green, false zero. The comparison is containment
- * now, and the fixtures below carry a nowdoc case for exactly this reason: a
- * harness written to check a claim can carry the defect the claim is about,
- * and the only thing that catches it is a fixture whose answer you already
- * know.
+ * WHILE `grep` FOUND ONE, which is the part worth keeping.
+ *
+ * WHAT THAT WAS FIRST WRITTEN DOWN AS: "it compared each string token to the
+ * name for EQUALITY, and a heredoc body arrives as ONE token, so the heredoc
+ * in `candy-core/src/WorkerPool.php` read as a string that was not
+ * `php://fd/0`." That account is narrower than the defect, and it leaves a
+ * reader believing a plain `fopen('php://stdin')` was covered.
+ *
+ * WHAT IS TRUE: equality on the raw token never matched ANY string spelling,
+ * because `token_get_all()` hands back the token WITH ITS QUOTES. Measured,
+ * PHP 8.3.6, on `<?php $f = fopen('php://stdin', 'r');` — the
+ * `T_CONSTANT_ENCAPSED_STRING` is the 13-byte `'php://stdin'`, so
+ * `=== 'php://stdin'` is false and `str_contains(...)` is true. Reverting
+ * containment to equality today reds 8 of the 15 rows below, not just the
+ * heredoc one.
+ *
+ * WHY IT STILL EARNS ITS PLACE: the heredoc is still the shape that MADE the
+ * zero look plausible — a one-token block is where a reader stops suspecting
+ * the instrument. The comparison is containment now, and the fixtures below
+ * carry nowdoc cases for exactly this reason: a harness written to check a
+ * claim can carry the defect the claim is about, and the only thing that
+ * catches it is a fixture whose answer you already know.
  *
  * ## What the roster does NOT do
  *
@@ -106,6 +137,13 @@ use PHPUnit\Framework\TestCase;
  *    the roster because the scanner must report what it finds rather than
  *    silently drop what it cannot judge (rule 14), and this line is the
  *    judgement.
+ *  - `sugar-crush/src/Agents/ProcessExecutor.php` — the same judgement, same
+ *    reason, different spelling. `createInlineWorkerScript()` returns a nowdoc
+ *    that `feof(STDIN)`/`fgets(STDIN)` its way through a startup handshake,
+ *    and `spawnWorker()` runs it via `proc_open([$binary, '-r', $script], [0
+ *    => ['pipe', 'r'], …])` — verified by symbol — so that `STDIN` is the
+ *    CHILD's pipe. Not this process's descriptor 0, and not affected by
+ *    closing it.
  *
  * Every other entry is unclassified on purpose. Classifying them is the work
  * E296's option (a) actually requires, and doing it here — without running the
@@ -190,6 +228,7 @@ final class StdinConstantReaderCensusTest extends TestCase
         'candy-core/src/Util/Tty/WindowsBackend.php' => ['STDIN'],
         'candy-core/src/WorkerPool.php' => ['php://fd/0'],
         'candy-mosaic/src/Detect.php' => ['STDIN'],
+        'sugar-crush/src/Agents/ProcessExecutor.php' => ['STDIN'],
         'sugar-crush/src/Cli/NonInteractive.php' => ['STDIN'],
     ];
 
@@ -273,6 +312,44 @@ final class StdinConstantReaderCensusTest extends TestCase
             "<?php \$a = STDIN; \$b = fopen('php://fd/0', 'rb'); \$c = \\STDIN;",
             ['STDIN', 'php://fd/0'],
         ];
+        // THE ROWS THAT CAUGHT THE ALPHABET'S SECOND HALF. Containment was
+        // applied to the three stream names and not to the constant, so a
+        // nowdoc worker script reading STDIN scanned clean - which is the real
+        // shape in src/Agents/ProcessExecutor.php.
+        yield 'NOWDOC body carrying a child script that reads the STDIN CONSTANT' => [
+            "<?php \$code = <<<'X'\nwhile (!feof(STDIN)) { \$l = fgets(STDIN); }\nX;\n",
+            ['STDIN'],
+        ];
+        yield 'HEREDOC body naming the root-qualified constant' => [
+            "<?php \$code = <<<X\nthe worker reads \\STDIN here\nX;\n",
+            ['STDIN'],
+        ];
+        yield 'a PROSE string naming the constant is reported too, deliberately' => [
+            "<?php throw new \\RuntimeException('cannot read STDIN');",
+            ['STDIN'],
+        ];
+        yield 'a word merely CONTAINING the name inside a string is not it' => [
+            "<?php \$m = 'MY_STDIN_BUFFER and STDINX';",
+            [],
+        ];
+        // The two spellings that are an identifier reached through an operator,
+        // not the global constant. sebastian/environment has both in one file.
+        yield 'a class constant named STDIN is not the global one' => [
+            '<?php $x = Console::STDIN;',
+            [],
+        ];
+        yield 'a property named STDIN is not the global one' => [
+            '<?php $x = $console->STDIN;',
+            [],
+        ];
+        yield 'a nullsafe property named STDIN is not the global one' => [
+            '<?php $x = $console?->STDIN;',
+            [],
+        ];
+        yield 'an import of the constant IS a reference' => [
+            "<?php\nuse const STDIN;\n",
+            ['STDIN'],
+        ];
     }
 
     /**
@@ -289,14 +366,15 @@ final class StdinConstantReaderCensusTest extends TestCase
     private static function fd0References(string $source): array
     {
         $found = [];
+        $tokens = token_get_all($source);
 
-        foreach (token_get_all($source) as $token) {
+        foreach ($tokens as $index => $token) {
             if (!\is_array($token)) {
                 continue;
             }
 
             if ($token[0] === \T_STRING || $token[0] === \T_NAME_FULLY_QUALIFIED) {
-                if (ltrim($token[1], '\\') === 'STDIN') {
+                if (ltrim($token[1], '\\') === 'STDIN' && !self::isMemberAccess($tokens, $index)) {
                     $found[] = 'STDIN';
                 }
 
@@ -307,18 +385,55 @@ final class StdinConstantReaderCensusTest extends TestCase
                 continue;
             }
 
-            // CONTAINMENT rather than equality, and the fixtures say why: a
-            // heredoc/nowdoc body is a single token holding the whole block,
-            // so equality answers "no" to a file that plainly has one.
+            // CONTAINMENT rather than equality, and the doc-block says why: the
+            // token arrives WITH ITS QUOTES, so equality never matched any
+            // string spelling at all, and a heredoc/nowdoc body arrives as one
+            // token holding the whole block.
             $literal = strtolower($token[1]);
             foreach (self::FD0_STREAM_NAMES as $name) {
                 if (str_contains($literal, $name)) {
                     $found[] = $name;
                 }
             }
+
+            // AND THE CONSTANT INSIDE A STRING BODY, because a nowdoc holding a
+            // child script names it exactly the way a normal file does. Word
+            // boundaries so `STDINX` and `MY_STDIN` are not it; case-sensitive,
+            // because a constant is.
+            if (preg_match('/\bSTDIN\b/', $token[1]) === 1) {
+                $found[] = 'STDIN';
+            }
         }
 
         return array_values(array_unique($found));
+    }
+
+    /**
+     * Whether the identifier at $index is reached through `::` or `->`.
+     *
+     * `Console::STDIN` and `$o->STDIN` are a class constant and a property, not
+     * the global constant, and both spell the identifier `T_STRING` exactly the
+     * way the real thing does. `sebastian/environment` has both spellings in
+     * one file, which is how this came up.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     */
+    private static function isMemberAccess(array $tokens, int $index): bool
+    {
+        for ($i = $index - 1; $i >= 0; $i--) {
+            $t = $tokens[$i];
+            if (\is_array($t) && \in_array($t[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            return \is_array($t) && \in_array(
+                $t[0],
+                [\T_DOUBLE_COLON, \T_OBJECT_OPERATOR, \T_NULLSAFE_OBJECT_OPERATOR],
+                true,
+            );
+        }
+
+        return false;
     }
 
     /**
