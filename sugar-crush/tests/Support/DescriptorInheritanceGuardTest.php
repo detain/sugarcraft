@@ -155,6 +155,45 @@ final class DescriptorInheritanceGuardTest extends TestCase
     ];
 
     /**
+     * Sites that are short ONLY because a CLOSING_HELPERS row says so.
+     *
+     * E425, AND IT IS THE STRUCTURAL REASON THE PREVIOUS ROUND'S FINDING WAS
+     * EXPENSIVE TO FIND. {@see exposedIn()} drops every {@see
+     * ChildLifetimeScanner::LIFETIME_SHORT} site, which is correct - a child
+     * reaped in the function that spawned it is not the shape this guard is
+     * about. But "short" has two provenances and they are not equally
+     * trustworthy. A literal `proc_close($h)` is the language ending the
+     * child. A {@see ChildLifetimeScanner::CLOSING_HELPERS} row is a PERSON'S
+     * CLAIM about a method in another file, made at a glance, from its name -
+     * and the scanner's own doc-block says so: "this is the one roster whose
+     * rows can HIDE a finding rather than raise one".
+     *
+     * Before this roster existed those two were spelled the same way in the
+     * output and the second vanished without trace: a wrong row promoted an
+     * exposed spawn to short, `exposedIn()` dropped it, and nothing anywhere
+     * recorded that a judgement had been relied on. The count is the size of
+     * the reliance, for the same reason {@see ACCOUNTED_FOR}'s is.
+     *
+     * A ROW HERE IS NOT AN EXEMPTION FROM ANYTHING - the site is already not
+     * reported. It is a receipt. Adding a CLOSING_HELPERS row now costs a row
+     * here too, which is the point: the promotion has to be written down
+     * somewhere a reviewer reads.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    private const SHORT_VIA_HELPER = [
+        'Providers/ClaudeCodeProvider.php::completeStream' => [
+            'count' => 1,
+            'reason' => 'reaped by ProcessReaper::terminateAndClose() in a generator finally, '
+                . 'which runs on normal completion, on an exception, and on a consumer that '
+                . 'breaks out of the foreach and destroys the generator mid-body. The short '
+                . 'verdict rests entirely on the CLOSING_HELPERS row for that helper; if that '
+                . 'row is ever wrong this site is a long-lived exposed spawn and nothing else '
+                . 'in this file would say so.',
+        ],
+    ];
+
+    /**
      * Appearances of the name that are not calls, and what each one is.
      *
      * The rule-14 half. `function_exists('proc_open')` is a capability probe,
@@ -864,6 +903,112 @@ final class DescriptorInheritanceGuardTest extends TestCase
         }
 
         return $exposed;
+    }
+
+    /**
+     * A short verdict that rests on a roster row, and one that does not.
+     *
+     * BOTH POLARITIES IN ONE PAIR. The first is closed by a rostered helper
+     * and must carry provenance; the second is closed by the language itself
+     * and must carry none. A scanner that stamped every short site would make
+     * the roster below meaningless by filling it with `proc_close()` sites,
+     * and one that stamped none would empty it - and an empty roster is what
+     * an absence assertion cannot tell from a healthy tree.
+     */
+    private const KNOWN_SHORT_VIA_HELPER = <<<'PHP'
+        <?php
+        class Fixture {
+            public function viaHelper(array $pipes): void {
+                $h = proc_open('x', [2 => ['pipe', 'w']], $pipes);
+                ProcessReaper::terminateAndClose($h);
+            }
+        }
+        PHP;
+
+    private const KNOWN_SHORT_VIA_PROC_CLOSE = <<<'PHP'
+        <?php
+        class Fixture {
+            public function viaProcClose(array $pipes): void {
+                $h = proc_open('x', [2 => ['pipe', 'w']], $pipes);
+                proc_close($h);
+            }
+        }
+        PHP;
+
+    /**
+     * Every helper-promoted short verdict has a receipt, and every receipt matches.
+     *
+     * {@see SHORT_VIA_HELPER} carries the argument; this is the arithmetic.
+     */
+    public function testEveryShortVerdictThatRestsOnAHelperRowIsRecorded(): void
+    {
+        $viaHelper = ChildLifetimeScanner::scan(self::KNOWN_SHORT_VIA_HELPER)['sites'];
+        self::assertCount(1, $viaHelper, 'the scanner found no site in the helper fixture.');
+        self::assertSame(
+            ChildLifetimeScanner::LIFETIME_SHORT,
+            $viaHelper[0]['lifetime'],
+            'the fixture must be SHORT, or it is not exercising the promotion at all.',
+        );
+        self::assertSame(
+            'processreaper::terminateandclose',
+            $viaHelper[0]['closedBy'],
+            'a short verdict produced by a CLOSING_HELPERS row must name the row. With this '
+                . 'null, the roster below can only ever be empty and the assertion over the '
+                . 'tree is satisfied by an instrument that reports nothing.',
+        );
+
+        $viaProcClose = ChildLifetimeScanner::scan(self::KNOWN_SHORT_VIA_PROC_CLOSE)['sites'];
+        self::assertCount(1, $viaProcClose, 'the scanner found no site in the proc_close fixture.');
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $viaProcClose[0]['lifetime']);
+        self::assertNull(
+            $viaProcClose[0]['closedBy'],
+            'a literal proc_close() is the language ending the child, not a judgement about '
+                . 'another file. Stamping it too would fill the roster with sites nobody needs '
+                . 'to review and bury the ones who do.',
+        );
+
+        $seen = [];
+        foreach ($this->sourceFiles() as $relative => $source) {
+            foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
+                if ($site['closedBy'] === null) {
+                    continue;
+                }
+                $key = $relative . '::' . $site['function'];
+                $seen[$key] = ($seen[$key] ?? 0) + 1;
+            }
+        }
+
+        $wrong = [];
+        foreach (self::SHORT_VIA_HELPER as $key => $row) {
+            self::assertNotSame('', \trim($row['reason']), $key . ' has no reason recorded.');
+            $found = $seen[$key] ?? 0;
+            if ($found !== $row['count']) {
+                $wrong[] = $key . ': recorded ' . $row['count'] . ', found ' . $found;
+            }
+            unset($seen[$key]);
+        }
+        foreach ($seen as $key => $count) {
+            $wrong[] = $key . ': not recorded at all, found ' . $count;
+        }
+
+        self::assertSame([], $wrong, <<<'TEXT'
+            A spawn in src/ is being treated as short-lived - and therefore dropped
+            from this guard entirely - on the strength of a
+            ChildLifetimeScanner::CLOSING_HELPERS row rather than a literal
+            proc_close(). That is allowed. It is not allowed to be invisible.
+
+            NOT RECORDED AT ALL: a CLOSING_HELPERS row was added, or a spawn was
+            changed to use one. Read the helper's source and satisfy yourself that
+            it really closes on EVERY path out of itself - if it closes only
+            sometimes it belongs in BEST_EFFORT_REAPERS instead, which reports the
+            site rather than hiding it - then add a row to SHORT_VIA_HELPER saying
+            what you checked.
+
+            RECORDED BUT NOT FOUND: the site was fixed, renamed, or switched to a
+            literal proc_close() (all good - delete the row), OR the scanner stopped
+            stamping provenance and this row is the only thing that noticed. Find
+            out which before deleting anything.
+            TEXT);
     }
 
     /** @return iterable<string, string> relative path => source */
