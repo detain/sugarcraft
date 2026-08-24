@@ -141,15 +141,29 @@ final class NonBlockingVocabularyTest extends TestCase
             self::markTestSkipped('no /proc/self/fdinfo: the flag cannot be read on this box');
         }
 
+        // THE PIPE COMES FROM proc_open() AND NOT FROM popen(), and the first
+        // draft used popen. `ChildStderrCaptureTest` reddened on it, correctly:
+        // popen() gives the child the SUITE's fd 2, where nobody running
+        // phpunit wants its noise and no test can read it. The spec below hands
+        // fd 2 a pipe of its own, which is what that guard asks for — and it is
+        // worth recording that the guard caught a spawn added by the very
+        // round that was writing another guard beside it.
+        $spec = [0 => ['pipe', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['pipe', 'w']];
+        $pipes = [];
+        $child = proc_open('cat', $spec, $pipes);
+        self::assertIsResource($child, 'could not spawn the child whose stdin is the pipe under test');
+
+        $socketPair = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        $file = fopen('/dev/null', 'r');
+        self::assertIsResource($file);
+
         $kinds = [
-            'a pipe' => static fn () => popen('cat > /dev/null', 'w'),
-            'a regular file' => static fn () => fopen('/dev/null', 'r'),
-            'a unix socket pair' => static fn () => stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0)[0],
+            'a pipe' => $pipes[0],
+            'a regular file' => $file,
+            'a unix socket pair' => $socketPair[0],
         ];
 
-        foreach ($kinds as $why => $make) {
-            /** @var resource $stream */
-            $stream = $make();
+        foreach ($kinds as $why => $stream) {
 
             $before = self::flagSnapshot();
             stream_set_blocking($stream, false);
@@ -191,13 +205,19 @@ final class NonBlockingVocabularyTest extends TestCase
             self::assertTrue($metaBlocking, $why . ': a stream whose descriptor has the flag '
                 . 'CLEARED is not reported as blocking');
 
-            if ($why === 'a pipe') {
-                pclose($stream);
-
-                continue;
-            }
-            fclose($stream);
         }
+
+        fclose($pipes[0]);
+        $childStderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        proc_close($child);
+
+        self::assertSame('', $childStderr, 'the child wrote to fd 2; its pipe is read here rather '
+            . 'than discarded so that anything it says arrives as a failure and not as noise');
+
+        fclose($file);
+        fclose($socketPair[0]);
+        fclose($socketPair[1]);
     }
 
     /**
