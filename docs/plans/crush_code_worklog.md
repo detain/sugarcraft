@@ -11068,7 +11068,77 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
-## ROUND 50 — IN FLIGHT (base `906fa666`, THREE lanes, run `wf_7226568a-c70`)
+## ROUND 50 — CLOSED (`674cdf7b`, floor `9661 / 142165 / 1 skipped / rc 0`, THREE lanes, one clean run)
+
+### THE CLOSE
+
+**Floor `9661 / 142165 / 1 skipped / rc 0` at `674cdf7b`** (04:50.670, 304.64 MB). Merges `7973b4c9` a,
+`032a7c2f` b, `be9c0aa3` c; heading normalise + renumber `0b36f911`; E333 `674cdf7b`. Skip still
+`MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. 18/18 symlinks with a
+`realpath()` prefix check, `check-path-repos` rc 0, config md5 unchanged, zero tracked per-lib locks, all
+three lane HEADs confirmed ancestors by `git merge-base`. Backlog **297 → 327**, ids **E304–E333**.
+
+**Tests predicted EXACTLY for the eighth consecutive round**: 9582 + (6+56+17) = 9661. **Assertions
+predicted as a lower bound of 142141 and landed at 142165** — loose by 24, for the stated reason
+(E191: lane c widened census alphabets that walk `src/`, and lanes a and b both added `src/` material).
+**ZERO cross-lane file overlap for the second round running.**
+
+### THE FIRST FLOOR RUN WENT RED AND THE SECOND DID NOT — FILED AS E333, WITHOUT A MECHANISM
+
+`BootstrapSkillSkipsTest`'s two real-binary spawns each aborted at 60s in the first run
+(`9661 / 142162 / Risky: 2 / rc 1`, 06:50 — the extra time is the two aborts almost exactly). The
+immediate re-run at the same commit was clean at 04:50, and the 3-assertion gap between the runs IS those
+two tests' assertions.
+
+Ruled out by measurement: the file alone (0.412s); `EngineBackendTest` immediately before it (E301's
+injected-Termios seam, which writes O_NONBLOCK onto the runner's fd 0); lane b's new
+`SuiteChildStdinPrependResidualTest` immediately before it; and contention from the supervisor's own
+probes, **which ran during the CLEAN run rather than the red one.**
+
+⚠️ **Round 49's lane b saw this exact signature and blamed sibling-suite contention. That is now
+doubtful** — this occurrence had no sibling suite. Either there are two causes or that attribution was
+wrong, and **the entry deliberately records evidence instead of a mechanism** with a concrete next step:
+capture the hung child's `/proc/<pid>/fd/0` during the 60s window rather than reason from one
+observation.
+
+### 🔴 LANE a REFUTED ITS OWN REVIEWER TWICE, WITH THE MEASUREMENT EACH TIME
+
+The reviewer prescribed widening the denial frame's opener from `[A-Z]` to `[A-Za-z]`. Lane a measured it
+instead: across 200,000 random strings over a 21-token alphabet, four seeds, the `(?<![A-Za-z])`
+lookbehind changes the verdict **639–691 times with the capitalised opener and ZERO times with a widened
+one** — because a frame that may start with any letter always has its leftmost match at a word start.
+**Taking the advice would have closed the gap AND left a live-looking assertion doing nothing — it
+manufactures exactly the dormant code rule 6 exists about.** It closed the case gap by tying the rule to
+the real mechanism (`str_starts_with` is case-sensitive) and killed all five probe rows.
+
+It also refuted the reviewer's claim that `DenialKind`'s whole class doc-block was false: the stale-tense
+half was, and was rewritten; **the autoload paragraph was still true**, measured from a bare
+`vendor/autoload.php` — `class_exists(Chat::class, false)` is FALSE after `DenialKind::classify()` answers
+and TRUE on the very next line after reading `Chat::DENIED_ERROR_PREFIXES`.
+
+**And a BLOCKING find worth the round on its own:** `filesNamingBoth()` returning `[]` left the whole
+suite green — the helper has exactly one caller, so that was a whole-suite survival, not merely a
+filter-scoped one.
+
+### WHAT LANE b ACTUALLY SHIPPED, WHICH IS NOT WHAT THE BRIEF ASKED FOR
+
+**E296 was NOT repaired.** Lane b changed no `src/` file and no `tests/bootstrap.php` — its 2064 lines are
+three test files. What it did instead is arguably better: it **measured option (a)'s viability** (the
+descriptor replacement costs three named readers), built the fd-0 reader roster nobody had, and found that
+**E302's second defect is still open** — `Detect::stdinFd()` hands out an unguarded `?? STDIN`, so the
+`candy-mosaic` fix closed one of two. It also found the O_NONBLOCK vocabulary is INVERTED across the suite
+while the code is right, and that four THIRD-PARTY vendor packages name descriptor 0, one inside PHPUnit
+itself.
+
+### TWO BRIEF DEFECTS, BOTH THE SUPERVISOR'S
+
+The round-50 script reused round 49's `COMMON` verbatim, so **all three lanes filed under `E<lane>49-N`
+rather than `E<lane>50-N`.** Harmless ONLY because round 49's provisional ids had all been renumbered away
+before round 50 branched — verified, the base carries zero. 🔴 **Parameterise the round number in
+`COMMON`.** And lane a filed at `##` rather than `###`, the same slip round 48's lane c made, which is why
+the heading count still read 297 after its merge and six entries were nearly missed. **The merge check
+must count `^#{2,3} E`, not `^### E`.**
+
 
 **Launched 2026-08-24.** The user set the cap at three lanes for this round. Three file-disjoint lanes ×
 implement → adversarial review → fix, from a DURABLE script path.

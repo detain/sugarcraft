@@ -1094,6 +1094,14 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 50 — CLOSED (674cdf7b). Floor 9661 / 142165 / 1 skipped / rc 0** — three lanes
+(denial-roster completion, the fd-0/Tty family, scanner alphabets), 327 backlog entries, ids
+E304–E333. Tests predicted exactly for the eighth consecutive round; zero cross-lane file
+overlap for the second round running. The round's best work was lane a REFUTING its own
+reviewer with 200,000 measured strings: the prescribed frame-widening changes the verdict zero
+times, so taking it would have manufactured a dormant assertion. E296 is still open — lane b
+measured the repair's cost rather than shipping it, which is what round 51 can build on.
+
 **ROUND 49 — CLOSED (1a2caebb). Floor 9581 / 135471 / 1 skipped / rc 0** — five lanes
 (denial roster, dormancy + doc-blocks, censuses, scanners, daemon + concurrency), 297 backlog
 entries, ids E246–E303. The merge red on exactly one test and it was a CROSS-LANE catch: lane
