@@ -225,6 +225,26 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
      */
     public function testNoSiteIsSpelledInAWayTheScannerCannotClassify(): void
     {
+        // THE IN-TEST KNOWN-POSITIVE. The assertion below is an absence, and
+        // an empty result is also what a dead scanner returns. The control
+        // further down this file catches that too -- but only while both
+        // tests run: MEASURED (round-53 mutation M9a), with `scanSource()`
+        // gutted to walk no tokens at all, THIS TEST ON ITS OWN passed, one
+        // test and one green assertion, against an instrument that could no
+        // longer see anything. Under `--filter` on this method's name, or if
+        // the control below is ever moved out, that is the whole guard. So
+        // the positive lives here as well, in the same test as the absence
+        // it is protecting.
+        $alive = DescriptorSinkScanner::scanSource(
+            "<?php\n" . DescriptorSinkScanner::FUNCTION_SINKS[0] . '(0 + 1)' . ";\n",
+        );
+        self::assertSame(
+            [DescriptorSinkScanner::UNCLASSIFIED],
+            array_column($alive, 'kind'),
+            'the scanner can no longer report an unnameable operand, so the emptiness asserted '
+                . 'below is a property of the instrument and not of the tree',
+        );
+
         $unclassified = [];
         foreach ($this->scanLibraries() as $key => $hit) {
             if ($hit['kind'] === DescriptorSinkScanner::UNCLASSIFIED) {
