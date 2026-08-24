@@ -478,6 +478,23 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         self::assertTrue(SttyReading::isOn($cooked, 'icanon'), 'a set ICANON was not seen');
         self::assertFalse(SttyReading::isOff($cooked, 'icanon'), 'a set ICANON was read as cleared');
 
+        // ICANON CLEARED WITH ECHO STILL ON. This is the reading a terminal
+        // set to `-icanon echo` produces, it is the case the substring form
+        // called RAW, and it is the ONLY case that can tell isRaw()'s two
+        // conjuncts apart. MEASURED (mutation MF1_CONJ), whole candy-core
+        // suite, before this block existed: dropping the ECHO conjunct from
+        // isRaw() outright SURVIVED at 828 / 7532 / rc 0 -- the fix for the
+        // substring defect was itself unpinned against the same defect.
+        $halfRaw = str_replace('isig icanon iexten echo', 'isig -icanon iexten echo', $cooked);
+        self::assertNotSame($cooked, $halfRaw, 'the half-raw fixture was not actually derived from the cooked one');
+        self::assertTrue(SttyReading::isOff($halfRaw, 'icanon'), 'setup: ICANON is not cleared in the half-raw fixture');
+        self::assertTrue(SttyReading::isOn($halfRaw, 'echo'), 'setup: ECHO is not still on in the half-raw fixture');
+        self::assertFalse(
+            SttyReading::isRaw($halfRaw),
+            'a terminal with ICANON cleared and ECHO still ON was reported raw, so isRaw() is '
+                . 'not looking at ECHO at all',
+        );
+
         // And the positive polarity: a raw reading must come back raw.
         $raw = str_replace(
             'isig icanon iexten echo echoe echok',
