@@ -8592,3 +8592,107 @@ has no generator to catch it.
 
 ---
 
+
+### Eb49-1 — `constructionSites()` reports a false ZERO for any class built through a named static factory
+
+**Recorded 2026-08-24 by round-49 lane b.** Severity: correctness of an INSTRUMENT. **Measured, PHP 8.3.6.**
+Lane c's file (`tests/Cli/StderrEmitterCensusTest.php`).
+
+**What.** `constructionSites()` recognises exactly two construction shapes: `new Foo` (bare, qualified,
+fully-qualified) and the project's canonical `Foo::new()` factory. A class built through a
+DIFFERENTLY-NAMED static factory is invisible to it, and it answers `0` — which reads identically to the
+`0` that established `WorktreeManager`'s dormancy. Run over `src/` plus `bin/sugarcrush` it answers `0` for
+`SglangProvider`, which is constructed on every run through
+`SglangProvider::openAiCompatible()` (body: `return new self(...)`), selected out of a name-keyed `match`
+arm in `ProviderFactory::instantiateProvider()`. Neither the factory's name nor the string key is visible to
+a `T_NEW`-adjacency walk.
+
+The existing doc-block already names the holes it knows about (`new $variable`, `new class extends`,
+`ReflectionClass::newInstance()`, container resolution). The named-factory hole is not among them, and it is
+the one that fires in this package today.
+
+**Step.** Either (a) give `constructionSites()` a second arm reporting static calls of any name on the
+target — the shape `SglangProviderReachabilityTest::constructionShapes()` and
+`WorktreeRemovalReportingTest::constructionShapes()` both implement, either of which can be lifted — or (b)
+leave the scanner alone and add the hole to its doc-block's list, so the next dormancy claim built on a zero
+has to say why a named factory is ruled out. Do NOT leave it as-is: two lanes have now independently written
+a superset scanner because the shared one could not answer, which is drift in the making.
+
+---
+
+### Eb49-2 — `cleanupStaleWorktrees()` swallows every removal failure with a bare `catch (\Throwable)`
+
+**Recorded 2026-08-24 by round-49 lane b.** Severity: diagnosability. **Measured.** Lane b's file, deferred
+deliberately.
+
+**What.** E222 gave `removeWorktree()` the ability to refuse — it now throws and keeps the registry entry
+when the worktree is still on disk. `cleanupStaleWorktrees()`'s loop catches that with
+`catch (\Throwable) { }` and a comment reading "Skip worktrees that fail to remove (e.g., locked files)".
+The accounting is now honest (`$removed` is not incremented), but the operator learns nothing: a sweep that
+failed to remove every single worktree it tried returns the same `0` as a sweep with nothing to do.
+
+**Why deferred rather than fixed.** The natural fix is a `RuntimeNoticeSink::warn()` in the catch, and that
+would take `RUNTIME_NOTICE_SITES['src/Agents/WorktreeManager.php']` from `4` to `5` — a roster bump in lane
+c's file PLUS the literal `4` asserted inside
+`testTheWorktreeManagerSeamSitesAreDormantBecauseNothingConstructsIt()`. Two coupled edits in a concurrent
+lane's file, for a class nothing constructs, was not worth it this round. Note also that every throw path
+E222 added is ALREADY preceded by the existing `git worktree remove` failure warn (git failing is what
+leaves the directory there in the first place), so the uncovered case is narrow: git reports exit 0 and the
+directory survives anyway.
+
+**Step.** When lane c's census is not in flight, add the warn and bump both numbers together.
+
+---
+
+### Eb49-3 — `removeDirectory()` follows a directory SYMLINK and deletes the target's contents
+
+**Recorded 2026-08-24 by round-49 lane b.** Severity: security / data loss. **Measured, PHP 8.3.6.**
+Lane b's file, deferred under "functionality before hardening".
+
+**What.** `WorktreeManager::removeDirectory()` decides how to treat an entry with `is_dir($itemPath)`, which
+FOLLOWS symlinks. A symlink inside a worktree pointing at a directory outside it is therefore recursed into
+and emptied, and only then does `rmdir()` fail on the link itself. A `.worktreeinclude` that copies a link,
+or an agent that creates one, is enough. E222 left the traversal semantics byte-for-byte unchanged on
+purpose — it was a reporting change, and altering what gets deleted is not a reporting change.
+
+**Step.** Guard the recursion with `!is_link($itemPath)` and `unlink()` the link instead. That is also
+strictly more correct for the boolean E222 added: `rmdir()` on a symlink fails, so today a worktree
+containing one can never report `true` no matter how much was removed. Add a fixture with a symlink to a
+populated directory and assert the target's contents SURVIVE.
+
+---
+
+### Eb49-4 — `warnForkFailed()` reports the first fork failure per pool and never the count
+
+**Recorded 2026-08-24 by round-49 lane b.** Severity: cosmetic / observability. **Measured.** Lane b's file.
+
+**What.** E221's new diagnostic latches once per `AgentWorkerPool`, matching
+`warnSequentialFallback()`'s anti-spam reasoning: the alternative is one log line per dispatched agent, and
+a pool that has run out of processes is precisely the one about to dispatch many. The cost is that a
+transient failure which clears and later recurs is logged only the first time, and that "one agent fell back"
+and "forty did" are indistinguishable.
+
+**Step.** Count the failures in a counter beside `$forkFailureWarned` and surface the total somewhere a
+caller can read it — most naturally alongside whatever `executeAll()` already returns, or in a second log
+line at pool teardown. Not worth a new public accessor on its own; do it when something else needs pool
+statistics.
+
+---
+
+### Eb49-5 — the `-1` fork arm was unreachable from any test until this round, and three sibling arms still are
+
+**Recorded 2026-08-24 by round-49 lane b.** Severity: test coverage. **Measured.** Lane b's file.
+
+**What.** E221 added `forkProcess()` specifically because `startAgent()`'s `pcntl_fork() === -1` branch could
+not be driven: a genuine fork failure needs `RLIMIT_NPROC` exhausted or the machine out of memory, and a test
+that arranged either would take the box down. That is a large part of how the branch went so long emitting
+nothing at all. The lesson generalises — an arm no test can reach accumulates defects silently — and
+`startAgent()` has more of them: the child branch (`$pid === 0`) is only ever exercised by a real fork, and
+its own doc-block says the path is "currently unreachable from `bin/sugarcrush`'s live path".
+
+**Step.** Audit `src/` for `=== -1`, `=== false` and `catch` arms that no test reaches, and decide per site
+whether a seam (the `forceXForTesting` pattern, twice over in `AgentWorkerPool` now) is warranted or whether
+the arm should be documented as intentionally unexercised. A count is deliberately not recorded here — it
+would be stale on the next merge; the generator is the point.
+
+---
