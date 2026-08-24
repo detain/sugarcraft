@@ -58,6 +58,26 @@ final class LspConnection implements LspConnectionInterface
     /** Default request timeout in seconds. */
     private float $requestTimeout = 30.0;
 
+    /**
+     * How much of the server's stderr is kept for diagnostics.
+     *
+     * 64 KiB is one pipe buffer on this host, which is the natural unit: the
+     * point at which an undrained fd 2 stops the server dead (see
+     * {@see drainStderr()}). Keeping one buffer's worth means a wedge that did
+     * happen is fully explained by what was retained.
+     */
+    private const MAX_STDERR_BYTES = 65536;
+
+    /**
+     * The TAIL of whatever the server has written to stderr.
+     *
+     * Bounded because {@see drainStderr()} runs inside an unbounded poll and a
+     * server in a warning loop would otherwise be an unbounded allocation. The
+     * TAIL rather than the head because this text answers "why did it stop",
+     * and the reason a process gives is the last thing it says.
+     */
+    private string $stderrTail = '';
+
     public function __construct(
         private readonly string $serverPath,
         private readonly array $serverArgs = [],
@@ -106,6 +126,11 @@ final class LspConnection implements LspConnectionInterface
         // false for a `proc_open()` pipe, which is an STDIO stream and not a
         // socket. Non-blocking plus the caller's poll is the shape that works.
         stream_set_blocking($this->pipes[1], false);
+
+        // NON-BLOCKING STDERR TOO, and it is DRAINED — see drainStderr(). fd 2
+        // is a pipe nothing here ever read, and a pipe nobody reads stops the
+        // writer at one buffer.
+        stream_set_blocking($this->pipes[2], false);
 
         // Mark as initialized so isConnected returns true.
         // Caller is responsible for calling initialize() to complete LSP handshake.
@@ -456,6 +481,14 @@ final class LspConnection implements LspConnectionInterface
      */
     private function stopProcess(): void
     {
+        // ONE LAST DRAIN, BEFORE THE SIGNAL. A server blocked in write(2) on a
+        // full stderr pipe cannot run its own SIGTERM handler to shut down
+        // cleanly, so it would take the ladder's escalation to signal 9 every
+        // time. Emptying the pipe first gives it the chance to exit on the
+        // polite signal — and leaves {@see stderrTail()} holding whatever it
+        // said on the way out.
+        $this->drainStderr();
+
         ProcessReaper::terminateAndClose($this->process);
 
         $this->process = null;
@@ -604,6 +637,17 @@ final class LspConnection implements LspConnectionInterface
             return false;
         }
 
+        // BEFORE stdout, every pass. See drainStderr() for why this is not
+        // optional bookkeeping.
+        $this->drainStderr();
+
+        // Same TypeError exposure as drainStderr() — see the note there. This
+        // read was reachable with a closed pipe before that method existed;
+        // nothing had exercised it, which is not the same as it being safe.
+        if (!is_resource($this->pipes[1])) {
+            return false;
+        }
+
         $chunk = @fread($this->pipes[1], 8192);
         if ($chunk === false || $chunk === '') {
             return false;
@@ -612,6 +656,68 @@ final class LspConnection implements LspConnectionInterface
         $this->readBuffer .= $chunk;
 
         return true;
+    }
+
+    /**
+     * Take whatever the server has written to stderr and keep the tail.
+     *
+     * ⚠️ THIS IS NOT DIAGNOSTICS PLUMBING; IT IS WHAT STOPS THE SERVER WEDGING.
+     * {@see connect()} gives the child fd 2 as a `['pipe', 'w']`, and until this
+     * existed nothing in this class ever read it. A pipe whose reader never
+     * reads holds at most one kernel buffer, after which the WRITER blocks in
+     * `write(2)` — so a server that logged more than that never got to write
+     * its next response, and could not exit either.
+     *
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8, 64 KiB pipe buffer) with a
+     * child that writes N bytes to stderr and then a well-formed
+     * `Content-Length` header to stdout, using this exact three-pipe descriptor
+     * spec, fd 1 non-blocking, fd 2 never read, 5.0s deadline / 5ms poll —
+     * three consecutive takes, identical: N = 1000 and N = 60000 both deliver
+     * the header in 0.04s; N = 100000 never delivers it at all.
+     *
+     * THE SYMPTOM IS NOT A HANG HERE, WHICH IS WHY IT SURVIVED. Every read path
+     * in this class is deadline-bounded, so the CALLER returns on time with an
+     * empty answer while the SERVER is permanently stuck — and
+     * {@see isConnected()} goes on reporting true, because the process is alive
+     * and the handle is a resource. A `rust-analyzer`/`gopls`/`jdtls` log storm
+     * is an ordinary amount of stderr, not a pathological one.
+     */
+    private function drainStderr(): void
+    {
+        if ($this->pipes === null) {
+            return;
+        }
+
+        // `is_resource()`, NOT `@`. A pipe belonging to a process that has been
+        // `proc_close()`d is a CLOSED resource, and `fread()` on one raises a
+        // TypeError — which `@` does NOT suppress, because it is an exception
+        // and not a diagnostic. That is the same mistake E367 found one file
+        // over, where an `@stream_get_contents()` on an fclose'd pipe meant the
+        // RuntimeException it was building was never constructed at all. Found
+        // here by `LspConnectionTest::testProcessDiesMidRead`, which kills the
+        // server and then reads.
+        if (!is_resource($this->pipes[2])) {
+            return;
+        }
+
+        // Bounded per pass rather than "until EOF": a server writing faster
+        // than this loop reads must not be able to hold the poll here forever.
+        for ($i = 0; $i < 16; $i++) {
+            $chunk = @fread($this->pipes[2], 8192);
+            if (!is_string($chunk) || $chunk === '') {
+                break;
+            }
+            $this->stderrTail = substr($this->stderrTail . $chunk, -self::MAX_STDERR_BYTES);
+        }
+    }
+
+    /**
+     * The tail of the server's stderr, for a caller trying to explain a
+     * connection that went quiet. Empty when the server has said nothing.
+     */
+    public function stderrTail(): string
+    {
+        return $this->stderrTail;
     }
 
     /**

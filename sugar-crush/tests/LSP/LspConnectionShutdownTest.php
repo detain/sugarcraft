@@ -58,6 +58,19 @@ final class LspConnectionShutdownTest extends TestCase
      */
     private const DESTRUCTOR_BOUND_SECONDS = 3.0;
 
+    /**
+     * Under one pipe buffer (64 KiB on this host). The control volume: a server
+     * writing this much is answered whether or not fd 2 is drained.
+     */
+    private const QUIET_STDERR_BYTES = 1000;
+
+    /**
+     * Over one pipe buffer, with margin. MEASURED: 60000 bytes still drains in
+     * 0.04s undrained, 100000 never completes — so the boundary is between
+     * them and this sits clear of it on the failing side.
+     */
+    private const FLOODING_STDERR_BYTES = 200000;
+
     private string $tempDir = '';
 
     /** @var list<int> pids a fixture reported for itself, killed on the way out */
@@ -279,6 +292,123 @@ final class LspConnectionShutdownTest extends TestCase
      * both no-ops — {@see LspConnection::__destruct()} calls into the same
      * teardown after any explicit call, so a double teardown is the NORMAL path.
      */
+    /**
+     * A SERVER THAT LOGS MORE THAN ONE PIPE BUFFER STILL GETS ANSWERED.
+     *
+     * {@see LspConnection::connect()} gives the child fd 2 as a `['pipe','w']`,
+     * and nothing in the class read it. A pipe nobody reads holds one kernel
+     * buffer and then blocks the WRITER in `write(2)` — so a server that logged
+     * enough never got to write its next response and could not exit either.
+     *
+     * ⚠️ THE SYMPTOM IS NOT A HANG ON THIS SIDE, WHICH IS HOW IT SURVIVED
+     * REVIEW. Every read path here is deadline-bounded, so the CALLER returns
+     * on time with nothing while the SERVER is stuck forever, and
+     * `isConnected()` keeps answering true. This test therefore asserts the
+     * ANSWER ARRIVED, not that the call returned quickly — a bound alone is
+     * satisfied by the broken version.
+     *
+     * MEASURED with this exact descriptor spec (PHP 8.3.6, Linux 6.8, 64 KiB
+     * pipe buffer), fd 1 non-blocking, fd 2 never read, 5.0s deadline / 5ms
+     * poll, three consecutive takes: 1000 and 60000 bytes of stderr both
+     * deliver the header in 0.04s, 100000 never delivers it at all.
+     *
+     * THE QUIET CASE IS THE CONTROL (rule 15). {@see QUIET_STDERR_BYTES} sits
+     * under one buffer and passes with or without the drain; it is here so that
+     * a failure of the loud case is unambiguously about VOLUME and not about
+     * the fixture, the framing, or the request id. If both rows go red, the
+     * defect is in this test.
+     */
+    public function testAServerThatFloodsStderrIsStillAnsweredAndItsStderrIsKept(): void
+    {
+        // Comfortably under one pipe buffer: passes either way, by design.
+        $quiet = $this->requestOverNoisyServer(self::QUIET_STDERR_BYTES);
+        $this->assertSame(
+            'SERVED',
+            $quiet->result,
+            'the CONTROL row failed, so this test is not measuring what it claims: a server '
+            . 'writing well under one pipe buffer must be answered whether or not fd 2 is drained'
+        );
+
+        // Comfortably over it. Without the drain the server blocks in write(2)
+        // before it ever reads the request.
+        $loud = $this->requestOverNoisyServer(self::FLOODING_STDERR_BYTES);
+        $this->assertSame(
+            'SERVED',
+            $loud->result,
+            'a server that wrote ' . self::FLOODING_STDERR_BYTES . ' bytes to stderr never '
+            . 'answered. fd 2 is an undrained pipe, so the server is wedged in write(2) — note '
+            . 'that the request itself returned on time, which is why a timing bound would not '
+            . 'have caught this'
+        );
+    }
+
+    /**
+     * The stderr a flooding server wrote is RETAINED, and BOUNDED.
+     *
+     * Separate from the test above because they can fail independently and the
+     * distinction matters: draining to `/dev/null` would satisfy the liveness
+     * claim while throwing away the only diagnostic a wedged language server
+     * ever produces. This is also the positive component that stops
+     * {@see LspConnection::stderrTail()} being pinned only by an empty string.
+     */
+    public function testTheFloodingServersStderrIsRetainedUpToOneBufferAndNoMore(): void
+    {
+        $connection = $this->connectedOverNoisy(self::FLOODING_STDERR_BYTES);
+
+        try {
+            $connection->sendRequest('textDocument/definition', []);
+            $tail = $connection->stderrTail();
+
+            $this->assertNotSame(
+                '',
+                $tail,
+                'nothing was retained, so fd 2 is being discarded rather than read — the server '
+                . 'stays alive but its only diagnostic is gone'
+            );
+            $this->assertSame(
+                str_repeat('E', strlen($tail)),
+                $tail,
+                'the retained stderr is not what the fixture wrote'
+            );
+            $this->assertLessThanOrEqual(
+                65536,
+                strlen($tail),
+                'the retained stderr is unbounded; a server in a warning loop would then be an '
+                . 'unbounded allocation in a long-lived TUI'
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    /** One request against a server that wrote $stderrBytes to fd 2 first. */
+    private function requestOverNoisyServer(int $stderrBytes): \SugarCraft\Crush\LSP\LspResponse
+    {
+        $connection = $this->connectedOverNoisy($stderrBytes);
+
+        try {
+            return $connection->sendRequest('textDocument/definition', []);
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    private function connectedOverNoisy(int $stderrBytes): LspConnection
+    {
+        $script = $this->tempDir . '/noisy.php';
+        file_put_contents($script, self::NOISY_STDERR_SERVER);
+        @unlink($this->pidFile());
+
+        $connection = new LspConnection($script, [$script, $this->pidFile(), (string) $stderrBytes]);
+        // Generous relative to the 0.04s a healthy answer takes, and far below
+        // the fixture's own 20s lifetime, so a timeout here means wedged.
+        $connection->connect(PHP_BINARY, [], null, 6.0);
+        $this->assertTrue($connection->isConnected(), 'the noisy fixture server must have started');
+        $this->selfReportedPid();
+
+        return $connection;
+    }
+
     public function testDisconnectIsIdempotentAndSafeUnconnected(): void
     {
         $never = new LspConnection('/nonexistent-lsp');
@@ -343,6 +473,54 @@ final class LspConnectionShutdownTest extends TestCase
      * the escalation budget is paid. That is the claim the bound below is
      * allowed to make.
      */
+    /**
+     * Well-behaved on stdout, LOUD on stderr: writes `$argv[2]` bytes to fd 2
+     * before serving a single request.
+     *
+     * THE PID FILE IS WRITTEN FIRST, DELIBERATELY. If the stderr storm came
+     * first the server would wedge before reporting itself and the failure
+     * would surface in {@see selfReportedPid()} as "never reported its pid" —
+     * true, but pointing at the handshake rather than at the pipe. Reporting
+     * first puts the red where the defect is: on the request.
+     */
+    private const NOISY_STDERR_SERVER = <<<'PHP'
+        <?php
+        file_put_contents($argv[1], (string) getmypid());
+        fwrite(STDERR, str_repeat('E', (int) $argv[2]));
+        $buffer = '';
+        $deadline = microtime(true) + 20.0;
+        while (microtime(true) < $deadline) {
+            $chunk = fread(STDIN, 8192);
+            if ($chunk === false || ($chunk === '' && feof(STDIN))) {
+                break;
+            }
+            $buffer .= $chunk;
+            while (($sep = strpos($buffer, "\r\n\r\n")) !== false) {
+                $headers = substr($buffer, 0, $sep);
+                $length = 0;
+                foreach (explode("\r\n", $headers) as $header) {
+                    if (str_starts_with($header, 'Content-Length:')) {
+                        $length = (int) trim(substr($header, 15));
+                    }
+                }
+                if (strlen($buffer) < $sep + 4 + $length) {
+                    break;
+                }
+                $body = substr($buffer, $sep + 4, $length);
+                $buffer = substr($buffer, $sep + 4 + $length);
+                $message = json_decode($body, true);
+                if (($message['method'] ?? '') === 'exit') {
+                    exit(0);
+                }
+                if (isset($message['id'])) {
+                    $reply = json_encode(['jsonrpc' => '2.0', 'id' => $message['id'], 'result' => 'SERVED']);
+                    fwrite(STDOUT, "Content-Length: " . strlen($reply) . "\r\n\r\n" . $reply);
+                    fflush(STDOUT);
+                }
+            }
+        }
+        PHP;
+
     private const WELL_BEHAVED_SERVER = <<<'PHP'
         <?php
         file_put_contents($argv[1], (string) getmypid());
