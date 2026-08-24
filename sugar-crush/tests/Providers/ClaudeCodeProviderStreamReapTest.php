@@ -322,7 +322,7 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
 
     private function pidFile(): string
     {
-        return $this->tempDir . '/child.pid';
+        return $this->tempDir . '/fixture.pid';
     }
 
     private function selfReportedPid(): int

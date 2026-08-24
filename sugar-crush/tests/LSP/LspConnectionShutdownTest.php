@@ -406,7 +406,7 @@ final class LspConnectionShutdownTest extends TestCase
 
     private function pidFile(): string
     {
-        return $this->tempDir . '/server.pid';
+        return $this->tempDir . '/fixture.pid';
     }
 
     /**
@@ -430,7 +430,7 @@ final class LspConnectionShutdownTest extends TestCase
             usleep(20000);
         }
 
-        $this->fail('the fixture server never reported its pid');
+        $this->fail('the fixture child never reported its pid');
     }
 
     private function isAlive(int $pid): bool

@@ -134,7 +134,7 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
     public function testTheIgnoringServerIsDeadAfterDisconnectReturns(): void
     {
         $client = $this->connectedClientOver(self::STUBBORN_SERVER);
-        $pid = $this->selfReportedPid($client);
+        $pid = $this->selfReportedPid();
 
         $client->disconnect();
 
@@ -157,7 +157,7 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
     {
         $client = $this->connectedClientOver(self::STUBBORN_SERVER);
 
-        $selfReported = $this->selfReportedPid($client);
+        $selfReported = $this->selfReportedPid();
         $handle = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'process');
         $directChild = (int) proc_get_status($handle->getValue($client))['pid'];
 
@@ -255,22 +255,32 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
         // stubborn fixture that has not yet installed its handler is a
         // well-behaved fixture. See STUBBORN_SERVER for the mutation that
         // survived while this wait was missing.
-        $this->selfReportedPid($client);
+        $this->selfReportedPid();
 
         return $client;
     }
 
     private function pidFile(): string
     {
-        return $this->tempDir . '/server.pid';
+        return $this->tempDir . '/fixture.pid';
     }
 
     /**
      * The pid the fixture wrote down for ITSELF, waited for rather than assumed:
      * `connect()` returns as soon as `proc_open()` does, which is before the
      * child has necessarily run a line.
+     *
+     * WHAT THIS TOOK, AND WHY IT NO LONGER DOES. It took the
+     * {@see ClaudeCodeMcpClient} whose child it was waiting on, which read as
+     * documentation of the association. It never USED it — the pid arrives
+     * through the file system, not through the client — and
+     * {@see \SugarCraft\Crush\Tests\Support\DuplicatedTestHelperDriftTest}
+     * caught the cost: three suites in this package now carry a byte-identical
+     * copy of this helper, and a parameter list that differs while the body
+     * does not is invisible to every other check in that guard. The association
+     * is documented in this sentence instead, where it cannot drift.
      */
-    private function selfReportedPid(ClaudeCodeMcpClient $client): int
+    private function selfReportedPid(): int
     {
         $deadline = microtime(true) + 5.0;
         while (microtime(true) < $deadline) {
@@ -286,7 +296,7 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
             usleep(20000);
         }
 
-        $this->fail('the fixture server never reported its pid');
+        $this->fail('the fixture child never reported its pid');
     }
 
     private function isAlive(int $pid): bool

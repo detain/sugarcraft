@@ -304,12 +304,27 @@ final class BuiltInToolCorpusTest extends TestCase
      * before that trio was `Providers/ToolCallParser/MarkupScanner`.
      *
      * THE LAST BUMP, NAMED SO THE NEXT READER DOES NOT HAVE TO GUESS: +1 file
-     * and +1 concrete class from `src/Permissions/ToolRefusal.php`, the shared
-     * refusal classifier E292/E300 hoisted out of
-     * {@see \SugarCraft\Crush\Cli\NonInteractive} and
-     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}. It
-     * declares one concrete final readonly class and nothing else, which is
-     * why only `concrete` moved.
+     * and +1 concrete class from `src/Support/ProcessReaper.php`, the one
+     * bounded SIGTERM -> signal 9 -> `proc_close()` ladder E366 hoisted out of
+     * the four teardown paths that were each about to grow their own. It
+     * declares one concrete final class and nothing else, which is why only
+     * `concrete` moved: 294 -> 295 files, 243 -> 244 concrete, 313 -> 314
+     * declarations.
+     *
+     * THE BUMP BEFORE IT: +1 file and +1 concrete class from
+     * `src/Permissions/ToolRefusal.php`, the shared refusal classifier E292/E300
+     * hoisted out of {@see \SugarCraft\Crush\Cli\NonInteractive} and
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}.
+     *
+     * ⚠️ THIS CENSUS IS A CARDINALITY OVER `src/` AND FIVE LANES ARE EDITING
+     * `src/` AT ONCE. A lane worktree's figure is void the moment a sibling
+     * merges (rule 18), and these three literals can merge textually clean
+     * while being arithmetically wrong (rule 32). If this test reds after a
+     * merge, the resolution is NOT to take one side: re-derive all three from
+     * the merged tree and check the last invariant in
+     * {@see testTheSecondaryDeclarationCensus()} — `declarations - files` must
+     * still equal the secondary-declaration total — because that is the one
+     * assertion here that a wrong pair of literals cannot satisfy by accident.
      *
      * THE PREVIOUS BUMP NAMED THE WRONG CAUSE. This paragraph attributed the
      * last +1 to `Config/LayeredSettings` after the numbers had already been
@@ -351,9 +366,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(294, $files, 'php files under src/');
+        $this->assertSame(295, $files, 'php files under src/');
         $this->assertSame(
-            ['concrete' => 243, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
+            ['concrete' => 244, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -443,8 +458,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(294, count($files), 'php files under src/');
-        $this->assertSame(313, $declarations, 'top-level declarations in them');
+        $this->assertSame(295, count($files), 'php files under src/');
+        $this->assertSame(314, $declarations, 'top-level declarations in them');
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),
