@@ -231,6 +231,81 @@ final class AuditHookRefusalNoticeTest extends TestCase
     }
 
     /**
+     * A SPENT LATCH DOES NOT BUILD THE MESSAGE IT IS NOT GOING TO SAY.
+     *
+     * THE ASSERTION THIS FILE WAS MISSING, and the reason it was missing is
+     * worth keeping: every other test here counts NOTICES, and the number of
+     * notices is identical whether the latch suppresses the `warn()` alone or
+     * the whole inspection behind it. So the shipped shape ran
+     * {@see AuditHook::directoryRefusalReason()} — a `clearstatcache()` that
+     * also flushes the process-global realpath cache, up to four stats and a
+     * `sprintf` — on EVERY refused tool call and discarded the result, and
+     * nothing in this class could see it. MEASURED at round 49, PHP 8.3.6,
+     * before the fix: five refused calls, five inspections, one notice.
+     *
+     * A SPY RATHER THAN A COUNTER IN THE PRODUCTION CLASS. The property is
+     * "what it is handed is not invoked", which a closure reports about
+     * itself; adding a static tally to {@see AuditHook} to observe the same
+     * thing would be production state existing only for this line.
+     *
+     * The spy answers a DIFFERENT string each time deliberately —
+     * {@see RuntimeNoticeSink::drain()} de-duplicates identical rows within a
+     * batch, so three identical messages would arrive as one and the notice
+     * count below could not tell a working latch from the sink's dedup. That
+     * is the same trap {@see testThreeRefusalsAboutDifferentDirectoriesStillProduceOneNotice()}
+     * documents, one level down.
+     */
+    public function testASpentLatchNeverInvokesTheReasonItWasHanded(): void
+    {
+        $built = 0;
+        $spy = static function () use (&$built): string {
+            $built++;
+
+            return 'audit log disabled: spy reason ' . $built;
+        };
+
+        $notice = new \ReflectionMethod(AuditHook::class, 'noticeRefusalOnce');
+        $notice->invoke(null, $spy);
+        $notice->invoke(null, $spy);
+        $notice->invoke(null, $spy);
+
+        // POSITIVE HALF (rule 15/E228): a `0` here is what a deleted call site
+        // or a never-invoked closure also answers, so the first call is
+        // asserted to have gone all the way through to the sink.
+        self::assertSame(1, $built, 'the reason was built for a notice that was never going to be said');
+        self::assertSame(
+            ['audit log disabled: spy reason 1'],
+            RuntimeNoticeSink::drain(),
+            'the first refusal did not reach the sink, so the count above is vacuous',
+        );
+    }
+
+    /**
+     * THE TYPE IS THE ENFORCEMENT, so the type is asserted.
+     *
+     * The gate above only holds while the argument is DEFERRED. A `string`
+     * parameter puts the inspection back in the caller where no latch can
+     * reach it, and that regression reads as a tidy-up: it deletes a `fn () =>`
+     * and the suite above still passes, because a spy handed to a `string`
+     * parameter is a `TypeError` in the test and nowhere near `append()`.
+     *
+     * `\Closure` and not `callable`: a `callable` parameter accepts the string
+     * `'strlen'` and every other lazily-spelled thing, but it also accepts
+     * nothing that would force a caller to defer — the point is a type an
+     * eagerly-built message CANNOT satisfy.
+     */
+    public function testTheRefusalReasonParameterIsANonNullableClosure(): void
+    {
+        $parameters = (new \ReflectionMethod(AuditHook::class, 'noticeRefusalOnce'))->getParameters();
+
+        self::assertCount(1, $parameters);
+        $type = $parameters[0]->getType();
+        self::assertInstanceOf(\ReflectionNamedType::class, $type, 'the reason parameter lost its single type');
+        self::assertSame(\Closure::class, $type->getName(), 'an eagerly-built message can now be passed');
+        self::assertFalse($type->allowsNull());
+    }
+
+    /**
      * Point the unconfigured default at $directory, drive $times tool calls
      * through a no-argument hook, and hand back what reached the sink.
      *

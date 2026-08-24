@@ -326,8 +326,23 @@ final class AuditHook implements HookInterface
      */
     private function append(string $entry): bool
     {
-        if ($this->ownsPath && !self::directoryIsOurs(\dirname($this->logFile))) {
-            self::noticeRefusalOnce(self::directoryRefusalReason(\dirname($this->logFile)));
+        $directory = \dirname($this->logFile);
+
+        // THE REASON IS PASSED AS A CLOSURE AND NOT AS A STRING, which is the
+        // difference between "computed once" and "computed on every refused
+        // call". PHP evaluates a call's arguments before the call, so the
+        // earlier `noticeRefusalOnce(self::directoryRefusalReason($dir))`
+        // spelling ran the whole inspection every time this arm was taken and
+        // then threw the string away — MEASURED at round 49, five refused
+        // calls produced five inspections and one notice. The latch suppresses
+        // the `warn()`, not the work that builds its argument, and only a
+        // deferred argument can be suppressed by a latch inside the callee.
+        //
+        // The parameter type is what enforces it: a `\Closure` parameter under
+        // `strict_types` cannot be handed an eagerly-built string, so the
+        // regression is a `TypeError` rather than a silent cost.
+        if ($this->ownsPath && !self::directoryIsOurs($directory)) {
+            self::noticeRefusalOnce(static fn (): string => self::directoryRefusalReason($directory));
 
             return false;
         }
@@ -340,10 +355,11 @@ final class AuditHook implements HookInterface
         // race-free in the case that matters because a 0700 directory this
         // uid owns is one nobody else can create an entry in.
         if ($this->ownsPath && \is_link($this->logFile)) {
-            self::noticeRefusalOnce(\sprintf(
+            $log = $this->logFile;
+            self::noticeRefusalOnce(static fn (): string => \sprintf(
                 'audit log disabled: %s is a symbolic link, and this hook will not append through one '
                 . 'to a file it did not create. Nothing is being recorded. Remove or replace the link.',
-                $this->logFile,
+                $log,
             ));
 
             return false;
@@ -413,10 +429,23 @@ final class AuditHook implements HookInterface
      * WHY ONCE, WHICH IS THE WHOLE REASON THE COST ARGUMENT DIES. E345's
      * objection to a notice was that on a squatted box it is one line per tool
      * call for the whole run — the shape that trains an operator to ignore
-     * stderr. Every condition this method reports is a property of a directory
-     * that does not change mid-run, so the second line would carry no
-     * information the first did not. One line is the whole of what needs
-     * saying, and the latch is what makes that true rather than hoped for.
+     * stderr. One line is the whole of what needs saying, and the latch is
+     * what makes that true rather than hoped for.
+     *
+     * WHY *THAT* REASON AND NOT THE ONE THIS PARAGRAPH FIRST GAVE. It said:
+     * "every condition this method reports is a property of a directory that
+     * does not change mid-run, so the second line would carry no information
+     * the first did not." THAT IS NOT TRUE, and the message itself is the
+     * counter-example — the mode arm ends `Fix it with: chmod 700 <dir>`,
+     * which invites exactly the mid-run change the sentence says cannot
+     * happen, and after the operator makes it the hook silently resumes
+     * recording and says nothing more. WHY THE DECISION SURVIVES THE
+     * CORRECTION: the reason for once is signal-to-noise, not immutability. A
+     * line per tool call is the failure mode; a second line announcing that a
+     * directory changed shape mid-run would be a real (if rare) piece of
+     * information, and it is given up deliberately to keep the first line
+     * worth reading. A reader who believed the old reason would "fix" a
+     * repeat-notice bug that is not a bug.
      *
      * THROUGH {@see RuntimeNoticeSink::warn()} AND NOT A BARE `fwrite`. That
      * funnel writes the complete text to stderr via `error_log()` AND puts a
@@ -426,15 +455,27 @@ final class AuditHook implements HookInterface
      * It also means this file does not become a new raw-stderr emitter; it
      * joins the funnel {@see \SugarCraft\Crush\Tests\Cli\StderrEmitterCensusTest}
      * counts as channel 6.
+     *
+     * THE ARGUMENT IS DEFERRED, and the parameter type is the enforcement.
+     * A latch inside a callee cannot suppress work its caller already did
+     * building the argument, so with a `string` parameter this method's
+     * "once" applied to the `warn()` and to nothing else — see
+     * {@see append()} for the measurement. `\Closure` is the narrowest type
+     * that makes the eager spelling impossible rather than merely discouraged;
+     * {@see \SugarCraft\Crush\Tests\Hooks\AuditHookRefusalNoticeTest} asserts
+     * both the type and the fact that a spent latch never invokes what it is
+     * handed.
+     *
+     * @param \Closure(): string $reason built only if it is going to be said
      */
-    private static function noticeRefusalOnce(string $message): void
+    private static function noticeRefusalOnce(\Closure $reason): void
     {
         if (self::$noticed) {
             return;
         }
 
         self::$noticed = true;
-        RuntimeNoticeSink::warn($message);
+        RuntimeNoticeSink::warn($reason());
     }
 
     /**
@@ -445,8 +486,24 @@ final class AuditHook implements HookInterface
      * {@see directoryIsOurs()}, deliberately: that method is driven directly
      * by several tests and by {@see append()}'s hot path, and widening its
      * contract to carry a reason would make every caller pay for a string
-     * nobody reads on the accept path. This runs only after a refusal, at most
-     * once per process.
+     * nobody reads on the ACCEPT path.
+     *
+     * WHAT THIS PARAGRAPH SAID WHEN IT WAS WRITTEN, and it was wrong about the
+     * site it annotates rather than about the design: "this runs only after a
+     * refusal, at most once per process". WHAT IS TRUE NOW: the first half was
+     * always true and still is; the second half was false the moment it was
+     * written, because {@see append()} spelled the call as
+     * `noticeRefusalOnce(self::directoryRefusalReason($dir))` and PHP builds a
+     * call's arguments before the call. MEASURED at round 49, PHP 8.3.6: five
+     * refused calls through a mode-refused directory produced FIVE inspections
+     * and one notice. The refusing caller was paying, on every call after the
+     * first, for exactly the discarded string the accept-path argument above
+     * objects to. WHY THIS STILL EARNS ITS PLACE: the accept-path reasoning is
+     * the load-bearing half and is untouched — the refusal is still a separate
+     * inspection so that `directoryIsOurs()` stays a predicate. What changed is
+     * that {@see append()} now defers this call behind a `\Closure`, so the
+     * "at most once per process" clause is a property of the code instead of a
+     * hope about it.
      *
      * THE MODE ARM IS SPELLED WITH ITS REMEDY AND THE OTHER TWO ARE NOT, and
      * that asymmetry is the point (E345's amendment). The symlink and
