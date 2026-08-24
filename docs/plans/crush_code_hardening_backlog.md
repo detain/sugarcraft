@@ -13101,3 +13101,115 @@ box" and its reviewer found **0** and flagged the discrepancy. Both are correct.
 claim, and the backlog should not record it as one.
 
 ---
+
+### Ec53-1 — E366's mechanical repair is built: a lifetime scanner over `proc_open()`, and it found E366's own HIGH by machine
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: hygiene, mechanised. **BUILT + GUARDED this round.**
+Measured on PHP 8.3.6, `sugar-crush/src` only.
+
+E366 ended with a prescription: extending the existing descriptor-spec scanner to flag "long-lived child
++ nothing said about fd ≥ 3" makes E365 non-recurring instead of fixing today's five call sites by hand.
+That is now `sugar-crush/tests/Support/ChildLifetimeScanner.php`, with
+`DescriptorInheritanceGuardTest` pointing it at `src/` and `ChildLifetimeScannerFixtureTest` pinning every
+rule against synthetic sources whose answer is known before the scanner is asked.
+
+**The prescription was measured before it was implemented, and it held** — with one correction. E366 says
+"extend `ChildStderrCaptureScanner`". It is a SEPARATE class. That scanner asks where fd 2 goes for spawns
+under `tests/`; this one asks whether a child outlives its call, over `src/`. Folding a lifetime analysis
+into a stderr classifier gives one instrument two answers and one name, and the file is also claimed by
+another lane's ownership row this round. Nothing in `ChildStderrCaptureScanner.php` was touched.
+
+**No cardinality is asserted anywhere in the guard.** E366's HIGH list was five on the day it was written;
+the roster is keyed `File.php::method` and every row must still match something, which is the half a dead
+scanner cannot satisfy.
+
+---
+
+### Ec53-2 — the textual presence of `proc_close()` is not evidence that a child was reaped
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: instrument correctness. **FOUND AGAINST THE TREE,
+AND IT WAS THE FIRST IMPLEMENTATION'S OWN DEFECT.**
+
+The scanner's first version called a spawn short-lived if a `proc_close($handle)` appeared anywhere in the
+same function. `Sessions/BackgroundSupervisor.php::spawnSession()` satisfied that and is E366's own HIGH:
+its only `proc_close()` sits inside the branch taken when the IPC handshake times out, and **the happy
+path never reaps at all**. A leak, reported as fine — the polarity that waves a real offender through.
+
+**The fix, and the two corrections it forced, both in the opposite polarity:**
+
+1. **Brace depth against a RUNNING MINIMUM, not zero.** The obvious rule — a close nested deeper than the
+   spawn is conditional — reds correct code. `Hooks/ScriptHook.php::executeStaged()` spawns a retry INSIDE
+   an `if` and closes once at the method's own level, which is depth *minus one* from that spawn. Against
+   the running minimum a close that has merely left the spawn's own block counts, while a close inside a
+   LATER block does not, because entering one takes depth back above the floor.
+2. **`return proc_close($p);` hands back an exit code, not the handle.** The escape scan deliberately looks
+   anywhere inside a returned expression, because `return [$proc, $pipes];` is this tree's commonest escape
+   spelling — and it then read the exit-code idiom as the handle escaping. Found by a fixture written for
+   rule 1, which is the argument for having fixtures at all.
+
+Both shapes are pinned in `ChildLifetimeScannerFixtureTest`, each in its own right.
+
+---
+
+### Ec53-3 — my brief and the round's ownership map disagree about who owns `ChildStderrCaptureScanner.php`
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: process / merge hazard. **NOT A CODE FINDING.**
+
+Lane c's brief says under YOUR FILES: "`sugar-crush/tests/Support/ChildStderrCaptureScanner.php` and its
+own tests". The ownership map in the same brief lists `tests/Support/ChildStderrCapture*.php` under **lane
+d**, and lane c as "(censuses)" owning two `tests/Cli/` files its work items never mention. Two lanes were
+told they own one file.
+
+Resolved by touching neither: lane c's work went into new files that match no other lane's glob
+(`ChildLifetimeScanner.php`, `ChildLifetimeScannerFixtureTest.php`,
+`DescriptorInheritanceGuardTest.php`). **Step:** when a brief's per-lane file list and the shared ownership
+map disagree, the disagreement itself is the finding — say so before working, and prefer the resolution
+that makes the question moot.
+
+---
+
+### Ec53-4 — DEFERRED: the seven rostered `sugar-crush/src` spawns still inherit fd 3+
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: handle-leak-into-subprocess. **FINDING ONLY —
+deliberately not fixed** (functionality before hardening; lane c changes no `src/`).
+
+Every exposed site is rostered in `DescriptorInheritanceGuardTest::ACCOUNTED_FOR` with its reason, so the
+list lives where an instrument can see it go stale. The fix for each is the same shape: name the fds in
+the descriptor spec so the child cannot inherit them. Three of the seven are E366 HIGHs
+(`ClaudeCodeMcpClient::connect`, `LSP/LspConnection::connect`, `BackgroundSupervisor::spawnSession`); the
+roster is the authority on the current set, not this paragraph.
+
+⚠️ **`MCP/StdioMcpServer::start` is rostered even though E366 calls it the correctly-reaped twin.** Reaping
+being right is not the fd half being right. Do not delete that row on the strength of its SIGTERM → poll →
+SIGKILL teardown.
+
+---
+
+### Ec53-5 — DEFERRED: the guard's scope is `sugar-crush/src` and nothing else
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: coverage. Named so a green run is not misread.
+
+`DescriptorInheritanceGuardTest` walks `sugar-crush/src` only. **Not covered:** `sugar-crush/bin/` ·
+`sugar-crush/tests/` (spawn-heavy, and a test's child is short-lived by construction far more often) · and
+every other lib. E366's cross-lib HIGH/MEDIUM list — `sugar-dash/src/Plugin/ExternalModule.php`,
+`sugar-reel/src/AudioPlayer.php`, `sugar-reel/src/Decode/FfmpegDecoder.php`,
+`candy-core/src/WorkerPool.php`, `candy-core/src/Program.php` — has no equivalent guard, and the scanner is
+a sugar-crush test-support class so pointing another lib at it means promoting it somewhere shared first.
+
+---
+
+### Ec53-6 — DEFERRED: the scanner will not follow a handle through an array member
+
+**Recorded 2026-08-24 by round-53 lane c.** Severity: instrument coverage. Reported, not hidden.
+
+`Agents/ProcessExecutor.php::spawnWorker()` puts its handle in a local array literal
+(`'process' => $process`), stores that array in `$this->processes[$id]` and returns it as well. The truth
+is long-lived; the scanner answers `unclassified` because it does not do taint-through-array-members, and
+`unclassified` is a failure the guard reds on rather than a quiet pass. The row in `ACCOUNTED_FOR` states
+the measured truth.
+
+Widening the scanner to follow one level of array membership would resolve this site. It is deliberately
+not done: a shape with one occurrence to verify against is thin evidence for a change that moves every
+site in the tree at once, and the honest `unclassified` costs a roster row rather than a wrong answer.
+
+---
