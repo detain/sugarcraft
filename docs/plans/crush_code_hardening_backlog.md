@@ -12124,8 +12124,17 @@ future test of "does subsystem X warn once / twice / not at all" has the same ho
 `drain()` call site says so. Grep for `drain()` in `tests/` before trusting any cardinality taken through
 it.
 
+**The dedup is per BATCH, and that is the half that says which tests are exposed.** `drain()` builds its
+`$unique` list as a LOCAL and throws it away on return, so two messages merge only when one `drain()` call
+returns both. A test that drains after every stimulus is therefore already safe; the shape that gets caught
+is the natural one — drive N times, drain once at the end — which is exactly the shape the latch test had.
+`AuditHookRefusalNoticeTest`'s latch test now defends itself twice over (distinct messages AND a drain per
+stimulus), and its doc-block says so, because naming one defence invites a later reader to remove the other
+as redundant.
+
 **Step.** Consider a `drainRaw()` for tests, or a doc-block line on `drain()` naming the hazard. Cheapest
-honest version is the doc-block line.
+honest version is the doc-block line, and it should say "per batch" rather than "de-duplicates": the
+unqualified verb is what makes a reader think a drain-per-stimulus test is exposed too.
 
 ---
 
