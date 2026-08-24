@@ -12065,6 +12065,22 @@ opposite responses.
 
 ---
 
+### Round 49, lane b — a note on the numbering and the ids below
+
+**The round number in this block is 49, which is what this lane's brief calls the round, and the entries
+immediately above it are filed under 50 and 51.** That is not a mistake in either place and it is worth one
+sentence rather than a silent renumber: the supervisor's plan commits and this lane's brief both say round
+49, while several earlier merges filed under 50 and 51. Where an entry below cites "round 51" it is citing
+THAT round's work by its own name — E328's fix landing at `d881f552`, and E338's measurement recorded by
+round-51 lane a — and those citations are accurate as written. Renumbering them to match this block would
+break the reference rather than tidy it.
+
+**The `Eb52-` prefix is a provisional lane-scoped id**, spelled the way this lane's brief prescribed it
+verbatim, so that three lanes appending to this one file cannot collide before the supervisor renumbers at
+merge. No source file cites one — that is the standing rule, and it is what makes the renumber safe.
+
+---
+
 ### Eb52-1 — `LOCK_EX` is not load-bearing for `AuditHook`'s write on any filesystem this box can offer
 
 **Recorded 2026-08-24 by round-49 lane b, from a mutation of its own fix.** Severity: stated bound.
@@ -12171,5 +12187,13 @@ opens `\is_resource($this->in) && \stream_isatty($this->in)`. A null therefore m
 `HeadlessPermissionPromptStdinDefaultTest::testWithNoPinInstalledTheDefaultIsTheProcesssOwnDescriptorZero()`
 asserts both halves.
 
-**Step.** Change the two doc-blocks to `@var resource|null` when that file is next in a lane. One line
-each; no code change.
+**Step, NAMED BY SYMBOL BECAUSE "the two doc-blocks" IS WRONG.** `HeadlessPermissionPrompt` carries two
+`/** @var resource */` lines and only ONE of them is about a value that can now be null: the one on the
+`$in` PROPERTY. The other is on `$err`, which is resolved from `\STDERR` and is not nullable — widening it
+would document a state that cannot occur and would invite an `is_resource()` guard on a path that does not
+need one. The constructor's own `@param resource|null $in` is ALREADY correct and needs nothing. So: one
+line, on the `$in` property's `@var`, when that file is next in a lane. No code change.
+
+An earlier draft of this Step said "change the two doc-blocks", which followed literally would have made
+one of the two worse — a prescription in a backlog entry is a hypothesis exactly as a prescription in a
+review is (rule 16), and this one was measured against the file rather than counted from memory.
