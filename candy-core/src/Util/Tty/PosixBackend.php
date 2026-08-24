@@ -154,7 +154,7 @@ final class PosixBackend implements Backend
         // `self::openTty()` is untouched and is NOT made dormant by this: it
         // is a {@see Backend} interface method and `Program` reaches it
         // through `Tty::openTty()` for its `openTty: true` option.
-        $ttyFd = self::openTerminalDescriptor(self::CONTROLLING_TERMINAL);
+        $ttyFd = self::openDeviceDescriptor(self::CONTROLLING_TERMINAL);
         if ($ttyFd !== null) {
             try {
                 $result = SizeIoctl::query($ttyFd);
@@ -164,7 +164,7 @@ final class PosixBackend implements Backend
             } catch (\Throwable $e) {
                 // /dev/tty query failed — fall through
             } finally {
-                self::closeTerminalDescriptor($ttyFd);
+                self::closeDeviceDescriptor($ttyFd);
             }
         }
 
@@ -203,7 +203,7 @@ final class PosixBackend implements Backend
     /**
      * The controlling terminal's device path.
      *
-     * Named rather than inlined so {@see openTerminalDescriptor()} reads as
+     * Named rather than inlined so {@see openDeviceDescriptor()} reads as
      * a general "open this terminal device" helper — which is what makes it
      * testable on a host that has no controlling terminal at all, by handing
      * it /dev/ptmx instead. See that method's doc-block.
@@ -218,7 +218,14 @@ final class PosixBackend implements Backend
     private const O_RDONLY = 0;
 
     /**
-     * Open a terminal device and return the GENUINE file descriptor, or null.
+     * Open a device file and return the GENUINE file descriptor, or null.
+     *
+     * Named for what it GUARANTEES rather than for what it is used for: it
+     * hands back a descriptor for whatever it was pointed at, terminal or
+     * not. `SizeIoctl::query()` does the `posix_isatty()` check, and
+     * duplicating it here would make the "null exactly when the device could
+     * not be opened" contract -- which is what the guard asserts -- two
+     * contracts instead of one.
      *
      * This exists because {@see SizeIoctl::query()} and
      * {@see TermiosFactory::open()} both take an `int` descriptor and PHP
@@ -237,11 +244,11 @@ final class PosixBackend implements Backend
      *           assertable everywhere, not only under a terminal.
      *
      * @return int|null a descriptor the caller MUST hand to
-     *                  {@see closeTerminalDescriptor()}, or null when the
+     *                  {@see closeDeviceDescriptor()}, or null when the
      *                  device cannot be opened (no controlling terminal, no
      *                  ext-ffi, no libc)
      */
-    public static function openTerminalDescriptor(string $device): ?int
+    public static function openDeviceDescriptor(string $device): ?int
     {
         try {
             $fd = Libc::lib()->open($device, self::O_RDONLY);
@@ -256,7 +263,7 @@ final class PosixBackend implements Backend
     }
 
     /**
-     * Close a descriptor obtained from {@see openTerminalDescriptor()}.
+     * Close a descriptor obtained from {@see openDeviceDescriptor()}.
      *
      * Paired rather than inlined so the `finally` at the call site cannot
      * drift away from the libc handle that produced the descriptor. A leaked
@@ -265,7 +272,7 @@ final class PosixBackend implements Backend
      *
      * @internal
      */
-    public static function closeTerminalDescriptor(int $fd): void
+    public static function closeDeviceDescriptor(int $fd): void
     {
         try {
             Libc::lib()->close($fd);

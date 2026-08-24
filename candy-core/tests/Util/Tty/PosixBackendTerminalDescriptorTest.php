@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Pty\SizeIoctl;
 
 /**
- * {@see PosixBackend::openTerminalDescriptor()} answers with a GENUINE file
+ * {@see PosixBackend::openDeviceDescriptor()} answers with a GENUINE file
  * descriptor, never with a number derived from a PHP stream.
  *
  * ## The defect this file exists for
@@ -76,7 +76,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
     {
         $this->requireTerminalDevice();
 
-        $fd = PosixBackend::openTerminalDescriptor(self::TERMINAL_DEVICE);
+        $fd = PosixBackend::openDeviceDescriptor(self::TERMINAL_DEVICE);
         self::assertNotNull($fd, self::TERMINAL_DEVICE . ' is openable but the helper answered null');
 
         $handle = fopen(self::TERMINAL_DEVICE, 'r+b');
@@ -101,7 +101,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
             // The claim.
             self::assertTrue(
                 posix_isatty($fd),
-                'openTerminalDescriptor() answered ' . $fd . ', which is not a terminal descriptor; '
+                'openDeviceDescriptor() answered ' . $fd . ', which is not a terminal descriptor; '
                     . 'a stream resource id for this device would be ' . $resourceId,
             );
 
@@ -115,7 +115,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
             self::assertArrayHasKey('cols', $size);
         } finally {
             fclose($handle);
-            PosixBackend::closeTerminalDescriptor($fd);
+            PosixBackend::closeDeviceDescriptor($fd);
         }
     }
 
@@ -173,16 +173,16 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
                 fclose($handle);
             }
 
-            $fd = PosixBackend::openTerminalDescriptor($device);
+            $fd = PosixBackend::openDeviceDescriptor($device);
             if ($fd !== null) {
-                PosixBackend::closeTerminalDescriptor($fd);
+                PosixBackend::closeDeviceDescriptor($fd);
             }
 
             self::assertSame(
                 $openable,
                 $fd !== null,
                 $device . ': fopen ' . ($openable ? 'succeeded' : 'failed')
-                    . ' but openTerminalDescriptor() answered ' . var_export($fd, true),
+                    . ' but openDeviceDescriptor() answered ' . var_export($fd, true),
             );
         }
     }
@@ -202,9 +202,9 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
         $before = $this->openDescriptors();
 
         for ($i = 0; $i < 25; $i++) {
-            $fd = PosixBackend::openTerminalDescriptor(self::TERMINAL_DEVICE);
+            $fd = PosixBackend::openDeviceDescriptor(self::TERMINAL_DEVICE);
             self::assertNotNull($fd, 'cycle ' . $i . ' failed to open');
-            PosixBackend::closeTerminalDescriptor($fd);
+            PosixBackend::closeDeviceDescriptor($fd);
         }
 
         $after = $this->openDescriptors();
@@ -232,7 +232,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
             fclose($handle);
         }
 
-        $fd = PosixBackend::openTerminalDescriptor('/dev/tty');
+        $fd = PosixBackend::openDeviceDescriptor('/dev/tty');
 
         if (!$hasControllingTerminal) {
             self::assertNull($fd, 'no controlling terminal, yet a descriptor came back');
@@ -244,7 +244,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
         try {
             self::assertTrue(posix_isatty($fd), '/dev/tty descriptor ' . $fd . ' is not a tty');
         } finally {
-            PosixBackend::closeTerminalDescriptor($fd);
+            PosixBackend::closeDeviceDescriptor($fd);
         }
     }
 

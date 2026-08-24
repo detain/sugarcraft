@@ -92,7 +92,7 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         ],
         'candy-core/src/Util/Tty/PosixBackend.php::SizeIoctl::query($ttyFd)' => [
             DescriptorSinkScanner::VARIABLE,
-            'CORRECT. size()\'s /dev/tty arm. $ttyFd comes from openTerminalDescriptor(), which '
+            'CORRECT. size()\'s /dev/tty arm. $ttyFd comes from openDeviceDescriptor(), which '
             . 'asks libc to open the device and hands back a genuine descriptor. This arm used '
             . 'to read `(int) $tty[0]` on a freshly fopen\'d handle, and was wrong on every run '
             . 'rather than latent -- see PosixBackendTerminalDescriptorTest.',
