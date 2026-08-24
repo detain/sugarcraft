@@ -11068,7 +11068,7 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
-## ROUND 50 — IN FLIGHT (base `906fa666`, THREE lanes, script `crush-round-50.js`)
+## ROUND 50 — IN FLIGHT (base `906fa666`, THREE lanes, run `wf_7226568a-c70`)
 
 **Launched 2026-08-24.** The user set the cap at three lanes for this round. Three file-disjoint lanes ×
 implement → adversarial review → fix, from a DURABLE script path.

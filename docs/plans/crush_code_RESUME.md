@@ -10,6 +10,7 @@ Nothing here depends on a prior conversation's context.
 
 **Launched 2026-08-24 from master `906fa666`, tree clean. THREE lanes** (the user set the cap at three
 for this round), each implement → adversarial review → fix.
+**Run `wf_7226568a-c70`, task `wgldhwmbd`.**
 
 **Script:** `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-50.js`
 🔴 **A DURABLE PATH, NOT THE SCRATCHPAD** — round 49's run 2 died with **"adopt scriptPath rejected"**
