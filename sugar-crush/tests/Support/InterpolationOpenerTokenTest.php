@@ -559,17 +559,21 @@ final class InterpolationOpenerTokenTest extends TestCase
 
         // ...AND AN ARRAY KEYED BY A BRACE IS NOT A DEPTH COUNTER. This is the
         // negative that makes the arrow arm safe rather than merely wider, and
-        // it is not hypothetical: measured on PHP 8.3.6, EVERY `T_DOUBLE_ARROW`
-        // adjacent to a brace literal in this repository is an array key, three
-        // of them, one pair in this suite's own fixtures. An ungated arrow arm
-        // would select those files and report them missing every opener.
+        // the fixture had to be MEASURED into its final shape: the first
+        // version put the braces in VALUE position - `['name' => '{']`, which
+        // is what this tree's three real arrow-adjacent braces are - and the
+        // arm looks FORWARD, so it never fired and un-gating it SURVIVED. A
+        // fixture that does not reach the code it is written for is a green
+        // that means nothing (rule 2: suspect the assertion's window before the
+        // mutation's relevance). Both braces are keys here, which is the only
+        // shape the arm can see.
         $keyed = <<<'PHP'
             <?php
             final class Keyed
             {
-                public function names(): array
+                public function weights(): array
                 {
-                    return ['T_CURLY_OPEN' => '{', 'closer' => '}'];
+                    return ['{' => 1, '}' => -1];
                 }
             }
             PHP;
@@ -1240,13 +1244,24 @@ final class InterpolationOpenerTokenTest extends TestCase
      * with `case`, or with a `match` arm, and a predicate that knew only the
      * first covered the shape its author happened to have written.
      *
-     * THE ARROW ARM IS GATED ON `match` AND THAT GATE IS LOAD-BEARING, not
-     * caution. Measured, PHP 8.3.6: every `T_DOUBLE_ARROW` beside a brace
-     * literal in this tree is an ARRAY KEY - `['T_CURLY_OPEN' => '{']` in this
-     * very suite's own fixtures - and an ungated arrow arm would select those
-     * files as brace walkers and report them missing every opener. `case` needs
-     * no such gate: `T_CASE` appears in `switch` and in enum declarations, and
-     * an enum case spells its value after an `=`, never adjacent to the name.
+     * THE ARROW ARM LOOKS FORWARD ONLY, because a `match` arm's subject is the
+     * KEY: `'{' => 1`. A brace in VALUE position - `['T_CURLY_OPEN' => '{']` -
+     * has its arrow BEFORE it and is not a dispatch on the brace at all.
+     * Measured, PHP 8.3.6, over every `.php` under `tests/` and `src/`: three
+     * brace literals neighbour a `T_DOUBLE_ARROW` and all three are values,
+     * NONE is a key. So the arrow arm selects nothing in the tree today.
+     *
+     * THE `match` GATE IS THEREFORE GUARDING A SHAPE THAT IS NOT HERE YET, and
+     * saying so is the point rather than a caveat: an array literal `['{' => 1,
+     * '}' => -1]` - a perfectly ordinary table mapping a brace to something -
+     * is indistinguishable from a `match` walker on the arrow alone, and an
+     * ungated arm would select it and report it missing every opener. That the
+     * tree has no such table today is a fact about today. The gate is pinned by
+     * a fixture rather than by this paragraph.
+     *
+     * `case` needs no gate: `T_CASE` appears in `switch` and in enum
+     * declarations, and an enum case spells its value after an `=`, never
+     * adjacent to the name.
      *
      * @param list<array{int,string,int}|string> $tokens
      */
