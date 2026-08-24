@@ -146,6 +146,50 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
     }
 
     /**
+     * THE TRUNCATION KEEPS THE TAIL, and this is the only thing that says so.
+     *
+     * `clipStderr()`'s doc-block argues the tail because "the reason a process
+     * gives is the last thing it says", and a head-keeping truncation would
+     * reliably preserve a startup banner and drop the actual error. MEASURED:
+     * with no test here, reversing `substr($errors, -N)` to
+     * `substr($errors, 0, N)` SURVIVED the whole file. The fixture writes a
+     * recognisable banner, then a megabyte of filler, then the real reason last
+     * — so the two directions are distinguishable rather than merely both large.
+     */
+    public function testStderrTruncationKeepsTheTailWhereTheReasonIs(): void
+    {
+        $provider = $this->providerOver(<<<'PHP'
+            <?php
+            pcntl_alarm(15);
+            fwrite(STDERR, 'BANNER-node-v22-experimental-warning');
+            fwrite(STDERR, str_repeat('.', 1000000));
+            fwrite(STDERR, 'REASON-model-quota-exhausted');
+            exit(7);
+            PHP);
+
+        try {
+            iterator_to_array($provider->completeStream($this->request()));
+            $this->fail('a non-zero exit must throw');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString(
+                'REASON-model-quota-exhausted',
+                $e->getMessage(),
+                'the LAST thing the child said is the reason it exited and must survive truncation',
+            );
+            $this->assertStringNotContainsString(
+                'BANNER-node-v22-experimental-warning',
+                $e->getMessage(),
+                'a head-keeping truncation preserves the banner and drops the error — the wrong half',
+            );
+            $this->assertLessThan(
+                200000,
+                strlen($e->getMessage()),
+                'a megabyte of stderr must not be carried whole into an exception message',
+            );
+        }
+    }
+
+    /**
      * DEFECT 2. 200000 bytes is comfortably past the 64 KiB pipe buffer measured
      * on this host, and past the 100000 that was already observed never to
      * complete. Pre-fix this does not fail slowly — it does not finish.
