@@ -155,10 +155,20 @@ final class Detect
      * Drain up to $limitMs milliseconds of already-available stdin data.
      * This suppresses spurious replies from earlier queries.
      *
-     * @param resource $fd
+     * Null means {@see stdinFd()} found no usable descriptor 0, and there is
+     * then nothing to drain. This is the site the E318 fatal came out of:
+     * {@see probe()} drains UNCONDITIONALLY on all three of its exits, with no
+     * isInteractiveTty() ahead of it, so it is reached with a closed handle
+     * where the two read paths are not.
+     *
+     * @param resource|null $fd
      */
     private static function drainStdin(int $limitMs, $fd): void
     {
+        if (!\is_resource($fd)) {
+            return;
+        }
+
         $read    = [$fd];
         $deadline = Deadline::in($limitMs);
         while (true) {
@@ -183,10 +193,19 @@ final class Detect
      * Read available bytes from stdin until $timeoutMs elapses or the
      * full DA1 reply is received.  Returns '' on timeout.
      *
-     * @param resource $fd
+     * Null means {@see stdinFd()} found no usable descriptor 0. '' is already
+     * this method's no-answer value and every caller handles it, so a dead
+     * descriptor degrades exactly the way a terminal that did not reply does
+     * (E318).
+     *
+     * @param resource|null $fd
      */
     private static function readStdinTimed(int $timeoutMs, $fd): string
     {
+        if (!\is_resource($fd)) {
+            return '';
+        }
+
         $buf      = '';
         $deadline = Deadline::in($timeoutMs);
 
@@ -218,21 +237,53 @@ final class Detect
     }
 
     /**
-     * Whether stdin and stdout are connected to an interactive TTY.
+     * The stream this class probes descriptor 0 through, or null when there
+     * is not a usable one.
      *
-     * @return resource
+     * WHAT THIS DOC-BLOCK SAID: "Whether stdin and stdout are connected to an
+     * interactive TTY." WHAT IS TRUE: that sentence belongs to
+     * {@see isInteractiveTty()} directly below and was copied onto the wrong
+     * method; this one resolves a STREAM. WHY THE CORRECTION EARNS ITS PLACE
+     * rather than a silent rewrite: the wrong sentence is what made the missing
+     * guard below read as already handled — a method documented as returning a
+     * boolean predicate is not one a reader checks for a closed resource.
+     *
+     * NULL IS A REAL ANSWER, NOT A DEFENSIVE ONE (E318/E302). A closed
+     * descriptor 0 is a legitimate state for a process to be in — a daemon, a
+     * git hook, `sugarcrush 0<&-`, or a test harness that replaced its own fd 0
+     * — and `defined('STDIN')` stays true after `fclose(STDIN)` while
+     * `is_resource()` goes false. Handing that on unguarded is what this used
+     * to do, and the failure is NOT the suppressed warning it looks like:
+     * MEASURED, PHP 8.3.6, `@stream_select()` drops the closed handle out of
+     * the read array and then throws `ValueError: No stream arrays were
+     * passed`, which `@` cannot suppress because it is thrown rather than
+     * raised. Driving `Detect::probe()` in a process that had done
+     * `fclose(\STDIN)`: `ValueError: No stream arrays were passed` from
+     * {@see drainStdin()}, every call, before this guard existed.
+     *
+     * The callers below therefore treat null as "no probe is possible" and
+     * return their own no-answer value, which is the same thing they already
+     * return on a timeout.
+     *
+     * @return resource|null
      */
     private static function stdinFd()
     {
-        return self::$probeStdin ?? STDIN;
+        $fd = self::$probeStdin ?? STDIN;
+
+        return \is_resource($fd) ? $fd : null;
     }
 
     private static function isInteractiveTty(): bool
     {
         // Test override: when setProbeStdin() injected a mock stdin, skip
-        // the real TTY check (CI environments have no real TTY).
+        // the real TTY check (CI environments have no real TTY). The
+        // is_resource() is not redundant with the null check: a caller that
+        // injected a stream and then closed it leaves a non-null handle that
+        // is no longer a stream, and answering "interactive" for it is what
+        // carries a dead descriptor into readStdinTimed() (E318).
         if (self::$probeStdin !== null) {
-            return true;
+            return \is_resource(self::$probeStdin);
         }
 
         // Explicitly disabled for testing daemon/CGI environments.
@@ -322,7 +373,7 @@ final class Detect
         fflush(STDOUT);
 
         // Read the response with a tight timeout (terminal responds fast).
-        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::$probeStdin ?? STDIN);
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd());
 
         return self::parseXtwinoReply($reply, $query);
     }
@@ -340,7 +391,7 @@ final class Detect
         }
         fflush(STDOUT);
 
-        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::$probeStdin ?? STDIN);
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::stdinFd());
 
         return self::parseXtwinoReply($reply, self::XTWINOP_18);
     }
