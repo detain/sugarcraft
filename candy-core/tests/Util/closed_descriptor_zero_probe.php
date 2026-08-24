@@ -14,11 +14,21 @@ declare(strict_types=1);
  * taking the rest of the run down with it. So the closing happens here, in a
  * process whose whole job is to die afterwards.
  *
- * Usage: `php closed_descriptor_zero_probe.php <mode> <result-file>` where
- * mode is `closed` (close descriptors 0, 1 and 2 before probing) or `live`
- * (leave them alone). Results are written to <result-file> as JSON rather
- * than to standard output, precisely because `closed` mode closes standard
- * output too.
+ * Usage: `php closed_descriptor_zero_probe.php <mode> <result-file>`, with
+ * three modes:
+ *
+ *   `closed`  close descriptors 0, 1 and 2, then probe
+ *   `live`    leave them alone (the caller gives descriptor 0 /dev/null)
+ *   `tty`     leave them alone (the caller gives descriptor 0 a REAL
+ *             terminal device, so every family row answers `true`)
+ *
+ * The child does not know which of `live` and `tty` it is in beyond the
+ * argument; the difference is entirely in what the caller put on descriptor
+ * 0, which is why `tty` is a positive control rather than a second copy of
+ * the same negative one.
+ *
+ * Results are written to <result-file> as JSON rather than to standard
+ * output, precisely because `closed` mode closes standard output too.
  *
  * Each probe is recorded as one of:
  *   {"ok": <json-encodable value>}      the callable returned
@@ -34,6 +44,12 @@ declare(strict_types=1);
  *     detect a throw, the harness reports it rather than swallowing it, and
  *     descriptor 0 in this child really is closed — so a green family row is
  *     "it did not throw" rather than "nothing was exercised".
+ *
+ * And the `tty` mode is the other half of that argument. Every family row in
+ * `closed` mode expects `false`, and `false` is also what a gutted probe
+ * returns — a row asserting it is not evidence on its own. In `tty` mode the
+ * same rows must answer `true`, which a constant cannot fake without being
+ * wrong in the other two modes.
  */
 
 use SugarCraft\Core\ExecRequest;

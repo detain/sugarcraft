@@ -194,9 +194,60 @@ final class ClosedDescriptorZeroFamilyTest extends TestCase
     }
 
     /**
+     * THE POSITIVE POLARITY, and the reason the two tests above are evidence.
+     *
+     * Every family row in the closed child expects `false`, and `false` is
+     * also what a probe returns when its call has been replaced by a
+     * constant, or when the symbol under it has been gutted. An assertion of
+     * `false` is therefore not, by itself, proof that anything ran — this is
+     * the fixture-with-a-dead-instrument shape, one level down from the
+     * controls.
+     *
+     * So the same child is run once more with a REAL terminal device on its
+     * descriptor 0, opened here as `/dev/ptmx` and handed over by proc_open.
+     * Now every one of those rows must answer `true`. A constant cannot
+     * satisfy both this test and the two above, and neither can a gutted
+     * `isAtty()`.
+     */
+    public function testTheSameFamilyRowsAnswerTrueWhenDescriptorZeroIsARealTerminal(): void
+    {
+        if (\DIRECTORY_SEPARATOR !== '/' || !is_readable('/dev/ptmx')) {
+            self::markTestSkipped('/dev/ptmx is not available; no terminal device to hand the child');
+        }
+
+        $ptmx = fopen('/dev/ptmx', 'r+b');
+        self::assertIsResource($ptmx);
+
+        try {
+            self::assertTrue(stream_isatty($ptmx), '/dev/ptmx is not a tty here; the control cannot discriminate');
+            $result = $this->runProbe('tty', $ptmx);
+        } finally {
+            if (\is_resource($ptmx)) {
+                fclose($ptmx);
+            }
+        }
+
+        self::assertTrue($result['_state']['stdin_is_resource']);
+        self::assertSame(['ok' => 'PROBES-RAN'], $result['control_ok']);
+
+        // The unguarded shape answers true rather than throwing, which is the
+        // third distinct answer it has given across the three modes.
+        self::assertSame(['ok' => true], $result['control_unguarded_isatty']);
+
+        // And the guarded members agree with it. These are the rows that were
+        // false in both other modes.
+        self::assertSame(['ok' => true], $result['tty_detect_is_atty']);
+        self::assertSame(['ok' => true], $result['env_detect_is_console_stdin']);
+
+        // null is still not a stream, whatever descriptor 0 is.
+        self::assertSame(['ok' => false], $result['tty_detect_is_atty_null']);
+    }
+
+    /**
+     * @param resource|null $stdin descriptor 0 for the child; null means /dev/null
      * @return array<string, mixed>
      */
-    private function runProbe(string $mode): array
+    private function runProbe(string $mode, $stdin = null): array
     {
         self::assertFileExists(self::PROBE);
 
@@ -207,7 +258,7 @@ final class ClosedDescriptorZeroFamilyTest extends TestCase
 
         $process = proc_open(
             [\PHP_BINARY, self::PROBE, $mode, $resultFile],
-            [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            [0 => $stdin ?? ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
         );
         self::assertIsResource($process, 'could not start the probe child');
