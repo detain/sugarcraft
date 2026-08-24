@@ -86,9 +86,29 @@ final class DescriptorSinkScanner
      *
      * So the roster is read out of {@see Libc::cdef()}, which is a
      * declaration of exactly this fact and which candy-pty already keeps
-     * loadable without the FFI runtime for introspection. A symbol added
-     * there appears here on its next commit, and the census then demands a
-     * judgement for every call site of it.
+     * loadable without the FFI runtime for introspection.
+     *
+     * ## What a new symbol in that cdef actually does here
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY: "A symbol added there appears here on
+     * its next commit, and the census then demands a judgement for every call
+     * site of it." WHAT IS TRUE NOW: that was a claim about the DERIVATION,
+     * and the derivation could not keep it. MEASURED through the shipped
+     * parser, PHP 8.3.6: `fsync(int fildes)`, `dup3(int oldfd, int newfd)`
+     * and `fchdir(int)` all appeared and none of them arrived -- the pattern
+     * recognised the literal parameter name `fd` and dropped everything else
+     * in silence, so the sentence was false for three realistic spellings,
+     * two of which are POSIX's own. WHY IT STILL EARNS ITS PLACE: the
+     * INTENTION was right and is the reason this method is derived at all,
+     * and a reader who deletes the sentence deletes the reason.
+     *
+     * What holds today, in three parts rather than one:
+     * a symbol whose first parameter is named in
+     * {@see DESCRIPTOR_PARAMETER_NAMES} appears here on its next commit and
+     * the census demands a judgement for every call site of it; one named in
+     * {@see NON_DESCRIPTOR_PARAMETER_NAMES} is rejected; and one that is
+     * neither -- or unnamed, or of an unrecognised type -- THROWS, which reds
+     * the census rather than shrinking the roster behind it.
      *
      * @return list<string>
      */
@@ -98,8 +118,45 @@ final class DescriptorSinkScanner
     }
 
     /**
-     * Parse a C declaration block for functions whose first parameter is
-     * `int fd`.
+     * First-parameter names that ARE a file descriptor.
+     *
+     * POSIX does not spell this one way. `fd` is the common form, but
+     * `fildes` is what the standard's own prototypes for `fsync`,
+     * `ftruncate` and `fstat` use, and the `dup`/`dup2` family uses
+     * `oldfd`/`newfd`. A roster derived by matching the literal name `fd`
+     * is a transcript of how the cdef in front of its author happened to be
+     * spelled -- which is the failure this whole class is about, one level
+     * up from the call sites.
+     *
+     * @var list<string>
+     */
+    public const DESCRIPTOR_PARAMETER_NAMES = [
+        'dirfd', 'fd', 'fd1', 'fd2', 'filedes', 'fildes', 'newfd', 'oldfd', 'sockfd',
+    ];
+
+    /**
+     * First-parameter names that are an `int` but NOT a descriptor.
+     *
+     * Taken from the vocabulary candy-pty's own cdef already uses for its
+     * parameters rather than invented, so this list is a reading of the
+     * declaration block and not a guess about future ones. `posix_openpt(int
+     * flags)` and `waitpid(int pid, ...)` are the two live int-first
+     * non-descriptors today; the rest appear in later positions of the same
+     * declarations.
+     *
+     * A name in NEITHER list is the point of the pair: see
+     * {@see sinksFromCdef()}.
+     *
+     * @var list<string>
+     */
+    public const NON_DESCRIPTOR_PARAMETER_NAMES = [
+        'arg', 'buf', 'buflen', 'cmd', 'flags', 'options', 'path', 'pid',
+        'request', 'speed', 'status', 'termios_p', 'when',
+    ];
+
+    /**
+     * Parse a C declaration block for functions whose first parameter is a
+     * file descriptor.
      *
      * Split out from {@see methodSinks()} so a control fixture can push a
      * cdef whose answer is known through the same parser -- including the
@@ -110,6 +167,37 @@ final class DescriptorSinkScanner
      * inside them, and a census that reads a comment as a declaration is the
      * same class of error as one that reads a doc-comment as a call.
      *
+     * ## WHAT THIS USED TO DO, AND WHY THAT WAS A HOLE
+     *
+     * WHAT IT SAID: one regex, `name(int fd` , collecting the names it
+     * matched. WHAT IS TRUE NOW: that pattern answers a question about the
+     * SPELLING of a parameter and was being read as an answer about its
+     * MEANING. MEASURED through the shipped parser, PHP 8.3.6, against a
+     * synthetic block declaring `fsync(int fildes)`, `close(int fd)`,
+     * `dup3(int oldfd, int newfd)` and `fchdir(int)`: it returned `['close']`
+     * and dropped the other three in silence. Two of those are POSIX's own
+     * spellings and candy-pty already declares `dup`. WHY THE OLD SHAPE STILL
+     * EARNS A MENTION: it was right that the roster must be DERIVED and never
+     * hand-listed -- that part is unchanged and is the reason this method
+     * exists. It was the derivation's alphabet that was too narrow, which is
+     * the same defect the census documents at its call sites.
+     *
+     * ## And a declaration it cannot classify is a FAILURE, not a skip
+     *
+     * The first parameter is classified against two lists --
+     * {@see DESCRIPTOR_PARAMETER_NAMES} and
+     * {@see NON_DESCRIPTOR_PARAMETER_NAMES} -- and an `int`-typed first
+     * parameter that is in neither, or that has no name at all, throws. So
+     * does a declaration whose parameter list will not parse. A guard that
+     * quietly ignores what it cannot read has a hole shaped exactly like the
+     * next defect; here that hole would be an entire libc sink absent from
+     * the roster, and therefore every call site of it absent from the census,
+     * with nothing anywhere going red.
+     *
+     * Resolving that throw is one word in one of the two lists. The exception
+     * message says which lists and quotes the declaration.
+     *
+     * @throws \RuntimeException when a declaration cannot be classified
      * @return list<string>
      */
     public static function sinksFromCdef(string $cdef): array
@@ -117,13 +205,22 @@ final class DescriptorSinkScanner
         $stripped = preg_replace('#/\*.*?\*/#s', ' ', $cdef) ?? $cdef;
 
         $names = [];
-        if (preg_match_all(
-            '/([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*int\s+fd\s*[,)]/',
-            $stripped,
-            $matches,
-        )) {
-            foreach ($matches[1] as $name) {
-                $names[$name] = true;
+        foreach (explode(';', $stripped) as $statement) {
+            $statement = trim($statement);
+            if ($statement === '' || !str_contains($statement, '(')) {
+                continue;
+            }
+
+            if (preg_match('/([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()]*)\)\s*$/', $statement, $m) !== 1) {
+                throw new \RuntimeException(
+                    'this cdef declaration could not be parsed, so whether it takes a file '
+                    . "descriptor first is UNKNOWN and the roster below it is incomplete:\n  "
+                    . $statement . ';',
+                );
+            }
+
+            if (self::firstParameterIsADescriptor($m[2], $statement)) {
+                $names[$m[1]] = true;
             }
         }
 
@@ -131,6 +228,72 @@ final class DescriptorSinkScanner
         sort($out);
 
         return $out;
+    }
+
+    /**
+     * Is the first parameter of a parsed parameter list a file descriptor?
+     *
+     * @param  string $parameters the text between the parentheses
+     * @param  string $statement  the whole declaration, for the message
+     * @throws \RuntimeException when the answer is not knowable
+     */
+    private static function firstParameterIsADescriptor(string $parameters, string $statement): bool
+    {
+        $first = trim(explode(',', $parameters)[0]);
+
+        // `f(void)` and `f()` take nothing.
+        if ($first === '' || $first === 'void') {
+            return false;
+        }
+
+        // A pointer is not a descriptor, whatever it points at. `char *buf`,
+        // `void *termios_p`, `int *status` are all confidently not one, and
+        // no descriptor is ever passed by pointer in this family.
+        if (str_contains($first, '*')) {
+            return false;
+        }
+
+        // An int-typed scalar WITH a name: the two lists decide.
+        if (preg_match('/^(?:const\s+)?(?:unsigned\s+|signed\s+)?int\s+([A-Za-z_][A-Za-z0-9_]*)$/', $first, $m) === 1) {
+            if (\in_array($m[1], self::DESCRIPTOR_PARAMETER_NAMES, true)) {
+                return true;
+            }
+            if (\in_array($m[1], self::NON_DESCRIPTOR_PARAMETER_NAMES, true)) {
+                return false;
+            }
+
+            throw new \RuntimeException(
+                'this cdef declaration takes an int first, named "' . $m[1] . '", and that name is '
+                . "in neither descriptor list, so whether it is a file descriptor is UNKNOWN:\n  "
+                . $statement . ";\n"
+                . 'Resolve it by adding "' . $m[1] . '" to DescriptorSinkScanner::'
+                . 'DESCRIPTOR_PARAMETER_NAMES if it names a descriptor, or to '
+                . 'NON_DESCRIPTOR_PARAMETER_NAMES if it does not. Guessing is the one option that '
+                . 'is not available: a descriptor missed here is a libc sink absent from the '
+                . 'roster and every call site of it absent from the census.',
+            );
+        }
+
+        // An int-typed scalar with NO name, e.g. `int fchdir(int);`. The type
+        // is right and the meaning is unreadable, which is precisely the case
+        // that must not be dropped quietly.
+        if (preg_match('/^(?:const\s+)?(?:unsigned\s+|signed\s+)?int$/', $first) === 1) {
+            throw new \RuntimeException(
+                'this cdef declaration takes an UNNAMED int first, so whether it is a file '
+                . "descriptor cannot be read from the declaration at all:\n  " . $statement . ";\n"
+                . 'Resolve it by naming the parameter in candy-pty\'s cdef.',
+            );
+        }
+
+        // Some other scalar type -- a typedef such as `pid_t`, or a `long`.
+        // Not knowable from the name alone, and a descriptor typedef is
+        // exactly the shape that would slip past a rule keyed on `int`.
+        throw new \RuntimeException(
+            'this cdef declaration\'s first parameter is a scalar whose type this parser does not '
+            . "know, so whether it is a file descriptor is UNKNOWN:\n  " . $statement . ";\n"
+            . 'Resolve it by teaching DescriptorSinkScanner::firstParameterIsADescriptor() about '
+            . 'the type, in whichever polarity is correct.',
+        );
     }
 
     /** A literal integer — a genuine descriptor number. */

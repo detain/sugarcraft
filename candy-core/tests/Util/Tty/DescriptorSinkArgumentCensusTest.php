@@ -710,6 +710,26 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'the cdef parser did not answer with exactly the fd-first declarations',
         );
 
+        // THE PARSER'S OWN ALPHABET. Every near-miss above is a GENUINE
+        // non-fd-first declaration, so all of them would still be rejected by
+        // a parser that recognised the single literal name `fd` and nothing
+        // else -- which is what this one did. MEASURED through the shipped
+        // parser before this block existed, PHP 8.3.6: given `fsync(int
+        // fildes)`, `close(int fd)`, `dup3(int oldfd, int newfd)` and
+        // `fchdir(int)`, it answered `['close']` and dropped the other three
+        // without a sound. `fildes` is POSIX's own spelling for `fsync`,
+        // `ftruncate` and `fstat`; `oldfd`/`newfd` are the `dup` family's;
+        // and candy-pty already declares `dup`. A descriptor sink missing
+        // from this roster is every call site of it missing from the census.
+        self::assertSame(
+            ['dup3', 'fsync'],
+            DescriptorSinkScanner::sinksFromCdef(
+                "int fsync(int fildes);\nint dup3(int oldfd, int newfd);\n",
+            ),
+            'the cdef parser reads only the literal parameter name `fd`, so a descriptor '
+                . 'declared with any of POSIX\'s other spellings for one is silently not a sink',
+        );
+
         // And the REAL cdef, through the same parser. Asserted by membership
         // rather than by set equality: candy-pty owns that file, and a census
         // in candy-core that reds because candy-pty declared a new symbol
@@ -730,6 +750,105 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         foreach (['read', 'write', 'dup2'] as $imaginary) {
             self::assertNotContains($imaginary, $real, $imaginary . ' is now declared; every call site of it needs a roster row');
         }
+    }
+
+    /**
+     * A cdef declaration the parser CANNOT classify is a failure, not a skip.
+     *
+     * The counterpart to the derivation control above, and the half that
+     * makes its rejections trustworthy. That test asserts which declarations
+     * come back; this one asserts that everything else was actually READ and
+     * understood to be a non-descriptor, rather than merely not matching a
+     * pattern. Without it, the correct answer and the answer of a parser that
+     * had quietly stopped recognising anything are the same list.
+     *
+     * Each case names its resolution in the exception, because the person who
+     * hits one is holding a red census in a package they may never have
+     * opened, caused by a one-line change in another.
+     *
+     * @dataProvider unclassifiableDeclarations
+     */
+    public function testACdefDeclarationThatCannotBeClassifiedIsAFailure(
+        string $declaration,
+        string $because,
+        string $expectedInMessage,
+    ): void {
+        try {
+            $answer = DescriptorSinkScanner::sinksFromCdef($declaration);
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString(
+                $expectedInMessage,
+                $e->getMessage(),
+                'the parser refused this declaration without saying what would resolve it',
+            );
+            self::assertStringContainsString(
+                trim($declaration),
+                $e->getMessage(),
+                'the parser refused a declaration without quoting it, so the reader cannot find it',
+            );
+
+            return;
+        }
+
+        self::fail(
+            'the cdef parser answered [' . implode(', ', $answer) . '] for a declaration it '
+            . 'cannot actually classify (' . $because . '): ' . trim($declaration) . ' -- a '
+            . 'descriptor sink dropped here is absent from the roster and every call site of it '
+            . 'is absent from the census, with nothing going red anywhere.',
+        );
+    }
+
+    /** @return iterable<string, array{string, string, string}> */
+    public static function unclassifiableDeclarations(): iterable
+    {
+        yield 'an unnamed int parameter' => [
+            "int fchdir(int);\n",
+            'the type is right and the meaning is unreadable',
+            'UNNAMED int',
+        ];
+
+        yield 'an int parameter whose name is in neither list' => [
+            "int weird(int gadget);\n",
+            'the name says nothing either way',
+            'DESCRIPTOR_PARAMETER_NAMES',
+        ];
+
+        yield 'a scalar of a type the parser does not know' => [
+            "int fchdir2(pid_t p);\n",
+            'a descriptor hidden behind a typedef is exactly what a rule keyed on `int` misses',
+            'firstParameterIsADescriptor',
+        ];
+
+        yield 'a parameter list that does not close' => [
+            "int broken(int fd;\n",
+            'nothing about it can be read at all',
+            'could not be parsed',
+        ];
+    }
+
+    /**
+     * THE POSITIVE CONTROL for the test above: the same parser, on the same
+     * shapes, with a classifiable name -- so its refusals are a property of
+     * the declaration and not of a parser that has started refusing
+     * everything.
+     *
+     * Rule of this file, learned the hard way one level down: a test whose
+     * expectation is "it threw" passes just as well against an instrument
+     * that always throws.
+     */
+    public function testTheParserStillClassifiesTheShapesItCanRead(): void
+    {
+        self::assertSame(
+            ['fchdir'],
+            DescriptorSinkScanner::sinksFromCdef("int fchdir(int fd);\n"),
+            'the parser refuses a NAMED int-first declaration too, so its refusals above say '
+                . 'nothing about the declarations that caused them',
+        );
+        self::assertSame(
+            [],
+            DescriptorSinkScanner::sinksFromCdef("int weird(int flags);\n"),
+            'a known non-descriptor int name no longer resolves, so the two lists are not both live',
+        );
     }
 
     /**
