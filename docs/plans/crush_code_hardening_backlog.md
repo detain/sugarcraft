@@ -8622,11 +8622,29 @@ which is exactly why it looked like it correlated with a sibling lane.
 that the pin does not reach `src/` or `bin/`; `exec()`/`proc_open()` hand a child THIS process's fd 0, and
 eighteen test files spawn the real binary.
 
-**Fix.** The bootstrap closes fd 0 and reopens `/dev/null` onto it — only when fd 0 is not a tty, only
-after checking `/dev/null` is readable. If the reopen misses, children inherit a closed fd 0, measured as
-equally fine. Cost: the `\STDIN` constant is a closed resource for the rest of the run
-(`stream_isatty(\STDIN)` fatals). Nothing reaches it today, and the write-up in `tests/bootstrap.php`
-argues the fatal is the right failure.
+**Fix, second attempt — the first one reddened the suite.** WHAT THIS ENTRY SAID: "the bootstrap closes
+fd 0 and reopens `/dev/null` onto it … Cost: the `\STDIN` constant is a closed resource for the rest of
+the run (`stream_isatty(\STDIN)` fatals). Nothing reaches it today."
+
+WHAT IS TRUE: something reaches it.
+`tests/Cli/NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne()` calls
+`stream_get_meta_data(\STDIN)` as its OWN known-positive control, and on a closed resource that is a
+`TypeError`. **MEASURED at 85a34cc1 from a non-tty runner: that one file, 5 tests, 1 error.** The suite was
+red on every runner whose fd 0 is not a terminal and green from a terminal, because the tty guard skips
+the block there — which is exactly why it shipped unnoticed.
+
+WHAT THE FIX IS NOW: `stream_set_blocking(\STDIN, false)`, still only when fd 0 is not a tty. `O_NONBLOCK`
+lives on the open file DESCRIPTION, which is what `fork(2)`/`exec(2)` share, so it reaches every inherited
+child without touching the descriptor or the constant. **MEASURED, PHP 8.3.6, three takes each**, a parent
+whose fd 0 is an open never-written pipe `exec()`ing a child that calls `stream_get_contents(\STDIN)`:
+inherited as-is → SIGKILLed at 8s, rc 137 (3/3); `stream_set_blocking(…, false)` → 0 bytes in 0.000s
+(3/3); close + reopen `/dev/null` → 0 bytes in 0.000s (3/3). Indistinguishable to the child, and
+`is_resource(\STDIN)` is still true after the flag where it is false after the close.
+
+**What the second attempt does NOT buy.** The flag is not hermetic the way `/dev/null` was: bytes already
+sitting in the pipe stay readable, so a runner started with data on stdin can still leak them into a
+spawned `-p` child's prompt — E212's PREPEND half, still open one process down. Closing it needs the
+descriptor gone, and the descriptor cannot go without the constant going with it. Recorded as Ee49-7.
 
 **Residual, deliberately not fixed.** In PRODUCTION `sugarcrush -p` still blocks forever on a held-open
 stdin with no bound. That is arguably the correct read-stdin contract, but it is unbounded, and a caller
@@ -8656,7 +8674,11 @@ convention as written has an unstated precondition ("the child's exit status is 
 site where it is read will meet the same wall.
 
 **Scope hole beside it.** `ForkedChildExitConventionTest::census()` walks `dirname(__DIR__)`, i.e.
-`tests/` only. `src/` has five fork sites and they are unscanned; `BackgroundSessionRunner`'s was an
+`tests/` only. `src/` has five `pcntl_fork()` CALL sites and they are unscanned — `EngineBackend`,
+`Chat`, `Runtime`, `AgentWorkerPool`, `BackgroundSessionRunner`, re-derived at 85a34cc1 by
+`grep -rn 'pcntl_fork()' src/` minus the `function_exists` guards, plus two more inside the daemon
+bootstrap that `BackgroundSupervisor` builds as a `php -r` string, which no scanner of `src/` would
+attribute to a file anyway; `BackgroundSessionRunner`'s was an
 un-argued bare exit for as long as it existed, and no guard could see it. Widening the census to `src/`
 needs the `ACCEPTED_BARE_EXIT` map to grow an argued row for `AgentWorkerPool` (which has one, reasoned in
 a comment) and for `exitWorker()` itself. Not done: the file is lane d's.
@@ -8673,7 +8695,7 @@ lines duplicated from `NonInteractive::refusalFrom()`, which is `private static`
 
 **Why it is bounded rather than urgent.** The ROSTER is read, not copied, so the two cannot disagree
 about what a refusal IS — which is the failure that would matter.
-`BackgroundSessionRunnerTest::testEveryPrefixInTheSharedDenialRosterIsRecognised()` iterates the roster,
+`BackgroundSessionRunnerTest::testEveryPrefixInTheSharedDenialRosterIsRecordedAsARefusal()` iterates the
 so an added entry the daemon stopped recognising fails there.
 
 **Step.** Hoist it to a shared owner. Blocked this round on ownership: `NonInteractive` is lane a's,
@@ -8719,5 +8741,71 @@ INVISIBLE · **`2 => \STDERR` IS SEEN** (the bare token matches) · controls `fw
 **The rest of E244 stands and stays recorded-only, confirmed at this head:** `src/Runtime.php` contains
 zero `proc_open` — and zero `popen`/`shell_exec`/`passthru`/`system` — so the real hole is unreachable
 from the guarded file.
+
+---
+
+### Ee49-6 — `AgentWorkerPool`'s forked child has E229's defect, and its justification argues only the other half
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: latent, live-code. **Out of lane —
+`src/Agents/AgentWorkerPool.php` is lane b's file this round.** Reported, not fixed.
+
+**What.** E229 was closed at `BackgroundSessionRunner::run()`'s worker only. `AgentWorkerPool::startAgent()`
+ends its `pcntl_fork()` child with a plain `exit(0)`, and the comment above it argues that is safe —
+"the one thing that made a bare `exit()` dangerous — an inherited raw-mode `Tty`'s destructor clobbering
+the real terminal on the way out — is now fixed at the ROOT in candy-core's `PosixBackend::restore()`".
+That is the TTY consequence of E201. It is not the OUTPUT-BUFFER consequence, which is E229, which the
+comment does not mention and which a plain `exit()` still has: PHP's shutdown flushes every open `ob_*`
+level, so a child forked while the parent holds a buffer republishes the parent's buffered bytes.
+
+**Why it is latent rather than live today, measured at 85a34cc1.** `startAgent()` takes the fork arm only
+with the default `ProcessExecutor` (`$this->customExecutor` short-circuits first, and the pool's own tests
+inject mocks), so no test in this suite reaches it with `TestCase::runBare()`'s buffer open. That is a
+property of how the tests are written, not of the site.
+
+**Step.** Either route it through a buffer-dropping exit of the same shape as
+`BackgroundSessionRunner::exitWorker()` (its exit CODE is not read — `waitForCompletion()` settles on the
+reap — so `ForkedChild::exitNow()` is also available there, unlike at the runner), or extend the existing
+comment with the third consequence and why it does not apply. Do not leave the comment asserting safety on
+one of two grounds.
+
+---
+
+### Ee49-7 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test-hermeticity. **Measured, PHP
+8.3.6.** Deliberate residual of Ee49-1's second fix.
+
+**What.** `tests/bootstrap.php` now clears `O_NONBLOCK` on descriptor 0 rather than replacing the
+descriptor with `/dev/null`, because replacing it closes the `\STDIN` constant and that reddens
+`NonInteractiveStdinPinTest` (see Ee49-1). A non-blocking read returns what is available; it does not
+return nothing. So a PHPUnit runner started with bytes already on its stdin still hands those bytes to
+every spawned `bin/sugarcrush -p` child, which prepends them to the prompt — the quieter half of the
+hazard E212 named in-process.
+
+**Why it was not closed.** The only route to a hermetic fd 0 is freeing the descriptor, and PHP has no
+`dup2`: freeing it means `fclose(\STDIN)`, which is what Ee49-1's first attempt did. The two costs are
+mutually exclusive as long as anything in the suite reads the `\STDIN` constant in-process.
+
+**Step, one of.** (a) Change `NonInteractiveStdinPinTest`'s known-positive to a freshly `fopen`ed
+`php://stdin` handle instead of the constant, then go back to close + reopen `/dev/null` — one line in
+each file, and it buys full hermeticity. (b) Or leave the flag and pin the residual with a test that
+proves bytes on the runner's stdin reach a spawned child, so the limit is a recorded fact rather than a
+gap. (a) is the better trade; it was not taken this round because `tests/Cli/NonInteractive*Test.php` is
+lane a's file.
+
+---
+
+### Ee49-8 — "eighteen test files spawn a real `bin/sugarcrush`" is not re-derivable
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: doc accuracy. **Measured. Fixed this
+round** in `tests/bootstrap.php` and `tests/SuiteChildStdinIsolationTest.php`.
+
+The sentence predates round 49 in the bootstrap's `TMPDIR` write-up and was copied into two new places
+this round. Three generators over `tests/` at 85a34cc1: **41** files mention the path at all, **15** of
+those also contain a spawn primitive (`exec`/`proc_open`/`popen`/`shell_exec`/`passthru`), and **13** name
+it outside a comment or doc-block (token-accurate, `token_get_all()` on PHP 8.3.6). None is eighteen. Both
+occurrences now say what the sentence is FOR — the set is non-empty and the children are real processes,
+which is why `TMPDIR` has to be exported rather than merely resolved — with no count. Rule 18 in the
+round brief; this is the third round to produce an instance.
 
 ---
