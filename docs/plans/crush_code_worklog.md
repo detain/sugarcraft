@@ -11068,6 +11068,60 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 51 — IN FLIGHT (base `a85fcfd6`, THREE lanes, run `wf_b02481db-f95`)
+
+**Launched 2026-08-24.** Base floor `9661 / 142165 / 1 skipped / rc 0` observed at `a85fcfd6` — identical
+to round 50's close, since only documentation moved between them, and **clean, with no 60s aborts: E333
+has not recurred in three consecutive runs.**
+
+**Lane `a` — implement E296, at last, and it crosses a library boundary.** Round 50 deliberately did not
+repair E296; it PRICED it, and that is what makes this lane buildable. E310: option (a) — replacing
+descriptor 0 rather than closing it — costs **three named assertions**, not the 107 errors a failure
+message still quotes (E323), a stale figure that stalled this work for two rounds. E314: viability is now
+MEASURED rather than argued. E315 is the reason it matters beyond tidiness — the prepend residual is a
+data path from the runner's stdin to a model provider. The lane also closes **E318**, `Detect::stdinFd()`'s
+unguarded `?? STDIN` in `candy-palette`, which is the second of the two defects the round-49 candy-mosaic
+investigation found and the supervisor's round-50 fix left open.
+
+⚠️ The brief carries round 49's failed attempt explicitly: it closed fd 0 and reopened `/dev/null` on a
+census of `sugar-crush/{src,bin,tests}` that concluded nothing read the `\STDIN` constant, **and the
+reader that mattered was in `candy-mosaic`** — rule 11 where the alphabet was a DIRECTORY. E313's fd-0
+reader roster and E320's four third-party packages naming descriptor 0 already exist as the map; the lane
+is told to extend them, not rebuild them.
+
+**Lane `b` — production defects.** E328: `AuditHook`'s default log path is a fixed shared name **in
+production**, not only in its test — the supervisor fixed the test half pre-round-50 and left this half
+on purpose, because two `sugarcrush` processes on one box truncate each other's audit log, and an audit
+log with a race in it is worse than none because it looks authoritative. E329: four `src/` `uniqid()`
+calls carry a literal prefix, so the argument was mistaken for entropy. **E308: a tool that throws can
+FORGE a refusal** — `Chat::invokeTool()`'s generic `catch` puts the raw exception message where the denial
+prefix goes, and since a generic catch names no class the co-occurrence scan cannot see it in principle,
+so the fix has to be structural. Then E304, E307, E306 close the denial work's loose ends.
+
+**Lane `c` — consolidation, where the TREND is the argument.** A **fifth** `significantTokens()` copy
+arrived in the very round that widened the drift guard's bound (E331), and `readOrFail()` plus its refusal
+test are now duplicated across **three** census files (E332). The drift guard caught a real cross-lane
+defect at the round-49 merge and is the most load-bearing guard in the suite — **and its own neighbourhood
+is accumulating the thing it guards against faster than it is being cleaned up.** Extraction follows
+`FlattensSourceProseTrait` / `DiscardsErrorLogTrait`: one implementation, doc-block carrying the UNION of
+every copy's justification. Plus E322, the three alphabet holes E312/E321/E330, E319's inverted O_NONBLOCK
+vocabulary, and E325/E327.
+
+### THE SUPERVISOR'S OWN TWO DEFECTS FROM ROUND 50, FIXED IN THIS SCRIPT
+
+1. **The round number is now parameterised** — `COMMON` emits `E{LANE}${ROUND}-N` from `const ROUND = 51`.
+   Round 50 reused round 49's `COMMON` verbatim, so all three lanes filed under `E<lane>49-N`; harmless
+   exactly once, because round 49's ids had been renumbered away before round 50 branched.
+2. **The merge's heading count must be `^#{2,3} E`** — round 50's lane a filed six entries at `##`, the
+   same slip round 48's lane c made, and the count read unchanged after its merge.
+
+### AND A HARNESS NOTE THAT COST REAL TIME THIS ROUND
+
+Chained multi-line background commands had their newlines collapsed **three separate times**, each leaving
+a shell alive that never ran the work it was waiting to run. Worse, `pkill -f <pattern>` matches the
+supervisor's OWN command line: one such call killed the calling shell (exit 144). **One step per call, and
+kill by PID after `ps`-ing it.**
+
 ## ROUND 50 — CLOSED (`674cdf7b`, floor `9661 / 142165 / 1 skipped / rc 0`, THREE lanes, one clean run)
 
 ### THE CLOSE

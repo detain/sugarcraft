@@ -6,6 +6,60 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 51 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-24 from master `a85fcfd6`, tree clean. THREE lanes.**
+**Run `wf_b02481db-f95`, task `wua8p0ohn`.** Script (DURABLE path, never the scratchpad):
+`/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-51.js`
+
+**Base floor `9661 / 142165 / 1 skipped / rc 0` OBSERVED at `a85fcfd6` itself** (E167) — identical to
+round 50's close, since only docs moved between them. **No 60s aborts in that run; E333 has not recurred
+in three consecutive clean runs.**
+
+**Lane dirs** `/home/sites/crush-lane-{a,b,c}` are `cp -a` copies at `a85fcfd6`, each verified: sugar-crush
+18/18 AND **candy-palette 4/4** symlinks resolving inside their own tree by `realpath()`.
+⚠️ **DO NOT DELETE until the merged floor is measured.**
+
+🔴 **Standard hazards on a kill:** RESUME if any lane completed, RELAUNCH if none did; check every lane
+for a dirty tree AND for commits its report does not mention (E168, E190); **inspect before reverting**;
+and **check `git branch` / `git reflog` before believing a lane lost anything** — round 49's lane d came
+back detached at base with 0 commits while `master` held all 16. **Never edit the script's `COMMON` while
+the run is resumable** — the cache key is `(prompt, opts)`.
+
+### THE LANES
+
+- **a — 🔴 IMPLEMENT E296 AT LAST, and it crosses into `candy-palette`.** Round 50 did not repair E296; it
+  PRICED it (E310: option (a) costs THREE named assertions, not the 107 a stale message still quotes;
+  E314: viability MEASURED, not argued). Plus E315 (the prepend residual is a data path from the runner's
+  stdin to a model provider), E323, E311, and **E318 — E302's second defect, `Detect::stdinFd()`'s
+  unguarded `?? STDIN`**, which the supervisor's round-50 candy-mosaic fix left open.
+- **b — production defects, not test defects.** E328 (`AuditHook`'s fixed shared log path **in
+  production** — the supervisor fixed only the test half pre-round-50 and left this deliberately), E329
+  (four `src/` `uniqid()` calls whose literal prefix was mistaken for entropy), **E308 (a tool that throws
+  can FORGE a refusal**; a generic `catch` names no class, so the fix must be structural, not another
+  scanner), E304, E307, E306.
+- **c — guard consolidation, tests only.** E331 (a **fifth** `significantTokens()` copy arrived in the very
+  round that widened the drift guard's bound) + E332 (`readOrFail()` triplicated across census files) —
+  **the guard that caught the round-49 cross-lane defect is watching its own neighbourhood accumulate the
+  thing it guards against.** Plus E322, E312/E321/E330, E319, E325/E327.
+
+### 🔴 THE TWO BRIEF DEFECTS FROM ROUND 50 ARE FIXED — DO NOT REINTRODUCE THEM
+
+1. **The round number is parameterised.** `COMMON` emits `E{LANE}${ROUND}-N` from `const ROUND = 51`.
+   Round 50 reused round 49's `COMMON` verbatim and all three lanes filed under `E<lane>49-N`; that was
+   harmless only because round 49's ids had been renumbered away first.
+2. **At merge, count backlog headings as `^#{2,3} E`, NOT `^### E`.** Round 50's lane a filed six entries
+   at `##` (as round 48's lane c did) and the count read unchanged after its merge.
+
+### ⚠️ A PROCESS NOTE WORTH MORE THAN IT LOOKS
+
+Chained multi-line background commands (`until … done; …; for x in …`) have had their newlines collapsed
+**three times this session**, leaving a shell alive that never does the work. And `pkill -f <pattern>`
+matches the supervisor's OWN command line — one such call killed the calling shell. **Run each step as its
+own call, and kill by PID after `ps`-ing it, never by pattern.**
+
+---
+
 ## 0-NOW-51. ROUND 50 CLOSED (floor 9661) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR: `9661 / 142165 / 1 skipped / rc 0` at `674cdf7b`** (merges `7973b4c9` a, `032a7c2f` b,
