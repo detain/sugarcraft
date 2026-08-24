@@ -55,12 +55,9 @@ final class AuditHookProductionPathIsolationTest extends TestCase
      */
     public function testAnUnconfiguredHookWritesToThePinAndNotToTheProductionTree(): void
     {
-        $productionDirectory = \sys_get_temp_dir() . '/sugar-crush-audit-'
-            . (\function_exists('posix_geteuid') ? \posix_geteuid() : 'noposix');
-
-        $before = \is_file($productionDirectory . '/audit.log')
-            ? (int) \filesize($productionDirectory . '/audit.log')
-            : null;
+        $productionLog = \sys_get_temp_dir() . '/sugar-crush-audit-'
+            . (\function_exists('posix_geteuid') ? \posix_geteuid() : 'noposix')
+            . '/audit.log';
 
         $marker = 'r49b-isolation-' . \bin2hex(\random_bytes(8));
         (new AuditHook())->execute(new HookContext(
@@ -74,12 +71,17 @@ final class AuditHookProductionPathIsolationTest extends TestCase
             projectRoot: '/',
         ));
 
-        // POSITIVE: the call really did record something.
+        // POSITIVE: the call really did record something, READ BACK THROUGH
+        // THE SAME READER the negative below uses (rule 25). An absence
+        // asserted with a reader that answers '' for everything is not
+        // evidence, and `readIfPresent()` answering '' is exactly what the
+        // negative expects — so the one thing that proves the reader is alive
+        // is finding this marker with it.
         $pinned = (string) AuditHook::defaultLogDirectoryPin() . '/audit.log';
         self::assertFileExists($pinned, 'the hook wrote nothing anywhere, so the negative below is vacuous');
         self::assertStringContainsString(
             $marker,
-            (string) \file_get_contents($pinned),
+            self::readIfPresent($pinned),
             'the hook wrote, but not this call, so the negative below is still vacuous',
         );
 
@@ -88,19 +90,46 @@ final class AuditHookProductionPathIsolationTest extends TestCase
         // Deliberately NOT `assertDirectoryDoesNotExist()`. Several lanes
         // share this box and one of them may be running a suite at an older
         // commit, or a real `sugarcrush` may have run here — the production
-        // directory existing is somebody else's business. What this test owns
-        // is that THIS process did not add to it, so it compares the size
-        // across its own call and never deletes anything it did not create.
-        $after = \is_file($productionDirectory . '/audit.log')
-            ? (int) \filesize($productionDirectory . '/audit.log')
-            : null;
+        // directory existing is somebody else's business, and this test never
+        // deletes anything it did not create.
+        //
+        // AND DELIBERATELY NOT A SIZE COMPARISON EITHER, WHICH IS WHAT THIS
+        // ARM DID WHEN IT LANDED. It took `filesize()` before its own call and
+        // again after, and asserted the two matched. WHAT IS TRUE NOW: that is
+        // the same cross-lane hazard one level down. Another lane's suite,
+        // running at a commit from before the pin, appends to this exact file
+        // WHILE this test is between its two reads — round 44 lost two lanes
+        // to that shape over `/tmp/sc_runtime_tool_*` — and this lane then
+        // goes red for a write it did not make. WHY THE PROPERTY SURVIVES THE
+        // CHANGE: the question was never "did the file grow", it was "is any
+        // of OUR output in it", and a marker only this process could have
+        // written answers that one exactly. Nothing another writer does can
+        // make it true, and nothing another writer does can make it false.
+        self::assertStringNotContainsString(
+            $marker,
+            self::readIfPresent($productionLog),
+            'this suite wrote to the production audit log at ' . $productionLog,
+        );
+    }
 
-        if ($before === null) {
-            self::assertNull($after, 'this suite created the production audit log');
-
-            return;
+    /**
+     * $path's bytes, or the empty string when nothing is there.
+     *
+     * The absent case is ORDINARY here and not an error: on a box where no
+     * suite and no real `sugarcrush` has ever run, the production log simply
+     * does not exist, and that is the outcome this file wants. The read is
+     * `@`-suppressed for the same reason — a file another user owns is
+     * unreadable to this process, which is again not this test's business.
+     * What keeps that from becoming rule 14's silent skip is the positive
+     * assertion above: the same reader has to find this call's marker in the
+     * pinned log, in this same test, or the empty string below proves nothing.
+     */
+    private static function readIfPresent(string $path): string
+    {
+        if (!\is_file($path)) {
+            return '';
         }
 
-        self::assertSame($before, $after, 'this suite appended to the production audit log');
+        return (string) @\file_get_contents($path);
     }
 }

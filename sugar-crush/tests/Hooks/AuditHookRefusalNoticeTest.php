@@ -204,6 +204,16 @@ final class AuditHookRefusalNoticeTest extends TestCase
      * Three distinct directories produce three distinct messages, which
      * `drain()` cannot merge — so the count that comes back is the number of
      * times THIS class decided to speak, which is the property under test.
+     *
+     * AND THAT IS THE BELT, NOT THE BRACES — stated because naming only one
+     * defence invites a future reader to remove the other as redundant.
+     * `drain()`'s de-duplication is scoped to ONE returned batch: its
+     * `$unique` list is a local, built and thrown away per call. This test
+     * drains once per directory rather than once at the end, so three
+     * separate drains would already defeat the dedup even if all three
+     * messages were identical. Either defence alone is sufficient; both are
+     * here because the version that had NEITHER is the one that passed with
+     * the latch deleted.
      */
     public function testThreeRefusalsAboutDifferentDirectoriesStillProduceOneNotice(): void
     {
