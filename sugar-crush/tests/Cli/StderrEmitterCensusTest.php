@@ -108,8 +108,8 @@ use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
  *     {@see \SugarCraft\Crush\Cli\Bootstrap::STDERR_LINE_FORMAT}, to a
  *     message that does not carry it.
  *  6. Call sites of
- *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — FOURTEEN
- *     of them, in FOUR files. THE SECOND EMITTER-SIDE FUNNEL, and the same
+ *     {@see \SugarCraft\Crush\Diagnostics\RuntimeNoticeSink::warn()} — FIFTEEN
+ *     of them, in FIVE files. THE SECOND EMITTER-SIDE FUNNEL, and the same
  *     alphabet trap as channel 5 one round later: `warn()` writes
  *     `error_log()` from inside the sink, so channel 3 credits the whole family
  *     with the ONE site in `src/Diagnostics/RuntimeNoticeSink.php` and cannot
@@ -367,6 +367,9 @@ final class StderrEmitterCensusTest extends TestCase
         // leaves the path registered and `prunable`, so the NEXT
         // createWorktree() for that agent id is refused.
         'src/Agents/WorktreeManager.php' => 4,
+        // Round 49, lane b (E345): the once-per-process notice for a refused audit
+        // write. One call site behind a latch, so it is one row and stays one.
+        'src/Hooks/BuiltIn/AuditHook.php' => 1,
         // E192, round 48: the two argument-decode refusals. The third site in
         // that file stayed on channel 3 — see its entry there.
         'src/Providers/SglangProvider.php' => 2,
@@ -551,7 +554,7 @@ final class StderrEmitterCensusTest extends TestCase
     private const NUMBER_WORDS = [
         'one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5,
         'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10,
-        'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
+        'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15,
         'twenty-one' => 21, 'twenty-two' => 22, 'twenty-three' => 23,
         'twenty-seven' => 27,
         'thirty-three' => 33, 'thirty-four' => 34, 'thirty-five' => 35,
