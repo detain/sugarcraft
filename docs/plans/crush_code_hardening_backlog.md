@@ -12259,3 +12259,30 @@ timed-out parent and goes on appending to a log `tearDown()` has already deleted
 
 **Step.** Add `'Hooks/'` to `SCOPE`, in alphabetical position between `Diagnostics/` and `Integration/`.
 One word; the only fork in that directory already satisfies it, so it cannot red on landing.
+
+---
+
+### Eb52-8 — observing the suite floor at a pre-pin commit writes the production audit path that E351 closed
+
+**Recorded 2026-08-24 by round-49 lane b (fix pass), having done it.** Severity: process, self-limiting.
+No code change wanted.
+
+Lanes are told to OBSERVE their floor by re-running the suite at the round's base commit rather than
+inheriting the number, which is a good rule and produced an exact reproduction here
+(`9730 / 143168 / 1 / rc 0`). The base commit for round 49 is `b9abd2fb`, and
+`git show b9abd2fb:sugar-crush/tests/bootstrap.php | grep -c pinDefaultLogDirectory` answers **0** — the
+audit-directory pin lands later in this very round. So the act of observing the floor runs a full suite
+with `HookManager::registerBuiltIns()` writing every tool call to
+`sys_get_temp_dir() . '/sugar-crush-audit-<euid>/audit.log'`, which is precisely the leak E351 exists to
+stop. The file was 29165 bytes when E351 was written and 52154 bytes after this lane's baseline run; some
+of that is sibling lanes at older commits and some of it is this observation.
+
+**Nothing is wrong with either rule.** They only conflict while the fix for the leak is younger than the
+commit the floor is measured at, which is a one-round window and is now closed for `sugar-crush`. It is
+written down because the shape recurs: any test-isolation fix whose landing round is also the round its
+baseline is measured in has the same property, and a reader finding a grown production file after a
+"read-only" baseline run should not go looking for a leak that was already fixed.
+
+**Step.** None on the code. When the lanes are merged, remove
+`/tmp/sugar-crush-audit-<euid>/audit.log` on the build box once — no lane can safely do it while siblings
+are still running suites at pre-pin commits, and no lane should glob-delete under `/tmp` in any case.
