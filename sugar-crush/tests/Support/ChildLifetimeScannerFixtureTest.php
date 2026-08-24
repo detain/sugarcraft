@@ -656,6 +656,7 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     public function testEveryRosteredHelperProducesItsRostersVerdict(
         string $helper,
         string $expected,
+        ?string $expectedClosedBy,
     ): void {
         // Rebuilt from the lowercased roster key, so the fixture cannot drift
         // away from the row it is spending: `processreaper::terminateandclose`
@@ -684,16 +685,31 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             \strtolower($sites[0]['reason']),
             'the reason must name the call that was actually found, not a generic proc_close()',
         );
+
+        // THE RECEIPT, EXPECTED FROM THE ROSTER KEY RATHER THAN FROM A LITERAL,
+        // which is the only reason this row is here and not beside the two
+        // hand-written closedBy fixtures below. Those spell one key out; this
+        // spends every row the roster has, in the roster's own polarity - a
+        // CLOSING_HELPERS row must receipt itself, a BEST_EFFORT_REAPERS row
+        // must receipt nothing, because it bought no verdict to receipt.
+        self::assertSame(
+            $expectedClosedBy,
+            $sites[0]['closedBy'],
+            $helper . ' does not receipt itself the way its roster says. A promotion bought by '
+                . 'a row must name the row, or the receipt roster in '
+                . 'DescriptorInheritanceGuardTest has nothing to count and E425 reopens.',
+        );
     }
 
-    /** @return iterable<string, array{0:string,1:string}> */
+    /** @return iterable<string, array{0:string,1:string,2:?string}> */
     public static function rosteredHelpers(): iterable
     {
         foreach (ChildLifetimeScanner::CLOSING_HELPERS as $helper => $_) {
-            yield 'closes: ' . $helper => [$helper, ChildLifetimeScanner::LIFETIME_SHORT];
+            yield 'closes: ' . $helper => [$helper, ChildLifetimeScanner::LIFETIME_SHORT, $helper];
         }
         foreach (ChildLifetimeScanner::BEST_EFFORT_REAPERS as $helper => $_) {
-            yield 'best effort: ' . $helper => [$helper, ChildLifetimeScanner::LIFETIME_UNCLASSIFIED];
+            yield 'best effort: ' . $helper
+                => [$helper, ChildLifetimeScanner::LIFETIME_UNCLASSIFIED, null];
         }
     }
 
@@ -1021,14 +1037,38 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     }
 
     /**
-     * The stamp is not merely present - it tracks the roster.
+     * An unrostered method on a rostered class buys nothing and receipts nothing.
      *
-     * Rule 25: the pair above asserts one exact string and one null, and BOTH
-     * survive a scanner that hard-codes those two answers by class name rather
-     * than reading {@see ChildLifetimeScanner::CLOSING_HELPERS} at all. This
-     * drives the same shape through a method the roster does NOT list, where
-     * the correct answer is not "some other key" but no short verdict at all -
-     * so a stamp that is really a hard-coded constant has nowhere to hide.
+     * WHAT THIS DOC-BLOCK CLAIMED WHEN IT WAS WRITTEN, an hour before the
+     * measurement that refuted it: that this test is the rule-25 control for
+     * the pair above - that it leaves "a stamp that is really a hard-coded
+     * constant nowhere to hide". WHAT IS TRUE NOW, MEASURED: it does not. The
+     * stamping line was mutated to ignore
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} entirely and derive the key
+     * from the closer's SHAPE instead - stamp it if the callee is spelled
+     * `Class::method`, null otherwise - and this whole file stayed green at 51
+     * tests, 130 assertions, rc 0. It survives because that mutant is
+     * EQUIVALENT on today's roster: every CLOSING_HELPERS key contains `::`,
+     * the only other thing that reaches the stamping line is a literal
+     * `proc_close()`, and a BEST_EFFORT row never reaches it at all. It stops
+     * being equivalent the day a bare function - not a `Class::method` - is
+     * rostered as a closer, and on that day the receipt goes wrong silently.
+     *
+     * WHERE THE ROSTER-TRACKING CHECK ACTUALLY LIVES, since it is not here:
+     * {@see testEveryRosteredHelperProducesItsRostersVerdict()}, whose expected
+     * receipt IS the roster key rather than a literal, spent once per row. Its
+     * strength is bounded by the roster's cardinality, which is one row today -
+     * so it too cannot currently separate "reads the roster" from "reproduces
+     * the roster's one answer". That is a property of a one-row roster, not a
+     * defect in either test, and it is written down here so the next reader
+     * does not have to re-derive it from a green run.
+     *
+     * WHY THIS TEST STILL EARNS ITS PLACE. It pins the dangerous polarity of
+     * the pair rather than the roster wiring: the class half of a
+     * `Class::method` key is load-bearing, and a scanner that let any class
+     * with the right method name close a handle would read a real leak as
+     * short-lived. It asserts that no verdict is bought AND that nothing is
+     * receipted, which is the shape a reader checking the receipt roster needs.
      */
     public function testAnUnrosteredCloserBuysNoVerdictAndLeavesNoReceipt(): void
     {
