@@ -8809,3 +8809,46 @@ which is why `TMPDIR` has to be exported rather than merely resolved — with no
 round brief; this is the third round to produce an instance.
 
 ---
+
+### Ee49-9 — `uniqid` was not the whole of E242: a FIXED shared temp path fails 2-3 runs in 6
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: test-infrastructure, reproduced.
+**Out of lane — `tests/Hooks/AuditHookTest.php` and `src/Hooks/BuiltIn/AuditHook.php` belong to neither
+lane e nor any lane's list this round.** Reported, not fixed.
+
+**The brief asked whether `uniqid()` was the whole mechanism or only the part that was easy to see. It was
+the part that was easy to see.** The pre-round sweep's ALPHABET was the token `uniqid`, and an alphabet
+cannot express what it has no symbol for (rule 11): a temp path with **no entropy source at all**.
+
+**The generator.** Every line under `tests/` matching `sys_get_temp_dir()` concatenated with a literal
+`/`, minus every line that also mentions `uniqid`, `random_bytes`, `random_int`, `mt_rand`, `getmypid`,
+`tempnam`, `bin2hex`, `microtime` or `getenv`. 18 hits at 3cce483c. Its own known hole, stated because a
+guard that silently drops what it cannot parse has a hole shaped like the next defect (rule 14): it is
+LINE-based, so a concatenation whose entropy sits on the following line reads as entropy-free — four of
+the 18 are that, and were cleared by hand. Of the rest, all but one are inert data (`ToolCall` arguments,
+`Skill::$sourcePath`, doc-block prose) that never reaches `open()`.
+
+**The one that does.** `AuditHookTest::testExecuteCreatesDefaultLogFileWhenNoneProvided()` exercises
+`AuditHook`'s DEFAULT log path, which `src/Hooks/BuiltIn/AuditHook.php` builds as
+`sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name, on the machine's REAL temp directory
+(the `TMPDIR` sandbox does not move `sys_get_temp_dir()` in-process; that is the finding this entry sits
+next to). The test asserts the file exists and then **unlinks it**. Two concurrent copies therefore race:
+one deletes the file between the other's write and its `assertFileExists`.
+
+**MEASURED, PHP 8.3.6, three takes of six concurrent single-test runs**, each take pointed at its own
+private launch-environment `TMPDIR` so the probe could not disturb a sibling lane: **3 of 6, 2 of 6, 2 of
+6 failed**, every failure `Failed asserting that file ".../sugar-crush-audit.log" exists`. That is the
+same signature class E242 reported once and could not reproduce, and unlike the `TMPDIR`-key hypothesis it
+reproduces on demand.
+
+**It is also cross-process vandalism, not only self-interference.** The name is `AuditHook`'s production
+default, so the suite deletes the audit log of any real `sugarcrush` running on the same box — and of any
+sibling lane's suite.
+
+**Step.** Give the test its own `AuditHook` path derived from pid + entropy and assert the default is
+CONSTRUCTED as expected rather than written (or keep the write and use a private launch-environment
+`TMPDIR` for that one child). Then widen `ProcessUniqueTempNameTest`'s alphabet: a shared-name hazard is
+not a `uniqid` hazard, and the guard as written cannot see this one. See also Ee49-4, which found the
+scope hole; this is the alphabet hole beside it.
+
+---
