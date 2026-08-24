@@ -306,6 +306,10 @@ final class BackgroundSupervisorReapTest extends TestCase
         $source = file_get_contents($file);
         $this->assertIsString($source);
 
+        // The scanner must be shown to still work IN THIS TEST, not in a
+        // sibling a --filter can leave behind. See the helper's doc-block.
+        $this->assertTheCommandShapeScannerIsLive();
+
         $this->assertSame(
             'array',
             self::procOpenCommandShape($source, 'spawnSession'),
@@ -331,6 +335,26 @@ final class BackgroundSupervisorReapTest extends TestCase
      * own evidence the way the 2026-08-23 sweep ate one (rule 26).
      */
     public function testTheCommandShapeScannerAnswersCorrectlyOnKnownInputs(): void
+    {
+        $this->assertTheCommandShapeScannerIsLive();
+    }
+
+    /**
+     * The body of the fixture above, as a helper the production assertion also
+     * calls.
+     *
+     * ⚠️ WHY THIS IS A HELPER AND NOT JUST A SIBLING TEST. Rule 15 asks for the
+     * known-positive control to run IN THE SAME TEST as the assertion it
+     * vouches for, and as a sibling it was not: MEASURED, with
+     * `procOpenCommandShape()` stubbed to return `'array'` unconditionally,
+     * `--filter testTheSessionSpawnPassesAnArgvNotAShellString` passed (rc 0,
+     * 3 assertions) while `--filter BackgroundSupervisorReapTest` went red —
+     * the kill came only from the fixture test. A `--filter`, a selective
+     * re-run, or a merge that drops one method could therefore leave the
+     * production pin asserting against a dead scanner. Calling this from both
+     * makes the two inseparable.
+     */
+    private function assertTheCommandShapeScannerIsLive(): void
     {
         $open = 'proc' . '_open';
 
