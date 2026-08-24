@@ -10270,25 +10270,39 @@ attached, and this round's mandate was to remove the copies rather than to sched
 
 ---
 
-## Ea49-2 — the roster's SPELLINGS are pinned only incidentally, by six unrelated test files
+## Ea49-2 — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
 
-`DenialPrefixRosterTest` derives every expectation from `DenialKind`, so it is self-consistent by
-construction and cannot see a respelling. MEASURED on PHP 8.3.6 at round 49 with the mutation harness:
-substituting `case Hook = 'Blocked:';` SURVIVED `--filter DenialPrefixRoster` entirely (10 tests, 67
-assertions, all green) and was KILLED only at a wider filter, by 13 failures across
-`ChatTest`, `DeniedToolCallTest`, `ParallelToolCallsTest`, `BackgroundSessionRunnerTest`,
-`NonInteractiveRefusalDocumentTest`, `ScriptHookTest` and `RuntimeTest` — every one of them a file that
-happens to spell `Hook denied:` as a literal in a fixture.
+**Status: closed by the round-49 fix pass** (`DenialPrefixRosterTest::testTheRostersBackingValuesAreTheThreePublishedPrefixes()`).
+Kept rather than deleted because the mechanism is the useful part and the original entry got two things
+wrong.
 
-That is a real pin but it is an accident of fixtures, and it points at the wrong file when it reds: a
-developer respelling a case gets seven unrelated red files and no statement of what the contract is.
-The three prefixes are model-facing text and `Chat::DENIED_ERROR_PREFIXES` is public, so a respelling is
-a behaviour change and not a rename.
+`DenialPrefixRosterTest` derived every expectation from `DenialKind`, so it was self-consistent by
+construction and could not see a respelling. MEASURED on PHP 8.3.6 at round 49 with the mutation
+harness: substituting `case Hook = 'Blocked:';` SURVIVED `--filter DenialPrefixRoster` entirely, and was
+KILLED only at a wider filter by failures across `ChatTest`, `DeniedToolCallTest`,
+`ParallelToolCallsTest`, `BackgroundSessionRunnerTest`, `NonInteractiveRefusalDocumentTest`,
+`ScriptHookTest` and `RuntimeTest` — SEVEN files, each of which happens to spell `Hook denied:` as a
+literal in a fixture. That is a real pin but an accident of fixtures, and it points at the wrong file
+when it reds.
 
-**Step.** One assertion in `DenialPrefixRosterTest` pinning the three backing values as literals, with a
-message saying they are published text. The `kind` TOKENS already got this treatment in round 49 for
-exactly this reason (the derived assertion `DenialKind::Hook->token()` let `return $this->name;` survive
-both files); the backing VALUES did not, because the token change was the one shipping a new contract.
+**WHAT THIS ENTRY GOT WRONG, both corrected here rather than overwritten.** (1) Its heading said SIX
+files and its body enumerated seven; seven is right. (2) It reported the survival as "10 tests, 67
+assertions" — a figure taken at an intermediate commit and shipped without one, which is the defect
+E256 exists for. Re-measured at `463c7469`, the survival was 12 tests / 79 assertions.
+
+**AND ITS FRAMING WAS WRONG IN A WAY THAT MATTERED.** This entry called the incidental pin a standing
+condition. It is not: it is coverage E246 removed in the same round. Before E246, `Runtime`'s three
+`DENIAL_*` constants were string LITERALS, so
+`testEveryDenialPrefixRuntimeProducesIsOnChatsRoster()` compared a literal against a derived roster and
+KILLED a respelling. MEASURED on PHP 8.3.6, both halves: with `Runtime`'s constants restored to their
+pre-E246 form the respelling fails that test at its `assertContains`; at HEAD, with both sides deriving
+from the enum, it leaves the whole file green. Re-pointing the constants was still the right fix for
+drift — it just also had a cost, and the cost belonged in the commit that incurred it.
+
+**What landed.** One `assertSame(['Permission denied:', 'Permission required:', 'Hook denied:'],
+DenialKind::prefixes())` with a message saying these are published text, plus the disclosure in the
+class doc-block. The `kind` TOKENS got the same treatment earlier in round 49 for exactly the same
+reason.
 
 ---
 

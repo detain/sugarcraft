@@ -574,6 +574,18 @@ final class DenialPrefixRosterTest extends TestCase
             . 'src/Runtime.php on two lines that are entirely correct',
         );
 
+        // AND THE SAME NEGATIVE FOLLOWED BY A REAL ONE, which is the leftmost-
+        // frame hole. Judged one frame at a time, this literal is reported;
+        // judged only on its FIRST frame it was not, because `Tool not found:`
+        // is innocent and came first.
+        $twoFrames = 'Tool ' . 'not found: bash. Hook ' . 'denied: nope';
+        self::assertSame(
+            [$twoFrames],
+            self::denialLiteralsIn('<?php $t = ' . var_export($twoFrames, true) . ';'),
+            'the scanner judges only the first colon-run in a literal, so a denial prefix behind an '
+            . 'innocent one is invisible to the whole-src map',
+        );
+
         $declared = array_values(self::runtimeDenialPrefixes());
         $found = self::denialLiteralsIn($source);
 
@@ -1269,8 +1281,7 @@ final class DenialPrefixRosterTest extends TestCase
             } else {
                 continue;
             }
-            if (preg_match(self::DENIAL_SHAPE, $value, $m) === 1
-                && preg_match(self::DENIAL_TERMS, $m[0]) === 1) {
+            if (self::hasADenialFrame($value)) {
                 $out[] = $value;
 
                 continue;
@@ -1282,6 +1293,43 @@ final class DenialPrefixRosterTest extends TestCase
         }
 
         return $out;
+    }
+
+    /**
+     * Whether any frame in $value carries a denial term.
+     *
+     * EVERY FRAME AND NOT THE LEFTMOST ONE, which was a hole found while
+     * widening the vocabulary at round 49. WHAT THE SCAN DID: one
+     * `preg_match`, then the vocabulary test against `$m[0]` — the FIRST frame
+     * in the literal. WHY THAT WAS WRONG: a literal may carry several, and
+     * only the first was ever judged. MEASURED on PHP 8.3.6:
+     * `'Tool not found: x. Hook denied: y'` was NOT reported, because the
+     * leftmost frame is `Tool not found:` and that one is deliberately
+     * innocent — so a producer whose decoration happens to contain an earlier
+     * colon-run was invisible to the whole-`src/` map, which is the same class
+     * of blindness the `^` anchor had. WHAT IT COST TO FIX: nothing
+     * measurable. Re-scanned over `src/` with every frame judged, the map
+     * names the same two files and the same four literals.
+     *
+     * LOUD ON A REGEX FAILURE (rule 14): `preg_match_all` answers `false` on a
+     * backtrack limit, and `false` reads as "no frames" — a silent clean bill
+     * of health for a literal this guard could not parse.
+     */
+    private static function hasADenialFrame(string $value): bool
+    {
+        $frames = preg_match_all(self::DENIAL_SHAPE, $value, $matches);
+        if ($frames === false) {
+            throw new \RuntimeException('the denial-shape scan failed on a literal, so this guard cannot '
+                . 'answer for the file it is in');
+        }
+
+        foreach ($matches[0] as $frame) {
+            if (preg_match(self::DENIAL_TERMS, $frame) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
