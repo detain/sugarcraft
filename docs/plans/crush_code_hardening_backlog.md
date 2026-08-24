@@ -11079,3 +11079,146 @@ arrives already two spellings apart, which is how the previous four-copy familie
 cannot read as a clean one, and three copies of that arm is three places for it to be quietly reverted.
 
 ---
+
+### Ec49-1 — a per-file assertion in two censuses makes the suite's assertion total a function of the file COUNT
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: measurement hygiene, and it voided this lane's own
+first baseline. **MEASURED, PHP 8.3.6, three takes, deterministic.**
+
+Adding ONE empty `.php` file under `sugar-crush/tests/` raises the suite's assertion total by exactly
+**four** — three from `Support/ProcessUniqueTempNameTest` and one from
+`Support/ReflectionLineSliceReaderCensusTest`, both of which assert once per file in scope. Generator:
+control run of `vendor/bin/phpunit tests/Support tests/Cli tests/Config` = 1241 tests / **36771**
+assertions; the same run with one empty class added under `tests/Support/` = 1241 / **36775**. Three
+takes each, identical to the assertion.
+
+**Why it matters.** This lane's baseline read `142169` against a brief stating `142165`, and the
+difference was not the tree — it was that the lane created two trait files WHILE the baseline run was in
+flight, so some censuses saw them and others did not. The brief's floor was right. Any lane that writes a
+file in `tests/` during a suite run gets a figure that belongs to no tree.
+
+**Step.** Two things, neither urgent. (a) A floor figure is only meaningful with the file count it was
+taken at; the supervisor's floor should be quoted as `9661 / 142165 @ a85fcfd6` and re-derived, never
+adjusted. (b) Never start a baseline before the lane's first edit — or take it, then do not touch
+`tests/` until it finishes.
+
+---
+
+### Ec49-2 — three of `ReflectionLineSliceReaderCensusTest`'s offender arms were unpinned, and the sweep E322 asked for found them
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: guard coverage. **Measured, PHP 8.3.6. FIXED this
+round.**
+
+E322's step is "apply the same check to every other census/roster guard in `sugar-crush/tests/`: for each
+branch that appends to an offender list, mutate it to `false &&` and confirm something goes red." Run
+over this lane's files. `DuplicatedTestHelperDriftTest`'s two rule-14 branches are killed.
+`ProcessUniqueTempNameTest`'s two census arms and all three of
+`ReflectionLineSliceReaderCensusTest`'s arms **survived** — each run filtered to its own file, so each
+verdict is a claim about the guards in that file rather than about the suite.
+
+Both files are fixed with a pure classifier plus a table in both polarities, and the fix is verified by
+the rule-16 pair rather than by a green: with the table disabled the same mutation is green
+(`OK, 11 tests, 2231 assertions` / `OK, 2 tests, 439 assertions`), and with it present all five are
+killed.
+
+**The transferable half, one level past E322.** The branch a clean population cannot pin is the
+offender-PRODUCING one, not the roster-SPARING one — this lane wrote the opposite into a doc-block and
+the mutation refuted it within the hour. A roster branch IS pinned by the tree whenever the roster has
+rows, because disabling it turns every rostered file into an offender. So the question to ask of a census
+arm is not "is this branch fixtured" but "does this branch produce anything on the real population" — and
+if the answer is no, nothing but a table can pin it.
+
+**Step.** The same sweep over the guards no lane held this round: `tests/Cli/`, `tests/Config/`,
+`tests/Diagnostics/`, and `TtyStreamArgumentCensusTest`'s two arms that lane b did NOT extract.
+
+---
+
+### Ec49-3 — consolidating a helper exposes which consumers were never testing half of it
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: the round's transferable lesson. **Measured, PHP
+8.3.6. FIXED this round.**
+
+`significantTokens()` had five declarations plus a sixth spelling written inline inside
+`BootstrapTranscriptSeamCallSiteCensusTest::countSeamCallSites()` (E331 counted the five; a search for a
+declaration cannot find the sixth). Extracted into `DropsInsignificantTokensTrait`.
+
+**What the extraction made visible, which five copies had hidden.** Mutating the SHARED strip to stop
+dropping `T_COMMENT`/`T_DOC_COMMENT` reddened only THREE of the five consumers.
+`ContainedPathInventoryTest` and `ProcessUniqueTempNameTest` had controls for the whitespace half and
+NONE for the comment half — invisible while each owned its own copy, because no test compares two
+consumers' coverage of one helper. Both now carry a fixture verified in both directions, and the comment
+has to sit where the walk reads a NEIGHBOUR, since adjacency is what the strip buys.
+
+**Generalise it.** A shared helper is the only place from which "which consumers actually test this" is a
+single mutation. Every future consolidation should end with one mutation of the shared body per drop, and
+a list of which consumers reddened — the ones that did not are the finding.
+
+**The fifth copy is deliberately not a consumer, and the reason is a measurement.**
+`Config/ReadmeJsonErrorContractDriftTest::significantTokens()` returns `list<PhpToken>` from
+`PhpToken::tokenize()`, and its callers read `$t->text` and `$t->is([...])`. Folding it in is a rewrite of
+that file's every walk, not a consolidation. **Step:** either port that file to the trait's return type
+in a round that owns `tests/Config/`, or record the two shapes as deliberate and pin the divergence.
+
+---
+
+### Ec49-4 — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: latent, and a narrower version of E332.
+
+E332 named three census files; there are six. The three this lane consolidated into
+`RefusesAnUnreadableSourceTrait` each had a fixture reaching the refusal. The three left —
+`Config/DocumentParagraphsTest`, `Config/ConfigWriteProducerDocumentationDriftTest` and
+`Config/GlobFigureDriftTest` — have **no fixture at all**, so reverting any of them to
+`(string) file_get_contents()` is a mutation nothing in the tree can kill.
+
+They were left deliberately: two carry a `could not be read` message and one carries `the census over it
+is void`, which is the one-token pair `DuplicatedTestHelperDriftTest::ACCEPTED_DIVERGENCE` has its
+`readOrFail` row for. Folding all three in would strand that row inside a consolidation, which is a data
+edit hiding in a refactor.
+
+**Step.** In a round that owns `tests/Config/`: fold the three into the trait, and delete the
+`readOrFail` row from `ACCEPTED_DIVERGENCE` in the same commit, with the reason in the commit message.
+
+---
+
+### Ec49-5 — E319's own figures are wrong in two places, derived rather than quoted
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: entry accuracy. **Measured, PHP 8.3.6, by
+`tests/Support/NonBlockingVocabularyTest`, which derives it on every run.**
+
+E319 lists `tests/Support/ForkedChildTest.php (×2)`. The tree has **four** — two copies of the pair.
+E319 lists `tests/SuiteChildStdinIsolationTest.php (×2)` as inverted. Of its two sites, one is
+**CONSISTENT** (`assertTrue($meta['blocked'])` beside a sentence naming the clearing verb, which is the
+correct pairing), and the other names BOTH directions in one sentence — the wording IS in the inverted
+vocabulary, but a direction-word scanner that picked one of the two would be reporting a coin flip, so it
+is rostered as `unreadable` rather than as inverted.
+
+Measured total over `tests/` and `src/`: **eight** contradictory sentences in three files, one
+unrankable, one consistent. All rostered in both directions.
+
+**Step.** The supervisor sweep E319 asks for still wants doing — this lane owns none of the four files.
+When it happens, the roster rows red and must be DELETED, which is the success case and is said so in the
+failure text.
+
+---
+
+### Ec49-6 — the static-path scanner's four stated holes are closed, and the residual is now five different shapes
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: coverage, closed. **Measured, PHP 8.3.6. FIXED this
+round** (E330).
+
+Heredoc/nowdoc bodies, class constants resolved within the declaring file, a scheme stripped before the
+anchored root match, and `proc_open` plus the two `stream_socket_*` builders. Over `tests`, `src` and
+`bin/sugarcrush`: **zero** new offenders, so the widening bought coverage rather than a roster.
+
+The bound test now carries a positive row per closed hole and six negatives, because deleting a
+"cannot see" row is only half of closing one — without a row that reds when the widening is reverted, the
+capability is exactly as unpinned as the absence was.
+
+**What is still outside**, each pinned by a row: a path assembled by a call such as `sprintf()`; a
+constant declared in ANOTHER file; a `define()`d global constant; a write reached through a method rather
+than a global call; an interpolating double-quoted string. **Step.** The cheapest two are the global
+constant (one more pre-pass, same shape as the class-constant one) and the cross-file class constant
+(needs a two-pass scan over the population, which the census already builds).
+
+---
