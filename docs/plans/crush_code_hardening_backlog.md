@@ -10254,6 +10254,47 @@ believed on the strength of its output rather than on the strength of a known-an
 
 ---
 
+### E333 — two tests that spawn the real binary abort at 60s in ONE full-suite run and not the next
+
+**Recorded 2026-08-24 by the supervisor at the round-50 merge.** Severity: test-infrastructure,
+**NOT reproduced on demand.** Cause UNKNOWN — this entry deliberately records evidence rather than a
+mechanism, because the obvious mechanism was checked and did not hold.
+
+**What happened.** The first merged-floor run at `0b36f911` came back
+`9661 / 142162 / 1 skipped / Risky: 2 / rc 1`, both risky rows being
+`Cli\BootstrapSkillSkipsTest::testAOneShotRunReportsSkippedSkillsToo` and
+`::testACleanOneShotRunIsSilent`, each *"aborted after 60 seconds"* and *"did not perform any
+assertions"*. Both spawn a real `bin/sugarcrush` one-shot that inherits descriptor 0. Wall clock 06:50,
+against a 04:45 baseline — **the extra time is the two 60s aborts almost exactly, so nothing else in the
+suite was slow.**
+
+**The immediate re-run at the same commit was clean:** `9661 / 142165 / 1 / rc 0` in 04:50. The
+3-assertion difference IS the two aborted tests' assertions, so the two runs are consistent and
+`142165` is the true figure.
+
+**What was ruled out, by measurement.**
+- The file itself: passes ALONE in 0.412s, 5 tests, 8 assertions.
+- `Backend/EngineBackendTest` immediately before it — the injected-Termios seam of E301 that writes
+  O_NONBLOCK onto the RUNNER's descriptor 0: 39 tests, 103 assertions, clean.
+- Lane b's new `SuiteChildStdinPrependResidualTest` immediately before it — the test that deliberately
+  exercises the prepend residual on descriptor 0: 6 tests, 22 assertions, clean.
+- **Contention from the supervisor's own probes**: those probes ran DURING the clean re-run, not during
+  the red one.
+
+**What is NOT ruled out.** An external process on the same box (the user runs an unrelated agent
+periodically), or an ordering interaction with a predecessor not yet identified. ⚠️ **Round 49's lane b
+saw this exact signature — same file, same two tests, same 60s abort — and attributed it to contention
+from four sibling phpunit processes. That attribution is now doubtful**: this occurrence had no sibling
+suite running, so either there are two causes or that one was wrong too.
+
+**Step.** Do NOT chase a mechanism from one observation. Next time the merged floor reds this way, before
+re-running: capture `uptime`, `ps` and the child's state (`cat /proc/<pid>/stack`, `ls -l /proc/<pid>/fd/0`)
+while it is hung — a 60s window is long enough. A hung spawn's fd 0 tells you in one look whether this is
+the E212/E296 family or something else. Until then this is an unexplained flake with a bounded cost of one
+re-run, and it must NOT be cited as evidence for any fd-0 hypothesis.
+
+---
+
 ### E304 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
 
 `Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` / `DENIAL_UNANSWERED` and
