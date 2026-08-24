@@ -638,13 +638,28 @@ final class ProcessUniqueTempNameTest extends TestCase
      * it and the inventory that may spare it.
      *
      * EXTRACTED BECAUSE A SCANNER'S FIXTURES DO NOT PIN THE ARM THAT READS IT
-     * (E322), and that is not a general worry here — it is a measurement. Both
-     * channels below assert an ABSENCE over a tree that is clean, so the branch
-     * deciding whether a scanner hit becomes an offender never fires on real
-     * input: mutating `isset($inventory[$relative])` to spare EVERY file left
-     * both censuses green, because with no offenders to suppress there is
-     * nothing for the suppression to change. The scanners either side of it
-     * have thorough known-answer tables; the six lines between them had none.
+     * (E322), and WHICH of its two branches was unpinned is a measurement
+     * rather than a guess — the first version of this paragraph named the wrong
+     * one and was corrected by the mutation it claimed to describe.
+     *
+     * THE OFFENDER-PRODUCING BRANCH IS THE UNPINNED ONE. Both channels below
+     * assert an ABSENCE, and the tree has no offenders, so an arm that reported
+     * NOTHING AT ALL is indistinguishable from a correct one on real input.
+     * MEASURED, PHP 8.3.6, with {@see armCases()} disabled and the loop
+     * replaced by `return []`: **OK, 11 tests, 2231 assertions** — green. With
+     * the table present the same mutation reds. That pair, and not the green
+     * before it, is what says the table is the fix (rule 16).
+     *
+     * THE ROSTER-SPARING BRANCH IS PINNED BY THE TREE ITSELF, which is why it
+     * is worth writing down that it is not this repair's subject: both
+     * inventories above carry rows, so disabling the `isset()` turns those
+     * rostered files into offenders and both censuses red even with the table
+     * gone (MEASURED, same session: 2 failures). A branch whose suppression has
+     * something real to suppress is guarded by the population; a branch whose
+     * output is empty on the whole population is not guarded by anything.
+     *
+     * The scanners either side of these six lines have thorough known-answer
+     * tables. The six lines between them had none.
      *
      * ONE FUNCTION FOR BOTH CHANNELS, and that is the second half of the
      * repair. The two arms were separate copies of the same six lines, so a
@@ -1652,6 +1667,28 @@ final class ProcessUniqueTempNameTest extends TestCase
         self::assertSame([2], self::staticTempPathWrites(
             "<?php\nfile_put_contents('/tmp/fixed.log', 'x');\n",
         ), 'the scanner is dead, so the "cannot see" rows above prove nothing at all');
+
+        // THE COMMENT HALF OF THE SHARED STRIP, PINNED (rule 15). This walk
+        // reads `$tokens[$at + 1]` for the `(` that opens a mutating call and
+        // for the `=` of a binding, and a comment is legal in exactly those
+        // positions. MEASURED, PHP 8.3.6, by mutating
+        // {@see DropsInsignificantTokensTrait}: with T_COMMENT/T_DOC_COMMENT
+        // out of the strip, every other assertion in this class stayed GREEN
+        // and these two answer `[]` — a missed hazard, which is the direction
+        // that reads as a clean tree. The doc-comment row is the other
+        // polarity: the strip must not make the scanner read its own prose.
+        self::assertSame([2], self::staticTempPathWrites(
+            "<?php\nfile_put_contents/* c */('/tmp/fixed.log', 'x');\n",
+        ), 'a comment between a mutating call and its argument list hid the call from the scan');
+
+        self::assertSame([3], self::staticTempPathWrites(
+            "<?php\n\$d = /* c */ sys_get_temp_dir();\nfile_put_contents(\$d . '/fixed.log', 'x');\n",
+        ), 'a comment between a binding\'s `=` and its value hid the binding from the scan');
+
+        self::assertSame([3], self::staticTempPathWrites(
+            "<?php\n/** file_put_contents('/tmp/in-prose.log', 'x'); */\n"
+            . "file_put_contents('/tmp/fixed.log', 'x');\n",
+        ), 'a write quoted in a doc-block was counted, so the scanner reads its own explanation');
 
         // THE FOUR SHAPES THIS BOUND USED TO NAME, NOW ASSERTED FROM THE OTHER
         // SIDE (E330). Deleting a "cannot see" row is only half of closing a
