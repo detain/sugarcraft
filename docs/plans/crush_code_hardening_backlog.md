@@ -10253,3 +10253,121 @@ it was spelled.
 believed on the strength of its output rather than on the strength of a known-answer control.**
 
 ---
+
+### Ec49-1 — E266/E293's COUNT is right and its HAZARD is not: `src/`'s five argument-less calls cannot collide on a path
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: none today, one edit away from real. **Measured,
+PHP 8.3.6.** Guard shipped; the `src/` fix deliberately not done (tests-only lane).
+
+**What E266/E293 said.** The process-unique-temp-name guard's scope was `tests/` only and `src/` has five
+argument-less `uniqid` sites. Both true — all five in `src/Workflows/WorkflowEngine.php`.
+
+**What is not true is that they are the hazard the guard exists for.** Each builds a `SubAgent` id as
+`<stage>-` . the call, and the id DOES reach disk: `AgentWorkerPool::resultFile()`/`progressFile()` are
+`$this->resultDir . '/' . hash('sha256', $agentId)`. But `$resultDir` is `makeResultDirPath()`, which is
+`sys_get_temp_dir() . '/sc_pool_' . getmypid() . '_' . bin2hex(random_bytes(8))`. The DIRECTORY already
+carries a pid and 64 bits of entropy, so two processes cannot meet on that path whatever the id is. What
+is left is intra-process uniqueness, which the argument-less call does guarantee — measured, 200 calls in
+one process yield 200 distinct values, PHP sleeps to advance the microtime.
+
+**Why it is still worth a round.** The guarantee is a property of the ENCLOSING DIRECTORY, not of these
+call sites. One edit to `makeResultDirPath()` — a shared pool dir, a `TMPDIR`-relative cache — makes all
+five live at once, and nothing would say so.
+
+**Step.** Give the five a pid prefix and the more-entropy flag. The guard already covers `src/` and carries
+the sites in `ProcessUniqueTempNameTest::ARGUMENTLESS_INVENTORY` with an EXACT count, so a sixth arrives red
+and the row must be deleted when they are fixed.
+
+---
+
+### Ec49-2 — E286's fix landed in one reader; ELEVEN take the shape, and its OBSERVED half is guarded in one
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: correctness of an instrument. **Measured**, PHP 8.3.6.
+Half fixed with a census; half deferred with the reason.
+
+**What.** `VhsTapeContractTest::modelMethodTokens()` sliced a line array with `ReflectionMethod`'s line
+numbers unchecked. It was fixed in round 49 (E286) in TWO directions: `assertSame(__FILE__, getFileName())`
+for the wrong-file case, and a `declaredSlice()` that refuses unless the slice's first line spells
+`function <name>` for the same-file-shifted case.
+
+**The shape recurs and nothing in the tree said so.** Derived by
+`tests/Support/ReflectionLineSliceReaderCensusTest`: every function under `tests/` that indexes a line array
+with reflection's line numbers. **Direction one — naming the declaring file — is satisfied by all but one**
+(`Cli/HelpTest.php::backendSelectionVariables`), which is rostered.
+
+**Direction two is satisfied by ONE reader out of eleven, and it is the half that was actually OBSERVED
+failing.** Reflection's line numbers are fixed at class load and `file()` is read per call, so an edit to
+the file in between shifts every slice while the name still matches; in the run where that happened a
+census reported one method's figures under another's name, under a message blaming stale prose — which
+invites the reader to edit the figures. Only `VhsTapeContractTest` refuses it.
+
+**Why the second half is not guarded here.** Ten readers in nine files, and the roster key is
+`<file>::<method>` — with five lanes merging concurrently that reds on every rename, for a defect that
+needs a mid-run edit to fire. It wants one round that adds a shared `declaredSlice()` to the readers
+themselves rather than a census over them.
+
+**Step.** (a) One `assertSame()` in `Cli/HelpTest.php::backendSelectionVariables` — it reflects `Bootstrap`
+and slices a `$lines` read by path, correct by construction until one of those methods arrives through a
+trait. (b) Lift `declaredSlice()` into a shared helper and route the ten readers through it.
+
+---
+
+### Ec49-3 — two of round 49's own review findings were ALREADY FIXED at the round's base commit
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: process. **Verified in the tree at `906fa666`.**
+
+Lane c's brief asked for E287 (the drift guard's visibility alphabet "was defended by a feeling") and E286
+(a reader slicing `file(__FILE__)` with reflection's line numbers "unchecked in both directions") as work
+items. Both were already done at the lane's base commit — `DuplicatedTestHelperDriftTest` carries
+`testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()` with the hook roster read off `TestCase`
+by reflection, and `VhsTapeContractTest::modelMethodTokens()` carries both the `getFileName()` assertion and
+`declaredSlice()`. Both were re-verified by mutation rather than by reading: neutralising the alphabet
+parameter is KILLED, and the readers census below found the fix present.
+
+**The generalisable part.** A brief assembled from backlog entries inherits their state at the moment they
+were WRITTEN, not at the moment the round starts. Entries marked FIXED in the same file the brief was drawn
+from were still restated as work. Cheap mitigation: a lane's first act on any item should be to check the
+entry's own status line and the tree, and a fixed item is a mutation to run rather than a fix to write.
+
+---
+
+### Ec49-4 — E289's `match`-arm gate guards a shape the tree does not have, and the first prose describing it was inverted
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: none (a widening). **Measured**, PHP 8.3.6. **Fixed.**
+
+`InterpolationOpenerTokenTest::comparesAgainstBrace()` now takes `case '{':` and a `match` arm beside the
+comparison operators. Two things are worth keeping.
+
+**The arrow arm looks FORWARD only**, because a `match` arm's subject is the KEY. Measured over every `.php`
+under `tests/` and `src/`: three brace literals neighbour a `T_DOUBLE_ARROW` and **all three are VALUES**
+(`['T_CURLY_OPEN' => '{']`), **none is a key**. So the arm selects nothing today and the `match` gate is
+guarding a shape that has not arrived — an array literal `['{' => 1, '}' => -1]` would be
+indistinguishable from a `match` walker on the arrow alone.
+
+**The first version of that paragraph said the opposite** — that every arrow-adjacent brace in the tree is
+a KEY an ungated arm would select — and the fixture written from it put its braces in value position, so
+un-gating the arm **SURVIVED**. Rule 2 caught it: the mutation was relevant and the assertion's window was
+wrong. Both are corrected and the mutation is now killed.
+
+---
+
+### Ec49-5 — `AuditHook`'s default log path is a fixed shared name in PRODUCTION, not only in its test
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: low, cross-process. **Measured.** Not fixed.
+
+E298 fixed the TEST that drove `AuditHook`'s production default, wrote the file and unlinked it. The
+default itself is unchanged and is `sys_get_temp_dir() . '/sugar-crush-audit.log'` — one fixed name, world-
+writable temp dir, no pid and no entropy. Two `sugarcrush` processes on one box append to one file
+(interleaved, and a partial write from either can split a record), and any local user can pre-create it as
+a symlink to somewhere else before the first run.
+
+**Why it is recorded rather than fixed.** An audit log that moves every run is not an audit log, and a
+caller who wants a private one passes it in — so the fixed name is the intended behaviour and changing it
+is a product decision, not a bug fix. The site is carried in
+`ProcessUniqueTempNameTest::STATIC_TEMP_PATH_INVENTORY`, where it also serves as that scanner's only
+real-tree liveness control.
+
+**Step.** Decide: keep the fixed default and open it with `O_APPEND` plus an `is_link()` refusal, or move
+the default under a per-user directory the process owns.
+
+---
