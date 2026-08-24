@@ -252,7 +252,14 @@ final class PosixBackend implements Backend
      *           three takes: `open('/dev/ptmx', O_RDONLY)` returns descriptor
      *           3 with `posix_isatty(3) === true`, while `/dev/tty` returns
      *           -1. So the positive half of this helper's contract is
-     *           assertable everywhere, not only under a terminal.
+     *           assertable without a controlling terminal.
+     *
+     *           NOT "assertable everywhere", which an earlier revision of this
+     *           sentence said: it needs libc, and `ffi.enable=0` -- a stock
+     *           setting on several distributions, and one that leaves
+     *           `extension_loaded('ffi')` answering true -- takes it away. The
+     *           guard probes for the capability; see
+     *           PosixBackendTerminalDescriptorTest::requireLibcDescriptors().
      *
      * @return int|null a descriptor the caller MUST hand to
      *                  {@see closeDeviceDescriptor()}, or null when the

@@ -6,6 +6,7 @@ namespace SugarCraft\Core\Tests\Util\Tty;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Tty\PosixBackend;
+use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\SizeIoctl;
 
 /**
@@ -58,8 +59,16 @@ use SugarCraft\Pty\SizeIoctl;
  * `open("/dev/tty", O_RDONLY)` returns -1, while `open("/dev/ptmx", O_RDONLY)`
  * returns descriptor 3 with `posix_isatty(3) === true`. So the POSITIVE half
  * of the contract — "the number that comes back is a descriptor that names a
- * terminal" — is assertable everywhere, and it is the half that dies when the
- * cast comes back.
+ * terminal" — is assertable without a controlling terminal, and it is the half
+ * that dies when the cast comes back.
+ *
+ * An earlier revision of that sentence said "assertable EVERYWHERE". It is
+ * not: it is assertable wherever libc can be reached, which is a narrower
+ * place than everywhere. MEASURED, PHP 8.3.6: under `-d ffi.enable=0` this
+ * file produced three FAILURES, because `extension_loaded('ffi')` — the gate
+ * it used to have — stays true when the extension is disabled, and two of
+ * these tests had no gate at all. {@see requireLibcDescriptors()} probes for
+ * the capability instead of for the extension.
  */
 final class PosixBackendTerminalDescriptorTest extends TestCase
 {
@@ -85,6 +94,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
     public function testTheNumberItAnswersIsADescriptorAndNotAStreamResourceId(): void
     {
         $this->requireTerminalDevice();
+        $this->requireLibcDescriptors();
 
         $fd = PosixBackend::openDeviceDescriptor(self::TERMINAL_DEVICE);
         self::assertNotNull($fd, self::TERMINAL_DEVICE . ' is openable but the helper answered null');
@@ -176,6 +186,8 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
      */
     public function testItAnswersNullExactlyWhenTheDeviceCannotBeOpened(): void
     {
+        $this->requireLibcDescriptors();
+
         foreach (['/dev/tty', self::TERMINAL_DEVICE, '/dev/null', '/nonexistent/r49a'] as $device) {
             $handle = @fopen($device, 'rb');
             $openable = \is_resource($handle);
@@ -208,6 +220,7 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
     public function testRepeatedOpenAndCloseLeaksNoDescriptors(): void
     {
         $this->requireTerminalDevice();
+        $this->requireLibcDescriptors();
 
         $before = $this->openDescriptors();
 
@@ -233,9 +246,17 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
      * Deliberately NOT a skip when there is no controlling terminal: the
      * negative is asserted instead, so the test still says something on a
      * host where the interesting case is unavailable.
+     *
+     * It IS a skip when libc is out of reach, and the two must not be
+     * conflated. Without FFI the helper answers null for every device, so the
+     * negative arm below passes for a reason that has nothing to do with
+     * controlling terminals — a green tick standing for an unrun test. That
+     * is what {@see requireLibcDescriptors()} refuses.
      */
     public function testTheControllingTerminalArmAsksAboutARealDescriptor(): void
     {
+        $this->requireLibcDescriptors();
+
         $handle = @fopen('/dev/tty', 'rb');
         $hasControllingTerminal = \is_resource($handle);
         if ($hasControllingTerminal) {
@@ -263,9 +284,47 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
         if (!is_readable(self::TERMINAL_DEVICE) || !is_writable(self::TERMINAL_DEVICE)) {
             self::markTestSkipped(self::TERMINAL_DEVICE . ' is not available; no terminal device to open');
         }
-        if (!\extension_loaded('ffi')) {
-            self::markTestSkipped('ext-ffi is required to open a descriptor through libc');
+    }
+
+    /**
+     * Skip when libc cannot hand this process a descriptor at all.
+     *
+     * WHAT THIS USED TO BE: an `extension_loaded('ffi')` arm inside
+     * {@see requireTerminalDevice()}.
+     *
+     * WHAT IS TRUE NOW: that is not the condition that matters, and two of the
+     * tests below never reached it. `extension_loaded('ffi')` stays TRUE with
+     * `ffi.enable=0`, which is the stock setting on several distributions --
+     * MEASURED, PHP 8.3.6: `php -d ffi.enable=0 -r 'var_dump(extension_loaded("ffi"));'`
+     * prints `bool(true)`, and this file then produced THREE FAILURES rather
+     * than three skips. CI is unaffected (`.github/workflows/ci.yml` puts
+     * `ffi` in PHP_EXTENSIONS and the Windows/macOS jobs set
+     * `ini-values: ffi.enable=true`), so a contributor on a stock PHP was the
+     * only one who ever saw it -- which is the worst audience for it.
+     *
+     * WHY A GATE STILL EARNS ITS PLACE: the descriptor contract is only
+     * assertable where libc can be reached, and saying so is better than
+     * three red tests that look like a broken tree.
+     *
+     * The probe goes through {@see Libc} DIRECTLY rather than through
+     * {@see PosixBackend::openDeviceDescriptor()}. Probing the code under test
+     * would turn every failure of that helper into a skip -- MEASURED
+     * (round-53 mutation R7): gutted to `return null`, it reds three tests
+     * here, and it must keep doing so.
+     */
+    private function requireLibcDescriptors(): void
+    {
+        try {
+            $probe = Libc::lib()->open('/dev/null', 0);
+        } catch (\Throwable $e) {
+            self::markTestSkipped('libc is not reachable through FFI here: ' . $e->getMessage());
         }
+
+        if (!\is_int($probe) || $probe < 0) {
+            self::markTestSkipped('libc is reachable but would not open /dev/null; no descriptors to test with');
+        }
+
+        Libc::lib()->close($probe);
     }
 
     /** @return list<int> the process's currently open descriptors, sorted */
