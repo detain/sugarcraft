@@ -413,6 +413,33 @@ final class InterpolationOpenerTokenTest extends TestCase
                 . 'comparison puts half the tree on the hook for a token it has no use for.',
         );
 
+        // ...AND ONE BRACE IS NOT A DEPTH COUNT. Measured: without this
+        // fixture, dropping the `&& comparesAgainstBrace($tokens, '}')` half
+        // of {@see countsBareBraces()} SURVIVED - no file in the tree happens
+        // to compare against `{` alone, so the tree could not tell the two
+        // predicates apart and the conjunct was decoration. A scanner that
+        // looks for an opening brace and never a closing one is looking for a
+        // block, not counting one.
+        $openerOnly = <<<'PHP'
+            <?php
+            final class OpenerOnly
+            {
+                public function startsBlock(array $tokens): bool
+                {
+                    foreach ($tokens as $t) {
+                        if ($t === '{') { return true; }
+                    }
+                    return false;
+                }
+            }
+            PHP;
+        $this->assertNull(
+            self::missingOpenersIn($openerOnly, $openers),
+            'a file that compares against the opening brace and never the closing one was '
+                . 'selected as a depth counter. It cannot be counting depth: there is nothing '
+                . 'to decrement.',
+        );
+
         // ...and the same walker with the whole roster is clean, so the
         // predicate is not simply stuck at "everything is a gap".
         $complete = str_replace(
