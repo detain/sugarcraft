@@ -6,6 +6,79 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
+## ⏳ ROUND 53 IS IN FLIGHT RIGHT NOW — read this before starting anything
+
+**Launched 2026-08-24 from master `9ed3e200`, tree clean. THREE lanes.**
+**Run `wf_1771adc7-288`, task `wapbf9zqa`.** Script (DURABLE path — never launch from a scratchpad path,
+the adopt is rejected):
+`/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-53.js`
+
+**BASE FLOORS, all four packages, OBSERVED at `cb0a7c69` whose code is byte-identical to `9ed3e200`
+(the diff between them is docs only — verified, not assumed):**
+
+| package | tests / assertions / skipped / rc |
+|---|---|
+| sugar-crush | **9860 / 143784 / 1 / rc 0** |
+| candy-core | **807 / 7288 / 25 / rc 0** |
+| candy-mosaic | **459 / 7753 / 6 / rc 0** |
+| candy-flip | **80 / 186 / 2 / rc 0** |
+
+**Lane dirs** `/home/sites/crush-lane-{a,b,c}` were `git fetch` + `reset --hard` to `9ed3e200` (NOT
+re-copied — a fresh `cp -a` would break the vendor symlinks, which must resolve INSIDE the lane). Closure
+re-verified per lane per package by `is_link()` + `realpath()` prefix: sugar-crush 18/18, candy-core 3/3,
+candy-flip 6/6 in all three lanes. DO NOT DELETE until the merged floor is measured.
+
+**Standard hazards on a kill** (unchanged, and rule 30 now makes one of them explicit): resume if any
+lane completed, relaunch if none; **a failure report is a claim about the harness, not about the tree —
+`git log <base>..HEAD` in every lane BEFORE deciding what to re-run** (E393, three occurrences now);
+check every lane for a dirty tree AND for commits its report omits (E168, E190); **inspect before
+reverting**; check `git branch`/`git reflog` before believing a lane lost work; **never edit `COMMON`
+while the run is resumable** — it is in every lane's prompt and the cache key is `(prompt, opts)`.
+
+### THE LANES
+
+- **a — the descriptor family, ENTIRELY outside sugar-crush.** Round 52 filed E368 and its own fix agent
+  amended it from three instances to six; **the two worst are still open** because they were out of that
+  lane's file list, not because they are minor. `PosixBackend::size()`'s `/dev/tty` arm is **wrong on every
+  run** (a freshly opened handle's resource id can never equal its own descriptor — measured: id 5 vs
+  descriptor 3, and the wrong number *inverts* the answer). `restoreLast()` snapshots descriptor 1 while
+  its own comment says STDIN. Plus `candy-flip/src/Renderer.php` as the sixth, **with permission to refute
+  it if the measurement says so.** Owes three suites' figures (rule 28).
+- **b — child reaping, the sugar-crush HIGHs from E366.** `ClaudeCodeMcpClient` is the unfixed twin of
+  `MCP/StdioMcpServer`, which is already correct — read the right one first. `LspConnection`,
+  `BackgroundSupervisor` (whose double-fork may be an intentional seam — rule 6 says decide and document,
+  do not delete), and E367's `ClaudeCodeProvider` fclose-then-read.
+- **c — the scanner guard, tests only.** Extend `ChildStderrCaptureScanner` to flag "long-lived child +
+  nothing said about fd >= 3". **This is the lane that makes E365/E366 non-recurring** instead of fixing
+  today's five sites by hand and meeting the sixth next year.
+
+**LANES B AND C OVERLAP ON PURPOSE.** Lane c's scanner walks the four `src/` files lane b is changing.
+That cross-lane control has caught a real defect in each of the last three rounds, twice something neither
+lane could see alone. Both briefs say so, and both are told to name the correct resolution in the failure
+text rather than just going red.
+
+### THREE NEW STANDING RULES IN `COMMON`, ALL FROM ROUND 52
+
+**30. If your own tooling reports a failure, check `git log` before redoing the work.** (E393)
+**31. When two fixes for one defect exist, pick the better one WHOLE — never fuse them.** (E394)
+**32. A clean textual merge proves nothing about a file whose assertions are counts.**
+
+Also fixed in the script itself: the three prompt headers said "round-49" hard-coded for four rounds
+running, which is what made round 52's lanes argue about which round they were in. They are
+`round-${ROUND}` now.
+
+### AT THE MERGE
+
+Merge a->b->c. **Renumber from E395** (394 is taken). Renumber **longest-id-first** — a naive pass rewrites
+`Ec53-13` into `E3953` by matching `Ec53-1` inside it. Count headings as `^#{2,3} E`. Measure the merged
+floor for **sugar-crush, candy-core, candy-flip** (and candy-mosaic if any lane touches it). Verify skips
+stay exactly 1, closure 18/18, `check-path-repos` rc 0, config md5
+`05480c743aff302fd6c06c5a4a4c2210`, zero tracked per-lib locks, zero orphaned `php -S` servers. **Write
+the prediction to a file BEFORE merging** — `round52-prediction.txt` in the session scratchpad is the
+template, and predicting the CONFLICTS as well as the figures paid off this round.
+
+---
+
 ## 0-NOW-53. ROUND 52 CLOSED (floor 9860) — read this first, then §0 for the standing rules
 
 **SUITE FLOOR, THREE PACKAGES** (rule 28), all measured at `cb0a7c69`, tree clean:

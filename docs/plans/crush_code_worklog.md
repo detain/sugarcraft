@@ -8,6 +8,42 @@ Summary + Implementation Plan, 209-2160 are the 13 research dossiers.
 
 ---
 
+## Round 53 — IN FLIGHT (launched 2026-08-24 from `9ed3e200`)
+
+Run `wf_1771adc7-288`, task `wapbf9zqa`. Script:
+`…/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-53.js` (durable path).
+
+Base floors observed at `cb0a7c69`, code byte-identical to `9ed3e200` (docs-only diff, verified):
+sugar-crush **9860 / 143784 / 1**, candy-core **807 / 7288 / 25**, candy-mosaic **459 / 7753 / 6**,
+candy-flip **80 / 186 / 2**, all rc 0.
+
+Lanes were refreshed by `git fetch` + `reset --hard`, **not re-copied** — a fresh `cp -a` would repoint the
+vendor symlinks out of the lane. Closure re-verified per lane per package: 18/18, 3/3, 6/6.
+
+**Lane a — the descriptor family, entirely outside sugar-crush.** The two worst instances of E368 are
+still open, left over because round 52's lane a had them out of its file list. `PosixBackend::size()`'s
+`/dev/tty` arm is wrong on every run rather than latent; `restoreLast()` reads descriptor 1 while its
+comment says STDIN. `candy-flip/src/Renderer.php` is the sixth instance, and the brief explicitly permits
+refuting it with a measurement rather than fixing it.
+
+**Lane b — child reaping.** The sugar-crush HIGHs from E366, with `MCP/StdioMcpServer` named as the
+already-correct reference so the lane matches an existing pattern instead of inventing a fourth. Includes
+E367. `BackgroundSupervisor`'s double-fork is flagged as possibly an intentional seam (rule 6).
+
+**Lane c — the scanner guard, tests only.** Extends `ChildStderrCaptureScanner` to flag "long-lived child
++ nothing said about fd >= 3". This is the mechanical repair E366 argued for. Told explicitly not to
+hard-code a count of flagged sites, because lane b is changing four of the five this round and a pinned
+count would red at the merge and look like lane b's defect.
+
+**Lanes b and c overlap deliberately** — c's scanner walks b's files. That control has caught a real
+defect in each of the last three rounds.
+
+Rules 30/31/32 added to `COMMON` from round 52's lessons. The prompt headers, which had said "round-49"
+hard-coded for four rounds, are now parameterised on `ROUND` — that literal is what made round 52's lanes
+argue about which round they were filing under.
+
+---
+
 ## Round 52 — CLOSED (2026-08-24). Floor 9860 / 143784 / 1, three packages, tenth exact test prediction
 
 **Base `b9abd2fb`. Three lanes: a candy-core/candy-mosaic fd defects · b sugar-crush runtime correctness ·
