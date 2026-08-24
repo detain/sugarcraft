@@ -236,7 +236,7 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         file_put_contents($probe, sprintf(
             self::BIG_WRITE_PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->writeServerScript(self::WEDGE_BYTES, 'big-server'), true),
+            var_export($this->writeBlockedServerScript(self::WEDGE_BYTES, 'big-server'), true),
             self::OVERSIZED_ARGUMENT_BYTES,
         ));
 
@@ -270,7 +270,7 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         file_put_contents($probe, sprintf(
             self::BIG_WRITE_PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->writeServerScript(self::SAFE_BYTES, 'big-quiet-server'), true),
+            var_export($this->writeBlockedServerScript(self::SAFE_BYTES, 'big-quiet-server'), true),
             self::OVERSIZED_ARGUMENT_BYTES,
         ));
 
@@ -442,6 +442,28 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         return $path;
     }
 
+    /**
+     * A server that completes the handshake and THEN floods stderr unprompted,
+     * so it is sitting blocked in its own `write()` — not at `fgets()` — when the
+     * parent's next stdin write begins.
+     *
+     * ⚠️ THE ORDERING IS THE WHOLE TEST. {@see writeServerScript()} floods only
+     * AFTER reading a line, and {@see StdioMcpServer::readLine()} drains that
+     * flood completely before returning the reply — so by the time the parent
+     * writes again, stderr is empty and the child is waiting at `fgets()`. Both
+     * oversized-write rows were originally pointed at that fixture and were
+     * therefore VACUOUS: removing the drain from the write loop, and putting
+     * stdin back into blocking mode, both left them green. They are pinned by
+     * this fixture instead, and by the mutations of those two exact lines.
+     */
+    private function writeBlockedServerScript(int $bytes, string $name): string
+    {
+        $path = $this->tempDir . '/' . preg_replace('/[^a-z0-9_-]/i', '_', $name) . '-blocked.php';
+        file_put_contents($path, sprintf(self::BLOCKED_ON_STDERR_SERVER_TEMPLATE, $bytes));
+
+        return $path;
+    }
+
     /** @return array{0: int, 1: string, 2: float} rc, stdout+stderr, elapsed */
     private function runBounded(array $argv, float $budgetSeconds): array
     {
@@ -568,6 +590,41 @@ final class StdioMcpServerStderrDrainTest extends TestCase
         echo 'CALLED:', $raw['content'][0]['text'] ?? '(nothing)', "\n";
         PHP;
 
+    /**
+     * %d bytes of stderr, written unprompted the moment the handshake is done.
+     * Above the pipe capacity the child parks inside that `fwrite()` and stops
+     * reading stdin, which is the state the oversized write has to meet.
+     */
+    private const BLOCKED_ON_STDERR_SERVER_TEMPLATE = <<<'PHP'
+        <?php
+        $noise = str_repeat('e', %d);
+        $flooded = false;
+        while (($line = fgets(STDIN)) !== false) {
+            $msg = json_decode($line, true);
+            if (!is_array($msg) || !isset($msg['id'])) {
+                continue;
+            }
+            $method = (string) ($msg['method'] ?? '');
+            if ($method === 'initialize') {
+                $result = ['protocolVersion' => '2024-11-05', 'capabilities' => new stdClass()];
+            } elseif ($method === 'tools/list') {
+                $result = ['tools' => [[
+                    'name' => 'ping',
+                    'description' => 'Answer with pong.',
+                    'inputSchema' => ['type' => 'object', 'properties' => [], 'required' => []],
+                ]]];
+            } else {
+                $result = ['content' => [['type' => 'text', 'text' => 'pong']]];
+            }
+            echo json_encode(['jsonrpc' => '2.0', 'id' => (string) $msg['id'], 'result' => $result]), "\n";
+            flush();
+            if ($method === 'tools/list' && !$flooded) {
+                $flooded = true;
+                fwrite(STDERR, $noise);
+            }
+        }
+        PHP;
+
     /** %s autoloader · %s server script · %d bytes of argument. */
     private const BIG_WRITE_PROBE_TEMPLATE = <<<'PHP'
         <?php
@@ -580,6 +637,10 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             startTimeoutSeconds: 5.0,
         );
         $server->start();
+        // Let the child reach its unprompted stderr flood and park in that
+        // write() — 300ms, the same settle used by the generator in
+        // StdioMcpServer::writeLine()'s doc-block.
+        usleep(300000);
         $raw = $server->callTool('ping', ['blob' => str_repeat('x', %d)]);
         $server->stop();
         echo 'BIGCALLED:', $raw['content'][0]['text'] ?? '(nothing)', "\n";
