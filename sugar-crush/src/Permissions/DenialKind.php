@@ -109,6 +109,29 @@ enum DenialKind: string
     }
 
     /**
+     * This kind's name as a stable lowercase token, for a consumer outside
+     * PHP.
+     *
+     * DERIVED FROM THE CASE NAME, NEVER A SECOND LIST. A `match` here would be
+     * a fourth place a denial kind is written down, which is the whole defect
+     * this enum exists to close; `strtolower()` over `$this->name` cannot
+     * drift from the roster because there is nothing to keep in sync.
+     *
+     * NOT THE BACKING VALUE, AND NOT `->name` RAW. The backing value is the
+     * PREFIX — `Permission denied:`, punctuation and all — which is the text a
+     * human reads and a poor key for a machine to switch on. `->name` is a PHP
+     * identifier, so emitting it verbatim would make renaming a case a
+     * breaking change to a JSON document. This is the one rendering meant to
+     * be matched by a consumer that cannot import the enum:
+     * {@see \SugarCraft\Crush\Cli\NonInteractive} puts it in the `kind`
+     * field of every `refusals` entry.
+     */
+    public function token(): string
+    {
+        return strtolower($this->name);
+    }
+
+    /**
      * This kind's prefix followed by $detail — the whole finished reason, as
      * every consumer sees it.
      *

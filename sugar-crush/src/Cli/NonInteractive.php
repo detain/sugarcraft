@@ -8,6 +8,7 @@ use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Permissions\DenialKind;
+use SugarCraft\Crush\Permissions\ToolRefusal;
 
 /**
  * The `-p "<prompt>"` / `run "<prompt>"` one-shot, non-interactive CLI path.
@@ -231,7 +232,7 @@ final class NonInteractive
         // {@see Bootstrap::backend()} — and it is enough, because a blocked call
         // terminates through {@see \SugarCraft\Crush\Runtime::failure()},
         // which emits a {@see ToolFinished} carrying the reason.
-        /** @var list<array{tool: string, reason: string}> $refusals */
+        /** @var list<array{tool: string, kind: string, reason: string}> $refusals */
         $refusals = [];
         $observeRefusals = static function (object $event) use (&$refusals): void {
             $refusal = self::refusalFrom($event);
@@ -1017,35 +1018,55 @@ final class NonInteractive
      * the reason is upstream of this class rather than a shortcut taken in it…
      * recovering it needs a distinguishable verdict from `Runtime`". WHAT IS
      * TRUE NOW: `Runtime` gives one. {@see \SugarCraft\Crush\Runtime::gate()}
-     * picks its prefix BEFORE `settleAsk()` flattens the verdict, so a
-     * `reason` now opens with one of three roster entries —
-     * {@see \SugarCraft\Crush\Runtime::DENIAL_HOOK} for a hook objecting,
-     * {@see \SugarCraft\Crush\Runtime::DENIAL_REFUSED} for an approver
-     * answering no, {@see \SugarCraft\Crush\Runtime::DENIAL_UNANSWERED} for
-     * an ASK that reached a run with no approver attached. A consumer reading
-     * the `refusals` array can tell the three apart with the same
-     * `str_starts_with` this method uses.
+     * picks its {@see DenialKind} BEFORE `settleAsk()` flattens the verdict,
+     * so a `reason` now opens with one of three roster entries —
+     * {@see DenialKind::Hook} for a hook objecting,
+     * {@see DenialKind::Refused} for an approver answering no,
+     * {@see DenialKind::Unanswered} for an ASK that reached a run with no
+     * approver attached.
+     *
+     * AND THE CONSUMER NO LONGER RE-DERIVES IT (E250). WHAT THIS PARAGRAPH
+     * ENDED WITH: "a consumer reading the `refusals` array can tell the three
+     * apart with the same `str_starts_with` this method uses". WHAT IS TRUE
+     * NOW: it does not have to. Each entry carries a `kind` field —
+     * {@see DenialKind::token()}, one of `hook`, `refused`, `unanswered` —
+     * so the classification crosses the process boundary as a stable token
+     * instead of as a prefix a `jq` script would have to re-match. WHY THE
+     * SENTENCE STILL EARNS ITS PLACE: it is the reason the field is ADDITIVE
+     * rather than a replacement. `reason` still opens with the prefix, so the
+     * `str_starts_with` a consumer wrote against the old document keeps
+     * working; the field is the supported way to stop.
      *
      * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the diagnosis in it is the
      * reason the fix went where it did. The collapse happened in `Runtime`, not
      * here, so no amount of work in this method could have recovered the
      * distinction — and the same is true of the next one. This method
      * classifies; it does not author. {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest}
-     * pins the three, and pins that every one of them is on the roster below.
+     * pins the three, and pins that every one of them is on the roster.
      *
-     * @return array{tool: string, reason: string}|null
+     * THE CLASSIFICATION IS NO LONGER SPELLED HERE EITHER (E292). WHAT THIS
+     * METHOD USED TO BE: an `instanceof ToolFinished`, an `isError()` guard
+     * and a {@see DenialKind::classify()} call — the same eight lines
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner::noticeRefusal()}
+     * spelled a second time in another file, where the duplicate reached the
+     * roster through `Chat` and so paid for the TUI model this path exists to
+     * avoid. WHAT IS TRUE NOW: {@see ToolRefusal::fromEvent()} owns the shape
+     * and both callers ask it. This method is the `refusals`-entry projection
+     * of the answer and nothing else.
+     *
+     * @return array{tool: string, kind: string, reason: string}|null
      */
     private static function refusalFrom(object $event): ?array
     {
-        if (!$event instanceof ToolFinished || !$event->result->isError()) {
+        $refusal = ToolRefusal::fromEvent($event);
+        if ($refusal === null) {
             return null;
         }
 
-        $reason = $event->result->content();
-        if (DenialKind::classify($reason) === null) {
-            return null;
-        }
-
-        return ['tool' => $event->toolName, 'reason' => $reason];
+        return [
+            'tool' => $refusal->tool,
+            'kind' => $refusal->kind->token(),
+            'reason' => $refusal->reason,
+        ];
     }
 }

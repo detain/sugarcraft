@@ -19,6 +19,7 @@ use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
+use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
@@ -74,6 +75,15 @@ final class Runtime
      * The three ways a tool call can be stopped before it runs, as the prefix
      * each one's reason string opens with (E210, E211).
      *
+     * DEPRECATED ALIASES OF {@see \SugarCraft\Crush\Permissions\DenialKind},
+     * NOT A FOURTH COPY OF THE ROSTER (E246). Each is declared as that enum's
+     * own case value in a constant expression, so drift is impossible by
+     * construction: there is nothing here to edit that would not be editing
+     * the enum. New code inside this class names the case
+     * ({@see gate()} does), and these three remain only because they are
+     * `public const` on a class an embedder can read — removing them would be
+     * a break bought for nothing.
+     *
      * THREE, BECAUSE THEY ARE THREE DIFFERENT EVENTS AND USED TO BE ONE
      * STRING. {@see gate()} rendered every non-allowed verdict as
      * `Hook denied: <message>`, so a hook actively objecting, a user answering
@@ -84,49 +94,61 @@ final class Runtime
      * different next step for each: change the hook, answer differently, or
      * attach an approver / change the permission mode.
      *
-     * THE SPELLINGS ARE NOT FREE CHOICES. Every one of them is an entry in
-     * {@see \SugarCraft\Crush\Chat::DENIED_ERROR_PREFIXES}, which is the
-     * roster {@see \SugarCraft\Crush\Chat::isDeniedResult()} reads to draw a
+     * THE SPELLINGS ARE NOT FREE CHOICES, and this class no longer spells any
+     * of them. Every one is a {@see \SugarCraft\Crush\Permissions\DenialKind}
+     * case, which is the roster
+     * {@see \SugarCraft\Crush\Chat::isDeniedResult()} reads to draw a
      * refusal as its own struck-through state and
      * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()} reads to
      * decide what goes in a `--output-format json` document's `refusals`
-     * array. A prefix this class invents that is not on that roster is a
-     * refusal that renders as an ordinary tool ERROR in both surfaces — the
-     * model's failure to be told a call was blocked, not merely a cosmetic
-     * one. {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} is what
-     * makes that a red rather than a silent misclassification.
+     * array. A prefix this class invented that was not on that roster would be
+     * a refusal rendering as an ordinary tool ERROR in both surfaces — the
+     * model not being told a call was blocked, which is a correctness failure
+     * and not a cosmetic one.
+     * {@see \SugarCraft\Crush\Tests\DenialPrefixRosterTest} is what makes
+     * that a red rather than a silent misclassification, and it now asserts
+     * over the whole of `src/` rather than over a named list of files.
      *
-     * READ FROM THE ROSTER RATHER THAN COPIED? DELIBERATELY NOT, AND HERE IS
-     * THE MEASUREMENT. `Chat` is this application's TUI model; touching
-     * `Chat::DENIED_ERROR_PREFIXES` from here would load it on the first
-     * gated tool call of every run, including the `-p` one-shot path that
-     * exists partly so a run never builds a `Chat` at all.
-     *
-     * The generator is not in this file and is named rather than paraphrased:
+     * READ FROM THE ROSTER RATHER THAN COPIED? THE ANSWER USED TO BE NO, AND
+     * IT IS REWRITTEN RATHER THAN DROPPED BECAUSE THE MEASUREMENT IN IT IS
+     * WHAT CHOSE WHERE THE ROSTER WENT. WHAT IT SAID, across two paragraphs:
+     * that the roster was `Chat::DENIED_ERROR_PREFIXES`; that `Chat` is this
+     * application's TUI model, so touching it from here would load it on the
+     * first gated tool call of every run, including the `-p` one-shot path
+     * that exists partly so a run never builds a `Chat` at all; and, citing
      * {@see \SugarCraft\Crush\Cli\NonInteractive::refusalFrom()}'s own
-     * doc-block records `class_exists(Chat::class, false)` sampled after a
-     * full `NonInteractive::run()` on PHP 8.3.6 — FALSE for a turn with no
-     * tool events and for one whose tool succeeded, TRUE for an errored
-     * non-refusal and TRUE for a refusal. So on the headless path the roster
-     * is already reached by any turn that ERRORS anything, and what is still
-     * avoided is the load on every turn that errors nothing, which is the
-     * common `-p` shape. That laziness is a property of WHERE the read sits —
-     * behind an `isError()` guard on an event that most turns never raise —
-     * and NOT of any effort inside `refusalFrom()`, which is a plain
-     * `foreach` over the constant; an earlier version of this paragraph said
-     * the method "goes to some length" to stay lazy, which credited the method
-     * for its position. Putting the same read in the engine's gate would move
-     * it from "turns that error" to "turns that gate anything", which is
-     * every turn with a tool call. So the coupling is pinned by a test instead
-     * of by an autoload.
+     * generator, that `class_exists(Chat::class, false)` sampled after a full
+     * `NonInteractive::run()` on PHP 8.3.6 was FALSE for a turn with no tool
+     * events and for one whose tool succeeded, TRUE for an errored
+     * non-refusal and TRUE for a refusal — so the headless read was lazy by
+     * POSITION, behind an `isError()` guard, and moving that read into the
+     * gate would have moved it from "turns that error" to "turns that gate
+     * anything".
+     *
+     * WHAT IS TRUE NOW: E239 moved the roster off `Chat` to
+     * {@see \SugarCraft\Crush\Permissions\DenialKind}, a leaf enum with no
+     * `use` statements and no dependency on anything in this application, and
+     * the objection was never to READING a roster — it was to loading the TUI
+     * model. Reading this one costs one enum. RE-MEASURED on PHP 8.3.6 at
+     * round 49 by driving {@see executeToolCalls()} through a hook chain that
+     * DENIES, with `class_exists(Chat::class, false)` sampled before and
+     * after: FALSE both times, where the sample is taken in a process that
+     * has autoloaded `Runtime`, `DenialKind` and the whole engine path. So
+     * the copy that this paragraph justified has no cost left to buy.
+     *
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: "do not make the engine pay for
+     * the TUI model" is the constraint that decided the roster lives in
+     * `src/Permissions/` and not on `Chat`, and without it the next reader
+     * moves the enum somewhere more convenient and re-creates the cost.
      */
-    public const DENIAL_HOOK = 'Hook denied:';
+    public const DENIAL_HOOK = DenialKind::Hook->value;
 
     /**
      * An ASK an attached approver answered with anything other than a literal
-     * `true` — the user's own decision, made about this call.
+     * `true` — the user's own decision, made about this call. See
+     * {@see DENIAL_HOOK} for why these three are aliases.
      */
-    public const DENIAL_REFUSED = 'Permission denied:';
+    public const DENIAL_REFUSED = DenialKind::Refused->value;
 
     /**
      * An ASK that reached a run with no approver attached at all. Nobody
@@ -134,7 +156,7 @@ final class Runtime
      * fail-closed arm, and note this is the shape a background daemon and any
      * embedder that forgot `withPermissionApprover()` both produce.
      */
-    public const DENIAL_UNANSWERED = 'Permission required:';
+    public const DENIAL_UNANSWERED = DenialKind::Unanswered->value;
 
     /**
      * Memoized project-memory block — see {@see memorySnapshot()}. Not a
@@ -941,7 +963,15 @@ final class Runtime
         // chain itself returns — so once it has run, the verdict no longer
         // carries where it came from and both used to be rendered as
         // `Hook denied:`. The distinction survives here and nowhere else.
-        $prefix = self::DENIAL_HOOK;
+        //
+        // A DenialKind AND NOT ITS PREFIX (E250). This local used to be the
+        // prefix STRING, so the one place in the engine that knows which of
+        // the three events happened threw the type away on the line that
+        // computed it and every party downstream re-derived it with
+        // `str_starts_with`. Held as the enum, the rendering happens once, at
+        // the single `reason()` call below, and the kind is available to
+        // anything inside this method that ever needs to branch on it.
+        $kind = DenialKind::Hook;
 
         if ($hookResult->isAsk()) {
             // `$onPermissionRequest === null` is settleAsk()'s OWN fail-closed
@@ -949,12 +979,12 @@ final class Runtime
             // message it produces: matching on that message would couple this
             // to its wording, and the wording is the half most likely to be
             // reworded.
-            $prefix = $onPermissionRequest === null ? self::DENIAL_UNANSWERED : self::DENIAL_REFUSED;
+            $kind = $onPermissionRequest === null ? DenialKind::Unanswered : DenialKind::Refused;
             $hookResult = $this->settleAsk($toolCall, $hookResult, $onPermissionRequest);
         }
 
         if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
-            return [null, "{$prefix} {$hookResult->message}", $context];
+            return [null, $kind->reason($hookResult->message), $context];
         }
 
         // A MODIFY hook rewrites the tool input before execution.
@@ -1314,7 +1344,8 @@ final class Runtime
      * whatever this returned with `Hook denied: `, so the finished reason DID
      * report it as a hook DENY — and so did every consumer that classifies by
      * prefix. WHY THE SENTENCE STILL EARNS ITS PLACE: it states the intent, and
-     * the intent is now carried by {@see Runtime::DENIAL_UNANSWERED} rather
+     * the intent is now carried by
+     * {@see \SugarCraft\Crush\Permissions\DenialKind::Unanswered} rather
      * than by this message's wording alone.
      *
      * @param ?callable $onPermissionRequest see {@see run()}
@@ -1327,7 +1358,8 @@ final class Runtime
         if ($onPermissionRequest === null) {
             // THE MESSAGE NO LONGER OPENS "Permission required and", because
             // {@see gate()} now prefixes this arm with
-            // {@see Runtime::DENIAL_UNANSWERED} — `Permission required:` — and
+            // {@see \SugarCraft\Crush\Permissions\DenialKind::Unanswered} —
+            // `Permission required:` — and
             // the old wording made the finished reason read "Hook denied:
             // Permission required and no approver…", which named the wrong
             // event twice over. The finished string is
