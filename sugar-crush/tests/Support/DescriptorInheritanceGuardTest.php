@@ -66,6 +66,17 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * backlog file nothing executes. Deleting a row because it is inconvenient
      * makes the guard red, not green.
      *
+     * ⚠️ THERE IS ONE WAY TO CLOSE A ROW HERE AND IT IS NOT THE OBVIOUS ONE.
+     * Until round 54 a row could be retired by appending an fd of 3 or above
+     * to the spawn's descriptor spec, which {@see exposedIn()} treated as
+     * handled. It is not: `proc_open()` replaces the descriptors its spec
+     * names and inherits every one it does not, so the append moved one fd and
+     * left the leak whole - measured in
+     * {@see testNamingAHighFdDoesNotStopTheInheritance()}. A row closes when
+     * the CHILD'S LIFETIME closes, by reaping it in the function that spawned
+     * it. E417 asked for all seven of these to be closed by naming fds; that
+     * measurement is why none of them were.
+     *
      * EVERY ROW CARRIES A COUNT, and it is spent one site at a time. WHAT THIS
      * MAP USED TO BE: `File.php::function => reason`, with membership tested
      * by `isset()`. WHAT IS TRUE NOW - measured, not anticipated: one row
