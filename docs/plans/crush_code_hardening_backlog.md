@@ -8741,3 +8741,105 @@ cleaning up. They were not deleted — sibling lanes were running and a glob del
 the hazard this round's brief spends a paragraph on.
 
 ---
+
+### Ed49-7 — a TEXT-keyed brace walk makes its token-id disjunct dormant, and a spelling roster cannot tell
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Measured**,
+PHP 8.3.6. **Fixed in the same round** for the one instance found; the shape is the entry.
+
+**What.** `InterpolationOpenerTokenTest::testEveryBraceWalkingScannerNamesEveryOpener()` requires every
+brace walker to NAME every opener the lexer produces. It reads what a walker *names*. It cannot tell
+whether the walk *works* — and for one class of walker the two answers diverge.
+
+**The class.** A walk that keys on the token's TEXT (`$text = is_array($t) ? $t[1] : $t;` then
+`$text === '{'`) already increments on `T_CURLY_OPEN`, because that token's text IS that one byte. The
+explicit `$id === T_CURLY_OPEN` disjunct beside it is then a NO-OP on every input. `T_DOLLAR_OPEN_CURLY_BRACES`
+is the opposite: its text is two bytes, the text arm cannot see it, and its disjunct is load-bearing.
+Measured on `DuplicatedTestHelperDriftTest::bodyOf()`: dropping the first changed no body on any fixture
+and SURVIVED that file's own tests; dropping the second also SURVIVED that file's own tests, and both were
+caught only by the roster guard in another file. So the roster was enforcing a spelling of which one half
+did nothing and the other half was untested.
+
+**Why it matters beyond the one site.** The roster guard is what the tree relies on to keep brace walks
+correct, and its verdict is about spelling. A lane that adds the token to satisfy it has satisfied the
+guard without exercising the walk — and if the walk is text-keyed, the token it added cannot be exercised
+at all. **A spelling guard and a behaviour guard are not substitutes, and this tree has one of each for
+this problem with nothing saying which claim is which.**
+
+**Step.** When auditing a walker's roster, classify the walk first: keyed on TEXT, on the token ID, or on
+the bare string. Only the last two make a `T_CURLY_OPEN` disjunct load-bearing. For a text-keyed walk,
+pin the dormancy from the interpreter (assert the token's text) rather than leaving the line to be deleted
+as dead — and pin the deprecated opener behaviourally, since its truncation makes two drifted copies
+compare EQUAL, which reads as "no drift" rather than as an error.
+
+### Ed49-8 — a deferral keyed on the FILENAME is silent on a partial fix
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: harness correctness. **Fixed** for
+`InterpolationOpenerTokenTest::KNOWN_GAPS` in the same round; the shape is the entry.
+
+**What.** This tree now has several deferral maps of the form `key => reason`, checked in "both
+directions": a key with no offence is *overtaken*, an offence with no key is *unrecorded*. Both directions
+ask a BOOLEAN question — is there still an offence here. Neither asks whether it is still THE offence the
+row describes.
+
+**The direction that is silent.** A partial fix. A walker missing two openers that gains one of them still
+has a gap, so the row still matches, and the row's argued prose — written about the wider gap — silently
+becomes false. The remaining half is then deferred by accident, under an argument for something else. Same
+applies to any `SCOPE`/`OUT_OF_SCOPE` pair whose rows describe a *cluster* of sites: fix three of four and
+the row survives describing four.
+
+**Step.** Where a row's reason describes a specific extent, record the extent as data and compare it, not
+just its non-emptiness — and intersect the recorded extent with whatever the running environment can still
+produce before comparing, or the map reds wholesale on the language change it was written to survive.
+`ChildStderrCaptureTest::OUT_OF_SCOPE` and `ForkedChildReaperAdoptionTest::OUT_OF_SCOPE` both have rows of
+this shape (`Context/`: "`git init` / `git config` fixture setup with `2>/dev/null` on each line") and
+neither records a count — deliberately, per their own doc-blocks, because a count over `tests/` rots. The
+open question this entry leaves is what a rot-proof extent looks like for those two.
+
+### Ed49-9 — a harness that hard-codes half of the set it measures is measuring the hard-coded half
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: process. **Three figures retracted.**
+
+**What was wrong.** Round 49 lane d's own implementer stage shipped three numbers a review could not
+re-derive. All three are corrected in place with their generators; the mechanism is the entry.
+
+  * "none of the **eight** Bootstrap methods it reads" (shipped in a `KNOWN_GAPS` reason). It is seven.
+    The generator merged a regex over the test source with a HARD-CODED list of seven method names, and
+    ran a REPLICA of the walk on both sides rather than the shipped one. Its table printed nine rows, two
+    of them fixture names resolving to `null`.
+  * "the **seven** walkers the old predicate already covered" (backlog). It is ten, re-derived by running
+    both predicates over every `tests/`+`src/` blob read out of `git show db90e768:`.
+  * "`KNOWN_GAPS` is empty at this commit" (shipped doc-block). It had three rows in the same commit that
+    wrote the sentence — the change-set that emptied it of its one row widened the selection and refilled
+    it.
+
+**The common cause is not carelessness.** Each figure was produced by a harness that was *partly* derived.
+A regex plus a hand-written list; a replica of the walk instead of the walk; a sentence written before the
+last hunk of the same commit. **Rule 13 says the harness can carry the defect the claim is about; this is
+the sub-case where the harness carries HALF the answer as a literal.** The reviewable property is not
+"was it measured" but "is every element of the measured set derived".
+
+**Step.** For any set-valued measurement, print the set and its size, derive both from the shipped code,
+and state the accessor used. A figure whose generator contains a literal list of the things being counted
+is not a measurement of them.
+
+### Ed49-10 — the drift guard compares BODIES, so a signature divergence is invisible
+
+**Recorded 2026-08-24 by round-49 lane d, REVIEW stage.** Severity: coverage. **Measured**, PHP 8.3.6.
+**Documented, not fixed.**
+
+**What.** `DuplicatedTestHelperDriftTest` compares two same-named private helpers by normalising their
+BODIES, and `bodyOf()` starts at the body's opening brace. A divergence in the PARAMETER LIST — an added
+parameter, a changed default, a widened type — is therefore invisible, and two copies whose signatures
+disagree can compare as byte-identical bodies.
+
+**Not hypothetical.** `reviewerAgent`'s own accepted row is exactly that shape (one copy takes the active
+flag as a parameter, the other hard-codes it) and is in the report only because the divergence also
+reaches the body.
+
+**Why it was not simply widened.** Including the signature folds every promoted-property and default-value
+spelling difference into the divergence core and pushes most real pairs past `DRIFT_BOUND`, which is a
+different guard rather than a wider one. Widening wants its own round with rows to argue — the same
+conclusion Ed49-4 reaches for the bound itself, and probably the same round.
+
+---
