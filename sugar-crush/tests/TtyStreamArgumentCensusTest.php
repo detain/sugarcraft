@@ -8,7 +8,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Nothing in this tree builds a raw-mode backend over the process's OWN
- * descriptor 0 with an injected `Termios`.
+ * descriptor 0 with an injected `Termios` — neither directly, nor one frame up
+ * through `Program`.
  *
  * ## THE FLAG, AND ITS POLARITY, STATED ONCE BECAUSE THIS DOC-BLOCK HAD IT
  * ## BACKWARDS
@@ -129,6 +130,42 @@ use PHPUnit\Framework\TestCase;
  * is the literal `null`. A first argument that is a bare CONSTANT is the
  * middle case: it could be defined as null, so the SET of constant names is
  * asserted rather than their shape, and a new one has to be looked at once.
+ *
+ * ## AND THAT RESIDUAL HAD A CONCRETE INSTANCE: `Program` (round 50 review)
+ *
+ * WHAT THIS SAID: the headline, unqualified — nothing in this tree builds the
+ * hazardous shape. WHAT IS TRUE: it was true of the shapes this scanner can
+ * DECIDE, and `candy-core/src/Program.php` resolves the stream ONE FRAME
+ * EARLIER. Verified by symbol rather than inferred:
+ *
+ *   $this->input = $options->input ?? STDIN;
+ *   …
+ *   $this->tty = new Tty($this->input, $options->termios);
+ *
+ * So `new Program($model, new ProgramOptions(termios: $t))`, with no `input:`,
+ * wraps the RUNNER's descriptor 0 with an injected `Termios` — the same
+ * hazard, reached through a second façade. At that site the census reads
+ * `new Tty(expression, …)` and waves it through, correctly, because by then
+ * the `?? STDIN` has already happened. And `ProgramOptions::$termios` is
+ * documented in candy-core as a TEST SEAM ("Tests inject a stub Termios"),
+ * which is the shape a test is likeliest to reach for.
+ *
+ * WHY THIS EARNED A THIRD ARM rather than a narrower headline: the join is
+ * DECIDABLE without cross-frame analysis, because both fields travel in ONE
+ * constructor call. A `new ProgramOptions(...)` that names `termios` and does
+ * not name `input` is the shape, and that is a token walk like the others.
+ * Measured over the package and every sibling `src`, PHP 8.3.6: no
+ * construction names `termios` without also naming `input`. Exactly one names
+ * `termios` at all — `ProgramOptionsBuilder::build()`, which names every
+ * parameter it has, `input` included — and no other site mentions it. So this
+ * was latent like the backend hole above rather than live.
+ *
+ * WHAT IS STILL OPEN, said plainly rather than implied to be closed. Any
+ * `?? STDIN` resolved one frame up and then passed along as a variable is
+ * invisible to this instrument by construction; `Program` is the instance of
+ * that shape which exists TODAY, not the shape itself. The general guard —
+ * flag a construction whose first argument is a variable assigned from a
+ * `?? STDIN` in the same constructor — is not built here.
  */
 final class TtyStreamArgumentCensusTest extends TestCase
 {
@@ -147,6 +184,19 @@ final class TtyStreamArgumentCensusTest extends TestCase
      * is excluded on mechanism rather than on platform.
      */
     private const HAZARD_CLASSES = ['Tty', 'PosixBackend'];
+
+    /**
+     * The options object that carries the hazard ONE FRAME UP.
+     *
+     * `Program::__construct()` does `$this->input = $options->input ?? STDIN;`
+     * and then `new Tty($this->input, $options->termios)`, so the two fields
+     * that decide the hazard both arrive in a single `ProgramOptions`
+     * construction — which is what makes this decidable by a token walk at
+     * all. Short-name matched after the last `\`, like the classes above, so
+     * every spelling is one case; `ProgramOptionsBuilder` is a different short
+     * name and is deliberately not this one.
+     */
+    private const OPTIONS_CLASS = 'ProgramOptions';
 
     /**
      * Reachable sibling libraries, scanned for the same shape.
@@ -304,6 +354,88 @@ final class TtyStreamArgumentCensusTest extends TestCase
     }
 
     /**
+     * ONE FRAME UP: nothing hands `Program` a `Termios` without also handing
+     * it an input stream.
+     *
+     * WHY THIS ARM EXISTS is in the class doc-block: `Program::__construct()`
+     * resolves `$options->input ?? STDIN` and then builds
+     * `new Tty($this->input, $options->termios)`, so the two arms above see
+     * `new Tty(expression, …)` at that site and — correctly, on the evidence
+     * they have — wave it through. The `?? STDIN` already happened one frame
+     * earlier.
+     *
+     * The join is decidable because both fields arrive in ONE constructor
+     * call: `termios` named and `input` not named IS the hazardous shape, and
+     * no cross-frame analysis is needed to see it.
+     *
+     * BOTH SCOPES IN ONE METHOD, unlike the two arms above, and for a reason:
+     * those two differ in what they assert (the package arm pins a roster of
+     * stream CONSTANTS, the sibling arm deliberately does not). This one
+     * asserts the same single thing about both, and splitting it would produce
+     * two tests that differ only in their walk.
+     *
+     * AND IT REPORTS WHAT IT CANNOT DECIDE (rule 14). A positional argument
+     * list is not "fine": `ProgramOptions` takes some two dozen parameters and
+     * this scanner cannot tell which slot a positional value landed in, so a
+     * positional call is an offender until a person looks at it. Same for an
+     * argument list that never closes.
+     */
+    public function testNoProgramOptionsInjectsATermiosWithoutAlsoNamingItsInput(): void
+    {
+        $offenders = [];
+        $seen = 0;
+
+        foreach ([self::sources(), self::libSources()] as $scope) {
+            foreach ($scope as $path => $source) {
+                foreach (self::programOptionsConstructions($source) as $site) {
+                    ++$seen;
+
+                    if ($site['unparsed']) {
+                        $offenders[] = $path . ': new ' . $site['name']
+                            . '(<argument list this scanner could not read to its close>)';
+
+                        continue;
+                    }
+                    if ($site['positional']) {
+                        $offenders[] = $path . ': new ' . $site['name']
+                            . '(<positional arguments - this scanner cannot tell which slot the termios '
+                            . 'landed in>)';
+
+                        continue;
+                    }
+                    if (
+                        \in_array('termios', $site['named'], true)
+                        && !\in_array('input', $site['named'], true)
+                    ) {
+                        $offenders[] = $path . ': new ' . $site['name'] . '(termios: …) with no input:';
+                    }
+                }
+            }
+        }
+
+        // The dead-scanner control (rule 15/E228): an empty offender list is
+        // also what a walk that found no ProgramOptions at all returns, and
+        // candy-core alone builds two.
+        self::assertGreaterThan(
+            0,
+            $seen,
+            'the census found no ProgramOptions construction in ' . implode(', ', self::SCOPE) . ' or under '
+                . self::LIB_SCOPE . ' - the scanner is dead, not the tree clean. candy-core builds two.',
+        );
+
+        self::assertSame(
+            [],
+            $offenders,
+            "a ProgramOptions carries an injected Termios and names no input, so Program will resolve its "
+                . "input to the process's own STDIN and hand BOTH to Tty. In this process that descriptor "
+                . "belongs to the PHPUnit runner, and PosixBackend::restore() then CLEARS O_NONBLOCK on it - "
+                . "putting fd 0 back to blocking, which erases tests/bootstrap.php's repair (that repair is "
+                . "the flag being SET) for every later test in the run. Pass an explicit input: too (a "
+                . "stream_socket_pair() end is what the existing sites use):\n  " . implode("\n  ", $offenders),
+        );
+    }
+
+    /**
      * KNOWN-ANSWER FIXTURES THROUGH THE SAME SCANNER.
      *
      * Every polarity the census depends on, including the two spellings that
@@ -411,6 +543,256 @@ final class TtyStreamArgumentCensusTest extends TestCase
                 ['name' => 'Tty', 'firstArg' => 'expression', 'extraArgs' => true],
             ],
         ];
+    }
+
+    /**
+     * KNOWN ANSWERS FOR THE ONE-FRAME-UP SCANNER, BOTH POLARITIES.
+     *
+     * The hazardous row and its near-misses sit side by side on purpose: a
+     * scanner that answered "offender" to everything would satisfy the arm
+     * above just as well as a correct one, and the rows that must come back
+     * CLEAN (termios with input, input with no termios, no arguments at all)
+     * are what tell the two apart.
+     *
+     * @param list<array{name: string, named: list<string>, positional: bool, unparsed: bool}> $expected
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('optionsFixtures')]
+    public function testTheOptionsScannerAnswersCorrectlyOnFixturesWhoseAnswerIsKnown(
+        string $source,
+        array $expected,
+    ): void {
+        self::assertSame($expected, self::programOptionsConstructions('<?php ' . $source));
+    }
+
+    /**
+     * @return iterable<string, array{string, list<array{name: string, named: list<string>, positional: bool, unparsed: bool}>}>
+     */
+    public static function optionsFixtures(): iterable
+    {
+        yield 'THE HAZARD: a termios and no input' => [
+            '$o = new ProgramOptions(termios: $t);',
+            [['name' => 'ProgramOptions', 'named' => ['termios'], 'positional' => false, 'unparsed' => false]],
+        ];
+        yield 'termios AND input - not the hazard, and this is the shape the builder ships' => [
+            '$o = new ProgramOptions(input: $s, termios: $t);',
+            [[
+                'name' => 'ProgramOptions',
+                'named' => ['input', 'termios'],
+                'positional' => false,
+                'unparsed' => false,
+            ]],
+        ];
+        yield 'no termios at all - nothing is injected, so nothing skips the isTty() guard' => [
+            '$o = new ProgramOptions(useAltScreen: true);',
+            [[
+                'name' => 'ProgramOptions',
+                'named' => ['useAltScreen'],
+                'positional' => false,
+                'unparsed' => false,
+            ]],
+        ];
+        yield 'no arguments at all' => [
+            '$o = new ProgramOptions();',
+            [['name' => 'ProgramOptions', 'named' => [], 'positional' => false, 'unparsed' => false]],
+        ];
+        yield 'FULLY QUALIFIED, the spelling a grep for "new ProgramOptions(" cannot see' => [
+            '$o = new \SugarCraft\Core\ProgramOptions(termios: $t);',
+            [[
+                'name' => '\SugarCraft\Core\ProgramOptions',
+                'named' => ['termios'],
+                'positional' => false,
+                'unparsed' => false,
+            ]],
+        ];
+        // RULE 14: ProgramOptions takes some two dozen parameters, so a
+        // positional list is a slot this scanner cannot identify. Reported,
+        // never waved through.
+        yield 'POSITIONAL arguments are reported, not guessed at' => [
+            '$o = new ProgramOptions(true, false);',
+            [['name' => 'ProgramOptions', 'named' => [], 'positional' => true, 'unparsed' => false]],
+        ];
+        yield 'a spread is undecidable and reads as positional' => [
+            '$o = new ProgramOptions(...$args);',
+            [['name' => 'ProgramOptions', 'named' => [], 'positional' => true, 'unparsed' => false]],
+        ];
+        yield 'an argument list that never closes is REPORTED, not dropped' => [
+            '$o = new ProgramOptions(termios: $t',
+            [['name' => 'ProgramOptions', 'named' => ['termios'], 'positional' => false, 'unparsed' => true]],
+        ];
+        // The three shapes a naive "a colon at argument depth is a label"
+        // scanner gets wrong, and none of them is a named argument.
+        yield 'a nested call in a named value does not read as positional' => [
+            '$o = new ProgramOptions(termios: makeT($a, $b), input: f(1));',
+            [[
+                'name' => 'ProgramOptions',
+                'named' => ['termios', 'input'],
+                'positional' => false,
+                'unparsed' => false,
+            ]],
+        ];
+        yield 'a ternary value has a colon at argument depth and is not a label' => [
+            '$o = new ProgramOptions(input: $a ? $b : $c);',
+            [['name' => 'ProgramOptions', 'named' => ['input'], 'positional' => false, 'unparsed' => false]],
+        ];
+        yield 'an enum case value is not a label' => [
+            '$o = new ProgramOptions(mouseMode: Mouse::All);',
+            [[
+                'name' => 'ProgramOptions',
+                'named' => ['mouseMode'],
+                'positional' => false,
+                'unparsed' => false,
+            ]],
+        ];
+        yield 'a trailing comma does not read as a positional argument' => [
+            '$o = new ProgramOptions(termios: $t, input: $s,);',
+            [[
+                'name' => 'ProgramOptions',
+                'named' => ['termios', 'input'],
+                'positional' => false,
+                'unparsed' => false,
+            ]],
+        ];
+        // NEGATIVE. The builder is a different class with a different short
+        // name, and it is the one place that legitimately names every field.
+        yield 'ProgramOptionsBuilder is NOT ProgramOptions' => [
+            '$b = new ProgramOptionsBuilder(termios: $t);',
+            [],
+        ];
+        yield 'a ProgramOptions in a comment is not a construction' => [
+            '// $o = new ProgramOptions(termios: $t);' . "\n" . '$x = 1;',
+            [],
+        ];
+    }
+
+    /**
+     * Every `new <…>ProgramOptions(...)` in $source, argument list classified
+     * by NAME rather than by position.
+     *
+     * Token-based for the same reason as the scanner above: the class name may
+     * be short, partially or fully qualified, and `T_NEW` cannot appear inside
+     * a comment or a string.
+     *
+     * @return list<array{name: string, named: list<string>, positional: bool, unparsed: bool}>
+     */
+    private static function programOptionsConstructions(string $source): array
+    {
+        $tokens = token_get_all($source);
+        $count = \count($tokens);
+        $skip = [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT];
+        $nameParts = [\T_STRING, \T_NS_SEPARATOR, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED];
+        $found = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== \T_NEW) {
+                continue;
+            }
+
+            $j = $i + 1;
+            $name = '';
+            while ($j < $count) {
+                $t = $tokens[$j];
+                if (\is_array($t) && \in_array($t[0], $skip, true)) {
+                    $j++;
+
+                    continue;
+                }
+                if (\is_array($t) && \in_array($t[0], $nameParts, true)) {
+                    $name .= $t[1];
+                    $j++;
+
+                    continue;
+                }
+
+                break;
+            }
+
+            $short = str_contains($name, '\\') ? substr($name, strrpos($name, '\\') + 1) : $name;
+            if ($short !== self::OPTIONS_CLASS || $j >= $count || $tokens[$j] !== '(') {
+                continue;
+            }
+
+            $found[] = ['name' => $name] + self::classifyNamedArguments($tokens, $j, $count, $skip);
+        }
+
+        return $found;
+    }
+
+    /**
+     * Which parameters an argument list names, and whether it also passes
+     * anything this scanner cannot attribute to a parameter.
+     *
+     * A NAMED argument is a `T_STRING` immediately followed by a `:` at the
+     * START of an argument. Both halves matter: `Foo::BAR` tokenises the pair
+     * as one `T_DOUBLE_COLON`, so a class constant can never be mistaken for a
+     * label, and a ternary's `:` is never at an argument's start. Anything
+     * else appearing where an argument begins — a literal, a variable, a
+     * spread — is positional, which this scanner reports rather than reads.
+     *
+     * @param list<array{int, string, int}|string> $tokens
+     * @param list<int>                            $skip
+     *
+     * @return array{named: list<string>, positional: bool, unparsed: bool}
+     */
+    private static function classifyNamedArguments(array $tokens, int $open, int $count, array $skip): array
+    {
+        $depth = 0;
+        $named = [];
+        $positional = false;
+        $atArgStart = false;
+        $closed = false;
+
+        for ($k = $open; $k < $count; $k++) {
+            $t = $tokens[$k];
+
+            if ($t === '(' || $t === '[') {
+                $depth++;
+                if ($depth === 1) {
+                    $atArgStart = true;
+
+                    continue;
+                }
+            } elseif ($t === ')' || $t === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    $closed = true;
+
+                    break;
+                }
+            } elseif ($t === ',' && $depth === 1) {
+                $atArgStart = true;
+
+                continue;
+            }
+
+            if (\is_array($t) && \in_array($t[0], $skip, true)) {
+                continue;
+            }
+            if (!$atArgStart || $depth !== 1) {
+                continue;
+            }
+
+            if (\is_array($t) && $t[0] === \T_STRING) {
+                $n = $k + 1;
+                while ($n < $count && \is_array($tokens[$n]) && \in_array($tokens[$n][0], $skip, true)) {
+                    $n++;
+                }
+                if ($n < $count && $tokens[$n] === ':') {
+                    $named[] = $t[1];
+                    $atArgStart = false;
+                    $k = $n;
+
+                    continue;
+                }
+            }
+
+            $positional = true;
+            $atArgStart = false;
+        }
+
+        // The list never closed, so the walk fell off the end of the token
+        // stream (rule 14): "I could not read it" must not be spelled the same
+        // way as "it was fine".
+        return ['named' => $named, 'positional' => $positional, 'unparsed' => !$closed];
     }
 
     /**
