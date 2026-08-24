@@ -224,6 +224,124 @@ final class DetectClosedStdinTest extends TestCase
     }
 
     /**
+     * THE GUARD ITSELF, DRIVEN DIRECTLY — because the three tests above pin the
+     * OUTCOME and the outcome is over-determined.
+     *
+     * MEASURED, five single-clause mutations of the repair, each run against
+     * this whole package suite (PHP 8.3.6): removing `drainStdin()`'s guard
+     * KILLS, and reverting `isInteractiveTty()`'s injected-stream arm to a bare
+     * `return true` KILLS — but removing `stdinFd()`'s own guard SURVIVED, and
+     * so did removing `readStdinTimed()`'s. Not because those clauses are
+     * wrong: because with any ONE of them in place the others are never reached
+     * with a dead handle. `probe()` drains unconditionally, so the drain guard
+     * absorbs the whole live path, and both read paths sit behind
+     * `isInteractiveTty()`, which already answers false for a dead descriptor.
+     *
+     * That is a redundancy worth keeping and worth PINNING rather than
+     * trusting: the reachability that makes each one dormant is a property of
+     * the callers, and callers move. So each clause is exercised here through
+     * reflection, at its own boundary, with a live-handle control beside it —
+     * which is what makes these assertions read a guard rather than an
+     * unreachable branch.
+     */
+    public function testEachGuardClauseAnswersOnItsOwnForADeadHandle(): void
+    {
+        $live = $this->pipe();
+        $dead = $this->pipe();
+        fclose($dead);
+
+        $stdinFd = new \ReflectionMethod(Detect::class, 'stdinFd');
+        Detect::setProbeStdin($live);
+        self::assertSame($live, $stdinFd->invoke(null), 'stdinFd() did not hand back a LIVE injected stream');
+        Detect::setProbeStdin($dead);
+        self::assertNull($stdinFd->invoke(null), 'stdinFd() handed on a closed resource');
+
+        // readStdinTimed(): '' is its no-answer value, and the control proves
+        // the method really reads rather than always answering ''.
+        $read = new \ReflectionMethod(Detect::class, 'readStdinTimed');
+        $pair = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($pair);
+        fwrite($pair[1], "\x1b[?62;4;0c");
+        self::assertSame("\x1b[?62;4;0c", $read->invoke(null, 200, $pair[0]), 'the control read nothing at all');
+        fclose($pair[0]);
+        fclose($pair[1]);
+        self::assertSame('', $read->invoke(null, 200, $dead), 'readStdinTimed() did not degrade on a dead handle');
+
+        // drainStdin(): void, so the control is the pipe being emptied.
+        $drain = new \ReflectionMethod(Detect::class, 'drainStdin');
+        $ctl = stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($ctl);
+        stream_set_blocking($ctl[0], false);
+        fwrite($ctl[1], 'stale probe bytes');
+        $drain->invoke(null, 50, $ctl[0]);
+        self::assertSame('', (string) fread($ctl[0], 64), 'the control did not drain, so the treatment says nothing');
+        fclose($ctl[0]);
+        fclose($ctl[1]);
+        $drain->invoke(null, 50, $dead);
+        self::addToAssertionCount(1); // reaching here IS the assertion: no throw.
+    }
+
+    /**
+     * `stdinFd()` IS THE ONLY PLACE IN THE FILE THAT NAMES THE CONSTANT, and
+     * that is asserted rather than left as a convention.
+     *
+     * The guard is a single resolution point, so a second inline
+     * `self::$probeStdin ?? STDIN` reintroduces the defect while every
+     * behavioural test above stays green — MEASURED: reverting both read paths
+     * to that inline spelling SURVIVED the whole package suite, because
+     * `readStdinTimed()`'s own guard absorbs it. A source-level assertion is
+     * the only thing that can see the difference, and E313's lesson is exactly
+     * that a spelling is where these hide.
+     *
+     * Token-based, not `grep`: this file's doc-blocks are full of the word, and
+     * a text search cannot tell a reference from a description of one. The
+     * fixture rows are the dead-instrument control (rule 15/E228) — a count of
+     * one is also what a scanner that matched nothing would report on a file
+     * with one, so the scanner is shown answering 0, 1 and 2 on sources whose
+     * answers are known before its answer here is believed.
+     */
+    public function testTheStdinConstantIsNamedExactlyOnceInDetect(): void
+    {
+        self::assertSame(0, self::stdinConstantCount('<?php $x = STDOUT;'));
+        self::assertSame(0, self::stdinConstantCount("<?php /** reads STDIN */\n// and \\STDIN\n\$x = 1;"));
+        self::assertSame(0, self::stdinConstantCount("<?php \$m = 'cannot read STDIN';"));
+        self::assertSame(1, self::stdinConstantCount('<?php $x = STDIN;'));
+        self::assertSame(1, self::stdinConstantCount('<?php $x = \STDIN;'));
+        self::assertSame(2, self::stdinConstantCount('<?php $a = STDIN; $b = \STDIN;'));
+
+        $source = (string) file_get_contents(\dirname(__DIR__) . '/src/Detect.php');
+        self::assertStringContainsString('function stdinFd()', $source, 'the guard method has been renamed');
+
+        self::assertSame(
+            1,
+            self::stdinConstantCount($source),
+            'Detect.php names the STDIN constant somewhere other than stdinFd(). That method is the single '
+                . 'place a dead descriptor 0 is turned into null (E318); a second inline '
+                . '`self::$probeStdin ?? STDIN` puts an unguarded handle back on a call path and no '
+                . 'behavioural test in this file can see it.',
+        );
+    }
+
+    /** Occurrences of the STDIN constant as a real reference, comments and strings excluded. */
+    private static function stdinConstantCount(string $source): int
+    {
+        $count = 0;
+        foreach (token_get_all($source) as $token) {
+            if (!\is_array($token)) {
+                continue;
+            }
+            if ($token[0] !== \T_STRING && $token[0] !== \T_NAME_FULLY_QUALIFIED) {
+                continue;
+            }
+            if (ltrim($token[1], '\\') === 'STDIN') {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
      * One end of a non-blocking socket pair, registered for teardown.
      *
      * A socket pair rather than `php://memory`: the guard's subject is
