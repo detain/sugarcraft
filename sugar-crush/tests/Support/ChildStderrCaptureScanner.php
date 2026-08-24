@@ -431,18 +431,41 @@ final class ChildStderrCaptureScanner
      * a spec whose elements ALL carry keys.
      *
      * WHAT IS TRUE NOW: it was applied on the FIRST element carrying an arrow,
-     * so a spec that MIXES the two spellings took it too. PHP hands a
-     * positional element the next free integer key, measured on PHP 8.3.6:
-     * `[0 => a, b, c]` has keys 0, 1, 2, `[1 => a, b]` has keys 1 and 2, and
-     * `[5 => a, b, c]` has keys 5, 6 and 7. So in a mixed spec fd 2 may be the
-     * second element, the third, or absent entirely - the position of an
-     * element no longer tells you its fd, and two of those three spellings put
-     * a pipe on fd 2 while the branch answered `inherited` for all three.
+     * so a spec that MIXES the two spellings took it too. PHP gives a
+     * positional element ONE GREATER THAN THE LARGEST INTEGER KEY IT HAS
+     * ASSIGNED SO FAR, measured on PHP 8.3.6: `[0 => a, b, c]` has keys 0, 1,
+     * 2, `[1 => a, b]` has keys 1 and 2, and `[5 => a, b, c]` has keys 5, 6
+     * and 7. So in a mixed spec fd 2 may be the second element, the third, or
+     * absent entirely - the position of an element no longer tells you its fd,
+     * and two of those three spellings put a pipe on fd 2 while the branch
+     * answered `inherited` for all three.
      *
-     * WHY THIS EARNS ITS PLACE: `inherited` is the shape this scanner's guards
-     * FLAG, so a wrong `inherited` reds correct code, and an exemption row
-     * written for correct code is where the next real offender hides. A mixed
-     * spec is therefore UNREADABLE rather than half-read - the same answer
+     * (THAT RULE USED TO BE WRITTEN HERE AS "the next free integer key", which
+     * is a DIFFERENT rule that agrees with the real one on all three examples
+     * above and disagrees elsewhere: `[5 => 'a', 0 => 'b', 'c']` has keys 5, 0
+     * and 6, where "next free" predicts 1. Measured, PHP 8.3.6. Nothing in the
+     * conclusion moves - if anything a running maximum is even less
+     * recoverable from an element's position than occupancy would be.)
+     *
+     * WHY THIS EARNS ITS PLACE, AND IT IS NOT THE REASON FIRST WRITTEN HERE.
+     * WHAT IT SAID: "`inherited` is the shape this scanner's guards FLAG, so a
+     * wrong `inherited` reds correct code, and an exemption row written for
+     * correct code is where the next real offender hides." WHAT IS TRUE NOW:
+     * that is not how the consumer works. {@see ChildStderrCaptureTest}'s
+     * `testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites()` treats
+     * everything that is not `captured` - and not an exempted `discarded` - as
+     * an offender, {@see SHAPE_UNCLASSIFIED} included, and says so in its own
+     * failure text. MEASURED: the same correct mixed spec, injected into a file
+     * in that guard's scope, reds it either way - as
+     * `(proc_open -> unclassified)` with this branch and as
+     * `(proc_open -> inherited)` with it reverted. The change relabels an
+     * offender; it does not stop one.
+     *
+     * WHY IT STILL EARNS ITS PLACE ANYWAY, on the two grounds that survive the
+     * measurement: `inherited` is a DEFINITE claim about where fd 2 goes and
+     * `unclassified` is an admission that this splitter cannot tell, which is
+     * rule 14 - what a guard cannot parse must be visible as unparsed rather
+     * than dressed as an answer. And it is the answer
      * {@see ChildLifetimeScanner::keysOf()} already gives the same shape,
      * reached independently. Two instruments walking one syntax disagreeing
      * about what they cannot read is the disagreement worth removing.

@@ -397,8 +397,11 @@ final class ChildStderrCaptureTest extends TestCase
 
         // A MIXED SPEC - some elements keyed, some positional - which the
         // arrow branch used to answer `inherited` for, on the strength of the
-        // first arrow it saw. PHP gives a positional element the next free
-        // integer key, MEASURED on PHP 8.3.6 with `array_keys()`: the first
+        // first arrow it saw. PHP gives a positional element ONE GREATER THAN
+        // THE LARGEST INTEGER KEY SO FAR - not "the next free key", which is a
+        // different rule that happens to agree on all three rows below and
+        // disagrees on `[5 => 'a', 0 => 'b', 'c']` (keys 5, 0, 6; "next free"
+        // predicts 1). MEASURED on PHP 8.3.6 with `array_keys()`: the first
         // two of these three put a PIPE on fd 2 and the third leaves fd 2
         // untouched, so one answer cannot be right for all three. The honest
         // answer is that position no longer names the fd.
