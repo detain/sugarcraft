@@ -11662,4 +11662,326 @@ built-in registration order).
 and still has the property the row claims — and not a golden-file comparison, which would red on every
 prose edit.
 
+### Ec49-1 — a per-file assertion in several censuses makes the suite's assertion total a function of the file COUNT
+
+**Recorded 2026-08-24 by round-49 lane c; CORRECTED the same day by the same lane after review.**
+Severity: measurement hygiene, and it voided this lane's own first baseline.
+
+**⚠️ THE FIRST VERSION OF THIS ENTRY SHIPPED THE NUMBER AND NOT THE GENERATOR, AND THE NUMBER WAS STALE
+TWO COMMITS LATER — inside the entry about measurement hygiene.** It said the delta was **four**, from
+`Support/ProcessUniqueTempNameTest` (3) and `Support/ReflectionLineSliceReaderCensusTest` (1). By the HEAD
+that shipped it the delta was **five**: the lane's own new `Support/NonBlockingVocabularyTest` calls
+`readOrFail()` once per file over `tests` **and** `src` in
+`testEveryContradictorySentenceIsOnTheRoster`, and `readOrFail()` asserts. That is rule 18 exactly — a
+cardinality measured over `tests/` is invalidated by the next commit, this lane's included.
+
+**So the claim, stated without a number.** Several censuses under `sugar-crush/tests/Support/` assert
+ONCE PER FILE in scope. The suite's assertion total is therefore a function of how many `.php` files
+`tests/` (and, for the scanners that also walk `src`, `src/`) contains — not of the tree's behaviour.
+**A floor figure is meaningful only with the commit it was taken at, and adjusting one arithmetically
+across a commit that adds or removes a test FILE is wrong even when the arithmetic is right.**
+
+**The generator, so the current delta can always be re-derived instead of quoted.** PHP 8.3.6,
+deterministic (no seed — it is a whole-population walk, not a sample), three takes on the control side:
+
+```sh
+cd sugar-crush
+vendor/bin/phpunit tests/Support tests/Cli tests/Config          # control
+printf '<?php\n' > tests/Support/<a name nothing else uses>.php  # exact-path create
+vendor/bin/phpunit tests/Support tests/Cli tests/Config          # probe
+rm -f tests/Support/<that exact path>                            # exact-path delete, never a glob
+git status --porcelain                                           # must be empty
+```
+
+Attribute the delta by re-running each suspect file alone with and without the probe. Observed values,
+each tagged with the commit they were taken at because that is the whole point of this entry: **+4 at
+`a85fcfd6`** (2243→2246 `ProcessUniqueTempNameTest`, 447→448 `ReflectionLineSliceReaderCensusTest`);
+**+5 at `5b3ee274`** (the same two, plus 751→752 `NonBlockingVocabularyTest`).
+
+**Why it matters.** This lane's first baseline read `142169` against a brief stating `142165`, and the
+difference was not the tree — the lane created two trait files WHILE the baseline run was in flight, so
+some censuses saw them and others did not. The brief's floor was right. Any lane that writes a file in
+`tests/` during a suite run gets a figure that belongs to no tree.
+
+**Step.** Three things, none urgent. (a) Quote a floor as `<tests> / <assertions> @ <sha>` and re-derive
+it, never adjust it. (b) Never start a baseline before the lane's first edit — or take it, then do not
+touch `tests/` until it finishes. (c) If a future round wants this delta as a fact rather than a
+footnote, it must be DERIVED BY A TEST and not written into prose (rule 18); the honest version of that
+is a guard asserting "every per-file census in `tests/Support/` is registered here", not a hard-coded
+count.
+
+---
+
+### Ec49-2 — three of `ReflectionLineSliceReaderCensusTest`'s offender arms were unpinned, and the sweep E322 asked for found them
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: guard coverage. **Measured, PHP 8.3.6. FIXED this
+round.**
+
+E322's step is "apply the same check to every other census/roster guard in `sugar-crush/tests/`: for each
+branch that appends to an offender list, mutate it to `false &&` and confirm something goes red." Run
+over this lane's files. `DuplicatedTestHelperDriftTest`'s two rule-14 branches are killed.
+`ProcessUniqueTempNameTest`'s two census arms and all three of
+`ReflectionLineSliceReaderCensusTest`'s arms **survived** — each run filtered to its own file, so each
+verdict is a claim about the guards in that file rather than about the suite.
+
+Both files are fixed with a pure classifier plus a table in both polarities, and the fix is verified by
+the rule-16 pair rather than by a green: with the table disabled the same mutation is green
+(`OK, 11 tests, 2231 assertions` / `OK, 2 tests, 439 assertions`), and with it present all five are
+killed.
+
+**The transferable half, one level past E322.** The branch a clean population cannot pin is the
+offender-PRODUCING one, not the roster-SPARING one — this lane wrote the opposite into a doc-block and
+the mutation refuted it within the hour. A roster branch IS pinned by the tree whenever the roster has
+rows, because disabling it turns every rostered file into an offender. So the question to ask of a census
+arm is not "is this branch fixtured" but "does this branch produce anything on the real population" — and
+if the answer is no, nothing but a table can pin it.
+
+**Step.** The same sweep over the guards no lane held this round: `tests/Cli/`, `tests/Config/`,
+`tests/Diagnostics/`. **NOT `TtyStreamArgumentCensusTest`** — this entry's first draft named its two
+`constants[]` arms as unextracted and therefore suspect, which was an assertion and not a measurement.
+Measured before shipping the sentence: gating BOTH on `false` is KILLED (46 tests, 51 assertions,
+1 failure, filtered to that file). Lane b's repair covers them; only the `offenders[]` halves go through
+`ttyOffender()`/`optionsOffender()`, and the `constants[]` halves are pinned by the exact-roster
+assertion beneath them instead. Recorded because the *shape* looked exactly like the finding above and
+was not one.
+
+---
+
+### Ec49-3 — consolidating a helper exposes which consumers were never testing half of it
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: the round's transferable lesson. **Measured, PHP
+8.3.6. FIXED this round.**
+
+`significantTokens()` had five declarations plus a sixth spelling written inline inside
+`BootstrapTranscriptSeamCallSiteCensusTest::countSeamCallSites()` (E331 counted the five; a search for a
+declaration cannot find the sixth). Extracted into `DropsInsignificantTokensTrait`.
+
+**What the extraction made visible, which five copies had hidden.** Mutating the SHARED strip to stop
+dropping `T_COMMENT`/`T_DOC_COMMENT` reddened only THREE of the five consumers.
+`ContainedPathInventoryTest` and `ProcessUniqueTempNameTest` had controls for the whitespace half and
+NONE for the comment half — invisible while each owned its own copy, because no test compares two
+consumers' coverage of one helper. Both now carry a fixture verified in both directions, and the comment
+has to sit where the walk reads a NEIGHBOUR, since adjacency is what the strip buys.
+
+**Generalise it.** A shared helper is the only place from which "which consumers actually test this" is a
+single mutation. Every future consolidation should end with one mutation of the shared body per drop, and
+a list of which consumers reddened — the ones that did not are the finding.
+
+**The fifth copy is deliberately not a consumer, and the reason is a measurement.**
+`Config/ReadmeJsonErrorContractDriftTest::significantTokens()` returns `list<PhpToken>` from
+`PhpToken::tokenize()`, and its callers read `$t->text` and `$t->is([...])`. Folding it in is a rewrite of
+that file's every walk, not a consolidation. **Step:** either port that file to the trait's return type
+in a round that owns `tests/Config/`, or record the two shapes as deliberate and pin the divergence.
+
+---
+
+### Ec49-4 — `readOrFail()` survives in three MORE files, and none of the three has a fixture reaching its arm
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: latent, and a narrower version of E332.
+
+E332 named three census files; there are six. The three this lane consolidated into
+`RefusesAnUnreadableSourceTrait` each had a fixture reaching the refusal. The three left —
+`Config/DocumentParagraphsTest`, `Config/ConfigWriteProducerDocumentationDriftTest` and
+`Config/GlobFigureDriftTest` — have **no fixture at all**, so reverting any of them to
+`(string) file_get_contents()` is a mutation nothing in the tree can kill.
+
+They were left deliberately: two carry a `could not be read` message and one carries `the census over it
+is void`, which is the one-token pair `DuplicatedTestHelperDriftTest::ACCEPTED_DIVERGENCE` has its
+`readOrFail` row for. Folding all three in would strand that row inside a consolidation, which is a data
+edit hiding in a refactor.
+
+**Step.** In a round that owns `tests/Config/`: fold the three into the trait, and delete the
+`readOrFail` row from `ACCEPTED_DIVERGENCE` in the same commit, with the reason in the commit message.
+
+---
+
+### Ec49-5 — E319's own figures are wrong in two places, derived rather than quoted
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: entry accuracy. **Measured, PHP 8.3.6, by
+`tests/Support/NonBlockingVocabularyTest`, which derives it on every run.**
+
+E319 lists `tests/Support/ForkedChildTest.php (×2)`. The tree has **four** — two copies of the pair. That
+correction stands.
+
+**⚠️ THE SECOND HALF OF THIS ENTRY WAS ITSELF WRONG, and the entry was the output of the instrument that
+was wrong.** It said of `tests/SuiteChildStdinIsolationTest.php`'s two sites that one is CONSISTENT —
+`assertTrue($meta['blocked'])` beside a sentence naming the clearing verb, "which is the correct
+pairing". It is not the correct pairing, and E319 was RIGHT to list that file. The site is the tree's
+only AFFIRMATIVELY-phrased message, `rank()` graded affirmative messages backwards (see Ec49-7), and this
+entry faithfully reported what the broken scanner returned. Deriving a figure instead of quoting one
+protects against a stale figure; it does not protect against a wrong instrument, and this is what that
+looks like from the inside.
+
+Verified against the CODE and not against the rule (rule 8): `tests/bootstrap.php` ends in
+`if (!stream_isatty(\STDIN)) { stream_set_blocking(\STDIN, false); }`, so the only act it could perform
+on a tty is a flag SET. The sentence says "cleared". Inverted.
+
+Measured total over `tests/` and `src/` after the `rank()` repair: **nine** contradictory sentences in
+four files, and one unrankable (the `:189` sentence naming both directions, which is a different defect
+and is rostered as its own kind). All rostered in both directions.
+
+**Step.** The supervisor sweep E319 asks for still wants doing — this lane owns none of the four files.
+When it happens, the roster rows red and must be DELETED, which is the success case and is said so in the
+failure text. `tests/SuiteChildStdinIsolationTest.php` needs BOTH of its sentences repaired and BOTH of
+its rows deleted, in the same commit as the repair.
+
+---
+
+### Ec49-6 — the static-path scanner's four stated holes are closed, and the residual is now five different shapes
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: coverage, closed. **Measured, PHP 8.3.6. FIXED this
+round** (E330).
+
+Heredoc/nowdoc bodies, class constants resolved within the declaring file, a scheme stripped before the
+anchored root match, and `proc_open` plus the two `stream_socket_*` builders. Over `tests`, `src` and
+`bin/sugarcrush`: **zero** new offenders, so the widening bought coverage rather than a roster.
+
+The bound test now carries a positive row per closed hole and six negatives, because deleting a
+"cannot see" row is only half of closing one — without a row that reds when the widening is reverted, the
+capability is exactly as unpinned as the absence was.
+
+**What is still outside**, each pinned by a row: a path assembled by a call such as `sprintf()`; a
+constant declared in ANOTHER file; a `define()`d global constant; a write reached through a method rather
+than a global call; an interpolating double-quoted string. **Step.** The cheapest two are the global
+constant (one more pre-pass, same shape as the class-constant one) and the cross-file class constant
+(needs a two-pass scan over the population, which the census already builds).
+
+**AMENDED the same day, after review, by the same lane.** The class-constant pre-pass's comment claimed
+it registered a constant "under EVERY spelling it can be reached by within the file". It registered
+three — `self::`, `static::` and the bare declaring-class name. Measured through the real scanner:
+`\Ns\A::LOG_PATH` and `parent::LOG_PATH` both answered `[]`, and **neither was on the derived "cannot
+see" list either**, so the bound this entry calls "pinned by a row" was incomplete in the same direction
+as the prose it was written to replace. Both are registered now (namespace-qualified whenever the file
+declares a namespace; `parent` whenever something in the file extends the declaring class), each with a
+positive row, and the comment writes its list of five out instead of quantifying. Three MORE shapes join
+the residual, all derived: a RELATIVE qualified name (`Sub\A::P` under `namespace Ns;` resolves to
+`Ns\Sub\A`), a name reached through a `use … as` alias, and `parent::` where the parent class lives in
+another file. All three need the file's import table or a second file, which is the same missing
+machinery as the existing cross-file row.
+
+**The transferable part is not the spellings.** A quantifier in a comment ("every", "all", "any") cannot
+be checked by reading and is not checked by the suite. Where a bound matters, WRITE THE LIST — a list
+that goes stale is visibly a list, and a reader can count it against the code in a way they cannot count
+a quantifier.
+
+---
+
+### Ec49-7 — a known-answer table can have every row in one grammatical shape, and the shape it omits is the one the code gets backwards
+
+**Recorded 2026-08-24 by round-49 lane c, from its own reviewer's BLOCKING finding.** Severity:
+correctness of a guard. **FIXED this round.**
+
+`NonBlockingVocabularyTest::rank()` graded every failure message against the flag direction its assertion
+DEMANDS. That is correct only for the NEGATED form. A failure message is read at the instant the
+assertion fails, so:
+
+- NEGATED — `assertFalse($m['blocked'], 'did not <verb> the flag')` names the demanded act and reports it
+  missing, so the correct verb IS the demanded direction.
+- AFFIRMATIVE — `assertTrue($m['blocked'], 'X <verb>ed the flag')` describes the state AT FAILURE, which
+  is the OPPOSITE of the demand, so the correct verb is the opposite one.
+
+The rule was therefore **inverted, not merely blind**, on the affirmative shape — wrong in both
+polarities — and the tree has exactly one affirmative site, which it false-cleaned:
+`tests/SuiteChildStdinIsolationTest.php`'s TERMINAL arm came back `consistent`, the file was rostered as
+carrying zero inverted sentences, and the census would have gone **red if anybody repaired it**.
+
+**Why the file's own known-answer table did not catch it (rule 11, one turn further than the round-43
+finding that produced rule 11).** All four polarity rows were the negated form: `did not clear`, `did not
+put … back`, `did not set`, `did not clear`. The table did not lack a row for a case it knew about; the
+shape it mis-ranked was **outside its own alphabet by construction**. A polarity table needs a row per
+GRAMMATICAL SHAPE × direction, not per direction.
+
+**Two things the fix had to add beyond the flip.** (a) `negatesTheVerb()` returns `null` — `unreadable` —
+when a message carries a negation it cannot attach to the verb, because `the bootstrap cleared the flag,
+which is not allowed` is affirmative about the verb and negated about the consequence, and a bare
+`str_contains($body, 'not')` inverts it silently (rule 14). (b) A measured reach: the widest gap in the
+real population is two words (`did not put O_NONBLOCK back`), the bound is four, and a five-word gap is
+reported unreadable rather than guessed.
+
+**Step, and it must land TOGETHER with the prose fix.** The repair to
+`tests/SuiteChildStdinIsolationTest.php:181`'s sentence — "cleared" → "set", because
+`tests/bootstrap.php` ends in `if (!stream_isatty(STDIN)) { stream_set_blocking(STDIN, false); }` and the
+only act it could perform on a tty is a flag SET — is **lane e's**, and it must be committed WITH the
+deletion of that file's `INVERTED_ROSTER` row. Either alone reds the census. That file also owns the one
+`UNREADABLE_ROSTER` row (the :189 sentence naming both directions), which is a separate repair.
+
+---
+
+### Ec49-8 — a doc-block that NAMES a PHPUnit annotation IS that annotation, and it skipped the test written to stop skipping
+
+**Recorded 2026-08-24 by round-49 lane c, against itself.** Severity: trap, cost about four minutes.
+**Measured, PHP 8.3.6, PHPUnit 10.5.64. FIXED before it shipped.**
+
+Removing a requires-annotation from a test and writing a paragraph explaining why it was removed
+**re-created it**: the annotation name appeared in the replacement doc-block, PHPUnit's metadata parser
+read it out of the comment exactly as it had read the original, and the test skipped — inside the change
+whose entire purpose was that it should never skip. The suite reported `Skipped: 1` for a file that
+carries no `markTestSkipped` at all.
+
+This is rule 26 one level down. Rule 26 is about a textual SWEEP corrupting the prose that describes the
+pattern it rewrites; this is a doc-comment corrupting itself simply by quoting a directive, with no sweep
+involved. **A doc-comment is not an inert place to quote a doc-comment directive.** The same trap is live
+for every other annotation the tooling reads out of comments — a provider, a group, a depends, a
+covers — in any explanatory paragraph, `CALIBER_LEARNINGS.md` fragments included.
+
+**Step.** When a paragraph must name an annotation, spell it without the sigil ("an OS-Linux
+requires-annotation"). Cheap guard for a later round: assert that no test method in `tests/` is reported
+skipped for a reason its own file does not contain a `markTestSkipped` for — which is exactly the shape
+this produced, and is derivable from PHPUnit's own result output rather than from a text scan.
+
+---
+
+### Ec49-10 — `BootstrapSkillSkipsTest` goes RISKY, not red, under parallel-lane load, and the diff in flight gets the blame
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: measurement hygiene / flake attribution.
+**Observed once in five runs of `tests/Support tests/Cli tests/Config` at PHP 8.3.6, with four sibling
+lanes running suites on the same box.**
+
+One three-directory run reported `Tests: 1282, Assertions: 37575, Risky: 2` pointing at
+`tests/Cli/BootstrapSkillSkipsTest.php`. The file passes alone (`OK, 5 tests, 8 assertions`) and the same
+three-directory run reproduced clean immediately after and three times since, at the same commit, with
+`37578` assertions — so the risky run also SHED three assertions, which is the tell.
+
+**Mechanism, and it is not a guess about the test's logic.** The file spawns real child processes under
+`timeout -s KILL 60` with a `sys_get_temp_dir()` working directory. Under four concurrent suites a child
+that would finish in a second can miss a 60-second wall clock; the arm that would have asserted never
+runs, and PHPUnit reports the test as risky rather than failed. Nothing in the file is shared with a
+sibling lane — the temp dir is process-unique — so this is contention for CPU, not for a path.
+
+**Why it needs an entry rather than a shrug.** A risky verdict in the middle of a lane's run reads
+exactly like a defect the lane just introduced, and the lane has no cheap way to tell the difference
+except to re-run. Round 44 lost time to the `/tmp` version of this; this is the CPU version, and it
+survives every `/tmp` precaution because it is not about `/tmp`.
+
+**Step.** Two options, neither taken here. (a) Raise the child budget in that file, which trades a
+diagnosis for a longer red when a child genuinely hangs. (b) Better: make the timeout budget an explicit
+named constant with the reason beside it, so the next reader can raise it knowingly. Until then: **a
+risky or red verdict on this file during a parallel round should be re-run alone before it is attributed
+to anything.**
+
+---
+
+### Ec49-9 — a false-positive guard is unpinned by construction, and this suite has at least one
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: coverage. **FIXED this round for the one instance
+found; the rule is the deliverable.**
+
+`vocabularySites()`'s `$tokens[$i + 1] === '('` stops the body walk starting from a `T_STRING` that is not
+a call. Mutating it to never skip **SURVIVED** `tests/Support tests/Cli tests/Config`, because no bare
+`assertTrue`/`assertFalse` token exists anywhere in the tree.
+
+**The general shape, which is what makes this worth an entry.** A guard that prevents FALSE POSITIVES is
+unpinnable by the real population by definition — the population is exactly the set of inputs on which it
+does nothing. Every mutation-survival audit will report these as survivals, and the temptation is to read
+the survival as "this branch is dead" and delete it. It is not dead; it is untriggered. The fixture has
+to be synthetic, and that is correct rather than a compromise: it is the only input that distinguishes
+the guard from its absence.
+
+**Step.** When a mutation survives, classify the branch before acting: an OFFENDER-PRODUCING branch that
+survives is a coverage hole in the census (Ec49-2's rule); a FALSE-POSITIVE guard that survives needs a
+synthetic fixture and must not be deleted (rule 6). The two look identical in a mutation table and want
+opposite responses.
+
+---
+
 ---

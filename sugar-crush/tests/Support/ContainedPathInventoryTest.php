@@ -144,6 +144,8 @@ use SugarCraft\Crush\Support\ContainedPath;
  */
 final class ContainedPathInventoryTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
+
     /**
      * The functions a path-against-boundary prefix compare can be written with.
      *
@@ -459,6 +461,20 @@ final class ContainedPathInventoryTest extends TestCase
                 "\$base = str_starts_with(\$token, '/') ? \$token : \$root . '/' . \$token;",
                 0,
             ],
+            // THE COMMENT HALF OF THE SHARED STRIP, PINNED (rule 15).
+            // {@see DropsInsignificantTokensTrait} drops T_WHITESPACE, T_COMMENT
+            // and T_DOC_COMMENT, and until this row and its twin in
+            // routedShapes() NOTHING in this file noticed if it stopped dropping
+            // the last two. MEASURED, PHP 8.3.6, by mutating the trait: with
+            // T_COMMENT/T_DOC_COMMENT out of the strip every other row here was
+            // still green, and this one answers 0. The comment has to sit
+            // BETWEEN the two operands of the concat — a comment before the
+            // whole argument survives the mutation, because what the strip buys
+            // is ADJACENCY and only the operand walk reads neighbours.
+            'a separator concat with a comment between its operands' => [
+                "str_starts_with(\$p, \$b . /* c */ '/');",
+                1,
+            ],
         ];
     }
 
@@ -532,6 +548,17 @@ final class ContainedPathInventoryTest extends TestCase
             ],
             'used to decide a throw' => ['ContainedPath::within($a, $b) or throw new \\RuntimeException();', true],
             'used to guard a right-hand side' => ['ContainedPath::within($a, $b) && $this->read($a);', true],
+            // THE COMMENT HALF OF THE SHARED STRIP, PINNED (rule 15) — the
+            // routed-call twin of the row at the end of compareSpellings().
+            // This walk reads the neighbours of the `::` by index and a comment
+            // is legal in exactly that position. MEASURED, PHP 8.3.6: 1 at head,
+            // 0 with T_COMMENT/T_DOC_COMMENT out of the trait's strip, so it
+            // fails as a MISSED call rather than as a miscounted one — which is
+            // the direction that reads as a clean tree.
+            'with a comment between the class and the operator' => [
+                'if (ContainedPath /* c */ :: within($a, $b)) { }',
+                true,
+            ],
         ];
     }
 
@@ -703,7 +730,7 @@ final class ContainedPathInventoryTest extends TestCase
      */
     private function routedCallsIn(string $code): array
     {
-        $tokens = $this->significantTokens($code);
+        $tokens = self::significantTokens($code);
         $calls = [];
 
         foreach ($tokens as $i => $token) {
@@ -1264,7 +1291,7 @@ final class ContainedPathInventoryTest extends TestCase
      */
     private function handSpelledComparesIn(string $code): array
     {
-        $tokens = $this->significantTokens($code);
+        $tokens = self::significantTokens($code);
         $found = [];
 
         foreach ($tokens as $i => $token) {
@@ -1432,31 +1459,6 @@ final class ContainedPathInventoryTest extends TestCase
         }
 
         return false;
-    }
-
-    /**
-     * $code's tokens with whitespace and comments dropped.
-     *
-     * Comments are dropped rather than skipped per line because a doc-comment
-     * `{@see ContainedPath::within()}` is a cross-reference, not a call site,
-     * and counting those is what inflated an earlier hand count.
-     *
-     * @return list<array{0: int, 1: string, 2: int}|string>
-     */
-    private function significantTokens(string $code): array
-    {
-        $tokens = [];
-        foreach (token_get_all($code) as $token) {
-            if (\is_array($token)
-                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
-            ) {
-                continue;
-            }
-
-            $tokens[] = $token;
-        }
-
-        return $tokens;
     }
 
     /** @param array{0: int, 1: string, 2: int}|string|null $token */

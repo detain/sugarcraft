@@ -70,6 +70,9 @@ use PHPUnit\Framework\TestCase;
  */
 final class ProcessUniqueTempNameTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
+    use RefusesAnUnreadableSourceTrait;
+
     /**
      * Directories scanned by both censuses, plus the one entry-point script.
      *
@@ -195,10 +198,21 @@ final class ProcessUniqueTempNameTest extends TestCase
         ],
     ];
 
-    /** Global calls for which a fixed shared path in ANY argument is the hazard. */
+    /**
+     * Global calls for which a fixed shared path in ANY argument is the hazard.
+     *
+     * THE LAST THREE ARE NOT WRITES IN THE ORDINARY SENSE AND ARE HERE ANYWAY
+     * (E330). `stream_socket_server('unix:///tmp/…')` CREATES a filesystem
+     * entry and `proc_open()`'s fourth argument is a working DIRECTORY the
+     * child then writes into; both were named as outside the alphabet by
+     * {@see testTheStaticPathScannerSaysWhatItCannotSee()} and both are real
+     * collision surfaces, which is why the row said so rather than calling the
+     * omission a decision.
+     */
     private const MUTATING_CALLS = [
         'file_put_contents', 'mkdir', 'touch', 'unlink', 'rmdir',
         'copy', 'rename', 'symlink', 'link', 'fopen', 'chmod',
+        'proc_open', 'stream_socket_server', 'stream_socket_client',
     ];
 
     /**
@@ -263,11 +277,9 @@ final class ProcessUniqueTempNameTest extends TestCase
             }
 
             $counts[$relative] = \count($lines);
-            if (isset(self::NO_ENTROPY_FLAG_INVENTORY[$relative])) {
-                continue;
-            }
-            foreach ($lines as $line) {
-                $offenders[] = $relative . ':' . $line;
+
+            foreach (self::armOffenders($relative, $lines, self::NO_ENTROPY_FLAG_INVENTORY) as $offender) {
+                $offenders[] = $offender;
             }
         }
 
@@ -532,11 +544,9 @@ final class ProcessUniqueTempNameTest extends TestCase
             }
 
             $counts[$relative] = \count($sites);
-            if (isset(self::STATIC_TEMP_PATH_INVENTORY[$relative])) {
-                continue;
-            }
-            foreach ($sites as $site) {
-                $offenders[] = $relative . ':' . $site;
+
+            foreach (self::armOffenders($relative, $sites, self::STATIC_TEMP_PATH_INVENTORY) as $offender) {
+                $offenders[] = $offender;
             }
         }
 
@@ -621,44 +631,118 @@ final class ProcessUniqueTempNameTest extends TestCase
         ), 'a fixed path that is only compared, never written, was reported');
     }
 
+    // =========================================================================
+    // The arm — what a census DOES with a scanner's verdict
+    // =========================================================================
+
     /**
-     * RULE 14 AT THE READ IS ALSO PINNED, because a robustness arm nothing
-     * exercises is a robustness arm nobody notices the loss of.
+     * The offender lines one file contributes, given the scanner's verdict for
+     * it and the inventory that may spare it.
      *
-     * The alternative — `(string) file_get_contents()` — turns an unreadable
-     * file into an empty one, an empty one into "no hits", and "no hits" into a
-     * clean census. Three silent steps, and every count in this file would then
-     * be a statement about how many files the process happened to be allowed to
-     * open. Reverting {@see readOrFail()} to the cast is a mutation nothing
-     * else here can kill: no real source in the tree is unreadable, so the arm
-     * has no natural input. This is that input.
+     * EXTRACTED BECAUSE A SCANNER'S FIXTURES DO NOT PIN THE ARM THAT READS IT
+     * (E322), and WHICH of its two branches was unpinned is a measurement
+     * rather than a guess — the first version of this paragraph named the wrong
+     * one and was corrected by the mutation it claimed to describe.
+     *
+     * THE OFFENDER-PRODUCING BRANCH IS THE UNPINNED ONE. Both channels below
+     * assert an ABSENCE, and the tree has no offenders, so an arm that reported
+     * NOTHING AT ALL is indistinguishable from a correct one on real input.
+     * MEASURED, PHP 8.3.6, with {@see armCases()} disabled and the loop
+     * replaced by `return []`: **OK, 11 tests, 2231 assertions** — green. With
+     * the table present the same mutation reds. That pair, and not the green
+     * before it, is what says the table is the fix (rule 16).
+     *
+     * THE ROSTER-SPARING BRANCH IS PINNED BY THE TREE ITSELF, which is why it
+     * is worth writing down that it is not this repair's subject: both
+     * inventories above carry rows, so disabling the `isset()` turns those
+     * rostered files into offenders and both censuses red even with the table
+     * gone (MEASURED, same session: 2 failures). A branch whose suppression has
+     * something real to suppress is guarded by the population; a branch whose
+     * output is empty on the whole population is not guarded by anything.
+     *
+     * The scanners either side of these six lines have thorough known-answer
+     * tables. The six lines between them had none.
+     *
+     * ONE FUNCTION FOR BOTH CHANNELS, and that is the second half of the
+     * repair. The two arms were separate copies of the same six lines, so a
+     * table for one would have pinned only one — the shape
+     * {@see DuplicatedTestHelperDriftTest} exists for, arriving inside a single
+     * file where even that guard (which compares across FILES) could not see
+     * it.
+     *
+     * NEITHER POLARITY IS EVIDENCE ALONE, which is why
+     * {@see armCases()} carries both: without the rows that must produce an
+     * offender, an arm that reports nothing passes; without the rows that must
+     * produce none, an arm that reports everything passes.
+     *
+     * @param  list<int|string>                         $sites     the scanner's verdict for this file
+     * @param  array<string,array{sites:int,why:string}> $inventory rows that spare a file
+     * @return list<string>
      */
-    public function testTheReadRefusesAFileItCannotOpenInsteadOfReadingItAsEmpty(): void
+    private static function armOffenders(string $relative, array $sites, array $inventory): array
     {
-        $absent = \dirname(__DIR__, 2) . '/tests/Support/no_such_file_'
-            . \getmypid() . '_' . \bin2hex(\random_bytes(6)) . '.php';
-
-        self::assertFileDoesNotExist($absent);
-
-        // The PHP-level warning from the failed open is the point of the
-        // fixture and is not the thing under test; this suite runs with
-        // failOnWarning, so it is swallowed HERE rather than with an `@` in
-        // readOrFail(), where it would also swallow the diagnosis on a real
-        // unreadable source.
-        $previous = \set_error_handler(static fn (): bool => true);
-        $refused  = false;
-
-        try {
-            self::readOrFail($absent);
-        } catch (\PHPUnit\Framework\AssertionFailedError) {
-            $refused = true;
-        } finally {
-            \set_error_handler($previous);
+        if (isset($inventory[$relative])) {
+            return [];
         }
 
-        self::assertTrue($refused, 'the read returned instead of refusing a file it could not '
-            . 'open, so an unreadable source now reaches every scanner in this file as empty '
-            . 'text and is reported as a clean one');
+        $offenders = [];
+        foreach ($sites as $site) {
+            $offenders[] = $relative . ':' . $site;
+        }
+
+        return $offenders;
+    }
+
+    /**
+     * KNOWN-ANSWER TABLE FOR THE ARM, in both polarities (E322).
+     *
+     * @param list<int|string>                          $sites
+     * @param array<string,array{sites:int,why:string}> $inventory
+     * @param list<string>                              $expected
+     *
+     * @dataProvider armCases
+     */
+    public function testTheCensusArmAnswersCorrectlyOnCasesWhoseAnswerIsKnown(
+        string $why,
+        string $relative,
+        array $sites,
+        array $inventory,
+        array $expected,
+    ): void {
+        self::assertSame($expected, self::armOffenders($relative, $sites, $inventory), $why);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: string, 2: list<int|string>, 3: array<string,array{sites:int,why:string}>, 4: list<string>}>
+     */
+    public static function armCases(): iterable
+    {
+        $row = ['sites' => 1, 'why' => 'a fixture row, not a claim about the tree'];
+
+        yield 'an unrostered file reports one offender per site' => [
+            'a scanner hit in a file with no inventory row was not reported',
+            'src/A.php', [3, 9], [], ['src/A.php:3', 'src/A.php:9'],
+        ];
+        yield 'a rostered file is spared' => [
+            'a file WITH an inventory row was still reported, so the roster does nothing',
+            'src/A.php', [3], ['src/A.php' => $row], [],
+        ];
+        yield 'a row for another file does not spare this one' => [
+            'the roster lookup is not keyed on the file, so one row spares everything',
+            'src/A.php', [3], ['src/B.php' => $row], ['src/A.php:3'],
+        ];
+        yield 'a clean unrostered file reports nothing' => [
+            'a file the scanner cleared was reported anyway',
+            'src/A.php', [], [], [],
+        ];
+        yield 'a clean rostered file reports nothing' => [
+            'a rostered file the scanner cleared was reported',
+            'src/A.php', [], ['src/A.php' => $row], [],
+        ];
+        yield 'the offender names the file and the line, in that order' => [
+            'the offender line no longer reads <file>:<line>, so a real report would be unreadable',
+            'src/Deep/Nested.php', [42], [], ['src/Deep/Nested.php:42'],
+        ];
     }
 
     // =========================================================================
@@ -909,6 +993,56 @@ final class ProcessUniqueTempNameTest extends TestCase
      *
      * @return list<int> 1-indexed lines, sorted, unique
      */
+    /**
+     * The namespace this file declares, or '' for the global one.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function namespaceOf(array $tokens): string
+    {
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_NAMESPACE) {
+                continue;
+            }
+            $name = $tokens[$i + 1] ?? null;
+            if (\is_array($name) && \in_array($name[0], [\T_STRING, \T_NAME_QUALIFIED], true)) {
+                return $name[1];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Every name this file writes after `extends`, as a lookup.
+     *
+     * The KEY is the trailing segment, because that is the spelling under which
+     * a class in the same file was registered: `extends \Ns\A` and `extends A`
+     * name the same declaration when both live here.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     *
+     * @return array<string,true>
+     */
+    private static function extendedNames(array $tokens): array
+    {
+        $found = [];
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_EXTENDS) {
+                continue;
+            }
+            $name = $tokens[$i + 1] ?? null;
+            if (!\is_array($name)
+                || !\in_array($name[0], [\T_STRING, \T_NAME_QUALIFIED, \T_NAME_FULLY_QUALIFIED], true)) {
+                continue;
+            }
+            $segments = explode('\\', $name[1]);
+            $found[(string) end($segments)] = true;
+        }
+
+        return $found;
+    }
+
     private static function staticTempPathWrites(string $source): array
     {
         $tokens = self::significantTokens($source);
@@ -917,6 +1051,77 @@ final class ProcessUniqueTempNameTest extends TestCase
         $roots = [];
         $paths = [];
         $depth = 0;
+
+        // THE FILE'S NAMESPACE AND ITS `extends` EDGES, BOTH NEEDED BEFORE THE
+        // FIRST CONSTANT IS REGISTERED. The namespace decides the fully
+        // qualified spelling of every class below it, and `parent::` can only
+        // be attached to a class whose name something in this file extends —
+        // which may be written AFTER the class it names, so it cannot be
+        // collected in the same forward pass.
+        $namespace = self::namespaceOf($tokens);
+        $extended  = self::extendedNames($tokens);
+
+        // CONSTANTS FIRST, BINDINGS SECOND, and the order is load-bearing: a
+        // field assigned `self::LOG_PATH` in a constructor can only be
+        // classified once the constant it names has been.
+        $class = null;
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+
+            if (\is_array($token) && $token[0] === \T_CLASS
+                && !(isset($tokens[$i - 1]) && \is_array($tokens[$i - 1]) && $tokens[$i - 1][0] === \T_NEW)
+                && isset($tokens[$i + 1]) && \is_array($tokens[$i + 1]) && $tokens[$i + 1][0] === \T_STRING) {
+                $class = $tokens[$i + 1][1];
+            }
+            if (!\is_array($token) || $token[0] !== \T_CONST) {
+                continue;
+            }
+
+            // `const NAME = …` and PHP 8.3's `const string NAME = …`; the name
+            // is whichever T_STRING the `=` follows.
+            $nameAt = $i + 1;
+            if (isset($tokens[$nameAt + 1]) && self::text($tokens[$nameAt + 1]) !== '=') {
+                $nameAt++;
+            }
+            if (!isset($tokens[$nameAt], $tokens[$nameAt + 1])
+                || !\is_array($tokens[$nameAt]) || $tokens[$nameAt][0] !== \T_STRING
+                || self::text($tokens[$nameAt + 1]) !== '=') {
+                continue;
+            }
+
+            $end     = self::statementEnd($tokens, $nameAt + 2);
+            $verdict = self::classifyAnyStaticBranch($tokens, $nameAt + 2, $end, $roots, $paths);
+            if ($verdict === self::PATH_NOT_STATIC) {
+                continue;
+            }
+
+            $receivers = ['self', 'static', $class];
+            if ($class !== null && $namespace !== '') {
+                $receivers[] = $namespace . '\\' . $class;
+            }
+            if ($class !== null && isset($extended[$class])) {
+                // `parent::` is relative to the SUBCLASS, and this map is
+                // whole-file rather than scope-aware by construction (see the
+                // one-binding paragraph above). Registering the name means a
+                // second class in the same file writing `parent::P` resolves —
+                // and, if two classes in one file both had a `P`, that a
+                // subclass of the wrong one would resolve too. That is a false
+                // POSITIVE, which is loud, in a scanner whose stated trade is
+                // exactly that.
+                $receivers[] = 'parent';
+            }
+
+            foreach ($receivers as $receiver) {
+                if ($receiver === null) {
+                    continue;
+                }
+                if ($verdict === self::PATH_FIXED_FILE) {
+                    $paths[$receiver . '::' . $tokens[$nameAt][1]] = true;
+                } else {
+                    $roots[$receiver . '::' . $tokens[$nameAt][1]] = true;
+                }
+            }
+        }
 
         for ($i = 0; $i < $count; $i++) {
             $text = self::text($tokens[$i]);
@@ -1103,6 +1308,37 @@ final class ProcessUniqueTempNameTest extends TestCase
     }
 
     /**
+     * Whether one string's CONTENT names the temp root, and whether anything
+     * is appended to it.
+     *
+     * A SCHEME IS NOT PART OF THE PATH, and reading it as one is why
+     * `stream_socket_server('unix:///tmp/fixed.sock')` was outside the
+     * alphabet (E330): the literal does not BEGIN at the root, so an anchored
+     * match on `/tmp/` could never see it however the call was reached. The
+     * strip is anchored and scheme-shaped (`[a-z][a-z0-9+.-]*://`), so it
+     * cannot eat a path — and a host-relative URL such as
+     * `'https://example.com/tmp/x'` still does not match afterwards, because
+     * what is left does not start at the root either. MEASURED, PHP 8.3.6.
+     *
+     * THE LEAF IS COMPUTED WHETHER OR NOT THE ROOT MATCHED, and that is
+     * deliberate rather than sloppy: `sys_get_temp_dir() . '/fixed.log'` is
+     * two operands, and the second one carries the leaf with no root in it at
+     * all. A leaf test gated on the root would spare exactly the idiom this
+     * census exists for.
+     *
+     * @return array{bool, bool} names the root, carries a leaf
+     */
+    private static function literalParts(string $content): array
+    {
+        $bare = (string) preg_replace('#^[a-z][a-z0-9+.\\-]*://#i', '', $content);
+
+        return [
+            preg_match('#^/(?:var/)?tmp/#', $bare) === 1,
+            trim((string) preg_replace('#^/(?:var/)?tmp/#', '', $bare), '/') !== '',
+        ];
+    }
+
+    /**
      * Whether tokens[$from..$to] is a temp root concatenated with literals and
      * nothing else, and if so whether anything is appended to the root.
      *
@@ -1112,17 +1348,34 @@ final class ProcessUniqueTempNameTest extends TestCase
      * the ordinary idiom, every write through that name was reported however
      * much entropy the write site added. See {@see PATH_TEMP_ROOT}.
      *
-     * WHAT THIS ALPHABET STILL CANNOT EXPRESS, measured rather than assumed and
-     * pinned by {@see testTheStaticPathScannerSaysWhatItCannotSee()}: a path
-     * built in a heredoc, one reached through a class constant, and a path
-     * handed to a call outside {@see MUTATING_CALLS} and
-     * {@see MUTATING_CONSTRUCTORS} — `proc_open()`'s cwd, a unix socket URI.
-     * Each reads as NOT_STATIC, which is the safe direction for a false
-     * negative and the reason the bound is written down here rather than
-     * discovered later. A REBINDING IS NOT ON THAT LIST, and the first draft of
-     * this paragraph said it was: `$b = $a;` classifies `$a` and carries the
-     * answer to `$b`, so a chain of plain bindings is followed to any depth.
-     * Checked before shipping the sentence, not after.
+     * WHAT THIS SAID (E330): "a path built in a heredoc, one reached through a
+     * class constant, and a path handed to a call outside MUTATING_CALLS and
+     * MUTATING_CONSTRUCTORS — `proc_open()`'s cwd, a unix socket URI. Each
+     * reads as NOT_STATIC, which is the safe direction for a false negative."
+     * WHAT IS TRUE NOW: all four are inside the alphabet.
+     * {@see literalParts()} strips a scheme before the anchored root match, the
+     * heredoc arm below reads a non-interpolating body as the literal it is,
+     * {@see staticTempPathWrites()} resolves a class constant within its
+     * declaring file, and the two socket builders and `proc_open` are in
+     * {@see MUTATING_CALLS}. MEASURED, PHP 8.3.6, over `tests`, `src` and
+     * `bin/sugarcrush`: the widening reports ZERO new offenders, so it bought
+     * coverage and not a roster.
+     *
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: a stated bound that closes
+     * silently becomes a lie that reads as modesty, so the bound is now DERIVED
+     * on every run rather than narrated —
+     * {@see testTheStaticPathScannerSaysWhatItCannotSee()} carries the shapes
+     * that are still outside (a path assembled by a call such as `sprintf()`,
+     * a constant declared in ANOTHER file, a `define()`d global constant, a
+     * write reached through a method rather than a global call, and an
+     * interpolating double-quoted string), and reds the day one of them is
+     * fixed. Each still reads as NOT_STATIC, which remains the safe direction
+     * for a false negative.
+     *
+     * A REBINDING IS NOT ON THAT LIST, and the first draft of this paragraph
+     * said it was: `$b = $a;` classifies `$a` and carries the answer to `$b`,
+     * so a chain of plain bindings is followed to any depth. Checked before
+     * shipping the sentence, not after.
      *
      * @param  list<array{int,string,int}|string> $tokens
      * @param  array<string,true>                 $rootVariables names bound to a bare temp root
@@ -1143,14 +1396,84 @@ final class ProcessUniqueTempNameTest extends TestCase
             $token = $tokens[$j];
 
             if (\is_array($token) && $token[0] === \T_CONSTANT_ENCAPSED_STRING) {
-                $content = \substr($token[1], 1, -1);
+                [$root, $leaf] = self::literalParts(\substr($token[1], 1, -1));
+                $sawRoot = $sawRoot || $root;
+                $sawLeaf = $sawLeaf || $leaf;
 
-                if (preg_match('#^/(?:var/)?tmp/#', $content) === 1) {
+                continue;
+            }
+
+            // A HEREDOC OR NOWDOC BODY (E330). The lexer gives the whole body
+            // as `T_ENCAPSED_AND_WHITESPACE` runs between the two delimiter
+            // tokens, so a NON-interpolating one is a literal in three tokens
+            // rather than in one — which is the entire reason this shape was
+            // outside the alphabet. Anything else between the delimiters is an
+            // interpolation, whose value this walk cannot evaluate, and it
+            // takes the not-static branch with every other unreadable
+            // expression.
+            if (\is_array($token) && $token[0] === \T_START_HEREDOC) {
+                $body = '';
+                $k    = $j + 1;
+
+                while (isset($tokens[$k]) && \is_array($tokens[$k])
+                    && $tokens[$k][0] === \T_ENCAPSED_AND_WHITESPACE) {
+                    $body .= $tokens[$k][1];
+                    $k++;
+                }
+                if (!isset($tokens[$k]) || !\is_array($tokens[$k]) || $tokens[$k][0] !== \T_END_HEREDOC) {
+                    return self::PATH_NOT_STATIC;
+                }
+
+                // The newline before the closing delimiter belongs to the
+                // delimiter, not to the path.
+                [$root, $leaf] = self::literalParts(trim($body, "\n\r"));
+                $sawRoot = $sawRoot || $root;
+                $sawLeaf = $sawLeaf || $leaf;
+                $j       = $k;
+
+                continue;
+            }
+
+            // A CLASS CONSTANT, RESOLVED WITHIN ITS DECLARING FILE (E330).
+            // `self::LOG_PATH` was outside the alphabet by construction: the
+            // name carries no path and the walk had nowhere to look it up.
+            // The pre-pass in {@see staticTempPathWrites()} registers each
+            // constant under the spellings it can be reached by within the
+            // file, so the lookup here is a plain key in the same two maps a
+            // bound variable uses — a constant IS a binding that cannot be
+            // rebound, so it needs no machinery of its own.
+            //
+            // ⚠️ AND "the spellings" IS A LIST, NOT A QUANTIFIER. This sentence
+            // said EVERY spelling reachable within the file, and it registered
+            // three: `self::`, `static::` and the bare declaring-class name.
+            // `\Ns\A::LOG_PATH` and `parent::LOG_PATH` both answered `[]`, and
+            // both are now registered — the namespace-qualified name whenever
+            // the file declares a namespace, and `parent` whenever something in
+            // the file extends the declaring class. FIVE, and the list is
+            // written out because a quantifier cannot be checked by reading.
+            // The spellings still outside it are named in
+            // {@see testTheStaticPathScannerSaysWhatItCannotSee()} and derived
+            // there rather than promised here — chiefly a RELATIVE qualified
+            // name (`Sub\A::P` inside `namespace Ns;` resolves to `Ns\Sub\A`,
+            // which this pre-pass has no import table to follow) and any parent
+            // class declared in another file.
+            if (\is_array($token)
+                && \in_array($token[0], [\T_STRING, \T_NAME_FULLY_QUALIFIED, \T_STATIC], true)
+                && isset($tokens[$j + 2])
+                && \is_array($tokens[$j + 1]) && $tokens[$j + 1][0] === \T_DOUBLE_COLON
+                && \is_array($tokens[$j + 2]) && $tokens[$j + 2][0] === \T_STRING) {
+                $key = \ltrim(self::text($token), '\\') . '::' . $tokens[$j + 2][1];
+
+                if (isset($pathVariables[$key])) {
                     $sawRoot = true;
-                }
-                if (trim(preg_replace('#^/(?:var/)?tmp/#', '', $content) ?? '', '/') !== '') {
                     $sawLeaf = true;
+                } elseif (isset($rootVariables[$key])) {
+                    $sawRoot = true;
+                } else {
+                    return self::PATH_NOT_STATIC;
                 }
+
+                $j += 2;
 
                 continue;
             }
@@ -1432,14 +1755,31 @@ final class ProcessUniqueTempNameTest extends TestCase
     public function testTheStaticPathScannerSaysWhatItCannotSee(): void
     {
         $missed = [
-            'a heredoc path' =>
-                "<?php\nfile_put_contents(<<<T\n/tmp/fixed.log\nT, 'x');\n",
-            'a path reached through a class constant' =>
-                "<?php\nfile_put_contents(self::LOG_PATH, 'x');\n",
-            'a unix socket URI, whose literal does not begin at the root' =>
-                "<?php\nstream_socket_server('unix:///tmp/fixed.sock');\n",
-            'a proc_open() cwd' =>
-                "<?php\nproc_open('ls', [], \$pipes, '/tmp/fixed-dir');\n",
+            'a path assembled by a call, such as sprintf()' =>
+                "<?php\nfile_put_contents(sprintf('/tmp/%s', 'fixed'), 'x');\n",
+            'a constant declared in ANOTHER file' =>
+                "<?php\nfile_put_contents(Other::LOG_PATH, 'x');\n",
+            'a define()d global constant' =>
+                "<?php\ndefine('LOG', '/tmp/fixed.log');\nfile_put_contents(LOG, 'x');\n",
+            'a write reached through a method rather than a global call' =>
+                "<?php\n\$fs->write('/tmp/fixed.log');\n",
+            'an interpolating double-quoted string' =>
+                "<?php\n\$n = 'fixed';\nfile_put_contents(\"/tmp/{\$n}.log\", 'x');\n",
+            // THE THREE CLASS-CONSTANT SPELLINGS STILL OUTSIDE THE PRE-PASS,
+            // derived rather than promised. Each needs something the pre-pass
+            // does not have: an import table (the first and the third) or a
+            // second file (the second). The row on classifyStaticPath() names
+            // the five it DOES register; these are why that is a list and not
+            // the word "every", which is what it used to say.
+            'a RELATIVE qualified class name, which needs the file\'s import table' =>
+                "<?php\nnamespace Ns;\nfinal class A { const P = '/tmp/fixed.log'; }\n"
+                . "function f() { file_put_contents(Sub\\A::P, 'x'); }\n",
+            'a class name reached through a `use … as` alias' =>
+                "<?php\nnamespace Ns;\nuse Ns\\A as Z;\nfinal class A { const P = '/tmp/fixed.log'; }\n"
+                . "function f() { file_put_contents(Z::P, 'x'); }\n",
+            'parent:: where the parent class is declared in ANOTHER file' =>
+                "<?php\nfinal class B extends Other {\n"
+                . "  public function w(): void { file_put_contents(parent::P, 'x'); }\n}\n",
         ];
 
         foreach ($missed as $why => $source) {
@@ -1449,12 +1789,106 @@ final class ProcessUniqueTempNameTest extends TestCase
                 . 'and delete this row. Do not narrow the scanner to make this pass.');
         }
 
-        // ...AND THE CONTROL THAT KEEPS THE FOUR ABOVE FROM BEING VACUOUS.
+        // ...AND THE CONTROL THAT KEEPS THE ROWS ABOVE FROM BEING VACUOUS.
         // Rule 25: `[]` is also what a deleted scanner returns, so every one of
         // those rows would pass in a tree where this instrument is dead.
         self::assertSame([2], self::staticTempPathWrites(
             "<?php\nfile_put_contents('/tmp/fixed.log', 'x');\n",
-        ), 'the scanner is dead, so the four "cannot see" rows above prove nothing at all');
+        ), 'the scanner is dead, so the "cannot see" rows above prove nothing at all');
+
+        // THE COMMENT HALF OF THE SHARED STRIP, PINNED (rule 15). This walk
+        // reads `$tokens[$at + 1]` for the `(` that opens a mutating call and
+        // for the `=` of a binding, and a comment is legal in exactly those
+        // positions. MEASURED, PHP 8.3.6, by mutating
+        // {@see DropsInsignificantTokensTrait}: with T_COMMENT/T_DOC_COMMENT
+        // out of the strip, every other assertion in this class stayed GREEN
+        // and these two answer `[]` — a missed hazard, which is the direction
+        // that reads as a clean tree. The doc-comment row is the other
+        // polarity: the strip must not make the scanner read its own prose.
+        self::assertSame([2], self::staticTempPathWrites(
+            "<?php\nfile_put_contents/* c */('/tmp/fixed.log', 'x');\n",
+        ), 'a comment between a mutating call and its argument list hid the call from the scan');
+
+        self::assertSame([3], self::staticTempPathWrites(
+            "<?php\n\$d = /* c */ sys_get_temp_dir();\nfile_put_contents(\$d . '/fixed.log', 'x');\n",
+        ), 'a comment between a binding\'s `=` and its value hid the binding from the scan');
+
+        self::assertSame([3], self::staticTempPathWrites(
+            "<?php\n/** file_put_contents('/tmp/in-prose.log', 'x'); */\n"
+            . "file_put_contents('/tmp/fixed.log', 'x');\n",
+        ), 'a write quoted in a doc-block was counted, so the scanner reads its own explanation');
+
+        // THE FOUR SHAPES THIS BOUND USED TO NAME, NOW ASSERTED FROM THE OTHER
+        // SIDE (E330). Deleting a "cannot see" row is only half of closing a
+        // hole: without a row that reds when the widening is reverted, the
+        // capability is exactly as unpinned as the absence was, and the next
+        // reader who simplifies `literalParts()` back to an anchored match on
+        // the raw content gets a green suite. Each row here is the shape the
+        // paragraph above used to disclaim.
+        $seen = [
+            'a heredoc path' =>
+                ["<?php\nfile_put_contents(<<<T\n/tmp/fixed.log\nT, 'x');\n", [2]],
+            'a nowdoc path, which the lexer shapes the same way' =>
+                ["<?php\nfile_put_contents(<<<'T'\n/tmp/fixed.log\nT, 'x');\n", [2]],
+            'a path reached through a class constant, by self::' =>
+                ["<?php\nfinal class A {\n  private const LOG_PATH = '/tmp/fixed.log';\n"
+                    . "  public function w(): void { file_put_contents(self::LOG_PATH, 'x'); }\n}\n", [4]],
+            'the same constant reached by the declaring class\'s own name' =>
+                ["<?php\nfinal class A {\n  private const LOG_PATH = '/tmp/fixed.log';\n"
+                    . "  public function w(): void { file_put_contents(A::LOG_PATH, 'x'); }\n}\n", [4]],
+            'a unix socket URI, whose literal does not begin at the root' =>
+                ["<?php\nstream_socket_server('unix:///tmp/fixed.sock');\n", [2]],
+            'a proc_open() cwd' =>
+                ["<?php\nproc_open('ls', [], \$pipes, '/tmp/fixed-dir');\n", [2]],
+            // THE TWO SPELLINGS THE PRE-PASS DID NOT REGISTER, and the comment
+            // beside it claimed it registered EVERY one reachable within the
+            // file. It registered `self::`, `static::` and the bare class name.
+            // Measured through the real scanner: both of these answered `[]`
+            // before the pre-pass learned the namespace and the `extends`
+            // edges, and neither was on the "cannot see" list either — so the
+            // DERIVED bound was incomplete in the same direction as the prose.
+            'the same constant reached by its fully qualified name' =>
+                ["<?php\nnamespace Ns;\nfinal class A {\n  private const LOG_PATH = '/tmp/fixed.log';\n"
+                    . "  public function w(): void { file_put_contents(\\Ns\\A::LOG_PATH, 'x'); }\n}\n", [5]],
+            'a constant reached by parent:: from a subclass in the same file' =>
+                ["<?php\nclass A {\n  protected const LOG_PATH = '/tmp/fixed.log';\n}\n"
+                    . "final class B extends A {\n"
+                    . "  public function w(): void { file_put_contents(parent::LOG_PATH, 'x'); }\n}\n", [6]],
+        ];
+
+        foreach ($seen as $why => [$source, $expected]) {
+            self::assertSame($expected, self::staticTempPathWrites($source), $why
+                . ' is no longer seen by the static-path scanner. It was, and the paragraph on '
+                . 'classifyStaticPath() says so — reverting the widening without rewriting that '
+                . 'paragraph is how a stated bound becomes a lie in the other direction.');
+        }
+
+        // AND THE NEGATIVES THAT KEEP THE WIDENING FROM BEING A BLANKET YES.
+        // Each is one token away from a row above, so a widening that answered
+        // "static" for its whole shape rather than for the path in it reds
+        // here — which is the polarity a capability table is usually missing.
+        $spared = [
+            'an INTERPOLATING heredoc carries a value this walk cannot evaluate' =>
+                "<?php\nfile_put_contents(<<<T\n/tmp/{\$x}.log\nT, 'x');\n",
+            'a constant bound to the temp ROOT is a directory, not a shared file' =>
+                "<?php\nfinal class A {\n  private const D = '/tmp/';\n"
+                    . "  public function w(): void { mkdir(self::D); }\n}\n",
+            'a constant root with an entropic leaf at the write site' =>
+                "<?php\nfinal class A {\n  private const D = '/tmp/';\n"
+                    . "  public function w(): void { file_put_contents(self::D . bin2hex(random_bytes(8)), 'x'); }\n}\n",
+            'a tcp:// socket names no path at all' =>
+                "<?php\nstream_socket_server('tcp://127.0.0.1:0');\n",
+            'a URL whose HOST-relative part looks like the temp root' =>
+                "<?php\nfile_put_contents('https://example.com/tmp/x', 'y');\n",
+            'a proc_open() cwd that is a variable' =>
+                "<?php\nproc_open('ls', [], \$pipes, \$dir);\n",
+        ];
+
+        foreach ($spared as $why => $source) {
+            self::assertSame([], self::staticTempPathWrites($source), $why
+                . ', and it was reported as a fixed shared temp path. The widening has become a '
+                . 'blanket yes for its shape rather than a reading of the path inside it.');
+        }
     }
 
     // =========================================================================
@@ -1631,39 +2065,6 @@ final class ProcessUniqueTempNameTest extends TestCase
         }
 
         return 0;
-    }
-
-    /**
-     * $source without whitespace or comments.
-     *
-     * @return list<array{int,string,int}|string>
-     */
-    private static function significantTokens(string $source): array
-    {
-        $out = [];
-        foreach (\token_get_all($source) as $token) {
-            if (\is_array($token)
-                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
-                continue;
-            }
-            $out[] = $token;
-        }
-
-        return $out;
-    }
-
-    /**
-     * RULE 14 AT THE READ, not only at the parse. `(string) file_get_contents()`
-     * turns an unreadable file into an empty one, an empty file into "no hits",
-     * and "no hits" into a clean census — three silent steps from a permission
-     * bit to a green suite.
-     */
-    private static function readOrFail(string $path): string
-    {
-        $text = file_get_contents($path);
-        self::assertIsString($text, $path . ' is unreadable, so the census over it is void');
-
-        return $text;
     }
 
     /**
