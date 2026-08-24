@@ -68,9 +68,14 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         }
         $this->masters = [];
 
-        foreach ($this->artifacts as $path) {
-            if (is_file($path)) {
+        // Reverse order: a fixture directory is registered before the entries
+        // put inside it, and rmdir() on a non-empty directory does nothing.
+        // Exact-path deletes only -- never a glob under /tmp, which sibling
+        // lanes' suites are using at the same time.
+        foreach (array_reverse($this->artifacts) as $path) {
+            if (is_link($path) || is_file($path)) {
                 @unlink($path);
+                continue;
             }
             if (is_dir($path)) {
                 @rmdir($path);
@@ -253,20 +258,48 @@ final class PosixBackendStreamDescriptorTest extends TestCase
     {
         $table = $this->descriptorTable();
 
-        $firstPath = $this->tempPath();
-        $first     = $this->openHandle($firstPath, 'r+');
-        $firstStat = fstat($first);
+        $firstPath  = $this->tempPath();
+        $secondPath = $this->tempPath();
+        $first      = $this->openHandle($firstPath, 'r+');
+        $firstStat  = fstat($first);
         self::assertIsArray($firstStat);
 
-        // This warms PHP's stat cache for every entry in the table, with the
-        // truth as it stands now. That warming is the fixture.
         $descriptor = PosixBackend::descriptorForStream($first);
         self::assertIsInt($descriptor, 'the first handle resolved to nothing');
-        fclose($first);
 
-        $secondPath = $this->tempPath();
+        // A descriptor table of our own, holding ONE entry that points at the
+        // real one. Two reasons, and the second is the whole test:
+        //
+        //  - the walk is then one stat instead of a dozen, so nothing between
+        //    the warming read and the assertion can be attributed elsewhere;
+        //  - and the entry's TARGET changes when the descriptor is reused,
+        //    with no filesystem operation on the entry at all. That matters
+        //    because MEASURED, PHP 8.3.6, `unlink()` and `rename()` both
+        //    flush the stat cache outright -- repointing a symlink the
+        //    ordinary way would destroy the state being tested.
+        $fixture = $this->emptyDirectory();
+        self::assertTrue(symlink($table . '/' . $descriptor, $fixture . '/' . $descriptor));
+        $this->artifacts[] = $fixture . '/' . $descriptor;
+
+        // WARM. The cache now describes the FIRST file.
+        clearstatcache();
+        $warm = stat($fixture . '/' . $descriptor);
+        self::assertIsArray($warm);
+        self::assertSame($firstStat['ino'], $warm['ino'], 'the fixture entry does not reach the first handle');
+
+        // THE REUSE. fclose() and fopen() stat no path, so the cache entry
+        // above survives them -- which is precisely the production hazard:
+        // size() runs on every SIGWINCH in a process that opens and closes
+        // files, and `/proc/self/fd/4` is a path whose meaning moved.
+        fclose($first);
         $second     = $this->openHandle($secondPath, 'r+');
         $secondStat = fstat($second);
+
+        // Both readings taken BEFORE any assertion, because an assertion is a
+        // method call and this window is only as wide as it looks.
+        $cached   = stat($fixture . '/' . $descriptor);
+        $resolved = PosixBackend::descriptorForStream($second, $fixture);
+
         self::assertIsArray($secondStat);
         self::assertNotSame(
             $firstStat['ino'],
@@ -274,18 +307,10 @@ final class PosixBackendStreamDescriptorTest extends TestCase
             'the two temp files share an inode; this fixture cannot discriminate',
         );
 
-        // DISCRIMINATOR 1 -- the OS handed the freed descriptor straight back
-        // to the second handle. Read with readlink() and NOT with stat(),
-        // because MEASURED, PHP 8.3.6: readlink() is not served from the stat
-        // cache, so it can report the new target without refreshing the very
-        // staleness this test is about. An earlier revision of this test used
-        // `clearstatcache(); stat(...)` here, which refreshed the cache and
-        // let mutation m7 survive -- the assertion was right and its window
-        // was destroyed by its own setup.
-        //
-        // Deliberately an assertion and not a skip: a host that stops reusing
-        // the lowest free descriptor must make this test go red and be looked
-        // at, not quietly stop biting.
+        // DISCRIMINATOR 1 -- the OS handed the freed descriptor straight back.
+        // readlink() rather than stat(), because MEASURED, PHP 8.3.6, it is
+        // not served from the stat cache and so can be read without
+        // disturbing the staleness under test.
         self::assertSame(
             $secondPath,
             readlink($table . '/' . $descriptor),
@@ -293,23 +318,23 @@ final class PosixBackendStreamDescriptorTest extends TestCase
                 . 'this fixture cannot discriminate',
         );
 
-        // DISCRIMINATOR 2 -- and PHP's cache really is still describing the
-        // file that descriptor pointed at BEFORE the reuse. Without this the
-        // assertion below would be satisfied by a host that never caches.
-        $cached = stat($table . '/' . $descriptor);
+        // DISCRIMINATOR 2 -- and the cache really was still describing the
+        // first file at the moment the resolver ran. Without this, a host
+        // that never caches would satisfy the assertion below for the wrong
+        // reason.
         self::assertIsArray($cached);
         self::assertSame(
             $firstStat['ino'],
             $cached['ino'],
-            'the stat cache is not stale here, so nothing below distinguishes a resolver that '
-                . 'clears it from one that does not',
+            'the stat cache was not stale at the moment of the call, so nothing here '
+                . 'distinguishes a resolver that clears it from one that does not',
         );
 
         self::assertSame(
             $descriptor,
-            PosixBackend::descriptorForStream($second),
-            'the resolver answered from a cached stat of a path whose descriptor had been '
-                . 'reused, so it was matching against a file that is no longer there',
+            $resolved,
+            'the resolver matched against a cached stat of a path whose descriptor had been '
+                . 'reused, i.e. against a file that is no longer there',
         );
     }
 
