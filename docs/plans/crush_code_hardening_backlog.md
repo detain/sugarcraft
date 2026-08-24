@@ -11080,27 +11080,53 @@ cannot read as a clean one, and three copies of that arm is three places for it 
 
 ---
 
-### Ec49-1 — a per-file assertion in two censuses makes the suite's assertion total a function of the file COUNT
+### Ec49-1 — a per-file assertion in several censuses makes the suite's assertion total a function of the file COUNT
 
-**Recorded 2026-08-24 by round-49 lane c.** Severity: measurement hygiene, and it voided this lane's own
-first baseline. **MEASURED, PHP 8.3.6, three takes, deterministic.**
+**Recorded 2026-08-24 by round-49 lane c; CORRECTED the same day by the same lane after review.**
+Severity: measurement hygiene, and it voided this lane's own first baseline.
 
-Adding ONE empty `.php` file under `sugar-crush/tests/` raises the suite's assertion total by exactly
-**four** — three from `Support/ProcessUniqueTempNameTest` and one from
-`Support/ReflectionLineSliceReaderCensusTest`, both of which assert once per file in scope. Generator:
-control run of `vendor/bin/phpunit tests/Support tests/Cli tests/Config` = 1241 tests / **36771**
-assertions; the same run with one empty class added under `tests/Support/` = 1241 / **36775**. Three
-takes each, identical to the assertion.
+**⚠️ THE FIRST VERSION OF THIS ENTRY SHIPPED THE NUMBER AND NOT THE GENERATOR, AND THE NUMBER WAS STALE
+TWO COMMITS LATER — inside the entry about measurement hygiene.** It said the delta was **four**, from
+`Support/ProcessUniqueTempNameTest` (3) and `Support/ReflectionLineSliceReaderCensusTest` (1). By the HEAD
+that shipped it the delta was **five**: the lane's own new `Support/NonBlockingVocabularyTest` calls
+`readOrFail()` once per file over `tests` **and** `src` in
+`testEveryContradictorySentenceIsOnTheRoster`, and `readOrFail()` asserts. That is rule 18 exactly — a
+cardinality measured over `tests/` is invalidated by the next commit, this lane's included.
 
-**Why it matters.** This lane's baseline read `142169` against a brief stating `142165`, and the
-difference was not the tree — it was that the lane created two trait files WHILE the baseline run was in
-flight, so some censuses saw them and others did not. The brief's floor was right. Any lane that writes a
-file in `tests/` during a suite run gets a figure that belongs to no tree.
+**So the claim, stated without a number.** Several censuses under `sugar-crush/tests/Support/` assert
+ONCE PER FILE in scope. The suite's assertion total is therefore a function of how many `.php` files
+`tests/` (and, for the scanners that also walk `src`, `src/`) contains — not of the tree's behaviour.
+**A floor figure is meaningful only with the commit it was taken at, and adjusting one arithmetically
+across a commit that adds or removes a test FILE is wrong even when the arithmetic is right.**
 
-**Step.** Two things, neither urgent. (a) A floor figure is only meaningful with the file count it was
-taken at; the supervisor's floor should be quoted as `9661 / 142165 @ a85fcfd6` and re-derived, never
-adjusted. (b) Never start a baseline before the lane's first edit — or take it, then do not touch
-`tests/` until it finishes.
+**The generator, so the current delta can always be re-derived instead of quoted.** PHP 8.3.6,
+deterministic (no seed — it is a whole-population walk, not a sample), three takes on the control side:
+
+```sh
+cd sugar-crush
+vendor/bin/phpunit tests/Support tests/Cli tests/Config          # control
+printf '<?php\n' > tests/Support/<a name nothing else uses>.php  # exact-path create
+vendor/bin/phpunit tests/Support tests/Cli tests/Config          # probe
+rm -f tests/Support/<that exact path>                            # exact-path delete, never a glob
+git status --porcelain                                           # must be empty
+```
+
+Attribute the delta by re-running each suspect file alone with and without the probe. Observed values,
+each tagged with the commit they were taken at because that is the whole point of this entry: **+4 at
+`a85fcfd6`** (2243→2246 `ProcessUniqueTempNameTest`, 447→448 `ReflectionLineSliceReaderCensusTest`);
+**+5 at `5b3ee274`** (the same two, plus 751→752 `NonBlockingVocabularyTest`).
+
+**Why it matters.** This lane's first baseline read `142169` against a brief stating `142165`, and the
+difference was not the tree — the lane created two trait files WHILE the baseline run was in flight, so
+some censuses saw them and others did not. The brief's floor was right. Any lane that writes a file in
+`tests/` during a suite run gets a figure that belongs to no tree.
+
+**Step.** Three things, none urgent. (a) Quote a floor as `<tests> / <assertions> @ <sha>` and re-derive
+it, never adjust it. (b) Never start a baseline before the lane's first edit — or take it, then do not
+touch `tests/` until it finishes. (c) If a future round wants this delta as a fact rather than a
+footnote, it must be DERIVED BY A TEST and not written into prose (rule 18); the honest version of that
+is a guard asserting "every per-file census in `tests/Support/` is registered here", not a hard-coded
+count.
 
 ---
 
@@ -11226,5 +11252,113 @@ constant declared in ANOTHER file; a `define()`d global constant; a write reache
 than a global call; an interpolating double-quoted string. **Step.** The cheapest two are the global
 constant (one more pre-pass, same shape as the class-constant one) and the cross-file class constant
 (needs a two-pass scan over the population, which the census already builds).
+
+**AMENDED the same day, after review, by the same lane.** The class-constant pre-pass's comment claimed
+it registered a constant "under EVERY spelling it can be reached by within the file". It registered
+three — `self::`, `static::` and the bare declaring-class name. Measured through the real scanner:
+`\Ns\A::LOG_PATH` and `parent::LOG_PATH` both answered `[]`, and **neither was on the derived "cannot
+see" list either**, so the bound this entry calls "pinned by a row" was incomplete in the same direction
+as the prose it was written to replace. Both are registered now (namespace-qualified whenever the file
+declares a namespace; `parent` whenever something in the file extends the declaring class), each with a
+positive row, and the comment writes its list of five out instead of quantifying. Three MORE shapes join
+the residual, all derived: a RELATIVE qualified name (`Sub\A::P` under `namespace Ns;` resolves to
+`Ns\Sub\A`), a name reached through a `use … as` alias, and `parent::` where the parent class lives in
+another file. All three need the file's import table or a second file, which is the same missing
+machinery as the existing cross-file row.
+
+**The transferable part is not the spellings.** A quantifier in a comment ("every", "all", "any") cannot
+be checked by reading and is not checked by the suite. Where a bound matters, WRITE THE LIST — a list
+that goes stale is visibly a list, and a reader can count it against the code in a way they cannot count
+a quantifier.
+
+---
+
+### Ec49-7 — a known-answer table can have every row in one grammatical shape, and the shape it omits is the one the code gets backwards
+
+**Recorded 2026-08-24 by round-49 lane c, from its own reviewer's BLOCKING finding.** Severity:
+correctness of a guard. **FIXED this round.**
+
+`NonBlockingVocabularyTest::rank()` graded every failure message against the flag direction its assertion
+DEMANDS. That is correct only for the NEGATED form. A failure message is read at the instant the
+assertion fails, so:
+
+- NEGATED — `assertFalse($m['blocked'], 'did not <verb> the flag')` names the demanded act and reports it
+  missing, so the correct verb IS the demanded direction.
+- AFFIRMATIVE — `assertTrue($m['blocked'], 'X <verb>ed the flag')` describes the state AT FAILURE, which
+  is the OPPOSITE of the demand, so the correct verb is the opposite one.
+
+The rule was therefore **inverted, not merely blind**, on the affirmative shape — wrong in both
+polarities — and the tree has exactly one affirmative site, which it false-cleaned:
+`tests/SuiteChildStdinIsolationTest.php`'s TERMINAL arm came back `consistent`, the file was rostered as
+carrying zero inverted sentences, and the census would have gone **red if anybody repaired it**.
+
+**Why the file's own known-answer table did not catch it (rule 11, one turn further than the round-43
+finding that produced rule 11).** All four polarity rows were the negated form: `did not clear`, `did not
+put … back`, `did not set`, `did not clear`. The table did not lack a row for a case it knew about; the
+shape it mis-ranked was **outside its own alphabet by construction**. A polarity table needs a row per
+GRAMMATICAL SHAPE × direction, not per direction.
+
+**Two things the fix had to add beyond the flip.** (a) `negatesTheVerb()` returns `null` — `unreadable` —
+when a message carries a negation it cannot attach to the verb, because `the bootstrap cleared the flag,
+which is not allowed` is affirmative about the verb and negated about the consequence, and a bare
+`str_contains($body, 'not')` inverts it silently (rule 14). (b) A measured reach: the widest gap in the
+real population is two words (`did not put O_NONBLOCK back`), the bound is four, and a five-word gap is
+reported unreadable rather than guessed.
+
+**Step, and it must land TOGETHER with the prose fix.** The repair to
+`tests/SuiteChildStdinIsolationTest.php:181`'s sentence — "cleared" → "set", because
+`tests/bootstrap.php` ends in `if (!stream_isatty(STDIN)) { stream_set_blocking(STDIN, false); }` and the
+only act it could perform on a tty is a flag SET — is **lane e's**, and it must be committed WITH the
+deletion of that file's `INVERTED_ROSTER` row. Either alone reds the census. That file also owns the one
+`UNREADABLE_ROSTER` row (the :189 sentence naming both directions), which is a separate repair.
+
+---
+
+### Ec49-8 — a doc-block that NAMES a PHPUnit annotation IS that annotation, and it skipped the test written to stop skipping
+
+**Recorded 2026-08-24 by round-49 lane c, against itself.** Severity: trap, cost about four minutes.
+**Measured, PHP 8.3.6, PHPUnit 10.5.64. FIXED before it shipped.**
+
+Removing a requires-annotation from a test and writing a paragraph explaining why it was removed
+**re-created it**: the annotation name appeared in the replacement doc-block, PHPUnit's metadata parser
+read it out of the comment exactly as it had read the original, and the test skipped — inside the change
+whose entire purpose was that it should never skip. The suite reported `Skipped: 1` for a file that
+carries no `markTestSkipped` at all.
+
+This is rule 26 one level down. Rule 26 is about a textual SWEEP corrupting the prose that describes the
+pattern it rewrites; this is a doc-comment corrupting itself simply by quoting a directive, with no sweep
+involved. **A doc-comment is not an inert place to quote a doc-comment directive.** The same trap is live
+for every other annotation the tooling reads out of comments — a provider, a group, a depends, a
+covers — in any explanatory paragraph, `CALIBER_LEARNINGS.md` fragments included.
+
+**Step.** When a paragraph must name an annotation, spell it without the sigil ("an OS-Linux
+requires-annotation"). Cheap guard for a later round: assert that no test method in `tests/` is reported
+skipped for a reason its own file does not contain a `markTestSkipped` for — which is exactly the shape
+this produced, and is derivable from PHPUnit's own result output rather than from a text scan.
+
+---
+
+### Ec49-9 — a false-positive guard is unpinned by construction, and this suite has at least one
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: coverage. **FIXED this round for the one instance
+found; the rule is the deliverable.**
+
+`vocabularySites()`'s `$tokens[$i + 1] === '('` stops the body walk starting from a `T_STRING` that is not
+a call. Mutating it to never skip **SURVIVED** `tests/Support tests/Cli tests/Config`, because no bare
+`assertTrue`/`assertFalse` token exists anywhere in the tree.
+
+**The general shape, which is what makes this worth an entry.** A guard that prevents FALSE POSITIVES is
+unpinnable by the real population by definition — the population is exactly the set of inputs on which it
+does nothing. Every mutation-survival audit will report these as survivals, and the temptation is to read
+the survival as "this branch is dead" and delete it. It is not dead; it is untriggered. The fixture has
+to be synthetic, and that is correct rather than a compromise: it is the only input that distinguishes
+the guard from its absence.
+
+**Step.** When a mutation survives, classify the branch before acting: an OFFENDER-PRODUCING branch that
+survives is a coverage hole in the census (Ec49-2's rule); a FALSE-POSITIVE guard that survives needs a
+synthetic fixture and must not be deleted (rule 6). The two look identical in a mutation table and want
+opposite responses.
+
+---
 
 ---

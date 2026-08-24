@@ -58,12 +58,30 @@ use PHPUnit\Framework\TestCase;
  * that this cannot attach to its verb ({@see negatesTheVerb()}) takes the same
  * exit rather than being resolved by a coin flip.
  *
- * WHAT IT DELIBERATELY CANNOT SEE. Prose that discusses the flag without an
- * assertion beside it — `tests/bootstrap.php`'s measured table uses "clear" to
- * mean *non-blocking*, two paragraphs after using the flag sense, and no
- * assertion pairs with it. A sentence with no assertion has no polarity to
- * contradict, so it is outside this alphabet by construction rather than by
- * oversight; that one wants a reader, not a scanner.
+ * WHAT IT DELIBERATELY CANNOT SEE, and the second exclusion is much the larger
+ * of the two.
+ *
+ * (1) Prose that discusses the flag without an assertion beside it —
+ * `tests/bootstrap.php`'s measured table uses "clear" to mean *non-blocking*,
+ * two paragraphs after using the flag sense, and no assertion pairs with it. A
+ * sentence with no assertion has no polarity to contradict, so it is outside
+ * this alphabet by construction rather than by oversight; that one wants a
+ * reader, not a scanner.
+ *
+ * (2) EVERY BLOCKING-STATE ASSERTION WHOSE MESSAGE DOES NOT SPELL THE FLAG. The
+ * gate is `blocked` AND the flag name, so a message that says "the stream is
+ * blocking and it should not be" is not ranked at all — and there are more of
+ * those in `tests/` than there are ranked sites. A read of the near-miss ones
+ * found none currently inverted (they are `must report blocked` controls beside
+ * the rostered pairs, which are correct), so this is coverage and not a live
+ * defect, but "the census is clean" means clean over the narrower population.
+ * That exclusion is encoded as a provider row rather than only described here
+ * ({@see vocabularyCases()}, "an assertion that never names the flag is out of
+ * scope"), and widening the gate to `blocked` alone would be a real widening:
+ * it must be paid for by rostering whatever falls out, not by deleting rows.
+ * No count is written down for either group — a cardinality over `tests/` is
+ * stale at the next merge (rule 18) and this file already derives the one
+ * number it actually enforces.
  *
  * THE ROSTER IS NOT AN EXEMPTION LIST. Every row is checked back against the
  * tree in both directions, so a file whose sentences are fixed reds and its row

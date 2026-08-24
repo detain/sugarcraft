@@ -9,8 +9,12 @@ namespace SugarCraft\Crush\Tests\Support;
  * source as a token stream, and the UNION of every justification its copies
  * carried.
  *
- * WHY THIS EXISTS AS A TRAIT AND NOT AS A SIXTH COPY (E331). Round 50's merge
- * left FIVE declarations of this helper — in `StderrEmitterCensusTest`,
+ * (The history below is dated by SHA and not by round number. Two round numbers
+ * were in circulation across this tree's docs on the day it was written, and a
+ * commit is not a matter of opinion.)
+ *
+ * WHY THIS EXISTS AS A TRAIT AND NOT AS A SIXTH COPY (E331). The tree at
+ * `a85fcfd6` carried FIVE declarations of this helper — in `StderrEmitterCensusTest`,
  * `ContainedPathInventoryTest`, `HomeDirectoryPathReaderInventoryTest`,
  * `ProcessUniqueTempNameTest` and `ReadmeJsonErrorContractDriftTest` — plus a
  * SIXTH spelling of the same loop written inline inside

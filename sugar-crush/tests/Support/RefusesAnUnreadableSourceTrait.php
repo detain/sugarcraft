@@ -9,8 +9,8 @@ namespace SugarCraft\Crush\Tests\Support;
  * the censuses that walk a population of source files, with the UNION of every
  * justification its copies carried.
  *
- * WHY THIS EXISTS AS A TRAIT (E332). Round 50's merge left the read arm and its
- * fixture in three census files at once — byte-identical in
+ * WHY THIS EXISTS AS A TRAIT (E332). The tree at `a85fcfd6` carried the read
+ * arm and its fixture in three census files at once — byte-identical in
  * `Cli/StderrEmitterCensusTest` and `Cli/BootstrapTranscriptSeamCallSiteCensusTest`,
  * and one message apart in `Support/ProcessUniqueTempNameTest`, whose fixture
  * had also drifted in NAME (`testTheReadRefusesAFileItCannotOpen…` against
