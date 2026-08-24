@@ -60,7 +60,7 @@ use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
  *     `$err` defaults to `\STDERR` and which writes FOUR distinct
  *     `sugarcrush: ` shapes through it. A grep for `fwrite(STDERR` cannot see
  *     this file at all.
- *  3. `error_log(…)` — TWENTY-ONE sites across eleven files. MEASURED on this
+ *  3. `error_log(…)` — TWENTY-TWO sites across eleven files. MEASURED on this
  *     box, PHP 8.3.6, `ini_get('error_log')` is `''` and `php -r
  *     'error_log("x");' 2>file` puts `x` in the file: with no `error_log`
  *     destination configured, this IS stderr. Three of them appear in the
@@ -265,7 +265,7 @@ final class StderrEmitterCensusTest extends TestCase
      * @var array<string, int>
      */
     private const ERROR_LOG_SITES = [
-        'src/Agents/AgentWorkerPool.php' => 1,
+        'src/Agents/AgentWorkerPool.php' => 2,
         'src/Agents/ForeignAgentPresetRegistry.php' => 2,
         // WorktreeManager HAD FOUR AND HAS NONE, which is the largest single
         // move this roster has recorded, and it is the reason to read a fall
