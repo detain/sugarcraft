@@ -12013,3 +12013,79 @@ opposite responses.
 ---
 
 ---
+
+### E365 — a test's `php -S` server leaked once per test method and held the CALLER'S STDOUT, so `phpunit | anything` hung after a green run
+
+**Recorded 2026-08-24.** Severity: measurement discipline (the fd half), hygiene (the process half).
+**FIXED + GUARDED this round in `candy-mosaic`.**
+
+`candy-mosaic/tests/ImageSourceSsrfTest.php` spawned a real `php -S` server per test in `setUp()` and
+called `proc_terminate()` + `proc_close()` in `tearDown()`. It did not work. Two independent defects,
+both measured on this box rather than inferred:
+
+**1. The shell intermediary — why the process survived.** `proc_open()` was handed a command STRING, so
+PHP routed it through `/bin/sh -c`. `/bin/sh` here is dash, and dash did **not** exec the php binary:
+measured live, `proc_open()` returned pid *N* running `sh -c '/usr/bin/php8.3' -S …` with the real server
+as a separate child *N+1*. `proc_terminate()` killed the shell; the server was reparented to init
+(`ppid=1`) and ran forever. Note that the obvious shell-side repair does not work either: dash accepts
+only SINGLE-DIGIT fd redirections (`exec 20>&-` → `exec: 20: not found`, rc 127), so the intermediary
+cannot be told to close phpunit's fd 10.
+
+**2. Descriptor inheritance — the half that caused the hangs.** `proc_open()` remaps only the descriptors
+named in its spec, and the spec named 0, 1, 2. Measured fd table of a leaked server:
+
+```
+0 -> pipe:[…]                      1,2 -> /dev/null   (the test's own remap, correct)
+3 -> …/candy-mosaic/vendor/bin/phpunit
+4 -> THE CALLER'S STDOUT           <-- the damage
+5 -> /memfd:opcache_lock           6..10 -> phpunit's own sockets
+```
+
+Because fd 4 is the caller's stdout, an orphaned server holds the write end of that pipe open forever.
+`cd candy-mosaic && vendor/bin/phpunit | tail -5` therefore **never returns**: the suite goes green in
+13 s and the pipeline blocks on an EOF that will not come. Two measurements were lost to exactly this —
+one of 38 minutes and one of 11.5 hours — and both completed within milliseconds of the leaked servers
+being killed, which is the proof of the mechanism.
+
+**Measured evidence.** Exactly **4 leaked per full suite run** (0 before, 4 after, suite green at
+`457 / 7744 / 6 skipped`, rc 0). All four of the file's test methods leak, one each, confirmed by running
+them individually: `testFollowsSameSchemeRedirect`, `testBlocksRedirectToDisallowedFileScheme`,
+`testBlocksRedirectToDisallowedGopherScheme`, `testBlocksRedirectToMetadataIp`. They had been
+accumulating for a long time: **136 found alive**, the oldest **11.5 hours** old.
+
+**Fix** (`candy-mosaic/tests/Support/LoopbackHttpServer.php`, new; `ImageSourceSsrfTest` rewired onto it):
+
+- ARRAY command form to `proc_open()` — no `/bin/sh` at all, so the pid `proc_open()` reports IS the
+  server's pid and `proc_terminate()` reaches it.
+- Blocking reap: SIGTERM, bounded 3 s poll on `proc_get_status()['running']`, escalate to SIGKILL,
+  poll again, then `proc_close()`. The server is dead before the test method returns.
+- Descriptor spec NAMES every inherited fd. PHP exposes no `close(2)` and no close-on-exec control, so
+  each inherited slot is pointed at `['null']` instead. Verified on a live server started by the fixed
+  code under a real phpunit run: fds 0-13 are all `/dev/null` — no `vendor/bin/phpunit`, no caller's
+  stdout, no phpunit socket. **This half must hold even if a server leaks again: a leaked process that
+  does not hold the caller's stdout is a nuisance, one that does is a hang.**
+- Router temp dirs are process-unique (`mosaic-ssrf-<pid>-<uniqid>`), so the census can tell this run's
+  servers from a concurrent checkout's.
+
+**Guard** (`candy-mosaic/tests/SsrfServerLeakTest.php`, 2 tests). It drives the real spawner, not a
+re-implementation. `testServerLifecycleOrphansNoProcess` asserts the `/proc` census is empty on entry
+(this class sorts after `ImageSourceSsrfTest`, so that arm catches the original defect), then runs two
+start/stop cycles asserting `[] -> [pid] -> []`. The middle assertion is the point: **a leak detector
+that reads zero because it is looking in the wrong place passes vacuously**, so the census is required to
+SEE the running server before its zeroes are allowed to mean anything.
+`testServerInheritsNoneOfPhpunitsDescriptors` reads both `/proc/<phpunit>/fd` and `/proc/<server>/fd` and
+asserts the intersection is empty.
+
+**Known-positive control.** Both defects were reintroduced (string command form, `proc_terminate()` with
+no wait and no escalation) and the guard went **RED on 2 of 2 tests**, naming the four orphaned pids and
+the two inherited descriptors (`…/vendor/bin/phpunit` and the caller's redirect target). Restored: green.
+
+**Verification.** `459 / 7753 / 6 skipped / rc 0` in 13 s (baseline `457 / 7744`; delta **+2 tests,
++9 assertions** — the guard). Server census **0 -> 0** across a full run. `vendor/bin/phpunit | tail -5`
+now **returns**, rc 0.
+
+**Latent elsewhere — NOT fixed, scheduled.** The same shape (a long-lived child spawned with only 0/1/2
+in the descriptor spec) is a `proc_open` sweep away in other libs; see the sweep in the round report.
+Anything that spawns a child which can outlive the call inherits phpunit's stdout the same way.
+
+---

@@ -6,6 +6,7 @@ namespace SugarCraft\Mosaic\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Mosaic\Tests\Support\LoopbackHttpServer;
 
 /**
  * SSRF regression coverage for ImageSource::fromUrl()'s synchronous
@@ -24,8 +25,7 @@ use SugarCraft\Mosaic\ImageSource;
  */
 final class ImageSourceSsrfTest extends TestCase
 {
-    /** @var resource|null */
-    private $proc = null;
+    private ?LoopbackHttpServer $server = null;
     private string $tmpDir = '';
     private int $port = 0;
 
@@ -33,30 +33,30 @@ final class ImageSourceSsrfTest extends TestCase
     {
         parent::setUp();
 
-        $this->tmpDir = sys_get_temp_dir() . '/mosaic-ssrf-' . uniqid('', true);
-        mkdir($this->tmpDir, 0o755, true);
+        $this->tmpDir = LoopbackHttpServer::makeTempDir();
 
         $png    = __DIR__ . '/fixtures/4x2.png';
-        $router = $this->tmpDir . '/router.php';
+        $router = $this->tmpDir . '/' . LoopbackHttpServer::ROUTER_FILE;
         file_put_contents($router, $this->routerSource($png));
 
-        if (!$this->startServer($router)) {
+        $this->server = LoopbackHttpServer::start($router);
+        if ($this->server === null) {
             $this->markTestSkipped('Could not start a local php -S server for SSRF tests.');
         }
+
+        $this->port = $this->server->port();
     }
 
     protected function tearDown(): void
     {
-        if (is_resource($this->proc)) {
-            proc_terminate($this->proc);
-            proc_close($this->proc);
-        }
-        $this->proc = null;
+        // Blocking reap: the server MUST be dead before this method returns.
+        // See LoopbackHttpServer for why the old proc_terminate()/proc_close()
+        // pair orphaned one server per test method.
+        $this->server?->stop();
+        $this->server = null;
 
-        if ($this->tmpDir !== '' && is_dir($this->tmpDir)) {
-            @unlink($this->tmpDir . '/router.php');
-            @rmdir($this->tmpDir);
-        }
+        LoopbackHttpServer::removeTempDir($this->tmpDir);
+        $this->tmpDir = '';
 
         parent::tearDown();
     }
@@ -151,77 +151,5 @@ final class ImageSourceSsrfTest extends TestCase
                 return true;
         }
         PHP;
-    }
-
-    private function startServer(string $router): bool
-    {
-        for ($attempt = 0; $attempt < 3; $attempt++) {
-            $port = $this->freePort();
-            if ($port === 0) {
-                continue;
-            }
-
-            $cmd = sprintf(
-                '%s -S 127.0.0.1:%d %s',
-                escapeshellarg(PHP_BINARY),
-                $port,
-                escapeshellarg($router),
-            );
-
-            $descriptors = [
-                0 => ['pipe', 'r'],
-                1 => ['file', '/dev/null', 'w'],
-                2 => ['file', '/dev/null', 'w'],
-            ];
-            $proc = proc_open($cmd, $descriptors, $pipes);
-            if (!is_resource($proc)) {
-                continue;
-            }
-            if (isset($pipes[0]) && is_resource($pipes[0])) {
-                fclose($pipes[0]);
-            }
-
-            $this->proc = $proc;
-            $this->port = $port;
-
-            if ($this->waitForHealth($port)) {
-                return true;
-            }
-
-            proc_terminate($proc);
-            proc_close($proc);
-            $this->proc = null;
-        }
-
-        return false;
-    }
-
-    private function freePort(): int
-    {
-        $sock = @stream_socket_server('tcp://127.0.0.1:0', $_, $errstr);
-        if ($sock === false) {
-            return 0;
-        }
-        $name = (string) stream_socket_get_name($sock, false);
-        fclose($sock);
-
-        return (int) substr($name, strrpos($name, ':') + 1);
-    }
-
-    private function waitForHealth(int $port): bool
-    {
-        for ($i = 0; $i < 50; $i++) {
-            $body = @file_get_contents(
-                "http://127.0.0.1:{$port}/health",
-                false,
-                stream_context_create(['http' => ['timeout' => 1]]),
-            );
-            if ($body === 'ok') {
-                return true;
-            }
-            usleep(100_000);
-        }
-
-        return false;
     }
 }
