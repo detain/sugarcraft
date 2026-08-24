@@ -11349,6 +11349,36 @@ this produced, and is derivable from PHPUnit's own result output rather than fro
 
 ---
 
+### Ec49-10 — `BootstrapSkillSkipsTest` goes RISKY, not red, under parallel-lane load, and the diff in flight gets the blame
+
+**Recorded 2026-08-24 by round-49 lane c.** Severity: measurement hygiene / flake attribution.
+**Observed once in five runs of `tests/Support tests/Cli tests/Config` at PHP 8.3.6, with four sibling
+lanes running suites on the same box.**
+
+One three-directory run reported `Tests: 1282, Assertions: 37575, Risky: 2` pointing at
+`tests/Cli/BootstrapSkillSkipsTest.php`. The file passes alone (`OK, 5 tests, 8 assertions`) and the same
+three-directory run reproduced clean immediately after and three times since, at the same commit, with
+`37578` assertions — so the risky run also SHED three assertions, which is the tell.
+
+**Mechanism, and it is not a guess about the test's logic.** The file spawns real child processes under
+`timeout -s KILL 60` with a `sys_get_temp_dir()` working directory. Under four concurrent suites a child
+that would finish in a second can miss a 60-second wall clock; the arm that would have asserted never
+runs, and PHPUnit reports the test as risky rather than failed. Nothing in the file is shared with a
+sibling lane — the temp dir is process-unique — so this is contention for CPU, not for a path.
+
+**Why it needs an entry rather than a shrug.** A risky verdict in the middle of a lane's run reads
+exactly like a defect the lane just introduced, and the lane has no cheap way to tell the difference
+except to re-run. Round 44 lost time to the `/tmp` version of this; this is the CPU version, and it
+survives every `/tmp` precaution because it is not about `/tmp`.
+
+**Step.** Two options, neither taken here. (a) Raise the child budget in that file, which trades a
+diagnosis for a longer red when a child genuinely hangs. (b) Better: make the timeout budget an explicit
+named constant with the reason beside it, so the next reader can raise it knowingly. Until then: **a
+risky or red verdict on this file during a parallel round should be re-run alone before it is attributed
+to anything.**
+
+---
+
 ### Ec49-9 — a false-positive guard is unpinned by construction, and this suite has at least one
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: coverage. **FIXED this round for the one instance
