@@ -12014,41 +12014,122 @@ opposite responses.
 
 ---
 
-### Ea52-1 — `PosixBackend` has the SAME resource-id-as-descriptor defect as E336, at two sites
+### Ea52-1 — the resource-id-as-descriptor defect has SIX instances, not three, and one of them is not latent
 
-**Recorded 2026-08-24 by round-52 lane a.** Severity: correctness, latent. **Measured, PHP 8.3.6. Out of
-lane — `candy-core/src/Util/Tty/PosixBackend.php` is not on this lane's file list. Reported, not fixed.**
+**Recorded 2026-08-24 by round-52 lane a; AMENDED the same day, after review, by the fix agent.**
+Severity: correctness — five latent, **one live on every `2>file` invocation**. Measured, PHP 8.3.6.
+**Every remaining site is OUT OF LANE — `candy-core/src/Util/Tty/PosixBackend.php` and
+`candy-flip/src/Renderer.php` are not on this lane's file list. Reported, not fixed.**
 
-E336 is fixed in `TtyDetect::isAtty()`, but it was never the only instance. A token-stream census over the
-`src/` directory of all 58 libs (generator below) finds exactly three sites that cast a stream resource to
-`int` and then use the result as a file descriptor. One was `TtyDetect`. The other two are both in
-`PosixBackend`:
+#### WHAT THIS ENTRY FIRST SAID, AND WHY IT CHANGED
 
-  - `size()` — `$fd = (int) $this->stream;` then `SizeIoctl::query($fd)`
-  - `enableRawMode()` — `$fd = (int) $this->stream;` then `TermiosFactory::open($fd)`
+IT SAID: "a token-stream census over the `src/` directory of all 58 libs finds exactly three sites that
+cast a stream resource to `int` and then use the result as a file descriptor" — `TtyDetect::isAtty()` plus
+`PosixBackend::size()` and `PosixBackend::enableRawMode()`.
 
-Same mechanism, same measurement: `(int)` on a stream is its RESOURCE ID. Both are latent for the same
-reason `TtyDetect` was — in an ordinary terminal descriptors 0, 1 and 2 are the same device, so `TIOCGWINSZ`
-on the wrong one returns the right size — and both stop being latent in a process that opened streams before
-asking. `enableRawMode()` is the worse of the two: it puts an unrelated descriptor into raw mode and then
-restores a snapshot taken from it.
+WHAT IS TRUE NOW: there are six, and the entry named half of them. **WHY it missed the rest is the
+reusable part, and it is worth more than the corrected number.** The first census walked `T_INT_CAST`
+tokens — which does see all of them — and then kept only the hits "whose operand is a stream". That second
+step was written to recognise the operand shapes already in hand, `$this->stream` and `$stream`. An
+operand that was an **array element** (`$tty[0]`) or a **bare constant** (`STDIN`, `STDOUT`) could not be
+expressed in that vocabulary, so it was dropped in silence rather than surfaced as unclassified. The
+classifier's alphabet was a transcript of the known cases, and it reported exactly the cases it already
+knew.
 
-`candy-serve/src/StatsServer.php` also casts a stream to `int`, and is NOT an instance: it uses the value as
-an array key for handle identity, which is exactly what a resource id is for. Any sweep of this pattern has
-to keep that one (rule 26).
+WHY THIS ENTRY STILL EARNS ITS PLACE: the mechanism it documents was right, the carve-out it records is
+still correct, and the remediation advice — that the fix is not "delete the cast" — is unchanged. Only the
+population was wrong.
 
-**Generator**, PHP 8.3.6, whole-population walk, no sampling: `token_get_all()` over every `.php` under
-`*/src`, collect every `T_INT_CAST`, record the next significant token, and report every hit rather than
-only the ones that match a shape (rule 14). Run at `b9abd2fb`: 1042 int-casts across 58 libs, of which the
-three above are the ones whose operand is a stream. The 1042 and the 58 are a snapshot of that commit and
-will rot (rule 18); the load-bearing claim is the THREE, and re-deriving it is the generator's job, not this
-paragraph's.
+#### THE REPLACEMENT GENERATOR INVERTS THE ALPHABET
 
-**Step.** Give both sites the same treatment `TtyDetect::isAtty()` got where the question allows it —
-`size()` cannot, because `ioctl` genuinely needs a descriptor number. For `size()` the honest options are to
-carry the descriptor alongside the stream, or to keep the `stty`/`tput` fallback as the primary. For
-`enableRawMode()` the descriptor is needed too, so the same applies. Do not "fix" it by deleting the
-`(int)` — the call needs a number, and the defect is that it is the wrong number.
+Rather than asking "which int-casts look like a stream", it enumerates the **sinks that consume a file
+descriptor** and prints the first argument of every call to them, with a classification. An operand shape
+cannot hide from it, because operand shape is not what it searches on; and anything it cannot classify is
+printed as `UNCLASSIFIED` and counted rather than dropped.
+
+Sinks, discovered by grep over the tree rather than assumed: `posix_isatty`, `posix_ttyname`, `fcntl`,
+`TermiosFactory::open`, `SizeIoctl::query`. Run over every `.php` under each library's source directory,
+PHP 8.3.6: **1832 files across 58 libraries, 10 sink calls, of which 2 are a direct `(int)` cast of a bare
+constant and 3 more are a variable that a cast assigned one to two lines earlier.** The file/line pairs
+below are a snapshot and will rot; the generator is the durable artefact, and re-running it is the way to
+re-derive this list. Do not trust the count in this paragraph — re-derive it.
+
+#### THE SIX SITES
+
+| # | Site | Cast | Asks about | Latent? |
+|---|---|---|---|---|
+| 1 | `TtyDetect::isAtty()` | `(int) $stream` | resource id | **FIXED this round** |
+| 2 | `PosixBackend::size()`, ioctl arm | `(int) $this->stream` | resource id | latent |
+| 3 | `PosixBackend::size()`, `/dev/tty` arm | `(int) $tty[0]` | resource id | **wrong on every run** |
+| 4 | `PosixBackend::enableRawMode()` | `(int) $this->stream` | resource id | latent |
+| 5 | `PosixBackend::restoreLast()` | `(int) STDIN` | descriptor 1 (STDOUT) | wrong on every run |
+| 6 | `Renderer::withAdaptiveSize()` (candy-flip) | `(int) STDOUT` | descriptor 2 (STDERR) | **NOT latent — see below** |
+
+Sites 3, 5 and 6 were all missed by the first census, and all three for the alphabet reason above.
+
+**Site 3** is the worst of the candy-core group. The other cast sites there are latent-but-usually-right
+because descriptors 0, 1 and 2 name the same device in an ordinary terminal, so asking the wrong one still
+returns the right answer. Site 3 cannot be: `openTty()` **freshly `fopen`s `/dev/tty`**, and a fresh
+handle's resource id can never equal its own descriptor once the low numbers are taken. Measured under a
+real tty, PHP 8.3.6: the handle's resource id is **5** while its actual descriptor is **4**, and the two
+numbers give OPPOSITE answers — `posix_isatty(5)` is `false`, `posix_isatty(4)` is `true`. (The absolute
+numbers depend on how many descriptors the launcher already holds; the inequality is the invariant, not
+the pair.)
+
+**Site 5** takes its "current state from STDIN" — the comment directly above it says so — from
+`(int) STDIN`, which is **1**, i.e. STDOUT. Measured: the three standard streams have resource ids 1, 2, 3
+over descriptors 0, 1, 2.
+
+#### SITE 6 IS NOT LATENT, AND IT IS THE REASON THIS AMENDMENT MATTERS
+
+`candy-flip`'s `Renderer::withAdaptiveSize()` calls `SizeIoctl::query((int) STDOUT)`. `(int) STDOUT` is
+**2**; STDOUT's descriptor is **1**. So it asks the kernel for **STDERR's** window size while its own
+doc-block promises `@throws \RuntimeException if STDOUT is not a TTY`.
+
+That is harmless only while stderr happens to be the same terminal. Redirect stderr and keep stdout on the
+terminal — `php demo.php 2>err.log`, an utterly routine invocation — and the two descriptors stop naming
+the same thing. Measured under a real tty, PHP 8.3.6, three takes, identical every time:
+
+```
+posix_isatty(1)  [real STDOUT] = true          <- stdout IS a terminal
+posix_isatty(2)  [real STDERR] = false         <- stderr is the file
+SizeIoctl::query(1) -> succeeds
+SizeIoctl::query(2) -> RuntimeException: Cannot query size of non-tty fd
+```
+
+So the method **throws on a live terminal**, and the exception a caller sees says STDOUT is not a TTY when
+STDOUT demonstrably is. Wrong behaviour and a wrong diagnostic pointing the next reader away from the
+cause. Unlike sites 2–5 this needs no unusual process state — only a shell redirection.
+
+#### CARVE-OUTS — verified, and any sweep of this pattern must spare them
+
+- `candy-serve/src/StatsServer.php` casts a stream to `int` and is **not** an instance: the value is an
+  array key for handle identity, which is precisely what a resource id is for.
+- `candy-palette/src/Probe/TerminalProbe.php` and `candy-shine/src/Theme.php` call `posix_isatty(STDOUT)`
+  passing the **resource itself**, with no cast. `posix_isatty()` accepts `resource|int`, so this is
+  correct — and it is the shape the other sites should be moving toward, not away from.
+- `candy-vcr/src/Cli/RecordCommand.php` calls `TermiosFactory::open(0)` with a literal `0`. That is a real
+  descriptor number, not a cast. Correct.
+- `candy-pty/src/Posix/PosixPtySystem.php` passes `$masterFd` / `$slaveFd` to `fcntl()`. These come from
+  `posix_openpt` through FFI and are genuine kernel descriptors. Correct.
+
+#### STEP
+
+Give sites 2–6 the treatment `TtyDetect::isAtty()` got **where the question allows it**, and note that it
+often does not. `stream_isatty()` removes the need for a descriptor number, but `ioctl` and `termios`
+genuinely need one, so:
+
+- **Site 6 first** — it is the only one that misbehaves without unusual process state, and it is also the
+  easiest: `SizeIoctl::query()` needs a descriptor, and the descriptor for `STDOUT` is the constant `1`.
+  Passing `1` is correct and total. Add a regression test that redirects stderr to a file and asserts the
+  call still answers.
+- **Sites 2 and 4** need the descriptor carried alongside the stream, or the `stty`/`tput` fallback
+  promoted to primary.
+- **Site 3** should ask about the handle it just opened rather than a number derived from it.
+- **Site 5** should open descriptor `0` explicitly, since STDIN is what the comment says it wants.
+
+**Do not "fix" any of these by deleting the `(int)`** — the call needs a number, and the defect is that it
+is the wrong number.
 
 ---
 
