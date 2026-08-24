@@ -1094,6 +1094,14 @@ a detached child's refusal must reach a user who cannot see stderr — so **use 
 inventing a second one.** The four raw-`fwrite` sites were judged stderr-only with a stated rule and
 remain open if that judgement is revisited.
 
+**ROUND 49 — CLOSED (1a2caebb). Floor 9581 / 135471 / 1 skipped / rc 0** — five lanes
+(denial roster, dormancy + doc-blocks, censuses, scanners, daemon + concurrency), 297 backlog
+entries, ids E246–E303. The merge red on exactly one test and it was a CROSS-LANE catch: lane
+d's duplicated-helper drift guard found two copies lane b had written into its own files, which
+neither lane could see alone. Tests predicted exactly for the seventh consecutive round.
+Also fixed a live fatal in candy-mosaic (`PaletteCapability::Iterm2Image` does not exist; the
+enum spells it `ITerm2`), reachable only once a lane closed descriptor 0.
+
 **ROUND 48 — CLOSED (`2b57cd9c`). Floor `9497 / 133585 / 1 skipped / rc 0`, `sugar-crush` linked.**
 Merges `68189e5e` (a, seam) · `198ce2f3` (b, forks) · `3c1f8aa8` (c, denial). Backlog 214 → **239**
 (E221–E245). Second session limit in two rounds: the first launch ended 5-of-9 and was **resumed**, not
