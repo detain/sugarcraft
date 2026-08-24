@@ -925,17 +925,27 @@ final class NonInteractive
      * contract. Under `json` it is exactly one document, which is why
      * {@see HeadlessPermissionPrompt} puts its question here too.
      *
-     * ONE DELIBERATE DOUBLE LINE, stated because it is visible and looks like a
-     * bug. An ASK refused at a real terminal already writes
-     * "sugarcrush: refused <tool>." from
-     * {@see HeadlessPermissionPrompt::__invoke()}, so that one case produces two
-     * lines. It is not suppressed: the approver's line records the ANSWER, this
-     * one records the OUTCOME and carries the reason the MODEL was handed,
-     * which the terse one does not. Suppressing it would need this closure to
-     * know which refusals some approver had already announced — and the
-     * approver is constructed four frames away inside
+     * A DELIBERATE DOUBLE, ON EVERY ASK AND NOT ONLY AT A TERMINAL, stated
+     * because it is visible and looks like a bug. WHAT THIS SAID: that an ASK
+     * refused "at a real terminal" already writes the terse
+     * `sugarcrush: refused <tool>.` from
+     * {@see HeadlessPermissionPrompt::__invoke()}, "so that one case produces
+     * two lines". WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 49 in a
+     * child process with fd 2 on a plain file: the NO-TTY arm doubles too —
+     * that class's eight-line refusal block plus this line. Both arms, not one.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the reason neither is
+     * suppressed is unchanged and is the half a reader needs. The approver's
+     * text records WHICH ARM — a person answering no, versus nobody being
+     * there — and this line records the OUTCOME with the reason the MODEL was
+     * handed. The second cannot substitute for the first: BOTH arms produce a
+     * reason opening
+     * {@see \SugarCraft\Crush\Permissions\DenialKind::Refused}, so this
+     * line alone cannot say which happened. Suppressing it would additionally
+     * need this closure to know which refusals some approver had already
+     * announced — and the approver is constructed four frames away inside
      * {@see Bootstrap::backend()}, so that coupling does not exist and should
-     * not be invented for a cosmetic duplicate.
+     * not be invented.
+     * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins it.
      *
      * IT ALSO WRITES INTO THE TEST SUITE'S OWN CONSOLE, and that is a
      * decision rather than an accident. Several suites drive `self::run()`

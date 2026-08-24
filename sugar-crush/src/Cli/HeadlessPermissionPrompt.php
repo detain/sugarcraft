@@ -173,10 +173,40 @@ use SugarCraft\Crush\Tools\ToolCall;
  * WHY THE WHOLE ENTRY STILL EARNS ITS PLACE: the routing question it answers —
  * that these four stay on stderr rather than moving to the transcript seam — is
  * unchanged and independent of where the refusal line ended up. What changed is
- * only the last sentence's forecast. Note the one visible consequence, recorded
- * so it does not read as a bug: an ASK refused at a terminal now produces two
- * stderr lines, this class's terse "refused <tool>." and the observer's fuller
- * one. {@see NonInteractive::noticeRefusal()} says why neither is suppressed.
+ * only the last sentence's forecast.
+ *
+ * ## The pair of lines, and why the terse one stays (E240)
+ *
+ * WHAT THE PARAGRAPH ABOVE USED TO END WITH: "an ASK refused at a terminal now
+ * produces two stderr lines, this class's terse `refused <tool>.` and the
+ * observer's fuller one", recorded so it does not read as a bug, with
+ * {@see NonInteractive::noticeRefusal()} carrying the argument against
+ * suppressing either. The backlog entry that recorded it offered a cheap
+ * removal: drop shape 4 now that the observer says more.
+ *
+ * WHAT IS TRUE NOW, MEASURED on PHP 8.3.6 at round 49 by driving a real
+ * {@see \SugarCraft\Crush\Backend\EngineBackend} turn through a gate that
+ * ASKs, once per arm, in a child process with fd 2 on a plain file:
+ *
+ *  - THE DOUBLING IS NOT TTY-ONLY. The no-tty arm doubles as well — shape 2's
+ *    eight-line block plus the observer's line, 526 bytes over 9 lines,
+ *    against the terminal arm's 266 over 8. So removing shape 4 would take
+ *    the doubling out of one of the two arms that have it, not out of the
+ *    behaviour.
+ *  - AND THE OBSERVER'S LINE CANNOT TELL THE ARMS APART. Both end in a reason
+ *    opening `Permission denied:`
+ *    ({@see \SugarCraft\Crush\Permissions\DenialKind::Refused}), because in
+ *    both an approver was attached and answered no — what differs is WHY, and
+ *    the observer, reading a
+ *    {@see \SugarCraft\Crush\Events\ToolFinished}, never sees it. This
+ *    class's own text is therefore the ONLY thing on stderr separating "a
+ *    person typed n" from "there was nobody at the keyboard", two problems
+ *    with two different remedies.
+ *
+ * SO THE PAIR STAYS, and shape 4 is not a duplicate of the observer's line but
+ * the narrower half of a pair that is jointly exhaustive.
+ * {@see \SugarCraft\Crush\Tests\Cli\RefusalStderrSurfaceTest} pins both
+ * measurements, so the removal is not re-proposed from the entry's text alone.
  */
 final class HeadlessPermissionPrompt
 {
