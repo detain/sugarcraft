@@ -191,24 +191,40 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
     }
 
     /**
-     * Reads its own pid to $argv[1], then holds stdin open forever while
-     * IGNORING SIGTERM. `pcntl_async_signals()` plus a polling loop rather than
-     * a single long `usleep()`: a signal interrupts `usleep()` and the script
-     * would then simply END, which looks exactly like a well-behaved exit and
-     * would make this fixture silently useless.
+     * Holds stdin open forever while IGNORING SIGTERM, and writes its pid to
+     * $argv[1] ONLY ONCE THE HANDLER IS INSTALLED.
+     *
+     * THE ORDER OF THOSE TWO LINES IS THE FIXTURE. It was the other way round
+     * and the mutation table says what that cost: removing the signal-9
+     * escalation from
+     * {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndClose()}
+     * SURVIVED, because `disconnect()` ran before the child had reached
+     * `pcntl_signal()` and SIGTERM killed it at its DEFAULT disposition. The
+     * bound was measuring a well-behaved child while claiming to measure a
+     * stubborn one — the assertion's window, not the mutation's relevance. The
+     * pid file is now the readiness handshake every fixture here waits on, and
+     * the same mutation is killed.
+     *
+     * `pcntl_async_signals()` plus a POLLING loop rather than one long
+     * `usleep()`: a signal interrupts `usleep()`, and the script would then
+     * simply END — which looks exactly like a well-behaved exit and would make
+     * this fixture silently useless in the other direction.
      */
     private const STUBBORN_SERVER = <<<'PHP'
         <?php
-        file_put_contents($argv[1], (string) getmypid());
         pcntl_async_signals(true);
         pcntl_signal(SIGTERM, static function (): void {});
+        file_put_contents($argv[1], (string) getmypid());
         $deadline = microtime(true) + 20.0;
         while (microtime(true) < $deadline) {
             usleep(20000);
         }
         PHP;
 
-    /** The same, but with SIGTERM left at its default disposition. */
+    /**
+     * The same, but with SIGTERM left at its DEFAULT disposition — the control
+     * that keeps the bound above from being satisfied by a short budget.
+     */
     private const WELL_BEHAVED_SERVER = <<<'PHP'
         <?php
         file_put_contents($argv[1], (string) getmypid());
@@ -227,10 +243,19 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
     {
         $script = $this->tempDir . '/server.php';
         file_put_contents($script, $source);
+        @unlink($this->pidFile());
 
         $client = new ClaudeCodeMcpClient(PHP_BINARY, [$script, $this->pidFile()]);
         $client->connect();
         $this->assertTrue($client->isConnected(), 'the fixture server must have started');
+
+        // BLOCK UNTIL THE FIXTURE IS READY, in EVERY test rather than only the
+        // two that need the number. `connect()` returns as soon as
+        // `proc_open()` does, which is before the child has run a line — and a
+        // stubborn fixture that has not yet installed its handler is a
+        // well-behaved fixture. See STUBBORN_SERVER for the mutation that
+        // survived while this wait was missing.
+        $this->selfReportedPid($client);
 
         return $client;
     }
@@ -252,7 +277,9 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
             $raw = @file_get_contents($this->pidFile());
             if (is_string($raw) && ctype_digit(trim($raw))) {
                 $pid = (int) trim($raw);
-                $this->reportedPids[] = $pid;
+                if (!in_array($pid, $this->reportedPids, true)) {
+                    $this->reportedPids[] = $pid;
+                }
 
                 return $pid;
             }
