@@ -12,6 +12,7 @@ use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Support\ForkedChild;
 
 /**
  * A FORK THAT FAILED AND A FORK THAT WAS NEVER ATTEMPTED ARE DIFFERENT EVENTS,
@@ -154,23 +155,47 @@ final class AgentWorkerPoolForkFailureTest extends TestCase
     }
 
     /**
-     * THE SEAM DEFAULTS TO OFF, so the test above is measuring the arm rather
-     * than a pool that reports failure unconditionally.
+     * THE SEAM DEFAULTS TO OFF, MEASURED ON `forkProcess()` AND NOT ON THE FLAG.
      *
-     * This is the control for `forceForkFailureForTesting` itself: a seam
-     * stuck on would make every assertion in this file pass for the wrong
-     * reason. Read through Reflection rather than exercised through a real
-     * `pcntl_fork()`, which would fork the test runner.
+     * This is the control for `forceForkFailureForTesting` itself: a seam stuck
+     * on would make every assertion in this file pass for the wrong reason.
+     *
+     * A DRAFT OF THIS TEST READ THE PROPERTY AND STOPPED THERE, and a mutation
+     * that replaced `forkProcess()`'s whole body with `return -1;` SURVIVED it
+     * — the property was still false, and the method that consults it no longer
+     * did. The window was wrong, not the mutation. So this forks for real and
+     * asks what came back; the child leaves through
+     * {@see \SugarCraft\Crush\Support\ForkedChild::exitNow()}, which SIGKILLs
+     * itself rather than running PHPUnit's shutdown sequence a second time in a
+     * process that would otherwise print its own duplicate summary.
      */
     public function testTheForkFailureSeamIsOffUnlessATestTurnsItOn(): void
     {
         $property = new \ReflectionProperty(AgentWorkerPool::class, 'forceForkFailureForTesting');
-
-        self::assertFalse($property->getValue(new AgentWorkerPool()));
+        $forkProcess = new \ReflectionMethod(AgentWorkerPool::class, 'forkProcess');
 
         $forced = new AgentWorkerPool();
         self::forceForkFailure($forced);
         self::assertTrue($property->getValue($forced));
+        self::assertSame(-1, $forkProcess->invoke($forced), 'the seam no longer forces failure');
+
+        $unforced = new AgentWorkerPool();
+        self::assertFalse($property->getValue($unforced));
+
+        $pid = $forkProcess->invoke($unforced);
+        if ($pid === 0) {
+            ForkedChild::exitNow(0);
+        }
+
+        self::assertGreaterThan(
+            0,
+            $pid,
+            'forkProcess() reported failure on a pool that never asked it to, so every '
+                . 'failed-fork assertion in this file is measuring the seam rather than the arm',
+        );
+
+        $status = 0;
+        pcntl_waitpid($pid, $status);
     }
 
     private function logContents(): string
