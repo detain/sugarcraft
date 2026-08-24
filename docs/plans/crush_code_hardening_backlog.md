@@ -10254,7 +10254,7 @@ believed on the strength of its output rather than on the strength of a known-an
 
 ---
 
-### Ea49-1 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
+### E304 — `Chat::DENIED_ERROR_PREFIXES` is public API and the deprecation is only in prose
 
 `Runtime::DENIAL_HOOK` / `DENIAL_REFUSED` / `DENIAL_UNANSWERED` and
 `Chat::DENIED_ERROR_PREFIXES` are now aliases that DERIVE from
@@ -10270,7 +10270,7 @@ attached, and this round's mandate was to remove the copies rather than to sched
 
 ---
 
-### Ea49-2 — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
+### E305 — CLOSED in round 49: the roster's SPELLINGS had no pin of their own, and E246 is what removed the last one
 
 **Status: closed by the round-49 fix pass** (`DenialPrefixRosterTest::testTheRostersBackingValuesAreTheThreePublishedPrefixes()`).
 Kept rather than deleted because the mechanism is the useful part and the original entry got two things
@@ -10306,7 +10306,7 @@ reason.
 
 ---
 
-### Ea49-3 — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
+### E306 — `--output-format text` still carries no `kind`, and the terse arm-distinguishing line is not machine-readable
 
 Round 49 gave every `refusals` entry in the `--output-format json` document a `kind` field
 (`hook` / `refused` / `unanswered`, from `DenialKind::token()`), which is the seam where the enum
@@ -10328,7 +10328,7 @@ the change is visible.
 
 ---
 
-### Ea49-4 — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
+### E307 — `ToolRefusal`'s `kind` has exactly one consumer, and the other caller drops it
 
 `Permissions\ToolRefusal::fromEvent()` answers with a `DenialKind`. `NonInteractive::refusalFrom()`
 carries it out as the document's `kind`; `BackgroundSessionRunner::noticeRefusal()` takes `->tool` and
@@ -10344,7 +10344,7 @@ wants its own step rather than riding on a roster refactor.
 
 ---
 
-### Ea49-5 — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
+### E308 — a tool that throws can forge a refusal: `Chat::invokeTool()` puts a raw exception message where the denial classifier reads
 
 `Chat::invokeTool()`'s `catch (\Throwable $e)` returns
 `ToolResult::error($name, $e->getMessage(), $toolCall->id)` — the message VERBATIM, with no prefix of
@@ -10371,7 +10371,7 @@ wanting its own step and its own golden-file pass — and functionality comes be
 
 ---
 
-### Ea49-6 — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
+### E309 — the denial scan's vocabulary is still a hand-written list, and that is the residual limit
 
 Round 49 widened it twice (round-49 implement pass: the `^` anchor and the `[a-z]+` verb; round-49 fix
 pass: `declined`, `prohibited`, `vetoed`, `barred`, plus a case-variant rule and per-frame judging). Both
@@ -10396,7 +10396,7 @@ guard becomes "no raw error strings" rather than "no strings that look like deni
 tree-wide change and wants its own plan.
 ---
 
-### Eb49-0 — E296 OPTION (a) IS NOW AVAILABLE: the descriptor replacement costs THREE named assertions, not 107 errors
+### E310 — E296 OPTION (a) IS NOW AVAILABLE: the descriptor replacement costs THREE named assertions, not 107 errors
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: this is the answer E296 has been blocked on for a
 round. **MEASURED, full suite, PHP 8.3.6, at `a43d4f94` in lane b.** Not shipped — see "why not here".
@@ -10448,13 +10448,13 @@ out-of-lane edit is reportable, not prohibited):
    descriptor replacement". Only the second half is done. With the fallback repaired the throw is now
    caught rather than fatal, so the suite is green-ish — but candy-mosaic still leaves its normal path
    by exception on every call, and "no test noticed" is not the same as "the library is fine". See
-   Eb49-8.
+   E318.
  - **Five lanes are live on `tests/bootstrap.php` this round** and lane e shipped attempt 4 into it
    hours ago. Attempt 5, landed concurrently by a different lane, is the single highest-conflict edit
    available in this tree, and it touches three more files to absorb its costs.
 
 **Step, and it is now one commit rather than a research project.** Guard `Detect::stdinFd()`'s three
-consumers (Eb49-8), then apply the four-line bootstrap change above, repoint
+consumers (E318), then apply the four-line bootstrap change above, repoint
 `NonInteractiveStdinPinTest`'s control at a fresh `php://stdin` handle, rewrite
 `SuiteChildStdinIsolationTest`'s live-resource assertion into its opposite with the reason, and delete
 `tests/SuiteChildStdinPrependResidualTest.php`. `tests/StdinConstantReaderCensusTest.php` is the roster
@@ -10471,7 +10471,7 @@ name, in another repository, fixed by a different lane, in the same round.
 
 ---
 
-### Eb49-1 — E243 was CLOSED before round 50 started, and two places still say "narrowed"
+### E311 — E243 was CLOSED before round 50 started, and two places still say "narrowed"
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: doc accuracy on an item that was re-issued as work.
 **Measured by symbol at `906fa666`.**
@@ -10494,7 +10494,7 @@ in the tree (E190's shape, one level up: there the commits were unreported, here
 
 ---
 
-### Eb49-2 — the `new Tty(null, …)` census's alphabet was ONE CLASS NAME, and the backend under it has the same constructor
+### E312 — the `new Tty(null, …)` census's alphabet was ONE CLASS NAME, and the backend under it has the same constructor
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: guard coverage, latent. **Measured, PHP 8.3.6,
 three takes. FIXED this round** in `tests/TtyStreamArgumentCensusTest.php`.
@@ -10532,7 +10532,7 @@ both filtered to the single census method, so each is a claim about that guard a
 
 ---
 
-### Eb49-3 — the fd-0 reader roster nobody had, and the scanner that reported a confident false zero
+### E313 — the fd-0 reader roster nobody had, and the scanner that reported a confident false zero
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: the missing input to E296. **Measured, PHP 8.3.6.
 FIXED this round** by `tests/StdinConstantReaderCensusTest.php`.
@@ -10573,7 +10573,7 @@ the other six by reading is exactly the reasoning-instead-of-measuring that kill
 
 ---
 
-### Eb49-4 — E296's PREPEND residual now executes, and option (a)'s viability is MEASURED rather than argued
+### E314 — E296's PREPEND residual now executes, and option (a)'s viability is MEASURED rather than argued
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: test-hermeticity, unchanged; provenance, improved.
 **Measured, PHP 8.3.6.**
@@ -10596,7 +10596,7 @@ means someone closed the prepend half, which is the outcome E296 wants.
 
 ---
 
-### Eb49-5 — the prepend residual is a data path from the runner's stdin to a model provider
+### E315 — the prepend residual is a data path from the runner's stdin to a model provider
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: security shape, recorded not fixed
 (functionality-before-hardening). **Measured, PHP 8.3.6.**
@@ -10609,13 +10609,13 @@ pipes a build log into `phpunit`, or any supervisor that passes its own stdin do
 going to a provider — and `NonInteractive::MAX_STDIN_BYTES` is 10MB, so the bound is generous rather than
 absent.
 
-**Not fixed here on purpose.** The only repair that closes it is the descriptor replacement (Eb49-3's
+**Not fixed here on purpose.** The only repair that closes it is the descriptor replacement (E313's
 roster is its input), and that is one decision, not two. Recorded so it is not re-discovered as a
 surprise.
 
 ---
 
-### Eb49-6 — E299 re-derived independently, and nothing else in `tests/bootstrap.php` assumes a local is a global
+### E316 — E299 re-derived independently, and nothing else in `tests/bootstrap.php` assumes a local is a global
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: informational, closing an open question.
 **Measured, PHP 8.3.6, PHPUnit 10.5.64, three takes.**
@@ -10641,7 +10641,7 @@ someone "tidies" it into `assertNotNull()`.
 
 ---
 
-### Eb49-7 — round 44's `grep` binary-detection trap reproduced live, on a PHPUnit log in this lane
+### E317 — round 44's `grep` binary-detection trap reproduced live, on a PHPUnit log in this lane
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: methodology, reproduced on demand.
 **Measured, GNU grep on this box.**
@@ -10664,7 +10664,7 @@ that looks like good news.
 
 ---
 
-### Eb49-8 — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
+### E318 — E302's second defect is still open: `Detect::stdinFd()` hands an unguarded `?? STDIN` on
 
 **Recorded 2026-08-24 by round-50 lane b.** Severity: the remaining blocker on E296 option (a).
 **Measured by symbol at `906fa666`. Out of lane — `candy-mosaic/` belongs to no lane.**
@@ -10689,7 +10689,7 @@ closed resource directly rather than through a thrown probe. Worth a candy-mosai
 
 ---
 
-### Eb49-9 — the O_NONBLOCK vocabulary is INVERTED across the suite, and the code is right in every case
+### E319 — the O_NONBLOCK vocabulary is INVERTED across the suite, and the code is right in every case
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: mechanism prose, tree-wide.
 **MEASURED, PHP 8.3.6, three takes**, reading `/proc/self/fdinfo/0` either side of the call with fd 0 a pipe:
@@ -10724,7 +10724,7 @@ re-reading — and the reader who "corrects" the code to match the prose deletes
 
 ---
 
-### Eb49-10 — four THIRD-PARTY vendor packages name descriptor 0, and one is inside PHPUnit's own tree
+### E320 — four THIRD-PARTY vendor packages name descriptor 0, and one is inside PHPUnit's own tree
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: E296 input, currently benign.
 **Generator:** `StdinConstantReaderCensusTest::fd0References()` (verbatim copy) over every
@@ -10755,7 +10755,7 @@ generator, instead.
 
 ---
 
-### Eb49-11 — the `?? STDIN` resolved ONE FRAME UP is invisible to the Tty census by construction
+### E321 — the `?? STDIN` resolved ONE FRAME UP is invisible to the Tty census by construction
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: guard coverage, latent.
 **Partially FIXED this round**; the general case is not.
@@ -10782,7 +10782,7 @@ the headline is, rather than where the bucket is.
 
 ---
 
-### Eb49-12 — A GUARD'S CLASSIFICATION BRANCHES ARE NOT PINNED BY ITS SCANNER'S FIXTURES
+### E322 — A GUARD'S CLASSIFICATION BRANCHES ARE NOT PINNED BY ITS SCANNER'S FIXTURES
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: this is the round's transferable lesson.
 **Found by mutation, FIXED this round in `tests/TtyStreamArgumentCensusTest.php`.**
@@ -10812,7 +10812,7 @@ whose scanner is well-tested is where this hides, because the fixture table look
 
 ---
 
-### Eb49-13 — `SuiteChildStdinIsolationTest`'s failure message still prices option (a) at 107 errors
+### E323 — `SuiteChildStdinIsolationTest`'s failure message still prices option (a) at 107 errors
 
 **Recorded 2026-08-24 by round-50 lane b (fix pass).** Severity: doc accuracy on the decision E296 turns
 on. **Out of this lane's file list** — `sugar-crush/tests/SuiteChildStdinIsolationTest.php` is lane e's.
@@ -10820,12 +10820,12 @@ on. **Out of this lane's file list** — `sugar-crush/tests/SuiteChildStdinIsola
 Its `testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking` reads
 `tests/bootstrap.php closed the \STDIN constant; SugarCraft\Mosaic\Detect reads it unguarded and 107
 tests error out when it is gone`. Observed verbatim in the option-(a) probe run. That figure predates
-E302 (`1a2caebb`, an ancestor of this tree) and is retired — see Eb49-0 and the two doc-blocks this lane
+E302 (`1a2caebb`, an ancestor of this tree) and is retired — see E310 and the two doc-blocks this lane
 rewrote. The assertion itself is correct and should stay; only its reason is stale.
 
 **Step.** Rewrite the message in three-part form when that file is next touched. If option (a) ships, the
 assertion is inverted rather than deleted, with its reason.
-### Ec49-1 — E266/E293's COUNT is right and its HAZARD is not: `src/`'s five argument-less calls cannot collide on a path
+### E324 — E266/E293's COUNT is right and its HAZARD is not: `src/`'s five argument-less calls cannot collide on a path
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: none today, one edit away from real. **Measured,
 PHP 8.3.6.** Guard shipped; the `src/` fix deliberately not done (tests-only lane).
@@ -10851,7 +10851,7 @@ and the row must be deleted when they are fixed.
 
 ---
 
-### Ec49-2 — E286's fix landed in one reader; the shape recurs, and its OBSERVED half is guarded in one
+### E325 — E286's fix landed in one reader; the shape recurs, and its OBSERVED half is guarded in one
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: correctness of an instrument. **Measured**, PHP 8.3.6.
 Half fixed with a census; half deferred with the reason.
@@ -10896,7 +10896,7 @@ census.
 
 ---
 
-### Ec49-3 — three of round 49's own review findings were ALREADY FIXED at or in the round's base commit
+### E326 — three of round 49's own review findings were ALREADY FIXED at or in the round's base commit
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: process. **Verified in the tree at `906fa666`.**
 **Corrected from "two" to "three" 2026-08-24:** E298's fix *is* `906fa666` itself, so it belongs in this
@@ -10917,7 +10917,7 @@ entry's own status line and the tree, and a fixed item is a mutation to run rath
 
 ---
 
-### Ec49-4 — E289's `match`-arm gate guards a shape the tree does not have, and the first prose describing it was inverted
+### E327 — E289's `match`-arm gate guards a shape the tree does not have, and the first prose describing it was inverted
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: none (a widening). **Measured**, PHP 8.3.6. **Fixed.**
 
@@ -10937,7 +10937,7 @@ wrong. Both are corrected and the mutation is now killed.
 
 ---
 
-### Ec49-5 — `AuditHook`'s default log path is a fixed shared name in PRODUCTION, not only in its test
+### E328 — `AuditHook`'s default log path is a fixed shared name in PRODUCTION, not only in its test
 
 **Recorded 2026-08-24 by round-49 lane c.** Severity: low, cross-process. **Measured.** Not fixed.
 
@@ -10958,10 +10958,10 @@ the default under a per-user directory the process owns.
 
 ---
 
-### Ec49-6 — four `src/` `uniqid()` calls carried a literal prefix and therefore no entropy at all
+### E329 — four `src/` `uniqid()` calls carried a literal prefix and therefore no entropy at all
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: same family as
-`Ec49-1`. **Measured**, PHP 8.3.6.
+`E324`. **Measured**, PHP 8.3.6.
 
 **What.** `ProcessUniqueTempNameTest`'s guard banned the ARGUMENT-LESS call. `uniqid($p)` is `$p` followed
 by the *same* 13-hex microtime suffix the bare call returns — 20000/20000 prefixed values conform,
@@ -10977,17 +10977,17 @@ flag, 9 do not, 0 are undecidable.
 
 **Traced, not assumed.** `AgentManager` and `App` build `SubAgent` ids that reach
 `AgentWorkerPool::resultFile()`/`progressFile()` under `makeResultDirPath()`, which already carries a pid
-and 64 bits — same containment argument as `Ec49-1`, and it fails at the same moment. `ScriptHook`'s value
+and 64 bits — same containment argument as `E324`, and it fails at the same moment. `ScriptHook`'s value
 is a display NAME (the payload file is `tempnam()`-generated at a different site) and
 `ClaudeCodeProvider`'s is a tool-call id (the `sc_runtime_tool_*` / `sc_chat_tool_*` files are named by
 `ToolIpcFiles::reserve()`); neither reaches a filename.
 
 **Step.** Fix all nine sites in one edit — `uniqid($prefix . getmypid() . '_', true)` — and delete the five
-inventory rows. It is a `src/` edit, out of a tests-only lane. Doing it with `Ec49-1` is one change, not two.
+inventory rows. It is a `src/` edit, out of a tests-only lane. Doing it with `E324` is one change, not two.
 
 ---
 
-### Ec49-7 — the static-path scanner's alphabet still cannot express four shapes, and now says so in a test
+### E330 — the static-path scanner's alphabet still cannot express four shapes, and now says so in a test
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage.** Severity: stated bound. **Measured**, PHP 8.3.6.
 
@@ -11007,7 +11007,7 @@ resolution within the declaring file. Delete the corresponding row from the test
 
 ---
 
-### Ec49-8 — a fifth `significantTokens()` copy arrived in the round that widened the drift guard's bound
+### E331 — a fifth `significantTokens()` copy arrived in the round that widened the drift guard's bound
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: latent duplication.
 
@@ -11020,12 +11020,12 @@ at 2, so the guard the same round strengthened cannot see them.
 Not a defect today — it is exactly the family the widened bound exists for, arriving one notch outside it.
 
 **Step.** Either extract one shared `significantTokens()` (it has no lib-local behaviour in any copy), or
-measure bound 3 (see `Ec49-1`'s neighbour on the unexplored bound) and decide whether the guard should
+measure bound 3 (see `E324`'s neighbour on the unexplored bound) and decide whether the guard should
 reach this far. Extraction is the cheaper of the two and removes the question.
 
 ---
 
-### Ec49-9 — `readOrFail()` and its refusal test are now duplicated across three census files
+### E332 — `readOrFail()` and its refusal test are now duplicated across three census files
 
 **Recorded 2026-08-24 by round-49 lane c's fix stage, from its own review.** Severity: latent duplication.
 
