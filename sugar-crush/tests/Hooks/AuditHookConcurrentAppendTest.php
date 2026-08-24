@@ -192,6 +192,88 @@ final class AuditHookConcurrentAppendTest extends TestCase
     }
 
     /**
+     * `LOCK_EX` SURVIVES ITS OWN BEHAVIOURAL MUTATION ON THIS BOX, AND THAT IS
+     * WHY IT IS PINNED TEXTUALLY HERE INSTEAD OF BEING QUIETLY DROPPED.
+     *
+     * MEASURED, PHP 8.3.6, Linux, local ext4 (generator `probe_lockex_r49b.php`
+     * in the round-49 scratchpad): with the write reduced to `FILE_APPEND`
+     * alone, 8 processes x 60 records at payloads of 9000, 100000 and 1000000
+     * bytes — nine runs — produced 480/480 whole records and zero damage every
+     * time. Deleting `LOCK_EX` from {@see AuditHook} is a mutation that
+     * SURVIVES {@see testConcurrentAppendsThroughTheRealHookAreNeitherLostNorSplit()},
+     * and the window is not the reason: deleting `FILE_APPEND` instead KILLS
+     * that same test, so the instrument is awake and it is `O_APPEND` doing
+     * the work.
+     *
+     * WHY THE FLAG STAYS ANYWAY, which is a measured reason and not a shrug.
+     * `O_APPEND`'s seek-and-write atomicity is a property of the FILESYSTEM,
+     * and the one filesystem this box can offer is the one that has it. It is
+     * exactly the guarantee NFS is known not to honour, and a temp directory
+     * on a network mount is an ordinary thing on a shared build host — so the
+     * flag defends a case this hardware cannot produce. Under the standing
+     * rule that dormant code is documented and pinned rather than removed,
+     * that makes this the only kind of test the property can have: a
+     * behavioural test would have to lie about what it proved.
+     *
+     * THE SCAN READS CODE, NOT COMMENTS. Both constant names appear several
+     * times in {@see AuditHook}'s prose — including in the paragraph arguing
+     * for them — so a scan of the raw bytes would pass on a class whose write
+     * had lost the flag entirely. Comment and doc-block tokens are dropped
+     * before matching, and {@see testTheFlagScannerReportsAMissingFlag()} is
+     * the control proving the scanner can still say no.
+     */
+    public function testTheWriteStillCarriesBothFlags(): void
+    {
+        $code = self::codeWithoutComments((string) file_get_contents(
+            \dirname(__DIR__, 2) . '/src/Hooks/BuiltIn/AuditHook.php',
+        ));
+
+        self::assertStringContainsString('FILE_APPEND', $code);
+        self::assertStringContainsString('LOCK_EX', $code);
+    }
+
+    /**
+     * KNOWN-POSITIVE CONTROL for the flag scanner (rule 15/E228).
+     *
+     * A source whose only occurrence of the flag is inside a comment must be
+     * reported as NOT carrying it. Without this, the assertion above is
+     * satisfied by a scanner that forgot to strip comments — the precise
+     * failure it exists to avoid — and by one that was deleted outright.
+     */
+    public function testTheFlagScannerReportsAMissingFlag(): void
+    {
+        $fixture = "<?php\n"
+            . "/** written with " . 'LOCK' . "_EX and " . 'FILE' . "_APPEND, allegedly */\n"
+            . "\$ok = file_put_contents(\$p, \$e);\n";
+
+        $code = self::codeWithoutComments($fixture);
+
+        self::assertStringContainsString('file_put_contents', $code, 'the scanner ate the code as well as the comments');
+        self::assertStringNotContainsString('LOCK_EX', $code);
+        self::assertStringNotContainsString('FILE_APPEND', $code);
+    }
+
+    /**
+     * $source with every comment and doc-block token removed.
+     */
+    private static function codeWithoutComments(string $source): string
+    {
+        $out = '';
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token)) {
+                if ($token[0] === \T_COMMENT || $token[0] === \T_DOC_COMMENT) {
+                    continue;
+                }
+                $out .= $token[1];
+                continue;
+            }
+            $out .= $token;
+        }
+
+        return $out;
+    }
+
+    /**
      * KNOWN-POSITIVE CONTROL 1 — the analyser reports LOSS.
      *
      * Constructed, not raced: a file holding one record where the run above
