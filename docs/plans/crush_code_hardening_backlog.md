@@ -8702,11 +8702,59 @@ not be driven: a genuine fork failure needs `RLIMIT_NPROC` exhausted or the mach
 that arranged either would take the box down. That is a large part of how the branch went so long emitting
 nothing at all. The lesson generalises — an arm no test can reach accumulates defects silently — and
 `startAgent()` has more of them: the child branch (`$pid === 0`) is only ever exercised by a real fork, and
-its own doc-block says the path is "currently unreachable from `bin/sugarcrush`'s live path".
+an inline comment on that branch says it is "also currently unreachable from `bin/sugarcrush`'s
+live path" (the quoted text is exact; "doc-block" was wrong — it is a `//` comment inside
+`startAgent()`, corrected by round-49 lane b's review pass).
 
 **Step.** Audit `src/` for `=== -1`, `=== false` and `catch` arms that no test reaches, and decide per site
 whether a seam (the `forceXForTesting` pattern, twice over in `AgentWorkerPool` now) is warranted or whether
 the arm should be documented as intentionally unexercised. A count is deliberately not recorded here — it
 would be stale on the next merge; the generator is the point.
+
+---
+
+### Eb49-6 — the stacked-doc-comment guard's unreadable-file arm has no fixture
+
+**Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: instrument coverage. **Measured, PHP
+8.3.6.** Lane b's file (`tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php`).
+
+**What.** `testNoSourceFileCarriesStackedDocComments()` carries a rule-14 arm — `assertIsString($source,
+$file . ' could not be read, …')` — so a file the scan cannot read reds instead of contributing a silent
+zero. Nothing exercises it. Every other assertion in that test has a known-positive control that has been
+watched to fail; this one has not, and it is the arm that would matter on a checkout with a permission
+problem.
+
+**Why not fixed here.** The only honest fixture is an unreadable `.php` file inside `src/`, created and
+chmod-ed by the test — which means writing into the tree under test, in a suite five lanes share, and
+leaving a `0000` file behind if the process dies between create and restore. The alternative is to give
+the scan its roster as a parameter so a fixture roster can name a path in the scratch directory instead;
+that is the right shape and it is a signature change to a guard three other lanes are currently obliged
+by.
+
+**Step.** Give the file loop a roster parameter (default: `phpSourceRoster($root)`), then add a fixture
+that points it at one unreadable scratch file and asserts the test-level failure. The same parameter also
+makes the existing roster control non-tautological for `bin/sugarcrush`.
+
+---
+
+### Eb49-7 — `removeDirectory()`'s `$emptied = false` on a failed `unlink()` is unkillable by construction
+
+**Recorded 2026-08-24 by round-49 lane b's review pass.** Severity: NOTE — recorded so the next reviewer
+does not spend the mutation on it. **Measured, PHP 8.3.6.**
+
+**What.** Rewriting `} elseif (!@unlink($itemPath)) { $emptied = false; }` to `} else { @unlink($itemPath);
+}` SURVIVES the whole of `tests/Agents/`. That is not a hole in the tests: a failed `unlink()` leaves the
+entry in place, so `@rmdir($path)` on the same directory then fails with `ENOTEMPTY` and the method returns
+false anyway. The assignment is belt-and-braces and cannot be observed.
+
+**The one case where it is not redundant runs the other way.** If the entry is removed by something else
+between `scandir()` and `unlink()`, `unlink()` fails with `ENOENT` while the directory really is emptying —
+`rmdir()` then succeeds and the current code reports `false` for a tree that is gone. So the surviving
+mutation is arguably MORE correct under a race, and the assignment's real justification is that a
+false-negative is the safe direction for a caller that deletes a registry entry on `true`.
+
+**Step.** None proposed. Leave the assignment; do not spend a fixture on it. If someone ever wants the race
+handled, the shape is `!@unlink($itemPath) && file_exists($itemPath)` — and that needs its own
+`clearstatcache()`, which is a bigger change than the case deserves.
 
 ---
