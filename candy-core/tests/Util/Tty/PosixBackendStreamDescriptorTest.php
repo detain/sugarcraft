@@ -253,15 +253,19 @@ final class PosixBackendStreamDescriptorTest extends TestCase
     {
         $table = $this->descriptorTable();
 
-        $first     = $this->openTempFile();
+        $firstPath = $this->tempPath();
+        $first     = $this->openHandle($firstPath, 'r+');
         $firstStat = fstat($first);
         self::assertIsArray($firstStat);
 
+        // This warms PHP's stat cache for every entry in the table, with the
+        // truth as it stands now. That warming is the fixture.
         $descriptor = PosixBackend::descriptorForStream($first);
         self::assertIsInt($descriptor, 'the first handle resolved to nothing');
         fclose($first);
 
-        $second     = $this->openTempFile();
+        $secondPath = $this->tempPath();
+        $second     = $this->openHandle($secondPath, 'r+');
         $secondStat = fstat($second);
         self::assertIsArray($secondStat);
         self::assertNotSame(
@@ -270,32 +274,42 @@ final class PosixBackendStreamDescriptorTest extends TestCase
             'the two temp files share an inode; this fixture cannot discriminate',
         );
 
-        // DISCRIMINATOR 1: the OS handed the freed descriptor straight back.
-        // Deliberately an assertion and not a skip -- if a host stops doing
-        // this, the reason this test cannot bite must be visible, not hidden.
-        clearstatcache();
-        $trueStat = stat($table . '/' . $descriptor);
-        self::assertIsArray($trueStat);
+        // DISCRIMINATOR 1 -- the OS handed the freed descriptor straight back
+        // to the second handle. Read with readlink() and NOT with stat(),
+        // because MEASURED, PHP 8.3.6: readlink() is not served from the stat
+        // cache, so it can report the new target without refreshing the very
+        // staleness this test is about. An earlier revision of this test used
+        // `clearstatcache(); stat(...)` here, which refreshed the cache and
+        // let mutation m7 survive -- the assertion was right and its window
+        // was destroyed by its own setup.
+        //
+        // Deliberately an assertion and not a skip: a host that stops reusing
+        // the lowest free descriptor must make this test go red and be looked
+        // at, not quietly stop biting.
         self::assertSame(
-            $secondStat['ino'],
-            $trueStat['ino'],
+            $secondPath,
+            readlink($table . '/' . $descriptor),
             'descriptor ' . $descriptor . ' was not reused by the second handle; '
                 . 'this fixture cannot discriminate',
         );
 
-        // DISCRIMINATOR 2: and PHP's cache really does still describe the
-        // closed handle's file, which is the thing clearstatcache() exists
-        // for here. Warmed by reading the path without clearing first.
-        $warm = stat($table . '/' . $descriptor);
-        self::assertSame($secondStat['ino'], $warm['ino']);
-        clearstatcache();
-        stat($table . '/' . $descriptor);
+        // DISCRIMINATOR 2 -- and PHP's cache really is still describing the
+        // file that descriptor pointed at BEFORE the reuse. Without this the
+        // assertion below would be satisfied by a host that never caches.
+        $cached = stat($table . '/' . $descriptor);
+        self::assertIsArray($cached);
+        self::assertSame(
+            $firstStat['ino'],
+            $cached['ino'],
+            'the stat cache is not stale here, so nothing below distinguishes a resolver that '
+                . 'clears it from one that does not',
+        );
 
         self::assertSame(
             $descriptor,
             PosixBackend::descriptorForStream($second),
             'the resolver answered from a cached stat of a path whose descriptor had been '
-                . 'reused, so it described a file that is no longer there',
+                . 'reused, so it was matching against a file that is no longer there',
         );
     }
 
@@ -432,11 +446,17 @@ final class PosixBackendStreamDescriptorTest extends TestCase
     /** @return resource */
     private function openTempFile()
     {
+        return $this->openHandle($this->tempPath(), 'r+');
+    }
+
+    /** A temp file this test owns, deleted in tearDown by exact path. */
+    private function tempPath(): string
+    {
         $path = tempnam(sys_get_temp_dir(), 'sc_core_r54a_fd_');
         self::assertIsString($path);
         $this->artifacts[] = $path;
 
-        return $this->openHandle($path, 'r+');
+        return $path;
     }
 
     /**
