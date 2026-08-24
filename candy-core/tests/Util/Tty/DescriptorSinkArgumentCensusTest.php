@@ -272,6 +272,19 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . '$fd = (int) $this->stream;' . "\n"
             . $static . "(\$fd);\n"
             . $fn . '($a ? 1 : 2)' . ";\n"
+            // An operand rooted in a LITERAL rather than in a variable. This
+            // is not a duplicate of the line above it: `$a ? 1 : 2` leaves
+            // classify() through the return inside the accessor-chain walk,
+            // whereas an operand whose first token is neither a cast, nor
+            // `intval`, nor a lone token, nor a variable-or-name reaches the
+            // TERMINAL fallthrough at the end of that method. Those are two
+            // separate returns, and until this line existed only the first of
+            // them was pinned -- MEASURED: with the terminal return rewritten
+            // to answer VARIABLE, this whole census stayed green (round-53
+            // mutation M8), so an operand the classifier has no word for was
+            // silently absorbed as a benign one. That is the exact failure
+            // this scanner was written to replace, one level down.
+            . $fn . '(0 + 1)' . ";\n"
             // Two shapes that must NOT be reported at all: a method of the
             // same name, and a declaration of it.
             . '$obj->' . $fn . "(0);\n"
@@ -288,6 +301,10 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
                 DescriptorSinkScanner::INT_CAST,
                 DescriptorSinkScanner::INTVAL,
                 DescriptorSinkScanner::INT_CAST_VIA_VARIABLE,
+                // `$a ? 1 : 2` -- the accessor-chain walk's return.
+                DescriptorSinkScanner::UNCLASSIFIED,
+                // `0 + 1` -- the terminal fallthrough. Distinct branch; see
+                // the fixture comment above.
                 DescriptorSinkScanner::UNCLASSIFIED,
             ],
             $kinds,
