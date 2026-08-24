@@ -7,81 +7,70 @@ namespace SugarCraft\Crush\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * E296's RESIDUAL, PINNED AS A FACT RATHER THAN LEFT AS A SENTENCE.
+ * E296's PREPEND RESIDUAL IS CLOSED, AND THIS IS THE HARNESS THAT PROVED IT
+ * OPEN, RUN IN THE OTHER DIRECTION.
  *
- * `tests/bootstrap.php` repairs the suite's descriptor 0 by SETTING
- * `O_NONBLOCK` on it — `stream_set_blocking(\STDIN, false)` sets that flag,
- * making the descriptor NON-BLOCKING. (MEASURED, PHP 8.3.6, three takes, from
- * `/proc/self/fdinfo/0` with fd 0 a pipe: the flag is clear at startup, set
- * after `stream_set_blocking($s, false)`, clear again after
- * `stream_set_blocking($s, true)`. The polarity is written out because this
- * doc-block previously had it backwards, and every reader downstream of a
- * backwards mechanism sentence inherits it.)
+ * ## WHAT THIS FILE SAID, AND WHY IT IS NOT DELETED
  *
- * That set flag closes the BLOCKING half of E212/E290 — a spawned
- * `bin/sugarcrush -p` can no longer park forever in `stream_get_contents()` on
- * a runner stdin nobody will ever write to or close — and it does NOT close
- * the PREPEND half. `O_NONBLOCK` changes when a read RETURNS; it does not
- * change what the read returns. Bytes already sitting in the runner's pipe are
- * available, so they are read, and `NonInteractive::historyFrom()` prepends
- * them to the prompt of every spawned `-p` child as stdin context.
+ * WHAT THIS SAID: "IF THIS TEST GOES RED, READ THIS BEFORE YOU FIX IT. A red
+ * here most likely means someone CLOSED the prepend half — which is a good
+ * thing and the outcome E296 wants. The correct response is to delete this test
+ * and say in the commit what closed it."
  *
- * ## Why this is a test and not a paragraph
+ * WHAT IS TRUE NOW: it did go red, for exactly that reason, and deleting it
+ * would have thrown away the only executable apparatus anyone had for the
+ * question. WHY THE FILE STILL EARNS ITS PLACE: the instruction was written to
+ * forbid WIDENING the assertion until it passed again, and inverting is not
+ * widening — the harness now asserts the opposite fact, which is the one that
+ * has to stay true from here on. The residual was written down in prose twice
+ * before it was ever executed, and prose does not go red; a closed residual
+ * left in prose would re-open exactly the same way.
  *
- * The residual was already written down, twice, in prose. Prose is not a
- * measurement and does not go red. Round 49 shipped that repair after FOUR
- * attempts, and three of the four were killed by a claim that had been
- * reasoned rather than run. So this file executes the residual: it puts a
- * marker on the runner's stdin, spawns the real binary the way the suite
- * spawns it, and asserts the marker comes back out of the child's prompt.
+ * ## WHAT CLOSED IT
  *
- * ## IF THIS TEST GOES RED, READ THIS BEFORE YOU FIX IT
+ * `tests/bootstrap.php` no longer flags descriptor 0 — it REPLACES it, with
+ * `fclose(\STDIN)` and a `/dev/null` handle onto the freed fd, parked in
+ * `$GLOBALS` so it outlives the method PHPUnit includes that file from.
  *
- * A red here most likely means someone CLOSED the prepend half — which is a
- * good thing and the outcome E296 wants. The correct response is to delete
- * this test and say in the commit what closed it; it is not to widen the
- * assertion until it passes again. The only repair that closes it is replacing
- * descriptor 0 rather than flagging it: PHP has no `dup2`, so replacing fd 0
- * means closing the `\STDIN` constant, and other libraries in this process
- * read that constant. {@see \SugarCraft\Crush\Tests\StdinConstantReaderCensusTest}
- * derives which ones would have to be looked at first.
+ * The flag repair (`stream_set_blocking(\STDIN, false)`, which SETS
+ * `O_NONBLOCK` — the polarity is spelled out because two rounds of prose here
+ * had it backwards) closed the BLOCKING half only. `O_NONBLOCK` changes when a
+ * read RETURNS; it does not change what the read returns. Bytes already sitting
+ * in the runner's pipe were available, so they were read, and
+ * `NonInteractive::historyFrom()` prepended them to the prompt of every spawned
+ * `-p` child. `/dev/null` reads empty, so replacing the descriptor closes both
+ * halves at once.
  *
- * ## AND THE PRICE OF THAT REPLACEMENT IS NOT WHAT THIS FILE FIRST SAID
+ * The price was priced wrong for two rounds at `9500 tests, 107 errors, rc 2`.
+ * That run predated the candy-mosaic repairs: it was ONE defect — a fallback
+ * naming a `Capability` case candy-palette spells differently — multiplied by
+ * every test that reached it, plus the unguarded `?? STDIN` that dropped the
+ * library into that fallback in the first place. Both are fixed. RE-MEASURED,
+ * PHP 8.3.6, full suite, the descriptor replacement alone against a green
+ * `9661 tests / 142165 assertions / 1 skipped / rc 0` baseline at the same
+ * head: ONE error and TWO failures, all three in tests whose entire subject is
+ * this repair, and not one candy-mosaic error of any kind.
  *
- * WHAT THIS SAID: `9500 tests, 107 errors, rc 2` — the figure that priced the
- * descriptor replacement out of reach for a round.
+ * ## WHY THIS IS THREE ARMS AND NOT TWO
  *
- * WHAT IS TRUE NOW. That run predated E302. It was never 107 costs: it was ONE
- * defect multiplied by every test that reached it — `candy-mosaic` naming an
- * enum case (`Capability::Iterm2Image`) that candy-palette spells `ITerm2`, in
- * a fallback nothing had ever entered before fd 0 was closed. Verified by
- * symbol: `candy-palette/src/Probe/Capability.php` declares `case ITerm2`, and
- * `1a2caebb` fixed the caller. That commit is an ancestor of this tree.
+ * The claim is now an ABSENCE — "the marker does not reach the child" — and an
+ * absence is what a harness that never delivered anything also reports (rule
+ * 15/E228). The old two-arm shape cannot tell those apart, because with the
+ * repair in force BOTH of its arms are marker-free. So there is a third arm
+ * whose answer is known: the same spawn, the same marker, from a script that
+ * has NOT loaded `tests/bootstrap.php`. That one must come back WITH the
+ * marker, and it is the only thing that makes the other two mean anything.
  *
- * RE-MEASURED here after it, PHP 8.3.6, full suite, with the bootstrap's
- * flag repair replaced by the descriptor replacement (`fclose(\STDIN)` plus a
- * `/dev/null` handle parked in `$GLOBALS`): ONE error and TWO failures, and
- * not one `candy-mosaic` error of any kind. All three are assertions whose
- * entire subject is this repair —
- * `NonInteractiveStdinPinTest::testTheBootstrapHasPinnedTheDefaultStdinAwayFromTheRealOne`
- * (its control reads `\STDIN`'s metadata),
- * `SuiteChildStdinIsolationTest::testTheBootstrapLeavesTheRunnersStdinConstantUsableAndNonBlocking`
- * (it exists to forbid exactly this change), and this test firing its own
- * designed "the residual is CLOSED" message below.
+ * ## The security shape, stated because it was never only untidiness
  *
- * WHY THIS STILL EARNS ITS PLACE. The replacement is still the only repair
- * that closes the prepend half, it still has to be paid for deliberately, and
- * the roster test is still its input. What changed is the price, not the
- * decision — and the reason the old price stood for a round is that nobody
- * re-ran it after the dependency in its causal chain was fixed.
- *
- * ## The security shape, stated because it is not only untidiness
- *
- * The prepend is a data path from whatever handed this process its descriptor
- * 0 into a prompt sent to a model. In a suite that is a hermeticity bug. On a
- * CI runner that pipes a build log into `phpunit`, it is a build log going to
- * a provider. Recorded on the backlog rather than fixed here, because the fix
- * is the descriptor replacement above and that is one decision, not two.
+ * The prepend was a data path from whatever handed this process its descriptor
+ * 0 into a prompt sent to a model. In a suite that is a hermeticity bug; on a
+ * CI runner that pipes a build log into `phpunit`, it is a build log going to a
+ * provider, bounded only by `NonInteractive::MAX_STDIN_BYTES` (10MB). The third
+ * arm still demonstrates that, one process outside the sandbox, which is the
+ * honest way to hold it: piped stdin reaching the prompt is the documented
+ * contract for a real `sugarcrush`, and it is only the SUITE that must not
+ * inherit the runner's.
  */
 final class SuiteChildStdinPrependResidualTest extends TestCase
 {
@@ -128,31 +117,59 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
     }
 
     /**
-     * THE CONTROL AND THE TREATMENT SHARE ONE HARNESS AND DIFFER IN ONE BYTE
-     * STRING, which is what makes either of them mean anything (rule 15).
+     * THREE ARMS THROUGH ONE HARNESS, DIFFERING IN TWO BITS: whether the script
+     * loaded `tests/bootstrap.php`, and whether the marker was written.
      *
-     * CONTROL — the runner's stdin is an open pipe that is never written. The
-     * child must answer (that is the blocking half, closed) and its output
-     * must NOT contain the marker. Without this arm, "the marker is in the
-     * child's output" would also be satisfied by a harness that echoed its own
-     * script back, or by a marker that leaked through the environment.
+     * KNOWN-POSITIVE — no bootstrap, marker written, writer CLOSED. The child
+     * must answer AND its output must carry the marker. This is the arm that
+     * says the plumbing works: without it, "no marker" below is equally
+     * satisfied by a harness that mis-spelled the binary, never started the
+     * child, or wrote to the wrong pipe. The writer is closed here on purpose —
+     * with no bootstrap there is nothing to keep `stream_get_contents()` from
+     * parking forever, and the EOF is what lets the arm terminate. It is
+     * therefore NOT evidence about the descriptor; it is evidence about the
+     * harness.
      *
-     * TREATMENT — identical, except the marker is written onto that pipe
-     * first and the write end is deliberately LEFT OPEN. Leaving it open is
-     * the point: an EOF would make even a blocking read return, so a closed
-     * writer would prove nothing about the flag. With the writer still open,
-     * the child returning AT ALL is the flag working, and the marker coming
-     * back is the residual the flag does not cover.
+     * CONTROL — bootstrap, nothing written, writer left open. The child must
+     * answer and carry no marker.
+     *
+     * TREATMENT — bootstrap, marker written, writer deliberately LEFT OPEN.
+     * Leaving it open is load-bearing: an EOF would let even a blocking read
+     * return, so a closed writer would prove nothing about the blocking half.
+     * With the writer still open, the child returning AT ALL is the blocking
+     * half closed, and the marker being ABSENT is the prepend half closed.
      */
-    public function testBytesOnTheRunnersStdinAreStillPrependedToASpawnedChildsPrompt(): void
+    public function testBytesOnTheRunnersStdinDoNotReachASpawnedChildsPrompt(): void
     {
         $marker = self::MARKER_HEAD . '-' . self::MARKER_TAIL;
 
-        $control = $this->spawn(null);
+        $plumbing = $this->spawn($marker . "\n", withBootstrap: false, closeWriter: true);
+        $this->assertSame(
+            0,
+            $plumbing['rc'],
+            "the un-bootstrapped known-positive did not complete, so this harness cannot say anything "
+                . "about the two arms below.\n" . $plumbing['raw'],
+        );
+        $this->assertStringContainsString(
+            $marker,
+            $plumbing['out'],
+            'the harness could not deliver a prepend even with NOTHING defending against it, so the '
+                . 'absences asserted below are the silence of a dead instrument rather than a repair. '
+                . "Check that the child really ran and that the marker really reached its stdin.\n"
+                . $plumbing['out'],
+        );
+
+        $control = $this->spawn(null, withBootstrap: true, closeWriter: false);
         $this->assertSame(
             0,
             $control['rc'],
             "the control spawn did not complete, so this harness cannot say anything about the treatment.\n"
+                . $control['raw'],
+        );
+        $this->assertStringContainsString(
+            'You said:',
+            $control['out'],
+            "the offline echo provider did not answer, so the child never reached the prompt at all.\n"
                 . $control['raw'],
         );
         $this->assertStringNotContainsString(
@@ -161,62 +178,31 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
             'the marker reached the child WITHOUT being written to stdin, so this harness cannot tell a '
                 . 'prepend from its own plumbing',
         );
-        // The control must also prove the child really ran and really answered
-        // - an empty stdout would satisfy the assertion above for free.
-        $this->assertStringContainsString(
-            'You said:',
-            $control['out'],
-            "the offline echo provider did not answer, so the child never reached the prompt at all.\n"
-                . $control['raw'],
-        );
 
-        $treatment = $this->spawn($marker . "\n");
+        $treatment = $this->spawn($marker . "\n", withBootstrap: true, closeWriter: false);
         $this->assertSame(
             0,
             $treatment['rc'],
             "the spawned binary did not complete with bytes waiting on the runner's stdin. If it was killed "
-                . "at the bound, tests/bootstrap.php has stopped SETTING O_NONBLOCK on descriptor 0 - the "
-                . "repair is the flag being set (stream_set_blocking(\STDIN, false)), not cleared.\n"
-                . $treatment['raw'],
+                . 'at the bound, tests/bootstrap.php has stopped replacing descriptor 0 - the repair is '
+                . "fclose(\\STDIN) plus a /dev/null handle on the freed fd, and the child is parking in "
+                . "stream_get_contents() on the runner's own pipe.\n" . $treatment['raw'],
         );
         $this->assertStringContainsString(
+            'You said:',
+            $treatment['out'],
+            "the child did not reach the prompt with bytes on the runner's stdin, so its marker-free output "
+                . "says nothing.\n" . $treatment['raw'],
+        );
+        $this->assertStringNotContainsString(
             $marker,
             $treatment['out'],
-            "E296's PREPEND residual is CLOSED. That is the outcome the backlog entry wants, and this test "
-                . 'is now wrong: delete it and record what closed it, rather than widening this assertion. '
-                . "Child output was:\n" . $treatment['out'],
-        );
-        // WHERE the marker landed is the claim, not merely that it is present:
-        // stdin context is PREPENDED to the prompt, so it must sit INSIDE the
-        // echoed turn and BEFORE the prompt line.
-        //
-        // The bound is two-sided on purpose. It used to be a single
-        // `assertLessThan(strrpos($out, 'hi'), …)`, and the last occurrence of
-        // a two-character bigram in the child's whole stdout is a bound that
-        // degrades silently: any banner word carrying it — `this`, `which`,
-        // `architecture` — landing after the echoed turn would quietly reduce
-        // the claim to "the marker is somewhere before the end". Anchoring on
-        // the echo provider's header and on the prompt LINE keeps the window
-        // pinned to the turn itself.
-        $saidAt = strpos($treatment['out'], 'You said:');
-        $promptAt = strrpos($treatment['out'], "\n> hi");
-        $markerAt = strpos($treatment['out'], $marker);
-        $this->assertNotFalse($saidAt, "the echoed turn has no header, so there is no window to place the "
-            . "marker in.\n" . $treatment['out']);
-        $this->assertNotFalse($promptAt, "the echoed turn has no '> hi' prompt line, so there is no window "
-            . "to place the marker in.\n" . $treatment['out']);
-        $this->assertNotFalse($markerAt, 'the marker is not in the child output at all');
-        $this->assertGreaterThan(
-            $saidAt,
-            $markerAt,
-            'the marker is in the child output but BEFORE the echoed turn, so it did not arrive as prompt '
-                . 'context and this test is no longer pinning the shape it was written for',
-        );
-        $this->assertLessThan(
-            $promptAt,
-            $markerAt,
-            'the marker reached the child but lands AFTER the prompt line rather than prepended to it, so '
-                . 'this test is no longer pinning the shape it was written for',
+            "E296's PREPEND residual is OPEN AGAIN: bytes on the RUNNER's descriptor 0 were read by a "
+                . 'spawned bin/sugarcrush and prepended to its prompt. The known-positive arm above has '
+                . 'already shown this harness can see the difference, so this is the repair, not the test. '
+                . 'tests/bootstrap.php must REPLACE descriptor 0 (fclose plus /dev/null); the O_NONBLOCK '
+                . "flag that used to be there closes the blocking half only.\nChild output was:\n"
+                . $treatment['out'],
         );
     }
 
@@ -244,15 +230,19 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
     }
 
     /**
-     * Run `bin/sugarcrush -p "hi"` from a script that loaded the bootstrap,
-     * in a process whose descriptor 0 is a pipe this test holds.
+     * Run `bin/sugarcrush -p "hi"` from a script in a process whose descriptor
+     * 0 is a pipe this test holds.
      *
-     * $stdin is written to that pipe before the child is read from, and the
-     * write end stays open either way.
+     * $stdin is written to that pipe before the child is read from.
+     * $withBootstrap is the difference between the known-positive arm and the
+     * two guarded ones. $closeWriter exists only for the known-positive: with
+     * no bootstrap there is nothing to stop the child parking in
+     * `stream_get_contents()`, so that arm needs an EOF to terminate at all,
+     * and the guarded arms must NOT have one or they would prove nothing.
      *
      * @return array{rc: int, out: string, raw: string}
      */
-    private function spawn(?string $stdin): array
+    private function spawn(?string $stdin, bool $withBootstrap, bool $closeWriter): array
     {
         $root = \dirname(__DIR__);
 
@@ -271,8 +261,16 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
             escapeshellarg('hi'),
         );
 
+        // TMPDIR is forwarded explicitly on BOTH shapes: the bootstrap is
+        // what normally sets it, and the un-bootstrapped arm is precisely
+        // the run that has none - without this it would sweep the machine's
+        // real temp directory on startup.
+        $require = $withBootstrap
+            ? var_export($root . '/tests/bootstrap.php', true)
+            : var_export($root . '/vendor/autoload.php', true);
+
         $script = "<?php\ndeclare(strict_types=1);\n"
-            . 'require ' . var_export($root . '/tests/bootstrap.php', true) . ";\n"
+            . 'require ' . $require . ";\n"
             . '$out = [];' . "\n"
             . '$rc = 0;' . "\n"
             . 'exec(' . var_export($command, true) . ', $out, $rc);' . "\n"
@@ -295,13 +293,23 @@ final class SuiteChildStdinPrependResidualTest extends TestCase
             fwrite($pipes[0], $stdin);
             fflush($pipes[0]);
         }
-        // $pipes[0] is NOT closed: an EOF would let even a blocking read
-        // return, and then the treatment would prove nothing about the flag.
+        if ($closeWriter) {
+            // Known-positive arm only. Nothing is defending that child, so
+            // without an EOF it parks in stream_get_contents() until the
+            // `timeout -s KILL` bound - which is the ORIGINAL hazard, and not
+            // what that arm is here to show.
+            fclose($pipes[0]);
+        }
+        // Otherwise $pipes[0] is NOT closed: an EOF would let even a blocking
+        // read return, and then the treatment would prove nothing about the
+        // descriptor replacement.
 
         $out = (string) stream_get_contents($pipes[1]);
         $err = (string) stream_get_contents($pipes[2]);
 
-        fclose($pipes[0]);
+        if (!$closeWriter) {
+            fclose($pipes[0]);
+        }
         fclose($pipes[1]);
         fclose($pipes[2]);
         proc_close($process);

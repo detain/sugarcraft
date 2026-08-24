@@ -14,12 +14,21 @@ use PHPUnit\Framework\TestCase;
  * rather than assumed" at the foot of this doc-block, which is where the
  * difference is written down instead of being left for a reader to discover.
  *
- * This roster is the missing input to E296. Round 49 tried three times to
- * replace the suite's descriptor 0 with `/dev/null`, which is the only repair
- * that closes E212's PREPEND half — PHP has no `dup2`, so replacing fd 0 means
- * `fclose(\STDIN)` and the `\STDIN` constant becomes a closed resource for the
- * rest of the run. Two of those attempts died on a claim of the form "nothing
- * reaches it", and the reason both claims were wrong is the same reason:
+ * THIS ROSTER IS NO LONGER AN INPUT TO A DECISION — IT IS THE STANDING
+ * CONTRACT OF ONE THAT WAS TAKEN. WHAT THIS SAID: "this roster is the missing
+ * input to E296", framed around whether the suite's descriptor 0 COULD be
+ * replaced. WHAT IS TRUE NOW: it is. `tests/bootstrap.php` does
+ * `fclose(\STDIN)` plus a `/dev/null` handle on the freed fd, so the `\STDIN`
+ * constant IS a closed resource for the rest of every non-tty run, and every
+ * site below is handed one on each such run. WHY THE ROSTER STILL EARNS ITS
+ * PLACE — more than before, not less: it was a list of things to check once,
+ * and it is now a list of things that are live. A new entry is a new site
+ * receiving a dead handle today.
+ *
+ * Round 49 tried three times to make that replacement and PHP has no `dup2`,
+ * so it always meant closing the constant. Two of those attempts died on a
+ * claim of the form "nothing reaches it", and the reason both claims were wrong
+ * is the same reason:
  *
  *   THE CENSUS BEHIND THEM WAS SCOPED TO `sugar-crush/`, AND THE READER THAT
  *   MATTERED WAS IN A SIBLING LIBRARY.
@@ -46,11 +55,19 @@ use PHPUnit\Framework\TestCase;
  * tests whose entire subject is that repair, and not one `candy-mosaic` error
  * of any kind.
  *
- * WHY THIS ROSTER STILL EARNS ITS PLACE: the price fell, the question did not.
- * Closing the `\STDIN` constant still hands a closed resource to every site
- * below, and "no test noticed" is not the same as "the library is fine" —
- * `Detect` still leaves its normal path by exception on every call. The
- * roster is what says which sites those are.
+ * AND THE ONE SITE THAT WAS STILL WRONG AFTER THE PRICE FELL IS FIXED TOO.
+ * WHAT THIS SAID: "`Detect` still leaves its normal path by exception on every
+ * call", recorded because "no test noticed" is not the same as "the library is
+ * fine". WHAT IS TRUE NOW: `Detect::stdinFd()` answers null for a dead handle
+ * instead of passing it to `stream_select()`, `drainStdin()` and
+ * `readStdinTimed()` treat null as their existing no-answer case, and a closed
+ * INJECTED probe stream no longer short-circuits `isInteractiveTty()` to true.
+ * Verified by symbol, and driven directly: `Detect::probe()` in a process that
+ * had done `fclose(\STDIN)` threw `ValueError: No stream arrays were passed`
+ * before and completes after (PHP 8.3.6). WHY THE PARAGRAPH STAYS: the
+ * distinction it draws is the one that made anyone look — a library that
+ * degrades by exception passes every test that only checks the caller
+ * survived.
  *
  * ## What this file asserts, and why it is a roster rather than a count
  *
@@ -121,12 +138,15 @@ use PHPUnit\Framework\TestCase;
  * and they are named rather than counted — a count of a roster the test itself
  * derives rots silently the next time an entry is added (rule 18):
  *
- *  - `candy-mosaic/src/Detect.php` — UNGUARDED, and it is the site that
+ *  - `candy-mosaic/src/Detect.php` — GUARDED NOW, and it is the site that
  *    TRIGGERED round 49's 107 errors rather than the site that caused them:
- *    the fault was the enum case name in the fallback it dropped into, fixed
- *    by E302 (above). Verified by symbol: `stdinFd()` returns `?? STDIN` and
- *    `drainStdin()` passes it straight to `stream_select()`, so this is still
- *    an unguarded read — it just no longer ends in a fatal.
+ *    the fault was the enum case name in the fallback it dropped into (E302).
+ *    WHAT THIS ROW SAID: "UNGUARDED … `stdinFd()` returns `?? STDIN` and
+ *    `drainStdin()` passes it straight to `stream_select()`". WHAT IS TRUE NOW:
+ *    `stdinFd()` is `$fd = self::$probeStdin ?? STDIN; return is_resource($fd)
+ *    ? $fd : null;` and the two consumers treat null as their no-answer case.
+ *    WHY THE ROW STAYS: it still NAMES the constant, which is what this roster
+ *    tracks, and it is the row a future reader will want the history of.
  *  - `candy-core/src/Util/Tty/PosixBackend.php` — one of its two sites is
  *    already guarded, and says so: `TermiosFactory::open((int) STDIN)` sits in
  *    a `try`/`catch (\Throwable)` whose comment reads "STDIN closed (CI
@@ -190,8 +210,12 @@ use PHPUnit\Framework\TestCase;
  * roster over content this repository does not version: it would red on an
  * unrelated upstream bump and teach the next reader to widen it away. The four
  * names above are therefore recorded here, with their generator, as a
- * measurement at a point in time — and if option (a) ever ships, that
- * `sebastian/environment` call is the one to re-read first.
+ * measurement at a point in time.
+ *
+ * OPTION (a) HAS NOW SHIPPED, so the follow-up that sentence asked for is done:
+ * OBSERVED, PHP 8.3.6, the full suite with the descriptor replacement in
+ * `tests/bootstrap.php` — 9661 tests, and no error from `sebastian/environment`
+ * or from any of the other three.
  */
 final class StdinConstantReaderCensusTest extends TestCase
 {
