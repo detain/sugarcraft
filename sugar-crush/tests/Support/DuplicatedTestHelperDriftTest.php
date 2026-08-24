@@ -621,14 +621,26 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * different alphabet would be a second definition of "drifted", which is
      * the seam this whole file is about.
      *
+     * THE BOUND IS A PARAMETER FOR THE SAME REASON THE ALPHABET IS. E279 asked
+     * what two tokens brings in and the honest answer was that nobody had run
+     * it; a constant buried in the comparison cannot be asked. It is measured
+     * through this same report by
+     * {@see testRelaxingTheBoundToTwoTokensBringsInOnlyNamesThatAreArgued()}.
+     *
      * @param array<string,string> $sources
      * @param list<int>            $visibility token ids one of which must carry the declaration
+     * @param int|null             $bound      per-side divergence bound; null means {@see DRIFT_BOUND}
      *
      * @return array{array<string,list<string>>, list<string>, int}
      *         name => pair descriptions, unparseable declarations, declarations read
      */
-    private static function driftReport(array $sources, array $visibility = [\T_PRIVATE]): array
-    {
+    private static function driftReport(
+        array $sources,
+        array $visibility = [\T_PRIVATE],
+        ?int $bound = null,
+    ): array {
+        $bound ??= self::DRIFT_BOUND;
+
         $declarations = [];
         $unparseable = [];
         $read = 0;
@@ -675,7 +687,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                     }
 
                     [$leftCore, $rightCore] = self::divergenceCore($left, $right);
-                    if (\count($leftCore) > self::DRIFT_BOUND || \count($rightCore) > self::DRIFT_BOUND) {
+                    if (\count($leftCore) > $bound || \count($rightCore) > $bound) {
                         continue;
                     }
 

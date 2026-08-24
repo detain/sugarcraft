@@ -153,33 +153,118 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
      * matches a literal `HomeDirectory::path()`, so a call through a variable
      * class expression would be invisible. There is none — asserted by counting
      * every `::path(` in `src/` whose subject is not the class name.
+     *
+     * WHAT THIS SAID, AND IT WAS TRUE OF A WALK THAT COULD NOT DO IT.
+     * {@see indirectPathCalls()} reads the neighbours of a `::` by index, and
+     * until 2026-08-24 the stream it read still carried `T_WHITESPACE`: this
+     * copy of {@see significantTokens()} dropped comments only, while the twin
+     * it was copied from — `ContainedPathInventoryTest`'s — dropped whitespace
+     * as well. So `$class :: path()` had a whitespace token where the subject
+     * and the method were looked for, and the scan walked past it before it
+     * ever reached the `T_VARIABLE` test. The absence this test asserts was an
+     * absence of the ZERO-WHITESPACE spelling alone.
+     *
+     * WHY THE CLAIM STILL EARNS ITS PLACE: the blind spot the paragraph names
+     * is the right one to state, and the walk now really has only that one.
+     * Nothing found the divergence for a full round — both files were green,
+     * both helpers were private — until the drift guard's bound was widened to
+     * two tokens and reported the pair. It is pinned below rather than
+     * re-argued.
      */
     public function testNoCallReachesTheResolutionThroughAVariableClassName(): void
     {
         $indirect = [];
 
         foreach ($this->sourceFiles() as $relative => $path) {
-            $tokens = $this->significantTokens((string) file_get_contents($path));
+            $code = file_get_contents($path);
+            $this->assertIsString($code, $path . ' is unreadable, so the scan over it is void');
 
-            foreach ($tokens as $i => $token) {
-                if (!\is_array($token) || $token[0] !== \T_DOUBLE_COLON) {
-                    continue;
-                }
-
-                $method = $tokens[$i + 1] ?? null;
-                $subject = $tokens[$i - 1] ?? null;
-
-                if (!\is_array($method) || $method[0] !== \T_STRING || strtolower($method[1]) !== 'path') {
-                    continue;
-                }
-
-                if (\is_array($subject) && $subject[0] === \T_VARIABLE) {
-                    $indirect[] = "{$relative}:{$method[2]}";
-                }
+            foreach ($this->indirectPathCalls($code) as $line) {
+                $indirect[] = $relative . ':' . $line;
             }
         }
 
         $this->assertSame([], $indirect, 'a variable class expression this inventory cannot attribute');
+    }
+
+    /**
+     * KNOWN-POSITIVE CONTROL for the absence above, and the regression fixture
+     * for the whitespace divergence.
+     *
+     * Rule 15: `assertSame([], …)` over `src/` is satisfied perfectly by a walk
+     * that has stopped working, and this one HAD stopped working for every
+     * spelling with a space in it. The spaced arm is the load-bearing half —
+     * restore the whitespace-keeping copy of {@see significantTokens()} and it
+     * is the assertion that reds.
+     */
+    public function testTheIndirectCallScanSeesBothSpellingsAndSparesTheDirectOne(): void
+    {
+        $this->assertSame(
+            [2],
+            $this->indirectPathCalls("<?php
+\$c::path();
+"),
+            'the scan misses the ordinary spelling of an indirect call',
+        );
+
+        $this->assertSame(
+            [2],
+            $this->indirectPathCalls("<?php
+\$c :: path ();
+"),
+            'the scan misses an indirect call written with whitespace around the operator. That '
+                . 'is what it did for a full round: this copy of significantTokens() dropped '
+                . 'comments but not whitespace, so the neighbour lookup around `::` landed on a '
+                . 'T_WHITESPACE and the site was never examined. Every "no indirect call" answer '
+                . 'this file gives is void while that is true.',
+        );
+
+        $this->assertSame(
+            [],
+            $this->indirectPathCalls("<?php
+HomeDirectory::path();
+"),
+            'the direct call this inventory is built to count was reported as an indirect one',
+        );
+
+        $this->assertSame(
+            [],
+            $this->indirectPathCalls("<?php
+// \$c::path();
+/** {@see \$c::path()} */
+"),
+            'a call inside a comment was counted, so the inventory counts cross-references',
+        );
+    }
+
+    /**
+     * The 1-indexed lines of every `$var::path()` in $code.
+     *
+     * @return list<int>
+     */
+    private function indirectPathCalls(string $code): array
+    {
+        $tokens = $this->significantTokens($code);
+        $found = [];
+
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== \T_DOUBLE_COLON) {
+                continue;
+            }
+
+            $method = $tokens[$i + 1] ?? null;
+            $subject = $tokens[$i - 1] ?? null;
+
+            if (!\is_array($method) || $method[0] !== \T_STRING || strtolower($method[1]) !== 'path') {
+                continue;
+            }
+
+            if (\is_array($subject) && $subject[0] === \T_VARIABLE) {
+                $found[] = $method[2];
+            }
+        }
+
+        return $found;
     }
 
     // ─── the instrument ─────────────────────────────────────────────
@@ -310,7 +395,9 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
     {
         $tokens = [];
         foreach (token_get_all($code) as $token) {
-            if (\is_array($token) && \in_array($token[0], [\T_COMMENT, \T_DOC_COMMENT], true)) {
+            if (\is_array($token)
+                && \in_array($token[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)
+            ) {
                 continue;
             }
 
