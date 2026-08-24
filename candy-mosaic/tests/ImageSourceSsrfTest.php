@@ -83,11 +83,36 @@ final class ImageSourceSsrfTest extends TestCase
      * Linux-only, because that is what `/proc` needs. The behaviour it pins
      * is not Linux-specific — an array command is the right shape everywhere
      * — but the observation is.
+     *
+     * BOTH OBSERVATIONS OR NEITHER, AND THE SKIP IS LOUD. The children
+     * check used to sit behind `if ($children !== [] && $children !== false)`,
+     * which on a kernel built without `CONFIG_PROC_CHILDREN` silently
+     * dropped it and left `comm` as the sole discriminator — the exact
+     * degraded state the paragraph above says is too weak, reached without
+     * a word in the output. A capability this test depends on has to be
+     * gated where a missing one is VISIBLE, so it is now part of the same
+     * `/proc` gate the test already takes. The gate probes THIS process's
+     * own `children` file rather than the server's: our own pid is always
+     * alive, so a missing file means the kernel cannot answer, never that
+     * the subject died. Liveness of the server pid is already covered —
+     * a dead pid makes `/proc/<pid>/comm` unreadable and the `comm`
+     * assertion below fails on the empty string.
      */
     public function testTheServerIsProcOpensDirectChildSoTearDownCanReachIt(): void
     {
         if (!is_dir('/proc/self/fd')) {
             self::markTestSkipped('/proc is not available; cannot observe the child process shape');
+        }
+
+        $ownPid = getmypid();
+        if (!is_file('/proc/self/task/' . $ownPid . '/children')) {
+            self::markTestSkipped(
+                'this kernel publishes no /proc/<pid>/task/<pid>/children (built without '
+                    . 'CONFIG_PROC_CHILDREN), so it cannot report whether the server pid has '
+                    . 'children of its own. Skipping rather than asserting only that comm '
+                    . 'starts with php, which a wrapping shell that had exec-ed would also '
+                    . 'satisfy.',
+            );
         }
 
         self::assertGreaterThan(0, $this->serverPid, 'the fixture recorded no server pid');
@@ -100,14 +125,13 @@ final class ImageSourceSsrfTest extends TestCase
                 . 'proc_terminate() signals the shell and leaks the server onto init.',
         );
 
-        $children = glob('/proc/' . $this->serverPid . '/task/' . $this->serverPid . '/children');
-        if ($children !== [] && $children !== false) {
-            self::assertSame(
-                '',
-                trim((string) @file_get_contents($children[0])),
-                'the server pid has children of its own, so it is a wrapper rather than the server',
-            );
-        }
+        self::assertSame(
+            '',
+            trim((string) @file_get_contents(
+                '/proc/' . $this->serverPid . '/task/' . $this->serverPid . '/children',
+            )),
+            'the server pid has children of its own, so it is a wrapper rather than the server',
+        );
     }
 
     public function testFollowsSameSchemeRedirect(): void
