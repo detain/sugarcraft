@@ -2032,17 +2032,48 @@ final class StderrEmitterCensusTest extends TestCase
      * generates it.
      *
      * WHY THIS EXISTS AND WHY IT IS EMBARRASSING. This file's whole subject is
-     * that a count nobody derives goes stale, and it shipped six of its own —
-     * one per channel, plus the two in the channel-5 paragraph — hand-typed
-     * from numbers the tests below derive, in a round whose sibling census had
-     * just built the anchoring machinery for exactly this. All six were correct
-     * the day they were written, which is the only thing that is ever true of
-     * them.
+     * that a count nobody derives goes stale, and it shipped a set of its own,
+     * hand-typed from numbers the tests below derive, in a round whose sibling
+     * census had just built the anchoring machinery for exactly this.
+     *
+     * AND THEN THE PARAGRAPH SAYING SO GOT ITS OWN COUNT WRONG, WHICH IS THE
+     * JOKE FINISHING ITSELF. Found by round 49's review; rule 18. WHAT IT SAID,
+     * in three places: "it shipped six of its own — one per channel, plus the
+     * two in the channel-5 paragraph"; "All six were correct the day they were
+     * written, which is the only thing that is ever true of them"; "Two of the
+     * six cross a wrap."
+     * WHAT IS TRUE NOW: this list holds NINE rows, and it has never held six.
+     * The commit that introduced it committed SEVEN — read back out of git, not
+     * inferred — so "all six were correct the day they were written" was false
+     * on the day IT was written, inside the doc-block of the guard whose whole
+     * purpose is to stop that. Round 48's transcript-seam channel then took the
+     * list to its present size and the numeral moved with nothing, because a
+     * numeral in a doc-block is the one statement of a count that has no
+     * generator. The arithmetic never worked either: one per channel plus two
+     * is eight.
+     * WHY THE HISTORY STILL EARNS ITS PLACE: "six" is the measurement of how
+     * fast this happens to the author who was thinking about the problem
+     * hardest, taken on that author. What has changed is that the number in the
+     * sentence above is now DERIVED like every other number in this file — the
+     * last assertion in
+     * {@see testEveryCardinalityThisFileStatesInProseHasItsGenerator()} reads
+     * that numeral back out of this doc-block and compares it with
+     * `count(self::selfCountAnchors())`, so adding a row without editing the
+     * sentence reds. Verified by mutation both ways: before that assertion
+     * existed, rewriting all three numerals to "nineteen" left this class
+     * entirely green (91 tests).
+     *
+     * WHERE THE REGRESS STOPS, and it stops one level up exactly as the sibling
+     * census stops it: how many sentences state the size of this list is not
+     * written down anywhere, and the sentence above is the only one that states
+     * it. If you find yourself wanting to write that size a second time, add a
+     * row instead.
      *
      * MATCHED AGAINST {@see flattened()} AND NOT THE RAW BYTES, for the reason
      * the sibling census gives: a doc-block wraps at 80 columns with ` * ` on
-     * every continuation, so a sentence is never those bytes in a row. Two of
-     * the six cross a wrap. The flattener's own known-positive control is the
+     * every continuation, so a sentence is never those bytes in a row. Some of
+     * these anchors cross a wrap; how many is deliberately not stated here, per
+     * the paragraph above. The flattener's own known-positive control is the
      * first assertion in the test, because a flattener returning `''` would
      * make every anchor fail open into a zero match — which this treats as a
      * failure, not a skip.
@@ -2141,6 +2172,33 @@ final class StderrEmitterCensusTest extends TestCase
                 "the prose for {$site['what']} says \"{$word}\" but its roster generates {$site['expected']}",
             );
         }
+
+        // AND THE SIZE OF THE ANCHOR LIST ITSELF, which is the one cardinality
+        // this guard used to state in prose and not derive — wrongly, in three
+        // sentences, from the day it was written. See selfCountAnchors()' own
+        // doc-block for the history. This is level two and there is no level
+        // three: nothing states how many sentences state this.
+        $anchored = preg_match('/this list holds ([A-Z]+) rows/', $own, $size);
+        self::assertSame(
+            1,
+            $anchored,
+            'selfCountAnchors() no longer states its own size where this can read it. It must state it '
+                . 'exactly once, in words, or the size goes back to being a number with no generator — '
+                . 're-point this anchor, do not drop it.',
+        );
+        self::assertArrayHasKey(
+            strtolower($size[1]),
+            self::NUMBER_WORDS,
+            "selfCountAnchors() states its own size as \"{$size[1]}\", which is not a number word this "
+                . 'guard can read. Widen self::NUMBER_WORDS; do not leave it unparsed.',
+        );
+        self::assertSame(
+            \count(self::selfCountAnchors()),
+            self::NUMBER_WORDS[strtolower($size[1])],
+            'selfCountAnchors() says it holds "' . strtolower($size[1]) . '" rows and it holds '
+                . \count(self::selfCountAnchors()) . '. A row was added or removed without editing the '
+                . 'sentence that states the size — edit it; that sentence is the only one allowed to.',
+        );
     }
 
     // ── the scanners ─────────────────────────────────────────────────────
