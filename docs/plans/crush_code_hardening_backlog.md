@@ -8651,12 +8651,32 @@ process whose fd 0 is an open pipe: clear after the flag is set, still clear aft
 BLOCKED again after `restore()` — 3/3.** A guard on the flag is therefore ORDER-DEPENDENT: green when its
 own file runs alone or before that seam, red after it.
 
-*Attempt 3, shipped:* back to close + reopen `/dev/null`, with attempt 1's one actual casualty repaired —
-that known-positive control now opens its own `php://stdin` handle instead of reading the constant, which
-answers the same question off a live resource. This is Ee49-7's option (a), taken. The assertion pinning it
-moved off the stream flag and onto the DESCRIPTOR's identity, read from `/proc/self/fd/0`, which no stream
-flag can undo. The `\STDIN` constant is a closed resource for the rest of the run, and that is now a
-KNOWN cost with exactly one named site rather than an assumed absence.
+*Attempt 3 — attempt 1 again, with its one known casualty repaired.* Tried, and **refuted by the first
+full suite run anyone had done of it.** WHAT ATTEMPT 3 ASSUMED: that the only in-process reader of the
+`\STDIN` constant was `NonInteractiveStdinPinTest`'s known-positive control, so pointing that control at
+a fresh `php://stdin` handle made closing the descriptor free. WHAT IS TRUE: **the census behind that
+sentence looked in `sugar-crush/{src,bin,tests}`, and the reader that matters is in a SIBLING LIBRARY.**
+`SugarCraft\Mosaic\Detect` resolves its probe stream as `self::$probeStdin ?? STDIN` and hands it to
+`drainStdin()` with no `is_resource()` guard; `Mosaic::auto()` catches the resulting throw and falls into
+`autoFromPalette()`, which references a `Capability` case candy-palette does not have. **MEASURED, full
+suite, PHP 8.3.6, this lane: `9500 tests, 107 errors, rc 2`**, every error
+`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`. A closed `\STDIN` does not
+cost one control assertion; it moves a whole library onto a code path that has never run. (That fallback
+is broken independently of this file — recorded separately as Ee49-13.)
+
+*Attempt 4, SHIPPED — attempt 2, with the thing that refuted it fixed instead of routed around.* The flag
+is what ships. What broke it was `new Tty(null, $injectedTermios)`, and every instance of that shape in
+the tree now passes an explicit `stream_socket_pair()` end and asserts the flag moves on THAT stream in
+both directions (Ee49-12). So nothing in the run writes the description any more, and the guard on the
+flag is order-dependent BY DESIGN: it is the only thing that reds when someone writes the next one. The
+order-independent guard beside it is the spawn test, which runs the bootstrap in a child of its own where
+no in-process seam can reach it.
+
+**The lesson worth keeping, since four attempts is a lot for one line.** Both refutations were of the same
+kind: a claim of the form "nothing reaches X", verified by a grep whose scope was the directory the author
+was working in. Attempt 1/3's scope stopped at `sugar-crush/`; attempt 2's stopped at "the site I found"
+rather than the SHAPE. Neither was refutable by reading — one needed a full suite run, the other needed
+the seam driven in isolation three times.
 
 **Residual, deliberately not fixed.** In PRODUCTION `sugarcrush -p` still blocks forever on a held-open
 stdin with no bound. That is arguably the correct read-stdin contract, but it is unbounded, and a caller
@@ -8782,7 +8802,7 @@ one of two grounds.
 
 ---
 
-### Ee49-7 — the suite's fd-0 repair now closes BOTH halves of E212 — RESOLVED, option (a) taken
+### Ee49-7 — the suite's fd-0 repair closes the BLOCKING half of E212 and not the PREPEND half — REOPENED
 
 **Recorded 2026-08-24 by round-49 lane e (review pass); CLOSED the same round.** Severity was
 test-hermeticity. **Measured, PHP 8.3.6.**
@@ -8794,19 +8814,30 @@ nothing, so bytes already on the runner's stdin still reach every spawned `bin/s
 get prepended to its prompt. It offered two Steps and called (a) the better trade, declining it only
 because `tests/Cli/NonInteractive*Test.php` is lane a's file.
 
-**WHAT IS TRUE NOW.** Option (a) was taken, and it turned out not to be a preference: the flag repair does
-not survive this suite at all (see Ee49-1's attempt 2 — `EngineBackendTest`'s injected-Termios seam
-re-blocks descriptor 0 through `PosixBackend::restore()`, measured 3/3). So the choice was not
-"hermeticity versus a live constant" but "a working repair versus an order-dependent one". Descriptor 0
-is `/dev/null` for the rest of the run, both halves of E212's hazard are closed one process down, and the
-pin is `readlink('/proc/self/fd/0')` rather than a stream flag.
+**WHAT IS TRUE NOW — and this entry was closed and then REOPENED inside one round, which is the useful
+part.** Option (a) was taken: the known-positive was repointed at a fresh `php://stdin` handle and the
+repair went back to close + reopen `/dev/null`. **The first full suite run of that shape produced 107
+errors** — `SugarCraft\Mosaic\Detect` reads the `\STDIN` constant unguarded from a SIBLING library, which
+no grep of `sugar-crush/` could see (Ee49-1's attempt 3, and Ee49-13). So option (a) is not merely a
+trade, it is unavailable while any reachable library reads that constant without a guard. The repair is
+the flag again, and this residual is **live**: bytes already sitting on the runner's stdin still reach a
+spawned `bin/sugarcrush -p` child and get prepended to its prompt.
 
-**WHY THIS ENTRY STILL EARNS ITS PLACE.** It records the residual that existed for the length of one
-attempt, and — more usefully — that the reason given here for not fixing it (file ownership) was the
-wrong reason to stop. The edit to `tests/Cli/NonInteractiveStdinPinTest.php` was FORCED by a change in
-`tests/bootstrap.php`, which is lane e's, and a forced out-of-lane edit is reportable rather than
-prohibited (rule 23). It is four lines: the known-positive now opens its own `php://stdin` handle instead
-of reading a constant this suite has deliberately retired.
+**WHY IT IS SMALLER THAN IT WAS.** The reason the flag failed before — `new Tty(null, $injectedTermios)`
+clearing it via `PosixBackend::restore()` — is fixed at every site in the tree (Ee49-12), so the flag now
+holds for a whole run rather than up to the first raw-mode test. The BLOCKING half, which is the one that
+hangs a run for 60s a test with no message, is genuinely closed.
+
+**Step, revised.** Not "close the descriptor". Either (a) fix `SugarCraft\Mosaic\Detect` to guard its
+`?? STDIN` with `is_resource()` and fix the fallback it falls into (Ee49-13), then re-try the descriptor
+replacement behind a full suite run — noting that the census must then cover every reachable
+`sugarcraft/*` lib, not `sugar-crush/` — or (b) pin the residual with a test proving bytes on the runner's
+stdin reach a spawned child, so the limit is a recorded fact rather than a gap. (b) is cheap and honest;
+(a) is the only thing that actually closes it.
+
+**And the note this entry earned the first time still stands:** the reason originally given for not acting
+(file ownership) was the wrong reason to stop. A forced out-of-lane edit is reportable, not prohibited
+(rule 23) — the two edits in `tests/Support/ForkedChildTest.php` that make the flag hold are exactly that.
 
 ---
 
@@ -8895,6 +8926,15 @@ the blocking hazard only and says nothing about descriptor reuse.
 which asserts the identity rather than the absence of a hang — so the `$GLOBALS`→local regression is a
 red test, not a silent downgrade. Confirmed by mutation this round.
 
+**WHAT IS TRUE NOW, and it does not retract the finding.** The `$GLOBALS` line is GONE, because the
+repair it belonged to is gone: closing descriptor 0 cost 107 errors (Ee49-1's attempt 3, Ee49-13) and the
+shipped repair is a flag, which needs no handle parked anywhere. **WHY THIS ENTRY STILL EARNS ITS PLACE:**
+the measurement is about PHPUnit, not about that line. Anything a future `tests/bootstrap.php` wants to
+keep alive for the length of a run — a stream, a handle, a temp directory guard object — must be parked in
+`$GLOBALS` or a static, because `Application::loadBootstrapScript()` is a METHOD and a bare local there
+dies on return. That is a fact about the host, and the next person to reach for a local in that file needs
+it.
+
 **Step.** None; recorded because the class of error is worth remembering: "an included file is at file
 scope" is an assumption about a HOST, and the host here is a method.
 
@@ -8955,9 +8995,52 @@ both directions — so a revert to `null` is red, not merely unnoticed. A socket
 `php://memory` is forced: PHP reports a memory stream as blocked whatever is set on it, so it cannot
 distinguish "the seam wrote here" from "the seam wrote elsewhere".
 
-**Step.** Give `tests/Support/ForkedChildTest.php`'s two constructions an explicit stream the same way.
-Then consider whether candy-core's `Tty` should refuse `null` when an injected `Termios` is supplied at
-all — the combination means "drive this fd" and "wrap that stream", and there is no caller for which the
+**DONE, all sites, later the same round — and it stopped being optional.** The shipped descriptor-0
+repair in `tests/bootstrap.php` IS the `O_NONBLOCK` flag (Ee49-1 attempt 4), so `restore()` at any of
+these sites was silently undoing it for every later test in the run. `tests/Support/ForkedChildTest.php`
+belongs to lane d this round; both of its constructions were changed anyway, because the alternative was
+shipping a repair that stops working at the first raw-mode test. **FORCED OUT-OF-LANE EDIT, named at the
+top of lane e's report (rule 23).** Both now assert the flag in both directions, so a revert is red.
+
+**Step.** Consider whether candy-core's `Tty` should refuse `null` when an injected `Termios` is supplied
+at all — the combination means "drive this fd" and "wrap that stream", and there is no caller for which the
 process's own descriptor 0 is the right answer to both.
+
+---
+### Ee49-13 — `candy-mosaic`'s no-TTY fallback names a `Capability` case candy-palette does not have
+
+**Recorded 2026-08-24 by round-49 lane e (review pass).** Severity: live crash on a reachable path.
+**Measured, PHP 8.3.6. Out of lane — `candy-mosaic/` and `candy-palette/` belong to no lane this round.**
+
+**What.** `candy-mosaic/src/Mosaic.php`'s `autoFromPalette()` — the fallback taken when `Detect::probe()`
+throws, i.e. whenever there is no usable TTY to probe — evaluates
+`$report->has(PaletteCapability::Iterm2Image)`. **There is no such case.**
+`candy-palette/src/Probe/Capability.php` spells it `ITerm2 = 'iterm2'`. The line is a fatal
+`Error: Undefined constant SugarCraft\Palette\Probe\Capability::Iterm2Image`, not a false.
+
+**Why nobody has hit it.** `Mosaic::auto()` wraps the probe in a try/catch and only reaches
+`autoFromPalette()` when the probe throws — and the probe's own stdin read normally succeeds (returning
+nothing) rather than throwing. It took a `\STDIN` that was a CLOSED resource to make the probe throw:
+`Detect::stdinFd()` is `self::$probeStdin ?? STDIN` and `drainStdin()` gets it with no `is_resource()`
+guard.
+
+**How it was found, and the generator.** Round 49 lane e's attempt to replace the suite's descriptor 0
+with `/dev/null` closes the `\STDIN` constant. **Full suite, PHP 8.3.6: `9500 tests, 107 errors, rc 2`,
+every error that undefined constant**, reached through
+`Mosaic.php:166 ← Mosaic.php:122 ← sugar-crush/src/ToolResult.php:280 ← :294 ← src/Cli/Bootstrap.php:1003`.
+To reproduce without that change: `fclose(\STDIN)` before anything calls `Mosaic::auto()`.
+
+**Two defects, not one.**
+ 1. `autoFromPalette()` cannot run at all — it references a nonexistent enum case. Anything reaching that
+    fallback in production (a `sugarcrush` invoked with a closed or unusable fd 0, which is an ordinary
+    thing for a daemon or a hook) gets a fatal instead of a HalfBlock renderer.
+ 2. `Detect::stdinFd()` hands an unguarded `?? STDIN` to stream functions. A closed descriptor 0 is a
+    legitimate state for a process to be in; it should degrade, not throw.
+
+**Step.** Fix the case name in `candy-mosaic` (`ITerm2`, and check the rest of that method against the
+enum the same way — one wrong name means nobody has executed the method). Guard `Detect::stdinFd()`'s
+consumers with `is_resource()`. Neither is a sugar-crush change; both are worth a PR of their own, and (1)
+should carry a test that drives `autoFromPalette()` directly rather than through a thrown probe, since
+the throw is what made it unreachable for so long.
 
 ---
