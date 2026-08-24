@@ -16,15 +16,63 @@ agent at a time. All five implementers had already committed their briefs — **
 b 8, c 5, d 9, e 8** — and each had reached its backlog-recording commit, which is the last step of the
 brief. **Nothing was lost. No implementer wrote a report, because the stop preempted the report.**
 
-**Phase 2 — review + fix, ONE LANE AT A TIME — IS WHAT IS RUNNING NOW.** Run `wf_e9f19bf7-612`,
-**task `wyxy94q0k`**. Script:
-`/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-49b-wf_e9f19bf7-612.js`
-It reuses round 49's `COMMON`/`OWNERSHIP`/`LANES` verbatim and replaces the `pipeline()` with a serial
-`for` loop, so **exactly one agent is alive at any moment**. Review and fix are **combined into one fresh
-agent per lane** — a fresh agent that did not implement still supplies the independent eyes, and combining
-halves the agent count, which was the point.
-🔴 **If it is killed: resume with `resumeFromRunId: 'wf_e9f19bf7-612'`** — completed lanes replay from
-cache, and because the loop is serial a resume genuinely picks up where it stopped.
+**Phase 2 — review + fix — RAN SERIAL FOR LANE `a`, THEN WENT BACK TO FOUR PARALLEL.** Run
+`wf_e9f19bf7-612`. Script (resume target, do not edit its `COMMON`):
+`/tmp/claude-1000/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/scratchpad/round49b.js`
+Durable copy: `.../workflows/scripts/crush-round-49b-wf_e9f19bf7-612.js`.
+Review and fix are **combined into one fresh agent per lane** — a fresh agent that did not implement still
+supplies the independent eyes, and combining halves the agent count.
+
+- **Serial pass** (task `wyxy94q0k`, 2026-08-24 00:40): the user was near a session limit and asked for one
+  agent at a time. **Lane `a` completed.** Lanes `b`/`c`/`d`/`e` then died on
+  `You've hit your session limit · resets 3am (UTC)` **before doing any work** — all four were still at
+  their implement HEADs with clean trees, so nothing was lost or half-done.
+- **Parallel resume** (task `wrjky6769`, 01:32) after the user re-raised the cap to finish the step.
+  `resumeFromRunId: 'wf_e9f19bf7-612'` replays lane `a` from cache and runs `b`/`c`/`d`/`e` concurrently.
+
+🔴 **THE SCRATCHPAD SCRIPT'S `COMMON` MUST NOT BE EDITED WHILE THIS RUN IS RESUMABLE.** Resume matches on
+`(prompt, opts)`, and `COMMON` is in every lane's prompt — one character there and *every* lane, lane `a`
+included, re-runs from scratch instead of replaying. The floor correction below was therefore applied to
+the **durable** copies only, and deliberately reverted in the resume target.
+
+### 🔴 LANE `a` IS DONE — AND ITS REVIEW REFUTED THE BRIEF I WROTE
+
+**Lane `a` HEAD `2cd49de9`, 15 commits, `9514 / 133730 / 1 skipped / rc 0`, 18/18 closure, clean tree.**
+Baseline **OBSERVED**, not derived: the reviewer put the worktree back to `db90e768` and re-ran.
+
+**It found a BLOCKING defect the implementer's own guard was blind to.**
+`DenialPrefixRosterTest::DENIAL_SHAPE` was `^`-anchored, so the `FAMILY_SPELLINGS` row asserting
+`'src/Chat.php' => 0` could not see a **decorated** denial literal. Re-introducing Chat's exact pre-E236
+line — `Message::system("_Permission denied: {$name} was not run._")` — left the guard **GREEN**. No
+behavioural test can catch it either: the emitted string is byte-identical. Fixed in `de2394bb` by framing
+with `(?<![A-Za-z])` instead of `^`, and the fix was itself mutation-checked (rule 16): the same
+re-introduction is now KILLED.
+
+Two MAJORs alongside it. The doc-block above that guard claimed the scan saw "exactly the six real
+spellings" — **there were SEVEN** in `src/Chat.php` at base, the seventh being the underscore-wrapped
+system note, i.e. the very literal the guard was blind to. **The rounded-up claim is what stopped the
+author noticing the defect.** And `RefusalStderrSurfaceTest`'s deny row asserted `assertSame('', $promptText)`
+while attaching the approver **only on the `ask` arm** — so `''` was what an *absent* instrument returned.
+**Rule 25, in the row written as that file's own rule-15 control.** Fixed in `e8045036`.
+
+🔴 **THE BRIEF STATED TWO DIFFERENT FLOORS AND THE REVIEWER CAUGHT IT.** `COMMON` said
+`9445 / 132167` (round 48's close) at the top and `9499 / 133587` at the bottom. The reviewer re-ran at
+`db90e768` and **observed `9499 / 133587`** — the bottom figure is right, the top is wrong.
+⚠️ **LANES `b`–`e` ARE RUNNING WITH THAT SAME CONTRADICTION IN THEIR BRIEFS** (the run launched before the
+correction). **At merge, recompute every lane's delta from the observed `9499 / 133587` yourself; do not
+trust a lane-reported delta**, because one taken against 9445 is inflated by 54 tests / 1420 assertions.
+
+**And `+15` tests vs `14` new test methods reconciled exactly**, which is worth carrying forward: the
+fifteenth is a **data-provider case**, not a method — `BinSugarcrushWiringTest`'s `crushSourceFiles`
+provider yields one case per file under `src/`, and lane `a` added `src/Permissions/DenialKind.php`.
+Recorded as **Ea49-12: every lane that adds a `src/` file owes +1 test it did not write.** Expect this at
+merge.
+
+Also worth noting: the reviewer **refuted one of its own findings**. It first called
+`src/Context/RepoMapBlock.php` an unforced out-of-lane edit, having grepped `tests/` for the literals and
+found none — then discovered `BuiltInToolCorpusTest` asserts that prose via `sprintf` against a *derived*
+count, so the literals never appear. Both out-of-lane edits are genuinely forced. **The grep was the wrong
+instrument, and it said so.** No mutation residue found in the diff.
 
 ### 🔴 WHAT THE STOP ITSELF TAUGHT — TWO LANES WERE HOLDING A LIVE MUTATION
 
