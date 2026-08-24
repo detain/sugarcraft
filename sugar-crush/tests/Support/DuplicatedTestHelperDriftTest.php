@@ -297,10 +297,18 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * file's own subject wearing a different modifier - so the message says to
      * widen the alphabet, not to exempt the name.
      *
-     * AND IT IS THE ONE ASSERTION IN THIS FILE THAT A DEAD REPORT CANNOT
-     * SATISFY BY AGREEING WITH ITSELF: a {@see driftReport()} returning nothing
-     * empties BOTH sides, and the wide side is required to be strictly the
-     * larger.
+     * THE PAIR COUNT BELOW IS NOT DECORATION, AND THE REASON IS NOT THE ONE
+     * THIS PARAGRAPH FIRST GAVE. It claimed to be the assertion a dead report
+     * cannot satisfy; measured, a {@see driftReport()} stubbed to return no
+     * drift is caught by {@see assertTheScannerIsAlive()} three assertions
+     * earlier, so that was a claim about the wrong failure. What the count
+     * really covers is the hole in the assertion above it: an EMPTY wide report
+     * satisfies "no name here is a non-hook" perfectly. Measured both ways -
+     * with the alphabet parameter neutralised so the wide run yields nothing,
+     * the diff assertion passes and only the count reds; with the count deleted,
+     * the whole file stays green on that mutation. Rule 15, one level down: an
+     * assertion of `[]` needs something in the same test that fails when the
+     * instrument stops producing.
      */
     public function testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll(): void
     {
