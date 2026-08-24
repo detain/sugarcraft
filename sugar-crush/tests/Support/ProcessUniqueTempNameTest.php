@@ -102,9 +102,22 @@ final class ProcessUniqueTempNameTest extends TestCase
      * spared by a guard whose own stated subject describes them exactly, and
      * ONE OF THEM BUILDS A SubAgent ID IN THE SAME SHAPE the WorkflowEngine row
      * below spends six hundred words on. The predicate is now "no more-entropy
-     * flag" and those four are rostered. WHY THE ROSTER STILL EARNS ITS PLACE
-     * UNCHANGED IN FORM: the argument that a site is safe is a claim about the
-     * tree, and the tree is still asked in both directions.
+     * flag" and those four were rostered.
+     *
+     * AND THEN THEY WERE FIXED (E329), which is why four rows are gone from
+     * here rather than rewritten: `src/Agents/AgentManager.php`,
+     * `src/App/App.php`, `src/Hooks/ScriptHook.php` and
+     * `src/Providers/ClaudeCodeProvider.php` now spell the call with the pid in
+     * the prefix and the more-entropy flag set, so the scanner spares them on
+     * their own tokens and a row for any of them would fail
+     * {@see testEveryEntropylessInventoryRowStillDescribesTheSitesItClaims()}.
+     * The WorkflowEngine row is deliberately left standing — it is E324, a
+     * different entry with a different argument, and it is also what keeps this
+     * channel's real-tree walk honest.
+     *
+     * WHY THE ROSTER STILL EARNS ITS PLACE UNCHANGED IN FORM: the argument that
+     * a site is safe is a claim about the tree, and the tree is still asked in
+     * both directions.
      *
      * @var array<string,array{sites:int,why:string}>
      */
@@ -128,58 +141,6 @@ final class ProcessUniqueTempNameTest extends TestCase
                 . 'to makeResultDirPath() away from being untrue. That edit is out of this '
                 . 'lane (tests only) and is recorded as a deferred finding rather than done '
                 . 'here.',
-        ],
-        'src/Agents/AgentManager.php' => [
-            'sites' => 1,
-            'why' =>
-                'THE SAME SHAPE AS THE WorkflowEngine ROW ABOVE, AND IT WAS INVISIBLE TO THIS '
-                . 'GUARD UNTIL THE PREDICATE STOPPED MEANING "no arguments". `uniqid(\'subagent_\')` '
-                . 'builds a SubAgent id, and a literal prefix adds no cross-process entropy '
-                . 'whatever — same 13-hex microtime suffix, measured on PHP 8.3.6. TRACED, not '
-                . 'assumed: the id reaches disk through AgentWorkerPool::resultFile() and '
-                . 'progressFile(), both `$this->resultDir . "/" . hash("sha256", $agentId)`, and '
-                . '`$resultDir` is makeResultDirPath() — `sys_get_temp_dir() . "/sc_pool_" . '
-                . 'getmypid() . "_" . bin2hex(random_bytes(8))`. The DIRECTORY carries the pid '
-                . 'and 64 bits, so two processes cannot meet on that path. What is left is '
-                . 'intra-process uniqueness, which the microtime does give. Same conclusion and '
-                . 'same caveat as WorkflowEngine: the safety is a property of the enclosing '
-                . 'directory, one edit away from being untrue, and the fix is out of a '
-                . 'tests-only lane. Recorded as a deferred finding.',
-        ],
-        'src/App/App.php' => [
-            'sites' => 1,
-            'why' =>
-                'THE THIRD INSTANCE OF THE SubAgent-ID SHAPE. `uniqid(\'skill_fork_\')` names a '
-                . 'skill-fork SubAgent, and the id reaches the same AgentWorkerPool result and '
-                . 'progress paths under the same pid+64-bit directory, so the same measured '
-                . 'argument applies unchanged. Rostered together with AgentManager rather than '
-                . 'argued separately BECAUSE THEY ARE ONE FAMILY: the day makeResultDirPath() '
-                . 'stops carrying entropy, all three rows go live at once, and three rows saying '
-                . 'so is what makes that visible.',
-        ],
-        'src/Hooks/ScriptHook.php' => [
-            'sites' => 1,
-            'why' =>
-                'NOT A PATH AT ALL, TRACED RATHER THAN ASSUMED. `uniqid(\'hook_\')` is the LAST '
-                . 'fallback for a hook\'s display NAME when the config supplies neither a name '
-                . 'nor a command. The hook payload file this class does write is built by '
-                . '`@tempnam(sys_get_temp_dir(), ToolIpcFiles::HOOK_PAYLOAD_PREFIX)` at a '
-                . 'different site, and tempnam() is what guarantees that name, not this one. A '
-                . 'collision here would give two hooks the same label in a listing. FIX IT '
-                . 'ANYWAY WHEN THE FAMILY IS FIXED — the cost is a flag — but it is not the '
-                . 'hazard the other rows describe, and saying it is would be the kind of '
-                . 'inherited sentence this file exists to stop.',
-        ],
-        'src/Providers/ClaudeCodeProvider.php' => [
-            'sites' => 1,
-            'why' =>
-                'ALSO NOT A PATH, TRACED. `uniqid(\'tool_\')` fills in a tool call\'s id when the '
-                . 'provider\'s payload omits one. The `sc_runtime_tool_*` and `sc_chat_tool_*` '
-                . 'files that this tree really does race on are named by '
-                . 'ToolIpcFiles::reserve(), not by a tool-call id, so this value never reaches '
-                . 'a filename. The exposure is a duplicate id WITHIN one response, which the '
-                . 'microtime already prevents. Rostered rather than fixed for the same '
-                . 'lane reason as the rest, and it belongs in the same edit.',
         ],
     ];
 
