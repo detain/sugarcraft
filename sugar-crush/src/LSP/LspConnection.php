@@ -700,6 +700,13 @@ final class LspConnection implements LspConnectionInterface
             return;
         }
 
+        // SET HERE TOO, NOT ONLY IN connect() — see the identical note on
+        // ClaudeCodeMcpClient::drainStderr(). `fread()` on a BLOCKING pipe
+        // waits for a child that may have nothing more to say, so without this
+        // the method's correctness depends on a line in another method, and
+        // losing that line turns a test failure into a hung CI job.
+        stream_set_blocking($this->pipes[2], false);
+
         // Bounded per pass rather than "until EOF": a server writing faster
         // than this loop reads must not be able to hold the poll here forever.
         for ($i = 0; $i < 16; $i++) {

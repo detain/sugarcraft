@@ -398,6 +398,17 @@ final class ClaudeCodeMcpClient
             return;
         }
 
+        // SET HERE TOO, NOT ONLY IN connect(). The loop below calls `fread()`
+        // on fd 2, and on a BLOCKING pipe that call waits for a child that may
+        // have nothing more to say — so this method's correctness depended on a
+        // line in a different method thirty lines away. MEASURED: with the
+        // `connect()` call deleted and this absent, the 4-second
+        // ClaudeCodeMcpClientShutdownTest suite had not finished after 300s.
+        // That is the worst shape for a regression to take, because CI reports
+        // a stuck job rather than a failed assertion. Making the drain set its
+        // own precondition means the mode does not exist.
+        stream_set_blocking($this->pipes[2], false);
+
         // Bounded per pass rather than "until EOF": a child writing faster than
         // this reads must not be able to hold the caller here forever.
         for ($i = 0; $i < 16; $i++) {
