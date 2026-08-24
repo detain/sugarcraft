@@ -11068,6 +11068,76 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 52 — IN FLIGHT (base `b9abd2fb`, THREE lanes, run `wf_5f1a8d38-5b8`)
+
+**Launched 2026-08-24.** Base floor `9730 / 143168 / 1 skipped / rc 0` observed at `b9abd2fb`, clean, no
+60s aborts. Lane dirs verified across all three packages this round touches — sugar-crush 18/18,
+candy-core 3/3, candy-mosaic 7/7.
+
+**Lane `a` — the fd defect family, and it is mostly NOT in `sugar-crush`.** E336: `TtyDetect::isAtty()`
+casts a STREAM to `(int)` and treats the result as a file descriptor — a resource id is not a descriptor
+number and coincides with one only by accident on small ids, in `candy-core`, the package everything else
+sits on. E340: `Program::runExec()`'s closed-stream guard now falls back to a closed stream, because it
+was written before the suite began closing descriptor 0. E341: `Detect::stdinFd()` can answer `null` into
+a `@param resource` at `candy-core` — a contract violation ACROSS a package boundary, the kind no single
+package's suite catches. E339: dormant `EnvDetect::isConsoleStdin()`, to be wired or documented as a seam,
+**never deleted**.
+
+**The through-line the lane is asked to state once and well:** candy-core and candy-mosaic were written
+when descriptor 0 was always a live tty, and sugar-crush's suite now closes it. One guard that pins the
+family beats four that each pin a symptom. **The lane owes three suites' figures (rule 28).**
+
+**Lane `b` — sugar-crush runtime.** It opens with a contradiction to settle rather than a fix to make:
+**E344 says E328's recorded mechanism does not reproduce** — E328 was fixed on a race theory, E344 says
+the hazard was reachability — **and both entries are in the tree, so one is wrong.** Then E345 (the
+hardened audit write fails SILENTLY, which is worse than no audit log because it looks authoritative),
+E351 (the suite creates and populates the REAL production audit directory and nothing removes it), E338
+(round 51 measured that guarding only the named call RELOCATES the `TypeError`, because `@` suppresses
+diagnostics and not exceptions), E346/E347/E348, and E352 — the wire-id period the supervisor's own
+round-49 sweep introduced.
+
+**Lane `c` — measurement hygiene, and two entries that close a long-running mystery.**
+
+### 🔴 E362 EXPLAINS E333, INCLUDING THE DETAIL E333 COULD NOT ACCOUNT FOR
+
+E333 recorded two 60-second aborts in one merged-floor run that did not reproduce, and filed evidence
+rather than a mechanism because the obvious candidates had been ruled out. **E362 supplies the mechanism,
+measured**: `BootstrapSkillSkipsTest` spawns children under `timeout -s KILL 60`; under concurrent load a
+child that would finish in a second misses the wall clock; PHPUnit reports **RISKY rather than red**, and
+the run **sheds the assertions that arm would have made.** That shed is exactly the 3-assertion gap E333
+recorded between its red and clean runs without being able to explain it.
+
+**Refusing to name a mechanism in E333 was the right call and this is the payoff** — the entry stayed
+accurate, and a later observation resolved it rather than having to un-say a guess. The standing
+consequence: **a risky or red verdict on that file during a parallel round is re-run alone before it is
+attributed to anything.**
+
+### 🔴 E361 — RULE 26 ONE LEVEL DOWN, WITH NO SWEEP INVOLVED
+
+A doc-comment that NAMES a PHPUnit annotation IS that annotation. Removing a requires-annotation and
+writing a paragraph explaining why **re-created it**: the metadata parser read the name out of the
+explanatory comment and the test skipped, inside the change whose entire purpose was that it never should.
+The suite reported `Skipped: 1` for a file carrying no `markTestSkipped` at all. Caught before shipping,
+so the skip invariant held. **Live for every annotation the tooling reads out of comments.** Lane c builds
+the guard, and is told its guard must be immune to its own trap.
+
+### 🔴 E354 CHANGES HOW THIS PROJECT PREDICTS
+
+A per-file assertion in several censuses makes the suite's assertion total a function of the FILE COUNT.
+That is the mechanism behind every loose assertion bound recorded here, and behind E364, where a
+merge-time row deletion put the total BELOW its lower bound. Lane c is asked to quantify it — assertions
+per added file, per census — because a number there converts a bounded prediction into an exact one.
+
+### TWO NEW STANDING RULES, AND A BRIEF-WRITING ONE
+
+`COMMON` gained **rule 28** (a lane touching a second library owes that library's figures separately) and
+**rule 29** (file ids under THIS round's number, not the one you see around you). Both come from round 51:
+the first because the floor became two numbers, the second because a lane copied its neighbours' id
+convention instead of following its brief.
+
+And **every path in this round's briefs was verified to exist before the brief was written** — E334's
+lesson, after round 51 sent a lane to a file in the wrong package.
+
 ## ROUND 51 — CLOSED (`8629df24`, floor `9730 / 143168 / 1 skipped / rc 0`, THREE lanes)
 
 ### THE CLOSE
