@@ -565,8 +565,27 @@ final class DenialPrefixRosterTest extends TestCase
      * {@see \SugarCraft\Crush\Runtime::gate()}, and nothing turns it into a
      * `ToolResult`. Asserted rather than asserted-in-prose: the class is a
      * `\Throwable` subclass, and no file in `src/` both names it and names
-     * `ToolResult` — which is the one edit that would make its message a
-     * tool-result opener and so a real fourth kind.
+     * `ToolResult`.
+     *
+     * THAT SCAN IS NECESSARY AND NOT SUFFICIENT, and saying so costs less than
+     * a reader finding out. WHAT THIS PARAGRAPH SAID: that naming both symbols
+     * in one file is "the one edit" that would make this message a tool-result
+     * opener and so a real fourth kind. WHAT IS TRUE NOW, measured on
+     * PHP 8.3.6 at round 49: `src/Chat.php`'s tool callback already catches
+     * `\Throwable` and returns `ToolResult::error($name, $e->getMessage(), …)`
+     * with the message UNPREFIXED, into the very field
+     * {@see Chat::isDeniedResult()} reads — and a generic catch need not name
+     * this class to swallow it. So there is a path this scan cannot see. WHY
+     * THE SCAN STILL EARNS ITS PLACE: it is the mechanical tripwire for the
+     * DELIBERATE wiring, a caller reaching for this class BY NAME in order to
+     * turn it into a tool result, which is the edit a person makes when they
+     * decide this really is a fourth kind. The generic-catch path is covered
+     * by the paragraph below instead, and that cover is asserted: the message
+     * classifies as NOT a denial, so even arriving through a `\Throwable`
+     * catch it renders as an ordinary tool error. (Also measured at round 49,
+     * and not load-bearing here: {@see \SugarCraft\Crush\Agents\TaskList::addTask()},
+     * the only thrower, had no caller anywhere in `src/`, so nothing reached
+     * the throw from a tool callback at all.)
      *
      * THIRD, WHAT WOULD HAPPEN IF IT DID REACH A CLASSIFIER, because that is
      * the half a "they are just different" comment cannot answer. It would
@@ -640,6 +659,41 @@ final class DenialPrefixRosterTest extends TestCase
             ),
             'the co-occurrence scanner reports a file naming only ONE of the two symbols, so it would red '
             . 'this guard against every correct tree',
+        );
+
+        // AND THE DECLARING FILE IS SKIPPED, through the same matcher: a class
+        // that mentions its own name is not a call site. Expected `[]`, so it
+        // is the positive fixture above that makes this row mean anything --
+        // a matcher that has stopped matching returns `[]` here too.
+        self::assertSame(
+            [],
+            self::filesNamingBothIn(
+                ['src/Agents/TaskBlockedException.php' => '<?php class TaskBlockedException {} // ToolResult'],
+                TaskBlockedException::class,
+                'ToolResult',
+            ),
+            'the declaring file is no longer skipped, so this guard reds on a tree where nothing has '
+            . 'wired the exception to a tool result at all',
+        );
+
+        // AND A KNOWN-POSITIVE OVER THE REAL WALK, which is the half the three
+        // fixtures above cannot reach (rule 15, one level down). They call
+        // filesNamingBothIn() with sources of their own, so they pin the
+        // MATCHER and say nothing about the COLLECTION that filesNamingBoth()
+        // wraps it in -- phpFilesUnder(), sourceOf() and the path arithmetic.
+        // MEASURED on PHP 8.3.6 at round 49: replacing filesNamingBoth()'s
+        // body with `return []` left this whole file GREEN, because every
+        // assertion that reads it expects an empty answer, and that helper has
+        // no other caller in the tree. `TaskList` is the second symbol rather
+        // than `ToolResult` precisely because src/Agents/TaskList.php is where
+        // the exception is thrown, so a POSITIVE answer over the real walk is
+        // available without inventing one.
+        self::assertContains(
+            'src/Agents/TaskList.php',
+            self::filesNamingBoth(TaskBlockedException::class, 'TaskList'),
+            'the co-occurrence scan cannot find TaskBlockedException in the file that throws it, so it is '
+            . 'not reading src/ at all and its empty answer above is what a dead instrument returns rather '
+            . 'than evidence that nothing wires this exception to a tool result',
         );
     }
 
