@@ -935,15 +935,27 @@ final class DenialPrefixRosterTest extends TestCase
      */
     public function testTheReadmePublishesTheSameThreeKindTokens(): void
     {
-        // KNOWN-POSITIVE FIRST: the helper really does cut the paragraph out
-        // of a document, and really does fail loudly when it cannot.
-        $fixture = "intro\n\nOne key is **conditional**: FIXTURE-BODY\n\nBefore this,\ntail\n";
+        // KNOWN-POSITIVE FIRST, AND IT HAS TO DISCRIMINATE IN BOTH DIRECTIONS
+        // (rule 25). "The extractor found the body" is also what an extractor
+        // that returns the WHOLE DOCUMENT answers — and that mutation is the
+        // one that matters here, because the two assertions below would then
+        // pass on a README whose refusals paragraph had been deleted outright,
+        // on the strength of the words `hook` and `refused` appearing
+        // somewhere else in a 1,000-line file. So the fixture plants a decoy
+        // on each side of the paragraph and the slice must exclude both.
+        $fixture = "intro DECOY-HEAD\n\nOne key is **conditional**: FIXTURE-BODY\n\n"
+            . "Before this,\ntail DECOY-TAIL\n";
+        $sliced = self::refusalsParagraphIn($fixture);
         self::assertStringContainsString(
             'FIXTURE-BODY',
-            self::refusalsParagraphIn($fixture),
+            $sliced,
             'the paragraph extractor cannot find a paragraph it is looking straight at, so its answer for '
             . 'README.md says nothing',
         );
+        self::assertStringNotContainsString('DECOY-HEAD', $sliced, 'the extractor returns text from before '
+            . 'the paragraph, so its answer is about the whole document and not about the schema');
+        self::assertStringNotContainsString('DECOY-TAIL', $sliced, 'the extractor returns text from after '
+            . 'the paragraph, so its answer is about the whole document and not about the schema');
 
         $paragraph = self::refusalsParagraphIn(self::sourceOf('README.md'));
 
