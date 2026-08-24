@@ -102,6 +102,42 @@ putenv('COLORFGBG');
  * back on the real one), a shutdown hook would be inherited by every forked
  * child and run at the wrong time, and the sweep above prunes it on the next
  * run anyway. Per-uid because /tmp is shared.
+ *
+ * PER-UID AND NOT PER-CHECKOUT, which E242 proposed and which was measured
+ * before it was declined (round 49). Three findings, all on PHP 8.3.6 and all
+ * pinned by `tests/SuiteTempSandboxContractTest.php` so 8.4 answers for itself:
+ *
+ *  - THE KEY CANNOT HAVE CAUSED WHAT IT WAS BLAMED FOR. E242's one observed
+ *    failure was two processes opening one `tasklist_test_<id>.sqlite3`, and
+ *    that path is built from `sys_get_temp_dir()`. By the paragraph above,
+ *    `putenv()` never moves THIS process's answer to that — measured in both
+ *    orderings, including putenv before the first call — so it was the
+ *    machine's real temp directory, not this sandbox, at any key. The same is
+ *    true of every in-process `ToolIpcFiles::reserve()`, whose names are
+ *    `sys_get_temp_dir()`-based too. Re-keying moves none of them.
+ *  - THERE IS ALMOST NOTHING IN HERE TO COLLIDE ON. Sampled every 0.5s across
+ *    a full 9,508-test run, the only entries this directory ever held were 20
+ *    `crush-hook-payload-*` files, every one named by `tempnam()` — which is
+ *    atomic and collision-free by construction, not by luck.
+ *  - AND A PER-CHECKOUT KEY WOULD ADD A LEAK THIS ONE DOES NOT HAVE. The
+ *    sandbox is pruned only by the next run's own bootstrap sweep. Keyed by
+ *    uid there is exactly one per user and every run of any checkout prunes
+ *    it; keyed by uid plus checkout path there is one per checkout, and a
+ *    deleted lane worktree leaves a directory no bootstrap will ever sweep
+ *    again — five of those a round, forever.
+ *
+ * WHAT THE RE-KEY WOULD HAVE DONE TO `ToolIpcFiles::sweepOnce()`, since E242's
+ * Step asked and the answer is "less than it looks": nothing. The sweep above
+ * is spent HERE to trip the per-process latch, and by the first finding the
+ * payloads this suite reserves in-process are not in the directory it is
+ * pointed at anyway. Its `$dir` argument only has to be somewhere harmless.
+ * The uid filter inside `ToolIpcFiles::sweep()` keeps its stated reason too —
+ * courtesy on a shared `/tmp` — because the one place the suite genuinely
+ * sweeps the real `/tmp` is `ToolIpcFilesTest`'s wiring proof, which resets
+ * the latch itself and never consults this key.
+ *
+ * WHAT E242 ACTUALLY SAW is the descriptor-0 block recorded at the bottom of
+ * this file, which reproduces with one process on an idle box.
  */
 $sandbox = sys_get_temp_dir() . '/sc_suite_tmp_' . (function_exists('posix_geteuid') ? posix_geteuid() : 'x');
 @mkdir($sandbox, 0o700, true);
