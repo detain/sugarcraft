@@ -308,23 +308,45 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . $fn . '(intval($stream))' . ";\n"
             . '$fd = (int) $this->stream;' . "\n"
             . $static . "(\$fd);\n"
+            // ---- the four ways classify() answers UNCLASSIFIED ----------
+            //
+            // A classifier needs a case per RETURN, not a case per
+            // CLASSIFICATION. classify() reaches UNCLASSIFIED through FOUR
+            // separate returns, and each is its own branch to mutate:
+            //
+            //  1. the empty-argument guard at the top -- a call with no
+            //     first argument at all;
+            //  2. the single-token fallthrough, after the ladder that names
+            //     a lone number, a lone variable and a lone constant;
+            //  3. the return inside the accessor-chain walk, for a
+            //     multi-token operand ROOTED in a variable or a name that
+            //     contains something the chain has no word for;
+            //  4. the terminal fallthrough at the end of the method, for a
+            //     multi-token operand rooted in anything else.
+            //
+            // WHAT AN EARLIER REVISION OF THIS COMMENT SAID: "Those are two
+            // separate returns", naming 3 and 4.
+            //
+            // WHAT IS TRUE NOW: there are four, and 1 and 2 were unpinned.
+            // MEASURED (round-53 mutations R2 and R9), each rewritten to
+            // answer VARIABLE, whole candy-core suite: 818 tests / 7384
+            // assertions / rc 0 both times. Both are reachable -- a bare
+            // `<sink>()` takes return 1, and `<sink>("x")` takes return 2.
+            //
+            // WHY THIS STILL EARNS ITS PLACE: the reasoning was right, and it
+            // is the reason these four lines exist rather than one. An
+            // operand the classifier has no word for, silently absorbed as a
+            // benign one, is the exact failure this scanner replaced -- one
+            // level down, inside the instrument built to fix it.
             . $fn . '($a ? 1 : 2)' . ";\n"
-            // An operand rooted in a LITERAL rather than in a variable. This
-            // is not a duplicate of the line above it: `$a ? 1 : 2` leaves
-            // classify() through the return inside the accessor-chain walk,
-            // whereas an operand whose first token is neither a cast, nor
-            // `intval`, nor a lone token, nor a variable-or-name reaches the
-            // TERMINAL fallthrough at the end of that method. Those are two
-            // separate returns, and until this line existed only the first of
-            // them was pinned -- MEASURED: with the terminal return rewritten
-            // to answer VARIABLE, this whole census stayed green (round-53
-            // mutation M8), so an operand the classifier has no word for was
-            // silently absorbed as a benign one. That is the exact failure
-            // this scanner was written to replace, one level down.
             . $fn . '(0 + 1)' . ";\n"
-            // Two shapes that must NOT be reported at all: a method of the
-            // same name, and a declaration of it.
+            . $fn . '()' . ";\n"
+            . $fn . '("x")' . ";\n"
+            // ---- three shapes that must NOT be reported at all -----------
+            // A method of the same name, the nullsafe spelling of that same
+            // method, and a declaration of the function.
             . '$obj->' . $fn . "(0);\n"
+            . '$obj?->' . $fn . "(0);\n"
             . 'function ' . $fn . "(\$x) {}\n";
 
         $kinds = array_column(DescriptorSinkScanner::scanSource($fixture), 'kind');
@@ -338,15 +360,42 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
                 DescriptorSinkScanner::INT_CAST,
                 DescriptorSinkScanner::INTVAL,
                 DescriptorSinkScanner::INT_CAST_VIA_VARIABLE,
-                // `$a ? 1 : 2` -- the accessor-chain walk's return.
+                // `$a ? 1 : 2` -- the accessor-chain walk's return (3).
                 DescriptorSinkScanner::UNCLASSIFIED,
-                // `0 + 1` -- the terminal fallthrough. Distinct branch; see
-                // the fixture comment above.
+                // `0 + 1` -- the terminal fallthrough (4).
+                DescriptorSinkScanner::UNCLASSIFIED,
+                // `()` -- the empty-argument guard (1).
+                DescriptorSinkScanner::UNCLASSIFIED,
+                // `"x"` -- the single-token fallthrough (2).
                 DescriptorSinkScanner::UNCLASSIFIED,
             ],
             $kinds,
             'the scanner did not classify the control fixture as expected; every assertion of '
                 . 'absence in this file is void until it does',
+        );
+
+        // AND THE ARM FOR A CALL IT CANNOT BRACKET AT ALL. This is the one
+        // the class doc-blocks on both sides name as the scanner's reason for
+        // existing -- "a guard that quietly ignores what it cannot parse has
+        // a hole shaped exactly like the next defect" -- and it was the one
+        // branch with no case. MEASURED (round-53 mutation R3): with the row
+        // it records deleted, leaving a bare `continue;`, the whole
+        // candy-core suite stayed green at 818 / 7384 / rc 0. The scanner
+        // could be made to swallow exactly what it cannot read, silently, and
+        // nothing in the tree noticed.
+        //
+        // It needs its own scanSource() call rather than a line in the
+        // fixture above: an unterminated call swallows everything after it.
+        self::assertSame(
+            [[
+                'sink'     => $fn,
+                'kind'     => DescriptorSinkScanner::UNCLASSIFIED,
+                'argument' => '<could not bracket the argument list>',
+                'line'     => 2,
+            ]],
+            DescriptorSinkScanner::scanSource("<?php\n" . $fn . '('),
+            'a sink whose argument list does not close is no longer REPORTED as unreadable. '
+                . 'Dropping it in silence is the failure mode this scanner exists to replace.',
         );
     }
 

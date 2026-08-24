@@ -244,9 +244,23 @@ final class DescriptorSinkScanner
         }
 
         // Not a method call, a declaration, or a `new`.
+        // T_NULLSAFE_OBJECT_OPERATOR is here for the same reason as
+        // T_OBJECT_OPERATOR: `$libc?->posix_isatty($s)` means exactly what
+        // `$libc->posix_isatty($s)` means, and only the second was excluded.
+        // MEASURED, PHP 8.3.6: before this line the nullsafe spelling was
+        // reported as a plain FUNCTION sink classified VARIABLE, i.e. an
+        // unjudged roster row for a call to somebody else's method. It failed
+        // safe -- a spurious row reds the census rather than hiding a site --
+        // but the two spellings must answer the same, so it is pinned below.
         $before = self::previousSignificant($tokens, $i - 1);
         if ($before !== null && \is_array($tokens[$before])
-            && \in_array($tokens[$before][0], [\T_OBJECT_OPERATOR, \T_DOUBLE_COLON, \T_FUNCTION, \T_NEW], true)
+            && \in_array($tokens[$before][0], [
+                \T_OBJECT_OPERATOR,
+                \T_NULLSAFE_OBJECT_OPERATOR,
+                \T_DOUBLE_COLON,
+                \T_FUNCTION,
+                \T_NEW,
+            ], true)
         ) {
             return null;
         }
