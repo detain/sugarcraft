@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 use PHPUnit\Framework\TestCase;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\AssistantMsg;
@@ -202,11 +203,10 @@ final class ReasoningPaintTest extends TestCase
     }
 
     /**
-     * The inbox is shared with the tool-lifecycle channel, and two consumers
-     * read it expecting tool events only. A {@see ReasoningDelta} leaking into
-     * either would be applied as a transcript state.
+     * The inbox is shared with the tool-lifecycle channel, and the accessor
+     * that reports it is contracted to tool events only.
      */
-    public function testAThoughtIsNeitherAToolEventNorReplayedOnSettle(): void
+    public function testAThoughtIsNotReportedAsAToolEvent(): void
     {
         $chat = new Chat(inFlight: true);
         $chat->enqueueReasoning('thinking');
@@ -214,12 +214,50 @@ final class ReasoningPaintTest extends TestCase
 
         $this->assertCount(1, $chat->liveToolEvents(), 'liveToolEvents() must report tool lifecycle only');
         $this->assertInstanceOf(ToolStarted::class, $chat->liveToolEvents()[0]);
+    }
 
-        // Settle without pumping, so the drain - not the pump - is what sees
-        // the thought still sitting in the inbox.
-        [$settled] = $chat->update(new AssistantMsg(Message::assistant('Noon.')));
+    /**
+     * The end-of-turn drain must discard an unpumped thought rather than carry
+     * it out on the settled Msg.
+     *
+     * Driven through a REAL turn, and that is the whole point of the fixture
+     * work below: {@see Chat::drainToolEventInbox()} is reachable ONLY from the
+     * backend promise's settle handlers. An earlier version of this test
+     * enqueued a thought and dispatched an {@see AssistantMsg} by hand, which
+     * never reaches the drain at all — and a mutation deleting the
+     * `ReasoningDelta` exclusion from it SURVIVED, entirely green. The window
+     * was wrong, not the mutation.
+     *
+     * What the exclusion buys, concretely: a `ReasoningDelta` returned here
+     * lands in a {@see \SugarCraft\Crush\BackendToolEventsMsg}, whose applier
+     * dispatches on `instanceof ToolStarted` and sends everything else to the
+     * ToolFinished branch. A thought would arrive there as a TypeError and take
+     * the whole turn down.
+     */
+    public function testAnUnpumpedThoughtIsDiscardedByTheEndOfTurnDrain(): void
+    {
+        $backend = new ReasoningRecorderBackend(['unpumped thought'], 'Noon.');
+        $chat = new Chat(backend: $backend, inputBuf: 'what time is it?');
+
+        [$inFlight, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $async = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $async);
+
+        // Deliberately NOT pumped: the thought is still sitting in the inbox
+        // when the turn settles, which is the state the drain exists for.
+        $resolved = null;
+        $async->promise->then(static function ($msg) use (&$resolved): void { $resolved = $msg; });
+        $backend->settle();
+
+        $this->assertInstanceOf(
+            AssistantMsg::class,
+            $resolved,
+            'the drain carried the unpumped thought out as a tool-lifecycle batch',
+        );
+
+        [$settled] = $inFlight->update($resolved);
         foreach ($settled->history as $message) {
-            $this->assertStringNotContainsString('thinking', $message->content);
+            $this->assertStringNotContainsString('unpumped thought', $message->content);
         }
     }
 
