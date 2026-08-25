@@ -293,20 +293,36 @@ final class LspConnectionFrameCapTest extends TestCase
             . 'untested rather than dormant',
         );
 
-        // And the implication itself, stated as arithmetic rather than as prose:
-        // any length the header guard admits leaves the body loop running only
-        // while the buffer is strictly under the cap.
-        $largestAdmitted = $cap;
-        $this->assertLessThan(
-            $cap + 1,
-            $largestAdmitted,
-            'the largest admissible declared length is the cap itself',
-        );
-        $this->assertTrue(
-            $largestAdmitted - 1 < $cap,
-            'the body loop runs only while strlen($readBuffer) < $pendingContentLength, so '
-            . 'the buffer is strictly below the cap at the moment the refusal is called — '
-            . 'which is why that call cannot fire',
+        // ---- THE OTHER HALF, and the half that carries the row. The first
+        // assertion above is satisfied by ANY header bound at or below the cap —
+        // including one an order of magnitude lower — so on its own it cannot see
+        // the divergence this row exists to catch. What makes the implication
+        // hold is that the header's upper bound is EXACTLY the cap, so a declared
+        // length of exactly `cap` must be ADMITTED rather than refused.
+        //
+        // Admitted means "no LspProtocolException": the body never arrives, so
+        // the exchange ends at its own deadline as an ordinary failed response.
+        $atCap = $this->connectedTo("Content-Length: " . $cap . "\r\n\r\n");
+        $protocolError = null;
+
+        try {
+            $response = $atCap->sendRequest('textDocument/definition', []);
+            $this->assertTrue(
+                $response->isFailure(),
+                'a body that never arrived was reported as a success',
+            );
+        } catch (LspProtocolException $e) {
+            $protocolError = $e;
+        } finally {
+            $atCap->disconnect();
+        }
+
+        $this->assertNull(
+            $protocolError,
+            'a declared length of exactly MAX_FRAME_BYTES was REFUSED by the header guard, so '
+            . 'the header bound and the buffer cap are no longer the same number. The body '
+            . 'phase call is then reachable for lengths between the two, and it is covered by '
+            . 'nothing: ' . (string) $protocolError?->getMessage(),
         );
     }
 
