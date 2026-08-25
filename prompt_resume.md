@@ -66,8 +66,31 @@ the interesting content first.
    them, do not write to them.** A different plan is running in them right now.
 3. Confirm you will not modify `docs/plans/crush_code_*.md` or `left_steps.md`. They are read-only to
    you, in both directions: you take knowledge out, you put nothing in.
-4. **Check the sequencing gate.** See §5 below. This is a real decision and it comes before P0.S1.
-5. Start at **P0.S1** (`prompt_plan.md`, Phase 0). It is the only step in Phase 0 that runs alone;
+4. **Confirm the commit identity.** Nothing checks it automatically and a wrong author is silent:
+   ```sh
+   git -C /home/sites/sugarcraft config user.name    # must print: Joe Huss
+   git -C /home/sites/sugarcraft config user.email   # must print: detain@interserver.net
+   ```
+   If either is wrong, `git -C /home/sites/sugarcraft config user.name 'Joe Huss'` (and the matching
+   `user.email`) **before** you commit anything. Worktrees inherit this, so setting it once is enough.
+5. **Audit for stale worktrees, before you spawn anything.** An orchestrator that died mid-batch
+   leaves worktrees behind, and they can hold unmerged commits or uncommitted work that exists
+   nowhere else. Deleting one blind destroys it.
+   ```sh
+   git -C /home/sites/sugarcraft worktree list
+   ```
+   For every `/home/sites/prompt-step-<ID>` this lists, run both of:
+   ```sh
+   git -C /home/sites/prompt-step-<ID> status --porcelain            # uncommitted work?
+   git -C /home/sites/sugarcraft log --oneline master..prompt/<ID>   # unmerged commits?
+   ```
+   Then follow `prompt_plan.md` §1.12 for what to do with each. **A worktree listed here that is not
+   a step you spawned in this session is stale by definition** — you are a fresh agent; you spawned
+   nothing yet. Do not assume it is safe to remove because the worklog looks complete.
+   `/home/sites/crush-lane-{a,b,c}` will also appear in that listing if they are worktrees — they
+   belong to the other plan. Leave them completely alone.
+6. **Check the sequencing gate.** See §5 below. This is a real decision and it comes before P0.S1.
+7. Start at **P0.S1** (`prompt_plan.md`, Phase 0). It is the only step in Phase 0 that runs alone;
    P0.S2 and P0.S3 are concurrent with each other afterwards.
 
 ## 5. The sequencing gate — check before you start
@@ -105,11 +128,31 @@ Full detail in `prompt_plan.md` §1. The short form:
   **disjoint**. Fewer when the phase does not offer five.
 - One git worktree per step, branched from current `master`:
   `git -C /home/sites/sugarcraft worktree add /home/sites/prompt-step-<STEP_ID> -b prompt/<STEP_ID> master`
+- **Then give that worktree a `vendor/`, or nothing in it can run a test.** `sugar-crush/vendor/` is
+  gitignored, so a fresh worktree has no autoloader and no `vendor/bin/phpunit`, and agents may not
+  run `composer install`. Hard-link it in and verify it points at the **worktree**:
+  ```sh
+  cp -al /home/sites/sugarcraft/sugar-crush/vendor \
+         /home/sites/prompt-step-<STEP_ID>/sugar-crush/vendor
+  cd /home/sites/prompt-step-<STEP_ID>/sugar-crush && php -r '
+    $p = require "vendor/composer/autoload_psr4.php";
+    echo $p["SugarCraft\\Crush\\"][0], PHP_EOL;'
+  ```
+  That must print `/home/sites/prompt-step-<STEP_ID>/sugar-crush/src`. **Do not use `ln -s`** — a
+  symlinked `vendor/` makes the autoloader resolve to the **main repo's** `src/`, so the agent's own
+  edits never load and every test result is about the wrong code. Full detail and the measurements:
+  `prompt_plan.md` §1.2 action 2.
 - Spawn the step agent with the step text, its file list, the `prompt_expand.md` sections it names,
   and `prompt_plan.md` §1.10, §1.11, §16 and §17.
 - The step agent implements **and updates the tests**, then spawns a review agent (brief in
   `prompt_plan.md` §1.4). Findings → fix agent → **a brand-new** review agent → loop. Break only on a
   clean review. Cap five cycles, then the step is blocked.
+- **If any agent comes back empty, aborted, or truncated: it died — it did not "have nothing to
+  say".** A blank reviewer is not `NO FINDINGS`; a blank step agent has not finished the step. Work
+  the ladder in `prompt_plan.md` §1.8: resume the same agent if you can, otherwise read its worktree
+  (§1.8.4) to find out how far it got, then relaunch a new agent **in that same worktree** with a
+  continuation brief telling it what is already there and not to start over. Blank returns get five
+  attempts, not three. Never write the missing report yourself.
 - You run the tests yourself and record **your** numbers.
 - Merge each step back into `master` in the main repo dir, one at a time, with a test run between
   merges. Commit directly to `master` with the detailed message format in §1.6. **Do not push.**
@@ -147,6 +190,16 @@ Full detail in `prompt_plan.md` §1. The short form:
   step agent to state the deletion experiment it ran and what it showed. Full rule:
   `prompt_plan.md` §1.11 and §16.2.
 - Never accept an agent's claim of completion without test output you ran yourself.
+- **Never read an empty or aborted agent response as a result.** It means the agent died. Recover it
+  (`prompt_plan.md` §1.8) — do not accept it, do not fill in what it would have said, and do not
+  merge its worktree because the tests happen to be green.
+- Never commit before confirming `user.name` / `user.email` are `Joe Huss` /
+  `detain@interserver.net` (§4 action 4). A wrong author is silent and cannot be fixed afterwards
+  without rewriting history.
+- Never `ln -s` a worktree's `vendor/`. Use `cp -al` and verify the PSR-4 root (§6). A symlinked
+  `vendor/` silently runs every test against the main repo's `src/`.
+- Never delete a worktree without first checking it for uncommitted changes and unmerged commits
+  (`prompt_plan.md` §1.12).
 - Never write a worklog number you did not measure.
 - Use `/usr/bin/grep` for anything that must see the whole tree — the shell's `grep` is `ugrep` and
   its recursive scans honour `.gitignore`.
@@ -159,6 +212,8 @@ Next step:      P0.S1 — bootstrap tracking, baseline the suite
 Steps done:     0 of 61
 Phases done:    0 of 12
 Last commit:    (none from this plan)
+In-flight batch: (none)
+Live worktrees: (none — verify with `git -C /home/sites/sugarcraft worktree list`)
 Blocked on:     nothing
 Awaiting user decision: (none)
 Open follow-ups: (none)
@@ -206,7 +261,10 @@ Phases done:      <N> of 12
 Last commit:      <sha> — <subject line>
 Baseline:         Tests: <N>, Assertions: <N>, Skipped: <N>  (from P0.S1, never edited)
 Latest suite:     Tests: <N>, Assertions: <N>, Skipped: <N>  (from your last verification run)
-Live worktrees:   <paths, or "none">
+In-flight batch:  <the batch id, its steps, their worktree paths, and the declared MERGE ORDER —
+                  or "none". Write it the moment you spawn a batch, not when you start merging.>
+Live worktrees:   <paths, or "none". Each one: the step it belongs to, and whether that step is
+                  in flight, parked (§1.2 action 6), or stale (§1.12).>
 Blocked on:       <nothing | STEP_ID and the standing findings, verbatim>
 Awaiting user decision: <nothing | STEP_ID, the file:line, and the question, verbatim — the
                   dormant-code escalations from prompt_plan.md §1.10 that no agent may resolve>
@@ -219,6 +277,10 @@ is measured against, and a moving baseline makes every delta meaningless.
 
 ### Rules for the rewrite
 
+- **`In-flight batch` is the field that survives a session loss.** Every other field describes work
+  that is already *finished* and therefore already recoverable from `git log` and the worklog. Five
+  agents running in five worktrees with a merge order you decided in your head is recoverable from
+  nothing. Write it at spawn time. Clear it at batch close, not before.
 - **A fresh agent handed only this file must be able to continue.** After writing it, reread it as if
   you had never seen this repository. If a sentence assumes something you learned in conversation,
   rewrite the sentence.

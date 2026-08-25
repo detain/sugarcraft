@@ -36,6 +36,10 @@ not pick the nicer one.
 - `CORRECTED:` — a prior entry's claim that turned out to be wrong, with the measurement that
   overturned it.
 - `DECLINED:` — a plan step deliberately not done, with the reason.
+- `RECOVERED:` — work that reached this entry after an agent died mid-step and a later agent picked
+  it up (`prompt_plan.md` §1.8). Say which rung of the ladder was used, how many launch attempts it
+  took, and what §1.8.4 found in the worktree. A step that took five launches and one that took one
+  are indistinguishable afterwards unless this is written down.
 
 ---
 
@@ -47,7 +51,7 @@ omitting one.
 ```markdown
 ### <STEP_ID> — <one-line what changed>   ·   <YYYY-MM-DD HH:MM>   ·   <commit sha>
 
-**Status** done | blocked | declined
+**Status** <exactly one of the five below — the word in backticks, nothing else>
 **Worktree** /home/sites/prompt-step-<STEP_ID>  (removed | left in place because …)
 **Base** <sha the worktree branched from>
 
@@ -98,6 +102,56 @@ when genuinely nothing surprised you.>
 **Follow-ups created**
 <New work discovered but not done, with enough detail to act on later. `(none)` if none.>
 ```
+
+### The five `Status` values
+
+`blocked` on its own is not enough. The three ways a step can block need **different** recovery
+actions, and a resuming orchestrator has to know which one applies without reading the whole entry
+body. Use exactly one of these, spelled exactly like this:
+
+| Status | What it means | What the next orchestrator does |
+|---|---|---|
+| `done` | Merged, verified by the orchestrator's own test run, bookkeeping written. | Nothing. Move on. |
+| `blocked (review-cycle)` | Six reviews, still findings (`prompt_plan.md` §1.2 action 6). The code may be partly written. | Read the standing findings in this entry. Decide whether to re-scope the step, split it, or escalate. Do **not** just re-run the loop unchanged — it already failed five times. |
+| `blocked (agent-failure)` | The agent slot exhausted its attempts under `prompt_plan.md` §1.8 — five for blank/aborted returns, three for substantive-but-wrong ones. Nothing is wrong with the *step*; the agents failed. | Walk §1.8.4 against the worktree first: a dead agent usually left work behind, and the right re-entry point is often mid-loop, not the start. If blanks persist past a fresh attempt, the step text is probably the problem — read it as a brief and consider that it is unfollowable. |
+| `blocked (user-escalation)` | Dormant/unwired code the step may not remove and cannot wire in scope (§1.10). **The step is parked**: its worktree and branch are left in place. | Do **not** unpark it by guessing. Check whether the user has answered the question carried in `prompt_resume.md` §8. If not, continue with steps that do not depend on it. |
+| `declined` | The step was deliberately not done. | Read the `DECLINED:` reason. It is a decision, not a gap. |
+
+A step can end `done` **and** carry a follow-up or an escalation about something adjacent that it
+finished around; that goes in `Follow-ups created`, and the status stays `done`. Parking is only for
+a step whose own work could not be completed.
+
+---
+
+## Batch entries
+
+A batch is the five (or fewer) steps the orchestrator spawns concurrently. Two one-line entries
+bracket it. They exist because the merge order is decided at **spawn** time and used at **merge**
+time, and a context loss between the two destroys it (`prompt_plan.md` §1.3).
+
+**Batch-open** — written immediately after spawning, before any agent reports back:
+
+```markdown
+### BATCH <PHASE>.B<n> OPEN · <YYYY-MM-DD HH:MM>
+Steps: <STEP_ID>, <STEP_ID>, <STEP_ID>, <STEP_ID>, <STEP_ID>
+Merge order: <the same ids, in the order they will be merged> (<"plan order" | the reason it differs>)
+Worktrees: /home/sites/prompt-step-<ID> ×5
+Base: <master sha all five branched from>
+```
+
+**Batch-close** — written after the last of them merges:
+
+```markdown
+### BATCH <PHASE>.B<n> CLOSE · <YYYY-MM-DD HH:MM>
+Merged, in this actual order: <ID>@<sha>, <ID>@<sha>, <ID>@<sha>
+Did not merge: <ID> (<status>) — or `(none)`
+Suite after the last merge: Tests: <N>, Assertions: <N>, Skipped: <N>
+```
+
+Both are one-liners on purpose. They are the only artefact that maps "five commits landed in this
+window" back to "these five steps, in this order", and they cost nothing to write.
+
+---
 
 A **phase-close** entry uses the same shape with `<STEP_ID>` = `<PHASE> CLOSE`, `What changed`
 replaced by a list of the phase's step ids and their commits, and an extra section:

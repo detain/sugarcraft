@@ -39,6 +39,7 @@ channels that feed them.
 | 16 | [LESSONS — what to watch for, what a real test is](#16-lessons--what-to-watch-for-what-a-real-test-is) |
 | 17 | [Invariants that must not break](#17-invariants-that-must-not-break) |
 | 18 | [Things deliberately NOT in this plan](#18-things-deliberately-not-in-this-plan) |
+| 19 | [The measurement cheat sheet](#19-the-measurement-cheat-sheet) |
 
 ---
 
@@ -76,54 +77,234 @@ The orchestrator then either widens the declaration (and re-checks concurrency) 
 
 ### 1.2 The step loop
 
-For each step the orchestrator runs:
+For each step the orchestrator runs the twelve numbered actions below, **in order**. Do not skip one
+because it looks unnecessary for a small step, and do not merge two of them because they look
+related. Where a command is given, run that command — not a variant you think is equivalent.
 
-1. **Create a sandbox.** A dedicated git worktree per step, branched from the current `master` of the
-   main repo directory:
+1. **Clear any wreckage, then create the sandbox.** A `git worktree add` fails outright if the
+   branch or the directory already exists, and a failed earlier attempt at this step leaves both
+   behind. Run these commands in this order, every time. They are safe when nothing is there.
+
    ```sh
+   # 1a. Is there already a worktree for this step?
+   git -C /home/sites/sugarcraft worktree list | /usr/bin/grep "prompt-step-<STEP_ID>" \
+     || echo "no stale worktree — skip to 1d"
+
+   # 1b. If 1a printed a worktree line, check it for work you are about to destroy.
+   #     If EITHER of these prints anything, STOP and follow §1.12 (stale-worktree recovery).
+   git -C /home/sites/prompt-step-<STEP_ID> status --porcelain
+   git -C /home/sites/sugarcraft log --oneline master..prompt/<STEP_ID>
+
+   # 1c. Only when BOTH commands in 1b printed nothing at all:
+   git -C /home/sites/sugarcraft worktree remove --force /home/sites/prompt-step-<STEP_ID>
+   git -C /home/sites/sugarcraft branch -D prompt/<STEP_ID>
+
+   # 1d. Create the sandbox.
    git -C /home/sites/sugarcraft worktree add /home/sites/prompt-step-<STEP_ID> -b prompt/<STEP_ID> master
    ```
    One worktree per concurrently-running step. Never two agents in one worktree. Never a step agent
    working directly in `/home/sites/sugarcraft`.
-2. **Spawn the step agent** with: the step's full text from this plan, its file list, the relevant
+
+2. **Give the sandbox a `vendor/` directory.** *This action is not optional, and the reason it is
+   needed is not visible from anywhere else in this plan.*
+
+   `sugar-crush/vendor/` is gitignored (`.gitignore:6`, `**/vendor/`). A git worktree checks out
+   **committed files only**, so a fresh worktree contains **no `vendor/` at all** — no autoloader,
+   no `vendor/bin/phpunit`, and therefore no way for the step agent to run a single test. Agents
+   may not run `composer install` (§1.9). So the orchestrator materialises `vendor/` itself, with a
+   **hard-link copy**:
+
+   ```sh
+   cp -al /home/sites/sugarcraft/sugar-crush/vendor \
+          /home/sites/prompt-step-<STEP_ID>/sugar-crush/vendor
+   ```
+
+   Then **verify it, every time.** A wrong `vendor/` fails silently, not loudly:
+
+   ```sh
+   cd /home/sites/prompt-step-<STEP_ID>/sugar-crush && php -r '
+     $p = require "vendor/composer/autoload_psr4.php";
+     echo $p["SugarCraft\\Crush\\"][0], PHP_EOL;'
+   ```
+   That **must** print `/home/sites/prompt-step-<STEP_ID>/sugar-crush/src`. If it prints
+   `/home/sites/sugarcraft/sugar-crush/src`, the sandbox is broken — delete the `vendor/` you just
+   made and redo this action. Then confirm the suite actually runs in the sandbox:
+
+   ```sh
+   cd /home/sites/prompt-step-<STEP_ID>/sugar-crush && vendor/bin/phpunit --filter RuntimeTest
+   ```
+   Expected: `OK (85 tests, 251 assertions)` (MEASURED on `master` at `2b53302af`, 2026-08-25 — if
+   the plan has since changed `RuntimeTest`, expect the count from the last worklog entry instead;
+   what matters is that it runs at all and is green).
+
+   **Why `cp -al` and not `ln -s`. Read this before improvising.** MEASURED on this tree, 2026-08-25:
+
+   - **`ln -s` of the whole `vendor/` directory looks like it works and is silently wrong.** Composer
+     derives its PSR-4 roots as `$baseDir = dirname(dirname(__DIR__))` inside
+     `vendor/composer/autoload_psr4.php` (lines 5–6), and PHP resolves `__DIR__` through symlinks.
+     With a symlinked `vendor/`, `SugarCraft\Crush\` resolves to
+     `/home/sites/sugarcraft/sugar-crush/src` — **the main repo**. The step agent's tests would run
+     against the unmodified main tree while its own edits sat unloaded, and every result would be
+     about the wrong code. Measured directly: the probe above printed
+     `/home/sites/sugarcraft/sugar-crush/src` under `ln -s`. Do not do this.
+   - **`cp -al` creates a real directory whose entries are hard links**, so `__DIR__` is
+     worktree-local and `$baseDir` resolves correctly. Measured: `real 0m0.238s` to create; ~11 MB
+     of additional disk for a 109 MB `vendor/` (`du -sh -c` across both trees reports `120M total`
+     versus `109M` for the main tree alone); `vendor/bin/phpunit --filter RuntimeTest` inside the
+     worktree returned `OK (85 tests, 251 assertions)` while resolving the worktree's own `src/`.
+   - **The `vendor/sugarcraft/*` entries are *relative* symlinks** (`candy-ansi -> ../../../candy-ansi/`),
+     not absolute. Under `cp -al` they are copied as symlinks and therefore resolve to the
+     **worktree's own** sibling libraries — which is what you want. Do not "fix" them.
+   - **Hard links are safe here** because nothing writes to `vendor/`. Deleting the worktree's copy
+     does not touch the main tree's files — MEASURED: after `git worktree remove`,
+     `/home/sites/sugarcraft/sugar-crush/vendor/autoload.php` was still present and
+     `vendor/bin/phpunit --filter RuntimeTest` in the main tree was still
+     `OK (85 tests, 251 assertions)`.
+   - **`git worktree remove` handles the hard-linked `vendor/` by itself** — MEASURED exit 0 with a
+     109 MB `vendor/` present, because `vendor/` is gitignored. You do not need to delete it first.
+   - **Never run `composer install` or `composer update` in a worktree.** §1.9.
+
+3. **Spawn the step agent** with: the step's full text from this plan, its file list, the relevant
    sections of `prompt_expand.md` (by section number — the agent reads them itself), §1.10 (removal
-   is not an available outcome), §1.11 (what counts as a test), §16 LESSONS, §17 INVARIANTS, and the
-   absolute path of its worktree. The step agent implements the change **and
-   updates or adds the tests** for it in the same worktree.
-3. **The step agent spawns a review agent** on its own changes when it believes it is done. The
-   review brief is §1.4. The reviewer works from the same worktree, reads the diff, and returns
-   findings.
-4. **If the reviewer returned any finding:** the step agent spawns a **fix agent** to address them,
+   is not an available outcome), §1.11 (what counts as a test), §16 LESSONS, §17 INVARIANTS, the
+   absolute path of its worktree, the required entry format from `prompt_worklog.md`, and the
+   required final-report shape below. The step agent implements the change **and updates or adds the
+   tests** for it in the same worktree.
+
+   **The step agent's final report has a mandatory shape.** §1.8 rejects a report that is missing
+   required structure, and this is that structure — an agent that returns anything else is
+   respawned, so tell it exactly this:
+
+   > Your final report must contain all seven of these sections, in this order, with these headings.
+   > Write `(none)` rather than omitting a section.
+   >
+   > 1. **Changed files** — every path you wrote, and one line on what changed in it. If any path is
+   >    not in your declared file list, say so explicitly; that is a declared-scope event (§1.1).
+   > 2. **Tests added or changed** — for each: `path::testName`, what it asserts, and the exact
+   >    assertion that would go red if your change were reverted.
+   > 3. **Deletion experiment** — what you reverted or mutated to prove the new tests bite, the
+   >    command you ran, and the verbatim result. `not applicable` only when the step adds no guard.
+   >    This is a required return value, not an implied duty (§1.11).
+   > 4. **Test output, verbatim** — the commands you ran and their real output, pasted, not
+   >    summarised. Include the run you did **before** spawning the reviewer (see action 4).
+   > 5. **Review loop** — one line per cycle: reviewer, finding count, and each finding in one line;
+   >    then what the fix agent changed.
+   > 6. **Worklog entry** — the complete entry for this step in the exact format defined by
+   >    `prompt_worklog.md` ("Required entry format"). The orchestrator appends this verbatim, so it
+   >    must be complete and correctly formatted, not a sketch.
+   > 7. **Escalations** — anything you stopped on: a dormant-code escalation (§1.10), a
+   >    declared-scope widening you need approved, or a question only the user can answer. `(none)`
+   >    if there are none.
+
+4. **The step agent runs the affected tests, then spawns a review agent.** Before spawning the
+   reviewer the step agent runs the step's own test files in its worktree and **pastes that output
+   into the review brief**, so the reviewer starts from a real result rather than a claim. The review
+   brief is §1.4. The reviewer works from the same worktree, reads the diff, runs the tests itself,
+   and returns findings.
+
+5. **If the reviewer returned any finding:** the step agent spawns a **fix agent** to address them,
    then spawns a **brand-new** review agent — never the same reviewer instance, never the same agent
    that wrote the fix. Loop: review → fix → *new* review → … The loop breaks only on a review that
    returns no findings.
-5. **Cycle cap.** Five review cycles. If the sixth review still finds problems, the step is
+
+   **The fix agent is told, verbatim:**
+
+   > You are fixing findings from a review. You did not write the code and you are not reviewing it.
+   > Work only in the worktree you were given.
+   >
+   > 1. Read the findings list in full before editing anything.
+   > 2. **Reproduce each finding in the tree before you fix it.** Open the `file:line` it cites and
+   >    confirm the thing it describes is actually there. A finding that does not reproduce is
+   >    **reported back as not-reproducible with the evidence** — the file, the line, and what is
+   >    actually at it — and is **not** "fixed". A prescription is a hypothesis (§16.5); a reviewer
+   >    citing the wrong file is a known failure mode, and fixing a real line because a wrong finding
+   >    pointed near it is how a step acquires damage nobody asked for.
+   > 3. Make the **minimal** edit that addresses exactly that finding. Do not fix anything adjacent,
+   >    do not refactor while you are in there, do not rename. If you see a second problem, report it;
+   >    do not fix it.
+   > 4. Do not touch a file outside the step's declared file list. If a finding requires one, stop and
+   >    report that instead.
+   > 5. Re-run the step's own tests and paste the verbatim output.
+   > 6. **Return a per-finding disposition**, one line each, using exactly one of these words:
+   >    `fixed` (with the file:line you changed) / `not-reproducible` (with the evidence) /
+   >    `scope-blocked` (with the file it would have required). Every finding in the list gets a line.
+   >    A finding you silently skipped is the same as a finding you lied about.
+   > 7. §1.10 applies to you in full: you may not fix a finding by deleting the thing it is about.
+
+6. **Cycle cap.** Five review cycles. If the sixth review still finds problems, the step is
    **blocked**: the step agent reports the standing findings verbatim and stops. The orchestrator
-   records the block in the worklog and does not silently move on.
+   records the block in the worklog as `blocked (review-cycle)` and does not silently move on.
+
    A step may also block for a **third** reason, recorded separately from a review-cycle block and
    from an agent failure (§1.8): the step ran into dormant, unfinished, or unwired code that it may
    not remove and cannot wire within its declared scope (§1.10). That block is escalated to the
    **user** — the orchestrator does not decide it — and it goes into `prompt_resume.md` §8 verbatim,
-   under `Awaiting user decision:`. Every other part of the step is finished first.
-6. **Verify.** The orchestrator (or an agent it spawns for this) runs the affected test suites in the
-   worktree and records the actual pass/fail/skip counts. A step is not done on an agent's say-so;
-   it is done on a test run whose numbers are written down.
-7. **Merge back.** Merge the step branch into `master` in the main repo directory:
+   under `Awaiting user decision:`. It is recorded in the worklog as `blocked (user-escalation)`.
+   Every other part of the step is finished first.
+
+   **A user-escalated step is parked; the plan does not stop.** Parked means: the step branch and its
+   worktree are **left in place** (say so in the worklog entry's `Worktree` field), the question sits
+   in `prompt_resume.md` §8 verbatim, and the orchestrator **continues with the next steps that do
+   not depend on the parked one**. Do not sit idle waiting for the user — they may be away for a day.
+   Do not guess the answer to unpark it. Do not park a step whose blocking question you could have
+   answered by reading the tree. When every remaining step depends on a parked one, and only then,
+   the plan stops and reports that it is waiting.
+
+7. **Verify — the orchestrator's own run.** The orchestrator (or an agent it spawns for this) runs
+   the verification set below in the worktree and records the **actual** pass/fail/skip counts. A
+   step is not done on an agent's say-so; it is done on a test run whose numbers are written down.
+
+   **The minimum verification set for every step** — "affected suites" is too vague to act on, so it
+   is enumerated here (§2.6 explains why the third item exists):
+
+   a. **The step's own test files**, by path:
+      `vendor/bin/phpunit tests/Path/ToTheTestFile.php` for each file the step declared under
+      `sugar-crush/tests/`.
+   b. **The tree-wide census tests**, always, even when the step added no file — several of them
+      scan `src/` and `tests/` wholesale and can go red because of a file you added in a directory
+      you never opened:
+      ```sh
+      cd /home/sites/prompt-step-<STEP_ID>/sugar-crush && vendor/bin/phpunit \
+        tests/SymbolCitationDriftTest.php \
+        tests/SwallowingCatchCensusTest.php \
+        tests/Support/DuplicatedTestHelperDriftTest.php \
+        tests/Support/ChildWallClockBudgetTest.php \
+        tests/Config/EnvRosterDriftTest.php \
+        tests/Tools/BuiltInToolCorpusTest.php
+      ```
+      (Paths MEASURED on `master` 2026-08-25. If one has moved, find it with
+      `find sugar-crush/tests -name '<Name>.php'` and record the new path in the worklog.)
+   c. **The full `sugar-crush` suite** at least once per phase. The phase review (§1.7) already runs
+      it; that run is the phase's full-suite checkpoint. A step may skip the full suite only because
+      the phase close will do it.
+
+   **If the orchestrator's own run fails after a clean review loop**, the step is **not** done and it
+   is **not** merged. It goes back through the loop as another review cycle — with a **brand-new**
+   reviewer, briefed with §1.4, the failing output, and nothing else — and that cycle **counts
+   toward the five-cycle cap** in action 6. A reviewer that returned `NO FINDINGS` on a tree whose
+   tests fail has already been shown to be wrong; do not ask it again.
+
+8. **Merge back.** Merge the step branch into `master` in the main repo directory:
    ```sh
    git -C /home/sites/sugarcraft merge --no-ff prompt/<STEP_ID>
    ```
    Resolve conflicts in the main repo dir, never in the worktree. If a conflict appears in a file the
    step did not declare, that is a concurrency-planning failure — record it in the worklog as such.
-8. **Commit.** `git commit` directly to `master` with a detailed message (§1.6). Merge commits from
-   step 7 count, provided the merge message carries the detail.
-9. **Remove the worktree.**
-   ```sh
-   git -C /home/sites/sugarcraft worktree remove /home/sites/prompt-step-<STEP_ID>
-   git -C /home/sites/sugarcraft branch -d prompt/<STEP_ID>
-   ```
-10. **Bookkeeping.** Append the worklog entry, rewrite `prompt_resume.md`. See §3. **The step is not
+
+9. **Commit.** `git commit` directly to `master` with a detailed message (§1.6). Merge commits from
+   action 8 count, provided the merge message carries the detail.
+
+10. **Remove the worktree.**
+    ```sh
+    git -C /home/sites/sugarcraft worktree remove /home/sites/prompt-step-<STEP_ID>
+    git -C /home/sites/sugarcraft branch -d prompt/<STEP_ID>
+    ```
+    Do **not** do this for a parked step (action 6) — a parked step keeps its worktree.
+
+11. **Bookkeeping.** Append the worklog entry, rewrite `prompt_resume.md`. See §3. **The step is not
     complete until this is done.**
-11. **Re-sync every live sandbox.** Before starting the next batch, spawn a sync agent (§1.5).
+
+12. **Re-sync every live sandbox.** Before starting the next batch, spawn a sync agent (§1.5).
 
 ### 1.3 Batching — five at a time
 
@@ -133,11 +314,32 @@ Never more than five.
 
 Each of the five gets its own worktree. Each runs its own review→fix→review loop independently. The
 orchestrator waits for all five, then merges them back **one at a time, in the batch's declared
-order**, running the affected suites after each merge — a batch that was concurrency-safe in
+order**, running the verification set from §1.2 action 7 after each merge — a batch that was concurrency-safe in
 isolation can still produce a semantic conflict, and merging serially with a test run between merges
 is what catches it.
 
+**Where the merge order is declared.** The orchestrator declares it **when it spawns the batch**, not
+when it starts merging, and writes it down immediately — otherwise a context loss between spawn and
+merge destroys it. It goes in a **batch-open line** in `prompt_worklog.md` (format in that file,
+"Batch entries") and in `prompt_resume.md` §8's `In-flight batch:` field. Default order: the order
+the steps appear in this plan. Deviate only for a stated reason, and state it.
+
+When the batch's last step has merged, append a one-line **batch-close** entry recording the actual
+merge order, each step's commit sha, and any step that did not merge. It costs one line and it is
+the only artefact that maps "five commits landed in this window" back to "these five steps, in this
+order" after the fact.
+
 ### 1.4 The review brief
+
+**What a new reviewer is handed, and what it is not.** Every reviewer in a cycle — the first and
+every replacement — gets exactly three things: the step's full text from this plan (including its
+declared file list), the diff at the **current** tree position, and the step agent's own test output.
+It is **not** given the previous reviewer's findings, and it is not told that a previous review
+happened. Handing over the old list re-creates precisely the anchoring failure that §16.5's
+never-reuse-a-reviewer rule exists to prevent: a reviewer given a list checks the list. The old
+findings are considered addressed when a reviewer that never saw them finds nothing on its own.
+(The orchestrator keeps the old findings — they go in the worklog's review-loop section — but they
+do not go to the reviewer.)
 
 A review agent is told, verbatim:
 
@@ -198,6 +400,36 @@ A review agent is told, verbatim:
 >     believe it actually would. A test file that grew only annotations and existence checks added no
 >     coverage — say so as a finding, with the counts.
 >
+> 17. **Repo conventions.** Every touched PHP file: `declare(strict_types=1);` on line 1; PSR-12 and
+>     PSR-4; a new public class `final` unless extension is the contract; `with*()` returning a new
+>     instance via `mutate()`; bare accessors with no `get` prefix; a nullable field paired with its
+>     `bool $XSet` sentinel. And repo-level: no `repositories[]` entry added to
+>     `sugar-crush/composer.json`, no `sugar-crush/composer.lock` committed, `sugar-crush/phpunit.xml`
+>     `bootstrap` unchanged, no `--no-verify` and no `core.hooksPath` in anything the diff adds.
+>     §17.3 lists these; you are the last line of defence on them and nobody else is asked to look.
+> 18. **The Done-when ledger.** The step text has one or more "Done when" clauses. Write them out as
+>     a numbered list, and against each one **name the evidence in this diff that satisfies it** — a
+>     file and line, or a test name. A "Done when" with no evidence you can point at is a finding,
+>     and so is evidence that only *nearly* matches (the clause says "asserts byte equality **and**
+>     byte position"; a test asserting equality alone does not satisfy it). This makes the step text
+>     falsifiable in both directions and completes check 14.
+> 19. **Roster membership.** This tree keeps roster/census tests that must be updated in the same
+>     diff as the thing they enumerate. If the diff adds a new environment variable, a new settings
+>     key, a new slash command, a new prompt fence spelling, a new tool, or a file under
+>     `sugar-crush/src/`, find the roster test that enumerates that category and confirm the diff
+>     updates it. If the diff updates none, that is a finding — name the roster you expected. §16.6
+>     records that this is the thing reviews of this tree most often miss.
+>
+> **Run the code. Do not only read it.** You have the worktree; use it.
+> - Run the step's own test file(s) and paste the **actual** counts:
+>   `cd <worktree>/sugar-crush && vendor/bin/phpunit tests/<Path>/<TheTest>.php`
+> - Run the census set from §1.2 action 7b. A step that reds one of those is not done, and it will
+>   red four minutes into somebody else's full run if you do not catch it here.
+> - If `vendor/bin/phpunit` is missing or the suite cannot start, **stop and report that as your
+>   single finding** — the sandbox's `vendor/` was not materialised (§1.2 action 2) and nothing you
+>   would say about the diff is worth anything until it is.
+> - A review that reasons about a diff it never executed is prose, not a review.
+>
 > Rules for your report:
 > - **Cite `file:line`.** Quoting prose without a path sends the fix agent to the wrong file, where
 >   the finding does not reproduce and a less careful agent calls it false.
@@ -211,7 +443,7 @@ A review agent is told, verbatim:
 >
 > Report findings as a numbered list. For each: the file and line, what is wrong, and what would
 > have to be true for it not to be wrong. If you found nothing, say `NO FINDINGS` on its own line
-> and then say which of the sixteen checks you performed and what you looked at for each — a bare
+> and then say which of the nineteen checks you performed and what you looked at for each — a bare
 > `NO FINDINGS` with no account of the checks is itself a failed review and will be rerun.
 
 ### 1.5 Between batches — sandbox sync
@@ -223,11 +455,49 @@ each live worktree under `/home/sites/prompt-step-*`:
 - rebases or merges the current `master` into the step branch
 - reports any conflict rather than resolving it silently
 - reports any worktree whose branch has diverged in a file the step did not declare
+- **re-verifies the worktree's `vendor/`** — a rebase, a crash, or a stray `rm` can leave it missing
+  or wrong, and a wrong `vendor/` fails silently (§1.2 action 2). For each worktree:
+  ```sh
+  cd <worktree>/sugar-crush && php -r '
+    $p = require "vendor/composer/autoload_psr4.php";
+    echo $p["SugarCraft\\Crush\\"][0], PHP_EOL;'
+  ```
+  It must print `<worktree>/sugar-crush/src`. Anything else — including a missing file — is
+  reported, and the orchestrator redoes §1.2 action 2 for that worktree.
+- **reports, and never cleans, untracked or uncommitted files** in a worktree. A crashed step agent
+  leaves partial work that exists nowhere else. Run `git -C <worktree> status --porcelain` and report
+  the output verbatim. Do not `git clean`, do not `git checkout --`, do not `git stash`. §1.12.
+- **reports any worktree whose branch has no live agent** — the orchestrator knows which steps it
+  spawned; anything under `/home/sites/prompt-step-*` that is not one of them is **stale** and goes
+  to the orchestrator for §1.12 recovery. Do not remove it yourself.
 
 If a sandbox cannot be cleanly updated, the step running in it is paused and reported, not forced.
 
 ### 1.6 Commits
 
+- **Check the commit author identity before the first commit of the run**, and after any change of
+  machine or checkout. This repo's convention is `Joe Huss <detain@interserver.net>` (AGENTS.md).
+  Nothing checks it automatically, and a wrong identity is silent and unfixable after the fact
+  without a rewrite:
+  ```sh
+  git -C /home/sites/sugarcraft config user.name    # must print: Joe Huss
+  git -C /home/sites/sugarcraft config user.email   # must print: detain@interserver.net
+  ```
+  MEASURED 2026-08-25: both already correct on this checkout. A git worktree inherits the main
+  repo's config, so setting it once here covers every step worktree. If either is wrong, set it with
+  `git -C /home/sites/sugarcraft config user.name 'Joe Huss'` (and the matching `user.email`) before
+  committing anything.
+- **Two commits exist per step, and they carry different messages. Do not confuse them.**
+  1. The **step agent commits inside its own worktree**, on `prompt/<STEP_ID>`. It must — an
+     unmerged worktree with no commit has nothing to merge. Its message is short and needs no
+     ceremony: `prompt/<STEP_ID>: <one-line what changed>`. The step agent may make several such
+     commits; they are squashed into readability by the merge, not by rewriting history.
+  2. The **orchestrator's `--no-ff` merge commit on `master`** carries the detailed message below
+     (WHY / WHAT / MEASURED / REVIEW / Refs). That is the message a future reader finds with
+     `git log`, so that is the one that has to be complete. Write it with
+     `git merge --no-ff prompt/<STEP_ID> -m "$(cat <<'EOF' … EOF)"` or `git merge --no-ff --no-commit`
+     followed by a `git commit` — either is fine; what matters is that the merge commit, not the
+     worktree commit, holds the detail.
 - **Commit after every step**, directly to `master` in the main repo directory. No feature-branch
   PR flow for this plan; the step branch exists only to sandbox the worktree and is deleted on merge.
 - **Do not push to GitHub.** The only exception is a push genuinely required to complete a merge
@@ -276,14 +546,211 @@ After the last step of a phase merges:
    blocked and reported.
 4. Commit and merge the phase-review fixes the same way as any step.
 5. Append a phase-close entry to the worklog and rewrite `prompt_resume.md`.
+6. **Tell the user, in one line.** This plan runs 61 steps and otherwise speaks to the user only
+   when something blocks. A phase close is the natural checkpoint: post a single line to the user
+   naming the phase, the steps that landed, the suite delta against the baseline, and anything
+   parked. Do not wait for a reply — this is a report, not a question, and the plan continues. It
+   costs nothing and it is the only thing that catches directional drift before another phase is
+   built on top of it.
 
-### 1.8 Agent failure retry
+### 1.8 Agent failure, blank returns, and recovery
 
-A step/review/fix agent's response is **unusable** if it is empty, truncated mid-sentence, missing
-the required structure, obviously about a different task, or claims completion with no evidence
-(no test output, no file list, no diff). Do not accept it. Spawn a brand-new agent with the identical
-prompt, up to **3 attempts**. After three, the step is blocked for agent failure — recorded
-separately from a review-cycle block, because they mean different things.
+Agents die. They get aborted mid-run, hit a session limit, lose a connection, or come back with an
+empty string. This happens often enough that an orchestrator without a written procedure for it will
+either stall forever or — much worse — quietly treat a dead agent as a finished one. This section is
+that procedure. Follow it literally.
+
+#### 1.8.1 What counts as a failed response
+
+A step/review/fix/sync agent's response is **unusable** if any of these is true:
+
+- it is **empty** — no text at all, or only whitespace;
+- it is **truncated** — cuts off mid-sentence, mid-code-block, mid-list;
+- it says the agent was **aborted, cancelled, interrupted, or hit a limit**;
+- it is **missing the required structure** — for a step agent, any of the seven sections in §1.2
+  action 3; for a reviewer, the numbered findings list or the account of the checks (§1.4);
+- it is **obviously about a different task**;
+- it **claims completion with no evidence** — no test output, no file list, no diff.
+
+Do not accept any of them. An unusable response is **not a result**, and nothing downstream may be
+built on it.
+
+#### 1.8.2 A blank return means the agent died. It never means "nothing to report."
+
+This is the single most expensive mistake available in this section, because the wrong reading of a
+blank is always the convenient one:
+
+- A **reviewer** that returns nothing has **not** returned `NO FINDINGS`. §1.4 requires the literal
+  words `NO FINDINGS` on their own line *plus* an account of which of the nineteen checks were
+  performed. Silence is a dead reviewer, and treating it as a clean review merges unreviewed code.
+- A **step agent** that returns nothing has **not** finished the step, even if the worktree looks
+  plausible and the tests pass. Its work is unreviewed and its report — the worklog entry, the
+  deletion experiment, the escalations — does not exist.
+- A **fix agent** that returns nothing has **not** established that the findings were spurious.
+- A **sync agent** that returns nothing has **not** established that the worktrees are clean.
+
+If you catch yourself reasoning "it probably finished and just didn't print anything", stop. Go read
+the worktree (§1.8.4). The tree is evidence; an absent response is not.
+
+#### 1.8.3 The recovery ladder — try these in order, do not skip a rung
+
+**Rung 1 — resume the same agent.** If the spawn mechanism can continue an existing agent session
+(sending a follow-up message to the agent that died, rather than creating a new one), **do that
+first**. A resumed agent still has its own context: what it read, what it already changed, what it
+was part-way through. Send it something plainly worded:
+
+> Your previous response came back empty and you appear to have been interrupted. You have not lost
+> your worktree — it is exactly as you left it. Do not start over. Tell me first: what had you
+> completed, what were you in the middle of, and what remains? Then continue from there and give me
+> your full final report in the required seven-section format.
+
+If it answers, you have lost nothing. **Try this twice** before moving to rung 2; a resume that
+itself returns blank is the same failure and rung 1 is the cheapest rung.
+
+**Rung 2 — find out how far it got, from the tree.** Rung 1 is unavailable, or failed twice. The
+agent's memory is gone, but **its work is not**: this plan gives every step agent a dedicated
+worktree precisely so that a dead agent leaves its state behind on disk. Read it (§1.8.4) before
+relaunching anything.
+
+**Rung 3 — relaunch with a continuation brief.** A **new** agent, in the **same** worktree, given the
+original step brief **plus** an explicit statement of what is already there. Do not hand it the
+original prompt unchanged — an agent told to implement something that is already half-implemented
+will either redo it (churn, and often a worse second version) or get confused by its own predecessor's
+half-finished edits and call them a bug. The continuation brief says, verbatim:
+
+> A previous agent working this step was interrupted and left partial work in your worktree. It is
+> **not** reviewed and **not** trusted — it is a starting point, not a foundation.
+>
+> Already present in the worktree (`git diff master...HEAD` and `git status --porcelain` will show
+> you all of it):
+> - <file>: <what appears to have been done to it>
+> - <file>: <what appears to have been done to it>
+> Tests currently: <the verbatim output of the run you did in §1.8.4>
+>
+> Your job: finish the step. First **read** the existing changes and judge them against the step
+> text — if any of them is wrong, incomplete, or contradicts the step, fix or replace it and say so
+> in your report. Then complete what is missing. Do **not** assume the partial work is correct
+> because it is there. Do **not** delete anything that predates this step (§1.10 applies to you in
+> full). Return the full seven-section report (§1.2 action 3), covering the whole step, not just the
+> part you personally wrote.
+
+**Rung 4 — restart clean.** Only when rungs 1–3 have failed, or when §1.8.4 showed the partial work
+is incoherent enough that reading it costs more than redoing it. Save the partial work first — never
+discard it silently:
+
+```sh
+git -C /home/sites/prompt-step-<STEP_ID> diff > \
+  /home/sites/sugarcraft/.sugar-crush-prompt/abandoned-<STEP_ID>-<n>.patch
+```
+Record that path in the worklog entry. Then destroy and recreate the sandbox (§1.2 actions 1 and 2 —
+**including the `vendor/`**, which a fresh worktree will not have) and spawn a new agent with the
+original, unmodified step brief.
+
+#### 1.8.4 How to determine where the dead agent got to
+
+Run all of these, in the worktree, and read the output before you write any brief. Never infer
+progress from what the agent said it was doing; it may have said that before doing it, or after
+failing at it.
+
+```sh
+WT=/home/sites/prompt-step-<STEP_ID>
+
+# 1. Did it commit anything?
+git -C $WT log --oneline master..HEAD
+
+# 2. What is changed but not committed?
+git -C $WT status --porcelain
+
+# 3. The whole delta, committed and not, against the branch point.
+git -C $WT diff master --stat
+git -C $WT diff master
+
+# 4. Is the sandbox still usable at all? (A dead agent may have left no vendor/,
+#    or a later sync may have removed it — §1.2 action 2.)
+cd $WT/sugar-crush && php -r '
+  $p = require "vendor/composer/autoload_psr4.php";
+  echo $p["SugarCraft\\Crush\\"][0], PHP_EOL;'
+# must print $WT/sugar-crush/src
+
+# 5. What is the actual state of the tests right now? Run the step's own files
+#    and the census set (§1.2 action 7). Paste this output into the brief.
+cd $WT/sugar-crush && vendor/bin/phpunit tests/<Path>/<TheTest>.php
+```
+
+Then judge, and write the judgement into the worklog:
+
+| What you found | What it means | Rung |
+|---|---|---|
+| No commits, no changed files | The agent died before writing anything. Nothing is lost. | Rung 4, but it costs nothing — reuse the sandbox and respawn with the original brief. |
+| Changed files, no commits, tests green | It got most of the way and died before reporting. | Rung 3. |
+| Changed files, tests **red** | It died mid-edit. The tree is in a state nobody chose. | Rung 3, and say in the brief that the tests are red and with what output. |
+| Commits present, worklog entry exists | It finished and died during hand-off. | Re-enter at §1.2 action 7 (the orchestrator's own verification), not at the start. |
+| Commits present, no worklog entry | The work is **unreviewed**. | Re-enter at §1.2 action 4 with a fresh reviewer. Mark anything you infer `RECONSTRUCTED` (§3.3). |
+| Changes you cannot make sense of | Reading it costs more than redoing it. | Rung 4, patch saved. |
+
+#### 1.8.5 Retrying repeatedly, and when to stop
+
+**Blank and aborted returns get up to five attempts, not three.** They are usually transient
+infrastructure failures — a dropped connection, a limit, a killed process — and repeating the launch
+genuinely does work. Retrying is cheap; a step wrongly marked blocked is not. Count every launch,
+including rung-1 resumes.
+
+**A substantive-but-wrong response gets three.** If the agent answered at length and answered the
+wrong question, ignored the required structure, or claimed completion with no evidence, that is a
+**briefing** failure, not an infrastructure one, and relaunching the identical prompt a fourth time
+will produce the identical result. On the third such failure, stop and re-read the step text as a
+brief: check 14 exists because a step text can be wrong, and an unfollowable brief looks exactly like
+three incompetent agents.
+
+Escalate what you change between attempts. Do not vary everything at once, and do not vary nothing:
+
+1. **Attempt 2** — identical brief, new agent. (Most blanks resolve here.)
+2. **Attempt 3** — identical brief, new agent, but **narrower**: if the step declares four files,
+   brief the agent on the one file that has to change first, and run the rest as a second launch.
+   A large brief is more likely to hit a limit mid-run.
+3. **Attempt 4** — continuation brief from rung 3, built from whatever attempts 1–3 left in the
+   worktree, however partial.
+4. **Attempt 5** — clean sandbox (rung 4), original brief.
+
+After five, the step is **blocked**, recorded in the worklog as `blocked (agent-failure)` — separate
+from a review-cycle block and from a user-escalation, because the recovery is different for each
+(see the Status table in `prompt_worklog.md`). Then **continue with other steps**; an
+agent-failure block parks one step, it does not stop the plan (§1.2 action 6).
+
+#### 1.8.6 An agent that never answers is also a failure, and it needs a clock
+
+A hung agent looks exactly like a slow one, and an orchestrator with no rule for it waits forever.
+
+- If an agent has returned nothing after **2 hours** of wall clock, check whether it is alive before
+  doing anything else. Liveness is the modification time of its transcript or output, **not** the
+  fact that a process exists — a wedged process has a pid too:
+  ```sh
+  ls -l --time-style=full-iso <the agent's transcript or log file>
+  ```
+- If that mtime has not moved in **30 minutes**, the agent is hung. Kill it **by pid**
+  (`kill <pid>`; never a global `pkill` — §1.9), then enter the ladder at §1.8.3 rung 2 — a hung
+  agent has usually written *something*, so go and look before relaunching. The relaunch counts as
+  an attempt.
+- If you cannot find a transcript or a pid — some spawn mechanisms give you neither — treat 2 hours
+  of silence as the failure itself, and enter the ladder the same way.
+
+#### 1.8.7 What you never do in recovery
+
+- **Never accept a blank as a result** (§1.8.2), in any direction, for any agent role.
+- **Never write the missing report yourself.** If a step agent died without returning its worklog
+  entry, the entry is **reconstructed from the tree and marked `RECONSTRUCTED`** (§3.3) — it is not
+  imagined from what the step was supposed to do. The same goes for a review: you do not write the
+  findings the dead reviewer would have found. Spawn a reviewer.
+- **Never merge partial work because it looks finished.** Work from a dead agent has not been through
+  a review loop. It re-enters the loop; it does not skip it.
+- **Never lower the required structure to make an attempt count as a success.** The seven sections
+  and the nineteen checks do not become optional on attempt four.
+- **Never delete a worktree to "get a clean start"** without first saving the diff and checking for
+  unmerged commits (§1.12, and rung 4 above).
+- **Never let a recovery go unrecorded.** Every attempt, every rung, every kill, in the step's
+  worklog entry under the review loop. Four silent relaunches and a fifth that worked reads,
+  afterwards, exactly like a step that worked first time — and the difference is the whole reason
+  you would know to brief that step differently next time.
 
 ### 1.9 Hard prohibitions for every agent in this plan
 
@@ -374,6 +841,41 @@ every step agent is given it. The short form, because it is the thing most often
   guard) and watch your new test go red. If it stays green, it is decorative. "I believe this covers
   it" is not the same sentence as "I reverted it and the test failed."
 
+### 1.12 Stale-worktree recovery
+
+A worktree under `/home/sites/prompt-step-*` with no live agent working in it is **stale**. Stale
+worktrees appear when an orchestrator dies mid-batch (§3.3 is about exactly this) or when a step
+agent crashes. They may contain committed work that never merged, or uncommitted work that exists
+nowhere else. **Never delete one without checking it first.**
+
+Recovery, in order:
+
+```sh
+# 1. What worktrees exist at all?
+git -C /home/sites/sugarcraft worktree list
+
+# 2. For each /home/sites/prompt-step-<ID>, ask two questions:
+git -C /home/sites/prompt-step-<ID> status --porcelain            # uncommitted work?
+git -C /home/sites/sugarcraft log --oneline master..prompt/<ID>   # unmerged commits?
+```
+
+- **Both empty** → nothing is at risk. Remove the worktree and branch (§1.2 action 1c) and re-run the
+  step from scratch.
+- **Unmerged commits, clean tree** → the step got as far as committing. Read the commits
+  (`git -C /home/sites/sugarcraft show`), decide whether the step completed its review loop (check
+  `prompt_worklog.md` for an entry). If there is a worklog entry, finish from §1.2 action 7
+  (verify). If there is no entry, treat the work as **unreviewed**: re-enter the loop at §1.2
+  action 4 with a fresh reviewer, and mark the resulting worklog entry `RECONSTRUCTED` for anything
+  you inferred rather than recorded.
+- **Uncommitted changes** → do not `git checkout`, do not `git stash`, do not `git clean`. Save the
+  diff first (`git -C /home/sites/prompt-step-<ID> diff > /home/sites/sugarcraft/.sugar-crush-prompt/rescued-<ID>.patch`),
+  record that path in the worklog, and only then decide. Partial work from a crashed agent is
+  usually worth less than the risk of merging it unreviewed — but that is a decision you make after
+  reading it, not before.
+
+Auditing for stale worktrees is a **first action** on every resume (`prompt_resume.md` §4), and a
+standing duty of the sync agent (§1.5).
+
 ---
 
 ## 2. Concurrency rules
@@ -387,18 +889,70 @@ two worktrees produce a merge conflict at best and a silent semantic collision a
 ### 2.2 The hot files
 
 These are the files most likely to force serialisation. A step touching one of them is almost never
-concurrent with another step touching it:
+concurrent with another step touching it.
+
+**This table is derived, not written.** It is the inverse index of every step's declared `**Files**`
+list in this document. If you edit a step's file list, this table is stale until you regenerate it,
+and the regeneration is one command — run it, do not hand-patch a row:
+
+```sh
+php -r '
+$lines = file("prompt_plan.md"); $cur = null; $in = false; $map = [];
+foreach ($lines as $l) {
+  if (preg_match("/^### (P\\d+\\.S\\d+)/", $l, $m)) { $cur = $m[1]; $in = false; $map[$cur] = []; continue; }
+  if ($cur === null) continue;
+  if (preg_match("/^\\*\\*Files\\*\\*/", $l)) { $in = true; continue; }
+  if (!$in) continue;
+  if (preg_match("/^\\s*-\\s+`([^`]+)`/", $l, $m)) { $map[$cur][] = $m[1]; }
+  elseif (trim($l) !== "") { $in = false; }
+}
+$rev = [];
+foreach ($map as $s => $fs) foreach ($fs as $f) $rev[$f][] = $s;
+uasort($rev, fn($a, $b) => count($b) - count($a));
+foreach ($rev as $f => $ss) if (count($ss) >= 3) printf("| `%s` | %s |\n", $f, implode(", ", $ss));
+printf("(%d steps parsed — must be 61)\n", count($map));
+'
+```
+
+MEASURED output of that command on this document, 2026-08-25 (61 steps parsed). Files wanted by
+**three or more** steps:
 
 | File | Wanted by |
 |---|---|
-| `sugar-crush/src/Runtime.php` | P2.S1, P3.S1, P5.S1, P5.S2, P5.S3, P5.S5, P7.S4 |
-| `sugar-crush/src/Chat.php` | P4.S4, P7.S2, P8.S1, P8.S2, P8.S4, P8.S5 |
-| `sugar-crush/src/Cli/Bootstrap.php` | P6.S4, P7.S3, P7.S5, P7.S6 |
-| `sugar-crush/src/Providers/CompleteRequest.php` | P1.S5, P4.S1, P10.S1 |
-| `sugar-crush/src/Usage.php` | P4.S1, P4.S2, P4.S3 |
-| `sugar-crush/src/Context/EnvironmentBlock.php` | P3.S2, P3.S3, P5.S3 |
-| `sugar-crush/tests/BaseSystemPromptTest.php` | P2.S2, P3.S1, P5.S4, P5.S6 |
-| `sugar-crush/tests/Integration/SystemPromptWiringTest.php` | P1.S5, P3.S1, P5.S1, P7.S3 |
+| `sugar-crush/src/Runtime.php` | P2.S1, P3.S1, P5.S1, P5.S2, P5.S4, P5.S5, P9.S5, P9.S7, P10.S1 |
+| `sugar-crush/tests/fixtures/prompt/golden-system-prompt.txt` | P2.S2, P3.S1, P5.S4, P5.S5, P5.S6, P9.S5 |
+| `sugar-crush/src/Chat.php` | P4.S4, P7.S2, P8.S1, P8.S2, P8.S3, P8.S5 |
+| `prompt_worklog.md` | P0.S1, P0.S2, P0.S3, P3.S4, P11.S5 — **not a serialisation point; see below** |
+| `sugar-crush/tests/BaseSystemPromptTest.php` | P2.S2, P3.S1, P5.S4, P5.S6, P9.S5 |
+| `sugar-crush/src/Cli/Bootstrap.php` | P6.S4, P7.S3, P7.S6, P9.S2, P10.S3 |
+| `sugar-crush/src/Context/EnvironmentBlock.php` | P2.S1, P3.S2, P3.S3, P5.S2 |
+| `sugar-crush/tests/RuntimeTest.php` | P2.S1, P3.S1, P5.S1, P5.S2 |
+| `sugar-crush/tests/Integration/SystemPromptWiringTest.php` | P2.S4, P3.S1, P7.S3, P11.S4 |
+| `sugar-crush/src/Context/ContextCompactor.php` | P4.S4, P4.S5, P8.S3, P8.S4 |
+| `sugar-crush/src/Providers/SglangProvider.php` | P1.S1, P4.S2, P10.S4 |
+| `sugar-crush/src/Providers/CustomProvider.php` | P1.S2, P4.S2, P10.S4 |
+| `sugar-crush/tests/Providers/ProviderRequestResponseTest.php` | P1.S5, P1.S7, P10.S1 |
+| `sugar-crush/tests/Context/ContextCompactorTest.php` | P4.S4, P8.S3, P8.S4 |
+| `sugar-crush/src/Context/PromptSection.php` | P5.S1, P5.S3, P5.S6 |
+| `sugar-crush/src/Context/RuleLoader.php` | P6.S2, P6.S3, P6.S5 |
+| `sugar-crush/tests/Chat/` | P8.S1, P8.S2, P8.S5 |
+
+Files wanted by exactly **two** steps are also serialisation points and are **not** listed here —
+MEASURED, there are **fourteen** more (the `>= 2` form of the command emits 31 rows; this table is
+its 17). Lower the `>= 3` in the command above to `>= 2` to see them. Do not treat
+absence from this table as evidence that two steps are disjoint; §2.1 is the rule, and the rule is
+**intersect the two declared lists**, not "look it up here".
+
+**Two files that a previous version of this table listed as hot are not hot**, and serialising on
+them would cost throughput for nothing:
+`sugar-crush/src/Providers/CompleteRequest.php` is declared by **P10.S1 only**, and
+`sugar-crush/src/Usage.php` by **P4.S1 only**.
+
+**`prompt_worklog.md` is declared by P0.S1, P0.S2, P0.S3, P3.S4 and P11.S5 — and §3.2 says step
+agents never write it.** There is no conflict: those steps *produce* worklog content, and the
+**orchestrator** is the one that writes it, exactly as for every other step. A step whose file list
+names `prompt_worklog.md` returns its table/measurements in its final report (§1.2 action 3,
+section 6) and writes nothing. Two such steps are therefore **concurrent**, not serialised.
 
 ### 2.3 The naturally-parallel families
 
@@ -418,6 +972,14 @@ These are where the plan gets its five-at-a-time throughput:
 - Two steps both adding a constant to `LayeredSettings::LAYERED_KEYS` **collide**.
 - A step that only *reads* a hot file does not collide. Declare reads separately from writes when it
   changes the answer — but if in doubt, declare it as a write and serialise.
+
+### 2.5 Per-phase concurrency is stated inside each phase
+
+Every phase below ends with a **Concurrency** block naming its batches explicitly. **That block is
+the operational instruction** — it is what you execute. §2.2's table is a derived index for planning
+and for spotting a collision the phase block missed; if the two ever disagree, regenerate §2.2 with
+the command in it and then reconcile the phase block, because the phase block is the one that can be
+wrong without anything noticing.
 
 ### 2.6 Collision with the other active plan in this repo
 
@@ -440,11 +1002,6 @@ contended files except `Chat.php`/`ContextCompactor.php` in Phase 4. They are th
 alongside the other plan. **Phases 5 and 6 add most of the new `src/` files and must not run while
 the other plan has a round in flight.** If you are unsure whether its round is closed, ask the
 supervisor — do not read its worktrees to find out.
-
-### 2.5 Per-phase concurrency is stated inside each phase
-
-Every phase below ends with a **Concurrency** block naming its batches explicitly. That block, not
-this section, is the operational instruction.
 
 ---
 
@@ -645,8 +1202,7 @@ contract.
 
 **Goal** The repo's only prefix-cache guard currently tests a request shape production never sends:
 it puts the system text inside `messages` and never uses the `systemPrompt:` named argument. Rebuild
-it against `CompleteRequest::$systemPrompt`, and retire the stale `MiniMax-M2.7` model id (this
-deployment serves `deepseek-ai/DeepSeek-V4-Flash-0731`).
+it against `CompleteRequest::$systemPrompt`, and retire the stale `MiniMax-M2.7` model id.
 **Source** §3.2, §9.1, §15.
 **Files**
 - `sugar-crush/tests/Providers/PromptStabilityTest.php`
@@ -656,6 +1212,15 @@ deployment serves `deepseek-ai/DeepSeek-V4-Flash-0731`).
 byte position** of the prefix across two turns, and fails if `SglangProvider` stops transmitting.
 Delete nothing from the class docblock's brief; extend it with a line saying what the old shape was
 and why it was wrong.
+
+**Do not replace one hardcoded model id with another.** A deployment's model name is a fact about
+today's endpoint, and a literal in a test is exactly the class of figure §16.3 exists to stop from
+rotting. The tree already holds the value in one canonical place — MEASURED 2026-08-25,
+`sugar-crush/src/Providers/SglangProvider.php:62`:
+`public const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V4-Flash-0731';`
+The rebuilt test reads `SglangProvider::DEFAULT_MODEL`. It must not spell the id out, and it must not
+introduce a second constant of its own. If a later swap changes the deployment, one edit to that
+constant moves the test with it; a literal here would go stale silently and pass.
 
 ### P1.S7 — The transmission matrix test
 
@@ -866,6 +1431,14 @@ that did nothing — and the number is how you know.
 
 **Concurrency (Phase 3)** — **fully serial**: S1 → S2 → S3 → S4. Every step touches a file the
 previous one touched, and S4 measures the result of the other three. Do not batch this phase.
+
+**Do not merge S2 and S3 into one step.** It is the obvious saving — same two files, serial anyway,
+one fewer review loop — and it is wrong here. S2 changes *behaviour* (when the diff is emitted); S3
+writes a *caveat that must be true of that behaviour*, and it cannot be written until S2 has decided
+and been measured. Folding them puts a behaviour change and the sentence describing it in one commit,
+which is the shape §16.3 warns about: the prose ships as an assertion about code that changed in the
+same diff, and no reviewer can check one against the other's *previous* state. The review overhead is
+the price of that separation, not waste.
 
 ---
 
@@ -2492,6 +3065,138 @@ building one, stop it.
 | Utility prompts (`away-recap`, `next-action-suggestion`, `tool-summary`) | §9.15 | Cheap polish, no defect behind them. Out of scope; note them for a later plan. |
 | A memory-consolidation prompt at `SessionEnd`/`PreCompact` | §9.15 | Depends on `SessionEnd`/`PreCompact` having dispatch sites, which Phase 7 only builds for `SessionStart`/`UserPromptSubmit`. Defer. |
 | Anything in `docs/plans/crush_code_*.md` or `left_steps.md` | — | **Read-only to this plan.** No edits of any kind. |
+
+---
+
+## 19. The measurement cheat sheet
+
+Every agent this plan spawns is asked to *measure* rather than assert (§16.3). A measurement is only
+comparable across agents if they all run the **same** command, so the standing ones are written out
+here, verbatim. Copy them; do not improvise a variant. If a command below is wrong for what you need,
+say so in the worklog rather than quietly substituting your own — a figure produced by an
+unrecorded command cannot be reproduced by the next agent.
+
+**Paths below assume the main repo.** Inside a step worktree, replace `/home/sites/sugarcraft` with
+`/home/sites/prompt-step-<STEP_ID>`.
+
+### Counting things in the tree
+
+```sh
+# Occurrences of a symbol in one file. ALWAYS /usr/bin/grep, never bare `grep` —
+# the shell's grep here is ugrep, and its recursive scans honour .gitignore,
+# which silently hides files from an "absence" census.
+/usr/bin/grep -c 'systemPrompt' sugar-crush/src/Providers/SglangProvider.php
+# MEASURED 2026-08-25: 0 — this is the lead finding, in one command.
+
+# Every occurrence across the tree, with file:line, for a citation.
+/usr/bin/grep -rn 'systemPrompt' --include='*.php' sugar-crush/src
+
+# The src/ file-count census (§17.1). These two numbers are asserted verbatim in
+# BuiltInToolCorpusTest and restated in a RepoMapBlock doc-block — read §17.1
+# BEFORE adding any file under sugar-crush/src/.
+find sugar-crush/src -name '*.php' | wc -l          # MEASURED 2026-08-25: 297
+```
+
+The **declaration** count is not a grep. It comes from the same helper the test uses, and a
+hand-rolled grep gets a different answer (a plausible-looking one returned 225 against the
+asserted 316), so use this and nothing else. **The `cd` is part of the command** — from the repo root
+it dies with `Class "SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus" not found`:
+
+```sh
+cd /home/sites/sugarcraft/sugar-crush && php -r '
+  require "vendor/autoload.php";
+  $c = "SugarCraft\\Crush\\Tests\\Tools\\BuiltInToolCorpus";
+  $src = __DIR__ . "/src";
+  $files = $c::sourceFiles($src);
+  $d = 0; foreach ($files as $f) { $d += count($c::declaredTypes($src . "/" . $f)); }
+  echo "files=", count($files), " declarations=", $d, PHP_EOL;'
+# MEASURED 2026-08-25 in /home/sites/sugarcraft/sugar-crush:
+#   files=297 declarations=316
+# — the two literals asserted at BuiltInToolCorpusTest.php:500-501.
+```
+
+### Running tests
+
+```sh
+# One test file (the form to use in a step's own verification).
+cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/RuntimeTest.php
+
+# One class, wherever it lives.
+cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit --filter RuntimeTest
+
+# The census set every step must run (§1.2 action 7b).
+cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit \
+  tests/SymbolCitationDriftTest.php \
+  tests/SwallowingCatchCensusTest.php \
+  tests/Support/DuplicatedTestHelperDriftTest.php \
+  tests/Support/ChildWallClockBudgetTest.php \
+  tests/Config/EnvRosterDriftTest.php \
+  tests/Tools/BuiltInToolCorpusTest.php
+# MEASURED 2026-08-25 on master @2b53302af: OK (103 tests, 9380 assertions), 00:11.965.
+# That is the number to compare against — a step that changes it has changed a census.
+
+# The full suite — the phase-close checkpoint. Quote the summary line VERBATIM.
+cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit
+
+# NEVER `composer install` / `composer update` first (§1.9). If vendor/ looks stale,
+# record that it is stale; the staleness is itself a measurement.
+```
+
+**If a phpunit run hangs** (PTY/FFI tests can), `timeout` does not reliably kill it. Arm a watchdog
+that names *this* plan's process, never a global `pkill` (§1.9):
+
+```sh
+( sleep 900; pkill -f 'phpunit.*prompt-step-<STEP_ID>' ) &
+```
+
+### Sandbox verification
+
+```sh
+# The autoloader points at the WORKTREE, not the main repo (§1.2 action 2).
+# Must print /home/sites/prompt-step-<STEP_ID>/sugar-crush/src
+cd /home/sites/prompt-step-<STEP_ID>/sugar-crush && php -r '
+  $p = require "vendor/composer/autoload_psr4.php";
+  echo $p["SugarCraft\\Crush\\"][0], PHP_EOL;'
+
+# Sibling libs resolve inside the worktree too.
+php -r 'var_dump(realpath("/home/sites/prompt-step-<STEP_ID>/sugar-crush/vendor/sugarcraft/candy-core"));'
+```
+
+### Git
+
+```sh
+# What this step actually changed, against the branch point.
+git -C /home/sites/prompt-step-<STEP_ID> diff master...HEAD --stat
+git -C /home/sites/sugarcraft log --oneline master..prompt/<STEP_ID>
+
+# The tree position a review was performed at (reviewers must state this).
+git -C /home/sites/prompt-step-<STEP_ID> rev-parse HEAD
+
+# Uncommitted work in a worktree — check before destroying anything (§1.12).
+git -C /home/sites/prompt-step-<STEP_ID> status --porcelain
+
+# Every worktree, live or stale.
+git -C /home/sites/sugarcraft worktree list
+
+# Commit identity (§1.6). Must be Joe Huss / detain@interserver.net.
+git -C /home/sites/sugarcraft config user.name
+git -C /home/sites/sugarcraft config user.email
+```
+
+### Path-repo policy (§17.3)
+
+```sh
+# Must exit 0. Run before any commit that touched a composer.json.
+php /home/sites/sugarcraft/tools/check-path-repos.php --no-lib-path-repos
+# MEASURED 2026-08-25: "scanned 58 libs for sibling path-repos /
+# no sibling path-repos in per-lib manifests", exit 0.
+```
+
+### Regenerating §2.2
+
+The command is inside §2.2 itself. Run it after any edit to a step's `**Files**` list; it prints
+`(61 steps parsed — must be 61)` as its own sanity check, and a different number means the parser
+missed a step heading and the table it just printed is wrong.
 
 ---
 
