@@ -539,14 +539,26 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * `Content-Length` message is precisely the case the latch exists for, and
      * this is the only row in the suite that reaches it through the backstop.
      *
-     * ⚠️ `CHILDALIVE` IS THE ASSERTION THAT DOES THE WORK, and the mutation that
-     * proved it is worth writing down, because the row LOOKS like ELAPSED is the
-     * interesting readout. With the backstop clause deleted, the loop did not
-     * hang: it ran on until the child expired and left through the LIVENESS exit,
-     * reporting `RESULT:false`, `FRAMINGBROKEN:true` and ELAPSED 29.843 — which
-     * satisfies every other assertion here, `ELAPSED > 1.0` included. Only
-     * `CHILDALIVE:false` caught it. A row that asserted "it returned false, and
-     * not too quickly" would have called that mutation a survivor.
+     * ⚠️ THE MUTATION IS KILLED TWICE OVER, AND BY DIFFERENT ASSERTIONS DEPENDING
+     * ON THE CHILD'S LIFETIME. Both readings are recorded because between them
+     * they show why the fixture is dedicated and why `CHILDALIVE` is not
+     * decoration:
+     *
+     *  - Against the SHARED 30s {@see deafServerScript()}, deleting the backstop
+     *    clause did NOT hang the loop. It ran on until the child expired and left
+     *    through the LIVENESS exit, reporting `RESULT:false`, `FRAMINGBROKEN:true`
+     *    and ELAPSED 29.843 — which satisfies every other assertion in this row,
+     *    `ELAPSED > 1.0` included. Only `CHILDALIVE:false` caught it. A row
+     *    asserting merely "it returned false, and not too quickly" would have
+     *    scored that mutation a SURVIVOR.
+     *  - Against the dedicated 120s child this row now spawns, the same deletion
+     *    spins past {@see STORM_BOUND_SECONDS} and the probe is killed at 45.00s
+     *    with rc -1 and no output at all, which is the honest shape of the defect:
+     *    the loop is unbounded, and the backstop is the only thing that bounds it.
+     *
+     * The second is the kill this row is built to produce. The first is why
+     * `CHILDALIVE` stays regardless — it is what stops any OTHER way out of the
+     * loop being quietly credited to the backstop.
      */
     public function testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop(): void
     {
