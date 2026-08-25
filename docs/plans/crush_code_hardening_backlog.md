@@ -19225,9 +19225,17 @@ outside the lane's file list and still carries:
 > 297 top-level types, 19 of them secondary, in 8 files.
 
 plus a symbol-kind vector (`220 concrete classes, 25 enums, 16 interfaces, 6 traits`) a few lines
-above. Both are explicitly framed as historical — "the tree AS IT WAS WHEN THIS PARAGRAPH WAS
-MEASURED" — so this is not the rot the other four copies were, and rule 7 says leave a stale
-justification standing rather than delete it.
+above.
+
+**CORRECTED after review — this entry understated its own case.** Only the class doc-block's copy is
+framed as historical ("the tree AS IT WAS WHEN THIS PARAGRAPH WAS MEASURED"). MEASURED at
+`204c9cf58`, the file carries `278` FOUR times, and at least two of them read as a LIVE present-tense
+measurement rather than a quotation — `nonClassSources()`'s doc-block says "MEASURED on this tree:
+0 of 278" and then, in the next paragraph, "The 'of 278' half is now load-bearing rather than
+decorative", while `classNames()`'s says "this tree, 278 `.php` files under `src/` hold TWELVE
+concrete `Tool`". The tree has 297 files, so those are stale by nineteen and nothing says so. Rule 7
+protects a stale JUSTIFICATION; it does not license a stale measurement written in the present tense,
+and "load-bearing" is the file's own word for the half that is wrong.
 
 **The specific hazard, which is new.** `297` in that sentence is the DECLARATION count as of some past
 round. At `88374be64` the tree's FILE count is also 297 and its declaration count is 316. A reader
@@ -19236,10 +19244,19 @@ sweep for "restated census figures" cannot distinguish the historical from the l
 `BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()` deliberately scopes itself
 to `RepoMapBlock.php` for that reason.
 
-**Step.** Elide the digits from the historical sentence the way `RepoMapBlock`'s rule-7 paragraph now
-does (`<N>`), keeping the narrative and the argument — the argument is about the ZERO abstract classes
-and about interfaces/traits already being present, and neither needs a number. Then widen the
-no-restatement scanner to cover `tests/Tools/BuiltInToolCorpus.php` as well.
+**Step.** Elide the digits from all four sites the way `RepoMapBlock`'s rule-7 paragraph now does,
+keeping the narrative and the argument — the argument is about the ZERO abstract classes and about
+interfaces/traits already being present, and neither needs a number; where the sentence is written in
+the present tense, rewrite the tense too, because eliding a digit out of a live claim leaves a live
+claim with no figure rather than a quotation. Then widen the no-restatement scanner to cover
+`tests/Tools/BuiltInToolCorpus.php`.
+
+⚠️ **Widening the scanner reds on the test file BEFORE it reds on the scanner.** Round 60's review
+found `BuiltInToolCorpusTest` re-spelling `297` and `316` inside the doc-block of the very test that
+replaced those two literals; that was elided in `fbe48bf5d`, but the same sweep must be run over the
+whole of `tests/Tools/` before the scanner's domain is widened, or the widening lands red on prose
+that has nothing to do with `RepoMapBlock`. And see Ea60-5: widening this scanner's ALPHABET is a
+different and much worse idea than widening its FILE domain.
 
 ### Ea60-3 — a figure was asserted; the claim the figure supported was not, and it was false
 
@@ -19252,9 +19269,20 @@ against `MAX_SECTION_BYTES` of 8,192 — 1.5x, over the cap but not "several tim
 short-name width it is 4,516 B, roughly half the cap, which would comfortably FIT. The WIDTH the claim
 depends on was never stated in the sentence.
 
-Fixed this round: the prose now names the width, and the assertion is
-`assertGreaterThan(MAX_SECTION_BYTES, $fullyQualifiedListing)` — the argument, derived — instead of a
-string match on a count. The generalisable part is the pattern, not this instance.
+Fixed this round: the prose names the width, and the assertion is the argument derived from the tree
+instead of a string match on a count.
+
+⚠️ **AND THE FIX'S OWN PROSE CARRIED THE SAME DEFECT, which is the part worth keeping.** The commit
+that removed the stale digit wrote THREE fresh qualitative claims into `RepoMapBlock` and pinned none
+of them: two ratios (`about one and a half times MAX_SECTION_BYTES`, `roughly half the cap`) and a
+growth claim (`survives the tree septupling`). MEASURED at `4cc1227d7`: inverting the short-name
+sentence to "NINE TIMES the cap … would not begin to fit" left the FULL SUITE green, and the
+septupling claim was simply FALSE when written — the assertion behind it holds only while the tree is
+under a tenth of `MAX_SOURCE_FILES`, and seven times the tree's size is past that. So the sentence
+written to replace a stale multiple stated a multiple that was already wrong, in the same direction
+the same paragraph accuses its predecessor of. Closed in `fbe48bf5d`/`c6d05530d`/`204c9cf58`: no ratio
+is written in `src/` at all, both widths and the slack are bounds, and each corrective SENTENCE is
+pinned as prose as well, because an unpinned correction rots back into the claim it corrected.
 
 **Step.** Sweep for its siblings: a doc-block that quotes a measured figure AND draws a qualitative
 conclusion from it ("several times", "orders of magnitude", "a quarter of the cap", "about SEVENTY
@@ -19265,7 +19293,12 @@ of the cap`). Each is either derivable — in which case derive it and delete th
 one-off observation about two named repositories, in which case it should say so and stop being
 read as a live property.
 
-### Ea60-4 — the suite's TEST COUNT is still a function of `src/`'s size, via one data provider
+**Do that sweep with the fix's own prose in scope.** Two of the four instances found so far were
+written BY a fix for this pattern, not found by looking for it, and both were caught by mutating a
+sentence rather than by reading one. The sweep's acceptance test is a mutation of each conclusion,
+not of the figure underneath it.
+
+### Ea60-4 — the suite's TEST COUNT is still a function of `src/`'s size, via one data provider (and its ASSERTION figure, as first filed, did not reproduce)
 
 Round 60 lane a removed every ASSERTION that counts `src/`, and the acceptance test is green in both
 polarities. That does not make the suite's totals independent of the tree, and a supervisor predicting
@@ -19275,14 +19308,165 @@ a merged figure needs to know why.
 `.php` file under `sugar-crush/src/` takes the collected total from 10,289 to 10,290, and `diff` names
 the single arrival —
 `Integration\BinSugarcrushWiringTest::testNoRootResolvingSiteFallsBackToBareGetcwd` with the new
-filename as its data-set key. Full-suite effect of one added source file, measured on two complete
-runs at that commit: **+1 test and +58 assertions** (10,286/159,393 → 10,287/159,451).
+filename as its data-set key.
 
 This is a per-file CHECK driven by a provider over the tree, not a census of it — it is exactly the
-shape a census should have been, and it is correct as it stands. It is recorded because the earlier
-backlog entry E383 predicted "+48 assertions and +1 TEST" for the same operation, and the assertion
-half of that figure is now stale by ten; anyone arithmetically reconciling a merged total from lane
-deltas will be off by 58 per added source file if they do not know this provider exists.
+shape a census should have been, and it is correct as it stands.
 
-**Step.** No fix. Cite this entry, not E383, for the per-file delta, and re-measure the +58 whenever
-`BinSugarcrushWiringTest`'s per-file body changes.
+⚠️ **THE ASSERTION HALF OF THIS ENTRY DID NOT REPRODUCE, AND THE ENTRY IS THE REASON IT MATTERS.**
+It was filed to correct a stale figure in E383 ("+48 assertions") and it stated **+58** as the
+replacement, with the instruction "cite this entry, not E383, for the per-file delta". Two later
+measurements, by two different readers on two different trees, both give **+53**:
+
+| measurement | tree | before | after one added `src/` file | delta |
+|---|---|---|---|---|
+| this entry, as filed | `c3ddc7483` | 10,286 / 159,393 | 10,287 / 159,451 | +1 / **+58** |
+| round-60 review | `4cc1227d7` | 10,286 / 159,393 | 10,287 / 159,446 | +1 / **+53** |
+| round-60 fix agent | `204c9cf58` | 10,287 / 159,406 | 10,288 / 159,459 | +1 / **+53** |
+
+And the MECHANISM named here accounts for a small part of either figure: `BinSugarcrushWiringTest`
+run alone moves by +1 test and **+6** assertions (its per-file body applies six regexes, one of them
+skipped for the exempt file). The remaining ~47 come from other per-file loops elsewhere in the
+suite, which were bounded to `tests/Support`, `Integration`, `Config` and `Cli` plus a handful outside
+that subset, and never isolated. The review refuted the obvious explanation for the gap — the delta
+is NOT file-NAME dependent; a two-character and a thirty-four-character probe give byte-identical
+subset totals — which leaves probe SHAPE as the unfalsified hypothesis: a file whose content matches
+more per-file guard patterns adds more assertions than a bare `final class`, and the three rows above
+did not use the same probe.
+
+**So the correction was the same defect as the thing it corrected**: a load-bearing figure with no
+generator, replacing a load-bearing figure with no generator, and stale — or wrong — the same way.
+
+**Step.** No code fix; **retract the instruction**. Do NOT cite a constant for the per-file delta,
+from this entry or from E383. It depends on the SHAPE of the file added and on every per-file loop in
+the suite, so it is a measurement, not a property. Measure it at your own merge base:
+
+```sh
+cd sugar-crush && vendor/bin/phpunit                      # baseline
+printf '<?php\n\ndeclare(strict_types=1);\n\nnamespace SugarCraft\\Crush;\n\nfinal class Probe\n{\n}\n' > src/Probe.php
+vendor/bin/phpunit ; rm src/Probe.php                     # delta, for THIS probe shape
+```
+
+The generalisable fact, which is all that should be cited: **one added `src/` file adds exactly one
+TEST**, and it adds a number of ASSERTIONS that is a function of the file's content and of how many
+per-file loops the suite currently has. If the assertion delta is genuinely load-bearing for a merge
+reconciliation, derive it from a run rather than from any entry in this file (rule 18).
+### Ea60-5 — the no-restatement guard covers TWO of the census's components, and widening its alphabet is measurably worse than leaving it narrow
+
+`BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()` reports a derived figure
+appearing as a standalone integer in `RepoMapBlock.php`. Its alphabet is the FILE count and the
+TOP-LEVEL DECLARATION count. The census it replaced had more components than that, and a restatement
+phrased in any of the others is unguarded: MEASURED at `4cc1227d7`, inserting a genuine restatement
+into `RepoMapBlock`'s production prose using the secondary-declaration total left the whole suite
+green.
+
+**The obvious step — widen the alphabet — was measured and REJECTED, and that is the finding.** The
+unguarded components are SMALL, and this scanner matches a bare integer anywhere in a file that is
+full of small integers. MEASURED at `204c9cf58` on PHP 8.3.6, taking every integer literal in
+`RepoMapBlock.php` (digit-group separators normalised away) and asking how far each candidate figure
+sits below the nearest literal ABOVE it:
+
+| component | value | nearest literal above | headroom |
+|---|---:|---:|---:|
+| file count | 297 | 947 | 650 |
+| top-level declarations | 316 | 947 | 631 |
+| concrete symbols | 245 | 256 (`MAX_PACKAGES`) | **11** |
+| enums | 27 | 32 | 5 |
+| interfaces / secondary total | 19 | 32 | 13 |
+| files carrying a secondary | 8 | 8 | **0 — already colliding** |
+
+So widening buys one false negative back at the price of a guard that reds on the next commit to
+touch an unrelated constant, and one row would red immediately. The two figures in the alphabet are
+the two distinctive enough for this shape to carry.
+
+**Step.** A component small enough to collide needs a DIFFERENT INSTRUMENT, not a longer list. Do not
+key it on prose (rule 40 — an exemption or a match bought with a sentence is bought by the fix's own
+comment); key it on structure. One candidate worth measuring: match a digit only where the same
+sentence also contains a structural marker of the census (`src/` as a path token, or a `{@see}` to one
+of the corpus scanner's symbols), which is a token-stream fact rather than a phrasing. Until then the
+narrow alphabet is documented in the guard's own doc-block, with this measurement, rather than
+implied.
+
+### Ea60-6 — the reflection census is declared ABOVE the token-stream balance, so on a real defect the only instrument that can report never runs
+
+Ea60-1 establishes that a mis-namespaced file under `src/` takes the runner down rc 255 through
+`classNames()`/`nonClassSources()`'s triple `*_exists()` probe. This entry is the consequence for
+`BuiltInToolCorpusTest`'s own ordering, and it is why a doc-block in that file claimed a redundancy
+the tree does not have.
+
+Three tests state the same PSR-4 policy. Two of them —
+`testEverySourceFileDeclaresItsPsr4Symbol()` through `nonClassSources()`, and
+`testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()` through the classifier — gate on the
+IDENTICAL `class_exists() / interface_exists() / trait_exists()` triple, so they are not independent
+instruments; they answer together and they fatal together. The third,
+`testTheDeclarationBalanceHoldsAcrossTheWholeSourceTree()`, reads the file with `token_get_all()` and
+never asks PHP to load it — it is the only one that could still REPORT the case. It is declared after
+the reflection census, so in a default run it never executes. The doc-block claiming "three
+independent instruments … the arrangement that survives one of them going quiet" was corrected in
+`fbe48bf5d`; the ORDERING was not.
+
+**Step.** Once Ea60-1 is fixed the fatal goes away and the ordering stops mattering, so this is
+subordinate to it — but if Ea60-1 is deferred again, move the balance and its fixture above the
+reflection census in the file, and pin the ordering with a comment stating why (a `@depends` would be
+wrong: they are not dependent, they are differently survivable). Cheap, and it is the difference
+between a named failure and a redeclaration fatal.
+
+### Ea60-7 — `declaredTypes()` cannot see a conditionally-declared type, and that is newly load-bearing
+
+MEASURED on PHP 8.3.6 at `204c9cf58`: `BuiltInToolCorpus::declaredTypes()` walks the token stream at
+brace depth zero, so a `class Hidden {}` nested inside an `if` block is invisible to it — the file
+reports only its primary symbol. Pre-existing and unchanged by round 60.
+
+**Why it is newly load-bearing.** Round 60 retired the declaration-count literals and elevated
+`declarations - files === secondary total` to "the token-stream statement of the same policy" the two
+reflection instruments make, and it made the per-file secondary map the thing that names an offending
+file. A conditionally-declared secondary symbol is seen by NONE of the three: the token walk misses
+it by depth, and the two `*_exists()` instruments only ever ask about a file's PRIMARY name. So
+`testNoSecondaryDeclarationIsADispatchableTool()` — the invariant the whole census exists to protect —
+has a hole shaped exactly like a `Tool` implementor declared inside an `if`.
+
+**Step.** Decide whether depth-zero is the policy or the limitation. If it is the policy, say so in
+`declaredTypes()`'s doc-block and pin it with a fixture in BOTH polarities (a top-level secondary is
+reported; a conditionally-declared one is deliberately not) so the next reader cannot mistake the
+limitation for coverage — rule 14 says a guard must be able to state what it cannot see. If it is a
+limitation, the walk needs to record a conditional declaration as something other than absence.
+
+
+### Ea60-8 — `BuiltInToolCorpusTest` now carries THREE bounds with a finite horizon in tree size, and one of them is the binding constraint on adding source files
+
+Round 60 removed the census literals; what replaced them are bounds, and three of those bounds are
+claims about today's tree that a large enough tree will legitimately falsify. This entry states where,
+so nobody rediscovers it as a mystery red.
+
+MEASURED at `204c9cf58` on PHP 8.3.6, by adding well-formed `final class` files to `sugar-crush/src/`
+and running `--filter BuiltInToolCorpusTest` (probe class names 30-33 B fully qualified, 14-17 B
+short — the bounds are BYTE bounds, so the file counts below move with the names you choose):
+
+| bound | what it asserts | first red | provenance |
+|---|---|---:|---|
+| `$shortNameListing < MAX_SECTION_BYTES` | a per-class listing at short-name width still FITS, which is what makes the design note true | **+223 files** | OBSERVED (8,199 B vs 8,192; green at +222) |
+| `$fullyQualifiedListing < MAX_SECTION_BYTES * 3` | the note's correction, "over the cap but not several times over it" | +365 files | OBSERVED (24,580 B vs 24,576; green at +364) |
+| `MAX_SOURCE_FILES > files * 10 * 3` | the order-of-magnitude backstop claim, with a factor of slack | ≈+370 files | **DERIVED, not observed** — `20000/30 = 666` files; the two bounds above fire earlier in the same test and abort it, so this one cannot be reached from the tree side |
+| `testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()` | the census guard's own false-positive distance | +531 files | OBSERVED (headroom 100 vs `> 100`; green at +530) |
+
+Green OBSERVED at +1, +6, +220 and +222; red OBSERVED at +223. **Compare +5 green / +6 red before the
+round-60 fix** — that is the coupling this round removed, and the remaining horizon is nearly two
+orders of magnitude further out. The census guard itself, the thing the constraint was about, has
+650 files of room; what binds now is a design note about listing widths, not a count.
+
+None of these is a false positive: at +223 the sentence "at bare short-name width the same listing
+fits inside the cap" has genuinely stopped being true, and each failure message says so and names the
+prose to rewrite rather than a number to re-derive. But they ARE claims with an expiry, which is a
+different thing from an invariant, and the difference is worth one entry rather than four surprises.
+
+⚠️ A FOURTH BOUND WAS WRITTEN AND WITHDRAWN IN THE SAME SESSION, and it is the useful part. The
+short-name bound was first spelled `< MAX_SECTION_BYTES * 2 / 3` — an invented margin standing in for
+the word "comfortably" in the prose. MEASURED: that reddened at about **+60** added source files,
+which would have re-imposed most of the coupling the round exists to remove, in the fix for it. The
+word came out of the prose and the ratio came out of the assertion. **A margin nobody derived is a
+coupling nobody counted**; if a bound needs slack, the slack has to be argued for on its own terms
+(as `MAX_SOURCE_FILES`'s factor of three is) rather than smuggled in as an adverb.
+
+**Step.** No fix. Re-measure the table if `MAX_SECTION_BYTES` or `MAX_SOURCE_FILES` moves, and treat
+any red in it as an instruction to rewrite `RepoMapBlock`'s design note, never to loosen the bound
+back toward a ratio.
