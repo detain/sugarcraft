@@ -16814,3 +16814,85 @@ above 60. It CANNOT express a lifetime built by arithmetic (`sleep(self::X * 2)`
 `tests/Integration/` (which are in NEITHER lane's list) plus the deliberate `AssertionFailedError`
 catches listed above; for E505, `tests/Integration/McpToolWiringTest.php` and
 `tests/Support/ReapsForkedChildrenTraitTest.php`.
+
+### Eb57-9 — 🔴 a `.mcp.json` value of the wrong JSON TYPE reaches a constructor, and a constructor answers with `TypeError`
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: real, and the likeliest of all three E499 routes to
+be hit by an actual user. **Measured. Fixed and pinned this round.** Found by mutating the NEIGHBOUR of a
+survivor (rule 41), having nearly excused that neighbour as an equivalent mutant.
+
+Narrowing `McpClient::startServer()`'s CONFIG catch from `\Throwable` to `\RuntimeException` survives the
+obvious reading — the `match`'s `default` arm throws exactly `RuntimeException`, so it looks equivalent.
+It is not. `buildServer()` also CONSTRUCTS, and `StdioMcpServer`, `HttpMcpServer`, `GitMcpServer` and
+`GitCommandHandlers` all declare typed parameters that a hand-written `.mcp.json` can violate. Generator:
+`startServers()` over a two-entry config, offender first, a well-formed `git` server second. PHP 8.3.6:
+
+    {"args": "not-an-array"}        reported, good server's 29 tools reachable
+    {"env": "nope"}                 reported, 29 tools reachable
+    {"command": 7}                  reported, 29 tools reachable
+    {"headers": "nope"}   (http)    reported, 29 tools reachable
+    {"path": 7}           (git)     reported, 29 tools reachable
+
+Under the narrowed catch every one aborts the loop and the good server is lost.
+
+**AND THIS IS THE ORDINARY CASE, not an exotic one.**
+`"args": "-y @modelcontextprotocol/server-git"` written as a string instead of a list is the likeliest
+mistake a human makes editing that file, and before this round it disabled every OTHER server in the
+config — silently, and depending on key order.
+
+⚠️ **THE PROCESS POINT IS THE FINDING.** Two mutations survived in this lane and neither was equivalent.
+The first (`\Throwable` → `\RuntimeException` on the RUNTIME catch) was green across 100 rows and 290
+assertions, so route 3 had been "closed" by nothing at all. The second was one line away from it, looked
+equivalent for a defensible reason, and was the more serious of the two.
+
+### Eb57-10 — `DenialPrefixRosterTest`'s vocabulary reads an HTTP header block as a permission denial
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: classifier false positive. **Measured.** Out of
+lane — `tests/DenialPrefixRosterTest.php` is at `tests/` root, which is lane c's this round. Reported,
+not reached for.
+
+A new `LspProtocolException` message ending `… Header block: %s` reddened
+`testTheOnlyDenialShapedLiteralsInSrcAreTheLeafsAndOneEarnedException`. `DENIAL_SHAPE` matches any
+capital-initial word-run ending in a colon, and the vocabulary gate passes because **`block` is a denial
+vocabulary word** — so an HTTP/LSP *header block* is classified as a permission denial.
+
+⚠️ **NEITHER RESOLUTION THE FAILURE TEXT OFFERS FITS**, which is rule 33's shape exactly. A roster row
+would be a licence for a string that is not a tool-result prefix at all. And `OFF_ROSTER_THROWABLE_SHAPES`
+is keyed `path => class-string<\Throwable>` and earned by the FILE BEING a Throwable class —
+`src/LSP/LspConnection.php` is not one, so the mechanical exclusion cannot express "this file THROWS a
+Throwable carrying the string".
+
+Reworded in lane b's own file instead (`The header began %s`), with the reasoning left in the source so
+the next person does not re-derive it.
+
+**STEP for whoever owns that guard:** the exclusion wants a second, mechanically checkable form — a
+literal that is an argument to a `new <Throwable>(…)` in a `throw`, verifiable from the token stream
+without naming the file. As it stands the guard's own advice will push the next person into writing an
+exemption row for correct code, which is where the next real offender hides.
+
+### Eb57-11 — `T_DOLLAR_OPEN_CURLY_BRACES` truncated a brand-new token scanner, and a guard caught it
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: instrument defect, in this round's own work.
+**Measured. Fixed.**
+
+`tests/Support/InterpolationOpenerTokenTest` reddened on `LspClientBodyDuplicationTest`, this round's new
+duplicate-body census. PHP opens a brace with THREE tokens and closes it with one: bare `{`,
+`T_CURLY_OPEN` (text `{`, so a text comparison happens to work) and `T_DOLLAR_OPEN_CURLY_BRACES` (text
+`${`, which it does not). MEASURED on PHP 8.3.6 against the first draft:
+
+    public function a(): string { $x = 1; $s = "${x}"; return $s . 'TAIL_MARKER'; }
+    ->  body '$x = 1; $s = "${x'          TRUNCATED
+
+The interpolation's closing brace decremented a depth its opener never incremented, so the body ended at
+the first interpolated string. Two methods differing only AFTER such a string would compare EQUAL, and a
+real duplicate pair could be missed — in the very census written to find duplicate pairs.
+
+Fixed by counting on token identity, pinned with a four-arm fixture (bare / `T_CURLY_OPEN` / dollar-open
+/ a nested call inside the interpolation), each arm required to contain its own tail marker so
+"truncated" is distinguishable from "empty". The opener strings are assembled by concatenation and never
+spelled in the file's prose, so a future sweep over the pattern cannot eat the row documenting it.
+
+**Worth recording beyond the fix:** that guard's doc-block says it was widened after finding "three such
+walkers in `tests/`, one of them failing OPEN, all three invisible to this guard for as long as its
+alphabet was the set of files that already agreed with it". This round's scanner was the fourth. A
+brace-walking token scanner is apparently a shape this tree grows regularly and gets wrong by default.
