@@ -872,9 +872,19 @@ final class ChatInputCursorTest extends TestCase
      *     which does not shrink below its own minimum). That is a pre-existing
      *     narrow-terminal renderer gap with nothing to do with the draft, and
      *     asserting against it here would pin someone else's bug to this file.
-     *     Also unasserted, and also pre-existing: a single-line draft longer
-     *     than the terminal over-widens the input box, because the box does
-     *     not wrap. Neither is made better or worse by this change.
+     *
+     * WHAT THIS SAID: "Also unasserted, and also pre-existing: a single-line
+     * draft longer than the terminal over-widens the input box, because the
+     * box does not wrap."
+     * WHAT IS TRUE NOW: it wraps. E455 - the same bug, hit by a user typing an
+     * ordinary long sentence - was closed by wrapping the draft through
+     * `Renderer::wrapToPane()` before the box is styled, and the width bound is
+     * asserted directly in `InputWrapTest`.
+     * WHY THIS STILL EARNS ITS PLACE: the 62-column-row-0 note above is
+     * untouched by that fix and is still why the width half of THIS test is
+     * driven at 100 columns rather than 40. Deleting the paragraph would leave
+     * the two different widths looking arbitrary, and the next reader would
+     * "simplify" them back into one.
      */
     public function testAMultiRowDraftKeepsTheFrameInsideTheTerminal(): void
     {
