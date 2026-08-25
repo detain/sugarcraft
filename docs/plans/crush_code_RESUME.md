@@ -50,8 +50,12 @@ exactly four named test-root files).
 
 1. **Publication state — RE-MEASURE IT, DO NOT TRUST THIS LINE.** `git ls-remote origin master` is the
    only reliable answer. The user pushes this same working copy from their own terminal, and this line has
-   now been wrong in **both** directions across three rounds. At the round-58 launch the remote was
-   `8e8af356a`, with everything from `1dea13c4f` onward local.
+   now been wrong in **both** directions across three rounds — **and it went stale again while this very
+   block was being written.** It first said `8e8af356a`; by the time the round-58 launch commit landed,
+   `git ls-remote origin master` answered **`535d721ff`**, the round-57 close. **That is the fourth
+   consecutive round in which the user pushed this working copy from their own terminal while the
+   supervisor was mid-close.** Treat any sha written here as a reading taken at an instant that has
+   already passed.
 2. **E490 is open with a number, not a candidate.** Round 57 ran **53 takes, 0 events** — including Arm C,
    the sugar-crush-then-candy-pty back-to-back experiment that had never been run, four clean cycles. The
    95% upper bound on the per-take rate is **≈5.5%** against a prior of **≈1.3%**, so it **distinguishes
