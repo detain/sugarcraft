@@ -184,11 +184,14 @@ Exit codes:
   2  Fatal error (cannot resolve monorepo root)
 
 WHAT CI RUNS, IN ORDER, so you can run it before it runs you. The
-`path-repo-check` job in .github/workflows/ci.yml is these five commands and
-nothing else; three of them had no counterpart anyone had written down, which
-is why a contributor could be failed by a check they had no way to reproduce:
+`path-repo-check` job in .github/workflows/ci.yml is these commands and nothing
+else; three of them had no counterpart anyone had written down, which is why a
+contributor could be failed by a check they had no way to reproduce. THIS BLOCK
+IS CHECKED AGAINST THE WORKFLOW, not proof-read: add a step there without adding
+it here and CheckPathReposTest reds, which is the only reason a block of prose
+about CI is worth writing at all.
 
-    phpunit --no-configuration tools/tests/        # this script's own guard
+    phpunit --no-configuration --colors=never tools/tests/   # this script's own guard
     php tools/check-path-repos.php --no-lib-path-repos
     php tools/check-path-repos.php
     php tools/check-path-repos.php --unused

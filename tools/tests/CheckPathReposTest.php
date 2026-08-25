@@ -247,6 +247,166 @@ final class CheckPathReposTest extends TestCase
         $this->assertStringContainsString('--fix', $result['output']);
     }
 
+    /**
+     * The `--help` block naming what CI runs IS what CI runs.
+     *
+     * WHY THIS EXISTS. Round 57 added a "WHAT CI RUNS, IN ORDER" block to
+     * `--help` in the same commit whose whole subject was a guard that nothing
+     * ran, and put no guard on the block. It drifts the moment a step is added
+     * to the job — and it already had drifted, silently: `--colors=never` was
+     * in the workflow and absent from the help. A paragraph of prose about CI
+     * that nothing checks is worth less than no paragraph, because a reader
+     * runs it and believes they have reproduced the job.
+     *
+     * BOTH DIRECTIONS, AS A SET. A step added to the workflow and not to the
+     * help reds; a command left in the help after its step is deleted reds too.
+     * Comparing sets rather than asserting containment is what makes the second
+     * half work.
+     */
+    public function testTheHelpTextNamesExactlyWhatTheWorkflowRuns(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $workflow = \file_get_contents($root . '/.github/workflows/ci.yml');
+        $this->assertIsString($workflow, 'ci.yml is unreadable, so this comparison speaks for nothing');
+
+        $fromWorkflow = $this->pathRepoCheckCommands($workflow);
+        $fromHelp = $this->helpTextCiCommands($this->runScript($root, ['--help'])['output']);
+
+        // KNOWN-POSITIVE FIRST (rule 15). Both sides are parsed out of text,
+        // and two empty lists compare equal — which is exactly what a parser
+        // that has stopped matching produces on both sides at once.
+        $this->assertNotSame(
+            [],
+            $fromWorkflow,
+            'the path-repo-check job parsed to no commands at all, so the comparison below is '
+            . 'two empty lists agreeing with each other. The job block or the run: shape has '
+            . 'changed and this parser has to be taught it',
+        );
+        $this->assertNotSame(
+            [],
+            $fromHelp,
+            'the --help CI block parsed to no commands at all; same problem, other side',
+        );
+
+        $this->assertSame(
+            $fromWorkflow,
+            $fromHelp,
+            "the --help text's \"WHAT CI RUNS\" block and the path-repo-check job in "
+            . '.github/workflows/ci.yml have diverged. A contributor reads that block to '
+            . 'reproduce the job before pushing; if it is missing a step they are failed by a '
+            . 'check they had no way to run. Update the block in tools/check-path-repos.php, '
+            . 'not this assertion',
+        );
+    }
+
+    /**
+     * Every shell command the `path-repo-check` job runs, normalised.
+     *
+     * @return list<string> sorted
+     */
+    private function pathRepoCheckCommands(string $workflow): array
+    {
+        $lines = \explode("\n", $workflow);
+        $commands = [];
+        $inJob = false;
+        $blockIndent = null;
+
+        foreach ($lines as $line) {
+            if (\preg_match('/^  ([A-Za-z0-9_-]+):\s*$/', $line, $m) === 1) {
+                $inJob = $m[1] === 'path-repo-check';
+                $blockIndent = null;
+
+                continue;
+            }
+            if (!$inJob) {
+                continue;
+            }
+            if ($blockIndent !== null) {
+                // Inside a `run: |` block scalar: it ends at the first line
+                // that is non-empty and not more-indented than the opener.
+                $indent = \strlen($line) - \strlen(\ltrim($line));
+                if (\trim($line) !== '' && $indent <= $blockIndent) {
+                    $blockIndent = null;
+                } elseif (\trim($line) !== '') {
+                    $commands[] = $this->normaliseCommand($line);
+
+                    continue;
+                } else {
+                    continue;
+                }
+            }
+            if (\preg_match('/^(\s*)- run:\s*\|\s*$/', $line, $m) === 1) {
+                $blockIndent = \strlen($m[1]);
+
+                continue;
+            }
+            if (\preg_match('/^(\s*)run:\s*\|\s*$/', $line, $m) === 1) {
+                $blockIndent = \strlen($m[1]);
+
+                continue;
+            }
+            if (\preg_match('/^\s*-?\s*run:\s*(\S.*)$/', $line, $m) === 1) {
+                $commands[] = $this->normaliseCommand($m[1]);
+            }
+        }
+
+        return $this->tidyCommands($commands);
+    }
+
+    /**
+     * The commands the `--help` text's CI block names, normalised the same way.
+     *
+     * @return list<string> sorted
+     */
+    private function helpTextCiCommands(string $help): array
+    {
+        $marker = \strpos($help, 'WHAT CI RUNS, IN ORDER');
+        if ($marker === false) {
+            return [];
+        }
+        $rest = \substr($help, $marker);
+
+        // The block is the run of four-space-indented lines. Continuations end
+        // in a backslash and are joined before anything is split.
+        if (\preg_match('/\n((?:    \S[^\n]*\n|      \S[^\n]*\n)+)/', $rest, $m) !== 1) {
+            return [];
+        }
+        $block = \str_replace(["\\\n", "\n      "], [' ', ' '], $m[1]);
+
+        $commands = [];
+        foreach (\explode("\n", $block) as $line) {
+            foreach (\preg_split('/&&|;/', $line) ?: [] as $piece) {
+                $commands[] = $this->normaliseCommand($piece);
+            }
+        }
+
+        return $this->tidyCommands($commands);
+    }
+
+    /** Trailing comment stripped, whitespace collapsed. */
+    private function normaliseCommand(string $command): string
+    {
+        $command = (string) \preg_replace('/#.*$/', '', $command);
+
+        return \trim((string) \preg_replace('/\s+/', ' ', $command));
+    }
+
+    /**
+     * @param list<string> $commands
+     *
+     * @return list<string> sorted, unique, no empties
+     */
+    private function tidyCommands(array $commands): array
+    {
+        $commands = \array_values(\array_unique(\array_filter(
+            $commands,
+            static fn (string $c): bool => $c !== '',
+        )));
+        \sort($commands);
+
+        return $commands;
+    }
+
     public function testIdempotentWithoutFixFlag(): void
     {
         // Set up lib-b (sugarcraft prefix so the script cares about it).
