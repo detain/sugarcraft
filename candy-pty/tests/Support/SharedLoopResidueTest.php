@@ -28,9 +28,29 @@ use React\EventLoop\Loop;
  * ORDERING. This asserts a property of the shared loop at the moment it runs,
  * so it is a statement about whatever has executed before it, not a statement
  * about the whole suite. That is a weaker claim than it looks and it is stated
- * rather than dressed up: the leak it was written for is pinned directly, in
- * {@see testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()}, by driving that
- * class's own loop work here.
+ * rather than dressed up.
+ *
+ * WHERE THE LEAK IS ACTUALLY PINNED, AND THIS PARAGRAPH NAMED THE WRONG PLACE.
+ * WHAT IT SAID: "the leak it was written for is pinned directly, in
+ * `testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()`, by driving that
+ * class's own loop work here." WHAT IS TRUE NOW: no method of that name has
+ * ever existed in this repo -- a bare citation naming nothing, which is how a
+ * rename leaves a mechanism claim standing with nothing under it. The nearest
+ * method, {@see testTheSharedLoopIsCleanByTheTimeThisFileRuns()}, is not what
+ * the sentence described either: its own doc-block records that restoring the
+ * leak in `PtyPoolReactLoopTest` left it GREEN, because that file's third test
+ * waits out the orphan cap and a later observer always finds a clean loop. So
+ * the sentence asserted a mechanism that the method it pointed at explicitly
+ * refutes. VERIFIED HERE rather than inferred: `PtyPoolReactLoopTest` declares
+ * a `tearDown()` that runs `SharedLoopResidue::census()` and asserts all five
+ * axes are zero after EVERY test in that class -- which is the only window the
+ * leak is visible from, and where the regression proper lives.
+ *
+ * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the ordering caveat is the true and
+ * load-bearing half. A reader who takes this file for a suite-wide guarantee
+ * will read its empty verdict as covering leaks it cannot see; what it covers
+ * is whatever ran before it, and the per-class `tearDown()` is what covers the
+ * class the leak came from.
  */
 final class SharedLoopResidueTest extends TestCase
 {

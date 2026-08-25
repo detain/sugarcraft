@@ -470,9 +470,9 @@ final class ToolsEnvRosterTest extends TestCase
     /**
      * Every `.php` file directly under `tools/`, absolute and sorted.
      *
-     * NOT RECURSIVE, deliberately: `tools/tests/` has its own rule
-     * ({@see testNoToolsTestFileIntroducesAKnobOfItsOwn()}) because those files
-     * have no `--help` to be documented in.
+     * NOT RECURSIVE, deliberately: everything under `tools/` that is not a
+     * script has its own rule ({@see testNoOtherToolsFileIntroducesAKnobOfItsOwn()})
+     * because those files have no `--help` to be documented in.
      *
      * @return list<string>
      */
