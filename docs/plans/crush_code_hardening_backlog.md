@@ -19351,6 +19351,24 @@ The generalisable fact, which is all that should be cited: **one added `src/` fi
 TEST**, and it adds a number of ASSERTIONS that is a function of the file's content and of how many
 per-file loops the suite currently has. If the assertion delta is genuinely load-bearing for a merge
 reconciliation, derive it from a run rather than from any entry in this file (rule 18).
+
+**AND EDITING A `src/` FILE MOVES THE TOTAL TOO, WITHOUT ADDING A FILE AT ALL.** The round-60 review
+noticed this as an oddity — three added comment lines moving the suite's assertion count by one — and
+recorded it without a mechanism. MEASURED at `fd54e6e55` by diffing per-test `--log-junit` totals
+between two complete runs, which is the only instrument that localises a figure this small:
+
+| class | assertions | cause |
+|---|---|---|
+| `Tools\BuiltInToolCorpusTest` | 98 → 109 | nine new assert statements, two of them inside a two-iteration loop |
+| `Config\GlobFigureDriftTest` | 20,746 → 20,748 | **prose** |
+
+`GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()` runs its
+stale-figure census once per PARAGRAPH of every `.php` under `src/`, so a doc-block that gains two
+paragraphs adds two assertions to the suite and NOTHING about the code changed. That is the whole of
+the review's unexplained `+1`. Two consequences for anyone reconciling a merge: an assertion delta is
+not evidence that behaviour moved, and a lane that only rewrote comments still has a non-zero delta to
+account for. (Measured negative control, from the same pair of runs: `docs/plans/` is NOT in that
+census's scope — a commit adding ninety lines to THIS file left the suite's totals byte-identical.)
 ### Ea60-5 — the no-restatement guard covers TWO of the census's components, and widening its alphabet is measurably worse than leaving it narrow
 
 `BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()` reports a derived figure
