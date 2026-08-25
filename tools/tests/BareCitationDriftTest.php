@@ -162,6 +162,37 @@ final class BareCitationDriftTest extends TestCase
         $this->assertSame($expected, $found);
     }
 
+    /**
+     * The reported line is the line the tag OPENS on, wrap or no wrap.
+     *
+     * NOT COSMETIC, AND IT WAS WRONG. This guard's only output is a list of
+     * `file:line — name()` rows a human is expected to go and read, so a line
+     * number that drifts under exactly the condition rule 17 exists for makes
+     * the report actively misleading rather than merely terse. Both arms run:
+     * the unwrapped one would still pass with the offset arithmetic deleted
+     * entirely, so it is the wrapped one that carries the claim.
+     */
+    public function testTheReportedLineSurvivesAContinuationWrap(): void
+    {
+        $tag = '{@' . 'see ';
+
+        $unwrapped = "<?php\n\n/**\n * padding\n * " . $tag . "testAbsentOne()}\n */\nclass A {}";
+        $this->assertSame(
+            [['name' => 'testAbsentOne', 'line' => 5]],
+            self::citationsNamingNothing($unwrapped),
+            'the reported line is wrong for a citation that does not wrap at all',
+        );
+
+        $wrapped = "<?php\n\n/**\n * padding\n * " . $tag . "\n * testAbsentTwo()}\n */\nclass B {}";
+        $this->assertSame(
+            [['name' => 'testAbsentTwo', 'line' => 5]],
+            self::citationsNamingNothing($wrapped),
+            'the reported line drifts once the citation wraps across a continuation marker — '
+            . 'which is the one case rule 17 exists for, so it is the case the number has to '
+            . 'be right in. Flattening the marker must not consume the newline with it',
+        );
+    }
+
     // ── the roster ───────────────────────────────────────────────────────
 
     /**
@@ -300,12 +331,23 @@ final class BareCitationDriftTest extends TestCase
                 continue;
             }
 
-            // RULE 17. Flatten the ` * ` continuation markers first: a doc-block
+            // RULE 17. Strip the ` * ` continuation markers first: a doc-block
             // wraps at 80 columns, so the tag and its argument are never those
-            // bytes in a row. Line offsets within the block are preserved by
-            // counting newlines up to each hit, which is why the marker is
-            // replaced by a space rather than removed.
-            $flat = \preg_replace('/\n[ \t]*\*[ \t]?/', ' ', $token[1]);
+            // bytes in a row.
+            //
+            // THE MARKER IS REPLACED BY A NEWLINE, NOT BY A SPACE, AND THE
+            // FIRST DRAFT OF THIS COMMENT CLAIMED THE OPPOSITE. WHAT IT SAID:
+            // "line offsets within the block are preserved ... which is why the
+            // marker is replaced by a space rather than removed." WHAT IS TRUE:
+            // that substitution consumes the newline along with the marker, so
+            // every reported line after a wrap was too LOW — MEASURED on PHP
+            // 8.3.6 at 3 for a tag opening on line 5. Keeping the newline
+            // costs nothing, because `\s+` in the pattern below matches it
+            // just as happily as a space, and it makes the offset arithmetic
+            // exact instead of merely plausible. A guard whose entire job is
+            // pointing a human at a file has to point at the right line;
+            // {@see testTheReportedLineSurvivesAContinuationWrap()} pins it.
+            $flat = \preg_replace('/\n[ \t]*\*[ \t]?/', "\n", $token[1]);
             $flat = \is_string($flat) ? $flat : $token[1];
 
             if (\preg_match_all(
