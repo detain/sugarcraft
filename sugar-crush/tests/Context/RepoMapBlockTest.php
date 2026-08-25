@@ -1184,6 +1184,101 @@ final class RepoMapBlockTest extends TestCase
     // Helpers
     // =========================================================================
 
+    /**
+     * **E529 — the monorepo half of P8.8, measured instead of counted.**
+     *
+     * {@see RepoMapBlock}'s design note used to close with "Measured on this
+     * checkout it finds 58 packages and their namespaces without reading either
+     * markdown file". Two of that file's three restated cardinalities are
+     * asserted against their derivation by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()};
+     * this one was asserted by nothing, and it wrapped across a doc-block line,
+     * so it was invisible to a line-oriented search for the digits beside the
+     * noun.
+     *
+     * The number is not what the paragraph is arguing. The argument is that the
+     * monorepo half is derived from `composer.json` manifests and NOT from
+     * `docs/MATCHUPS.md` and `PROJECT_NAMES.md` — the two hand-maintained
+     * documents the item asked for a parser for. So that is what is measured,
+     * and the digits are gone from the prose rather than corrected: a
+     * hand-updated census is the same defect one round later (rule 18).
+     *
+     * FIXTURE, NOT THIS CHECKOUT, per this class's own opening note: a count
+     * taken against the real repository goes red on an unrelated manifest edit
+     * and green on a scanner that quietly stopped finding half of them.
+     *
+     * BOTH POLARITIES (rule 15). "The render contains no sentinel" is an
+     * absence, and an empty render satisfies it perfectly — so the same
+     * assertion block also requires that the manifest-derived facts DID arrive,
+     * and that the sentinels really are on disk to be found. Without the last
+     * of those, a fixture whose markdown failed to write would prove the point
+     * by not existing.
+     */
+    public function testTheMonorepoHalfIsDerivedFromManifestsAndNeverFromTheTwoMarkdownFiles(): void
+    {
+        // Built by concatenation so that a future textual sweep for either
+        // document name cannot rewrite the fixture that proves they are unread.
+        $matchupsSentinel = 'SENTINEL-FROM-' . 'MATCHUPS-MD';
+        $namesSentinel = 'SENTINEL-FROM-' . 'PROJECT-NAMES-MD';
+
+        $root = $this->workspace([
+            'composer.json' => ['name' => 'acme/monorepo'],
+            'docs/MATCHUPS.md' => "# Upstream map\n\n| upstream | port |\n| x | {$matchupsSentinel} |\n",
+            'PROJECT_NAMES.md' => "# Naming\n\nCandyThing -> {$namesSentinel}\n",
+            'candy-alpha/composer.json' => [
+                'name' => 'acme/candy-alpha',
+                'description' => 'The alpha package.',
+                'autoload' => ['psr-4' => ['Acme\\Alpha\\' => 'src/']],
+            ],
+            'candy-alpha/src/.keep' => '',
+            'sugar-beta/composer.json' => [
+                'name' => 'acme/sugar-beta',
+                'description' => 'The beta package.',
+                'autoload' => ['psr-4' => ['Acme\\Beta\\' => 'src/']],
+            ],
+            'sugar-beta/src/.keep' => '',
+        ]);
+
+        // The sentinels exist on disk. Without this the absence assertions
+        // below are satisfied by a fixture that never wrote the two files.
+        foreach ([
+            '/docs/MATCHUPS.md' => $matchupsSentinel,
+            '/PROJECT_NAMES.md' => $namesSentinel,
+        ] as $relative => $sentinel) {
+            $this->assertStringContainsString(
+                $sentinel,
+                (string) file_get_contents($root . $relative),
+                "the fixture never wrote {$relative}, so the absence assertions below would be "
+                    . 'true for the wrong reason',
+            );
+        }
+
+        $rendered = RepoMapBlock::capture($root)->render();
+
+        // THE POSITIVE HALF: every fact in the block came out of a manifest.
+        foreach (['candy-alpha', 'sugar-beta', 'Acme\\Alpha\\', 'Acme\\Beta\\', 'The alpha package.', 'The beta package.'] as $fromManifest) {
+            $this->assertStringContainsString(
+                $fromManifest,
+                $rendered,
+                'the manifest-derived scan stopped finding what it is supposed to find, so the '
+                    . 'absence assertions below measure an empty block',
+            );
+        }
+
+        // THE ARGUMENT ITSELF: nothing came out of either markdown document.
+        foreach ([$matchupsSentinel, $namesSentinel] as $sentinel) {
+            $this->assertStringNotContainsString(
+                $sentinel,
+                $rendered,
+                'RepoMapBlock read one of the two hand-maintained markdown documents. The '
+                    . 'monorepo half of P8.8 is implemented generically from composer manifests '
+                    . 'precisely so it works on repositories that are not this one; a parser for '
+                    . "these two files binds a shipped feature to their formatting.\n"
+                    . $rendered,
+            );
+        }
+    }
+
     private function systemPrompt(string $root): string
     {
         $provider = $this->createMock(ProviderInterface::class);

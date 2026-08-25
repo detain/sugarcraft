@@ -47,8 +47,25 @@ use SugarCraft\Crush\Support\ContainedPath;
  * sub-package already states first-hand in its own `composer.json` `name`,
  * `description` and `autoload.psr-4`. So the monorepo half is implemented
  * GENERICALLY, from those manifests, and this repository is simply one of the
- * repositories it happens to work on. Measured on this checkout it finds 58
- * packages and their namespaces without reading either markdown file.
+ * repositories it happens to work on — it finds every sub-package and its
+ * namespace without opening either markdown file.
+ *
+ * WHAT THIS SAID: "Measured on this checkout it finds 58 packages and their
+ * namespaces without reading either markdown file." WHAT IS TRUE NOW: the
+ * count was correct and it was the third restated census in this file — the
+ * other two are asserted against their derivation and this one was asserted by
+ * nobody, so it was the one guaranteed to rot. It also could not be FOUND: it
+ * wraps across a doc-block line, so a line-oriented search for the digits
+ * beside the noun misses it entirely, which is how it survived a round whose
+ * whole subject was this file's restated cardinalities. WHY THE CLAIM STILL
+ * EARNS ITS PLACE: the load-bearing half was never the number, it was
+ * "GENERICALLY, from those manifests" — the reason the monorepo half of P8.8
+ * is not a parser for two hand-maintained markdown files. That half is now
+ * measured rather than restated, against a fixture whose markdown carries
+ * sentinels the render must not contain, by
+ * {@see \SugarCraft\Crush\Tests\Context\RepoMapBlockTest::testTheMonorepoHalfIsDerivedFromManifestsAndNeverFromTheTwoMarkdownFiles()}.
+ * The digits are gone rather than corrected, because a hand-updated number is
+ * the same defect one round later.
  *
  * The FIRST half is likewise not taken literally, for a narrower reason.
  * `vendor/composer/autoload_psr4.php` exists only after `composer install` has
