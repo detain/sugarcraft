@@ -717,7 +717,7 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
     {
         $open = new \ReflectionMethod($server, 'start');
         // `start()` itself would block on the handshake; the spawn is inlined here
-        // instead, mirroring it line for line so a divergence is visible.
+        // instead, mirroring it so a divergence is visible.
         $processProp = new \ReflectionProperty($server, 'process');
         $processProp->setAccessible(true);
         $pipesProp = new \ReflectionProperty($server, 'pipes');
@@ -729,18 +729,22 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         $command->setAccessible(true);
         $args = new \ReflectionProperty($server, 'args');
         $args->setAccessible(true);
+        // `env` TOO, and it is not decoration: `start()` passes the configured
+        // environment, and a helper that omitted it handed its fixtures THIS
+        // process's environment instead. The fixtures did not care, but a mirror
+        // that silently diverges is worth less than no mirror.
+        $env = new \ReflectionProperty($server, 'env');
+        $env->setAccessible(true);
 
         $process = proc_open(
             [$command->getValue($server), ...array_values($args->getValue($server))],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
+            null,
+            $env->getValue($server),
         );
         $this->assertIsResource($process, 'could not spawn the fixture server');
-        $this->assertSame(
-            0,
-            $open->getNumberOfParameters(),
-            'start() grew a parameter — re-check that this helper still mirrors its spawn',
-        );
+        $this->assertStartStillLooksLikeThisMirror($open);
 
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
@@ -752,6 +756,62 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
 
         // Let the fixture reach its own read/sleep before anything is written.
         usleep(200000);
+    }
+
+    /**
+     * WHAT THE MIRROR ABOVE IS CHECKED AGAINST.
+     *
+     * WHAT THIS SAID: that the spawn was inlined "mirroring it line for line so a
+     * divergence is visible". WHAT WAS TRUE: the only check was
+     * `getNumberOfParameters() === 0`, which sees a new PARAMETER on `start()` and
+     * nothing else — not the descriptor spec, not the cwd, not the env, not the
+     * three `stream_set_blocking()` calls, i.e. not one of the things the helper
+     * actually duplicates. It was blind to the divergence it already had (the
+     * missing `env`, now fixed).
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the duplication is unavoidable — `start()`
+     * blocks on a handshake every fixture in this file is built to refuse — so
+     * something has to notice when the two drift. The four things the helper
+     * copies are now asserted against `start()`'s own source with runs of
+     * whitespace collapsed, which survives a reformat and does not survive an
+     * edit. A line-number-free match, per the rule about citing symbols.
+     */
+    private function assertStartStillLooksLikeThisMirror(\ReflectionMethod $start): void
+    {
+        $this->assertSame(
+            0,
+            $start->getNumberOfParameters(),
+            'start() grew a parameter — re-check that this helper still mirrors its spawn',
+        );
+
+        $file = (array) file((string) $start->getFileName());
+        $body = implode('', array_slice(
+            $file,
+            $start->getStartLine() - 1,
+            $start->getEndLine() - $start->getStartLine() + 1,
+        ));
+        $flat = (string) preg_replace('/\s+/', ' ', $body);
+
+        $this->assertStringContainsString(
+            "0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],",
+            $flat,
+            'start() no longer opens exactly three pipes in r/w/w order, so the descriptor spec '
+            . 'this helper hard-codes has drifted from the one under test',
+        );
+        $this->assertStringContainsString(
+            '$this->pipes, null, $this->env',
+            $flat,
+            'start() no longer spawns with (pipes, cwd=null, env), so this helper is handing its '
+            . 'fixtures a different environment from the one production gets',
+        );
+        foreach ([0, 1, 2] as $fd) {
+            $this->assertStringContainsString(
+                "stream_set_blocking(\$this->pipes[$fd], false);",
+                $flat,
+                "start() no longer sets fd $fd non-blocking, so this helper's pipe modes are not "
+                . 'the modes writeLine() and readLine() are written against',
+            );
+        }
     }
 
     private function writeLine(StdioMcpServer $server, string $json, ?float $deadline): bool
