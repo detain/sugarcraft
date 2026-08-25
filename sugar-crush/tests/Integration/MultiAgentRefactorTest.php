@@ -65,6 +65,8 @@ final class MultiAgentRefactorTest extends TestCase
     private string $repoRoot;
     private string $worktreesBase;
     private string $oldHome;
+    /** The env HOME to put back, or false when it was unset. */
+    private string|false $oldEnvHome = false;
     private WorktreeConfig $worktreeConfig;
 
     /**
@@ -103,8 +105,25 @@ final class MultiAgentRefactorTest extends TestCase
 
         // Override HOME so Team/TeamManager's ~/.sugar-crush/teams/ paths
         // resolve inside our disposable temp dir instead of the real home.
+        //
+        // BOTH SPELLINGS, and this used to move only the superglobal. Measured:
+        // one run of this file created exactly THREE directories in the
+        // developer's real ~/.sugar-crush/teams/ - refactor-*, solo-* and
+        // throwing-*, one per test that builds a Team - because the readers
+        // reached go through HomeDirectory, which prefers getenv('HOME'), while
+        // only $_SERVER['HOME'] had been redirected. That is the exact failure
+        // HomeSandboxTrait's doc-block describes: half a sandbox is not a
+        // sandbox. At the time this was found the real teams/ held 3,133
+        // entries, mtime minutes old.
+        //
+        // It is not only litter. Agents/TeamTest asserts in tearDown() that the
+        // real ~/.sugar-crush is unchanged across each of its tests, so this
+        // file leaking into it while another lane's suite is mid-test reds a
+        // test that did nothing wrong - and three lanes run this suite at once.
         $this->oldHome = $_SERVER['HOME'] ?? '/root';
+        $this->oldEnvHome = getenv('HOME');
         $_SERVER['HOME'] = $this->tmpRoot;
+        putenv('HOME=' . $this->tmpRoot);
 
         // Disposable git repository — same bare+clone pattern as
         // WorktreeManagerTest, so WorktreeManager::createWorktree() has a
@@ -132,6 +151,7 @@ final class MultiAgentRefactorTest extends TestCase
         $this->reapTrackedForkedChildren();
 
         $_SERVER['HOME'] = $this->oldHome;
+        $this->oldEnvHome === false ? putenv('HOME') : putenv('HOME=' . $this->oldEnvHome);
         $this->removeDirectory($this->tmpRoot);
 
         parent::tearDown();
