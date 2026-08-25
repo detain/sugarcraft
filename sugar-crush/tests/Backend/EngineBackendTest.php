@@ -282,6 +282,25 @@ final class EngineBackendTest extends TestCase
         $error = null;
         try {
             $this->awaitPromise($backend->completeAsync([Message::user('go')], null, $cancellation));
+        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            // RULE 39, NARROWED DELIBERATELY. awaitPromise() ends in
+            // `$this->fail('Promise did not settle within the test
+            // timeout')`, and that raises an AssertionFailedError - which a
+            // bare `catch (\Throwable)` here captures into $caught and then
+            // re-reports through the assertions below. MEASURED: the test
+            // still goes RED either way, so this was never E546's
+            // silent-pass shape; what it cost was the DIAGNOSTIC. MEASURED
+            // here, by shrinking awaitPromise()'s safety timer so the
+            // promise cannot settle: with the bare catch a hang arrives as
+            //   Failed asserting that 'Promise did not settle within the
+            //   test timeout' contains "cancelled"
+            // - an assertion about the cancellation path failing on a
+            // message about the timeout path - and with this arm it
+            // arrives as the fail() itself. The two sibling copies of this
+            // block assert instanceof RuntimeException instead, where the
+            // real message is not quoted at all. Rethrown so it arrives as
+            // itself.
+            throw $e;
         } catch (\Throwable $e) {
             $error = $e;
         }
@@ -816,6 +835,23 @@ final class EngineBackendTest extends TestCase
      * test has no use for, and folding the two would mean restructuring a file
      * whose whole suite is about a different claim. If a third caller appears,
      * promote it to `Support/` rather than growing a third copy.
+     *
+     * WHAT THIS SAID, in full, WAS ALL OF IT — and the last sentence was a
+     * TRIGGER with nobody watching for it: it fired only if the person adding
+     * the third copy happened to read this docblock first. WHAT IS TRUE NOW:
+     * the seam is pinned by {@see ScaledClockHelperSeamTest}, which reds on a
+     * third declaration with the remedy in its failure text, and which also
+     * checks STRUCTURALLY that these two are still two different helpers rather
+     * than a copy that drifted — the two situations have opposite fixes.
+     * WHY THIS PARAGRAPH STILL EARNS ITS PLACE: it carries the REASON, and the
+     * guard deliberately does not restate it. Note also that
+     * {@see \SugarCraft\Crush\Tests\Support\DuplicatedTestHelperDriftTest}
+     * is NOT the instrument for this pair and never was: it reports copies
+     * within
+     * {@see \SugarCraft\Crush\Tests\Support\DuplicatedTestHelperDriftTest::DRIFT_BOUND}
+     * tokens of each other, and lists "TWO TOKENS APART OR MORE" first among
+     * the things it cannot see. These two are far past it — measured with that
+     * guard's own report at widening bounds — so its silence is correct.
      *
      * @param array<int, string> $tokens
      * @return array{settled: bool, message: ?Message, error: ?\Throwable, virtualSeconds: float, realCeiling: bool}

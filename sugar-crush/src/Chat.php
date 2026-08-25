@@ -758,7 +758,7 @@ final class Chat implements Model
          * allocating here) keeps every existing embedder/test constructor
          * call working unchanged.
          *
-         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta}>|null
+         * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta|ReasoningDelta}>|null
          */
         ?\ArrayObject $liveToolEvents = null,
         /**

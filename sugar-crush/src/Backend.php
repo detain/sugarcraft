@@ -41,9 +41,13 @@ use SugarCraft\Crush\Backend\CancellationToken;
  * parameter to THIS interface instead would be a load-time fatal for every
  * four-parameter implementation, in this package and outside it, because PHP
  * rejects an implementation with fewer parameters than its interface even when
- * the extra one is optional (measured; see that interface's docblock, and
+ * the extra one is optional. MEASURED, and the measurement is a test rather
+ * than a sentence pointing at another sentence:
+ * {@see \SugarCraft\Crush\Tests\Backend\BackendContractWideningTest}
+ * compiles both polarities in a fresh interpreter and reports the interpreter's
+ * own version in every failure message. See also that interface's docblock, and
  * {@see Backend\ReportsContextWindow}, which made the same call for the same
- * reason).
+ * reason.
  *
  * @see Backend\EchoBackend  for the default offline / test impl
  */
