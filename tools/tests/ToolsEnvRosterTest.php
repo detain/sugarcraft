@@ -307,24 +307,47 @@ final class ToolsEnvRosterTest extends TestCase
     }
 
     /**
-     * Nothing under `tools/tests/` reads a variable of its own.
+     * Nothing under `tools/` that is not a script reads a variable of its own.
      *
-     * A SEPARATE POPULATION WITH A DIFFERENT RULE, stated rather than folded
-     * into the roster above. The test files have no `--help` to document
-     * anything in, so the rule for them is that every access is ambient. The
-     * day one of them needs a knob, this reds and the answer is a row in
-     * AMBIENT with a reason — not a silent extension.
+     * A SECOND POPULATION WITH A DIFFERENT RULE, stated rather than folded into
+     * the roster above: these files have no `--help` to document anything in,
+     * so the rule for them is that every access is ambient. The day one of them
+     * needs a knob, this reds and the answer is a row in AMBIENT with a reason
+     * — not a silent extension.
+     *
+     * AND IT IS A PARTITION, NOT A SECOND GLOB. The first draft of this pair
+     * was `tools/*.php` here and `tools/tests/*.php` there, which leaves a hole
+     * exactly the shape of `tools/anything-else/script.php` — a file in neither
+     * population and therefore scanned by nothing, in a guard whose entire
+     * subject is a variable nobody was watching. The assertion below closes it
+     * by construction: every `.php` file under `tools/` is either a script or
+     * one of these, and a file that is somehow neither reds by name.
      */
-    public function testNoToolsTestFileIntroducesAKnobOfItsOwn(): void
+    public function testNoOtherToolsFileIntroducesAKnobOfItsOwn(): void
     {
         $root = \dirname(__DIR__, 2);
-        $files = [];
-        foreach (\glob($root . '/tools/tests/*.php') ?: [] as $file) {
-            $files[] = $file;
-        }
+        $scripts = self::scriptRoster($root);
+        $everything = self::everyToolsFile($root);
+        $files = \array_values(\array_diff($everything, $scripts));
         \sort($files);
 
-        $this->assertContains(__FILE__, $files, 'the tools/tests/ walk cannot see its own files');
+        $this->assertContains(__FILE__, $files, 'the tools/ walk cannot see its own files');
+        $this->assertContains(
+            $root . '/tools/tests/_bootstrap.php',
+            $files,
+            'the walk is by *Test.php rather than by extension, so the helper that declares no '
+            . 'test — and carries more prose than either test file — is invisible to it',
+        );
+
+        // THE PARTITION ITSELF (rule 14): a file in neither population is
+        // scanned by nothing at all, which is the failure this whole guard
+        // exists to make impossible.
+        $this->assertSame(
+            [],
+            \array_values(\array_diff($everything, $scripts, $files)),
+            'these files under tools/ are in neither population, so no environment scan '
+            . 'reaches them at all',
+        );
 
         $local = [];
         foreach ($files as $file) {
@@ -342,11 +365,37 @@ final class ToolsEnvRosterTest extends TestCase
         $this->assertSame(
             [],
             $local,
-            'A file under tools/tests/ reads an environment variable that is neither ambient '
-            . 'nor documented anywhere — these files have no --help to document it in. Add a '
-            . 'row to ToolsEnvRosterTest::AMBIENT with the reason it is not ours, or move the '
-            . 'knob into the script it configures where the help block will cover it.',
+            'A file under tools/ that is not a script reads an environment variable that is '
+            . 'neither ambient nor documented anywhere — these files have no --help to '
+            . 'document it in. Add a row to ToolsEnvRosterTest::AMBIENT with the reason it is '
+            . 'not ours, or move the knob into the script it configures, where that script\'s '
+            . '`Environment:` help block will cover it.',
         );
+    }
+
+    /**
+     * Every `.php` file anywhere under `tools/`, absolute and sorted.
+     *
+     * BY EXTENSION AND RECURSIVE, which is what makes the two populations above
+     * a partition rather than two globs with a gap between them.
+     *
+     * @return list<string>
+     */
+    private static function everyToolsFile(string $root): array
+    {
+        $files = [];
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
+            $root . '/tools',
+            \FilesystemIterator::SKIP_DOTS,
+        ));
+        foreach ($walk as $entry) {
+            if ($entry->isFile() && $entry->getExtension() === 'php') {
+                $files[] = $entry->getPathname();
+            }
+        }
+        \sort($files);
+
+        return $files;
     }
 
     /**
