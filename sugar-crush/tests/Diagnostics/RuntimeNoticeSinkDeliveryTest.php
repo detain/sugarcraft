@@ -872,7 +872,8 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * THE WAKE Cmd IS NULL FOR EVERY Chat THAT MUST NOT LISTEN.
      *
      * Two gates, and they are different questions. A Chat nobody appointed must
-     * not install a watcher, for {@see drain()}'s destructiveness — the same
+     * not install a watcher, for {@see RuntimeNoticeSink::drain()}'s
+     * destructiveness — the same
      * reason {@see testAChatNobodyAppointedDoesNotPollTheInbox()} gives for the
      * tick. And a sink with no cross-fork transport has no fd to watch: the
      * in-process backend can only be written by this process, synchronously,

@@ -28,8 +28,8 @@ declare(strict_types=1);
  * `PATH`, so the PHAR form is exercised by CI and by nothing else. What WAS
  * checked locally is the half that distinguishes them: the same run with NO
  * `--bootstrap` at all, which is the shape CI uses, and which the autoload
- * hunt below has to survive. Do not restore the stronger sentence without
- * running the PHAR.
+ * hunt in _bootstrap.php has to survive. Do not restore the stronger sentence
+ * without running the PHAR.
  *
  * IT WAS DORMANT FOR SIX MONTHS AND IT PASSES. No `phpunit.xml` in the tree
  * references `tools/tests/`, no CI job ran it, and nothing autoloads
@@ -47,49 +47,22 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tools\Tests;
 
-// Standalone script: the script under test (check-path-repos.php) is invoked as
-// a subprocess, so no SugarCraft lib classes are needed — only PHPUnit itself.
-//
-// The root vendor/ carries no phpunit (root require-dev is phpstan only), so
-// borrow the first per-lib vendor that has one, then fall back to a global
-// composer install. The previous single hardcoded ~/.composer path made this
-// file unrunnable on any machine but its author's — it died in require_once
-// before PHPUnit could report anything.
-$autoloadCandidates = [];
-foreach (\glob(\dirname(__DIR__, 2) . '/*/vendor/autoload.php') ?: [] as $candidate) {
-    if (\is_file(\dirname($candidate) . '/bin/phpunit')) {
-        $autoloadCandidates[] = $candidate;
-    }
-}
-$autoloadCandidates[] = ($_SERVER['HOME'] ?? '') . '/.composer/vendor/autoload.php';
-$autoloadCandidates[] = ($_SERVER['HOME'] ?? '') . '/.config/composer/vendor/autoload.php';
-
-// AND NOT AT ALL WHEN PHPUNIT IS ALREADY HERE. A phpunit PHAR bundles its own
-// classes, so the hunt below finds nothing it needs and the `exit(2)` fired on
-// a runner that was perfectly capable of running this file — which is how a
-// guard ends up unrunnable in the one environment you want it in.
-$loaded = \class_exists(\PHPUnit\Framework\TestCase::class, false);
-foreach ($loaded ? [] : $autoloadCandidates as $candidate) {
-    if (\is_file($candidate)) {
-        require_once $candidate;
-        $loaded = true;
-        break;
-    }
-}
-if (!$loaded) {
-    \fwrite(\STDERR, "CheckPathReposTest: no autoloader with PHPUnit found. Run `composer install` in any lib.\n");
-    exit(2);
-}
+// The autoloader hunt that used to live here inline, plus the fixture-tree
+// helpers, MOVED (not deleted) to _bootstrap.php when a second guard needed
+// them — see that file, which carries the full reasoning verbatim. PHPUnit's
+// directory suite matches *Test.php, so this require is by name: a
+// bootstrap.php here would never be loaded.
+require_once __DIR__ . '/_bootstrap.php';
 
 use PHPUnit\Framework\TestCase;
 
 final class CheckPathReposTest extends TestCase
 {
-    private string $tmpDir = '';
+    use TmpTree;
 
     protected function setUp(): void
     {
-        $this->tmpDir = \sys_get_temp_dir() . '/check_path_repos_test_' . \uniqid('', true);
+        $this->tmpDir = $this->makeTmpTree('check_path_repos_test_');
         \mkdir($this->tmpDir . '/lib-b', 0777, true);
         \mkdir($this->tmpDir . '/lib-a', 0777, true);
     }
@@ -97,25 +70,9 @@ final class CheckPathReposTest extends TestCase
     protected function tearDown(): void
     {
         // Clean up temp directory.
-        if ($this->tmpDir !== '' && \is_dir($this->tmpDir)) {
+        if ($this->tmpDir !== '') {
             $this->removeDir($this->tmpDir);
         }
-    }
-
-    private function removeDir(string $dir): void
-    {
-        $items = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
-        );
-        foreach ($items as $item) {
-            if ($item->isDir()) {
-                \rmdir($item->getPathname());
-            } else {
-                \unlink($item->getPathname());
-            }
-        }
-        \rmdir($dir);
     }
 
     private function writeComposerJson(string $dir, array $data): void

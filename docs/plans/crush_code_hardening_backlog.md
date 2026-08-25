@@ -17867,3 +17867,217 @@ Noticed while attributing an assertion delta: this class is a live consumer of `
 gained exactly +2 assertions in round 58 (one per `src/` doc-block rewritten in lane b). That is the
 instrument working, and it is worth knowing that editing a `src/` doc-block anywhere moves this test's
 count — a figure someone will otherwise treat as unexplained noise.
+
+
+---
+
+## Ec58-1 — a parametrised child budget was never 20, and nothing had re-read it in two rounds
+
+`ChildWallClockBudgetTest`'s regex census could see that a budget went through a `%d` placeholder and not
+what it was, so the values rested on a doc-block sentence: *"those sites are at 20 by inspection, MEASURED
+at the time of writing"*. `resolvedParametrisedIn()` now walks the token stream — counting conversions
+(`%%` is an escape, not a conversion) to find which argument the placeholder consumes, then resolving it
+through an integer literal, a `self::` constant, or every argument the callers pass when the budget is
+handed down as a parameter.
+
+🔴 **THE FIRST THING IT REPORTED WAS THAT THE INSPECTION HAD ALREADY ROTTED.** MEASURED: the five sites
+resolve to **20, 30, 20, 20 and — through a parameter with two callers — 6 and 30.** Two of the five were
+never 20. Nothing was over the ceiling, so the TREE was fine and the CLAIM was not. That is rule 3 in its
+purest form: a load-bearing figure with no generator, wrong by the time anyone next read it.
+
+**The acceptance test was a mutation of the FIX, not of the defect (rule 16), and it came in two halves:**
+
+| # | mutation | verdict |
+|---|---|---|
+| M5a | a real parametrised constant raised to 100, against a ceiling of 50 | **KILLED** |
+| M5b | the same 100, with the fix's `array_merge` fold-in reverted | **SURVIVED** |
+
+M5b is the entry's whole point: **before this, a child budget of double the ceiling passed the guard in
+silence.** Four further mutations of the resolver (wrong conversion ordinal, `%%` counted as a conversion,
+the rule-14 report silently dropped, only the first caller's value taken) were all killed, as was blinding
+the token census on all but one directory — which the two-instrument cross-check catches.
+
+## Ec58-2 — `tools/` joins a doc-drift roster, and BOTH halves of the prescribed shape were wrong
+
+E551 said the fix was a guard in `tools/tests/` with "the token-stream scanner lifted somewhere both can
+reach", since copying it "is the shape `DuplicatedTestHelperDriftTest` exists to catch". **Measured, and
+neither half survives contact:**
+
+1. **The zero-copy reach is impossible.** `.github/workflows/ci.yml`'s `path-repo-check` — the only job
+   that runs `tools/tests/` — does NO `composer install` (that is why it installs a PHPUnit PHAR rather
+   than borrowing a lib's `vendor/bin`). There is no autoloader for `SugarCraft\Crush\Tests\*` there, and
+   `require`-ing the canonical guard to reflect its scanner fatals before PHPUnit reports anything:
+   VERIFIED, PHP 8.3.6, `Trait "SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait" not found`.
+2. **`DuplicatedTestHelperDriftTest` would never have seen the copy.** The conclusion holds; the reason
+   first filed here did not. **WHAT THIS SAID:** "MEASURED: its roster is `sugar-crush/src` alone."
+   **WHAT IS TRUE NOW:** that guard's roster is `sugar-crush/tests/`, via
+   `TestFileWalkTrait::everyTestFile()` rooted at `\dirname(__DIR__)`; its one direct walk of `src/` is
+   `declaredTypeNames()`, an auxiliary "is this name a class here" lookup, not the population it compares.
+   **WHY THE ENTRY STANDS:** `tools/` is outside `sugar-crush/tests/` exactly as it is outside
+   `sugar-crush/src/`, so the copy would have been unwatched drift under either roster — which is worse
+   than a pinned copy. Caught in review; the same wrong reason had also been written into
+   `tools/tests/StackedDocCommentTest.php`'s class doc-block and is corrected there.
+
+So the scanner IS copied, and the copy is **pinned** rather than wished away: the new guard reads the
+canonical implementation as TEXT — needing no autoloader — and compares token streams, so reformatting is
+free and a behaviour change reds naming the file to port into. **Mutating the CANONICAL scanner in
+`sugar-crush` reds `tools/tests/` (M9, KILLED)**, which is the property that makes the copy defensible.
+A real stacked pair injected into `tools/gen-docs.php` also reds (M14).
+
+## Ec58-3 — rule 18 demonstrated on itself, inside one round
+
+Round 58's own first commit wrote two cardinalities into `CONTRIBUTING.md` prose. **Both were wrong within
+the hour**, one of them invalidated by this same round's other work:
+
+| claim as shipped | measured one commit later |
+|---|---|
+| tools/tests is "10 tests / 45 assertions" | **28 tests, 135 assertions** |
+| `--fix --strict-closure` dirties "52 files" | **53** |
+
+Neither was corrected to today's number, which would only rot again. The verifiable half of each is kept
+as a property instead: the run prints its own totals, and `--fix` dirties `*/composer.json` and nothing
+outside that glob — re-measured, 53 entries, every one a `*/composer.json`, no root manifest, no lock.
+
+**A correction to this entry's own explanation, caught in review.** The replacement prose in
+`CONTRIBUTING.md` attributed 52→53 to lib growth — "the number is the lib count and every new lib moves
+it". That is a hypothesis, and it is false here: both figures were taken in round 58 about an hour apart
+by the same lane, and `git diff --name-only 535d721ff..HEAD` touches no `composer.json` at all, so no lib
+was added. **52 was a mis-measurement, not staleness.** The causal clause is removed. The point the entry
+is making survives it: a figure no test derives rots whether or not anyone also mis-typed it, and the
+reason it is dropped rather than corrected is unchanged.
+
+## Ec58-4 — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
+
+E547 inherited "eight bare `{@see someMethod()}` citations name no method that exists". Re-censused with a
+generator, the answer depends entirely on the alphabet (rule 11):
+
+- **This round's alphabet** — a bare `X()` where no `function X(` is declared anywhere in the same file —
+  reports **16 raw / 13 real** (3 are `SymbolCitationDriftTest`'s own prose *describing* the shape, which
+  rule 26 requires it to contain).
+- **The tree's own guard** counts a bare citation only when the member is spelled as a **test** method,
+  which excludes every one of `pump()`, `flattened()`, `drain()`, `significantTokens()`, `forPaths()`,
+  `readResponse()`, `__destruct()`, `selectedProviderLabel()`, `warnPermissionConfigOnce()`.
+
+Neither number is wrong; they answer different questions. **One was fixed** —
+`RuntimeNoticeSinkDeliveryTest`'s `{@see drain()}`, where the same file already spells it
+`RuntimeNoticeSink::drain()` two hundred lines up. The remaining twelve sit in `tests/Backend`,
+`tests/Cli`, `tests/LSP`, `tests/Support` and `tests/Tools` — lanes a and b's concurrent files this round,
+reported rather than edited. **Widening the tree's guard to this alphabet would red twelve files across
+two other lanes**, so it is a decision for a round where one lane owns `tests/`.
+
+## Ec58-5 — a 🔴 "before anything else" instruction was skipped, and only the transcript recorded it
+
+Round 58's first lane-c agent was told, in red, to start the E490 campaign in the background **before
+doing anything else**. Its transcript contains **zero** campaign calls across 43 tool uses; it went
+straight to E552. **Measured compliance with a 🔴 "before anything else" instruction: 0 of 1.** The two
+commits it did make are both good and both verified here — so this is not a finding about the agent's work
+but about the harness: a leading imperative in a long brief has no enforcement, and nothing but the
+transcript would have revealed the omission. Same class as E492, where three lanes read a stale ownership
+map and none reported it. **The rate is the part worth keeping.**
+
+## Ec58-6 — a census that could express two shapes, under a doc-block saying "every"
+
+`ChildWallClockBudgetTest::childBudgets()` scanned raw source for
+`/<wrapper> -s KILL (\d+|%d)/` and documented itself as "every literal child budget in `tests/`, and
+every parametrised one". **An alphabet is coverage (rule 11), and this one could express two shapes.**
+Measured by mutation at the fix commit:
+
+| what was mutated | before | after |
+|---|---|---|
+| `tests/Backend/CommandBackendTest.php`'s live `<wrapper> 10` raised to **300**, against a 60s `defaultTimeLimit` | **SURVIVED** | KILLED |
+| an existing `'... KILL 20 ...'` respelled as `"... KILL {$bound} ..."`, `$bound = 300` | **SURVIVED** | KILLED |
+
+The second is the sharper one. It removed the site from **both** censuses in a single edit — no digits for
+the text scan, no `%d` for the token scan — so it produced no `unresolved` row **and no cross-census
+disagreement either**, which falsified the file's own class doc-block: *"neither can go blind without
+disagreeing with the other."* True of a census being blinded; false of a site LEAVING the population.
+Two censuses that both see nothing agree perfectly.
+
+**Fixed by widening, not by narrowing the prose.** The scan reads string-literal tokens rather than raw
+text (structural, rule 40 — two rows the old scan reported were doc-block SENTENCES describing the shape,
+counted as real budgets); the alphabet is now the wrapper, an optional preceding printf conversion
+(`%s<wrapper>` is live, and `\b` does not fire between `s` and `t`), any run of the flags `timeout(1)`
+takes ahead of its duration, then one budget token — **classified, not required**. Digits are literal,
+`%d` goes to the resolver, and anything else it recognises as a budget, or a literal that ENDS at the
+wrapper, becomes an `unresolved` row carrying the token it choked on. The coverage diff is a strict
+superset over real invocations: all 15 kept, the 2 plain-form sites added, only the 2 prose sentences
+dropped.
+
+**What it still cannot see, stated rather than left to be found:** a wrapper split across a concatenation
+with no whitespace at the literal's end (`'time' . 'out 5 sh'` — this file's own discipline, and a
+deliberate act anywhere else), and a budget assembled by `implode()`. Everything else lands in
+`unresolved`.
+
+## Ec58-7 — the mutation harness's uniqueness check was meaningless for exactly the anchors that need it
+
+Rule 13, self-inflicted and caught mid-run. The harness refused a mutation unless
+`/usr/bin/grep -cF -- "$OLD" "$FILE"` returned 1. **GNU `grep -F` treats a newline in the pattern as a
+pattern SEPARATOR**, so a multi-line anchor was being counted as *"any of these lines"* — it reported 1
+for an anchor that matched nothing as a whole. It failed closed (the Python apply step asserts the real
+count and aborted), so no verdict was corrupted, but the check itself was worthless for multi-line
+anchors and a single-line-anchor harness would never have noticed. The count is taken in Python now.
+
+**A second harness defect from the same run:** the verdict classifier special-cased rc 255 as "php fatal,
+discard" and filed everything else non-zero as KILLED. Removing `resolveThroughParameter()`'s cycle guard
+produced **rc 139 — SIGSEGV**, the runner dying rather than reporting, and it was filed as a clean kill. A
+signal death is neither a kill nor a survival and is now named as such.
+
+## Ec58-8 — a `--check` that did nothing satisfied the guard for `--check`
+
+`GenDocsTest::testCheckDoesNotWriteToTheTree()` asserted only that the bytes on disk were unchanged after
+`--check` ran over a hand-edited page. **That is also exactly what a `--check` which never ran leaves
+behind** (rule 25). Proved by mutation rather than argued: with `gen-docs.php`'s drift branch neutered to
+`if (false)`, the test with the new `assertSame(1, $result['exit'])` **reds**, and the same mutation with
+that assertion reverted is **GREEN — 1 test, 2 assertions**. One line, and the exposure is closed.
+
+## Ec58-9 — repo-root `tools/` env vars are on no roster at all
+
+`SUGARCRAFT_GEN_DOCS_ROOT` (added this round) and `SUGARCRAFT_CHECK_PATH_REPOS_ROOT` (pre-existing) are
+documented only in their own comments. `EnvRosterDriftTest`'s roster is `sugar-crush/src` +
+`sugar-crush/bin` under the `SUGARCRUSH_`/`SUGAR_CRUSH_` alphabet, so a `SUGARCRAFT_`-prefixed variable at
+the monorepo root is covered by nothing — the new one is consistent with its sibling rather than a
+regression, which is why it was left. **Not deferred for cost: deferred because the roster is
+`sugar-crush`-rooted by design and reaching `tools/` from it is the same dependency inversion Ec58-2
+records.** A `tools/tests/` guard is the shape that would work, on the model of `StackedDocCommentTest`.
+
+## Ec58-10 — a manifest-policy CI job now reds on a test file's token stream
+
+`path-repo-check` — a job about composer manifests — is the only job that runs `tools/tests/`, so it now
+goes red whenever `RuntimeNoticeSinkDeliveryTest::stackedDocCommentLines()` changes by one token. That is
+the design (`StackedDocCommentTest` pins its copy against the canonical, and the failure text names the
+file to port into), and it is the price of Ec58-2's dependency direction. **Stated here because a sibling
+lane editing that method will see a job whose NAME gives no hint of the reason.** Renaming the job, or
+splitting `tools/tests/` into its own, is the cheap improvement whenever someone is next in `ci.yml`.
+
+## Ec58-11 — three arms compute a line, one fixture pinned none of them, and one arm was wrong
+
+Rule 41 three times in one file, and the third pass found a real defect rather than a gap.
+
+`wallClockWrappersIn()` computes a row's line in **three** places — the literal branch, the parametrised
+branch, and the unresolved arm. A fixture was added claiming *"the line numbers matter as much as the
+classification"*, and it was rendering the classification and the seconds and **not the line** — rule 43
+exactly: honestly satisfied, doing no work. With the line added to every fixture, the mutation replacing
+the row's line with the token's own line **still survived**, because every fixture literal was ONE LINE
+long and the heredoc's wrapper sat on the first line of its body. The correction added zero everywhere,
+so a dead one was indistinguishable from a live one (rule 2 — the mutation was relevant, the window was
+wrong).
+
+| tag | arm | before a multi-line fixture | after |
+|---|---|---|---|
+| MF12 | literal branch | **SURVIVED** | KILLED |
+| MF13 | unresolved arm | **SURVIVED** | KILLED — **and the fixture failed on the CODE** |
+| MF15 | parametrised branch | **SURVIVED** | KILLED |
+
+**MF13's fixture found a live off-by-one.** The left-boundary group CONSUMES the character ahead of the
+wrapper, and in a multi-line literal that character is the newline — so the unresolved arm, which
+reported from the WHOLE match, named a line one above the wrapper's. An interpolated budget three lines
+into a literal was reported two lines up. It reports from group 1 now (the flag run begins immediately
+after the wrapper and cannot contain a newline, so its offset is on the wrapper's own line whether or not
+the group is empty). The other arm was already right: it reports from the BUDGET group, past the flags.
+
+**MEASURED on PHP 8.3.6**, by driving the shipped scanner through reflection rather than a copy of it:
+`token_get_all()` reports a multi-line single-quoted string at the line it STARTS on, and a heredoc body
+at the line the body starts on. Both shapes are fixtures now, in all three arms.
+
+**The transferable finding:** killing a mutation does not transfer to its neighbour any more than
+excusing one does. Rule 41 is written for survivors; this is the same rule for kills.

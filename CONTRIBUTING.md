@@ -57,6 +57,42 @@ verify no injected entries leaked in:
 php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 ```
 
+That is one of **five** gates the `path-repo-check` job in
+`.github/workflows/ci.yml` runs, and until now this file documented only two
+of them — so a contributor could pass everything CONTRIBUTING asked for and
+still be failed by CI on a check they had never been told about. Run the whole
+set before you push; each must exit 0, and none of them needs a
+`composer install`:
+
+```sh
+phpunit --no-configuration --colors=never tools/tests/  # the checker's own guards
+php tools/check-path-repos.php --no-lib-path-repos      # no sibling path-repos in a published manifest
+php tools/check-path-repos.php                          # the root closure is complete
+php tools/check-path-repos.php --unused                 # no path-repo dep nothing requires
+php tools/check-path-repos.php --fix --strict-closure \
+  && php tools/check-path-repos.php --strict-closure \
+  && git checkout -- '*/composer.json'                  # injection restores a full local closure
+```
+
+The last one is the only entry that writes to your tree, and the revert is
+narrowed on purpose: CI spells that line `git checkout -- .`, which is safe in
+a throwaway checkout and would eat your uncommitted work here. MEASURED on this
+tree: `--fix --strict-closure` dirties `*/composer.json` and NOTHING else — no
+root manifest, no lock, no file outside that glob — so the glob reverts all of
+it. (A count of the dirtied files used to stand here. It said 52; re-measured
+about an hour later, in the same round and with no lib added in between, it was
+53 — so the first figure was simply wrong. It is dropped rather than corrected,
+because a number no test derives rots whether or not anyone mis-typed it.
+`git status --porcelain` after the `--fix` is the answer that cannot go stale.)
+
+The first line wants a PHPUnit 10 PHAR on `PATH` (CI installs one via
+`setup-php`'s `tools: phpunit:10`). Without one, borrow any lib's — that form
+was measured green on PHP 8.3.6, and the run prints its own totals:
+
+```sh
+candy-core/vendor/bin/phpunit --no-configuration tools/tests/
+```
+
 Do not commit a per-lib `composer.lock` (`/*/composer.lock` is gitignored;
 the root keeps its own). A committed lock makes `composer install` resolve
 from the lock and silently ignore the injection — it only warns.
