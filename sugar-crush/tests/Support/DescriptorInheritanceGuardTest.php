@@ -235,10 +235,27 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * the row is the argument for why not - which is a thing a reader can
      * disagree with, unlike an absence.
      *
-     * THE ROSTER IS THE HORIZON, so a library that grows a SIXTH kind of
-     * directory reds {@see testEveryFileOutsideAnAutoloadRootIsClassified()}
-     * rather than being skipped in silence. That is rule 14 at directory
-     * granularity: the guard goes red on what it cannot classify.
+     * EVERY ROW MUST MATCH A REAL FILE, `walked => false` INCLUDED, and this
+     * is the half the first version of the roster left out. WHAT THE UNWALKED
+     * ROWS USED TO BE: pinned by nothing - no mechanism, no hit count, no
+     * cardinality - so `walked => false` was a flag that made a whole
+     * directory kind invisible and could not go stale visibly, which is the
+     * complaint this doc-block makes about `walked` two paragraphs down.
+     * WHAT IS TRUE NOW: an attack demonstrated it rather than an argument -
+     * an unreadable `proc_open()` spec planted under a library's `docs/` ran
+     * GREEN through the whole test, and so did the same file at a library
+     * root. Every row is now asserted to match at least one file in the
+     * closure. WHY THE DISTINCTION STILL EARNS ITS PLACE: `walked` still
+     * decides whether the files are SCANNED; it just no longer decides
+     * whether they are COUNTED.
+     *
+     * THE ROSTER IS THE HORIZON, so a library that grows a kind of directory
+     * nobody has rostered reds
+     * {@see testEveryFileOutsideAnAutoloadRootIsClassified()} rather than
+     * being skipped in silence. That is rule 14 at directory granularity: the
+     * guard goes red on what it cannot classify. (No count of rows is written
+     * here on purpose, rule 18 - the roster below IS the list, and a sentence
+     * naming its size is wrong the first time somebody adds one.)
      *
      * `mechanism` IS THE EVIDENCE, AND IT IS WHAT MAKES A ROW FALSIFIABLE.
      * Every `walked => true` row names a file in the closure and a marker in
@@ -303,14 +320,19 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'runs by hand, in its own process, with its own descriptors',
         ],
 
-        // NOT WALKED, and empty of PHP on this tree - which is a measurement
-        // rather than a licence, hence the row: the day candy-pty puts a
-        // runnable script under docs/, this row is where somebody has to
-        // argue that it still cannot reach us.
-        'docs' => [
-            'walked' => false,
-            'reason' => 'prose; the reachable closure has no PHP under any docs/ directory today',
-        ],
+        // THERE WAS A `docs` ROW HERE, AND ITS OWN REASON IS WHY IT IS GONE.
+        // WHAT IT SAID: "prose; the reachable closure has no PHP under any
+        // docs/ directory today", offered as "a measurement rather than a
+        // licence". WHAT IS TRUE NOW: the measurement was right - there is no
+        // `.php` under any `docs/` in the closure - and that is exactly what
+        // made the row a licence. It pre-approved a directory kind that does
+        // not exist, and an unreadable spec planted under `candy-core/docs/`
+        // ran green through this entire test. WHY THE REASONING STILL EARNS ITS
+        // PLACE, rather than being deleted with the row: the argument it wanted
+        // somebody to make one day is now FORCED to happen - with no row, the
+        // first `docs/*.php` in the closure reds this test as unclassified,
+        // which is what THE ROSTER IS THE HORIZON promises above and is
+        // strictly stronger than a pre-written answer.
 
         // NOT WALKED. A PHP file at a library's own root, which today is one
         // tool config (`.php-cs-fixer.dist.php`). It is loaded by php-cs-fixer
@@ -1070,7 +1092,8 @@ final class DescriptorInheritanceGuardTest extends TestCase
         \sort($libs);
 
         $unclassified = [];
-        $walkedHits = [];
+        $segmentHits = [];
+        $rootBasenames = [];
         $seen = 0;
 
         foreach ($libs as $lib) {
@@ -1105,9 +1128,19 @@ final class DescriptorInheritanceGuardTest extends TestCase
                     continue;
                 }
 
+                // EVERY rostered segment is counted, not only the walked ones.
+                // A `walked => false` row used to be pinned by nothing at all -
+                // no mechanism, no hit count, no cardinality - so it licensed a
+                // directory whether or not that directory still existed. The
+                // liveness assertion below is what turns the row back into a
+                // claim, and this is the tally it reads.
                 $segment = self::horizonSegment($relative, $roots);
-                if ($segment !== null && (self::LIB_HORIZON[$segment]['walked'] ?? false) === true) {
-                    $walkedHits[$segment] = ($walkedHits[$segment] ?? 0) + 1;
+                if ($segment !== null && isset(self::LIB_HORIZON[$segment])) {
+                    $segmentHits[$segment] = ($segmentHits[$segment] ?? 0) + 1;
+
+                    if ($segment === '') {
+                        $rootBasenames[\basename($relative)] = true;
+                    }
                 }
             }
         }
@@ -1162,20 +1195,46 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 );
             }
 
+            // EVERY ROW MUST STILL MATCH SOMETHING - `walked => false` INCLUDED.
+            // This half was missing, and an attack found it rather than a
+            // reading: a `proc_open()` whose spec is a method call, planted
+            // under a library's `docs/`, left this whole test GREEN, and so did
+            // the same file at a library root. A row that matches nothing is
+            // not a classification, it is a standing permission for a directory
+            // kind that may no longer exist - which is the same shape as an
+            // ACCOUNTED_FOR exemption written for correct code, and the same
+            // standard {@see testNoReachableLibRowIsStale()} already applies to
+            // UNREADABLE_IN_LIBS two functions away. It was not applied here.
+            $liveness = $row['walked'] === true
+                ? <<<TEXT
+                    LIB_HORIZON says this walk reads `{$segment}/`, and there is no such file
+                    anywhere in the reachable closure any more.
+
+                    The widening is dead. Either the directory was renamed in every
+                    library at once - in which case fix the row - or the classifier has
+                    started answering `null` for it, in which case those files are being
+                    counted as autoloaded and every arm here is quietly reading a
+                    different set than it says it does.
+                    TEXT
+                : <<<TEXT
+                    LIB_HORIZON rosters `{$segment}/` as deliberately NOT walked, and there is
+                    no such file anywhere in the reachable closure to not walk.
+
+                    THE RESOLUTION IS TO DELETE THE ROW, not to keep it against the day
+                    the directory comes back. An unwalked row is an argument that a
+                    specific set of real files cannot reach this process; with no files
+                    behind it, it is a licence outliving the thing it licensed, and it
+                    silently pre-approves whatever lands there next. Deleted, the first
+                    file to appear in `{$segment}/` reds this test as unclassified and
+                    somebody has to make the argument then, with the file in front of
+                    them - which is what THE ROSTER IS THE HORIZON is supposed to mean.
+                    TEXT;
+
+            self::assertArrayHasKey($segment, $segmentHits, $liveness);
+
             if ($row['walked'] !== true) {
                 continue;
             }
-
-            self::assertArrayHasKey($segment, $walkedHits, <<<TEXT
-                LIB_HORIZON says this walk reads `{$segment}/`, and there is no such file
-                anywhere in the reachable closure any more.
-
-                The widening is dead. Either the directory was renamed in every
-                library at once - in which case fix the row - or the classifier has
-                started answering `null` for it, in which case those files are being
-                counted as autoloaded and every arm here is quietly reading a
-                different set than it says it does.
-                TEXT);
 
             // THE HALF THAT WAS MISSING, AND A MUTATION FOUND IT RATHER THAN A
             // READING. Everything above this line is derived from a walk this
@@ -1190,16 +1249,47 @@ final class DescriptorInheritanceGuardTest extends TestCase
             // Rule 35's shape: the roster is not evidence that the walk reads
             // what it says. Only the walk's own output is.
             self::assertSame(
-                $walkedHits[$segment],
+                $segmentHits[$segment],
                 $emitted[$segment] ?? 0,
                 $segment . ' is rostered as walked and libSourceFiles() emitted '
-                    . ($emitted[$segment] ?? 0) . ' of its ' . $walkedHits[$segment] . ' files. '
+                    . ($emitted[$segment] ?? 0) . ' of its ' . $segmentHits[$segment] . ' files. '
                     . 'The generator every other arm here consumes is reading a different set '
                     . 'from the one this roster describes, so those arms are scanning less than '
                     . 'they claim - which is exactly the invisibility E449 is about, reintroduced '
                     . 'behind a roster that still says otherwise.',
             );
         }
+
+        // THE UNWALKED ROW WITH THE WIDEST REACH, PINNED TO THE ONE THING IT
+        // WAS MEASURED AGAINST. `''` is not a directory: it matches EVERY
+        // `.php` file at EVERY library's root, and its reason - "a tool config
+        // loaded by that tool in its own process" - was measured against a
+        // single file. A row that broad is the one place a runnable script can
+        // arrive already exempted, so the reason is asserted rather than
+        // asserted-once-and-trusted: the basenames are re-derived from the
+        // filesystem on every run and compared to the set the reason describes.
+        //
+        // Rule 18: this is a SET the test derives, not a count written into
+        // prose. A sibling adding a root-level file moves it, and moving it is
+        // the point.
+        $basenames = \array_keys($rootBasenames);
+        \sort($basenames);
+        self::assertSame(['.php-cs-fixer.dist.php'], $basenames, <<<'TEXT'
+            A library-root `.php` file has appeared that is not the tool config
+            LIB_HORIZON's `''` row was written for.
+
+            The `''` row exempts every PHP file at every library's root on the
+            strength of one measured example, so a new one arrives PRE-APPROVED -
+            which is precisely how a runnable script gets past a roster that looks
+            thorough. Decide what the new file is:
+
+              a tool config, run by its own tool in its own process - add its
+              basename here, and the row keeps covering it honestly.
+
+              anything this process can load or exec - it does not belong under the
+              `''` row at all. Give it its own treatment, the way `bin/` and `lang/`
+              got theirs, with the mechanism measured off the source.
+            TEXT);
 
         \sort($unclassified);
         self::assertSame([], $unclassified, <<<'TEXT'
