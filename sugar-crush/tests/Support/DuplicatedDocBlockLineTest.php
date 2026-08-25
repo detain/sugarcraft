@@ -182,10 +182,24 @@ final class DuplicatedDocBlockLineTest extends TestCase
                 . 'ending in a lone slash is reported as repeating itself',
         );
 
-        // (3) A CONTINUATION LINE WITH NO STAR breaks adjacency. Doc-blocks in
-        // this package really do carry them — MEASURED on PHP 8.3.6, five lines
-        // in five files across `tests/`, `src/` and `bin/` — so this arm is
-        // reached by the real census and not only here.
+        // (3) A CONTINUATION LINE WITH NO STAR breaks adjacency.
+        //
+        // WHAT THIS SAID: "Doc-blocks in this package really do carry them —
+        // five lines in five files" — offered as the proof that the real census
+        // reaches this arm. WHAT IS TRUE NOW, re-measured on PHP 8.3.6 with a
+        // known-positive control in both polarities: the COUNT was right and
+        // the DESCRIPTION was not. Every one of those five lines is FULLY
+        // EMPTY. There is no un-starred PROSE continuation anywhere in
+        // `tests/`, `src/` or `bin/`. WHY THE ARM STILL EARNS ITS PLACE: an
+        // empty line takes it too, because `ltrim('')` does not begin with a
+        // star and so never reaches the empty-body reset in arm (1) — the arm
+        // IS exercised by the real census, just not by the shape the sentence
+        // named. The starless-PROSE fixture below is therefore synthetic-only,
+        // which is E363's shape and correct rather than a compromise. No count
+        // is written here on purpose (rule 18): derive it by walking
+        // `T_DOC_COMMENT` bodies and tallying continuation lines whose
+        // `ltrim()` does not start with `*`, keeping the empty ones apart from
+        // the rest — the two answers are different questions.
         $starless = 'a fenced example line, written without a leading star';
         $this->assertSame(
             [],

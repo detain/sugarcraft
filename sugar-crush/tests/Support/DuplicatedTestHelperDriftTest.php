@@ -917,10 +917,19 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * AND THE CLOSURE CONTROL, which is the mistake this fix made on its first
      * attempt and is worth a permanent reader. An anonymous function carries no
      * modifier either. With the visibility question asked before the name is
-     * read, "absence means public" files every closure in the suite as a
-     * declaration whose name cannot be read — MEASURED, 334 of them. The name
-     * is read first now, and the anonymous-function discriminator asks
-     * `carriesVisibility()` about EXPLICIT keywords only.
+     * read, "absence means public" files every ANONYMOUS `function` in the
+     * suite as a declaration whose name cannot be read — hundreds of rows, all
+     * of them noise. The name is read first now, and the anonymous-function
+     * discriminator asks `carriesVisibility()` about EXPLICIT keywords only.
+     *
+     * TWO CORRECTIONS TO HOW THAT USED TO BE WRITTEN, both measured. It said
+     * "every closure", and an ARROW function is not in this population at all:
+     * `fn` lexes as `T_FN`, and the walk below selects `T_FUNCTION`, so an
+     * arrow never reaches it in either token order. And it carried the count as
+     * a digit, which is a cardinality over `tests/` in prose and moves the day
+     * any lane adds a closure (rule 18). Derive it instead: swap the two blocks
+     * in {@see declarationsIn()} and read the `unparseable` list the public
+     * alphabet returns.
      */
     public function testAnImplicitlyPublicHelperIsScannedAsPublic(): void
     {
@@ -1959,9 +1968,12 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             // declaration carrying no modifier at all, which is what PHP means
             // by one — but an anonymous `function () {}` and an arrow function
             // also carry no modifier, and asking about visibility first files
-            // every closure in the suite as an unreadable public declaration.
-            // MEASURED: with these two blocks in the other order, this file
-            // reports 334 unparseable rows, every one of them a closure.
+            // every ANONYMOUS `function` in the suite as an unreadable public
+            // declaration — hundreds of rows. An ARROW function is not among
+            // them: `fn` is `T_FN` and this walk selects `T_FUNCTION`, so it
+            // never reaches here in either order. The count is deliberately not
+            // written down (rule 18); swap these two blocks and read the
+            // `unparseable` list under a `[\T_PUBLIC]` alphabet.
             $name = null;
             for ($j = $i + 1; $j < $count; $j++) {
                 $candidate = $tokens[$j];
@@ -2024,10 +2036,10 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * @param bool                               $anAbsentModifierIsPublic pass
      *        `false` to ask only about an EXPLICIT keyword. The one caller that
      *        does is the anonymous-function discriminator in
-     *        {@see declarationsIn()}: a closure carries no modifier either, so
-     *        a question that treats absence as `public` cannot tell it from a
-     *        bare `function foo()` and files all 334 of this suite's closures
-     *        as unreadable declarations.
+     *        {@see declarationsIn()}: an anonymous `function` carries no
+     *        modifier either, so a question that treats absence as `public`
+     *        cannot tell it from a bare `function foo()` and files every one of
+     *        them as an unreadable declaration.
      */
     private static function carriesVisibility(
         array $tokens,
