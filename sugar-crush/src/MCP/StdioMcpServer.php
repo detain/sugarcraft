@@ -286,7 +286,15 @@ final class StdioMcpServer implements McpServer
             'clientInfo' => ['name' => 'sugar-crush', 'version' => '1.0.0'],
         ], $deadline);
 
-        if ($response === null || ($response->result === null && $response->error === null)) {
+        // `!$response->resultSet`, NOT `result === null`: a server answering
+        // `initialize` with a legal `"result": null` used to be rejected here as
+        // "answered nothing at all", because the two were indistinguishable. It is
+        // still a MISBEHAVING answer — the MCP spec says the result is an object
+        // with a `protocolVersion` — but the gate this branch guards is "did the
+        // server answer", and it did. `parseTools()` reads the tools out with `??
+        // []`, so a server that answers null all the way through comes up with no
+        // tools rather than being reported as a failed launch.
+        if ($response === null || (!$response->resultSet && $response->error === null)) {
             // READ THE TAIL BEFORE `stop()`, which clears it. Without this the
             // only thing a user ever saw for a server that died printing a stack
             // trace was the bare name — the child's own explanation was written
@@ -472,7 +480,12 @@ final class StdioMcpServer implements McpServer
             'arguments' => $args,
         ]);
 
-        if ($response === null || $response->result === null) {
+        // `!$response->resultSet` rather than `result === null`, so a legal
+        // `"result": null` is a RESULT and falls through to the wrapping branch
+        // below — where it is rendered as the text `null`, exactly as `false` and
+        // `0` are. An error response still lands here, because an error carries no
+        // `result` key at all.
+        if ($response === null || !$response->resultSet) {
             return ['error' => 'Tool call failed'];
         }
 

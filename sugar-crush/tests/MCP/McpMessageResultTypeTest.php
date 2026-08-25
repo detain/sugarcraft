@@ -110,6 +110,12 @@ final class McpMessageResultTypeTest extends TestCase
         yield 'list' => ['[1,2,3]', [1, 2, 3]];
         yield 'object' => ['{"a":1}', ['a' => 1]];
         yield 'empty object' => ['{}', []];
+
+        // NULL IS IN THE TABLE NOW, AND IT WAS THE LAST ONE OUT. It is a
+        // conforming JSON-RPC result and was rejected until `$resultSet` existed
+        // to tell "sent null" from "sent nothing" — see
+        // {@see testANullResultParsesAndIsDistinguishedFromAnAbsentOne()}.
+        yield 'null' => ['null', null];
     }
 
     /**
@@ -134,37 +140,97 @@ final class McpMessageResultTypeTest extends TestCase
     }
 
     /**
-     * `"result": null` IS REJECTED, DELIBERATELY, and this pins the decision so
-     * the next reader does not "fix" it into the widening above.
+     * `"result": null` PARSES, AND IS TOLD APART FROM AN ABSENT `result`.
      *
-     * With `method`, `error` and `result` all null there is no discriminator
-     * left in the decoded array: the message is indistinguishable from
-     * `{"jsonrpc":"2.0"}` and from a reply with no `result` key at all, and this
-     * class carries no "was the key present" sentinel. Telling them apart needs
-     * a paired `bool $resultSet` — the convention this repo already uses for
-     * nullable state — threaded through `toJson()` and `StdioMcpServer`'s two
-     * `result === null` tests, which is a follow-up, not a line.
+     * WHAT THIS TEST SAID BEFORE: that `"result": null` was REJECTED on purpose,
+     * and that the next reader must not "fix" it. The reasoning was sound at the
+     * time — with `method`, `error` and `result` all null there was no
+     * discriminator left in the decoded array, so the message was
+     * indistinguishable from `{"jsonrpc":"2.0"}` and from a reply carrying no
+     * `result` key — and it named the proper fix: a paired `bool $resultSet`, the
+     * convention this repo already uses for nullable state.
      *
-     * THE SECOND ASSERTION IS THE CONTROL. `assertNull()` alone is satisfied by
-     * a `parse()` that has been deleted, or that rejects everything — and
-     * `false` is the neighbouring falsy value most likely to be swept up by a
-     * sloppier guard. Requiring `false` through the SAME call proves the
-     * rejection is a decision about `null` and not the instrument being dead.
+     * WHAT IS TRUE NOW: that sentinel exists. `array_key_exists()` is the
+     * discriminator, so all three messages are distinct, and the rejection is
+     * gone. `{"jsonrpc":"2.0","id":"1","result":null}` is a conforming JSON-RPC
+     * success response and this class now represents it.
+     *
+     * WHY THE ROWS BELOW STILL EARN THEIR PLACE: the sentinel is only worth
+     * anything if it DISCRIMINATES, and a `resultSet` hard-wired to `true` would
+     * satisfy "null parses" while quietly making `{"jsonrpc":"2.0"}` parse too.
+     * All four polarities are here — present-and-null, present-and-false,
+     * absent-with-a-method, and absent-with-nothing-at-all — so neither a
+     * blanket-accept nor a blanket-reject passes.
      */
-    public function testANullResultIsRejectedWhileTheAdjacentFalseIsNot(): void
+    public function testANullResultParsesAndIsDistinguishedFromAnAbsentOne(): void
     {
-        $this->assertNull(
-            McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":null}'),
-            'a result of null has no discriminator left and is rejected on purpose',
+        $nullResult = McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":null}');
+        $this->assertNotNull(
+            $nullResult,
+            'a conforming JSON-RPC response whose result is null was rejected — the resultSet '
+            . 'sentinel is not being consulted',
+        );
+        $this->assertTrue($nullResult->resultSet, 'the result key was present and is not recorded');
+        $this->assertNull($nullResult->result);
+        $this->assertTrue($nullResult->isResponse());
+        $this->assertFalse($nullResult->isError());
+
+        // The neighbouring falsy value, through the SAME call: a guard sloppy
+        // enough to sweep `null` up would very likely take `false` with it.
+        $falseResult = McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":false}');
+        $this->assertNotNull($falseResult);
+        $this->assertTrue($falseResult->resultSet);
+        $this->assertFalse($falseResult->result);
+
+        // ABSENT, not null: a request carries no `result` key, and must not be
+        // reported as one that does.
+        $request = McpMessage::parse('{"jsonrpc":"2.0","id":"1","method":"tools/list"}');
+        $this->assertNotNull($request);
+        $this->assertFalse(
+            $request->resultSet,
+            'a message with no result key is reporting one, so the sentinel is hard-wired true '
+            . 'and discriminates nothing',
         );
 
-        $stillParses = McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":false}');
-        $this->assertNotNull(
-            $stillParses,
-            'parse() rejected result:false too, so the null rejection above is not a decision '
-            . 'about null — the parser is refusing everything and this file proves nothing',
+        // AND THE ENVELOPE WITH NOTHING IN IT IS STILL REJECTED. This is what the
+        // guard in parse() is FOR, now that null is no longer its business: no
+        // method, no error, no result key — nothing to match a response against.
+        $this->assertNull(
+            McpMessage::parse('{"jsonrpc":"2.0"}'),
+            'an envelope carrying no method, no error and no result key was accepted — parse() '
+            . 'now returns objects that readResponse() has nothing to match on',
         );
-        $this->assertFalse($stillParses->result);
+    }
+
+    /**
+     * A NULL RESULT SURVIVES THE ROUND TRIP, which `toJson()` used to break in the
+     * mirror of the same bug: `if ($this->result !== null)` dropped the key, so a
+     * message that arrived as `{"…","result":null}` re-serialised as `{"…"}` — a
+     * DIFFERENT message, and one this class then refused to parse back.
+     */
+    public function testANullResultSurvivesToJsonAndBack(): void
+    {
+        $json = McpMessage::success('7', null)->toJson();
+
+        $this->assertStringContainsString(
+            '"result":null',
+            $json,
+            'toJson() dropped a null result, so the message it emits is not the one it holds',
+        );
+
+        $reparsed = McpMessage::parse($json);
+        $this->assertNotNull($reparsed, 'a null result did not survive toJson() + parse()');
+        $this->assertTrue($reparsed->resultSet);
+        $this->assertNull($reparsed->result);
+
+        // THE OTHER POLARITY: a message that genuinely has no result must not grow
+        // one. Without this, `toJson()` emitting `"result":null` unconditionally
+        // passes the row above and corrupts every request on the wire.
+        $this->assertStringNotContainsString(
+            '"result"',
+            McpMessage::request('7', 'tools/list', [])->toJson(),
+            'toJson() put a result key on a REQUEST',
+        );
     }
 
     /**
@@ -191,6 +257,56 @@ final class McpMessageResultTypeTest extends TestCase
         $array = McpMessage::success('3', true)->toArray();
 
         $this->assertTrue($array['result']);
+    }
+
+    /**
+     * A LEGAL `"result": null` REACHES THE MODEL AS THE TEXT `null`, END TO END,
+     * AND AN ABSENT `result` STILL FAILS THE CALL.
+     *
+     * `callTool()` tested `$response->result === null` and answered
+     * `['error' => 'Tool call failed']` for it — a wrong answer, but a graceful
+     * one, which is why it was split off from the scalar crash rather than
+     * bundled with it. With the sentinel the test is `!$response->resultSet`, so a
+     * present-but-null result falls through to the same wrapping branch that
+     * renders `false` and `0`, and is rendered as its own JSON text.
+     *
+     * DRIVEN THROUGH A REAL SERVER CHILD, because the sentinel has to survive
+     * `toJson()` on the way out, the wire, `parse()` on the way back, and
+     * `readResponse()`'s id matching — a unit test of `parse()` alone would pass
+     * with the sentinel threaded nowhere else.
+     *
+     * BOTH POLARITIES IN ONE TEST on purpose. A `callTool()` that simply deleted
+     * its null check would pass the first row and silently start reporting
+     * success for servers that answer nothing at all.
+     */
+    public function testCallToolRendersANullResultAndStillFailsOnAnAbsentOne(): void
+    {
+        $server = new StdioMcpServer(
+            name: 'nullable',
+            command: PHP_BINARY,
+            args: [$this->tempDir . '/scalar.php'],
+            env: [],
+            startTimeoutSeconds: 5.0,
+        );
+
+        $server->start();
+
+        try {
+            $this->assertSame(
+                ['content' => [['type' => 'text', 'text' => 'null']]],
+                $server->callTool('nullresult', []),
+                'a legal "result": null was reported as a failed tool call — the resultSet '
+                . 'sentinel is not reaching callTool()',
+            );
+            $this->assertSame(
+                ['error' => 'Tool call failed'],
+                $server->callTool('noresult', []),
+                'a reply with NO result key was treated as a successful call, so callTool() has '
+                . 'stopped distinguishing "answered null" from "answered nothing"',
+            );
+        } finally {
+            $server->stop();
+        }
     }
 
     // =========================================================================
@@ -375,10 +491,19 @@ final class McpMessageResultTypeTest extends TestCase
                     flush();
                     continue;
                 }
+                if ($name === 'noresult') {
+                    // NO `result` KEY AT ALL — the other polarity of the
+                    // resultSet sentinel, and the one that must still be
+                    // reported as a failed call.
+                    echo '{"jsonrpc":"2.0","id":', json_encode((string) $msg['id']), '}', "\n";
+                    flush();
+                    continue;
+                }
                 $result = match ($name) {
                     'boolean' => true,
                     'number' => 42,
                     'zero' => 0,
+                    'nullresult' => null,
                     'string' => 'plain text',
                     default => ['content' => [['type' => 'text', 'text' => 'pong']], 'isError' => false],
                 };
