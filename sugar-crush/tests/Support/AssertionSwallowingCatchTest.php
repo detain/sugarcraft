@@ -862,5 +862,23 @@ final class AssertionSwallowingCatchTest extends TestCase
             'the resolver invents a symbol for a name that does not exist, so the empty list '
             . 'above proves nothing',
         );
+
+        // AND THE FILING ITSELF, which an empty tree cannot exercise (rule 25,
+        // and rule 41 beside it). Deleting the line that files an unresolvable
+        // type is INVISIBLE in a tree where every type resolves — MEASURED,
+        // that mutation SURVIVED the whole file before this was added, which is
+        // the definition of an assertion whose expected value is what a dead
+        // instrument returns.
+        $this->assertFalse(
+            $this->swallowsAnAssertionFailure(['NoSuchTypeWasEverDeclared'], [], 'SugarCraft\\Crush\\Tests'),
+            'a type that resolves to nothing was nonetheless judged able to swallow an '
+            . 'assertion failure',
+        );
+        $this->assertSame(
+            ['NoSuchTypeWasEverDeclared'],
+            array_values(array_unique($this->unresolvable)),
+            'an unresolvable type was not filed, so the empty verdict above is exactly what a '
+            . 'scan that files nothing at all also returns',
+        );
     }
 }
