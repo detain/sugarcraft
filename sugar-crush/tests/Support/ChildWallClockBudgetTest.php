@@ -56,6 +56,14 @@ use PHPUnit\Framework\TestCase;
  */
 final class ChildWallClockBudgetTest extends TestCase
 {
+    // THE WALK AND THE READ ARE BORROWED RATHER THAN GROWN AGAIN. The first
+    // draft had its own `realpath(__DIR__ . '/../..')`, which
+    // `DuplicatedTestHelperDriftTest` reported as a one-token copy of the same
+    // helper in `SymbolCitationDriftTest` — a private helper has no other
+    // reader, so a copy fixed in one place stays green in both.
+    use RefusesAnUnreadableSourceTrait;
+    use TestFileWalkTrait;
+
     /**
      * How much of the parent's budget must remain unspent.
      *
@@ -65,14 +73,6 @@ final class ChildWallClockBudgetTest extends TestCase
      * of being wrong in the other direction is only a louder failure.
      */
     private const REQUIRED_HEADROOM_SECONDS = 10;
-
-    private function root(): string
-    {
-        $root = realpath(__DIR__ . '/../..');
-        self::assertIsString($root);
-
-        return $root;
-    }
 
     /**
      * The per-test limit `phpunit.xml` actually declares, read rather than
@@ -84,8 +84,7 @@ final class ChildWallClockBudgetTest extends TestCase
      */
     private function defaultTimeLimit(): int
     {
-        $xml = file_get_contents($this->root() . '/phpunit.xml');
-        self::assertIsString($xml, 'phpunit.xml is unreadable, so this guard has no reference to check against');
+        $xml = self::readOrFail(\dirname(__DIR__, 2) . '/phpunit.xml');
 
         self::assertSame(
             1,
@@ -111,24 +110,12 @@ final class ChildWallClockBudgetTest extends TestCase
      */
     private function childBudgets(): array
     {
-        $root = $this->root();
         $literal = [];
         $parametrised = [];
 
-        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
-            $root . '/tests',
-            \FilesystemIterator::SKIP_DOTS,
-        ));
-        foreach ($walk as $file) {
-            if (!$file instanceof \SplFileInfo || !$file->isFile() || $file->getExtension() !== 'php') {
-                continue;
-            }
-            $source = file_get_contents($file->getPathname());
-            self::assertIsString(
-                $source,
-                $file->getPathname() . ' could not be read, so this census does not speak for it',
-            );
-            $label = substr($file->getPathname(), \strlen($root) + 1);
+        foreach (self::everyTestFile() as $relative => $path) {
+            $source = self::readOrFail($path);
+            $label = 'tests/' . $relative;
 
             // THE ALPHABET IS BOTH FORMS AND THE UNPARSEABLE ONE IS REPORTED,
             // not dropped. `%d` is how the two files that got this right spell

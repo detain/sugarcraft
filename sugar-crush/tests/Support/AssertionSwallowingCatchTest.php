@@ -55,6 +55,9 @@ use PHPUnit\Framework\TestCase;
  */
 final class AssertionSwallowingCatchTest extends TestCase
 {
+    use RefusesAnUnreadableSourceTrait;
+    use TestFileWalkTrait;
+
     /**
      * Every type whose `catch` swallows a failed assertion.
      *
@@ -74,13 +77,6 @@ final class AssertionSwallowingCatchTest extends TestCase
         'ExpectationFailedException',
     ];
 
-    private function root(): string
-    {
-        $root = realpath(__DIR__ . '/../..');
-        self::assertIsString($root);
-
-        return $root;
-    }
 
     /**
      * The hierarchy the alphabet above is derived from, on the PHPUnit this
@@ -162,25 +158,17 @@ final class AssertionSwallowingCatchTest extends TestCase
      */
     private function swallowingCatches(): array
     {
-        $root = $this->root();
         $found = [];
 
-        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
-            $root . '/tests',
-            \FilesystemIterator::SKIP_DOTS,
-        ));
-        foreach ($walk as $file) {
-            if (!$file instanceof \SplFileInfo || !$file->isFile() || $file->getExtension() !== 'php') {
-                continue;
-            }
-            $source = file_get_contents($file->getPathname());
-            self::assertIsString(
-                $source,
-                $file->getPathname() . ' could not be read, so this scan does not speak for it',
-            );
-            $label = substr($file->getPathname(), \strlen($root) + 1);
+        // THE WALK AND THE READ ARE BORROWED, NOT COPIED. The first draft grew
+        // its own roster helper and its own `realpath(__DIR__ . '/../..')`;
+        // `DuplicatedTestHelperDriftTest` reported the second as a one-token
+        // divergence from the copy in `SymbolCitationDriftTest`, which is
+        // precisely what that guard exists to catch.
+        foreach (self::everyTestFile() as $label => $path) {
+            $source = self::readOrFail($path);
             foreach ($this->swallowingCatchesIn($source) as $row) {
-                $found[] = ['file' => $label] + $row;
+                $found[] = ['file' => 'tests/' . $label] + $row;
             }
         }
         usort($found, static fn (array $a, array $b): int => [$a['file'], $a['line']] <=> [$b['file'], $b['line']]);
@@ -254,6 +242,17 @@ final class AssertionSwallowingCatchTest extends TestCase
         $open = $i;
         $depth = 0;
         for (; $i < $count; $i++) {
+            // `"{$x}"` OPENS WITH AN ARRAY TOKEN AND CLOSES WITH A PLAIN `}`.
+            // Counting only the literal brace sends the depth one level down at
+            // the first interpolated string in a file and every try/catch
+            // boundary after it is wrong. `InterpolationOpenerTokenTest` caught
+            // exactly this in the first draft of this scanner, which is what
+            // that guard is for.
+            if (\is_array($tokens[$i]) && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                $depth++;
+
+                continue;
+            }
             if ($tokens[$i] === '{') {
                 $depth++;
             } elseif ($tokens[$i] === '}') {
