@@ -73,8 +73,9 @@ use SugarCraft\Crush\Tools\ToolCall;
  * WHAT THIS SAID, and it was wrong where it mattered most: that all three were
  * covered by the three clock tests below. WHAT IS TRUE NOW: the third clock
  * test's fixture emitted `toolCalls: []` — an EMPTY array, which is not a tool
- * call and which no provider here emits (`VertexProvider` spells
- * `toolCalls: $toolCalls === [] ? null : $toolCalls` precisely to avoid it). It
+ * call, and which the provider most likely to produce one goes out of its way
+ * not to: `VertexProvider`'s batch decoder spells
+ * `toolCalls: $toolCalls === [] ? null : $toolCalls` for exactly that reason. It
  * was a chunk with no payload at all, and MEASURED it died in lockstep with the
  * usage test under every mutation either could see, never killing anything on
  * its own. WHY BOTH STILL EARN THEIR PLACE: renamed to what it is, the blank
@@ -112,6 +113,16 @@ use SugarCraft\Crush\Tools\ToolCall;
  *   - the per-chunk gap is ~10 virtual seconds against a 120 ceiling, so a
  *     20 ms sleep would have to take twelve times as long as asked before a
  *     surviving turn could be reported as killed.
+ *
+ * That margin covers the gaps BETWEEN chunks, which is not the whole story and
+ * is stated so nobody reads it as if it were. The tightest interval here is the
+ * FIRST one — fork, `App`/`Runtime` construction, config reads, provider entry
+ * — and no `usleep()` bounds it, so it is whatever this box happens to cost.
+ * MEASURED on an idle host (PHP 8.3.6): the file's four forks contribute on the
+ * order of 50 ms of overhead in total against the same 240 ms real ceiling, so
+ * the margin is real today. It is nonetheless the term that degrades first
+ * under load, and it is the one to suspect if a `survived` assertion here ever
+ * flakes.
  *
  * PHP 8.3.6 on this host.
  */
