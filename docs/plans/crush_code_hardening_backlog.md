@@ -16731,3 +16731,68 @@ them would mean restructuring a file whose sixteen passing tests are about a dif
 duplication was taken deliberately and is noted in both. If a third caller appears, promote it to
 `tests/Backend/Support/` rather than growing a third copy — the duplicated-test-helper drift guard is
 exactly the instrument that will otherwise find this later and at more cost.
+
+---
+
+### Ea57-6 — `src/Context/RepoMapBlock.php` carries two `src/` cardinalities that NOTHING verifies
+
+**Not this lane's file — it needs an owner.** Round 57's lane a made a forced out-of-lane edit
+(`3d9496b46`) to keep `tests/Tools/BuiltInToolCorpusTest.php` green after two new source files, and bumped
+`RepoMapBlock.php`'s prose in the same commit on the stated grounds that the two are coupled by the file's
+own documented design.
+
+**Measured at the review: there is no coupling.** `RepoMapBlock.php` states `316 top-level` declarations in
+its own doc-block and `src/` here is 297 files in a second one. No test reads either. `tests/` matches
+`295|297|314|316` only in `BuiltInToolCorpusTest.php`, `BuiltInToolCorpus.php`, `StatusLineSegmentTest.php`,
+`GlobFigureDriftTest.php` and `WorkflowUserTierContainmentTest.php`, and `tests/Context/RepoMapBlockTest.php`
+matches neither number (`grep -c` returns 0). So they are two hand-maintained figures with no guard at all:
+after the next merge they are silently wrong and nothing goes red.
+
+Sharper, and the reason this is filed rather than shrugged at: the same commit REMOVED the pair from
+`BuiltInToolCorpusTest`'s prose arguing that "prose that restates them is a second place to be wrong (rule
+18) … the pair is now gone from the prose entirely rather than corrected a third time" — and then corrected
+the pair a third time into a place with no test behind it.
+
+**Resolution for whoever owns `src/Context/`:** replace both numbers with the RELATION they support, exactly
+as the corpus test's own paragraph now does. The 20 000 backstop is orders of magnitude clear of an
+order-hundreds file count; saying so does not rot, and saying `297` does.
+
+---
+
+### Ea57-7 — the empty-delta drop exists twice and NO assertion can see either one go
+
+`Chat::enqueueReasoning()` and the `$onReasoning` static closure in `Chat::scheduleBackendCompletion()` both
+return early on `''`. Round 57 added an agreement test for the two paths and mutated both drops away
+**independently**: `tests/Backend/ReasoningPaintTest.php` stayed entirely green each time (18 tests, 65
+assertions, rc 0, PHP 8.3.6).
+
+The reason is not a bad window — it is that the difference has no observable form. A reasoning fragment is
+appended to a string accumulator, and `$s . ''` is the identity, so an empty delta that survives the drop
+changes no accumulation. `Renderer::renderView()` then gates on `$liveThought !== ''`, so it produces no
+bare marker either. The drops are a cost guard on inbox churn, not a correctness guard.
+
+**Why this is worth a backlog entry rather than a shrug:** the same-shaped duplication in the two paths
+looks like something a test covers, and the round-57 test's FIRST doc-block said so before it was mutated
+and corrected. Anyone strengthening this later needs a surface that counts inbox entries, not one that reads
+painted text — `Chat::$liveToolEvents` is private and there is no accessor, so the honest options are an
+accessor used only by the guard, or accepting the drops as unpinnable and saying so where they live.
+
+**Generator:** `mut.sh` (refuse-dirty → backup → apply → numstat → run → restore → refuse-if-dirty),
+mutations `M10_live_keeps_empty` and `M13_seam_keeps_empty`, filtered scope
+`tests/Backend/ReasoningPaintTest.php`. Both SURVIVED; the channel and generation arms of the same
+assertions (`M12`, `M14`, `M15`) all KILLED, so the instrument was alive.
+
+---
+
+### Ea57-8 — the nullability scanner's parameter alphabet is still not enumerated
+
+Ea57-3's fix taught `splitParams()`/`classifyParam()` about `T_ATTRIBUTE`, with both polarities and an
+unterminated-group fixture. That closed the case that actually appears in `src/` today, and the census now
+returns exactly the two `Workflow.php` offenders with zero `<unparsed>` rows.
+
+What was NOT enumerated: heredoc/nowdoc defaults, first-class-callable syntax (`m(...)`), and DNF types
+(`(A&B)|null`) inside a parameter list. Rule 11 — a census's alphabet is usually written to match the cases
+already known, and this one's alphabet is now "the shapes round 57 happened to think of". The honest bound
+is a token-stream walk of every `*.php` under `src/` reporting whatever comes back `<unparsed>` after the
+attribute fix, re-run whenever the scan is widened past the Backend family. Today that set is empty, which
+is a fact about this tree and not about the scanner.
