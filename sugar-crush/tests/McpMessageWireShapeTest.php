@@ -213,6 +213,61 @@ final class McpMessageWireShapeTest extends TestCase
     }
 
     /**
+     * AND THE SENTINEL SURVIVES THE TRIP INTO THE ARRAY, which is the one thing
+     * the inspection view is FOR that the object gets for free.
+     *
+     * ⚠️ THIS ROW EXISTS BECAUSE A MUTATION SURVIVED. Deleting
+     * `'resultSet' => $this->resultSet` from `toArray()` left every McpMessage,
+     * MCP and ClaudeCodeMcpClient suite in this tree green — 394 tests, 1276
+     * assertions, rc 0. Nothing pinned it anywhere. The row above deliberately
+     * does not: it asserts the extra-key set contains `isNotification`, because
+     * `isNotification` is the EVIDENCE that this method never was the wire, and
+     * a row that also demanded `resultSet` would have muddled the two claims.
+     * So the sentinel gets its own row and gets it in the shape that matters.
+     *
+     * BOTH POLARITIES, because a `resultSet` key that is always true is worth
+     * nothing: `result => null` in this array carries exactly the ambiguity the
+     * sentinel exists to resolve — a peer that sent `"result": null` and a peer
+     * that sent no `result` at all are the SAME array without it — so the two
+     * shapes have to disagree here or the key is decoration.
+     */
+    public function testTheSentinelSurvivesIntoTheInspectionViewInBothPolarities(): void
+    {
+        $sent = McpMessage::parse('{"jsonrpc":"2.0","id":"1","result":null}');
+        $absent = McpMessage::parse('{"jsonrpc":"2.0","id":"1","error":{"code":-1,"message":"no"}}');
+
+        $this->assertInstanceOf(McpMessage::class, $sent);
+        $this->assertInstanceOf(McpMessage::class, $absent);
+
+        $sentArray = $sent->toArray();
+        $absentArray = $absent->toArray();
+
+        $this->assertArrayHasKey(
+            'resultSet',
+            $sentArray,
+            'toArray() dropped the sentinel, so a consumer reading the array cannot tell a peer '
+            . 'that sent "result": null from one that sent no result key at all — which is the '
+            . 'ambiguity the sentinel was added to resolve',
+        );
+        $this->assertTrue($sentArray['resultSet'], 'a present null result reported itself absent');
+        $this->assertNull($sentArray['result']);
+
+        $this->assertFalse(
+            $absentArray['resultSet'],
+            'an absent result reported itself present, so the sentinel is always-true and the '
+            . 'row above is satisfied by a constant',
+        );
+        $this->assertNull($absentArray['result']);
+
+        $this->assertSame(
+            $sentArray['result'],
+            $absentArray['result'],
+            'the two shapes differ in `result` as well, so this row is not in fact about the '
+            . 'sentinel — check the fixtures',
+        );
+    }
+
+    /**
      * E478 — THE SECOND CONSUMER OF THE WIDENING, PINNED RATHER THAN ASSERTED
      * ABOUT IN PROSE.
      *
