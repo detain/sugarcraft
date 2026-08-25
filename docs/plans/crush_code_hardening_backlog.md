@@ -14845,8 +14845,10 @@ step. Out of lane c's file list, hence not done here.
 `candy-kit` is **not spent**. `git log -S` on the manifest names `ddd9560d0`, which says what it was
 added for: Phase 3 item 5b, restyling `Cli\Help::screen()`. Still open, and deferred with a measured
 reason rather than forgotten — candy-kit's primitives emit ANSI unconditionally, `--help` is routinely
-piped, so a faithful restyle needs a `posix_isatty()` guard the item never specified, against a 145-line
-heredoc and a `HelpTest` asserting line-start regexes any SGR prefix breaks.
+piped, so a faithful restyle needs a `posix_isatty()` guard the item never specified, against the single
+`<<<'HELP'` heredoc that IS that method's body and a `HelpTest` asserting line-start regexes any SGR
+prefix breaks. (This said "a 145-line heredoc" when it was written. Measured: 143 content lines, 145
+counting the delimiters — defensible either way and stated neither, so the symbol replaces the count.)
 
 **The root cause is not the dependency.** `--unused`'s own usage text says its findings are CANDIDATES
 and to "confirm by hand before pruning" — and `ci.yml` runs it as a hard gate with no
