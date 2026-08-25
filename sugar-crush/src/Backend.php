@@ -49,7 +49,7 @@ interface Backend
      *                                Signature:
      *                                `function(Events\ToolStarted|Events\ToolFinished $event): void`
      */
-    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message;
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message;
 
     /**
      * Async version of {@see complete()}. Returns a promise that
@@ -74,5 +74,5 @@ interface Backend
      *                                invoked inside a forked child reaches
      *                                nobody.
      */
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface;
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface;
 }

@@ -192,7 +192,7 @@ final class StreamingCommandBackend implements Backend
      * the external command's tool use, if any, is invisible on the wire, so
      * there is no tool lifecycle to report.
      */
-    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
         $state = $this->begin($history, $onToken);
         if ($state instanceof Message) {
@@ -614,7 +614,7 @@ final class StreamingCommandBackend implements Backend
      * failed, and only when a caller opted into `$idleTimeout` at all — not the
      * completion path this method exists to unblock.
      */
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
         $deferred = new Deferred();
 
