@@ -425,6 +425,17 @@ final class AgentDefinitionTest extends TestCase
     }
 
     /**
+     * ITS KEEPER IS testDeclarationDefectDetectsTheDefectsItClaimsTo, AND THEY
+     * MUST NOT BE SEPARATED.
+     *
+     * This method asserts an ABSENCE — `assertSame([], $defects)` — and on its
+     * own that is worth nothing. MEASURED: with declarationDefect() replaced by
+     * `return null;`, running this test under `--filter` is GREEN (6 tests, 6
+     * assertions). The mutation is caught only because the fixture test in this
+     * same file always runs alongside it and pushes known-positive declarations
+     * through the same helper. Moving either one to another file, or gating one
+     * behind a skip, silently disarms this guard.
+     *
      * @dataProvider everyPreset
      */
     public function testEveryPresetToolGrantCanActuallyFire(AgentDefinition $definition): void
@@ -487,6 +498,98 @@ final class AgentDefinitionTest extends TestCase
         // through the same call, so the instrument is not simply pessimistic.
         $this->assertNull(self::declarationDefect('Bash(git *)', self::GRANT_PROBES));
         $this->assertNull(self::declarationDefect('Read', self::GRANT_PROBES));
+    }
+
+    /**
+     * THE HALF {@see declarationDefect()} DECLINES: a typo'd BARE name.
+     *
+     * That method answers `null` for any declaration with no argument half, on
+     * the stated grounds that "the name half is matched against the live
+     * registry by AgentManager, not against a fixture here". True — but
+     * AgentManager only does that when a caller hands it a tool registry, and
+     * MEASURED at this commit no production caller does. So `defaultTools:
+     * ['Reed']` in a preset is caught by NOTHING: not by well-formedness (it is
+     * well-formed), not by the probe guard (it is bare), and not at runtime.
+     * That is the same "well-formed and resolves to nothing" class this round
+     * was about, in the half the probe guard declines to cover.
+     *
+     * AGAINST AN UNNARROWED CEILING, DELIBERATELY, and this is not a detail.
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()} returns
+     * `filterToolSet($tools)` — already reduced by the operator's own
+     * `allowedTools`/`disabledTools` — so run against a developer's real config
+     * this guard would red on a correct preset the moment they disabled a tool.
+     * HOME is redirected to an empty sandbox and the emptiness of the merged
+     * config is ASSERTED rather than assumed: if the sandbox ever stops
+     * working, this reds on the config rather than lying about the presets.
+     */
+    public function testEveryBarePresetToolNameResolvesAgainstTheShippedToolSet(): void
+    {
+        $sandbox = sys_get_temp_dir() . '/sc_r60b_barename_' . bin2hex(random_bytes(6));
+        mkdir($sandbox . '/home', 0700, true);
+        $home = getenv('HOME');
+        putenv('HOME=' . $sandbox . '/home');
+
+        try {
+            $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
+            $this->assertArrayNotHasKey('allowedTools', $config, 'the sandbox is not empty; this guard would measure a narrowed set');
+            $this->assertArrayNotHasKey('disabledTools', $config, 'the sandbox is not empty; this guard would measure a narrowed set');
+
+            $ceiling = array_map(
+                static fn(\SugarCraft\Crush\Tools\Tool $t): string => $t->name(),
+                \SugarCraft\Crush\Cli\Bootstrap::tools($sandbox),
+            );
+
+            // INSTRUMENT ALIVE. An empty ceiling would make every `assertTrue`
+            // below vacuous in the wrong direction and every `assertFalse`
+            // vacuously true, so the roster is checked for content first.
+            $this->assertNotEmpty($ceiling, 'the tool ceiling is empty; nothing below means anything');
+            $this->assertContains('Read', $ceiling);
+
+            $resolves = static fn(string $declaration): bool => array_reduce(
+                $ceiling,
+                static fn(bool $carry, string $name): bool => $carry
+                    || PermissionRule::matchesToolName(
+                        (new PermissionRule($declaration, PermissionAction::Allow))->toolNamePattern(),
+                        $name,
+                    ),
+                false,
+            );
+
+            // KNOWN POSITIVE, in the same test and through the same closure:
+            // a name that is NOT shipped must fail to resolve. Without this the
+            // assertions below would pass against a matcher mutated to answer
+            // true unconditionally.
+            $this->assertFalse($resolves('Reed'), 'the resolver is dead: a typo resolved');
+            $this->assertTrue($resolves('Read'), 'the resolver is dead: a real tool did not resolve');
+
+            $unresolvable = [];
+            foreach (self::everyPreset() as $type => [$definition]) {
+                foreach ($definition->defaultTools as $declaration) {
+                    $rule = new PermissionRule((string) $declaration, PermissionAction::Allow);
+                    if ($rule->argumentPattern() !== null) {
+                        continue; // covered by testEveryPresetToolGrantCanActuallyFire
+                    }
+
+                    if (!$resolves((string) $declaration)) {
+                        $unresolvable[] = "{$type}: \"{$declaration}\"";
+                    }
+                }
+            }
+
+            $this->assertSame(
+                [],
+                $unresolvable,
+                "a preset declares a bare tool name this project does not ship:\n  "
+                    . implode("\n  ", $unresolvable),
+            );
+        } finally {
+            if ($home === false) {
+                putenv('HOME');
+            } else {
+                putenv('HOME=' . $home);
+            }
+            exec('rm -rf ' . escapeshellarg($sandbox));
+        }
     }
 
     /**
