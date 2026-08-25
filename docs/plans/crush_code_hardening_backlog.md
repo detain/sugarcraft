@@ -15803,3 +15803,162 @@ candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608
 
 **STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
 stays open on its own evidence.
+
+---
+
+### Ec56-1 — 🔴 a test wrote 3 directories into the developer's REAL `~/.sugar-crush` on every suite run, and that is the cross-lane flake
+
+**FIXED this round.** E482's premise was inverted. `Agents/TeamTest` does not "assert on the real
+`~/.sugar-crush`" in the sense meant: it sandboxes BOTH spellings of `HOME` and reads the real config dir
+only to assert in `tearDown()` that it stayed untouched. TeamTest is the **detector**, not the offender.
+
+**The offender, measured:** `Integration/MultiAgentRefactorTest` moved only `$_SERVER['HOME']` and not
+`getenv('HOME')`, while the readers it reaches resolve through `HomeDirectory`, which prefers `getenv()`.
+One `--filter MultiAgentRefactor` run took the real `~/.sugar-crush/teams/` from **3133 to 3136** entries
+— `refactor-*`, `solo-*`, `throwing-*`, one per test that builds a Team. That directory's mtime was
+minutes old when this was found. With both spellings moved the per-run delta is **0**.
+
+**Why it is a flake and not litter.** Three lanes run this suite concurrently against ONE home directory.
+TeamTest snapshots the real `~/.sugar-crush` before each of its tests and compares after; another lane's
+`MultiAgentRefactorTest` landing three directories in between reds a test that did nothing wrong, at a
+moment nobody can reproduce afterwards. This is the round-44 shared-`/tmp` collision one directory over.
+
+**`HomeSandboxTrait`'s doc-block has argued "half a sandbox is not a sandbox" since it was written, and
+had no reader.** `tests/Support/OneSidedHomeSandboxTest` gives it one. Censused on PHP 8.3.6 over
+`tests/`: **42 files touch `HOME`, and 9 still redirect exactly one spelling.** The roster is a MIGRATION
+BACKLOG checked in both directions — a new one-sided file reds, and a rostered file that gets fixed also
+reds — so it can only shrink. No row carries a reason, deliberately: there is no good reason to sandbox
+half of `HOME`, and a column for one would invite filling it in.
+
+**NOT DONE:** the ~3,133 already-leaked directories under `~/.sugar-crush/teams/` are left in place. That
+is the user's home directory and deleting from it was not asked for. Someone should, with permission.
+
+---
+
+### Ec56-2 — 🔴 a test leaked a 5s timer onto the SHARED ReactPHP loop, and the next test's `Loop::run()` was ending on it
+
+**FIXED this round; a candidate mechanism for [[E490]] and offered as a candidate only.**
+
+`PtyPoolReactLoopTest::testRapidCycleInsideLoopDoesNotLeakSignals` armed
+`Loop::addTimer(5.0, fn => Loop::stop())` as a safety cap and never cancelled it. Its periodic finishes in
+~0.2s and calls `Loop::stop()`, which returns from `Loop::run()` and leaves the cap armed on the SHARED
+loop. **The next test's `Loop::run()` then returned because the PREVIOUS test's cap fired, not because its
+own work had finished** — a pass for the wrong reason that read only as wasted seconds. Measured:
+`testDrainInsideLoopAfterMixedAcquireRelease` takes **0.002s run alone and 4.797s run after its two
+neighbours**; 5.0 less 0.2 is the 4.8. Filter wall time went 5.028s → 0.260s.
+
+**The periodic is the worse half, on the path nobody exercises.** It cancels itself only when the
+iteration count is reached, so a run that ended on the CAP leaves a periodic armed for ever — and
+`Loop::run()` never returns while one is armed. That is a hang, not a failure.
+
+**Why it is an E490 candidate.** This is the ONLY file in the suite that drives the shared `Loop::` facade
+with timers (censused; every other loop test builds its own `StreamSelectLoop`, which `tests/bootstrap.php`
+says is for isolation). A leaked one-shot is self-limiting. What is left AFTER it has been consumed is a
+shared `StreamSelectLoop` with an empty timer queue, and a `Loop::run()` waiting there on a stream that
+never becomes readable blocks in `stream_select()` **with no timeout at all** — `wchan: do_select`, which
+is exactly where the one observed E490 hang was sitting, with two `/dev/ptmx` fds open. Consistent. **Not
+proof**, because the hang has not reproduced.
+
+**Rule 2 caught the first guard.** A standalone "the shared loop is clean" test did NOT red when the leak
+was restored: the leak is self-consuming — the third test in that file waits the cap out, the cap fires and
+is gone — so any later observer truthfully finds a clean loop. The guard now lives in that class's own
+`tearDown()`, the only window the leak is visible from.
+
+---
+
+### Ec56-3 — the E490 watchdog inherited from a killed agent had two dead arms and one inverted mechanism claim
+
+**FIXED this round.** `ba9eb998c` was committed by the supervisor from a killed implementer's untracked
+files and reviewed by nobody. Two mutations of it SURVIVED `--filter HangWatchdog`:
+
+1. **`beat()` could be emptied to `return;` and the file stayed green.** It is the only thing that ever
+   points the watchdog at a test: with no heartbeat written the child polls a file that never appears and
+   never fires. The fixture built its own records with `heartbeatPayload()` + `file_put_contents`, so the
+   real producer had no reader at all. Rule 36 exactly, inside the E490 instrument itself.
+2. **`testAZeroBudgetDeclinesToInstall` was vacuous, provably.** From inside a running suite the static
+   instance is SET, so `install(0.0)` returns false at the FIRST guard and never reads the budget;
+   deleting the budget guard left the file green. It could not reach the arming path in either direction
+   either — PHPUnit's event facade is sealed by the time a test runs (measured:
+   `EventFacadeIsSealedException`), so a mid-suite `install()` with ANY budget lands in the catch branch.
+
+**And an inverted mechanism claim in two files (rule 8):** both said the watchdog makes a hang "surface as
+a named failure". It cannot — the runner is SIGKILLed, so PHPUnit emits nothing and the process exits 137
+with no summary line. Measured via a mutation that fired the watchdog unconditionally: `rc=137`, no
+`Tests:` line anywhere.
+
+---
+
+### Ec56-4 — the drift guard's alphabet could not see a copied TEST, and one prose row was really a classifier
+
+**FIXED this round (E481).** `DuplicatedTestHelperDriftTest` ran the `private` alphabet only; a test METHOD
+is public. Measured on PHP 8.3.6 over `tests/`, driving the real `driftReport()` by reflection:
+
+| alphabet | declarations read | unplaceable | drifted names |
+|---|---|---|---|
+| `private` (shipped) | 1623 | 0 | 13 |
+| `public`, whole | 8556 | **520** | 25 |
+| `public`, `test*` only | — | **0** | 12 (54 pairs) |
+
+Every one of the 520 is a name declared twice in one file by two anonymous test doubles, which a
+name ⇒ file ⇒ body report has nowhere to put; 13 of the 25 names are interface methods two doubles both
+implement — `setUp()`'s situation, a contract obligation and not a copy. So `test*` is the population the
+scanner can honestly ask, and the wider one needs the scanner to attribute anon-class declarations first.
+
+**All 54 `test*` pairs diverge by exactly one `T_STRING`, and it is the class the file itself tests.**
+Answering them with 12 prose rows would have been 12 licences bought to close one hole.
+`isSubjectSpelling()` is the classifier instead — and measured, it explains exactly ONE of the 15 private
+pairs, and it is `maxStderrBytes`, the row round 55 added. **That answers the rule-33 question
+affirmatively: the code was right and the classifier was the defect.** The row is retired and its
+reasoning rewritten into the classifier's doc-block, not deleted.
+
+---
+
+### Ec56-5 — `deferred-wiring` was honoured in 58 libs and validated in one
+
+**FIXED this round (E488).** The brief's claim that the hatch "never expires a row" is **not true** —
+round 55's `ManifestDependencyReachTest` already retires one three ways, and its own doc-block records
+that an attack rather than a reading found that hole. **What is true is that the enforcement does not
+travel:** that guard is a PHPUnit test inside `sugar-crush` reading `sugar-crush`'s manifest, and it is
+the only one of 58 libs that has it, while `tools/check-path-repos.php` honours the hatch for all of them
+and `ci.yml` gates on `--unused` with no `continue-on-error`.
+
+**Probed:** two rows added to `candy-shine` — one for `sugarcraft/candy-core` (referenced from its `src/`
+on every page) and one for `sugarcraft/package-that-does-not-exist` (not even a require) — produced **no
+output at all and exit 0**. The tool's lookup is consulted only for a dep it has already decided is dead,
+so a row naming anything else is never read.
+
+**What a deferral row must carry to be falsifiable: nothing new.** It must name a production
+`sugarcraft/*` require of its own manifest, that `src/` does not reach, whose namespace resolves, and
+carry a reason. All four are checkable against the tree, which is what falsifiable means here — a date
+would only expire a row, it would not ask whether it was still true. The check is now in the tool, runs
+for every lib, and reports `IDLE_DEFERRAL` naming which condition failed.
+
+---
+
+### Ec56-6 — `grep` in an agent shell is ugrep: E457's headline is wrong, and the real divergence is `.gitignore`
+
+**MEASURED, not fixed — there is nothing in the tree to fix.** Three claims, checked on this host
+(ugrep 7.8.4 via the Claude Code shell function; GNU grep 3.11; bash; PHP-irrelevant):
+
+1. **"`grep -qv` silently always answers no" — FALSE.** It answers *no* exactly when the pattern IS
+   present and *yes* when it is absent. `grep -qv X` under the shim is `! grep -q X`: the `-q` decision is
+   taken on the PATTERN and `-v` is ignored for exit status. `-lv`/`-Lv` diverge the same way. `-c`/`-cv`
+   on a named file agree with GNU.
+2. **"the shadow does not reach scripts" — TRUE, verified.** A `#!/bin/bash` script file and `bash -c`
+   both get `/usr/bin/grep`; the function is not exported (no `BASH_FUNC_grep` in the environment).
+3. **"counts are unaffected" — TRUE for a named file, FALSE for a recursive scan**, and this is the part
+   that matters more than `-qv`. The shim passes `--ignore-files`, so **it honours `.gitignore`**.
+   Measured: in a scratch repo with `ignored/` gitignored, `grep -rn NEEDLE .` found **1 of 2**
+   occurrences and `grep -rc` reported only the tracked file; GNU found both. **An absence asserted with a
+   bare recursive `grep` in an agent shell is scoped to non-ignored files only** — and in this repo that
+   silently excludes every `vendor/` tree and every per-lib `composer.lock`.
+
+**Audit of the tree: ZERO offenders.** No `-qv`, `-vq`, `-q -v`, `-v -q`, `--quiet --invert-match`,
+`--files-with`/`--files-without` in any `.sh`, `.php`, `.yml` or `.md` outside the backlog's own E457
+entry and `crush_code_RESUME.md`, both of which are prose describing the pattern (rule 26 — leave them).
+Scanner alive-checked against a planted fixture. Also censused for macOS-runner GNU-isms across
+`scripts/`, `tools/` and CI: `sed -i`, `readlink -f`, `grep -P`, `date -d`, `stat -c`, `xargs -r`,
+`sort -V` — **0 each**. Four uses of `timeout` exist, all in Ubuntu-only workflow steps.
+
+**The operative rule is therefore not "never write `grep -qv`" but "an agent-shell `grep -r` cannot see
+ignored files".** Use `/usr/bin/grep` for any census whose answer is load-bearing.
