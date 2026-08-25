@@ -6,12 +6,12 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 🟢 ROUND 57 IS **RUNNING** — launched 2026-08-25, run id `RUNID_PLACEHOLDER`
+## 🟢 ROUND 57 IS **RUNNING** — launched 2026-08-25, run id `wf_074924a0-898`
 
-**Round 56 is CLOSED, merged and recorded. Round 57 launched from base `BASE_PLACEHOLDER`** — nine
+**Round 56 is CLOSED, merged and recorded. Round 57 launched from base `1dea13c4f`** — nine
 agents, three lanes, `implement → review → fix` pipelined.
 
-| package | floor at `BASE_PLACEHOLDER` (measured, per E167) |
+| package | floor at `1dea13c4f` (measured, per E167) |
 |---|---|
 | **sugar-crush** | **10126 / 149182 / 1 skipped / rc 0** |
 | **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** |
@@ -108,7 +108,7 @@ load-bearing must call `/usr/bin/grep` by absolute path.** Audited across the tr
 
 ## 0-NOW-57. ROUND 56 CLOSED (floor 10126) — the restart, the recovery, and the first prediction miss in thirteen rounds
 
-**Closed 2026-08-25 at `CLOSESHA_PLACEHOLDER`, from base `d38b644f4`.** Backlog **492 → 523**.
+**Closed 2026-08-25 at `1dea13c4f`, from base `d38b644f4`.** Backlog **492 → 523**.
 Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 56`.
 
 🔴 **THE PREDICTION MISSED: 10167 predicted EXACT, 10126 measured — −41 tests**, and assertions came in at
