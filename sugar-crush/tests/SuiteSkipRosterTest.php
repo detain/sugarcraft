@@ -77,10 +77,18 @@ final class SuiteSkipRosterTest extends TestCase
      * process and saw THIS test prepared.
      *
      * This is the liveness half. `install()` swallows a registration failure on
-     * purpose -- it has to, because several test files load the bootstrap in a
-     * plain child PHP process where there is no event facade at all -- so a
-     * subscriber that silently stopped registering inside a real run would leave
-     * no trace anywhere except here.
+     * purpose -- against a SEALED facade, or a PHPUnit that moved the class, a
+     * throw here would be a fatal in every process that loads the bootstrap --
+     * so a subscriber that silently stopped registering inside a real run would
+     * leave no trace anywhere except here.
+     *
+     * WHAT THIS USED TO SAY: that the swallow was needed "because several test
+     * files load the bootstrap in a plain child PHP process where there is no
+     * event facade at all". WHAT IS TRUE NOW: there is one, and registration
+     * succeeds in those children -- MEASURED, PHP 8.3.6, and pinned by
+     * {@see testAPlainChildProcessThatRequiresTheBootstrapExitsZero()}. They are
+     * harmless because nothing is ever prepared in them, not because nothing is
+     * ever armed.
      */
     public function testTheLiveRosterIsInstalledAndIsReceivingEvents(): void
     {
@@ -212,13 +220,68 @@ final class SuiteSkipRosterTest extends TestCase
         self::assertNull($roster->report(), 'a filtered run was reported as a roster violation');
     }
 
-    /** Nothing prepared at all is "nothing to judge", not "clean". */
+    /** Nothing prepared and nothing skipped at all is "nothing to judge". */
     public function testARunWithNoPreparedTestIsNotJudged(): void
     {
         $roster = $this->syntheticRoster();
 
         self::assertSame(0, $roster->preparedCount());
+        self::assertSame([], $roster->suiteSkips());
         self::assertNull($roster->report());
+    }
+
+    /**
+     * Check 4's verdict logic: a skipped CLASS is red even though the roster has
+     * no key it could ever match, and even though NOTHING was prepared.
+     *
+     * The second half is not a detail. A class that skips in
+     * `setUpBeforeClass()` prepares none of its methods, so a `report()` that
+     * short-circuits on an empty `preparedKeys` -- which is what it did -- calls
+     * the run unjudged and returns null. A run consisting of one skipped class
+     * is precisely the case this has to catch.
+     */
+    public function testASkippedClassIsReportedEvenWithNothingPrepared(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordSuiteSkip('Acme\\Tests\\WholeClassTest', 'setUpBeforeClass opted out');
+
+        self::assertSame(0, $roster->preparedCount());
+        self::assertSame(
+            ['Acme\\Tests\\WholeClassTest' => 'setUpBeforeClass opted out'],
+            $roster->suiteSkips(),
+        );
+        self::assertSame([], $roster->unexpectedSkips(), 'check 1 is not the one that catches this');
+        self::assertSame(0, $roster->skipEventCount(), 'a suite skip is not a test-skip EVENT');
+
+        $report = (string) $roster->report();
+        self::assertStringContainsString('AN ENTIRE TEST CLASS SKIPPED', $report);
+        self::assertStringContainsString('Acme\\Tests\\WholeClassTest', $report);
+        self::assertStringContainsString('MISSING FROM THE "Tests:" TOTAL', $report);
+        self::assertStringContainsString('cannot be put on the roster', $report);
+    }
+
+    /**
+     * A skip with no preparation before it is judged, not waved through.
+     *
+     * `TestCase::runBare()` runs `checkRequirements()` above
+     * `$emitter->testPrepared()`, so a `--filter` that selects only a
+     * `#[Requires…]`-skipped test produces a skip event and no preparation at
+     * all. Under the original early return that run reported nothing.
+     */
+    public function testASkipWithNothingPreparedIsStillJudged(): void
+    {
+        $roster = $this->syntheticRoster();
+        $roster->recordSkip(
+            'Acme\\Tests\\OtherTest::testNeedsAnExtension',
+            'Acme\\Tests\\OtherTest::testNeedsAnExtension',
+            'the ext-foo extension is not loaded',
+        );
+
+        self::assertSame(0, $roster->preparedCount());
+        self::assertStringContainsString(
+            'SKIPPED BUT NOT ON THE ROSTER: Acme\\Tests\\OtherTest::testNeedsAnExtension',
+            (string) $roster->report(),
+        );
     }
 
     /**
@@ -314,6 +377,126 @@ final class SuiteSkipRosterTest extends TestCase
             'SkipRosterProbeTest::testSomethingWeSuddenlyStoppedRunning',
             $dirty['output'],
         );
+    }
+
+    /**
+     * Check 4, END TO END: an entire class opting out fails a real child run.
+     *
+     * This is the acceptance test for the fix, not for the defect -- a synthetic
+     * `recordSuiteSkip()` would pass just as happily against a roster that never
+     * registers the subscriber, which is exactly the hole this closes. So the
+     * event has to come from PHPUnit itself.
+     *
+     * The measurement that made it necessary, on this box, PHP 8.3.6, PHPUnit
+     * 10.5.64: before the `TestSuite\SkippedSubscriber` existed, this very child
+     * printed `Tests: 1, Assertions: 1, Skipped: 1` and exited 0 -- the probe
+     * class's TWO test methods absent from the total, and no roster output. The
+     * `Skipped: 1` came from the suite-skip half of PHPUnit's summary sum, so
+     * even a guard that asserted "exactly one skip" on the printed line would
+     * have been satisfied by it.
+     */
+    public function testAChildRunWhoseWholeClassSkipsExitsNonZero(): void
+    {
+        $result = $this->runChildSuite(
+            \dirname(__DIR__),
+            <<<'PHP'
+                public static function setUpBeforeClass(): void
+                {
+                    self::markTestSkipped('a class-level gate nobody can put on the roster');
+                }
+
+                public function testOne(): void
+                {
+                    $this->assertTrue(true);
+                }
+
+                public function testTwo(): void
+                {
+                    $this->assertTrue(true);
+                }
+                PHP,
+        );
+
+        self::assertNotSame(
+            0,
+            $result['rc'],
+            "an entire test CLASS skipped and the run still exited 0. PHPUnit emits TestSuite\\Skipped "
+            . "for a setUpBeforeClass() skip and NO per-test Skipped, so a roster watching only "
+            . "Test\\Skipped is blind to it - and the class's tests vanish from the Tests: total "
+            . "while the printed Skipped: figure moves by one.\n"
+            . $result['output'],
+        );
+        self::assertStringContainsString('SUITE SKIP ROSTER VIOLATION', $result['output']);
+        self::assertStringContainsString('AN ENTIRE TEST CLASS SKIPPED', $result['output']);
+        self::assertStringContainsString('SkipRosterProbeTest', $result['output']);
+        self::assertStringContainsString(
+            'a class-level gate nobody can put on the roster',
+            $result['output'],
+        );
+        self::assertStringContainsString('cannot be put on the roster', $result['output']);
+    }
+
+    /**
+     * A plain child PHP process that merely `require`s the bootstrap exits 0.
+     *
+     * The class doc-block used to claim such a child "arms nothing" because the
+     * event facade is absent. MEASURED, PHP 8.3.6: it is present, registration
+     * SUCCEEDS, and `live()` comes back non-null -- so the safety property is
+     * not the one that was written down. What actually keeps these children
+     * harmless is `report()` returning null with nothing prepared, and this pins
+     * THAT: several test files in this suite spawn exactly this shape of child,
+     * and a roster that started exiting 1 from their shutdown handlers would
+     * fail them all with a diagnostic about a run that never happened.
+     */
+    public function testAPlainChildProcessThatRequiresTheBootstrapExitsZero(): void
+    {
+        $root = \dirname(__DIR__);
+        $stem = tempnam(sys_get_temp_dir(), 'sc_skiproster_plain_');
+        self::assertIsString($stem);
+        $script = $stem . '.php';
+
+        try {
+            file_put_contents(
+                $script,
+                "<?php\n\ndeclare(strict_types=1);\n\n"
+                . 'require ' . var_export($root . '/tests/bootstrap.php', true) . ";\n"
+                . 'echo \SugarCraft\Crush\Tests\Support\SuiteSkipRoster::live() === null'
+                . " ? 'NULL' : 'INSTALLED';\n",
+            );
+
+            $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+            $process = proc_open(
+                [\PHP_BINARY, '-d', 'auto_prepend_file=', $script],
+                $descriptors,
+                $pipes,
+                $root,
+            );
+            self::assertIsResource($process, 'could not start the plain child');
+
+            $stdout = (string) stream_get_contents($pipes[1]);
+            $stderr = (string) stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $rc = proc_close($process);
+
+            self::assertSame(
+                0,
+                $rc,
+                "a plain child that only requires tests/bootstrap.php exited non-zero. The roster's "
+                . "shutdown handler is firing where there is nothing to judge.\n" . $stdout . $stderr,
+            );
+            self::assertStringNotContainsString('SUITE SKIP ROSTER', $stderr);
+            self::assertSame(
+                'INSTALLED',
+                $stdout,
+                'the roster did NOT install in a plain child. That is not a failure of the guard, but '
+                . 'it does mean this test is no longer pinning what it says it pins, and the '
+                . "doc-blocks that describe registration succeeding here are now wrong.\n" . $stderr,
+            );
+        } finally {
+            @unlink($script);
+            @unlink($stem);
+        }
     }
 
     private function syntheticRoster(): SuiteSkipRoster

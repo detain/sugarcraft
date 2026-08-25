@@ -11,6 +11,8 @@ use PHPUnit\Event\Test\Prepared;
 use PHPUnit\Event\Test\PreparedSubscriber;
 use PHPUnit\Event\Test\Skipped;
 use PHPUnit\Event\Test\SkippedSubscriber;
+use PHPUnit\Event\TestSuite\Skipped as TestSuiteSkipped;
+use PHPUnit\Event\TestSuite\SkippedSubscriber as TestSuiteSkippedSubscriber;
 
 /**
  * The suite's skip roster: WHICH tests are allowed to opt out of running, by
@@ -40,11 +42,44 @@ use PHPUnit\Event\Test\SkippedSubscriber;
  *      check 1, since rows collapse to one method key                -> red;
  *   3. a rostered test that RAN and did NOT skip -- the count moving
  *      DOWN is a re-base too, and it silently retires this guard's
- *      only positive evidence that it can see a skip at all          -> red.
+ *      only positive evidence that it can see a skip at all          -> red;
+ *   4. an entire test CLASS skipping                                 -> red.
  *
  * Check 3 fires only when the rostered test was actually PREPARED, so a
  * `--filter`ed run that never reaches it is silent rather than red. That is the
  * whole reason preparation is tracked separately from skipping.
+ *
+ * ## Why check 4 is a separate event family, and why it is UNCONDITIONALLY red
+ *
+ * The `Skipped: N` line PHPUnit prints is a SUM of two unrelated event families,
+ * and reading it as one number is what this guard was built to stop. MEASURED in
+ * `vendor/phpunit/phpunit/src/TextUI/Output/SummaryPrinter.php`: the figure is
+ * `numberOfTestSuiteSkippedEvents() + numberOfTestSkippedEvents()`.
+ *
+ *  - `Test\Skipped` is one test opting out from its own body or from a
+ *    requirement attribute. It has a `Class::method`, so it can be rostered.
+ *  - `TestSuite\Skipped` is an entire CLASS opting out -- a `setUpBeforeClass()`
+ *    that calls `markTestSkipped()`, or class-level `#[Requires…]` metadata.
+ *    MEASURED in `Framework/TestSuite.php::invokeMethodsBeforeFirstTest()`: it
+ *    emits `testSuiteSkipped()` and then `return false`, so the class's test
+ *    methods never run and never emit `Test\Prepared` or `Test\Skipped` at all.
+ *
+ * That second family is the LARGER silent re-base of the two, and the roster was
+ * blind to it for its whole first day. MEASURED on this box, PHP 8.3.6, PHPUnit
+ * 10.5.64: a child suite of one two-method class skipping from
+ * `setUpBeforeClass()` plus one ordinary passing test printed
+ * `OK, but some tests were skipped! / Tests: 1, Assertions: 1, Skipped: 1` and
+ * exited 0 -- the skipped class's TWO tests gone from the `Tests:` total, and
+ * not one byte of roster output. The same harness, same session, with a
+ * body-level skip and with an attribute skip, exited 1 and named both.
+ *
+ * It is unconditionally red rather than roster-able because there is no key to
+ * roster it BY: `TestSuite\Skipped` carries a
+ * {@see \PHPUnit\Event\TestSuite\TestSuite} value object, not a
+ * {@see \PHPUnit\Event\Code\Test}, so {@see keyOf()} cannot accept it and the
+ * `Class::method` roster has nothing to compare against. This suite has no
+ * class-level skip today (checked) and the day it acquires one is a decision
+ * about the suite floor that should be made deliberately, not absorbed.
  *
  * ## What it does on a non-Linux runner, stated rather than left to be
  * discovered
@@ -78,17 +113,41 @@ use PHPUnit\Event\Test\SkippedSubscriber;
  * function does change the process status (MEASURED, PHP 8.3.6: a script whose
  * body is `exit(0)` and whose shutdown handler is `exit(7)` exits 7).
  *
- * Three things keep that handler from firing where it should not:
+ * Three things keep that handler from firing where it should not, and it is
+ * worth being exact about which of them is load-bearing, because the obvious
+ * answer is wrong.
  *
- *  - it is armed only if the subscribers actually registered, so the several
- *    test files that `require tests/bootstrap.php` in a plain child PHP process
- *    -- no PHPUnit, no event facade -- arm nothing;
- *  - it returns immediately when no test was ever prepared, which is the same
- *    case seen from the other side;
+ *  - WHAT THIS USED TO SAY: that the handler "is armed only if the subscribers
+ *    actually registered, so the several test files that
+ *    `require tests/bootstrap.php` in a plain child PHP process -- no PHPUnit,
+ *    no event facade -- arm nothing". WHAT IS TRUE NOW: registration SUCCEEDS in
+ *    a plain child. MEASURED on this box, PHP 8.3.6 -- a `php` script whose only
+ *    statement is `require tests/bootstrap.php` reports `live()` non-null and
+ *    exits 0. `PHPUnit\Event\Facade` is autoloadable straight out of `vendor/`
+ *    and an unsealed facade accepts subscribers from anyone. So the `try`/`catch`
+ *    around registration STILL EARNS ITS PLACE -- it is what makes a SEALED
+ *    facade, or a PHPUnit that moved the class, a no-op instead of a fatal in
+ *    every one of those children -- but it is not what keeps them quiet.
+ *  - What actually keeps them quiet is the NEXT one: {@see report()} returns
+ *    null when no test was ever prepared. In a plain child nothing is prepared,
+ *    nothing is skipped, and there is nothing to judge. This is the load-bearing
+ *    half, and it is pinned by
+ *    {@see \SugarCraft\Crush\Tests\SuiteSkipRosterTest::testAPlainChildProcessThatRequiresTheBootstrapExitsZero()}.
  *  - it returns immediately in a `pcntl_fork()`ed child. This suite forks a
  *    great deal, a child inherits the parent's shutdown handlers, and a child
  *    that exited 1 because of its PARENT's skip bookkeeping would be a fault
  *    injected by the guard itself. The owning pid is captured at arm time.
+ *
+ * The cost of enforcing from a shutdown handler, stated because it is not
+ * obvious: `exit(1)` from one ABORTS every shutdown function registered after
+ * it. MEASURED, PHP 8.3.6: of two handlers, the first calling `exit(3)`, the
+ * second never runs and the process exits 3. This handler is armed from the
+ * first statement of `tests/bootstrap.php`, so it precedes the
+ * `register_shutdown_function` in `src/Cli/Bootstrap.php` that stops MCP
+ * servers -- on a VIOLATING run those children are left unstopped. That is
+ * accepted rather than fixed: the run is already red and already
+ * non-comparable, and moving the verdict earlier would make it blind to the
+ * back half of the tree, which is the whole reason it lives here.
  *
  * The mechanism end to end -- registration, accumulation, verdict, shutdown,
  * exit status -- is pinned in BOTH polarities by
@@ -126,6 +185,17 @@ final class SuiteSkipRoster
 
     /** @var array<string,true> roster keys that reached preparation */
     private array $preparedKeys = [];
+
+    /**
+     * Every `TestSuite\Skipped` event, suite name => message.
+     *
+     * A separate bucket from {@see $skipEvents} because it is a separate PHPUnit
+     * event family with no `Class::method` to roster by; see check 4 in the
+     * class doc-block.
+     *
+     * @var array<string,string>
+     */
+    private array $suiteSkips = [];
 
     /**
      * @param array<string,string> $expected roster, `Class::method` => why
@@ -180,6 +250,19 @@ final class SuiteSkipRoster
                         $this->roster->recordSkip(
                             $event->test()->id(),
                             SuiteSkipRoster::keyOf($event->test()),
+                            $event->message(),
+                        );
+                    }
+                },
+                new class($roster) implements TestSuiteSkippedSubscriber {
+                    public function __construct(private readonly SuiteSkipRoster $roster)
+                    {
+                    }
+
+                    public function notify(TestSuiteSkipped $event): void
+                    {
+                        $this->roster->recordSuiteSkip(
+                            $event->testSuite()->name(),
                             $event->message(),
                         );
                     }
@@ -247,6 +330,18 @@ final class SuiteSkipRoster
         $this->skippedKeys[$key] = true;
     }
 
+    /** Record an entire test class opting out. See check 4. */
+    public function recordSuiteSkip(string $suiteName, string $message): void
+    {
+        $this->suiteSkips[$suiteName] = $message;
+    }
+
+    /** @return array<string,string> suite name => why, for every skipped CLASS */
+    public function suiteSkips(): array
+    {
+        return $this->suiteSkips;
+    }
+
     /** True when a verdict of this roster is allowed to fail the run. */
     public function enforces(): bool
     {
@@ -293,13 +388,23 @@ final class SuiteSkipRoster
      * The diagnostic for this run, or null when the observed skips match the
      * roster exactly.
      *
-     * Answers null when NO test was ever prepared. That is not a green verdict,
-     * it is "there is nothing to judge": a plain PHP process that included the
-     * bootstrap, or a run that died before the first test.
+     * Answers null when nothing was prepared AND nothing was skipped in either
+     * event family. That is not a green verdict, it is "there is nothing to
+     * judge": a plain PHP process that required the bootstrap, or a run that
+     * died before the first test.
+     *
+     * A skip WITHOUT a preparation is deliberately NOT in that quiet case, and
+     * the distinction is not hypothetical in either family. A `#[Requires…]`
+     * skip is emitted from `TestCase::runBare()`'s `checkRequirements()`, which
+     * runs ABOVE `$emitter->testPrepared()` (MEASURED in
+     * `vendor/phpunit/phpunit/src/Framework/TestCase.php`), so a `--filter` that
+     * selects only such a test leaves `preparedKeys` empty while a skip really
+     * did happen; a `TestSuite\Skipped` class never prepares anything at all.
+     * Returning null there would report a skipped run as unjudged.
      */
     public function report(): ?string
     {
-        if ($this->preparedKeys === []) {
+        if ($this->preparedKeys === [] && $this->skipEvents === [] && $this->suiteSkips === []) {
             return null;
         }
 
@@ -308,7 +413,7 @@ final class SuiteSkipRoster
         $countsOff  = $this->skipEventCount() !== \count($this->expected)
             && $this->rosterWasFullyReached();
 
-        if ($unexpected === [] && $stopped === [] && !$countsOff) {
+        if ($unexpected === [] && $stopped === [] && !$countsOff && $this->suiteSkips === []) {
             return null;
         }
 
@@ -327,6 +432,12 @@ final class SuiteSkipRoster
 
         foreach ($stopped as $key) {
             $lines[] = '  ON THE ROSTER BUT RAN WITHOUT SKIPPING: ' . $key;
+        }
+
+        foreach ($this->suiteSkips as $suiteName => $message) {
+            $lines[] = '  AN ENTIRE TEST CLASS SKIPPED: ' . $suiteName . ': ' . $message;
+            $lines[] = '    Its test methods never ran and are MISSING FROM THE "Tests:" TOTAL, '
+                . 'not counted as skips.';
         }
 
         if ($countsOff) {
@@ -350,6 +461,16 @@ final class SuiteSkipRoster
         $lines[] = '    is now comparing across a different suite.';
         $lines[] = '  * if it is NOT legitimate, the test stopped running and the fix is in the';
         $lines[] = '    test, not here. Do not add a row to silence it.';
+
+        if ($this->suiteSkips !== []) {
+            $lines[] = '  * a skipped CLASS cannot be put on the roster and there is no row to add:';
+            $lines[] = '    the roster is keyed Class::method and PHPUnit\'s TestSuite\\Skipped event';
+            $lines[] = '    carries a TestSuite, not a Test. Either make the class-level gate a';
+            $lines[] = '    per-method one (a body markTestSkipped, or a method #[Requires...]';
+            $lines[] = '    attribute) so it becomes rosterable, or remove the gate. Note that the';
+            $lines[] = '    "Skipped: N" summary line ADDS suite skips to test skips, so N did not';
+            $lines[] = '    move by the number of tests you just lost.';
+        }
 
         return implode(\PHP_EOL, $lines);
     }

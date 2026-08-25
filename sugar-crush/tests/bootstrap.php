@@ -28,9 +28,17 @@ require __DIR__ . '/../vendor/autoload.php';
  * not fail.
  *
  * Registration happens here because PHPUnit loads this file BEFORE it seals its
- * event facade. It is a no-op in the several test files that `require` this
- * bootstrap in a plain child PHP process: no facade, nothing registered, nothing
- * armed.
+ * event facade.
+ *
+ * WHAT THIS USED TO SAY: that the call is "a no-op in the several test files
+ * that `require` this bootstrap in a plain child PHP process: no facade,
+ * nothing registered, nothing armed." WHAT IS TRUE NOW: those children DO arm
+ * it. MEASURED, PHP 8.3.6 -- a `php` script whose only statement is a `require`
+ * of this file reports `SuiteSkipRoster::live()` non-null and exits 0. The
+ * facade class autoloads out of `vendor/` like anything else. They stay
+ * harmless because nothing is ever PREPARED in them and the verdict returns
+ * null with nothing to judge, which is pinned by
+ * `SuiteSkipRosterTest::testAPlainChildProcessThatRequiresTheBootstrapExitsZero()`.
  */
 \SugarCraft\Crush\Tests\Support\SuiteSkipRoster::install();
 
