@@ -153,6 +153,46 @@ final class DuplicatedDocBlockLineTest extends TestCase
             'a blank continuation line no longer separates two paragraphs',
         );
 
+        // ── THE THREE RESET ARMS, EACH REACHED BY ITS OWN FIXTURE. Every one
+        // of these was added because a mutation of the arm SURVIVED the rows
+        // above it: the "blank continuation" and "non-adjacent" rows were
+        // written from the shape of the DEFECT and reached none of the code
+        // that prevents a FALSE report (rule 2 — the mutation was relevant and
+        // the window was wrong, twice in a row).
+
+        // (1) TWO BLANK CONTINUATIONS IN A ROW. Without the empty-body reset
+        // both carry the body `''`, the second equals the first, and every
+        // doc-block in this package with a double blank line is reported with
+        // an empty `text`. This is the arm's real job; separating two
+        // paragraphs is a consequence of it.
+        $this->assertSame(
+            [],
+            self::repeatedDocBlockLinesIn("<?php\n/**\n * a line.\n *\n *\n * another line.\n */\nclass A {}\n"),
+            'two blank continuation lines in a row were reported as a repeat, so a doc-block '
+                . 'with a double blank line now reds with an empty message',
+        );
+
+        // (2) A LONE SLASH ON TWO CONSECUTIVE LINES. The closing ` */` has the
+        // body `/` after the star is stripped, so without the `'/'` reset a
+        // doc-block whose last prose line is a bare slash repeats it.
+        $this->assertSame(
+            [],
+            self::repeatedDocBlockLinesIn("<?php\n/**\n * /\n */\nclass A {}\n"),
+            'the closing delimiter was compared against the prose line above it, so a doc-block '
+                . 'ending in a lone slash is reported as repeating itself',
+        );
+
+        // (3) A CONTINUATION LINE WITH NO STAR breaks adjacency. Doc-blocks in
+        // this package really do carry them — MEASURED on PHP 8.3.6, five lines
+        // in five files across `tests/`, `src/` and `bin/` — so this arm is
+        // reached by the real census and not only here.
+        $starless = 'a fenced example line, written without a leading star';
+        $this->assertSame(
+            [],
+            self::repeatedDocBlockLinesIn("<?php\n/**\n" . $line . "\n   " . $starless . "\n" . $line . "\n */\nclass A {}\n"),
+            'a starless continuation line no longer separates the two identical lines around it',
+        );
+
         // AND A `//` RUN IS OUT OF SCOPE BY CONSTRUCTION, not by a text test.
         $slashes = '// $this->assertSame(1, 1);';
         $this->assertSame(
