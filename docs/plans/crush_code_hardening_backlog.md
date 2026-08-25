@@ -19171,7 +19171,7 @@ not committed and not a policy breach. Recorded only because a per-lib lock make
 injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
 resolve from the lock and silently ignore the injected closure.
 
-### Ea60-1 — a mis-namespaced file under `src/` is a HARD FATAL, not "reported rather than thrown on"
+### E631 — a mis-namespaced file under `src/` is a HARD FATAL, not "reported rather than thrown on"
 
 `tests/Tools/BuiltInToolCorpus.php`'s class doc-block and `classNames()`'s own comment both say a
 PSR-4 exemption elsewhere in the tree is *reported* by `nonClassSources()` rather than aborting suite
@@ -19215,7 +19215,7 @@ doc-block's "reported rather than thrown on" must be rewritten under rule 7 rath
 and `testAnExemptFileElsewhereIsReportedRatherThanThrownOn()` needs a sibling that drives the REAL
 autoloader, because the probe autoloader cannot express this case.
 
-### Ea60-2 — `BuiltInToolCorpus.php`'s own doc-block is the fifth restatement of the `src/` census
+### E632 — `BuiltInToolCorpus.php`'s own doc-block is the fifth restatement of the `src/` census
 
 Round 60 lane a retired every cardinality over `src/` from `BuiltInToolCorpusTest` and both restated
 figures from `src/Context/RepoMapBlock.php`. It did not touch the scanner's own doc-block, which is
@@ -19255,10 +19255,10 @@ claim with no figure rather than a quotation. Then widen the no-restatement scan
 found `BuiltInToolCorpusTest` re-spelling `297` and `316` inside the doc-block of the very test that
 replaced those two literals; that was elided in `fbe48bf5d`, but the same sweep must be run over the
 whole of `tests/Tools/` before the scanner's domain is widened, or the widening lands red on prose
-that has nothing to do with `RepoMapBlock`. And see Ea60-5: widening this scanner's ALPHABET is a
+that has nothing to do with `RepoMapBlock`. And see E635: widening this scanner's ALPHABET is a
 different and much worse idea than widening its FILE domain.
 
-### Ea60-3 — a figure was asserted; the claim the figure supported was not, and it was false
+### E633 — a figure was asserted; the claim the figure supported was not, and it was false
 
 `RepoMapBlock`'s WHAT WAS DELIBERATELY NOT BUILT list argued that a per-class listing was rejected
 because at one line each it would be "several times this whole block's budget". The DIGIT in that
@@ -19298,7 +19298,7 @@ written BY a fix for this pattern, not found by looking for it, and both were ca
 sentence rather than by reading one. The sweep's acceptance test is a mutation of each conclusion,
 not of the figure underneath it.
 
-### Ea60-4 — the suite's TEST COUNT is still a function of `src/`'s size, via one data provider (and its ASSERTION figure, as first filed, did not reproduce)
+### E634 — the suite's TEST COUNT is still a function of `src/`'s size, via one data provider (and its ASSERTION figure, as first filed, did not reproduce)
 
 Round 60 lane a removed every ASSERTION that counts `src/`, and the acceptance test is green in both
 polarities. That does not make the suite's totals independent of the tree, and a supervisor predicting
@@ -19369,7 +19369,7 @@ the review's unexplained `+1`. Two consequences for anyone reconciling a merge: 
 not evidence that behaviour moved, and a lane that only rewrote comments still has a non-zero delta to
 account for. (Measured negative control, from the same pair of runs: `docs/plans/` is NOT in that
 census's scope — a commit adding ninety lines to THIS file left the suite's totals byte-identical.)
-### Ea60-5 — the no-restatement guard covers TWO of the census's components, and widening its alphabet is measurably worse than leaving it narrow
+### E635 — the no-restatement guard covers TWO of the census's components, and widening its alphabet is measurably worse than leaving it narrow
 
 `BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()` reports a derived figure
 appearing as a standalone integer in `RepoMapBlock.php`. Its alphabet is the FILE count and the
@@ -19405,9 +19405,9 @@ of the corpus scanner's symbols), which is a token-stream fact rather than a phr
 narrow alphabet is documented in the guard's own doc-block, with this measurement, rather than
 implied.
 
-### Ea60-6 — the reflection census is declared ABOVE the token-stream balance, so on a real defect the only instrument that can report never runs
+### E636 — the reflection census is declared ABOVE the token-stream balance, so on a real defect the only instrument that can report never runs
 
-Ea60-1 establishes that a mis-namespaced file under `src/` takes the runner down rc 255 through
+E631 establishes that a mis-namespaced file under `src/` takes the runner down rc 255 through
 `classNames()`/`nonClassSources()`'s triple `*_exists()` probe. This entry is the consequence for
 `BuiltInToolCorpusTest`'s own ordering, and it is why a doc-block in that file claimed a redundancy
 the tree does not have.
@@ -19423,13 +19423,13 @@ the reflection census, so in a default run it never executes. The doc-block clai
 independent instruments … the arrangement that survives one of them going quiet" was corrected in
 `fbe48bf5d`; the ORDERING was not.
 
-**Step.** Once Ea60-1 is fixed the fatal goes away and the ordering stops mattering, so this is
-subordinate to it — but if Ea60-1 is deferred again, move the balance and its fixture above the
+**Step.** Once E631 is fixed the fatal goes away and the ordering stops mattering, so this is
+subordinate to it — but if E631 is deferred again, move the balance and its fixture above the
 reflection census in the file, and pin the ordering with a comment stating why (a `@depends` would be
 wrong: they are not dependent, they are differently survivable). Cheap, and it is the difference
 between a named failure and a redeclaration fatal.
 
-### Ea60-7 — `declaredTypes()` cannot see a conditionally-declared type, and that is newly load-bearing
+### E637 — `declaredTypes()` cannot see a conditionally-declared type, and that is newly load-bearing
 
 MEASURED on PHP 8.3.6 at `204c9cf58`: `BuiltInToolCorpus::declaredTypes()` walks the token stream at
 brace depth zero, so a `class Hidden {}` nested inside an `if` block is invisible to it — the file
@@ -19450,7 +19450,7 @@ limitation for coverage — rule 14 says a guard must be able to state what it c
 limitation, the walk needs to record a conditional declaration as something other than absence.
 
 
-### Ea60-8 — `BuiltInToolCorpusTest` now carries THREE bounds with a finite horizon in tree size, and one of them is the binding constraint on adding source files
+### E638 — `BuiltInToolCorpusTest` now carries THREE bounds with a finite horizon in tree size, and one of them is the binding constraint on adding source files
 
 Round 60 removed the census literals; what replaced them are bounds, and three of those bounds are
 claims about today's tree that a large enough tree will legitimately falsify. This entry states where,
@@ -19488,7 +19488,7 @@ coupling nobody counted**; if a bound needs slack, the slack has to be argued fo
 **Step.** No fix. Re-measure the table if `MAX_SECTION_BYTES` or `MAX_SOURCE_FILES` moves, and treat
 any red in it as an instruction to rewrite `RepoMapBlock`'s design note, never to loosen the bound
 back toward a ratio.
-### Eb60-1 — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
+### E639 — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
 
 **DEFERRED, out of lane (`src/Cli/Bootstrap.php`).** Round 60 lane b made
 `AgentManager::executeSubAgent()` resolve `Agent::$tools` into the `CompleteRequest`'s `tools` field
@@ -19540,7 +19540,7 @@ Pinned by `AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromA
 that a policy-narrowed absence and a typo produce the byte-identical refusal. That test is the trap's
 tripwire: it names this entry's decision in its failure message.
 
-### Eb60-7 — `GRANT_PROBES` proves a grant CAN fire, never that it does not OVER-fire
+### E640 — `GRANT_PROBES` proves a grant CAN fire, never that it does not OVER-fire
 
 **RECORDED, not fixed — the guard's alphabet limit (rule 11).**
 `AgentDefinitionTest::declarationDefect()` calls a preset's argument-scoped declaration clean once
@@ -19555,7 +19555,7 @@ a judgement about what the preset meant. Worth doing when a preset ships a grant
 actually matters — today the only argument-scoped declaration in the built-in set is `Bash(git *)`,
 whose trailing space makes the over-fire case not arise.
 
-### Eb60-5 — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
+### E641 — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
 
 **DEFERRED, out of lane (`src/Workflows/WorkflowEngine.php`, `src/Workflows/WorkflowTask.php`).**
 Found while checking round 60's review MAJOR 4. `WorkflowEngine` builds its stage request as
@@ -19586,24 +19586,24 @@ Note this also makes the `[]`-vs-`null` distinction load-bearing on that path: `
 defaults to `[]`, NOT to `null`, so four of the six providers put a present-but-empty `tools` key on
 the wire for every workflow stage.
 
-### Eb60-6 — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
+### E642 — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
 
 **PARTIALLY CLOSED in round 60's fix stage.** `AgentDefinitionTest::declarationDefect()` returns
 `null` for any declaration with no argument half, on the grounds that the name half is matched
-against the live registry by `AgentManager` — which, per Eb60-1, no production caller makes it do. A
+against the live registry by `AgentManager` — which, per E639, no production caller makes it do. A
 typo'd bare `defaultTools: ['Reed']` was therefore caught by nothing.
 `testEveryBarePresetToolNameResolvesAgainstTheShippedToolSet` now closes that for the six built-in
 presets, resolving each bare name against `Bootstrap::tools()` under a sandboxed HOME (the sandbox's
-emptiness is asserted, so the guard cannot silently measure a narrowed set — see Eb60-1).
+emptiness is asserted, so the guard cannot silently measure a narrowed set — see E639).
 
 **STILL OPEN:** the same typo in a USER or FOREIGN preset (`.sugar-crush/agents`, `.claude/agents`,
 `.opencode/agents`) is caught by nothing, since those are not in the fixture table and are not
 validated at load time. Closing it properly means validating at `AgentPresetRegistry` /
-`ForeignAgentPresetRegistry` load time against the session's tool set — which needs Eb60-1's decision
+`ForeignAgentPresetRegistry` load time against the session's tool set — which needs E639's decision
 first, since a user preset naming a tool the operator disabled must warn rather than refuse. Related
-to Eb60-4, which is the argument-scoped half of the same gap.
+to E645, which is the argument-scoped half of the same gap.
 
-### Eb60-2 — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
+### E643 — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
 
 **DEFERRED. The FINDING, not the fix (rule 10).** `executeSubAgent()` applies skills with
 
@@ -19625,7 +19625,7 @@ REGISTRATION rather than at execution; (b) strip the skill's name from the promp
 resolve; (c) warn on stderr at construction. (b) is wrong on its own — it edits the model-facing
 prompt at runtime, which nothing else here does.
 
-### Eb60-3 — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
+### E644 — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
 
 **DEFERRED, and the more consequential half of §C7.** `executeSubAgent()` has no production caller;
 `executeAll()` has TWO — `Chat::executeAgents()` and `WorkflowEngine`'s parallel stages. MEASURED at
@@ -19642,7 +19642,7 @@ Not fixed in round 60 because the correct shape is a PER-AGENT request built ins
 already has: it builds a per-agent `CompleteRequest` from each agent's own `task`, so `tools` can be
 resolved there from `$agent->agent->tools` by the same method.
 
-### Eb60-4 — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
+### E645 — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
 
 **DEFERRED.** Round 60 lane b found `AgentDefinition::reviewer()` shipping `Bash(git:*)` — Claude
 Code's prefix dialect — where this project globs an argument half with `fnmatch()`. MEASURED on PHP
@@ -19658,7 +19658,7 @@ preset carrying `tools: Bash(git:*)` produces a declaration that is well-formed,
 and matches nothing — which after §C7 means the sub-agent is granted the `Bash` tool by the NAME half
 and then has every `Bash` call refused by the argument half. The durable fixes are a translation at
 import (`(x:*)` → `(x *)`) or a stderr warning naming the dialect; neither was taken.
-### Ec60-1 — the live worker cannot heartbeat through a non-streaming provider call
+### E646 — the live worker cannot heartbeat through a non-streaming provider call
 
 **DEFERRED FINDING, not a hole today.** `ProcessExecutor::createLiveWorkerScript()` emits one
 heartbeat before the provider call and then one every 5s *between relayed chunks*. On the
@@ -19677,7 +19677,7 @@ emit while blocked, e.g. an alarm signal, a `pcntl_fork()`ed heartbeat emitter, 
 Standing user rule: LLM calls may legitimately run for tens of minutes, so this must not be
 "solved" by capping the request.
 
-### Ec60-2 — a sub-agent worker runs with NO TOOLS, and nothing says so at runtime
+### E647 — a sub-agent worker runs with NO TOOLS, and nothing says so at runtime
 
 **DEFERRED FINDING.** `ProcessExecutor::encodeTools()` sends the request's tool NAMES across the
 startup line and `createLiveWorkerScript()` builds its `CompleteRequest` with `tools: null`. The
@@ -19703,7 +19703,7 @@ grant that path computes cannot reach a `ProcessExecutor` worker until this is a
 options are a name-plus-schema wire format the child rehydrates against a registry it rebuilds, or
 an RPC back to the parent for `execute()`.
 
-### Ec60-3 — `ProcessExecutor`'s live worker `require`s an autoloader path taken off the wire
+### E648 — `ProcessExecutor`'s live worker `require`s an autoloader path taken off the wire
 
 **DEFERRED FINDING, currently contained.** The child `require`s `$msg['autoload']`, which arrives in
 the startup JSON line. Classified `PROCESS_DERIVED` in `ReadPathCensusTest::READ_PATHS` because the
@@ -19725,7 +19725,7 @@ reading a spooled startup line off disk — the `require` becomes attacker-influ
 `is_file()` test does not bound it. `Sessions/BackgroundSupervisor.php|require` carries the same
 shape and the same exposure.
 
-### Ec60-4 — nothing in `src/` can give a sub-agent worker a provider, and `/workflow run` is the reachable case
+### E649 — nothing in `src/` can give a sub-agent worker a provider, and `/workflow run` is the reachable case
 
 **DEFERRED FINDING, and it is the reason the production sub-agent path is unexercised.**
 `Chat::executeAgents()` builds its executor from `AgentPoolConfig`, which carries `maxConcurrent`,
@@ -19757,7 +19757,7 @@ answer — but it is a behaviour change on a live command and it was not written
 Note also that `WorkflowEngine::$provider` is a provider NAME, not a config, so it is not a ready
 supplier for the seam either; the gap has the same shape at that site as at `AgentPoolConfig`.
 
-### Ec60-6 — the parent writes `execute` into a pipe whose child may already be gone
+### E650 — the parent writes `execute` into a pipe whose child may already be gone
 
 **DEFERRED FINDING, cosmetic today.** `spawnWorker()` writes its `execute` line with a bare
 `fwrite($pipes[0], ...)` after a bounded wait for `ready`. A child that exited during startup —
@@ -19773,7 +19773,7 @@ warning attributed to the executor rather than as a named failure, and `phpunit.
 detect the dead child (or guard the write) and turn it into the AgentResult the caller already
 expects.
 
-### Ec60-5 — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
+### E651 — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
 
 **DEFERRED, trivial.** A doc-block in `Renderer.php` reasons about the executor by LINE NUMBER. Both
 numbers were already approximate and this round moved everything below the constructor, so they now
