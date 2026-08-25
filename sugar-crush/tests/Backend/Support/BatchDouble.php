@@ -11,6 +11,10 @@ use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 
 /**
+ * A non-streaming provider that thinks and then answers in one call.
+ *
+ * ## Where this class came from
+ *
  * E497 — lifted out of `tests/Backend/ReasoningProgressTest.php`, where it sat
  * at top level in the SHARED `SugarCraft\Crush\Tests\Backend` namespace under
  * a name generic enough that the next lane to write one would collide with it
@@ -19,10 +23,9 @@ use SugarCraft\Crush\Providers\ProviderInterface;
  *
  * A namespace of its own, rather than a longer name: renaming would have to be
  * done again by the next person who wants the obvious name, whereas a namespace
- * makes `ScaledClockLoop` and someone else's `ScaledClockLoop` different
- * classes by construction.
+ * makes `BatchDouble` and someone else's `BatchDouble` different classes by
+ * construction.
  */
-/** A non-streaming provider that thinks and then answers in one call. */
 final class BatchDouble implements ProviderInterface
 {
     public function name(): string { return 'batch'; }

@@ -245,6 +245,18 @@ final class BuiltInToolCorpusTest extends TestCase
     }
 
     /**
+     * The resolution these literals need, IN THE FAILURE TEXT, because the
+     * person reading it is usually resolving a merge rather than debugging a
+     * test. Three lanes adding source files in one round each see a small
+     * increment that is correct for their own worktree and wrong for the merge,
+     * and a count merges cleanly without a conflict marker while being
+     * arithmetically wrong afterwards.
+     */
+    private const CENSUS_RESOLUTION = 'php files under src/ — a CENSUS OF THE TREE, not a policy. '
+        . 'Re-derive it; never resolve a conflict here by choosing a side. '
+        . 'Two lanes that each added one file both read +1, and the merge needs +2.';
+
+    /**
      * The doc-block's symbol-kind census, derived. The load-bearing number is the
      * LAST one: `abstract` is the only shape the old `class_exists()`-only guard
      * classified correctly, and there are none — while the 18 interfaces and 6
@@ -359,18 +371,6 @@ final class BuiltInToolCorpusTest extends TestCase
      * here: the walk below is `RecursiveDirectoryIterator` order, so "the Nth
      * file" is a fact about the filesystem, not about the tree.
      */
-    /**
-     * The resolution these literals need, IN THE FAILURE TEXT, because the
-     * person reading it is usually resolving a merge rather than debugging a
-     * test. Three lanes adding source files in one round each see a small
-     * increment that is correct for their own worktree and wrong for the merge,
-     * and a count merges cleanly without a conflict marker while being
-     * arithmetically wrong afterwards.
-     */
-    private const CENSUS_RESOLUTION = 'php files under src/ — a CENSUS OF THE TREE, not a policy. '
-        . 'Re-derive it; never resolve a conflict here by choosing a side. '
-        . 'Two lanes that each added one file both read +1, and the merge needs +2.';
-
     public function testTheSymbolKindCensusTheDocBlockQuotes(): void
     {
         $counts = ['concrete' => 0, 'enum' => 0, 'abstract' => 0, 'interface' => 0, 'trait' => 0, 'none' => 0];

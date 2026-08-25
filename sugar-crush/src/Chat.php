@@ -3004,9 +3004,23 @@ final class Chat implements Model
 
     /**
      * Append one fragment of the model's THINKING to the live inbox
-     * ({@see $liveToolEvents}) — written through by a
-     * {@see Backend\ObservesReasoning} backend's `$onReasoning` callback
-     * (E456/E494).
+     * ({@see $liveToolEvents}) — the EMBEDDER and TEST entry point onto that
+     * inbox (E456/E494).
+     *
+     * WHAT THIS SAID BEFORE: that it is "written through by a
+     * {@see Backend\ObservesReasoning} backend's `$onReasoning` callback".
+     * WHAT IS TRUE NOW: it never was. Measured — this method has no caller
+     * under `src/` or `bin/` at all. The live path's `$onReasoning` closure in
+     * {@see scheduleBackendCompletion()} appends to the shared inbox DIRECTLY,
+     * because it must be a `static` closure and so has no `$this` to call a
+     * method on. WHY IT STILL EARNS ITS PLACE (rule 6 — a dormant seam gets
+     * wired or justified, never deleted): it is the same public shape
+     * {@see enqueueToken()} has, and it is how anything OUTSIDE a
+     * {@see Backend} — an embedder hosting this model, or a test driving the
+     * paint without a backend — puts a thought in front of the renderer. The
+     * risk a dormant parallel implementation carries is DRIFT, so the two are
+     * pinned as equivalent rather than merely both present; see
+     * `ReasoningPaintTest`'s agreement test.
      *
      * Mutating for the reason {@see enqueueToken()} is: the callback fires
      * inside the backend — for {@see Backend\EngineBackend} on the ReactPHP
@@ -3097,11 +3111,12 @@ final class Chat implements Model
      * THE SAME KIND is folded into a single append. Same kind, because the two
      * accumulate into different fields and folding across the boundary would
      * append one channel's bytes to the other's — the precise corruption
-     * {@see ReasoningDelta} exists to prevent. One-at-a-time is what makes a tool call's running→done walk
-     * visible, but a delta has no such two-state shape — it is text — and a
-     * provider emits hundreds to thousands of them per reply. Rendering the
-     * whole transcript once per token would spend the turn repainting instead
-     * of streaming, while coalescing bounds the repaint rate at the pump's own
+     * {@see ReasoningDelta} exists to prevent. One-at-a-time is what makes a
+     * tool call's running→done walk visible, but a delta has no such two-state
+     * shape — it is text — and a provider emits hundreds to thousands of them
+     * per reply. Rendering the whole transcript once per token would spend the
+     * turn repainting instead of streaming, while coalescing bounds the repaint
+     * rate at the pump's own
      * {@see TOOL_EVENT_POLL_SECONDS} tick and loses nothing: the user cannot
      * read faster than the screen refreshes either way. Coalescing stops at
      * the first non-delta entry, so text never jumps ahead of the tool call it

@@ -12,6 +12,13 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Tools\ToolCall;
 
 /**
+ * A streaming provider whose pre-answer chunks all carry `content: ''` — one
+ * shape per family member, plus a `silent` shape that emits nothing at all and
+ * is the known-positive control.
+
+ *
+ * ## Where this class came from
+ *
  * E497 — lifted out of `tests/Backend/ReasoningProgressTest.php`, where it sat
  * at top level in the SHARED `SugarCraft\Crush\Tests\Backend` namespace under
  * a name generic enough that the next lane to write one would collide with it
@@ -20,13 +27,8 @@ use SugarCraft\Crush\Tools\ToolCall;
  *
  * A namespace of its own, rather than a longer name: renaming would have to be
  * done again by the next person who wants the obvious name, whereas a namespace
- * makes `ScaledClockLoop` and someone else's `ScaledClockLoop` different
- * classes by construction.
- */
-/**
- * A streaming provider whose pre-answer chunks all carry `content: ''` — one
- * shape per family member, plus a `silent` shape that emits nothing at all and
- * is the known-positive control.
+ * makes `StreamingDouble` and someone else's `StreamingDouble` different classes by
+ * construction.
  */
 final class StreamingDouble implements ProviderInterface
 {

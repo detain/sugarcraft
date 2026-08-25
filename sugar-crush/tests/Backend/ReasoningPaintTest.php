@@ -10,6 +10,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\CancellationToken;
@@ -22,7 +23,9 @@ use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\Role;
 use SugarCraft\Crush\ToolEventPumpMsg;
+use SugarCraft\Crush\Tests\Backend\Support\BatchDouble;
 use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
+use SugarCraft\Crush\Tui\Components\ChatPane;
 
 /**
  * **E494 — the last hop of E456: the thinking must reach the screen, and
@@ -316,22 +319,93 @@ final class ReasoningPaintTest extends TestCase
     // =====================================================================
 
     /**
-     * Which of the two `Renderer` classes paints the transcript, asserted
-     * rather than asserted-in-prose: the shell renderer must reach the live one
-     * for its chat pane. If that delegation is ever severed, the paint
-     * assertions above are measuring a surface the user no longer sees.
+     * Which of the two `Renderer` classes paints the transcript, asserted by
+     * DRIVING the shell rather than by reading its source.
+     *
+     * WHAT THIS DID BEFORE: matched two literals in
+     * `src/Tui/Components/ChatPane.php` — its `use ... as LiveRenderer` line
+     * and `LiveRenderer::renderView(`. WHAT IS TRUE NOW: that proved an import
+     * existed, not that the pane paints a thought, and it was keyed on the text
+     * of a file this test's own package does not own: a reformat, or a switch
+     * to a fully-qualified call, reddened this guard for no behavioural reason
+     * (rule 40 — key an exemption, or an assertion, on structure). WHY THE
+     * GUARD STILL EARNS ITS PLACE: unchanged and the reason is the important
+     * half. If the shell ever stops delegating to the live renderer, every
+     * paint assertion in this file is measuring a surface the user no longer
+     * sees, and they would all stay green while the feature was gone.
+     *
+     * `ChatPane::renderView()` is public static and takes the shell's own
+     * `App`, so the pane can be driven directly with a hosted `Chat` that
+     * carries a thought — a structural fact PHP enforces, rather than a string.
      */
     public function testTheTuiShellPaintsTheThoughtThroughTheSameSurface(): void
     {
-        $pane = new \ReflectionClass(\SugarCraft\Crush\Tui\Components\ChatPane::class);
-        $source = file_get_contents((string) $pane->getFileName());
-        $this->assertIsString($source);
+        $app = App::new(new BatchDouble(), 'm')
+            ->withChat($this->pumpToQuiescence($this->withThought(new Chat(inFlight: true), 'PANEMARKER')));
+
+        [$pane] = ChatPane::renderView($app, 100, 30);
+
         $this->assertStringContainsString(
-            'use SugarCraft\Crush\Renderer as LiveRenderer;',
-            $source,
-            'the TUI chat pane no longer delegates to the live renderer - the transcript may have moved',
+            '💭',
+            $pane,
+            'the TUI chat pane no longer paints the live thought - the transcript may have moved',
         );
-        $this->assertStringContainsString('LiveRenderer::renderView(', $source);
+        $this->assertStringContainsString('PANEMARKER', $pane, 'the marker was painted but the thought itself was not');
+
+        // Rule 15's known-negative through the SAME call: the pane must not
+        // paint the marker for a chat that has no thought, or the assertions
+        // above would pass against a pane that paints it unconditionally.
+        [$silent] = ChatPane::renderView($app->withChat(new Chat(inFlight: true)), 100, 30);
+        $this->assertStringNotContainsString('💭', $silent);
+        $this->assertStringNotContainsString('PANEMARKER', $silent);
+    }
+
+    /**
+     * **{@see Chat::enqueueReasoning()} and the live path must not drift.**
+     *
+     * `enqueueReasoning()` is production-DORMANT: measured, it has no caller
+     * under `src/` or `bin/`. The live turn's `$onReasoning` sink in
+     * `Chat::scheduleBackendCompletion()` is a `static` closure, so it has no
+     * `$this` and appends to the shared inbox itself — which means the empty
+     * drop and the `ReasoningDelta` construction exist TWICE, in two places
+     * that no compiler keeps in step.
+     *
+     * The seam is kept (rule 6): it is how an embedder or a test puts a thought
+     * in front of the renderer with no backend in play, and it is the shape
+     * {@see Chat::enqueueToken()} already has. What is pinned here is that the
+     * two agree, because a dormant parallel implementation that has silently
+     * diverged is worse than none: if the live path stopped dropping the empty
+     * delta, every test in this file would keep passing while the frame the
+     * user sees gained a bare `💭` on every heartbeat.
+     *
+     * The double announces `''` deliberately, even though
+     * {@see ObservesReasoning::completeAsync()} promises never to. The closure's
+     * own drop is defence in depth against exactly that contract being broken
+     * by a third-party backend, and a guard for defence in depth has to feed it
+     * the thing it defends against.
+     */
+    public function testTheDormantEntryPointAndTheLiveSinkAgree(): void
+    {
+        $viaSeam = new Chat(inFlight: true);
+        $viaSeam->enqueueReasoning('');
+        $viaSeam->enqueueReasoning('kept ');
+        $viaSeam->enqueueReasoning('');
+        $viaSeam->enqueueReasoning('and kept');
+        $seamText = $this->pumpToQuiescence($viaSeam)->reasoningText();
+
+        $backend = new ReasoningRecorderBackend(['', 'kept ', '', 'and kept'], 'done');
+        $chat = new Chat(backend: $backend, inputBuf: 'go');
+        [$inFlight, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'submitting produced no command');
+        $cmd();
+        $liveText = $this->pumpToQuiescence($inFlight)->reasoningText();
+
+        $this->assertSame('kept and kept', $seamText, 'the seam dropped or kept the wrong fragments');
+        $this->assertSame(
+            $seamText,
+            $liveText,
+            'the dormant entry point and the live sink have drifted - one of them changed and the other did not',
+        );
     }
 
     /**

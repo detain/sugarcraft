@@ -14,18 +14,6 @@ use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 
 /**
- * E497 — lifted out of `tests/Backend/ReasoningProgressTest.php`, where it sat
- * at top level in the SHARED `SugarCraft\Crush\Tests\Backend` namespace under
- * a name generic enough that the next lane to write one would collide with it
- * — a fatal at autoload time, in a file neither lane had touched. Nothing
- * collided; the hazard was that nothing had YET.
- *
- * A namespace of its own, rather than a longer name: renaming would have to be
- * done again by the next person who wants the obvious name, whereas a namespace
- * makes `ScaledClockLoop` and someone else's `ScaledClockLoop` different
- * classes by construction.
- */
-/**
  * A streaming provider whose FIRST attempt thinks and then dies transiently,
  * and whose second answers.
  *
@@ -40,6 +28,20 @@ use SugarCraft\Crush\Providers\ProviderInterface;
  * The reasoning chunk goes out BEFORE the failure in both, which is the whole
  * fixture: it is the only thing on the wire in the window where a thinking
  * model's connection drops.
+
+ *
+ * ## Where this class came from
+ *
+ * E497 — lifted out of `tests/Backend/ReasoningProgressTest.php`, where it sat
+ * at top level in the SHARED `SugarCraft\Crush\Tests\Backend` namespace under
+ * a name generic enough that the next lane to write one would collide with it
+ * — a fatal at autoload time, in a file neither lane had touched. Nothing
+ * collided; the hazard was that nothing had YET.
+ *
+ * A namespace of its own, rather than a longer name: renaming would have to be
+ * done again by the next person who wants the obvious name, whereas a namespace
+ * makes `ThinkThenFailDouble` and someone else's different classes by
+ * construction.
  */
 final class ThinkThenFailDouble implements ProviderInterface
 {

@@ -78,8 +78,10 @@ interface ObservesReasoning extends Backend
      *                      into {@see \SugarCraft\Crush\Runtime::run()},
      *                      untouched, and that runtime reports `''` for a chunk
      *                      that carried nothing showable. Held by
-     *                      `ReasoningProgressTest::testTheSyncPathDeliversTheEmptyHeartbeatBecauseTheChildNeedsIt()`,
-     *                      which asserts three empty deltas arrive.
+     *                      `ReasoningProgressTest`, in the test whose name says
+     *                      the sync path delivers the empty heartbeat because
+     *                      the child needs it - it asserts three empty deltas
+     *                      arrive.
      *                      WHY THE REASONING STILL EARNS ITS PLACE: the WHY was
      *                      right and only the WHICH-METHOD was wrong. An empty
      *                      fragment is meaningful one layer down — for

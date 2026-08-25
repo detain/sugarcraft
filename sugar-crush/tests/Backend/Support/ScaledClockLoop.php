@@ -9,18 +9,6 @@ use React\EventLoop\Timer\Timer;
 use React\EventLoop\TimerInterface;
 
 /**
- * E497 — lifted out of `tests/Backend/ReasoningProgressTest.php`, where it sat
- * at top level in the SHARED `SugarCraft\Crush\Tests\Backend` namespace under
- * a name generic enough that the next lane to write one would collide with it
- * — a fatal at autoload time, in a file neither lane had touched. Nothing
- * collided; the hazard was that nothing had YET.
- *
- * A namespace of its own, rather than a longer name: renaming would have to be
- * done again by the next person who wants the obvious name, whereas a namespace
- * makes `ScaledClockLoop` and someone else's `ScaledClockLoop` different
- * classes by construction.
- */
-/**
  * A `LoopInterface` whose STREAMS are real and whose CLOCK is scaled.
  *
  * `stream_select()` runs for real against the real socket pair
@@ -38,6 +26,20 @@ use React\EventLoop\TimerInterface;
  *     handler would be a behaviour this loop quietly removed from the code
  *     under test; nothing in `completeAsync()` registers one today, and if that
  *     changes the test must go red rather than lie.
+
+ *
+ * ## Where this class came from
+ *
+ * E497 — lifted out of `tests/Backend/ReasoningProgressTest.php`, where it sat
+ * at top level in the SHARED `SugarCraft\Crush\Tests\Backend` namespace under
+ * a name generic enough that the next lane to write one would collide with it
+ * — a fatal at autoload time, in a file neither lane had touched. Nothing
+ * collided; the hazard was that nothing had YET.
+ *
+ * A namespace of its own, rather than a longer name: renaming would have to be
+ * done again by the next person who wants the obvious name, whereas a namespace
+ * makes `ScaledClockLoop` and someone else's `ScaledClockLoop` different classes by
+ * construction.
  */
 final class ScaledClockLoop implements LoopInterface
 {
