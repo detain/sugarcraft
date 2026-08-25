@@ -766,7 +766,7 @@ final class AgentManager
             return null;
         }
 
-        $patterns = $this->declarationNamePatterns($agent);
+        $patterns = $this->namePatterns($agent, $agent->tools, 'tools');
         if ($patterns === []) {
             // NO DECLARATION IS NOT AN EMPTY GRANT, and the difference is
             // visible to the model. `Agent::fromArray()` defaults `tools` to
@@ -779,6 +779,19 @@ final class AgentManager
             // already applies to `App::$tools`.
             return null;
         }
+
+        // DENY WINS, AND IT IS A CONJUNCTION RATHER THAN A SECOND PASS, for
+        // the reason {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()}
+        // gives about the identical shape: both halves only ever REMOVE, so
+        // there is no "first" and no "then" for a later stage to re-admit
+        // anything in. `Agent::$disallowedTools` reaches this class from
+        // {@see Agent::fromPreset()} (and from opencode's `permission:` block
+        // through {@see ForeignAgentPresetRegistry}) and, until this method
+        // existed, was consumed by NOTHING in `src/` — so a resolver that read
+        // only `$tools` would have handed a preset the very tool its own
+        // denylist refuses. That is a widening committed inside the fix for a
+        // lie, which is the shape this whole item is about.
+        $denied = $this->namePatterns($agent, $agent->disallowedTools, 'disallowedTools');
 
         $matched = array_fill_keys(array_keys($patterns), false);
         $granted = [];
@@ -807,9 +820,22 @@ final class AgentManager
                 }
             }
 
-            if ($hit) {
-                $granted[] = $tool;
+            if (!$hit) {
+                continue;
             }
+
+            // MARKED RESOLVED BEFORE THE DENY IS APPLIED, deliberately. A
+            // declaration whose every match is denied DID resolve — policy
+            // then removed it — and reporting it as "matches no tool this
+            // session offers" would send the reader hunting for a typo in a
+            // preset that is merely self-contradictory.
+            foreach ($denied as $denyPattern) {
+                if (PermissionRule::matchesToolName($denyPattern, $tool->name())) {
+                    continue 2;
+                }
+            }
+
+            $granted[] = $tool;
         }
 
         $unresolved = [];
@@ -835,7 +861,13 @@ final class AgentManager
             ));
         }
 
-        return $granted;
+        // EMPTY AFTER THE DENY IS `null`, NOT `[]`, on the same argument the
+        // no-declaration branch above makes: `[]` is a real (empty) tool block
+        // to an OpenAI-shaped provider rather than absence, and an agent whose
+        // whole grant its own denylist removes wants no tools, not an empty
+        // one. The two spellings are indistinguishable to this project's
+        // providers today; they are not indistinguishable on the wire.
+        return $granted === [] ? null : $granted;
     }
 
     /**
@@ -863,25 +895,61 @@ final class AgentManager
      * declaration is the agent's own statement about itself and does not become
      * unenforceable because the caller owns no UI.
      *
-     * AN AGENT WITH NO DECLARATION IS NOT POLICED. `Agent::$tools === []` means
-     * the agent says nothing about tools ({@see resolveGrantedTools()} has the
-     * argument), and reading silence as "forbid everything" would refuse every
-     * call for every Agent built without the field — which is most of them.
+     * AN AGENT WITH NO DECLARATION IS NOT POLICED BY THE GRANT. `Agent::$tools
+     * === []` means the agent says nothing about tools
+     * ({@see resolveGrantedTools()} has the argument), and reading silence as
+     * "forbid everything" would refuse every call for every Agent built without
+     * the field — which is most of them. `Agent::$disallowedTools` is the
+     * opposite kind of statement and IS enforced on its own: a preset that
+     * names a tool it refuses has said something, whether or not it also
+     * enumerated what it wants.
      *
-     * @throws \RuntimeException When the call is outside the grant, or a
-     *         declaration cannot be parsed.
+     * @throws \RuntimeException When the call is refused by the agent's
+     *         denylist, falls outside its grant, or either list cannot be
+     *         parsed.
      */
     private function refuseCallOutsideGrant(ToolCall $toolCall, SubAgent $subAgent): void
     {
-        $declarations = $subAgent->agent->tools;
-        if ($declarations === []) {
+        $agent = $subAgent->agent;
+        $declarations = $agent->tools;
+        $denied = $agent->disallowedTools;
+
+        if ($declarations === [] && $denied === []) {
             return;
         }
 
         // Parsed for its side effect as well as its result: a malformed or
-        // non-string declaration throws out of here rather than being treated
-        // as a grant that happens not to match.
-        $this->declarationNamePatterns($subAgent->agent);
+        // non-string entry in EITHER list throws out of here rather than being
+        // treated as a rule that happens not to match.
+        $this->namePatterns($agent, $declarations, 'tools');
+        $this->namePatterns($agent, $denied, 'disallowedTools');
+
+        // DENY IS CHECKED FIRST AND WITH `PermissionAction::Deny`, both on
+        // purpose. First, because deny wins over the grant — the roster half of
+        // this decision is the same conjunction. And with the Deny ACTION
+        // because {@see PermissionRule::matchesShellSubject()} reads a shell
+        // subject as a UNION for the restrictive actions and an INTERSECTION
+        // for `Allow`: a denial must fire when ANY segment of a chain matches,
+        // where a grant must require EVERY segment to.
+        foreach ($denied as $denial) {
+            if ((new PermissionRule((string) $denial, PermissionAction::Deny))->matches($toolCall)) {
+                $this->refuseToolCall(
+                    $toolCall,
+                    $subAgent,
+                    sprintf(
+                        'is refused by the denylist agent "%s" declares [%s]',
+                        $agent->name,
+                        implode(', ', array_map(static fn($d): string => (string) $d, $denied)),
+                    ),
+                );
+            }
+        }
+
+        if ($declarations === []) {
+            // A denylist WITHOUT a grant narrows nothing else: silence about
+            // `tools` is still silence. See the doc-block.
+            return;
+        }
 
         foreach ($declarations as $declaration) {
             if ((new PermissionRule((string) $declaration, PermissionAction::Allow))->matches($toolCall)) {
@@ -894,33 +962,40 @@ final class AgentManager
             $subAgent,
             sprintf(
                 'is outside the tool grant agent "%s" declares [%s]',
-                $subAgent->agent->name,
+                $agent->name,
                 implode(', ', array_map(static fn($d): string => (string) $d, $declarations)),
             ),
         );
     }
 
     /**
-     * An agent's declarations, validated, reduced to their tool-NAME halves.
+     * One of an agent's pattern lists, validated, reduced to its tool-NAME
+     * halves.
      *
-     * One place both {@see resolveGrantedTools()} and
-     * {@see refuseCallOutsideGrant()} go through, so a declaration cannot be
-     * well-formed enough to grant a tool and malformed at the moment a call
-     * arrives. Keys are preserved so a caller can report WHICH declaration
-     * failed against `Agent::$tools`.
+     * One place {@see resolveGrantedTools()} and {@see refuseCallOutsideGrant()}
+     * both go through for BOTH lists, so a pattern cannot be well-formed enough
+     * to grant a tool and malformed at the moment a call arrives. Keys are
+     * preserved so a caller can report WHICH entry failed against the original
+     * array.
      *
+     * @param array<int|string, mixed> $declarations
+     * @param string $field The property being read, named in the failure text —
+     *        `tools` and `disallowedTools` fail identically and a message that
+     *        cannot say which one was read sends the reader to the wrong half of
+     *        the preset.
      * @return array<int|string, string>
-     * @throws \RuntimeException On a non-string or malformed declaration.
+     * @throws \RuntimeException On a non-string or malformed pattern.
      */
-    private function declarationNamePatterns(Agent $agent): array
+    private function namePatterns(Agent $agent, array $declarations, string $field): array
     {
         $patterns = [];
 
-        foreach ($agent->tools as $i => $declaration) {
+        foreach ($declarations as $i => $declaration) {
             if (!is_string($declaration)) {
                 throw new \RuntimeException(sprintf(
-                    'Agent "%s" declares a tool of type %s at index %s; a declaration is a %s pattern string.',
+                    'Agent "%s" declares a %s entry of type %s at index %s; an entry is a %s pattern string.',
                     $agent->name,
+                    $field,
                     get_debug_type($declaration),
                     var_export($i, true),
                     PermissionRule::class,
@@ -930,8 +1005,9 @@ final class AgentManager
             $reason = PermissionRule::patternRejectionReason($declaration);
             if ($reason !== null) {
                 throw new \RuntimeException(sprintf(
-                    'Agent "%s" declares the tool pattern "%s", which %s.',
+                    'Agent "%s" declares the %s pattern "%s", which %s.',
                     $agent->name,
+                    $field,
                     $declaration,
                     $reason,
                 ));

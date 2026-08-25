@@ -2200,7 +2200,7 @@ final class AgentManagerTest extends TestCase
         }
 
         $this->assertNotNull($caught);
-        $this->assertStringContainsString('declares a tool of type int', $caught->getMessage());
+        $this->assertStringContainsString('declares a tools entry of type int', $caught->getMessage());
     }
 
     /** A registry holding something that is not a Tool is refused, not skipped. */
@@ -2382,6 +2382,243 @@ final class AgentManagerTest extends TestCase
             new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
             new PermissionGate(PermissionMode::BypassPermissions),
         );
+
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+    }
+
+
+    // -------------------------------------------------------------------------
+    // The DENYLIST half. Agent::$disallowedTools reaches this class from
+    // Agent::fromPreset() and from opencode's `permission:` block, and until
+    // resolveGrantedTools() existed it was consumed by NOTHING in src/. A
+    // resolver that read only $tools would hand a preset the very tool its own
+    // denylist refuses -- a widening committed inside the fix for a lie.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param list<string> $grant
+     * @param list<string> $deny
+     * @param ?list<\SugarCraft\Crush\Tools\Tool> $registry
+     */
+    private function captureSubAgentRequestWithDenylist(array $grant, array $deny, ?array $registry): CompleteRequest
+    {
+        $captured = null;
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')
+            ->willReturnCallback(function (CompleteRequest $request) use (&$captured): CompleteResponse {
+                $captured = $request;
+
+                return new CompleteResponse(content: 'done');
+            });
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            toolRegistry: $registry,
+        );
+        $manager->register(new Agent(
+            name: 'denied',
+            description: 'denied description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $grant,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: $deny,
+        ));
+
+        $subAgent = $manager->createSubAgent('denied', 'do the thing');
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertInstanceOf(CompleteRequest::class, $captured, 'the provider was never called');
+
+        return $captured;
+    }
+
+    public function testTheDenylistShrinksTheResolvedRoster(): void
+    {
+        $request = $this->captureSubAgentRequestWithDenylist(
+            ['Read', 'Grep', 'Bash'],
+            ['Bash'],
+            $this->fakeRegistry('Bash', 'Read', 'Edit', 'Grep'),
+        );
+
+        $this->assertSame(['Read', 'Grep'], self::toolNames($request->tools));
+    }
+
+    /** The dialect is the same one, so `mcp__git__*` means here what it means in disabledTools. */
+    public function testTheDenylistGlobsToolNames(): void
+    {
+        $request = $this->captureSubAgentRequestWithDenylist(
+            ['mcp__*'],
+            ['mcp__git__*'],
+            $this->fakeRegistry('mcp__git__push', 'mcp__git__status', 'mcp__jira__issue'),
+        );
+
+        $this->assertSame(['mcp__jira__issue'], self::toolNames($request->tools));
+    }
+
+    /**
+     * A declaration whose every match is denied RESOLVED — policy then removed
+     * it — so it must not be reported as matching no tool. That message would
+     * send the reader hunting for a typo in a preset that is merely
+     * self-contradictory.
+     */
+    public function testAFullyDeniedGrantIsNotReportedAsUnresolvable(): void
+    {
+        $request = $this->captureSubAgentRequestWithDenylist(
+            ['Bash'],
+            ['Bash'],
+            $this->fakeRegistry('Bash', 'Read'),
+        );
+
+        $this->assertNull($request->tools, 'an emptied roster is absence, not an empty tool block');
+    }
+
+    /** Both lists are validated identically, and the message says which one was read. */
+    public function testAMalformedDenylistEntryIsRefusedAndNamesTheField(): void
+    {
+        $caught = null;
+
+        try {
+            $this->captureSubAgentRequestWithDenylist(['Read'], ['Bash(rm'], $this->fakeRegistry('Bash', 'Read'));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('disallowedTools pattern "Bash(rm"', $caught->getMessage());
+        $this->assertStringContainsString('unterminated', $caught->getMessage());
+    }
+
+    /**
+     * At CALL time the denylist is checked with `PermissionAction::Deny`, whose
+     * shell arm is a UNION over the chain's segments — so a denial fires when
+     * ANY segment matches, where the grant requires EVERY segment to.
+     */
+    public function testTheDenylistRefusesACallTheGrantWouldHaveAdmitted(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'git push --force'])],
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
+            toolRegistry: $this->fakeRegistry('Bash', 'Read'),
+        );
+        $manager->register(new Agent(
+            name: 'careful',
+            description: 'careful description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: ['Bash(git *)'],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: ['Bash(git push*)'],
+        ));
+        $subAgent = $manager->createSubAgent('careful', 'ship it');
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'the grant admits `git push --force`; only the denylist stops it');
+        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+    }
+
+    /**
+     * A denylist with NO grant is still enforced. Silence about `tools` is
+     * silence; naming a tool you refuse is a statement.
+     */
+    public function testADenylistWithNoGrantIsStillEnforced(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: [new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd'])],
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
+        );
+        $manager->register(new Agent(
+            name: 'noedit',
+            description: 'noedit description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: ['Edit'],
+        ));
+        $subAgent = $manager->createSubAgent('noedit', 'edit it');
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+    }
+
+    /**
+     * And the other polarity, so the test above is not simply "everything is
+     * refused": a call the denylist does not name passes through an agent that
+     * declares no grant.
+     */
+    public function testADenylistDoesNotRefuseACallItDoesNotName(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: [new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts'])],
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
+        );
+        $manager->register(new Agent(
+            name: 'noedit2',
+            description: 'noedit2 description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: ['Edit'],
+        ));
+        $subAgent = $manager->createSubAgent('noedit2', 'read it');
 
         iterator_to_array($manager->executeSubAgent($subAgent->id));
 
