@@ -420,8 +420,336 @@ final class LspConnectionStdinWedgeTest extends TestCase
     }
 
     // =========================================================================
+    // The latch is what `isConnected()` answers on (E474)
+    // =========================================================================
+
+    /**
+     * A LATCHED SESSION REPORTS ITSELF UNUSABLE, and the reason this is worth a
+     * row of its own is that {@see \SugarCraft\Crush\LSP\LspClient} branches on
+     * exactly this predicate to choose between the language server and its grep
+     * fallback — and CACHES whichever answer it gets. With `isConnected()`
+     * answering true for a session that can never send again, the client took the
+     * `[]` that a latched `sendRequest()` produces for a real answer and wrote it
+     * into the cache, so one desynchronised write turned into a permanently empty
+     * result for that uri+position. The consequence is pinned one file over, in
+     * `LspClientTest::testAConnectionThatReportsItselfConnectedCachesItsEmptyAnswerForGood()`.
+     *
+     * BOTH POLARITIES ARE IN THIS ONE ROW ON PURPOSE. The `true` before the
+     * oversized write is not decoration: without it, an `isConnected()` mutated
+     * to `return false;` outright would satisfy the assertion this row is named
+     * for. See {@see testASessionWhoseWriteWasAbandonedBeforeItsFirstByteStaysUsable()}
+     * for the third polarity — a FAILED write that must NOT latch.
+     */
+    public function testALatchedSessionReportsItselfUnusable(): void
+    {
+        $connection = $this->connectionTo($this->deafServerScript(), timeout: 1.0);
+
+        try {
+            $this->assertTrue(
+                $connection->isConnected(),
+                'the control: a fresh connection to a live child is usable, so a later false '
+                . 'cannot be attributed to the predicate simply always answering false',
+            );
+
+            $connection->sendRequest('textDocument/didOpen', [
+                'text' => str_repeat('x', self::OVERSIZED_BYTES),
+            ]);
+
+            $this->assertFalse(
+                $connection->isConnected(),
+                'the session reported itself usable after a partially-written Content-Length '
+                . 'message desynchronised the stream, so every caller that branches on this '
+                . 'predicate would keep routing work to a connection that can never send again',
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    /**
+     * THE THIRD POLARITY. A write abandoned before its FIRST byte is a lost
+     * message and not a broken stream, so the session stays usable and
+     * {@see \SugarCraft\Crush\LSP\LspConnection::isConnected()} must keep saying
+     * so. Without this row, moving the latch into the predicate is satisfied by
+     * an `isConnected()` that goes false after any failed write at all — which
+     * would send every recoverable one-off hiccup permanently down the grep
+     * fallback.
+     *
+     * Reached the same way {@see testAWriteAbandonedBeforeItsFirstByteLeavesTheConnectionUsable()}
+     * reaches it: an already-expired deadline trips the loop's first check with
+     * the payload untouched.
+     */
+    public function testASessionWhoseWriteWasAbandonedBeforeItsFirstByteStaysUsable(): void
+    {
+        $connection = $this->connectionTo($this->echoServerScript(self::SAFE_BYTES), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        try {
+            $connection->initialize();
+
+            $write = new \ReflectionMethod($connection, 'writeMessage');
+            $write->setAccessible(true);
+
+            $this->assertFalse(
+                $write->invoke($connection, ['jsonrpc' => '2.0', 'method' => 'nope'], microtime(true) - 1.0),
+                'an already-expired deadline must abandon the write',
+            );
+
+            $this->assertTrue(
+                $connection->isConnected(),
+                'a write that never put a byte on the wire marked the whole session unusable, so '
+                . 'the predicate now reports the framing as gone for a stream that is intact',
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    /**
+     * THE CONCERN THE LATCH USED TO BE HELD BACK BY, PINNED SO IT STAYS ANSWERED.
+     *
+     * {@see \SugarCraft\Crush\LSP\LspConnection::abandonWrite()} used to record
+     * that `isConnected()` was left alone because "a caller may still want to
+     * {@see \SugarCraft\Crush\LSP\LspConnection::disconnect()} it politely". That
+     * worry was aimed at the wrong method: `disconnect()` gates on the private
+     * `initialized` flag and never on the predicate, so the graceful path never
+     * went through it. This row is the guard that keeps that true — mutate
+     * `disconnect()`'s first condition to `!$this->isConnected()` and it reds,
+     * because the early-return branch calls `stopProcess()` and returns WITHOUT
+     * clearing the capabilities the full branch clears.
+     *
+     * `capabilities()` is the observable because it is PUBLIC and only the full
+     * shutdown branch nulls it. The latch is set through reflection rather than
+     * through a real partial write, because this row needs a server that
+     * ANSWERED `initialize` (so there are capabilities to lose) and such a server
+     * by construction never wedges the write.
+     */
+    public function testALatchedSessionStillDisconnectsPolitely(): void
+    {
+        $connection = $this->connectionTo($this->echoServerScript(self::SAFE_BYTES), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        $connection->initialize();
+
+        $this->assertNotNull(
+            $connection->capabilities(),
+            'the control: the fixture answered initialize, so there are capabilities for '
+            . 'disconnect() to clear and the assertion below is not vacuous',
+        );
+
+        $latch = new \ReflectionProperty($connection, 'framingBroken');
+        $latch->setAccessible(true);
+        $latch->setValue($connection, true);
+
+        $this->assertFalse($connection->isConnected(), 'the latch did not reach the predicate');
+
+        $connection->disconnect();
+
+        $this->assertNull(
+            $connection->capabilities(),
+            'disconnect() took its early-return branch on a latched session, so the LSP '
+            . 'shutdown/exit sequence was skipped for a server that was alive and reachable',
+        );
+    }
+
+    /**
+     * OMITTING THE DEADLINE IS AN ERROR, AND SAYING `null` IS NOT (E480).
+     *
+     * `writeMessage(array $payload, ?float $deadline = null)` had a null DEFAULT
+     * that no production caller used — both send paths pass
+     * `microtime(true) + $this->requestTimeout`. The default was the whole risk:
+     * the null path is not "bounded by the child's liveness" the way its
+     * `@param` claimed. With no deadline, no signals and a LIVE child that has
+     * stopped reading, `stream_select()` times out every `WRITE_POLL_MICROS`,
+     * `$ready === 0` takes the `continue`, and no liveness check is consulted at
+     * all. A caller could inherit that by writing nothing.
+     *
+     * THE MEASUREMENT AND ITS GENERATOR LIVE ON
+     * {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()}, point (d),
+     * and are named here rather than restated because an earlier draft of this
+     * doc-block restated them as "MEASURED this round" over figures it had
+     * inherited from the finding rather than run. The short form: a child that
+     * sleeps L seconds and never reads stdin, a 200000-byte payload, an explicit
+     * `null` deadline and the clock outside the process — L=60 under `timeout 12`
+     * gives rc 124 three times over, and L=8 under `timeout 30` returns false at
+     * 8.056 / 8.051 / 8.054s. The write ends at the child's death and at nothing
+     * else.
+     *
+     * ⚠️ WHAT THIS ROW PINS IS A SIGNATURE, NOT A BEHAVIOUR, and it is written
+     * that way on purpose because there is no behaviour to pin: re-adding `=
+     * null` is a WIDENING and would red nothing anywhere in this suite. The
+     * `ArgumentCountError` is the only observable the change has. Its mutation is
+     * therefore the fix itself — put the default back and this row is the one
+     * thing that notices.
+     *
+     * THE `null` ARM IS THE KNOWN-POSITIVE CONTROL, and without it this row is
+     * satisfied by a `writeMessage()` that has been deleted, renamed, or made to
+     * throw unconditionally — every one of which also produces an error from a
+     * one-argument call. The nullable path must still be REACHABLE, because
+     * {@see testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop()}
+     * drives it deliberately.
+     */
+    public function testTheDeadlineHasToBeStatedAndNullIsStillAThingYouCanState(): void
+    {
+        $connection = $this->connectionTo($this->echoServerScript(self::SAFE_BYTES), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        try {
+            $connection->initialize();
+
+            $write = new \ReflectionMethod($connection, 'writeMessage');
+            $write->setAccessible(true);
+
+            $this->assertTrue(
+                $write->invoke($connection, ['jsonrpc' => '2.0', 'method' => 'noDeadlinePlease'], null),
+                'the control: an explicit null deadline still writes, so the assertion below is '
+                . 'about the DEFAULT and not about the parameter having been removed',
+            );
+
+            try {
+                $write->invoke($connection, ['jsonrpc' => '2.0', 'method' => 'noDeadlineAtAll']);
+                $this->fail(
+                    'writeMessage() accepted a call with no deadline argument, so the unbounded '
+                    . 'path is reachable by omission again rather than by decision',
+                );
+            } catch (\ArgumentCountError $e) {
+                $this->assertStringContainsString('writeMessage', $e->getMessage());
+            }
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    // =========================================================================
+    // E475 — the between-exchange stall, and why it is a STALL
+    // =========================================================================
+
+    /**
+     * A SERVER THAT LOGS WHILE THE PARENT IS IDLE PARKS IN `write(2)`, AND THE
+     * NEXT EXCHANGE FREES IT. That is the whole difference between E475's
+     * severity and a deadlock, and it was inherited as prose until this row.
+     *
+     * {@see LspConnection::drainStderr()} runs from `refill()` (every read
+     * pass), from the write loop (every write pass) and once in `stopProcess()`.
+     * Between exchanges — the editor idle, the user typing — NOTHING reads fd 2,
+     * so a `gopls`/`rust-analyzer`/`jdtls` that logs continuously fills its
+     * stderr pipe and stops. E475 records that as a stall rather than a deadlock
+     * because the next exchange drains it. This asserts it rather than repeating
+     * it.
+     *
+     * MEASURED out of process first, three consecutive takes, PHP 8.3.6 /
+     * Linux 6.8: a server logging 4096 bytes at a time between exchanges wrote
+     * 81920 / 86016 / 81920 bytes — past the 65536-byte pipe capacity, so it
+     * really was blocked — while the parent idled 3.0s, and the very next
+     * request completed at 3.02s with the parent's tail at its 65536 cap.
+     *
+     * ⚠️ THIS IS NOT A FIX FOR E475 AND MUST NOT BE READ AS ONE. fd 2 is still
+     * unread for the whole idle gap and the server is still stopped for the
+     * whole of it. The honest fix is fd 2 on the ReactPHP loop, a shape change
+     * to a class that is synchronous by design, recorded rather than reached
+     * for. What this pins is the SEVERITY: the moment "it self-heals" stops
+     * being true, E475 (and E440 for the sibling class) is a deadlock and needs
+     * re-triaging, and nothing else in this suite would notice.
+     *
+     * THE STDERR ASSERTIONS ARE THE POSITIVE COMPONENT. Without them a fixture
+     * that quietly stopped logging would satisfy "the request was answered"
+     * while exercising nothing at all.
+     *
+     * ⚠️ ITS MUTATION SCOPE, STATED BECAUSE IT IS NARROWER THAN IT LOOKS.
+     * Removing the drain from the WRITE loop alone does not red this row, and
+     * neither does removing it from `refill()` alone — the request here is
+     * small, so either drain on its own frees the child and the exchange
+     * completes. Both single removals leave this row green; removing BOTH reds
+     * it. That is the right scope rather than a gap: the claim is "the next
+     * EXCHANGE frees it", an exchange is a write and a read, and the row reds
+     * exactly when no drain runs during one — which is exactly when the stall
+     * becomes a deadlock.
+     *
+     * WHAT THE SINGLE REMOVALS DO RED, NAMED RATHER THAN COUNTED.
+     *
+     * WHAT THIS SAID: that between them the two single removals red "four OTHER
+     * rows in this file".
+     *
+     * WHAT IS TRUE NOW: three, and one of the two reaches outside this file
+     * altogether. Re-measured at this tree, `tests/LSP` (79 rows), PHP 8.3.6 /
+     * Linux 6.8, the actual `+`/`-` lines printed for each patch:
+     *
+     *  - drop the WRITE-loop drain      -> 2 failures, both here:
+     *      {@see testAnOversizedRequestSurvivesAServerAlreadyBlockedOnStderr()}
+     *      {@see testTheChildHadNotFinishedItsFloodWhenTheOversizedWriteBegan()}
+     *  - drop `refill()`'s drain        -> 2 failures, ONE here:
+     *      {@see testTheFloodIsRealAndASmallRequestWasNeverAtRisk()}
+     *      and `LspConnectionShutdownTest::testAServerThatFloodsStderrIsStillAnsweredAndItsStderrIsKept()`
+     *  - drop BOTH                      -> 7 failures, 5 here, this row among them
+     *
+     * WHY THE OLD NUMBER STILL EARNS AN EXPLANATION RATHER THAN A DELETION: four
+     * is a real measurement of the WRONG mutation. It is the double removal's
+     * count of other in-file rows, and it includes
+     * {@see testTheOversizedRequestWasOnlyEverAtRiskBecauseOfTheFlood()}, which
+     * NEITHER single removal reds. Attributing it to the single removals made
+     * the two drains look independently load-bearing for a row that in fact
+     * needs both gone. Rows are named here instead of counted because a count
+     * taken in one worktree is wrong the moment a sibling lane merges.
+     */
+    public function testTheBetweenExchangeStderrStallSelfHealsOnTheNextExchange(): void
+    {
+        $connection = $this->connectionTo($this->idleLoggingServerScript(), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        try {
+            $connection->initialize();
+
+            // The parent does nothing at all. Nothing reads fd 2 in this gap,
+            // which is exactly the state E475 describes.
+            usleep(1500000);
+
+            $response = $connection->sendRequest('textDocument/hover', ['x' => 1]);
+
+            $this->assertFalse(
+                $response->isError,
+                'the next exchange did not free a server parked on a full stderr pipe, so E475 '
+                . 'is a DEADLOCK rather than a stall and its severity needs re-triaging',
+            );
+            $this->assertGreaterThan(
+                65536,
+                $response->result['stderrWritten'] ?? 0,
+                'the server never got past one pipe buffer, so it was never blocked and this row '
+                . 'is not about the stall at all',
+            );
+            $this->assertSame(
+                65536,
+                strlen($connection->stderrTail()),
+                'the parent did not retain a full buffer of the flood, so the drain that freed '
+                . 'the child is not the one this class performs',
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    // =========================================================================
     // Fixtures and helpers
     // =========================================================================
+
+    /**
+     * ANSWERS THE HANDSHAKE, THEN LOGS BETWEEN EXCHANGES — the E475 shape.
+     *
+     * ⚠️ IT CANNOT USE `sc_read_framed()` FOR THE SECOND MESSAGE, and that is
+     * not a style choice: that helper blocks in `fgets(STDIN)`, so a server
+     * built on it is parked in a READ between exchanges and never has the
+     * opportunity to write anything. The premise here is a server busy on its
+     * OWN account while the parent is idle, so the wait has to be a
+     * `stream_select()` on a non-blocking stdin with the logging in the timeout
+     * branch. The framing helpers are still pulled in, for the handshake
+     * exchange and for the framed reply.
+     *
+     * It reports how many bytes it managed to write, which is what lets the row
+     * tell "the server was blocked and then freed" from "the server never had
+     * anything to say".
+     */
+    private function idleLoggingServerScript(): string
+    {
+        $path = $this->tempDir . '/idlelogger.php';
+        file_put_contents($path, $this->withFraming(self::IDLE_LOGGING_SERVER));
+
+        return $path;
+    }
 
     /** @return array{0: int, 1: string, 2: float} rc, stdout+stderr, elapsed */
     private function runProbe(int $floodBytes, int $requestBytes): array
@@ -780,10 +1108,68 @@ final class LspConnectionStdinWedgeTest extends TestCase
         }
         PHP;
 
+    /** The E475 fixture body; see {@see idleLoggingServerScript()} for why it polls. */
+    private const IDLE_LOGGING_SERVER = <<<'PHP'
+        <?php
+        SC_FRAMING_HELPERS
+        $first = sc_read_framed();
+        if ($first !== null && isset($first['id'])) {
+            sc_write_framed(['jsonrpc' => '2.0', 'id' => $first['id'], 'result' => sc_reply($first)]);
+        }
+        stream_set_blocking(STDIN, false);
+        $written = 0;
+        $buffer = '';
+        $deadline = microtime(true) + 20;
+        while (microtime(true) < $deadline) {
+            $read = [STDIN];
+            $write = [];
+            $except = [];
+            if (@stream_select($read, $write, $except, 0, 1000) === 1) {
+                $chunk = fread(STDIN, 8192);
+                if ($chunk === false || $chunk === '') {
+                    continue;
+                }
+                $buffer .= $chunk;
+                $separator = strpos($buffer, "\r\n\r\n");
+                if ($separator === false || !preg_match('/Content-Length:\s*(\d+)/i', $buffer, $m)) {
+                    continue;
+                }
+                $bodyAt = $separator + 4;
+                $len = (int) $m[1];
+                if (strlen($buffer) - $bodyAt < $len) {
+                    continue;
+                }
+                $message = json_decode(substr($buffer, $bodyAt, $len), true);
+                $buffer = substr($buffer, $bodyAt + $len);
+                if (is_array($message) && isset($message['id'])) {
+                    sc_write_framed([
+                        'jsonrpc' => '2.0',
+                        'id' => $message['id'],
+                        'result' => ['stderrWritten' => $written],
+                    ]);
+                }
+                continue;
+            }
+            // Nothing to read: LOG. Blocks here once fd 2 is full, which is
+            // the state under test.
+            fwrite(STDERR, str_repeat('e', 4096));
+            $written += 4096;
+        }
+        PHP;
+
     /**
-     * %d bytes of stderr, written unprompted the moment the handshake is done.
-     * Above the pipe capacity the child parks inside that `fwrite()` and stops
-     * reading stdin, which is the state the oversized write has to meet.
+     * %d bytes of stderr, written unprompted rather than in reply — the
+     * difference from {@see ECHO_SERVER_TEMPLATE}. Above the pipe capacity the
+     * child parks inside that `fwrite()` and stops reading stdin, which is the
+     * state the oversized write has to meet.
+     *
+     * ⚠️ "UNPROMPTED" IS NOT "AS EARLY AS POSSIBLE", and the `$seen === 2` in
+     * the body below is the whole fixture. The flood lands after the SECOND
+     * message — the `initialized` NOTIFICATION that ends the handshake, not the
+     * `initialize` REQUEST that opens it. Flooding after message one was
+     * MEASURED vacuous, because the notification's own write-loop drain empties
+     * the pipe on the way past; see {@see blockedServerScript()} for that
+     * measurement and for the other arrangement it rules out.
      */
     private const BLOCKED_SERVER_TEMPLATE = <<<'PHP'
         <?php

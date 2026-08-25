@@ -305,11 +305,23 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      * The `result` of the first reply a noisy server sends, or null if it never
      * sent one within the fixture's own lifetime.
      *
-     * The fixture answers with an ARRAY result rather than a scalar because
-     * {@see \SugarCraft\Crush\McpMessage} types `$result` as `?array` and
-     * raises a TypeError on anything else — which is a real robustness gap
-     * against a real server, recorded separately, and not what this test is
-     * about.
+     * WHAT THIS SAID: that the fixture answers with an ARRAY result rather than
+     * a scalar because {@see \SugarCraft\Crush\McpMessage} typed `$result` as
+     * `?array` and raised a `TypeError` on anything else — a real robustness gap
+     * against a real server, recorded separately.
+     *
+     * WHAT IS TRUE NOW: that gap is closed. `$result` is `mixed`, every JSON
+     * value parses, and a legal `"result": null` is told apart from an absent
+     * one by the paired `resultSet` sentinel. A scalar-answering fixture would
+     * work here today.
+     *
+     * WHY THE ARRAY STILL EARNS ITS PLACE: this row asserts `['served' => true]`,
+     * i.e. that a SPECIFIC reply came back from a specific request, and an array
+     * is what carries a discriminator. A scalar result would still be a reply,
+     * but it would not distinguish this server's answer from any other's — and
+     * the defect under test (an undrained fd 2 wedging the child) shows up as NO
+     * reply, so the assertion has to be able to tell "the right one" from
+     * "something".
      */
     private function replyOverNoisyServer(int $stderrBytes): mixed
     {

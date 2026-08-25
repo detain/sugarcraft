@@ -667,6 +667,32 @@ final class StdioMcpServer implements McpServer
             return false;
         }
 
+        // THE GUARD IS ON FD 0 ONLY, AND THE SHAPE IS THE POINT.
+        //
+        // WHAT THIS SAID: `!is_resource($this->pipes[0]) || ($this->stderrOpen &&
+        // !is_resource($this->pipes[2]))`, i.e. refuse the whole write when EITHER
+        // is closed, citing {@see readLine()} for "the same three call shapes".
+        //
+        // WHAT IS TRUE NOW: the second clause was unreachable AND wrongly shaped.
+        // Unreachable, because this class `fclose()`s a pipe in exactly one place
+        // — {@see closePipes()}, which closes all three — so fd 2 closed implies
+        // fd 0 closed and the first clause short-circuits before the second is
+        // ever evaluated. Wrongly shaped, because if it HAD been reachable it
+        // would have refused a write to a perfectly writable stdin on the
+        // strength of a closed DIAGNOSTIC stream. Stderr is what this loop drains
+        // while it waits; stdin is the job.
+        //
+        // WHY THE FD-2 CHECK STILL EARNS ITS PLACE, moved rather than deleted:
+        // fd 2 is exposed in this method too, inside the loop, where a closed
+        // resource in the read set is the TypeError {@see readLine()} measures.
+        // It is now the same degrade that `readLine()` performs — drop fd 2 from
+        // the select set and carry on writing — instead of a refusal. Pinned in
+        // both polarities by `StdioMcpServerClosedPipeGuardTest`: fd 0 closed
+        // still returns false, fd 2 closed ALONE now completes the write.
+        if (!is_resource($this->pipes[0])) {
+            return false;
+        }
+
         $payload = $json . "\n";
         $consecutiveSelectFailures = 0;
 
@@ -680,7 +706,10 @@ final class StdioMcpServer implements McpServer
             }
 
             $write = [$this->pipes[0]];
-            $read = $this->stderrOpen ? [$this->pipes[2]] : [];
+            // `is_resource()` as well as the flag, exactly as {@see readLine()}
+            // builds its read set: the flag tracks stderr's EOF, not the
+            // resource's liveness, and they are not the same question.
+            $read = $this->stderrOpen && is_resource($this->pipes[2]) ? [$this->pipes[2]] : [];
             $except = [];
             $seconds = $remaining === null ? self::READ_POLL_SECONDS : (int) $remaining;
             $micros = $remaining === null ? 0 : (int) (($remaining - $seconds) * 1_000_000);
@@ -836,8 +865,38 @@ final class StdioMcpServer implements McpServer
                 return $this->readBuffer === '' ? null : $this->drainBuffer();
             }
 
+            // `is_resource()`, NOT `@`, AND NOT `$this->pipes !== null` ALONE.
+            // MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive
+            // takes, identical every time — every one of these is an EXCEPTION
+            // and `@` suppresses none of them, because `@` silences diagnostics
+            // and not throws:
+            //
+            //     stream_select() with a closed fd as the ONLY entry across all
+            //         three arrays  ->  ValueError: No stream arrays were passed
+            //     stream_select() with a closed fd beside an open one
+            //         ->  TypeError: supplied resource is not a valid stream resource
+            //     fread() / feof() / fwrite() on a closed pipe  ->  TypeError
+            //
+            // WHICH of the two `stream_select()` raises depends on whether
+            // {@see $stderrOpen} put fd 2 in the read set, so a guard written to
+            // catch one class BY NAME would miss the other. Both are exceptions;
+            // that is the load-bearing half.
+            //
+            // THE WINDOW IS THIS CLASS'S OWN, and it is why `pipes !== null` is
+            // not the same question. {@see stop()} calls {@see closePipes()}
+            // FIRST — the EOF that lets a well-behaved server leave without
+            // paying the escalation — and only nulls the field after
+            // `proc_close()` has returned, so the field holds three CLOSED
+            // resources for the whole SIGTERM grace, the signal-9 grace and the
+            // wait. Nothing in this synchronous class re-enters that window
+            // today, which is exactly what {@see \SugarCraft\Crush\LSP\LspConnection}
+            // could have said and chose not to.
+            if (!is_resource($this->pipes[1])) {
+                return $this->readBuffer === '' ? null : $this->drainBuffer();
+            }
+
             $read = [$this->pipes[1]];
-            if ($this->stderrOpen) {
+            if ($this->stderrOpen && is_resource($this->pipes[2])) {
                 $read[] = $this->pipes[2];
             }
             $write = [];
@@ -941,7 +1000,25 @@ final class StdioMcpServer implements McpServer
      */
     private function absorbStderr(): void
     {
-        if (!$this->stderrOpen || $this->pipes === null) {
+        // `is_resource()` as well as the flag — see {@see readLine()} for the
+        // measurement. This site is the one E476's own list did not name.
+        //
+        // ON THE E367 CITE, WHICH THIS GOT BACKWARDS IN BOTH HALVES.
+        // WHAT IT SAID: that this `fread()` "is the exact call
+        // {@see \SugarCraft\Crush\LSP\LspConnection::drainStderr()}'s doc-block
+        // cites E367 about".
+        // WHAT IS TRUE NOW: `drainStderr()`'s DOC-BLOCK does not mention E367 at
+        // all — the reference is a BODY comment on its own `is_resource()` guard;
+        // and that comment does not cite E367 as being about either call. E367
+        // was an `@stream_get_contents()` on an fclose'd pipe ONE FILE OVER,
+        // where the suppression meant the RuntimeException being built was never
+        // constructed. It is cited there as THE SAME MISTAKE, not as that call.
+        // WHY THE CITE STILL EARNS ITS PLACE: E367 is why the guard is
+        // `is_resource()` and not `@` — `@` silences diagnostics and not throws,
+        // so on a closed pipe the TypeError escapes either way. That is the
+        // reason this line exists, and deleting the pointer would leave the next
+        // reader free to "simplify" it back to an `@`.
+        if (!$this->stderrOpen || $this->pipes === null || !is_resource($this->pipes[2])) {
             return;
         }
 
@@ -995,6 +1072,70 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
+     * The keys {@see \SugarCraft\Crush\MCP\McpTool::fromArray()} reads out of a
+     * tool definition, each with the check that says whether the value would
+     * satisfy the constructor parameter it lands in.
+     *
+     * ⚠️ THIS IS A HAND MIRROR OF ANOTHER CLASS, AND THAT IS THE HAZARD. A
+     * fourth `$data[...]` in `fromArray()` reopens exactly the `TypeError` this
+     * filter exists to close, and nothing about adding one would red a test that
+     * merely exercised the three keys below. It is a CONST rather than a literal
+     * inside the method so that
+     * `StdioMcpServerToolListRobustnessTest::testTheTypeFilterStillMirrorsEveryKeyMcpToolReads()`
+     * can read it and compare it against `fromArray()`'s actual subscripts and
+     * `McpTool`'s actual parameter types.
+     *
+     * `serverName` is absent deliberately: `fromArray()` takes it from its own
+     * second parameter, not from the definition, so it is not a key a peer's
+     * reply can put a wrong type into.
+     *
+     * @var array<string, callable-string>
+     */
+    private const TOOL_DEFINITION_TYPES = [
+        'name' => 'is_string',
+        'description' => 'is_string',
+        'inputSchema' => 'is_array',
+    ];
+
+    /**
+     * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries a
+     * third party got wrong instead of failing the server over them.
+     *
+     * ⚠️ `is_array($def)` ALONE WAS NOT ENOUGH, AND THE GAP IS A MEASURED ONE-HOP
+     * KILL OF THE WHOLE MCP SUBSYSTEM. {@see McpTool::fromArray()} reads
+     * `$data['name'] ?? ''` into a `string` parameter, so a well-formed JSON-RPC
+     * reply of `{"tools":[{"name":5}]}` raises a `TypeError` — and a `TypeError`
+     * is not a `RuntimeException`, which is the only thing
+     * {@see McpClient::startServer()} catches under a comment promising that "a
+     * single unreachable/misbehaving server must not abort loading the rest".
+     *
+     * MEASURED end to end on this host (PHP 8.3.6, Linux 6.8), three consecutive
+     * takes, driving `McpClient::startServers()` over a two-server config the way
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()} does — one server
+     * answering `{"tools":[{"name":5}]}` and one answering correctly:
+     *
+     *     startServers() THREW TypeError ... Argument #1 ($name) must be of type
+     *     string, int given
+     *
+     * The well-formed server was never started. The same shape falls out of a
+     * `name` that is an object or a bool, and of an `inputSchema` that is a
+     * string; `name: null` alone is safe, because `??` catches it.
+     *
+     * WHAT THIS METHOD CAN AND CANNOT CLOSE. It closes the route through THIS
+     * server type, which is the one the trust grant exists for — `.mcp.json` is
+     * cloned content and starting a server from it is code execution. It does
+     * NOT close E436, which is the narrow catch itself: the identical
+     * `parseTools()` in {@see HttpMcpServer} still has the gap, and any future
+     * throw from a third party's output still walks through
+     * `catch (\RuntimeException)`. Both are out of this lane's file list and are
+     * reported rather than reached for. {@see \SugarCraft\Crush\Tools\McpToolBridge::execute()}
+     * already catches `\Throwable` for exactly this reason.
+     *
+     * SKIPPING RATHER THAN THROWING is the right shape here for the same reason
+     * `is_array($def)` was: one malformed tool in a list of forty is a defect in
+     * that tool, and taking the other thirty-nine down with it is the behaviour
+     * this whole path exists to avoid.
+     *
      * @param array<mixed> $response
      * @return array<McpTool>
      */
@@ -1004,11 +1145,46 @@ final class StdioMcpServer implements McpServer
         $toolDefs = $response['result']['tools'] ?? [];
 
         foreach ($toolDefs as $def) {
-            if (is_array($def)) {
-                $tools[] = McpTool::fromArray($def, $this->name);
+            if (!is_array($def) || !self::toolDefinitionIsWellTyped($def)) {
+                continue;
             }
+
+            $tools[] = McpTool::fromArray($def, $this->name);
         }
 
         return $tools;
+    }
+
+    /**
+     * Does `$def` carry the types {@see McpTool}'s constructor declares?
+     *
+     * Checked HERE rather than made lenient THERE on purpose: `McpTool`'s
+     * promoted properties are the contract every consumer of a tool list reads,
+     * and widening them to `mixed` to survive a bad server would push the same
+     * `TypeError` out to whichever of those consumers touched it first.
+     *
+     * ⚠️ `isset()` AND NOT `array_key_exists()`, AND THE DIFFERENCE IS A TOOL.
+     * {@see McpTool::fromArray()} reads every field with `??`, which supplies the
+     * typed default for an ABSENT key and for an explicit `null` alike — so
+     * `{"name":"write","description":null}` is perfectly well-typed as far as the
+     * constructor is concerned. `array_key_exists()` would call that key present,
+     * find `null` failing `is_string()`, and drop a legitimate tool on the floor
+     * without saying so. `isset()` is false for both shapes, which is exactly the
+     * question this method is asking. Pinned by the `write` entry in
+     * {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerToolListRobustnessTest::testAMalformedEntryIsSkippedAndItsWellFormedNeighboursAreNot()},
+     * which is there because the `array_key_exists()` mutation SURVIVED a fixture
+     * whose alphabet had no explicit null in it.
+     *
+     * @param array<mixed> $def
+     */
+    private static function toolDefinitionIsWellTyped(array $def): bool
+    {
+        foreach (self::TOOL_DEFINITION_TYPES as $key => $check) {
+            if (isset($def[$key]) && !$check($def[$key])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

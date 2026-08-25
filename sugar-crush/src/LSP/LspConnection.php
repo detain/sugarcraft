@@ -353,9 +353,76 @@ final class LspConnection implements LspConnectionInterface
         $this->notificationCallback = $callback;
     }
 
+    /**
+     * Can this session still be used? NOT "is the process up", and the
+     * difference is the {@see $framingBroken} latch.
+     *
+     * WHY THIS IS THE SESSION QUESTION AND NOT THE PROCESS QUESTION, measured
+     * rather than argued. {@see \SugarCraft\Crush\LSP\LspClient} is the only
+     * consumer of this predicate in `src/`, and what its branch sites do with
+     * the answer is the argument — but they do not all do the same thing, and
+     * an earlier draft of this paragraph said they did.
+     *
+     * WHAT THIS SAID: that "every one of its ten call sites spells the same
+     * branch", server on `true` and `fallbackGrep()` on `false`, so that
+     * "reporting `false` instead sends the same call down `fallbackGrep()`".
+     *
+     * WHAT IS TRUE NOW: that is the shape of the `definitions`, `references` and
+     * `symbols` pairs, and it is NOT the shape of the `hover` and `codeActions`
+     * pairs. Those four carry no fallback at all — `LspClient` says so in as many
+     * words at both of them ("No fallback for hover", "No meaningful fallback for
+     * code actions") — and their `false` arm caches `null` / `[]` and returns it.
+     * On those four, answering `false` does the very thing the old paragraph
+     * condemned answering `true` for.
+     *
+     * WHY THE LATCH STILL EARNS ITS PLACE, WHICH IS THE HALF THAT SURVIVES.
+     * Split the sites by what their `false` arm reaches:
+     *
+     *  - FALLBACK SHAPE (definitions, references, symbols, and their `*For`
+     *    twins). A latched session answers every request with
+     *    `LspResponse::ioError()`, which {@see definitions()} and its siblings
+     *    turn into `[]`. With `true` here the client takes that `[]` for an
+     *    ANSWER and WRITES IT INTO THE CACHE, so the empty result outlives the
+     *    failure and is served from cache on every later call for that
+     *    uri+position. With `false` the same call reaches `fallbackGrep()`,
+     *    which is the degraded-but-real answer that path exists to provide.
+     *    This is where the predicate is load-bearing.
+     *
+     *  - CACHE-EMPTY SHAPE (hover, codeActions, and their `*For` twins). Both
+     *    arms end at the same cached value on a latched session: `hover()`
+     *    returns `null` on `$response->isError`, `codeActions()` returns `[]`,
+     *    and the `false` arm caches exactly those. The predicate is therefore
+     *    INDIFFERENT here, not harmful — it saves a doomed round trip and
+     *    changes no answer. Pinned in both shapes by
+     *    `LspClientTest::testTheHoverAndCodeActionPairsHaveNoGrepArmToBeSentDownTo()`,
+     *    which asserts the two arms agree there and, in the same row, that the
+     *    fallback shape's two arms DISagree on the same file — so the row cannot
+     *    pass by the grep path being broken for everything.
+     *
+     * "The process is alive" is true of a latched session either way, and is not
+     * a fact any caller in this tree acts on.
+     *
+     * THE POLITE-SHUTDOWN CONCERN THIS USED TO BE HELD BACK BY DOES NOT ARISE.
+     * {@see disconnect()} gates on `$this->initialized`, never on this method,
+     * so a latched session still speaks `shutdown`/`exit` and still runs
+     * {@see stopProcess()}. Pinned by
+     * `LspConnectionStdinWedgeTest::testALatchedSessionStillDisconnectsPolitely()`.
+     *
+     * `$this->initialized` STAYS THE FIRST GATE: a connected-but-not-yet-
+     * initialised server cannot serve a request either, and that has always been
+     * false here.
+     */
     public function isConnected(): bool
     {
         if (!$this->initialized) {
+            return false;
+        }
+
+        // A partially-written `Content-Length` message left the stream with no
+        // agreed frame boundary, so {@see writeMessage()} refuses every later
+        // send. A predicate that answers "usable" for a session that can never
+        // send again is the one thing worse than no predicate.
+        if ($this->framingBroken) {
             return false;
         }
 
@@ -552,11 +619,55 @@ final class LspConnection implements LspConnectionInterface
      *     exchange. Here it may mean the session's framing is gone, which is what
      *     {@see abandonWrite()} decides.
      *
+     *  d. THE NULL DEADLINE HAS NO DEFAULT HERE, AND THAT IS NOT COSMETIC.
+     *     `StdioMcpServer::writeLine()` keeps `= null` because
+     *     {@see \SugarCraft\Crush\MCP\StdioMcpServer::callTool()} genuinely
+     *     wants it. No caller here does — both send paths pass
+     *     `microtime(true) + $this->requestTimeout` — and the null path is far
+     *     worse than "waits on the child's liveness" suggests: with no deadline,
+     *     no signals and a LIVE child that has stopped reading,
+     *     `stream_select()` times out every {@see WRITE_POLL_MICROS}, `$ready ===
+     *     0` takes the `continue`, and NO liveness check is consulted on that
+     *     path at all. The EINTR backstop does not help either, because it counts
+     *     consecutive FAILURES and a timeout is not a failure — so the ONLY exit
+     *     left is the child dying.
+     *
+     *     THE GENERATOR, because an earlier draft of this paragraph said
+     *     "MEASURED this round" over figures it had inherited from the finding
+     *     that prompted it rather than run. A `proc_open()`ed `php` child that
+     *     sleeps for L seconds and never reads its stdin; a parent that calls
+     *     this method through reflection with a 200000-byte payload — over both
+     *     the 65536-byte pipe capacity and this class's 131072-byte drain pass —
+     *     and an explicit `null` deadline; the clock OUTSIDE the process, because
+     *     the failure is a loop that does not return. PHP 8.3.6, Linux 6.8, three
+     *     consecutive takes each:
+     *
+     *         L=60, external `timeout 12`  ->  rc 124, rc 124, rc 124
+     *         L=8,  external `timeout 30`  ->  returned false at 8.056 / 8.051 /
+     *                                          8.054 seconds
+     *
+     *     The second row is the load-bearing one and it is the sharper
+     *     instrument: the write ends at the child's death to within 60 ms, three
+     *     times, so "bounded by the child's lifetime" is not a worst case, it is
+     *     the mechanism. For a real language server that lifetime is the editing
+     *     session. (Round 55's entry for this finding reports the same shape from
+     *     the other side — a run that returned at 29.843s against a 30s fixture —
+     *     but that figure was taken with the consecutive-failure backstop deleted
+     *     and belongs to that mutation, not to this loop as it ships.)
+     *
+     *     So the parameter stays nullable — the backstop test drives it that way
+     *     on purpose — but every call site now has to SAY `null`, which is the
+     *     difference between choosing the unbounded path and inheriting it from a
+     *     default.
+     *
      * @param array<string, mixed> $payload
      * @param float|null $deadline `microtime(true)` value past which the write
-     *        gives up; null waits on the child's liveness alone
+     *        gives up. `null` is NOT "bounded by the child's liveness": on that
+     *        path a live-but-unreading child is polled forever and the loop ends
+     *        only when the child dies. Pass a deadline unless you have measured
+     *        that you want that — see (d) above.
      */
-    private function writeMessage(array $payload, ?float $deadline = null): bool
+    private function writeMessage(array $payload, ?float $deadline): bool
     {
         if (!is_resource($this->process) || $this->pipes === null || $this->framingBroken) {
             return false;
@@ -577,6 +688,20 @@ final class LspConnection implements LspConnectionInterface
         // fd 2 in its read set, so the same closed fd 0 there raises
         // `TypeError: stream_select(): supplied resource is not a valid stream
         // resource` instead. Same guard, same reason; different class name.
+        //
+        // ⚠️ AND THE DISCRIMINATOR IS "SELECTABLE", NOT "VALID", which is a
+        // sharper statement than an earlier draft of this comment made and was
+        // measured only when a test tried to reproduce the TypeError arm.
+        // PHP 8.3.6, three consecutive takes each, one closed pipe in the write
+        // set beside: another `proc_open()` pipe -> TypeError; `STDIN` on a
+        // plain CLI -> TypeError; `STDIN` under this repo's PHPUnit config ->
+        // ValueError; a `php://memory` stream -> ValueError. A memory stream is a
+        // perfectly valid resource with no descriptor to select on, so it is
+        // dropped alongside the closed pipe and every array ends up empty. The
+        // load-bearing half is unchanged — both are exceptions and `@` suppresses
+        // neither — but a guard written to catch one BY NAME would miss the
+        // other, and so would a test that picked its companion stream casually.
+        // Pinned in {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerClosedPipeGuardTest::testTheClosedPipeHazardIsRealOnThisHostAndPhpVersion()}.
         if (!is_resource($this->pipes[0])) {
             return false;
         }
@@ -661,9 +786,22 @@ final class LspConnection implements LspConnectionInterface
      *
      * So the partial case latches {@see $framingBroken} and every later send
      * fails fast, instead of the session producing confidently-parsed garbage.
-     * {@see isConnected()} is deliberately NOT changed — the process is alive and
-     * a caller may still want to {@see disconnect()} it politely — which is
-     * recorded as a follow-up rather than decided here.
+     *
+     * WHAT THIS SAID: that {@see isConnected()} was "deliberately NOT changed —
+     * the process is alive and a caller may still want to {@see disconnect()} it
+     * politely", recorded as a follow-up rather than decided here.
+     *
+     * WHAT IS TRUE NOW: the follow-up is decided and {@see isConnected()} DOES
+     * consult the latch. The politeness worry was not wrong, it was aimed at the
+     * wrong method — {@see disconnect()} gates on `$this->initialized` and never
+     * on {@see isConnected()}, so nothing about the graceful shutdown path went
+     * through the predicate to begin with.
+     *
+     * WHY THE DISTINCTION STILL EARNS ITS PLACE: the zero-byte case really is
+     * different and really does leave the session usable, which is what keeps
+     * this method a decision rather than an unconditional `$this->framingBroken
+     * = true`. See {@see isConnected()} for the measurement of what the wrong
+     * answer costs downstream.
      *
      * @param int $total     bytes the framed message started at
      * @param int $remaining bytes still unwritten when the loop gave up
