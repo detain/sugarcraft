@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Backend;
 
+use GuzzleHttp\Exception\ServerException;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
@@ -60,9 +63,28 @@ use SugarCraft\Crush\Tools\ToolCall;
  *
  *   - **reasoning-only** — the reported case;
  *   - **tool-call-only** — a chunk carrying nothing but the structure of a
- *     call;
+ *     call. {@see \SugarCraft\Crush\Providers\VertexProvider}'s buffered
+ *     `input_json_delta` flush and
+ *     {@see \SugarCraft\Crush\Providers\SglangProvider}'s recovered-call
+ *     chunk both emit it as `content: '', toolCalls: [ToolCall]`;
  *   - **usage-only** — `VertexProvider`'s `message_start` reports input tokens
  *     with no content at all.
+ *
+ * WHAT THIS SAID, and it was wrong where it mattered most: that all three were
+ * covered by the three clock tests below. WHAT IS TRUE NOW: the third clock
+ * test's fixture emitted `toolCalls: []` — an EMPTY array, which is not a tool
+ * call and which no provider here emits (`VertexProvider` spells
+ * `toolCalls: $toolCalls === [] ? null : $toolCalls` precisely to avoid it). It
+ * was a chunk with no payload at all, and MEASURED it died in lockstep with the
+ * usage test under every mutation either could see, never killing anything on
+ * its own. WHY BOTH STILL EARN THEIR PLACE: renamed to what it is, the blank
+ * chunk is the degenerate control — it proves the gate keys on empty CONTENT
+ * and not on any particular payload — while the real tool-call shape is now
+ * pinned where it is cheap to pin,
+ * {@see testAChunkCarryingOnlyARealToolCallIsAnnouncedAsProgress()}. It is not
+ * pinned across the FORK, and deliberately: a real tool call is DISPATCHED,
+ * so forty of them would turn a one-second clock test into an eight-step
+ * agentic loop measuring something else entirely.
  *
  * MEASURED, and worth stating because the obvious mutation is the misleading
  * one: re-gating the reasoning announcement on `content !== ''` — the mutation
@@ -182,18 +204,25 @@ final class ReasoningProgressTest extends TestCase
     }
 
     /**
-     * The third family member: chunks carrying only the structure of a tool
-     * call. Same shape as the usage case — nothing to paint, everything to
-     * prove.
+     * The degenerate control: a chunk with NO payload at all — no content, no
+     * reasoning, no tool calls, no usage.
+     *
+     * It is not a shape any provider in this library is known to emit, and it
+     * is not the tool-call member it used to claim to be (see the class
+     * docblock). It is here for what it proves that the two payload-bearing
+     * cases cannot: that the gate keys on the CONTENT being empty and on
+     * nothing else, so a future chunk kind nobody has thought of still writes
+     * its frame. A gate re-spelled as "has usage or has tool calls" would pass
+     * both siblings and fail here.
      */
-    public function testATurnWhoseChunksCarryOnlyToolStructureSurvivesTheIdleCeiling(): void
+    public function testATurnWhoseChunksCarryNoPayloadAtAllSurvivesTheIdleCeiling(): void
     {
         $this->requireFork();
 
         $thoughts = [];
         $tokens = [];
         $run = $this->runOnScaledClock(
-            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'toolstructure', 'the answer'),
+            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'blank', 'the answer'),
             $tokens,
             $thoughts,
         );
@@ -356,6 +385,143 @@ final class ReasoningProgressTest extends TestCase
 
         $this->assertSame(['the answer'], $tokens);
         $this->assertNotSame([], $messages);
+    }
+
+    /**
+     * The tool-call-only family member, with a REAL tool call on it.
+     *
+     * The clock test that used to claim this shape carried `toolCalls: []` — an
+     * empty array is not a tool call, and the branch it took in
+     * {@see Runtime::runStreaming()} was byte-for-byte the usage member's. The
+     * real shape (`content: ''` with one actual `ToolCall`) takes a second
+     * branch as well: `$response->toolCalls !== null` merges into the
+     * accumulator, and a chunk that will go on to be DISPATCHED must still
+     * announce itself first. That is what this pins, and it is why it lives at
+     * the Runtime level rather than beside the fork tests — a real call is
+     * dispatched, and forty of them across the fork would be an eight-step
+     * agentic loop rather than a one-second clock measurement.
+     *
+     * The tool name is deliberately one nothing registers, so dispatch produces
+     * the "Tool not found" result by the branch that has always produced it and
+     * this test does not become a test of a tool.
+     */
+    public function testAChunkCarryingOnlyARealToolCallIsAnnouncedAsProgress(): void
+    {
+        $tokens = [];
+        $progress = [];
+
+        $messages = iterator_to_array($this->runtime(
+            new StreamingDouble(1, 0, 'toolcall', 'the answer'),
+        )->run(
+            $this->app(),
+            null,
+            null,
+            static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(
+            [''],
+            $progress,
+            'a chunk carrying only the structure of a call has nothing to paint and everything to prove - '
+                . 'it must reach the progress channel as a bare heartbeat',
+        );
+        $this->assertSame(['the answer'], $tokens, 'and the call structure must not reach the text channel');
+
+        $assistant = $messages[0];
+        $this->assertInstanceOf(AssistantMessage::class, $assistant);
+        $calls = $assistant->toolCalls();
+        $this->assertIsArray($calls);
+        $this->assertCount(1, $calls, 'the announcement must not have cost the chunk its tool call');
+        $this->assertSame('NoSuchToolExistsHere', $calls[0]->name());
+        $this->assertGreaterThan(1, count($messages), 'the accumulated call was never dispatched');
+    }
+
+    // =====================================================================
+    // the retry gate the progress channel must NOT latch
+    // =====================================================================
+
+    /**
+     * A stream that only THOUGHT before failing transiently is still retried.
+     *
+     * {@see Runtime::runStreaming()} gates its retry on `$emitted`, which means
+     * "something left this method that a retry cannot undo". `$onToken`'s bytes
+     * qualify: they become the `$buffer` that becomes the
+     * {@see AssistantMessage} the agentic loop feeds back to the model, so a
+     * re-sent stream would duplicate the CONVERSATION. E456 added a SECOND
+     * channel out of that loop, and the docblock argues at length that
+     * reasoning must not latch it — reasoning is display-only, so a re-sent
+     * think is a repaint.
+     *
+     * That argument had no guard behind it. MEASURED before this test existed:
+     * inserting `$emitted = true;` beside the `$onProgress(...)` call survived
+     * `ReasoningProgressTest`, `RuntimeTest`, `EngineBackendTest` and
+     * `EngineBackendReapTest` together — 141 tests, 411 assertions, entirely
+     * green — while turning every stream that thinks before it fails into an
+     * unretryable one. Which is most of them.
+     *
+     * A reasoning chunk before the failure is not a contrived fixture: it is
+     * the ONLY thing a thinking model emits before its first content byte, and
+     * it is the exact window a dropped connection lands in.
+     */
+    public function testAStreamThatOnlyThoughtBeforeFailingIsStillRetried(): void
+    {
+        $provider = new ThinkThenFailDouble('the answer', throwOnFirstAttempt: true);
+
+        $tokens = [];
+        $progress = [];
+        $messages = iterator_to_array($this->runtime($provider)->run(
+            $this->app(),
+            null,
+            null,
+            static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(
+            2,
+            $provider->attempts(),
+            'a stream that had only THOUGHT when it died was not retried - the progress channel latched '
+                . 'the retry gate, and reasoning is display-only',
+        );
+        $this->assertSame(['the answer'], $tokens, 'and the reply reached the user exactly once');
+        $this->assertSame('the answer', $messages[0]->content());
+        $this->assertSame(
+            ['a first thought '],
+            $progress,
+            "the failed attempt's think is the only one, and it is not re-announced by the retry",
+        );
+    }
+
+    /**
+     * The same gate on the OTHER channel, which is the one the providers this
+     * matters for actually use: {@see
+     * \SugarCraft\Crush\Providers\VertexProvider} reports an overloaded
+     * backend as an `isError` CHUNK on a 200 stream rather than by throwing, so
+     * the think-then-fail case arrives through the error-chunk gate. Both gates
+     * read `$emitted`; a latch added for reasoning would close both.
+     */
+    public function testAStreamThatOnlyThoughtBeforeATransientErrorChunkIsStillRetried(): void
+    {
+        $provider = new ThinkThenFailDouble('the answer', throwOnFirstAttempt: false);
+
+        $progress = [];
+        $messages = iterator_to_array($this->runtime($provider)->run(
+            $this->app(),
+            null,
+            null,
+            null,
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(2, $provider->attempts(), 'the error-chunk gate latched on a think');
+        $this->assertSame('the answer', $messages[0]->content());
+        // Two deltas, not one: the error CHUNK carries `content: ''` as well,
+        // so it beats the heartbeat on its way past. That is the behaviour and
+        // not an artefact - a failing stream is still a live one until the
+        // retry decides otherwise, and the parent's idle timer needs to hear
+        // from it.
+        $this->assertSame(['a first thought ', ''], $progress);
     }
 
     // =====================================================================
@@ -855,12 +1021,98 @@ final class StreamingDouble implements ProviderInterface
             yield match ($this->shape) {
                 'reasoning' => new CompleteResponse(content: '', reasoning: 'think ' . $i . ' '),
                 'usage' => new CompleteResponse(content: '', tokensUsed: 1),
-                'toolstructure' => new CompleteResponse(content: '', toolCalls: []),
+                // NO payload of any kind - see the test that uses it. Not
+                // `toolCalls: []`, which reads like a tool call and is not one.
+                'blank' => new CompleteResponse(content: ''),
+                // The REAL tool-call-only shape, as VertexProvider flushes a
+                // buffered `input_json_delta` and as SglangProvider emits a
+                // recovered call: empty content, one actual ToolCall on it.
+                'toolcall' => new CompleteResponse(content: '', toolCalls: [
+                    ToolCall::fromArray([
+                        'id' => 'call_r56a',
+                        'name' => 'NoSuchToolExistsHere',
+                        'arguments' => ['probe' => $i],
+                    ]),
+                ]),
                 default => throw new \LogicException('unknown shape ' . $this->shape),
             };
         }
 
         yield new CompleteResponse(content: $this->answer, tokensUsed: 7);
+    }
+
+    public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+    {
+        return new EmbeddingsResponse([]);
+    }
+}
+
+/**
+ * A streaming provider whose FIRST attempt thinks and then dies transiently,
+ * and whose second answers.
+ *
+ * Two failure shapes because {@see Runtime::runStreaming()} has two gates on
+ * `$emitted` and real providers use both: a thrown 503
+ * ({@see \SugarCraft\Crush\Providers\SglangProvider},
+ * {@see \SugarCraft\Crush\Providers\BedrockProvider}) and an `isError` chunk
+ * on an otherwise-successful stream
+ * ({@see \SugarCraft\Crush\Providers\VertexProvider},
+ * {@see \SugarCraft\Crush\Providers\CustomProvider}).
+ *
+ * The reasoning chunk goes out BEFORE the failure in both, which is the whole
+ * fixture: it is the only thing on the wire in the window where a thinking
+ * model's connection drops.
+ */
+final class ThinkThenFailDouble implements ProviderInterface
+{
+    private int $attempts = 0;
+
+    public function __construct(
+        private string $answer,
+        private bool $throwOnFirstAttempt,
+    ) {}
+
+    public function name(): string { return 'thinkthenfail'; }
+    public function supportsStreaming(): bool { return true; }
+    public function supportsFunctionCalling(): bool { return false; }
+    public function supportsVision(): bool { return false; }
+    public function supportsJsonSchema(): bool { return false; }
+    public function contextWindow(): int { return 1000; }
+    public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
+
+    public function attempts(): int { return $this->attempts; }
+
+    public function complete(CompleteRequest $request): CompleteResponse
+    {
+        return new CompleteResponse(content: $this->answer);
+    }
+
+    public function completeStream(CompleteRequest $request): \Generator
+    {
+        $this->attempts++;
+
+        if ($this->attempts === 1) {
+            yield new CompleteResponse(content: '', reasoning: 'a first thought ');
+
+            if ($this->throwOnFirstAttempt) {
+                throw new ServerException(
+                    '503 Service Unavailable',
+                    new Request('POST', 'https://example.invalid/v1'),
+                    new Response(503),
+                );
+            }
+
+            yield new CompleteResponse(
+                content: '',
+                isError: true,
+                errorMessage: 'overloaded',
+                errorTransient: true,
+            );
+
+            return;
+        }
+
+        yield new CompleteResponse(content: $this->answer);
     }
 
     public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse

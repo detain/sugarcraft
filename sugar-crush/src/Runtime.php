@@ -356,18 +356,35 @@ final class Runtime
      * agentic loop feeds back to the model and the transcript checkpoints - a
      * re-sent stream would duplicate the CONVERSATION. Reasoning is display
      * only: `$reasoning` is reset per attempt like every other accumulator, and
-     * it is never fed back to the model. MEASURED at this commit, because the
-     * first draft of this paragraph asserted it of a consumer that does not
-     * exist yet: `AssistantMessage::reasoning()` has exactly ONE reader in
-     * `src/` - {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}
-     * folding it onto the returned {@see \SugarCraft\Crush\Message} for the
-     * transcript - and no provider serialises it into an outbound request, so
-     * a re-sent think is a repaint and never a duplicated turn. Latching
+     * it is never fed back to the model.
+     *
+     * WHAT THIS SAID: that `AssistantMessage::reasoning()` "has exactly ONE
+     * reader in `src/`". WHAT IS TRUE NOW: the sentence was true when written
+     * and is not a claim a doc-block can keep - a count taken over a tree is
+     * void the moment anything merges beside it, and the whole argument here
+     * rests on it. WHY THE REASONING STILL EARNS ITS PLACE, stated as the
+     * symbol it is about rather than as a tally: the reader is
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}, which folds
+     * reasoning onto the returned {@see \SugarCraft\Crush\Message} for the
+     * transcript. And it never reaches a provider because the wire form of a
+     * message is built from `content()` alone - every provider maps a history
+     * entry to `['role' => ..., 'content' => $msg->content()]` and there is no
+     * `reasoning` key in that shape at all
+     * (VERIFIED against {@see \SugarCraft\Crush\Providers\SglangProvider}'s
+     * history mapping; `CompleteRequest::$reasoningEffort` is a request KNOB,
+     * not the model's thoughts, and is the only reasoning-shaped thing on the
+     * outbound side). Both are checkable in one jump from here, which a count
+     * is not.
+     *
+     * So a re-sent think is a repaint and never a duplicated turn. Latching
      * `$emitted` on it would trade a
      * cosmetic repaint for the loss of retry coverage on every stream that
      * thinks before it fails, which is most of them - the wrong side of that
      * trade. Do not "fix" this by widening the latch; widen it only if
-     * reasoning ever starts being fed back to the model.
+     * reasoning ever starts being fed back to the model - and it is no longer
+     * only prose that says so:
+     * {@see \SugarCraft\Crush\Tests\Backend\ReasoningProgressTest::testAStreamThatOnlyThoughtBeforeFailingIsStillRetried()}
+     * goes red on exactly that widening, on both of the gates below.
      *
      * The consequence of the gate is worth stating exactly rather than rounding
      * off:
