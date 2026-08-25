@@ -68,8 +68,17 @@ most valuable thing to come out of it, and it is unrecoverable afterwards.
 
 ### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
 
-1. **Nothing is pushed.** Round 54's push authorisation was consumed by round 54's close. Everything from
-   `48beea51` onward is committed locally and NOT on `origin`. **Ask before pushing.**
+1. 🔴 **THE PUSH STATE IS NOT WHAT THIS FILE SAID, AND NOBODY IN THIS SESSION RAN `git push`.**
+   VERIFIED with `git ls-remote origin master`: **`758f44d12` IS on `detain/sugarcraft`** — so round 55's
+   three lane merges and the E458-E489 renumber are PUBLIC and CI has run on them. The main repo's
+   reflog records three pushes on 2026-08-25 (01:07, 01:20, 04:09), all as `update by push`, meaning they
+   originated from `/home/sites/sugarcraft` itself. **No hook explains it**: `.git/hooks/` contains only
+   `.sample` files, `core.hooksPath` is unset, and no matching cron was found. The supervisor did not
+   issue any of them. Working assumption: the user pushes from their own terminal. **Do not treat "I did
+   not push" as "it is not published" in this repo — check `git ls-remote` instead.**
+   Still LOCAL-ONLY at the time of writing: `c03affeec` (E490), **`d38b644f4` (the candy-pty src fix)**
+   and `d421a364b` (the round-55 close). Confirm with `git rev-list --count origin/master..HEAD` rather
+   than trusting this line — it has already been wrong once.
 2. **E490 is open and unexplained** — 1 hang in ~76 takes, 0/60 on `--filter PtyPool`, 0/15 full-suite.
    The untried experiment is the one context it actually happened in: sugar-crush THEN candy-pty, in the
    same script, repeatedly. Lane c owns it.

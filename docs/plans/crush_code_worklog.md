@@ -114,6 +114,19 @@ E457 also cost a lesson worth more than the finding: the first control written t
 inverted match can select, so the control could never pass. A control must be a known positive, and
 asserting the known negative too catches an implementation that answers yes to everything.
 
+### A correction worth carrying forward: this repo pushes itself
+
+The supervisor told the user twice that round 55's work was unpushed. **It was not.**
+`git ls-remote origin master` returns `758f44d12`, so the lane merges and the renumber were already on
+GitHub. The main repo's reflog shows three `update by push` entries on 2026-08-25 (01:07, 01:20, 04:09),
+which means they originated from this working copy — but `.git/hooks/` holds only `.sample` files,
+`core.hooksPath` is unset, no cron matches, and no `git push` was issued in this session.
+
+The lesson is procedural, not forensic: **"I did not push" is not evidence that something is unpublished.**
+`git ls-remote` is, and it costs one command. This matters because the push authorisation model in this
+plan assumes the supervisor controls when work becomes public, and that assumption is false here. Anything
+that must NOT reach GitHub cannot be protected by declining to push it.
+
 ### Backlog
 
 457 → 491. Lane ids E458-E489, renumbered from provisional `Ea55-*`/`Eb55-*`/`Ec55-*` longest-id-first,
