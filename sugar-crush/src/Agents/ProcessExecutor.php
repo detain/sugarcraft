@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Tools\Tool;
 
 /**
  * Process-based executor using proc_open() for true parallelism.
@@ -40,6 +42,38 @@ final class ProcessExecutor implements ExecutorInterface
         private readonly ?int $timeoutSeconds = 300,
         /** Memory usage fraction above which new task scheduling is paused (0.0–1.0). */
         private readonly float $memoryPressureThreshold = self::DEFAULT_MEMORY_THRESHOLD,
+        /**
+         * The provider the WORKER consults, as a {@see \SugarCraft\Crush\Providers\ProviderFactory}
+         * config array — or the one extra spelling `['type' => 'echo']`, see
+         * {@see createLiveWorkerScript()}.
+         *
+         * Null is not a fallback and never selects a canned answer: a worker
+         * that receives no provider spec emits an `error` frame naming the
+         * absence and exits non-zero ({@see createLiveWorkerScript()}). That is
+         * the deliberate shape — the alternative, degrading to text when no
+         * model is reachable, is exactly the defect this parameter exists to
+         * close, and it would be strictly worse than the honest simulation it
+         * replaced because nothing downstream could tell the two apart.
+         *
+         * A serialisable ARRAY rather than a constructed ProviderInterface
+         * because the consumer lives in another process: `spawnWorker()` writes
+         * this straight into the startup line, and a provider object does not
+         * survive `json_encode()` any better than a Message does
+         * ({@see encodeMessages()}).
+         */
+        private readonly ?array $workerProvider = null,
+        /**
+         * Opt in to the FABRICATING worker script, {@see createInlineWorkerScript()}.
+         *
+         * TEST-ONLY, and the default is what enforces that: nothing in `src/`
+         * passes it, which {@see \SugarCraft\Crush\Tests\Agents\ProcessExecutorTest}
+         * pins with a scanner over the whole of `src/` (plus a known-positive
+         * fixture, so an assertion of "no occurrences" cannot be satisfied by a
+         * dead scanner). Production therefore reaches the live script or it
+         * reaches an error frame; there is no third outcome and no path from
+         * one to the other.
+         */
+        private readonly bool $simulatedWorker = false,
     ) {}
 
     /**
@@ -415,7 +449,9 @@ final class ProcessExecutor implements ExecutorInterface
      */
     private function spawnWorker(SubAgent $agent, CompleteRequest $request): array
     {
-        $workerScript = $this->createInlineWorkerScript();
+        $workerScript = $this->simulatedWorker
+            ? $this->createInlineWorkerScript()
+            : $this->createLiveWorkerScript();
 
         $descriptors = [
             0 => ['pipe', 'r'],  // stdin
@@ -452,6 +488,8 @@ final class ProcessExecutor implements ExecutorInterface
         // Send startup message with agent config
         $startupMessage = json_encode([
             'type' => 'startup',
+            'autoload' => self::autoloadPath(),
+            'provider' => $this->workerProvider,
             'agent' => [
                 'id' => $agent->id,
                 'name' => $agent->agent->name,
@@ -461,8 +499,8 @@ final class ProcessExecutor implements ExecutorInterface
             'task' => $agent->task,
             'request' => [
                 'model' => $request->model,
-                'messages' => $request->messages,
-                'tools' => $request->tools,
+                'messages' => self::encodeMessages($request->messages),
+                'tools' => self::encodeTools($request->tools),
                 'systemPrompt' => $request->systemPrompt,
                 'temperature' => $request->temperature,
                 'maxTokens' => $request->maxTokens,
@@ -503,6 +541,396 @@ final class ProcessExecutor implements ExecutorInterface
         $this->processes[$agent->id] = $processDescriptor;
 
         return $processDescriptor;
+    }
+
+    /**
+     * Absolute path to this package's Composer autoloader, for the child.
+     *
+     * TWO climbs, not three: `src/Agents` -> `src` -> package root, the same
+     * count and the same reasoning as
+     * {@see \SugarCraft\Crush\Providers\ProviderFactory::packageRoot()}. A
+     * third overshoots into whatever sits above sugar-crush on disk — harmless
+     * by coincidence in the monorepo checkout, wrong once this library is split
+     * into its own repo.
+     *
+     * Computed in the PARENT and shipped over the wire rather than derived in
+     * the child, because the child is a `php -r` process: it has no `__DIR__`
+     * pointing anywhere useful, no autoloader, and no way to find one. This is
+     * the single fact that makes a real provider constructible in there at all.
+     */
+    private static function autoloadPath(): string
+    {
+        return \dirname(__DIR__, 2) . '/vendor/autoload.php';
+    }
+
+    /**
+     * Flatten a CompleteRequest's messages into JSON-encodable arrays.
+     *
+     * ## THIS IS A BUG FIX, NOT A TIDY-UP
+     *
+     * MEASURED on PHP 8.3.6: `json_encode(new UserMessage('hello world'))` is
+     * `{}`. Every `Message` in this package keeps its state in PRIVATE
+     * properties and none of them implements `JsonSerializable`, so the
+     * startup line used to carry `"messages":[{},{}]` — the sub-agent's entire
+     * conversation destroyed crossing the pipe, silently, with no warning and
+     * no error. `Message::toArray()` is the serialiser those classes ship for
+     * exactly this, and this is the seam that was not using it.
+     *
+     * It was invisible for as long as the worker fabricated its answer: a
+     * script that never reads `request.messages` cannot notice that they are
+     * empty. It becomes load-bearing the moment {@see createLiveWorkerScript()}
+     * hands them to a provider, which is why it is fixed in the same change.
+     *
+     * ## AND IT REFUSES WHAT IT CANNOT ENCODE
+     *
+     * A third shape throws rather than being dropped. Silently skipping is how
+     * the defect above survived: an under-full `messages` array looks exactly
+     * like a short conversation, so the failure would once again be a request
+     * that is quietly wrong rather than a call that stops.
+     *
+     * @param array<mixed> $messages
+     * @return list<array<string, mixed>>
+     * @throws \InvalidArgumentException when an entry is neither a Message nor an array
+     */
+    private static function encodeMessages(array $messages): array
+    {
+        $encoded = [];
+
+        foreach ($messages as $message) {
+            if ($message instanceof Message) {
+                $encoded[] = $message->toArray();
+                continue;
+            }
+
+            // Both shapes are live in this tree: Chat builds Message objects,
+            // while ProcessExecutorTest and dispatchSkill() build plain
+            // ['role' => ..., 'content' => ...] arrays. Neither is wrong; the
+            // wire format is the array one.
+            if (\is_array($message)) {
+                $encoded[] = $message;
+                continue;
+            }
+
+            throw new \InvalidArgumentException(
+                'Cannot send message of type ' . get_debug_type($message)
+                . ' to a worker: expected ' . Message::class . ' or array.'
+            );
+        }
+
+        return $encoded;
+    }
+
+    /**
+     * Flatten a CompleteRequest's tools to their NAMES for the wire.
+     *
+     * Same measured defect as {@see encodeMessages()} — a `Tool` is an
+     * interface over objects with private state, so `json_encode()` of one is
+     * `{}` — but a DIFFERENT resolution, because the fix that works for
+     * messages does not work here.
+     *
+     * A `Message` is data and round-trips. A {@see Tool} is data plus an
+     * `execute()` implementation, and that half does not cross a process
+     * boundary: rehydrating one in the child needs the registry that built it,
+     * which needs the session it belongs to. So the live worker deliberately
+     * sends `tools: null` into its CompleteRequest and a sub-agent worker
+     * currently runs WITHOUT TOOLS.
+     *
+     * Names are sent anyway, and that is the point of this method rather than
+     * a bare `null`: the frame then says which tools the parent believed it was
+     * granting, so the gap is legible to anyone reading a transcript instead of
+     * looking like a caller that passed none. Recorded as a deferred finding in
+     * `docs/plans/crush_code_hardening_backlog.md`.
+     *
+     * @param ?array<mixed> $tools
+     * @return ?list<string>
+     */
+    private static function encodeTools(?array $tools): ?array
+    {
+        if ($tools === null) {
+            return null;
+        }
+
+        $names = [];
+
+        foreach ($tools as $tool) {
+            if ($tool instanceof Tool) {
+                $names[] = $tool->name();
+                continue;
+            }
+
+            if (\is_array($tool) && \is_string($tool['name'] ?? null)) {
+                $names[] = $tool['name'];
+                continue;
+            }
+
+            if (\is_string($tool)) {
+                $names[] = $tool;
+                continue;
+            }
+
+            // Rule: a serialiser that cannot express something says so rather
+            // than dropping it, for the same reason encodeMessages() throws.
+            $names[] = '<unencodable ' . get_debug_type($tool) . '>';
+        }
+
+        return $names;
+    }
+
+    /**
+     * The LIVE worker script: consults a real provider and streams its answer.
+     *
+     * This is the default script — {@see __construct()}'s `$simulatedWorker`
+     * defaults to false — so every production construction site
+     * ({@see \SugarCraft\Crush\Agents\AgentWorkerPool::createDefaultExecutor()},
+     * {@see \SugarCraft\Crush\Chat::executeAgents()}) reaches this one.
+     *
+     * ## IT HAS NO CANNED OUTPUT AND NO FALLBACK
+     *
+     * Read the script below for the property that matters: there is no string
+     * in it that could become a sub-agent's answer. Every prerequisite it
+     * cannot satisfy — no startup line, no readable autoloader, no provider
+     * spec, a provider that will not construct, a provider that throws or
+     * reports an error — ends in an `error` frame and `exit(1)`. None of them
+     * degrades to text.
+     *
+     * That asymmetry is deliberate and is the whole point of the change. A
+     * worker that fabricated on error would be strictly worse than the honest
+     * simulation it replaced: the simulation at least announced itself in a
+     * comment, whereas a fallback produces a plausible answer that no caller,
+     * test or transcript can distinguish from a real one.
+     *
+     * ## WHAT THE SHIPPED DEFAULT ACTUALLY DOES TODAY
+     *
+     * Nothing in `src/` passes `workerProvider`, so on the shipped paths this
+     * script reaches its provider check, refuses, and the pool reports a
+     * FAILED agent naming the absence. **The production sub-agent path is
+     * therefore unexercised, and this change does not make it work — it makes
+     * it honest.** What it does buy is that the claim "this sub-agent's prompt
+     * reached a model" is now falsifiable: before, it could not be tested at
+     * all, because a green suite over a fabricating worker measures the
+     * fabrication.
+     *
+     * ## `['type' => 'echo']`
+     *
+     * One provider spelling that {@see \SugarCraft\Crush\Providers\ProviderFactory}
+     * does not accept is accepted here, and it is not a special case for
+     * tests: {@see \SugarCraft\Crush\Providers\EchoProvider} is a real
+     * `ProviderInterface` that this application already ships as its offline
+     * default ({@see \SugarCraft\Crush\Cli\Bootstrap::backend()}), and its
+     * `name()` is `'echo'`. The factory has no such type because the factory
+     * builds CONFIGURED providers and this one has nothing to configure.
+     *
+     * It is what makes the seam testable without a network, and — measured,
+     * not asserted — it is a genuine round trip: the bytes that come back are
+     * `EchoProvider`'s Markdown blockquote of the request's own last user turn,
+     * assembled inside the provider, in whitespace-delimited stream pieces this
+     * script never chose. Change the task and the output changes with it. That
+     * is the difference from the simulation, which interpolated the task into a
+     * sentence of its own.
+     *
+     * ## WHY THE SIMULATION SURVIVES ANYWAY
+     *
+     * {@see createInlineWorkerScript()} is kept, not deleted. It is the only
+     * exercise the fork/pipe/pump/compositor chain has with a fixed, known
+     * timing shape, and out-of-lane suites assert on that shape. It is now
+     * reachable only by asking for it in the constructor.
+     */
+    private function createLiveWorkerScript(): string
+    {
+        // NOTE: `php -r` executes the code without an opening tag, so there is
+        // none here — same as createInlineWorkerScript().
+        return <<<'PHP'
+declare(strict_types=1);
+
+// Live worker: reads config from stdin, constructs a REAL provider, and
+// streams that provider's answer back over the JSON line protocol.
+//
+// There is no canned output anywhere below. Every path that cannot reach a
+// provider emits an `error` frame and exits non-zero.
+
+$emit = static function (array $frame): void {
+    fwrite(STDOUT, json_encode($frame) . "\n");
+    fflush(STDOUT);
+};
+
+$fail = static function (string $message) use ($emit): void {
+    $emit(['type' => 'error', 'message' => $message]);
+    exit(1);
+};
+
+$agentConfig = null;
+$task = '';
+$requestSpec = [];
+$providerSpec = null;
+$autoload = null;
+
+while (!feof(STDIN)) {
+    $line = fgets(STDIN);
+    if ($line === false) {
+        break;
+    }
+    $msg = json_decode(trim($line), true);
+    if (is_array($msg) && ($msg['type'] ?? '') === 'startup') {
+        $agentConfig = is_array($msg['agent'] ?? null) ? $msg['agent'] : [];
+        $task = (string) ($msg['task'] ?? '');
+        $requestSpec = is_array($msg['request'] ?? null) ? $msg['request'] : [];
+        $providerSpec = $msg['provider'] ?? null;
+        $autoload = $msg['autoload'] ?? null;
+        break;
+    }
+}
+
+// The ready/execute handshake runs BEFORE the prerequisite checks on purpose.
+// spawnWorker() writes `execute` into stdin unconditionally once its ready
+// wait ends, so a child that exited during startup would leave the parent
+// writing into a closed pipe. Answering ready first puts every refusal below
+// onto the normal read path, where the parent is already listening for frames.
+$emit(['type' => 'ready']);
+
+$executeReceived = false;
+$deadline = time() + 5;
+while (!$executeReceived && time() < $deadline) {
+    if (feof(STDIN)) {
+        break;
+    }
+    $line = fgets(STDIN);
+    if ($line === false) {
+        continue;
+    }
+    $msg = json_decode(trim($line), true);
+    if (($msg['type'] ?? '') === 'execute') {
+        $executeReceived = true;
+    } elseif (($msg['type'] ?? '') === 'cancel') {
+        $emit(['type' => 'complete', 'status' => 'stopped']);
+        exit(0);
+    }
+}
+
+if (!$executeReceived) {
+    $fail('Timeout waiting for execute');
+}
+
+if ($agentConfig === null) {
+    $fail('Worker received no startup message, so it has no agent to run.');
+}
+
+if (!is_string($autoload) || $autoload === '' || !is_file($autoload)) {
+    $fail(
+        'Worker autoloader is not readable: the parent named '
+        . var_export($autoload, true)
+        . '. A php -r child has no autoloader of its own, so no provider class '
+        . 'is loadable here and this worker will not invent an answer.'
+    );
+}
+
+require $autoload;
+
+if (!is_array($providerSpec) || $providerSpec === []) {
+    $fail(
+        'No provider configured for this worker: ProcessExecutor was '
+        . 'constructed without a workerProvider spec, so there is no model to '
+        . 'consult. Refusing to fabricate a result.'
+    );
+}
+
+try {
+    $provider = ($providerSpec['type'] ?? null) === 'echo'
+        ? new SugarCraft\Crush\Providers\EchoProvider()
+        : (new SugarCraft\Crush\Providers\ProviderFactory())->create($providerSpec);
+} catch (Throwable $e) {
+    $fail('Provider construction failed: ' . get_class($e) . ': ' . $e->getMessage());
+}
+
+$messages = [];
+foreach ((is_array($requestSpec['messages'] ?? null) ? $requestSpec['messages'] : []) as $entry) {
+    if (!is_array($entry)) {
+        continue;
+    }
+    $content = (string) ($entry['content'] ?? '');
+    $messages[] = match ((string) ($entry['role'] ?? 'user')) {
+        'assistant' => new SugarCraft\Crush\Messages\AssistantMessage($content),
+        'system' => new SugarCraft\Crush\Messages\SystemMessage($content),
+        'tool' => new SugarCraft\Crush\Messages\ToolResultMessage(
+            (string) ($entry['tool_call_id'] ?? $entry['toolCallId'] ?? ''),
+            $content,
+        ),
+        default => new SugarCraft\Crush\Messages\UserMessage($content),
+    };
+}
+
+// A sub-agent is dispatched with a TASK; a provider is called with MESSAGES.
+// When the caller supplied no turns at all, the task IS the user turn — the
+// same assembly App::dispatchSkill() already does in the parent. Without this
+// the provider would be asked to answer an empty conversation.
+if ($messages === [] && $task !== '') {
+    $messages[] = new SugarCraft\Crush\Messages\UserMessage($task);
+}
+
+$request = new SugarCraft\Crush\Providers\CompleteRequest(
+    model: (string) ($requestSpec['model'] ?? ($agentConfig['model'] ?? '')),
+    // Deliberately null: the parent sends tool NAMES, not tools. See
+    // ProcessExecutor::encodeTools() for why a Tool does not cross a fork.
+    tools: null,
+    messages: $messages,
+    systemPrompt: $requestSpec['systemPrompt'] ?? ($agentConfig['prompt'] ?? null),
+    temperature: isset($requestSpec['temperature']) ? (float) $requestSpec['temperature'] : null,
+    maxTokens: isset($requestSpec['maxTokens']) ? (int) $requestSpec['maxTokens'] : null,
+);
+
+// One heartbeat before the call, so the parent's 15s heartbeat deadline is
+// measured from the moment the provider work actually starts rather than from
+// spawn. See the DEFERRED note on ProcessExecutor::createLiveWorkerScript()
+// about the non-streaming path, which cannot heartbeat at all while blocked.
+$emit(['type' => 'heartbeat']);
+
+$output = '';
+$tokensUsed = 0;
+$costUsd = 0.0;
+$lastHeartbeat = time();
+
+try {
+    if ($provider->supportsStreaming()) {
+        foreach ($provider->completeStream($request) as $chunk) {
+            if ($chunk->isError) {
+                $fail('Provider reported an error: ' . ($chunk->errorMessage ?? 'unknown'));
+            }
+            $tokensUsed += $chunk->tokensUsed;
+            $costUsd += $chunk->costUsd;
+            if ($chunk->content !== '') {
+                $output .= $chunk->content;
+                $emit(['type' => 'streaming', 'content' => $chunk->content]);
+            }
+            if (time() - $lastHeartbeat >= 5) {
+                $emit(['type' => 'heartbeat']);
+                $lastHeartbeat = time();
+            }
+        }
+    } else {
+        $response = $provider->complete($request);
+        if ($response->isError) {
+            $fail('Provider reported an error: ' . ($response->errorMessage ?? 'unknown'));
+        }
+        $tokensUsed = $response->tokensUsed;
+        $costUsd = $response->costUsd;
+        $output = $response->content;
+        if ($output !== '') {
+            $emit(['type' => 'streaming', 'content' => $output]);
+        }
+    }
+} catch (Throwable $e) {
+    $fail('Provider call failed: ' . get_class($e) . ': ' . $e->getMessage());
+}
+
+$emit([
+    'type' => 'complete',
+    'status' => 'completed',
+    'output' => $output,
+    'tokensUsed' => $tokensUsed,
+    'costUsd' => $costUsd,
+]);
+
+exit(0);
+PHP;
     }
 
     /**
