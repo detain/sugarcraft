@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Tools;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Context\RepoMapBlock;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -245,168 +246,186 @@ final class BuiltInToolCorpusTest extends TestCase
     }
 
     /**
-     * The resolution these literals need, IN THE FAILURE TEXT, because the
-     * person reading it is usually resolving a merge rather than debugging a
-     * test. Three lanes adding source files in one round each see a small
-     * increment that is correct for their own worktree and wrong for the merge,
-     * and a count merges cleanly without a conflict marker while being
-     * arithmetically wrong afterwards.
+     * THE RESOLUTION, IN THE FAILURE TEXT, because the person reading it is
+     * usually resolving a merge rather than debugging a test.
+     *
+     * WHAT THIS SAID: "php files under src/ — a CENSUS OF THE TREE, not a
+     * policy. Re-derive it; never resolve a conflict here by choosing a side.
+     * Two lanes that each added one file both read +1, and the merge needs +2."
+     * WHAT IS TRUE NOW: no assertion in this file is a function of how many
+     * files `src/` happens to contain, so there is no literal left to re-derive
+     * and no side left to choose — adding a source file is GREEN here, and that
+     * is pinned in both polarities rather than asserted. WHY THIS STILL EARNS
+     * ITS PLACE: the advice was never wrong, it was unsatisfiable, and saying
+     * why is the whole argument for the shape this file now has. Three lanes
+     * each re-deriving the same count in three worktrees produce three answers
+     * that are each correct locally and wrong at the merge, and a count merges
+     * textually clean while being arithmetically wrong afterwards. The stronger
+     * conclusion, which is what replaced the literals: a test that counts the
+     * tree and asserts the tree's count is a CHANGE-DETECTOR, not an invariant.
+     * It reds on every honest addition — a false positive that cost this repo
+     * five separate cross-lane collisions — and it stays green through any
+     * change that preserves the total, which is the false negative nobody was
+     * counting. So this sentence survives as the standing instruction to the
+     * next person tempted to add one back: write the INVARIANT the count was
+     * standing in for, not the count.
      */
-    private const CENSUS_RESOLUTION = 'php files under src/ — a CENSUS OF THE TREE, not a policy. '
-        . 'Re-derive it; never resolve a conflict here by choosing a side. '
-        . 'Two lanes that each added one file both read +1, and the merge needs +2.';
+    private const CENSUS_RESOLUTION = 'this file deliberately asserts NO cardinality over src/. '
+        . 'If you are resolving a merge by re-deriving a count here, stop: '
+        . 'the claim wanted is the invariant the count stood in for, not the count.';
 
     /**
-     * The doc-block's symbol-kind census, derived. The load-bearing number is the
-     * LAST one: `abstract` is the only shape the old `class_exists()`-only guard
-     * classified correctly, and there are none — while the 18 interfaces and 6
-     * traits it would have thrown on are already here.
+     * THE SYMBOL-KIND POLICY, which is what was left when the census was taken
+     * out of it.
      *
-     * DOMAIN: one symbol per FILE — the PSR-4-named one. `src/` declares MORE
-     * top-level types than it has files, so this is not a census of the tree's
-     * types and never was; see {@see testTheSecondaryDeclarationCensus()} for
-     * the secondary ones and for the blind spot that equating the two produced.
+     * WHAT THIS TEST SAID: an eleven-scalar vector — a file count, and one
+     * count per symbol kind — asserted as exact literals against the real
+     * `src/`, under a doc-block carrying a bump-by-bump history of which lane
+     * had moved which scalar by how much. WHAT IS TRUE NOW: ten of those eleven
+     * scalars were arithmetic. They were a function of how many files `src/`
+     * happens to contain, so every one of them redded on any honest addition
+     * and none of them would have moved for a change that swapped one concrete
+     * class for another. WHY THE TEST STILL EARNS ITS PLACE: the eleventh
+     * scalar was never a census at all. `abstract => 0` is a POLICY claim about
+     * this codebase — no source file's PSR-4 symbol is an abstract class — and
+     * `none => 0` is a reachability claim: every file under `src/` resolves to
+     * the symbol its path names. Both are true of a tree of any size, both go
+     * red for a real reason, and neither has anything to do with the total.
      *
-     * ⚠️ THIS SENTENCE USED TO CARRY THE PAIR "288 files / 307 types", then the
-     * pair "295 and 314" in the correction that replaced it (rule 7, so here is
-     * what it said and why it now reads differently). WHAT IS TRUE NOW: the
-     * SECOND pair went stale too, inside one round, the moment a lane added two
-     * source files — which is the third time this one paragraph has restated a
-     * census and been wrong about it. WHY THE CLAIM STILL EARNS ITS PLACE: the
-     * RELATION is the load-bearing part and does not rot, while every pair
-     * written beside it has. So the pair is now gone from the prose entirely
-     * rather than corrected a third time. The live numbers belong in the
-     * assertions below, which fail with the derived value in the message;
-     * prose that restates them is a second place to be wrong (rule 18), and
-     * this paragraph is the proof of its own argument.
+     * WHY THE BUMP HISTORY IS GONE RATHER THAN CORRECTED. It existed for one
+     * purpose: to tell the next lane which of the eleven literals its new file
+     * had moved, and by how much. Read as prose it was a record of the defect
+     * rather than of the tree — the paragraph itself said it had restated the
+     * census wrong three times, named the wrong file for one bump, and
+     * contradicted itself about which paragraph held the newest arrival. With
+     * no literals to maintain, a bookkeeping note about maintaining them is not
+     * history worth keeping; the argument it was making is the paragraph above.
      *
-     * `Permissions/DenialKind` — the leaf enum the
-     * three denial prefixes moved onto when the roster came off `Chat` (E239).
-     * (THIS PARAGRAPH USED TO OPEN "The most recent file is". It was not, by the
-     * time it was written: the newest arrival is named under THE LAST BUMP
-     * below, and two bump paragraphs each claiming primacy is how this block
-     * came to contradict itself in three places at once. New arrivals go in the
-     * LAST BUMP paragraph; this list is history, in no particular order.)
-     * ONE file and it is an `enum`, so this bump is +1 on the file count and
-     * +1 on `enum`, NOT on `concrete`; the declaration total moved by the same
-     * +1 and by no more, checked rather than assumed, and the 19 SECONDARY
-     * declarations in 8 files are untouched by it. This edit was forced out of
-     * its lane's file list by the two assertions below — the guard's
-     * obligations are dynamic even though the ownership map is static.
-     *
-     * Before it, `Diagnostics/RuntimeNoticeSink` and
-     * `RuntimeNoticePumpMsg` — the mid-session half of the transcript seam
-     * (E171) and the tick Msg that drains it. TWO files at once, both a single
-     * `final class`, so this bump is +2 on the file count and +2 on `concrete`;
-     * every other kind and the whole per-file map below are unmoved, and the 19
-     * SECONDARY declarations in 8 files are untouched by them. THE DECLARATION
-     * TOTAL MOVED BY THE SAME +2 and not by more, which is the check worth
-     * making rather than assuming: neither file declares a second top-level
-     * symbol.
-     *
-     * Before them, `Hooks/BoundedHookInterface` — the narrow seam
-     * {@see \SugarCraft\Crush\Hooks\HookRegistry::executeHooks()} charges
-     * against its whole-chain deadline, which only a hook that runs something
-     * OUT of process can honour. One `interface` and nothing else, so this bump
-     * is +1 on the file count and +1 on `interface` — the FIRST bump in a while
-     * that does not land on `concrete`, which is the reason this paragraph says
-     * which kind moved rather than assuming; every other kind and the whole
-     * per-file map below are unmoved, and its 19 SECONDARY declarations in 8
-     * files are untouched by it.
-     *
-     * Before it, `Context/RepoMapBlock` — the `<repo-map>` system prompt block
-     * that maps a workspace's Composer sub-packages and PSR-4 source
-     * directories (crush_code.md P8.8). One `final readonly class`, so a +1 on
-     * `concrete`.
-     *
-     * Before that, THREE files arrived at once from three lanes that landed in
-     * the same window, for a +3 rather than the usual +1:
-     * `Tui/Components/AgentSplitColumn` — the live-agent pane the split-pane
-     * compositor lays beside the shell band (crush_code.md Phase 8 item 4);
-     * `Cli/HeadlessPermissionPrompt`, the console approver the `-p` one-shot
-     * path and the background-session daemon attach to the engine, which is the
-     * first caller
-     * {@see \SugarCraft\Crush\Backend\EngineBackend::withPermissionApprover()}
-     * has had in `src/`; and `Commands/TranscriptTable`, the shared column
-     * layout `AgentsCommand` and `McpAuthCommand` moved onto when their
-     * hand-built `strlen()` columns became a candy-sprinkles `Table`
-     * (crush_code.md P3.4). Each was a single concrete class too. The file
-     * before that trio was `Providers/ToolCallParser/MarkupScanner`.
-     *
-     * THE LAST BUMP, NAMED SO THE NEXT READER DOES NOT HAVE TO GUESS: +2 files
-     * from E494's reasoning channel — `src/Events/ReasoningDelta.php` (+1
-     * concrete) and `src/Backend/ObservesReasoning.php` (+1 interface), each
-     * declaring exactly one top-level type, so files and declarations moved
-     * together and `abstract`/`trait`/`enum` did not move at all.
-     *
-     * THE BUMP BEFORE IT: +1 file and +1 concrete class from
-     * `src/Support/ProcessReaper.php`, the one
-     * bounded SIGTERM -> signal 9 -> `proc_close()` ladder E366 hoisted out of
-     * the four teardown paths that were each about to grow their own. It
-     * declares one concrete final class and nothing else, which is why only
-     * `concrete` moved: 294 -> 295 files, 243 -> 244 concrete, 313 -> 314
-     * declarations.
-     *
-     * THE BUMP BEFORE IT: +1 file and +1 concrete class from
-     * `src/Permissions/ToolRefusal.php`, the shared refusal classifier E292/E300
-     * hoisted out of {@see \SugarCraft\Crush\Cli\NonInteractive} and
-     * {@see \SugarCraft\Crush\Sessions\BackgroundSessionRunner}.
-     *
-     * ⚠️ THIS CENSUS IS A CARDINALITY OVER `src/` AND FIVE LANES ARE EDITING
-     * `src/` AT ONCE. A lane worktree's figure is void the moment a sibling
-     * merges (rule 18), and these three literals can merge textually clean
-     * while being arithmetically wrong (rule 32). If this test reds after a
-     * merge, the resolution is NOT to take one side: re-derive all three from
-     * the merged tree and check the last invariant in
-     * {@see testTheSecondaryDeclarationCensus()} — `declarations - files` must
-     * still equal the secondary-declaration total — because that is the one
-     * assertion here that a wrong pair of literals cannot satisfy by accident.
-     *
-     * THE PREVIOUS BUMP NAMED THE WRONG CAUSE. This paragraph attributed the
-     * last +1 to `Config/LayeredSettings` after the numbers had already been
-     * moved by a different file, so the prose and the literal disagreed about
-     * what changed. Re-deriving a census is cheap; re-deriving it from a
-     * sentence that names the wrong file is how the next reader gets the next
-     * bump wrong. Ordinals are deliberately not quoted
-     * here: the walk below is `RecursiveDirectoryIterator` order, so "the Nth
-     * file" is a fact about the filesystem, not about the tree.
+     * ⚠️ THE TWO ZEROS ARE AN ABSENCE, so on their own they are exactly what a
+     * DEAD classifier reports (rule 15/25). {@see classifyPsr4Symbol()} is a
+     * method rather than an inline `if` chain precisely so the fixture in
+     * {@see testTheSymbolKindClassifierStillNamesEveryShapeIncludingTheTwoPinnedAtZero()}
+     * can push a known abstract class and a known missing symbol through THE
+     * SAME instrument. The four `assertGreaterThan(0, ...)` calls below are the
+     * second half of that: a classifier that answered `concrete` to everything
+     * would satisfy both zeros and fail those.
      */
-    public function testTheSymbolKindCensusTheDocBlockQuotes(): void
+    public function testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract(): void
     {
         $counts = ['concrete' => 0, 'enum' => 0, 'abstract' => 0, 'interface' => 0, 'trait' => 0, 'none' => 0];
+        $abstract = [];
+        $unresolved = [];
 
         $walk = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($this->srcDir, \FilesystemIterator::SKIP_DOTS),
         );
 
-        $files = 0;
         /** @var \SplFileInfo $file */
         foreach ($walk as $file) {
             if (!$file->isFile() || $file->getExtension() !== 'php') {
                 continue;
             }
-            ++$files;
 
             $relative = substr($file->getPathname(), \strlen($this->srcDir) + 1);
             $class = 'SugarCraft\\Crush\\' . str_replace('/', '\\', substr($relative, 0, -4));
 
-            if (class_exists($class)) {
-                $reflection = new \ReflectionClass($class);
-                $counts[$reflection->isEnum() ? 'enum' : ($reflection->isAbstract() ? 'abstract' : 'concrete')]++;
-            } elseif (interface_exists($class)) {
-                ++$counts['interface'];
-            } elseif (trait_exists($class)) {
-                ++$counts['trait'];
-            } else {
-                ++$counts['none'];
+            $kind = $this->classifyPsr4Symbol($class);
+            ++$counts[$kind];
+
+            if ($kind === 'abstract') {
+                $abstract[] = $relative;
+            } elseif ($kind === 'none') {
+                $unresolved[] = $relative;
             }
         }
 
-        $this->assertSame(297, $files, self::CENSUS_RESOLUTION);
+        sort($abstract);
+        sort($unresolved);
+
         $this->assertSame(
-            ['concrete' => 245, 'enum' => 27, 'abstract' => 0, 'interface' => 19, 'trait' => 6, 'none' => 0],
-            $counts,
+            [],
+            $abstract,
+            'src/ declares no abstract class as a file\'s own PSR-4 symbol — this is a policy, '
+            . 'not a count, and it is the one claim the old class_exists()-only guard got right: '
+            . implode(', ', $abstract),
         );
+        $this->assertSame(
+            [],
+            $unresolved,
+            'every src/ file must resolve to the symbol its path names: ' . implode(', ', $unresolved),
+        );
+
+        // The known-positive half of the two zeros above (rule 15): a
+        // classifier that had stopped discriminating would report both
+        // absences just as happily. These are bounds, not counts — they do not
+        // move when a file is added.
+        foreach (['concrete', 'enum', 'interface', 'trait'] as $kind) {
+            $this->assertGreaterThan(
+                0,
+                $counts[$kind],
+                "src/ contains at least one {$kind} symbol; zero here means the classifier stopped answering, "
+                . 'not that the tree changed shape',
+            );
+        }
+    }
+
+    /**
+     * The classifier's own fixture, so the two zeros next door are an
+     * observation rather than the reading of a dead instrument (rule 15).
+     *
+     * `abstract` and `none` are the load-bearing rows: they are the two answers
+     * the census asserts NOBODY gives, so they are the two the census can never
+     * demonstrate the classifier is still capable of giving. The other four
+     * rows are covered twice over — here, and by the `assertGreaterThan(0, ...)`
+     * bounds over the real tree.
+     */
+    public function testTheSymbolKindClassifierStillNamesEveryShapeIncludingTheTwoPinnedAtZero(): void
+    {
+        $this->writeProbe('Kinds/Solid.php', "namespace CorpusProbe\\Kinds;\n\nfinal class Solid\n{\n}\n");
+        $this->writeProbe('Kinds/Shade.php', "namespace CorpusProbe\\Kinds;\n\nenum Shade\n{\n    case One;\n}\n");
+        $this->writeProbe('Kinds/Base.php', "namespace CorpusProbe\\Kinds;\n\nabstract class Base\n{\n}\n");
+        $this->writeProbe('Kinds/Seam.php', "namespace CorpusProbe\\Kinds;\n\ninterface Seam\n{\n}\n");
+        $this->writeProbe('Kinds/Mixin.php', "namespace CorpusProbe\\Kinds;\n\ntrait Mixin\n{\n}\n");
+
+        $this->assertSame('concrete', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Solid'));
+        $this->assertSame('enum', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Shade'));
+        $this->assertSame('abstract', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Base'));
+        $this->assertSame('interface', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Seam'));
+        $this->assertSame('trait', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Mixin'));
+
+        // No file was written for this one, so the probe autoloader returns
+        // without declaring anything — the shape `none` names.
+        $this->assertSame('none', $this->classifyPsr4Symbol('CorpusProbe\\Kinds\\Absent'));
+    }
+
+    /**
+     * ONE instrument, shared by the tree census and by its fixture.
+     *
+     * Inline in the census this was six lines of `if` inside the walk, which is
+     * where rule 15 bites: mutate those six lines to always answer `concrete`
+     * and both of the census's zero assertions still pass, because `abstract`
+     * and `none` are absences. A method can be pushed a known abstract class.
+     *
+     * `class_exists()` is true for an enum and for an abstract class, so the
+     * kind has to come off the reflection rather than off which `*_exists()`
+     * answered; interfaces and traits are invisible to `class_exists()`, which
+     * is the ordering defect this scanner's own history is about.
+     *
+     * @return 'concrete'|'enum'|'abstract'|'interface'|'trait'|'none'
+     */
+    private function classifyPsr4Symbol(string $class): string
+    {
+        if (class_exists($class)) {
+            $reflection = new \ReflectionClass($class);
+
+            return $reflection->isEnum() ? 'enum' : ($reflection->isAbstract() ? 'abstract' : 'concrete');
+        }
+
+        if (interface_exists($class)) {
+            return 'interface';
+        }
+
+        return trait_exists($class) ? 'trait' : 'none';
     }
 
     /**
@@ -427,52 +446,39 @@ final class BuiltInToolCorpusTest extends TestCase
     }
 
     /**
-     * THE CENSUS THE SCAN USED TO EQUATE WITH FILES. `classNames()` derived one
-     * class per FILENAME, so "the SOURCE TREE is the corpus … a new tool class is
-     * in every one of these tests the moment it exists" held only for
-     * one-type-per-file — and `src/` ships nineteen counterexamples.
+     * THE SECONDARY-DECLARATION MAP. `classNames()` derived one class per
+     * FILENAME, so "the SOURCE TREE is the corpus … a new tool class is in every
+     * one of these tests the moment it exists" held only for one-type-per-file —
+     * and `src/` ships counterexamples. Derived with `token_get_all()` rather
+     * than `class_exists()`, because a secondary symbol is not autoloadable by
+     * its own name.
      *
-     * Derived with `token_get_all()` rather than `class_exists()`, because the
-     * secondary symbols are not autoloadable by their own names. The file and
-     * declaration totals are asserted below rather than restated here — they
-     * were spelled "288" and "307" in this sentence for two rounds after the
-     * tree left those values behind (rule 18). What does not rot: a minority of
-     * declarations are SECONDARY, and they live in a handful of files. Pinned
-     * per file, so a second declaration arriving in a scanned file reds THIS test
-     * with the file named rather than silently widening the blind spot.
+     * PINNED PER FILE, WHICH IS THE POINT: this map NAMES the eight files that
+     * declare more than their own PSR-4 symbol, so a second declaration
+     * arriving in a scanned file reds this test with the file named. It is not
+     * a cardinality over `src/` — adding a source file that declares one type
+     * does not move a single row — so it survives the merge that a count does
+     * not.
      *
-     * `src/ToolRegistry.php` declaring `SugarCraft\Crush\Tool` is reported rather
-     * than moved: `src/ToolRegistry.php` is outside this change-set's ownership.
-     * It is one `use` away from colliding with `SugarCraft\Crush\Tools\Tool`, and
-     * `tests/ToolRegistryTest.php` already imports it.
+     * WHAT THIS DOC-BLOCK SAID: a running narrative of two figures (files and
+     * top-level declarations) that it had spelled "288" and "307" for two
+     * rounds after the tree left those values behind, then "267/286", then
+     * "+2 when Phase 5 items 8/9 added two files". WHAT IS TRUE NOW: both
+     * figures, and the `assertSame()` calls that had been added to stop them
+     * rotting, are gone from this test — they were counts of the tree asserted
+     * against the tree. WHY THE RELATION STILL EARNS ITS PLACE: what does not
+     * rot is that a MINORITY of declarations are secondary and that they live
+     * in a handful of files, and the balance between the two totals is a real
+     * invariant with its own test next door.
      *
-     * The two file/declaration figures above are measured (`sourceFiles()` and
-     * `declaredTypes()` over `src/`), not restated: they read 267/286 before
-     * crush_code.md Phase 5 items 4/5 added three files, which was already one
-     * low against {@see testTheSymbolKindCensusTheDocBlockQuotes()}'s own count
-     * of the same tree. Nothing asserted them, which is how they drifted — so
-     * both are asserted below now, and both moved again by +2 when Phase 5
-     * items 8/9 added `Providers/TransientFailure` and `Context/MemoryBlock`. The declaration count in particular was quoted
-     * in BOTH census docblocks and enforced by neither, so adding a file redded
-     * only the sibling test's FILE count and left the declaration count to rot.
-     * The figures in that sentence are deliberately named rather than numbered:
-     * the numbers move with the tree, and writing today's beside a past-tense
-     * narrative about yesterday's is the drift this paragraph is describing.
+     * `src/ToolRegistry.php` declaring `SugarCraft\\Crush\\Tool` is reported
+     * rather than moved: it is one `use` away from colliding with
+     * `SugarCraft\\Crush\\Tools\\Tool`, and `tests/ToolRegistryTest.php`
+     * already imports it.
      */
-    public function testTheSecondaryDeclarationCensus(): void
+    public function testTheSecondaryDeclarationMap(): void
     {
-        $secondary = [];
-        foreach (BuiltInToolCorpus::sourceFiles($this->srcDir) as $relative) {
-            $primary = 'SugarCraft\\Crush\\' . str_replace('/', '\\', substr($relative, 0, -4));
-            $extra = array_values(array_diff(
-                BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative),
-                [$primary],
-            ));
-
-            if ($extra !== []) {
-                $secondary[$relative] = $extra;
-            }
-        }
+        $secondary = $this->secondaryDeclarations($this->srcDir, 'SugarCraft\\Crush\\');
 
         $this->assertSame(
             [
@@ -488,42 +494,256 @@ final class BuiltInToolCorpusTest extends TestCase
             array_map('count', $secondary),
         );
 
-        $this->assertSame(19, array_sum(array_map('count', $secondary)));
         $this->assertContains('SugarCraft\\Crush\\Tool', $secondary['ToolRegistry.php']);
+    }
 
-        // The two figures the docblock quotes, derived here rather than trusted.
-        $files = BuiltInToolCorpus::sourceFiles($this->srcDir);
+    /**
+     * THE BALANCE, and it is not the tautology it looks like.
+     *
+     * `declarations - files` equals the secondary total ONLY IF every file
+     * declares its own PSR-4 symbol: a file that declares something else
+     * contributes to the left side without its own name being subtracted, and
+     * the two sides part. So this is the token-stream statement of the same
+     * policy {@see testEverySourceFileDeclaresItsPsr4Symbol()} makes through
+     * `nonClassSources()` and
+     * {@see testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
+     * makes through reflection — three independent instruments over one claim,
+     * which is the arrangement that survives one of them going quiet.
+     *
+     * It replaces `assertSame(316, $declarations)` and `assertSame(297, count($files))`,
+     * which were the same two numbers written down instead of related. Neither
+     * literal could fail for a reason anyone wanted to hear about; this can,
+     * and {@see testTheDeclarationBalanceSeesAFileThatDoesNotDeclareItsPsr4Symbol()}
+     * shows it doing so.
+     */
+    public function testTheDeclarationBalanceHoldsAcrossTheWholeSourceTree(): void
+    {
+        [$files, $declarations] = $this->declarationTotals($this->srcDir);
+        $secondary = $this->secondaryDeclarations($this->srcDir, 'SugarCraft\\Crush\\');
+
+        $this->assertSame(
+            $declarations - $files,
+            array_sum(array_map('count', $secondary)),
+            'top-level declarations minus files must equal the secondary total, which it does only '
+            . 'while every src/ file declares its own PSR-4 symbol — ' . self::CENSUS_RESOLUTION,
+        );
+    }
+
+    /**
+     * The balance's known positive (rule 15): the SAME arithmetic over a
+     * synthetic tree, first well-formed and then with one mis-namespaced file,
+     * so the assertion next door is shown to be capable of parting rather than
+     * merely observed not to have.
+     */
+    public function testTheDeclarationBalanceSeesAFileThatDoesNotDeclareItsPsr4Symbol(): void
+    {
+        $this->writeProbe('Kinds/Solid.php', "namespace CorpusProbe\\Kinds;\n\nfinal class Solid\n{\n}\n");
+
+        [$files, $declarations] = $this->declarationTotals($this->probeDir);
+        $secondary = $this->secondaryDeclarations($this->probeDir, self::PROBE_PREFIX);
+        $this->assertSame($declarations - $files, array_sum(array_map('count', $secondary)));
+
+        // Declares `CorpusProbe\Elsewhere\Skewed` from a path that names
+        // `CorpusProbe\Kinds\Skewed`, so its own name is never subtracted.
+        $this->writeProbe('Kinds/Skewed.php', "namespace CorpusProbe\\Elsewhere;\n\nfinal class Skewed\n{\n}\n");
+
+        [$files, $declarations] = $this->declarationTotals($this->probeDir);
+        $secondary = $this->secondaryDeclarations($this->probeDir, self::PROBE_PREFIX);
+        $this->assertNotSame(
+            $declarations - $files,
+            array_sum(array_map('count', $secondary)),
+            'a file that does not declare its PSR-4 symbol must part the two sides of the balance',
+        );
+    }
+
+    /**
+     * @return array<string, list<string>> relative path => its non-primary declarations
+     */
+    private function secondaryDeclarations(string $dir, string $prefix): array
+    {
+        $secondary = [];
+        foreach (BuiltInToolCorpus::sourceFiles($dir) as $relative) {
+            $primary = $prefix . str_replace('/', '\\', substr($relative, 0, -4));
+            $extra = array_values(array_diff(
+                BuiltInToolCorpus::declaredTypes($dir . '/' . $relative),
+                [$primary],
+            ));
+
+            if ($extra !== []) {
+                $secondary[$relative] = $extra;
+            }
+        }
+
+        return $secondary;
+    }
+
+    /** @return array{0: int, 1: int} file count, top-level declaration count */
+    private function declarationTotals(string $dir): array
+    {
+        $files = BuiltInToolCorpus::sourceFiles($dir);
         $declarations = 0;
         foreach ($files as $relative) {
-            $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
+            $declarations += count(BuiltInToolCorpus::declaredTypes($dir . '/' . $relative));
         }
-        $this->assertSame(297, count($files), self::CENSUS_RESOLUTION);
-        $this->assertSame(316, $declarations, 'top-level declarations in them — ' . self::CENSUS_RESOLUTION);
-        $this->assertSame(
-            $declarations - count($files),
-            array_sum(array_map('count', $secondary)),
-            'and the two figures must stay consistent with the per-file census above',
+
+        return [count($files), $declarations];
+    }
+
+    /**
+     * THE TWO ARGUMENTS {@see RepoMapBlock} MAKES ABOUT THIS TREE, checked as
+     * arguments rather than as the digits they used to be written with.
+     *
+     * WHAT THIS WAS: two `assertStringContainsString()` calls asserting that
+     * `RepoMapBlock`'s prose spelled today's file count and today's declaration
+     * count. They were derived — `sprintf()` against the walk, not literals —
+     * and they were still the tightest coupling in the repository, because they
+     * made a PRODUCTION doc-block a file every lane adding a source file had to
+     * edit. WHAT IS TRUE NOW: the prose carries no figure, and what is asserted
+     * is the claim the figure was supporting. WHY THIS STILL EARNS ITS PLACE:
+     * removing the assertion and leaving the prose would have left an unpinned
+     * sentence that rots with nothing going red, which is the failure mode this
+     * whole change is about — so the prose lost its figures in the same commit,
+     * and both halves are checked here.
+     *
+     * ARGUMENT 1, from WHAT WAS DELIBERATELY NOT BUILT: a per-CLASS listing was
+     * rejected because it does not fit. Derived below at fully-qualified width
+     * against {@see RepoMapBlock::MAX_SECTION_BYTES}, which is the constant the
+     * block's own renderer measures a section against.
+     *
+     * ⚠️ THE OLD PROSE WAS WRONG ABOUT THIS, and nothing caught it because only
+     * the digit was asserted, never the claim the digit supported. It said such
+     * a listing would be "several times this whole block's budget". MEASURED on
+     * this tree, on PHP 8.3.6: at fully-qualified width it is about one and a
+     * half times the cap — over it, but not "several times" it — and at BARE
+     * SHORT-NAME width it comes to roughly half the cap and would comfortably
+     * FIT. So the WIDTH the claim is made at is load-bearing and the sentence
+     * never stated it. The assertion below names the width explicitly. (Neither
+     * measured byte figure is written into `src/`: it is a cardinality over the
+     * tree, and this test is the generator.)
+     *
+     * ARGUMENT 2, from {@see RepoMapBlock::MAX_SOURCE_FILES}: the walk's
+     * backstop is generous because it is a backstop and not a policy, and a
+     * package this size sits well under it. Asserted as ORDER OF MAGNITUDE
+     * rather than as the exact multiple — the multiple moves with every file
+     * added, which is what kept sending that paragraph stale, while the order
+     * of magnitude survives the tree roughly septupling.
+     */
+    public function testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold(): void
+    {
+        $fullyQualifiedListing = 0;
+        foreach (BuiltInToolCorpus::sourceFiles($this->srcDir) as $relative) {
+            foreach (BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative) as $type) {
+                $fullyQualifiedListing += \strlen($type) + 1;
+            }
+        }
+
+        $this->assertGreaterThan(
+            RepoMapBlock::MAX_SECTION_BYTES,
+            $fullyQualifiedListing,
+            'RepoMapBlock declines to emit a per-class listing because one would not fit; at one '
+            . 'fully-qualified name per line it must still overrun MAX_SECTION_BYTES, or that '
+            . 'design note has outlived its reason and the note is what needs rewriting',
         );
 
-        // `src/Context/RepoMapBlock` argues about the size of a per-class
-        // listing and about how far under MAX_SOURCE_FILES a normal package
-        // sits, so it restates BOTH figures — and it shipped restating 284/303
-        // in the very commit that moved them to 285/304 thirty lines away in
-        // its own message. A restated census no test asserts is this file's
-        // recurring defect; the restatement is asserted here rather than
-        // deleted, because the argument it supports needs the number.
+        [$files] = $this->declarationTotals($this->srcDir);
+        $this->assertGreaterThan(
+            $files * 10,
+            RepoMapBlock::MAX_SOURCE_FILES,
+            'MAX_SOURCE_FILES is argued as a backstop a normal package sits more than an order of '
+            . 'magnitude under; if this package no longer does, the constant is now a policy and '
+            . 'its doc-block says otherwise',
+        );
+
+        // And the prose still MAKES both arguments. Flattened first: a
+        // doc-block wraps at 80 columns with ' * ' on every continuation, so a
+        // sentence is never those bytes in a row (rule 17) — the previous
+        // version of this pin only worked because both fragments it matched
+        // happened to fall inside one line.
+        $prose = $this->flattenedSource($this->srcDir . '/Context/RepoMapBlock.php');
+
+        $this->assertStringContainsString(
+            "overruns this block's whole byte budget",
+            $prose,
+            'ARGUMENT 1 has left RepoMapBlock; the assertion above now pins nothing anyone can read',
+        );
+        $this->assertStringContainsString(
+            'more than an order of magnitude under it',
+            $prose,
+            'ARGUMENT 2 has left RepoMapBlock; the assertion above now pins nothing anyone can read',
+        );
+    }
+
+    /**
+     * THE OTHER HALF, AND THE ONE THE BRIEF PREDICTED WOULD FAIL SILENTLY: with
+     * the census assertions gone, nothing stops a future edit restating the
+     * count in `RepoMapBlock` again. It has been restated there, and been
+     * wrong, three times — once shipping `284/303` in the very commit that
+     * moved the tree to `285/304` thirty lines away in its own message.
+     *
+     * So the restatement is now FORBIDDEN rather than checked. This is an
+     * assertion of absence, so it runs a known positive through the SAME
+     * scanner in the same test (rule 15): a fixture that does restate the file
+     * count must come back reported. The fixture is built by concatenation so
+     * the offending digits are never spelled in this file — a blanket sweep for
+     * a pattern must not trip over the guard that documents it (rule 26).
+     *
+     * RESIDUAL DOMAIN, stated because a guard that cannot say what it misses is
+     * a licence: this matches the two derived figures as standalone integers
+     * anywhere in the file, so a coincidence — `src/` growing to exactly the
+     * value of one of `RepoMapBlock`'s own constants — would report a false
+     * positive. The resolution then is to reword the collision, NOT to weaken
+     * the scanner. The historical figures the file preserves under rule 7 are
+     * untouched by construction: they are stale by definition, so they are not
+     * today's derivation.
+     */
+    public function testRepoMapBlockNoLongerRestatesTheSourceCensus(): void
+    {
+        [$files, $declarations] = $this->declarationTotals($this->srcDir);
         $block = (string) file_get_contents($this->srcDir . '/Context/RepoMapBlock.php');
 
-        $this->assertStringContainsString(
-            sprintf('`src/` here declares %d top-level', $declarations),
-            $block,
-            'RepoMapBlock restates the declaration census and has drifted from it',
+        $this->assertSame(
+            [],
+            $this->restatedFigures($block, [$files, $declarations]),
+            'RepoMapBlock restates a census of src/ again — ' . self::CENSUS_RESOLUTION,
         );
-        $this->assertStringContainsString(
-            sprintf('`src/` here is %d files', count($files)),
-            $block,
-            'RepoMapBlock restates the file census and has drifted from it',
+
+        $fixture = '     * because it is a backstop and not a policy: `src/` here is '
+            . $files . ' files, so' . "\n" . '     * a normal package is comfortably under it.';
+
+        $this->assertSame(
+            [$files],
+            $this->restatedFigures($fixture, [$files, $declarations]),
+            'the scanner asserting the absence above must still be able to SEE a restatement',
         );
+    }
+
+    /**
+     * @param  list<int>  $figures
+     * @return list<int>  those of $figures that appear in $source as standalone integers
+     */
+    private function restatedFigures(string $source, array $figures): array
+    {
+        $found = [];
+        foreach (array_values(array_unique($figures)) as $figure) {
+            if (preg_match('/(?<![0-9])' . $figure . '(?![0-9])/', $source) === 1) {
+                $found[] = $figure;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * $file with every doc-block continuation marker removed and all runs of
+     * whitespace collapsed, so a wrapped sentence can be matched as a sentence
+     * (rule 17).
+     */
+    private function flattenedSource(string $file): string
+    {
+        $lines = explode("\n", (string) file_get_contents($file));
+        $lines = array_map(static fn (string $line): string => preg_replace('/^\s*\*\s?/', '', $line) ?? $line, $lines);
+
+        return trim((string) preg_replace('/\s+/', ' ', implode(' ', $lines)));
     }
 
     /**
