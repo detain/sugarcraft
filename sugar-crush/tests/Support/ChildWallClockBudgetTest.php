@@ -139,6 +139,75 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
+     * The rows in `$literal` whose budget is over `$ceiling`.
+     *
+     * EXTRACTED BECAUSE A MUTATION OF IT SURVIVED. Written inline in the guard
+     * below, widening the comparison by a hundred seconds — which switches the
+     * check off — passed the whole file: every budget in the tree is 20 against
+     * a ceiling of 50, so nothing sits near the boundary and no real row can
+     * tell a working comparison from a disabled one. That is rule 25 exactly:
+     * a fixture whose expected value is what a DEAD instrument returns proves
+     * nothing. {@see testTheComparisonRejectsBudgetsWhoseAnswerIsKnown()} drives
+     * this with rows either side of the boundary.
+     *
+     * @param list<array{0: string, 1: int, 2: int}> $literal
+     *
+     * @return list<string>
+     */
+    private function tooLooseIn(array $literal, int $ceiling): array
+    {
+        $tooLoose = [];
+        foreach ($literal as [$label, $line, $seconds]) {
+            if ($seconds > $ceiling) {
+                // ASSEMBLED for the same reason the fixture's expectations are: a
+            // literal here is a match for this census's own scan of this file.
+            $tooLoose[] = $label . ':' . $line . ' — ' . 'timeout -s ' . 'KILL ' . $seconds;
+            }
+        }
+
+        return $tooLoose;
+    }
+
+    /**
+     * The comparison answers rows whose verdict is already known.
+     *
+     * FOUR ROWS STRADDLING THE BOUNDARY, because the interesting failures are
+     * off-by-one in either direction: at the ceiling is fine, one over is not,
+     * and a row far under must never be reported.
+     */
+    public function testTheComparisonRejectsBudgetsWhoseAnswerIsKnown(): void
+    {
+        $rows = [
+            ['fixture/Far.php', 1, 5],
+            ['fixture/At.php', 2, 50],
+            ['fixture/OneOver.php', 3, 51],
+            ['fixture/AtTheLimit.php', 4, 60],
+        ];
+
+        // THE EXPECTED STRINGS ARE ASSEMBLED, NEVER SPELLED (rule 26). This file
+        // is inside its own roster: a literal command-and-number written here
+        // is scraped by the census as a real child budget, and the first draft
+        // of this fixture reported ITSELF as two offenders.
+        $shape = 'timeout -s ' . 'KILL ';
+        $this->assertSame(
+            [
+                'fixture/OneOver.php:3 — ' . $shape . '51',
+                'fixture/AtTheLimit.php:4 — ' . $shape . '60',
+            ],
+            $this->tooLooseIn($rows, 50),
+            'the comparison does not separate a budget over the ceiling from one at or under '
+            . 'it, so the empty verdict over the real tree is satisfied by a disabled check',
+        );
+
+        $this->assertSame(
+            [],
+            $this->tooLooseIn($rows, 60),
+            'a ceiling every row satisfies still produced findings, so the comparison reports '
+            . 'rows for reasons of its own',
+        );
+    }
+
+    /**
      * No child budget reaches the parent's own ceiling.
      */
     public function testEveryChildWallClockBudgetLeavesTheParentAlarmRoomToLose(): void
@@ -146,16 +215,9 @@ final class ChildWallClockBudgetTest extends TestCase
         $limit = $this->defaultTimeLimit();
         $ceiling = $limit - self::REQUIRED_HEADROOM_SECONDS;
 
-        $tooLoose = [];
-        foreach ($this->childBudgets()['literal'] as [$label, $line, $seconds]) {
-            if ($seconds > $ceiling) {
-                $tooLoose[] = $label . ':' . $line . ' — timeout -s KILL ' . $seconds;
-            }
-        }
-
         $this->assertSame(
             [],
-            $tooLoose,
+            $this->tooLooseIn($this->childBudgets()['literal'], $ceiling),
             sprintf(
                 "this child's wall-clock budget leaves the parent's own alarm no room to lose. "
                 . 'phpunit.xml declares defaultTimeLimit="%d" with enforceTimeLimit and '
