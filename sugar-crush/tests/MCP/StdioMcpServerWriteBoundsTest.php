@@ -387,22 +387,60 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
     }
 
     /**
-     * THE CONTROL FOR BOTH STORM ROWS: the same probe with NO storm running must
-     * report that `stream_select()` succeeded. Without it, a probe whose fork
-     * silently failed would report a prompt `false` for the ordinary reason — the
-     * child is deaf and the deadline-less loop found the pipe full — and both rows
-     * above would pass having exercised nothing.
+     * THE CONTROL FOR BOTH STORM ROWS: the same probe, on a pipe in THE SAME
+     * STATE, with NO storm running, must report that `stream_select()` never
+     * failed. Without it, a probe whose fork silently failed would report a prompt
+     * `false` for the ordinary reason — the child is deaf and the deadline-less
+     * loop found the pipe full — and both rows above would pass having exercised
+     * nothing.
+     *
+     * ⚠️ "THE SAME STATE" IS THE ENTIRE CONTROL, and an earlier version of this row
+     * did not have it. It selected on the pipe WITHOUT EVER WRITING TO IT, so it
+     * was measuring an EMPTY pipe — which by the measured table on
+     * {@see testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()} is
+     * instantly writable, never blocks, and therefore cannot be interrupted
+     * whatever else is happening. `SELECTFAIL === 0` was true by construction, and
+     * a control that holds by construction is a constant.
+     *
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8), 0.3s window, 20 ms slice,
+     * three consecutive takes per cell, identical every time:
+     *
+     *     pipe    storm      SELECTOK   SELECTFAIL
+     *     empty   none         ~213000            0
+     *     empty   RUNNING      ~210000            0   <- both assertions still pass
+     *     FULL    none              15            0
+     *     FULL    RUNNING            0         ~843   <- discriminates
+     *
+     * THE TWO BOUNDS ON `SELECTOK` ARE THE FILL'S OWN KNOWN-POSITIVE CHECK, and
+     * they are why this row cannot quietly go vacuous again. 15 is the 0.3s window
+     * divided by the 20 ms slice — every select BLOCKED to its timeout, which only
+     * a full pipe against a live child can do. An unfilled pipe returns ~213000
+     * immediate successes and would sail straight through a bare `> 0`.
      */
     public function testTheStormProbeIsMeasuringAStormAndNotAnOrdinaryFullPipe(): void
     {
         [$rc, $out, ] = $this->runStormProbe('control');
 
         $this->assertSame(0, $rc, 'the control probe is broken: ' . trim($out));
+        $this->assertGreaterThanOrEqual(
+            self::MEASURED_PIPE_CAPACITY_BYTES,
+            $this->reportedInt($out, 'FILLED'),
+            'the control never filled the pipe, so it is selecting on an empty one — which cannot '
+            . 'be interrupted in any case, and makes the SELECTFAIL:0 below true by construction '
+            . 'rather than by the absence of a storm. Output: ' . trim($out),
+        );
         $this->assertGreaterThan(
             0,
             $this->reportedInt($out, 'SELECTOK'),
             'with no storm running, stream_select() still never succeeded — the probe is not '
             . 'measuring what it claims. Output: ' . trim($out),
+        );
+        $this->assertLessThan(
+            self::CONTROL_BLOCKING_SELECT_CEILING,
+            $this->reportedInt($out, 'SELECTOK'),
+            'the control returned far more select() successes than a 0.3s window of 20ms timeouts '
+            . 'can produce, so its select is returning IMMEDIATELY: the pipe is not really full, '
+            . 'and the state being controlled is not the state under test. Output: ' . trim($out),
         );
         $this->assertSame(
             0,
@@ -411,6 +449,14 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             . 'their failures to the storm. Output: ' . trim($out),
         );
     }
+
+    /**
+     * A 0.3s window of 20 ms timeouts is ~15 blocked selects; an empty pipe
+     * returns ~213000 immediate ones. Nothing lands in between, so the ceiling
+     * sits nearly two orders above the real reading and more than two below the
+     * vacuous one.
+     */
+    private const CONTROL_BLOCKING_SELECT_CEILING = 1000;
 
     /**
      * THE MECHANISM BEHIND BOTH ROWS ABOVE, AND THE TRIPWIRE UNDER THE LIVENESS
@@ -943,12 +989,23 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         }
 
         if ($mode === 'control') {
-            // Count select() outcomes on the same fd, with no storm running.
+            // FILL THE PIPE FIRST, because the state under control has to be the
+            // state under test. An EMPTY pipe is instantly writable, so select()
+            // never blocks on it and nothing can interrupt it — the control was
+            // reporting SELECTFAIL:0 for that reason and not for the absence of a
+            // storm. Same 8192-byte loop the reachability probe uses.
+            $filled = 0;
+            while (($put = @fwrite($pipes[0], str_repeat('x', 8192))) > 0) {
+                $filled += $put;
+                if ($filled > 300000) { break; }
+            }
+            // Count select() outcomes on that FULL fd, with no storm running.
             $ok = 0; $fail = 0; $t = microtime(true);
             while (microtime(true) - $t < 0.3) {
                 $w = [$pipes[0]]; $rd = []; $ex = [];
                 if (@stream_select($rd, $w, $ex, 0, 20000) === false) { $fail++; } else { $ok++; }
             }
+            echo 'FILLED:', $filled, "\n";
             echo 'SELECTOK:', $ok, "\n", 'SELECTFAIL:', $fail, "\n", 'RESULT:false', "\n";
             proc_terminate($process, 9);
             foreach ($pipes as $q) { if (is_resource($q)) fclose($q); }
