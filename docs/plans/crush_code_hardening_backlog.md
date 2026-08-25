@@ -16591,3 +16591,224 @@ for the classifier rather than weakening it.
 tokens** — not reported at `DRIFT_BOUND` 1, nor at 2, 3, 4, 5, 8 or 12. Both now use
 `TestFileWalkTrait`. Filed because the lesson outlives the fix: a census that walks the tree is exactly
 the kind of helper that gets copied, and this guard's bound is tuned for one-token drift.
+
+---
+
+## Round 57 — lane b (MCP/LSP transport). Eb57-1 … Eb57-8.
+
+### Eb57-1 — E499 had a THIRD route, and it was the one the code called correct
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: real, user-facing. **Measured. Fixed this round.**
+
+E499 named two routes into "one bad `.mcp.json` entry disables every other server". There is a third,
+and unlike the other two it was not an oversight — `McpClient::startServer()` carried a comment
+presenting it as correct: *"An unknown type is a config error and is thrown above, before we get here."*
+The `default => throw` arm of the `match` sat OUTSIDE the try. Generator: `McpClient::startServers()`
+over a two-server config, MockHandler-backed Guzzle, offender first. PHP 8.3.6 / Linux 6.8:
+
+    'type' => 'sse'          ->  ESCAPED: RuntimeException: Unknown MCP server type: sse
+                                 tools visible: 0
+    {"tools":[{"name":5}]}   ->  ESCAPED: TypeError ... $name must be of type string, int given
+                                 tools visible: 0
+
+`sse` is not a typo invented for the probe — it is a transport the MCP specification defines and this
+port has not implemented, so it is what a real `.mcp.json` carries.
+
+⚠️ **THE ORDER-DEPENDENCE IS WHY THIS READS AS INTERMITTENT.** `startServers()` walks the config map in
+order, so entries BEFORE the offender were up and stayed up. The same broken file lost everything,
+something or nothing depending purely on key order. `Bootstrap::mcpClient()`'s own comment had already
+written this down — *"a defect in the client rather than here"* — and it had been true for at least a
+round.
+
+Fixed by consolidating the type filter onto `McpTool::tryFromArray()` (moved, not copied — the old
+doc-block calls the table a hand mirror of `McpTool`, and a second copy would have been a second
+hazard), and by moving the `match` inside `startServer()`'s guard.
+
+### Eb57-2 — 🔴 the first cut of Eb57-1's fix DELETED A WORKING DIAGNOSTIC, and the suite said so in four places
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: process finding. **Measured. Corrected before it
+was committed as final.**
+
+The obvious reading of "one bad entry must not abort the rest" is `catch (\Throwable) { return; }`. That
+was green across every MCP suite and RED across four rows: three of `Integration\McpToolWiringTest`,
+which pin that a partly-started config reaches the operator's `error_log()` **and** the transcript, and
+`McpClientTest::testStartServersThrowsOnUnknownType`.
+
+The original code had TWO catches and the split was principled — a CONFIG error (the `match`) is
+reported because only a human can fix it; a RUNTIME failure (`start()`) is skipped silently because a
+missing binary is routine. Flattening them traded one defect for another. **Reporting was never the
+defect; the defect was that reporting ABORTED THE LOOP.** Both catches keep their old meanings and the
+config-error report is deferred to `startServers()` until every entry has been attempted.
+
+This is rule 33 one level out: the "exemption" on offer was not a roster row but a plausible-looking
+simplification, and taking it would have removed a guard that was doing real work.
+
+### Eb57-3 — E504 said three pairs; there are five, and the guard's first draft would not have caught any
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: hygiene + instrument. **Measured. Fixed.**
+
+`LspClient` carried FIVE `x()`/`xFor()` pairs, not three: `symbols`/`symbolsFor` and
+`codeActions`/`codeActionsFor` have the same shape as the definitions/references/hover family named in
+E504.
+
+⚠️ **AND THE PAIRS WERE NEVER "CHARACTER-IDENTICAL", WHICH IS WHAT MADE THE OBVIOUS GUARD USELESS.** A
+census comparing whole normalised method bodies reports **ZERO on the pre-fix file**: `x()` opened on a
+bare `$this->connections[$this->language]` and `xFor()` on a null guard. Only the TAILS coincided. An
+assertion of absence that was already true before the fix is not evidence of the fix — rule 25 in a new
+place, and it was caught only by running the scanner against `1dea13c4f`'s file rather than reading it.
+
+Rebuilt on the length of the shared trailing token run. Generator: every method pair in `LspClient`,
+normalised token streams, PHP 8.3.6:
+
+    pre-fix   the five real pairs       74, 75, 84, 89, 89 tokens
+              highest non-pair          14   (definitionsFor / referencesFor)
+    post-fix  highest pair of any kind  14   (the same two)
+
+Threshold 40, in the middle of a 60-token gap. The 14 is not noise to tune away: those two are honestly
+parallel general implementations differing in the LSP method name and the fallback tag.
+
+### Eb57-4 — E506's caps, and a negative `Content-Length` that split the stream silently
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: resource (E506) plus one real correctness defect
+found beside it. **Measured. Fixed.**
+
+All three framing classes now hold `MAX_FRAME_BYTES = 64 * 1024 * 1024`, inherited from
+`Backend\EngineBackend::MAX_FRAME_BYTES` rather than invented, and exceeding it is a NAMED throw with the
+buffer dropped — never a truncation, because half a frame parses as malformed and the diagnostic would
+then blame the peer for this side's refusal.
+
+The defect found on the way is in `LspConnection::readMessage()`'s body phase, and it needs no oversized
+anything. MEASURED, PHP 8.3.6, buffer `"HELLOWORLD"`:
+
+    Content-Length: -5    ->  body 'HELLO', remainder 'WORLD'
+    Content-Length: abc   ->  (int) 0, consumes nothing, loops
+    Content-Length: 0     ->  as above
+
+`strlen($buffer) < -5` is false so nothing ever waits, and `substr($buffer, 0, -5)` means "all but the
+last five bytes". The peer named a length and this side consumed a different one, silently. Because
+`Content-Length` framing has no resynchronisation point, that desynchronises **every message after it**,
+not just the one. The declared length now has a floor as well as a ceiling.
+
+### Eb57-5 — 🔴 E508's premise is false: payload size has nothing to do with it
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: finding-instrument correction. **Measured, three
+takes. Documented, deliberately NOT changed.**
+
+E508 records that `WRITE_IDLE_SECONDS = 15.0` means *"a large `tools/call` from the TUI ... can now park
+the calling thread for fifteen seconds"*, attributing the cost to payload size. Generator:
+`ClaudeCodeMcpClient::sendMessage()` against two fixture children, PHP 8.3.6 / Linux 6.8, three
+consecutive takes:
+
+    a child that READS  10485853 bytes  ->  0.028s / 0.026s / 0.401s
+                         1048669 bytes  ->  0.036s / 0.035s / 0.037s
+    a child that DOES NOT  65629 bytes  ->  15.006s / 15.006s / 15.009s
+
+Ten mebibytes to a live reader never approaches the bound. **Sixty-five kilobytes to a deaf one pays it
+in full** — barely one pipe buffer over, i.e. the smallest message that can cost the whole fifteen
+seconds. It is a wedged-server bound, not a big-message bound, so E508's proposed step ("measure the
+worst realistic payload and decide whether to thread the bound") is measuring the wrong variable.
+
+**THE REAL ASYMMETRY, which nothing had written down:** `callTool()` may block **fifteen times** as long
+writing as the loop under it will wait reading (100 attempts × 10 ms ≈ 1.0s). Against the only shape
+that pays the write bound at all, it freezes the caller for 15s and then spends 1s waiting for an answer
+the same wedge makes impossible.
+
+**STEP, and it is a policy decision rather than a defect fix:** shortening the bound trades "the TUI is
+frozen for 15s" for "a slow-but-recovering server loses its message", and nothing in this tree measures
+how often the second happens. Not taken unilaterally. The half that makes it answerable is now pinned —
+`McpWriteBudgetShapeTest` shows an arbitrarily large payload to a healthy child costs nothing, so
+shortening the bound cannot break large tool calls.
+
+### Eb57-6 — 🔴 E503's prescribed fix is wrong for this tree, not merely expensive
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: closes an open question. **Verified in the tree.**
+
+E475/E440/E503 all end on the same sentence: *"The honest fix is fd 2 on the ReactPHP loop, a shape
+change to a class that is synchronous by design."* Nobody had checked that against the way tool calls
+actually execute here.
+
+`Chat`'s parallel dispatch **forks one child per tool call**, and the parent collects them from
+`Loop::get()->addPeriodicTimer(0.05, …)` — read out of `Chat.php`, not inherited from a comment. So the
+parent's loop is servicing callbacks every 50 ms while a forked child sits inside `callTool()` /
+`readMessage()` on fds it inherited from the parent. Registering fd 2 with that loop would put **two
+processes on one pipe at the same moment**, and `read(2)` is destructive: the bytes go to whichever wins.
+The stderr tail a failing exchange reports would be missing exactly the lines the parent consumed, and
+each process's own EOF bookkeeping (`$stderrOpen`) would diverge from the other's. That is a worse
+defect than the stall, and it is silent.
+
+The residual stall is bounded and already measured: 3.02s against a 3.0s idle, i.e. **~20 ms** on the
+first exchange after the gap.
+
+**STEP:** the question belongs to the DISPATCH layer, not to these two classes. A safe drain has to
+happen while no forked call is in flight — e.g. in the parent between turns — which is a change to
+`Chat`/`Runtime` and should be filed against them. Do not reopen this against `StdioMcpServer` or
+`LspConnection`.
+
+### Eb57-7 — E510 has 2 offenders in the whole tree, not 10 in 8 files, and lane b has none
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: census correction. **Measured, with a live
+instrument.**
+
+Round 57's brief splits E510 as "10 sites in 8 files", assigning `tests/Cli/` ×3, `tests/Providers/`,
+`tests/Config/`, `tests/VhsTapeContractTest.php` ×2 and `tests/Agents/` to lane c and the `tests/MCP/`
+sites to lane b. A token-stream census over all of `tests/` — every `try`/`catch`, any catch type list
+including multi-catch, matched against whether the TRY BODY contains an assertion — reports:
+
+    catches wide enough to swallow ExpectationFailedException   23
+    ... of which the TRY BODY asserts                            2
+
+Both are in `tests/Integration/`: `ForeignAgentPresetWiringTest.php` (try@653) and
+`ForeignSkillWiringTest.php` (try@236). **Neither is in lane b's or lane c's stated list, and
+`tests/MCP/` has zero.** Round 56's one site was fixed at that round and the two remaining `tests/MCP/`
+catches are correctly shaped — one wraps only the call under test, the other is an `assertThrows()`
+helper whose catch asserts on `$e`.
+
+The shape at those two is the `fail()`-inside-try variant: `try { doThing(); $this->fail('…'); } catch
+(\Throwable $e) { assertions on $e }`. `fail()` throws `AssertionFailedError`, which the catch swallows,
+and the assertions then run against the FAIL message. Today they still go red — `$exposed` is a path and
+the fail message is fixed prose — but they go red naming the wrong cause.
+
+⚠️ **ALPHABET, stated because it is the whole finding (rule 11).** My first pass used
+`{Throwable, Exception, Error}` and found 15 wide catches, none in the brief's directories. Widening to
+include `AssertionFailedError` / `ExpectationFailedException` / `PHPUnit\Framework\Exception` found 23 —
+and THAT is where the brief's `tests/Cli/`, `tests/Config/`, `tests/Providers/`, `tests/Agents/` and
+`VhsTapeContractTest` sites live. **They are deliberate**: a test whose subject IS an assertion failing
+has to catch it. So the wider alphabet explains the brief's list and disqualifies it at the same time.
+What my census still CANNOT express: an assertion reached INDIRECTLY from the try body (a helper called
+inside it), and swallowing by `set_error_handler` rather than by `catch`.
+
+Generator kept at
+`/tmp/claude-1000/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/scratchpad/r57b/census_e510_wide2.php`;
+it carries a known-positive and a known-negative fixture pushed through the same `scan()`.
+
+### Eb57-8 — E505 has zero offenders in lane b, and its two named examples are correct by design
+
+**Recorded 2026-08-25 by round 57 lane b.** Severity: census correction. **Measured.**
+
+E505's mechanism is "a fixture whose lifetime is what the TEST WAITS FOR, at or above
+`defaultTimeLimit`, aborts instead of asserting". Four candidates at or above 60 exist in `tests/MCP/`
+and `tests/LSP/`, and every one is a CHILD process lifetime deliberately sized ABOVE the row's own
+bound — the correct direction, and the opposite of the defect:
+
+- `StdioMcpServerWriteBoundsTest`'s `sleep(60)` is inside a nowdoc a GRANDCHILD runs, not a fixture
+  lifetime in the row's process.
+- `DEAF_SERVER_LIFETIME_SECONDS = 90` — "twice `STORM_BOUND_SECONDS`, so the fixture cannot be the thing
+  that ends a storm row".
+- `StdioMcpServerHandshakeTest`'s `SILENT_SERVER` `sleep(3600)` — bounded by `startTimeoutSeconds`.
+- `LspConnectionStdinWedgeTest`'s deaf storm server is **`sleep(120)`, not the `sleep(30)` the brief
+  names.** It was RAISED from 30 in an earlier round precisely because 30 was MEASURED to be the thing
+  that ended a row: with the backstop clause deleted the loop ran until the child expired at ELAPSED
+  29.843 and every assertion but one passed.
+
+MEASURED per-row durations across all 791 rows in `tests/MCP/`, `tests/LSP/` and the
+`ClaudeCodeMcpClient` files, via `--log-junit`: **the slowest row is 7.37s**, against a 60s limit — an 8x
+margin. Nothing here is near the alarm.
+
+⚠️ **ALPHABET.** The census matches `sleep(N)`, `const …_SECONDS = N` and `while (… < N.0)` loops at or
+above 60. It CANNOT express a lifetime built by arithmetic (`sleep(self::X * 2)`), one expressed in
+`usleep` microseconds, or one a fixture reads from an environment variable.
+
+**Lane b left lane c its half of both censuses untouched:** for E510, the two real offenders in
+`tests/Integration/` (which are in NEITHER lane's list) plus the deliberate `AssertionFailedError`
+catches listed above; for E505, `tests/Integration/McpToolWiringTest.php` and
+`tests/Support/ReapsForkedChildrenTraitTest.php`.

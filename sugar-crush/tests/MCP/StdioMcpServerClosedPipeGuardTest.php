@@ -53,7 +53,12 @@ use SugarCraft\Crush\MCP\StdioMcpServer;
  * behind each other in DIFFERENT respects and the pairwise framing hides that:
  * on this question `StdioMcpServer` is the one missing a guard the sibling
  * documents as necessary, and on the between-exchange stderr drain (E440 and
- * E475) the two are identical and BOTH still open. A change that made them
+ * E475) the two are identical and BOTH still open — see
+ * {@see \SugarCraft\Crush\Tests\LSP\LspConnectionStdinWedgeTest}'s
+ * between-exchange row for why the remedy that item names (fd 2 on the ReactPHP
+ * loop) is wrong for this tree rather than merely costly: tool calls run in a
+ * FORKED child while the parent's loop services timers, so a loop-registered
+ * reader would make two processes race one pipe. A change that made them
  * merely match would have closed one of those and not the other.
  */
 final class StdioMcpServerClosedPipeGuardTest extends TestCase
