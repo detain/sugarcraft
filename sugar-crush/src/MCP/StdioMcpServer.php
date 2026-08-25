@@ -1038,17 +1038,86 @@ final class StdioMcpServer implements McpServer
      * @param array<mixed> $response
      * @return array<McpTool>
      */
+    /**
+     * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries a
+     * third party got wrong instead of failing the server over them.
+     *
+     * ⚠️ `is_array($def)` ALONE WAS NOT ENOUGH, AND THE GAP IS A MEASURED ONE-HOP
+     * KILL OF THE WHOLE MCP SUBSYSTEM. {@see McpTool::fromArray()} reads
+     * `$data['name'] ?? ''` into a `string` parameter, so a well-formed JSON-RPC
+     * reply of `{"tools":[{"name":5}]}` raises a `TypeError` — and a `TypeError`
+     * is not a `RuntimeException`, which is the only thing
+     * {@see McpClient::startServer()} catches under a comment promising that "a
+     * single unreachable/misbehaving server must not abort loading the rest".
+     *
+     * MEASURED end to end on this host (PHP 8.3.6, Linux 6.8), three consecutive
+     * takes, driving `McpClient::startServers()` over a two-server config the way
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()} does — one server
+     * answering `{"tools":[{"name":5}]}` and one answering correctly:
+     *
+     *     startServers() THREW TypeError ... Argument #1 ($name) must be of type
+     *     string, int given
+     *
+     * The well-formed server was never started. The same shape falls out of a
+     * `name` that is an object or a bool, and of an `inputSchema` that is a
+     * string; `name: null` alone is safe, because `??` catches it.
+     *
+     * WHAT THIS METHOD CAN AND CANNOT CLOSE. It closes the route through THIS
+     * server type, which is the one the trust grant exists for — `.mcp.json` is
+     * cloned content and starting a server from it is code execution. It does
+     * NOT close E436, which is the narrow catch itself: the identical
+     * `parseTools()` in {@see HttpMcpServer} still has the gap, and any future
+     * throw from a third party's output still walks through
+     * `catch (\RuntimeException)`. Both are out of this lane's file list and are
+     * reported rather than reached for. {@see \SugarCraft\Crush\Tools\McpToolBridge::execute()}
+     * already catches `\Throwable` for exactly this reason.
+     *
+     * SKIPPING RATHER THAN THROWING is the right shape here for the same reason
+     * `is_array($def)` was: one malformed tool in a list of forty is a defect in
+     * that tool, and taking the other thirty-nine down with it is the behaviour
+     * this whole path exists to avoid.
+     *
+     * @return array<McpTool>
+     */
     private function parseTools(array $response): array
     {
         $tools = [];
         $toolDefs = $response['result']['tools'] ?? [];
 
         foreach ($toolDefs as $def) {
-            if (is_array($def)) {
-                $tools[] = McpTool::fromArray($def, $this->name);
+            if (!is_array($def) || !self::toolDefinitionIsWellTyped($def)) {
+                continue;
             }
+
+            $tools[] = McpTool::fromArray($def, $this->name);
         }
 
         return $tools;
+    }
+
+    /**
+     * Does `$def` carry the types {@see McpTool}'s constructor declares?
+     *
+     * Checked HERE rather than made lenient THERE on purpose: `McpTool`'s
+     * promoted properties are the contract every consumer of a tool list reads,
+     * and widening them to `mixed` to survive a bad server would push the same
+     * `TypeError` out to whichever of those consumers touched it first.
+     *
+     * Each key is checked only when PRESENT, because {@see McpTool::fromArray()}
+     * supplies a typed default for each absent one — so an entry that merely
+     * omits `description` is well-typed, and an entry that spells it `false` is
+     * not.
+     *
+     * @param array<mixed> $def
+     */
+    private static function toolDefinitionIsWellTyped(array $def): bool
+    {
+        foreach (['name' => 'is_string', 'description' => 'is_string', 'inputSchema' => 'is_array'] as $key => $check) {
+            if (isset($def[$key]) && !$check($def[$key])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
