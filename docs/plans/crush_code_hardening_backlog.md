@@ -16594,7 +16594,7 @@ the kind of helper that gets copied, and this guard's bound is tuned for one-tok
 
 ---
 
-### Ea57-1 — E493's heartbeat cannot be raised by a signal, and the measurement says what can
+### E524 — E493's heartbeat cannot be raised by a signal, and the measurement says what can
 
 **MEASURED, NOT BUILT.** Round 56 recorded a doubt beside E493's design — a heartbeat the child raises on
 a timer rather than on a chunk — that it "may not be reachable at all from inside `runCompleteInChild()`'s
@@ -16645,7 +16645,7 @@ constraint on both.
 
 ---
 
-### Ea57-2 — the retired idle-ceiling source scan survived a real mutation, and so did every other test
+### E525 — the retired idle-ceiling source scan survived a real mutation, and so did every other test
 
 **Context for E496, filed because the general lesson outlives the fix.**
 `EngineBackendTest::testTheCompletionTimeoutIsReArmedOnEveryFrame()` asserted two things about
@@ -16667,7 +16667,7 @@ whose fixtures all take one branch cannot notice a guard that moved into that br
 
 ---
 
-### Ea57-3 — two more implicitly-nullable parameters live outside the Backend family
+### E526 — two more implicitly-nullable parameters live outside the Backend family
 
 E495 fixed the eight in `src/Backend.php` and `src/Backend/`, and
 `tests/Backend/BackendSignatureNullabilityTest.php` pins that family. A token-level census of the whole of
@@ -16701,7 +16701,7 @@ reflection out of `tests/Backend/BackendSignatureNullabilityTest.php` over every
 
 ---
 
-### Ea57-4 — `Backend` cannot grow a parameter, and the reason should be written down once
+### E527 — `Backend` cannot grow a parameter, and the reason should be written down once
 
 Filed as a fact about this package that will otherwise be re-derived by whoever next wants to thread
 something new through a completion.
@@ -16723,7 +16723,7 @@ while declaring a signature that cannot receive it, and nothing would say so.
 
 ---
 
-### Ea57-5 — `runOnScaledClock` now exists twice
+### E528 — `runOnScaledClock` now exists twice
 
 `tests/Backend/EngineBackendTest.php` and `tests/Backend/ReasoningProgressTest.php` each carry a private
 helper of that name. They differ (one collects a reasoning channel the other has no use for) and merging
@@ -16734,7 +16734,7 @@ exactly the instrument that will otherwise find this later and at more cost.
 
 ---
 
-### Ea57-6 — `src/Context/RepoMapBlock.php` carries two `src/` cardinalities that NOTHING verifies
+### E529 — `src/Context/RepoMapBlock.php` carries two `src/` cardinalities that NOTHING verifies
 
 **Not this lane's file — it needs an owner.** Round 57's lane a made a forced out-of-lane edit
 (`3d9496b46`) to keep `tests/Tools/BuiltInToolCorpusTest.php` green after two new source files, and bumped
@@ -16759,7 +16759,7 @@ order-hundreds file count; saying so does not rot, and saying `297` does.
 
 ---
 
-### Ea57-7 — the empty-delta drop exists twice and NO assertion can see either one go
+### E530 — the empty-delta drop exists twice and NO assertion can see either one go
 
 `Chat::enqueueReasoning()` and the `$onReasoning` static closure in `Chat::scheduleBackendCompletion()` both
 return early on `''`. Round 57 added an agreement test for the two paths and mutated both drops away
@@ -16784,9 +16784,9 @@ assertions (`M12`, `M14`, `M15`) all KILLED, so the instrument was alive.
 
 ---
 
-### Ea57-8 — the nullability scanner's parameter alphabet is still not enumerated
+### E531 — the nullability scanner's parameter alphabet is still not enumerated
 
-Ea57-3's fix taught `splitParams()`/`classifyParam()` about `T_ATTRIBUTE`, with both polarities and an
+E526's fix taught `splitParams()`/`classifyParam()` about `T_ATTRIBUTE`, with both polarities and an
 unterminated-group fixture. That closed the case that actually appears in `src/` today, and the census now
 returns exactly the two `Workflow.php` offenders with zero `<unparsed>` rows.
 
@@ -16798,9 +16798,9 @@ attribute fix, re-run whenever the scan is widened past the Backend family. Toda
 is a fact about this tree and not about the scanner.
 
 
-## Round 57 — lane b (MCP/LSP transport). Eb57-1 … Eb57-14.
+## Round 57 — lane b (MCP/LSP transport). E532 … E545.
 
-### Eb57-1 — E499 had a THIRD route, and it was the one the code called correct
+### E532 — E499 had a THIRD route, and it was the one the code called correct
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: real, user-facing. **Measured. Fixed this round.**
 
@@ -16828,7 +16828,7 @@ Fixed by consolidating the type filter onto `McpTool::tryFromArray()` (moved, no
 doc-block calls the table a hand mirror of `McpTool`, and a second copy would have been a second
 hazard), and by moving the `match` inside `startServer()`'s guard.
 
-### Eb57-2 — 🔴 the first cut of Eb57-1's fix DELETED A WORKING DIAGNOSTIC, and the suite said so in four places
+### E533 — 🔴 the first cut of E532's fix DELETED A WORKING DIAGNOSTIC, and the suite said so in four places
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: process finding. **Measured. Corrected before it
 was committed as final.**
@@ -16847,7 +16847,7 @@ config-error report is deferred to `startServers()` until every entry has been a
 This is rule 33 one level out: the "exemption" on offer was not a roster row but a plausible-looking
 simplification, and taking it would have removed a guard that was doing real work.
 
-### Eb57-3 — E504 said three pairs; there are five, and the guard's first draft would not have caught any
+### E534 — E504 said three pairs; there are five, and the guard's first draft would not have caught any
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: hygiene + instrument. **Measured. Fixed.**
 
@@ -16871,7 +16871,7 @@ normalised token streams, PHP 8.3.6:
 Threshold 40, in the middle of a 60-token gap. The 14 is not noise to tune away: those two are honestly
 parallel general implementations differing in the LSP method name and the fallback tag.
 
-### Eb57-4 — E506's caps, and a negative `Content-Length` that split the stream silently
+### E535 — E506's caps, and a negative `Content-Length` that split the stream silently
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: resource (E506) plus one real correctness defect
 found beside it. **Measured. Fixed.**
@@ -16893,7 +16893,7 @@ last five bytes". The peer named a length and this side consumed a different one
 `Content-Length` framing has no resynchronisation point, that desynchronises **every message after it**,
 not just the one. The declared length now has a floor as well as a ceiling.
 
-### Eb57-5 — 🔴 E508's premise is false: payload size has nothing to do with it
+### E536 — 🔴 E508's premise is false: payload size has nothing to do with it
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: finding-instrument correction. **Measured, three
 takes. Documented, deliberately NOT changed.**
@@ -16923,7 +16923,7 @@ how often the second happens. Not taken unilaterally. The half that makes it ans
 `McpWriteBudgetShapeTest` shows an arbitrarily large payload to a healthy child costs nothing, so
 shortening the bound cannot break large tool calls.
 
-### Eb57-6 — 🔴 E503's prescribed fix is wrong for this tree, not merely expensive
+### E537 — 🔴 E503's prescribed fix is wrong for this tree, not merely expensive
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: closes an open question. **Verified in the tree.**
 
@@ -16948,7 +16948,7 @@ happen while no forked call is in flight — e.g. in the parent between turns �
 `Chat`/`Runtime` and should be filed against them. Do not reopen this against `StdioMcpServer` or
 `LspConnection`.
 
-### Eb57-7 — 🔴 RETRACTED AND RE-MEASURED: E510 has 28 asserting sites, not 2, and 6 of them are in `tests/MCP/`
+### E538 — 🔴 RETRACTED AND RE-MEASURED: E510 has 28 asserting sites, not 2, and 6 of them are in `tests/MCP/`
 
 **Recorded 2026-08-25 by round 57 lane b. RETRACTED AND CORRECTED the same round, at the fix stage,
 after the reviewer refuted it and an independent census reproduced the refutation exactly.** Severity:
@@ -16981,7 +16981,7 @@ naming the wrong cause, and only because that prose happens not to contain the n
 **FIXED THIS ROUND, in `tests/MCP/McpFrameCapTest.php` only:** both catches narrowed by moving `fail()`
 out of the `try` into an `assertNotNull($caught, …)` after it, so the try body no longer asserts at all.
 The remaining four `tests/MCP/` sites are pre-existing, outside this lane's diff, and listed under
-Eb57-13 for whoever owns them.
+E544 for whoever owns them.
 
 **The `tests/Cli/`, `tests/Providers/` and `VhsTapeContractTest` sites remain deliberate** — a test whose
 subject IS an assertion failing has to catch one. That half of the original entry survives.
@@ -17031,7 +17031,7 @@ Generator kept at
 `/tmp/claude-1000/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/scratchpad/r57b/census_e510_wide2.php`;
 it carries a known-positive and a known-negative fixture pushed through the same `scan()`.
 
-### Eb57-8 — E505 has zero offenders in lane b, and its two named examples are correct by design
+### E539 — E505 has zero offenders in lane b, and its two named examples are correct by design
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: census correction. **Measured.**
 
@@ -17063,7 +17063,7 @@ above 60. It CANNOT express a lifetime built by arithmetic (`sleep(self::X * 2)`
 catches listed above; for E505, `tests/Integration/McpToolWiringTest.php` and
 `tests/Support/ReapsForkedChildrenTraitTest.php`.
 
-### Eb57-9 — 🔴 a `.mcp.json` value of the wrong JSON TYPE reaches a constructor, and a constructor answers with `TypeError`
+### E540 — 🔴 a `.mcp.json` value of the wrong JSON TYPE reaches a constructor, and a constructor answers with `TypeError`
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: real, and the likeliest of all three E499 routes to
 be hit by an actual user. **Measured. Fixed and pinned this round.** Found by mutating the NEIGHBOUR of a
@@ -17093,7 +17093,7 @@ The first (`\Throwable` → `\RuntimeException` on the RUNTIME catch) was green 
 assertions, so route 3 had been "closed" by nothing at all. The second was one line away from it, looked
 equivalent for a defensible reason, and was the more serious of the two.
 
-### Eb57-10 — `DenialPrefixRosterTest`'s vocabulary reads an HTTP header block as a permission denial
+### E541 — `DenialPrefixRosterTest`'s vocabulary reads an HTTP header block as a permission denial
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: classifier false positive. **Measured.** Out of
 lane — `tests/DenialPrefixRosterTest.php` is at `tests/` root, which is lane c's this round. Reported,
@@ -17118,7 +17118,7 @@ literal that is an argument to a `new <Throwable>(…)` in a `throw`, verifiable
 without naming the file. As it stands the guard's own advice will push the next person into writing an
 exemption row for correct code, which is where the next real offender hides.
 
-### Eb57-11 — `T_DOLLAR_OPEN_CURLY_BRACES` truncated a brand-new token scanner, and a guard caught it
+### E542 — `T_DOLLAR_OPEN_CURLY_BRACES` truncated a brand-new token scanner, and a guard caught it
 
 **Recorded 2026-08-25 by round 57 lane b.** Severity: instrument defect, in this round's own work.
 **Measured. Fixed.**
@@ -17145,7 +17145,7 @@ walkers in `tests/`, one of them failing OPEN, all three invisible to this guard
 alphabet was the set of files that already agreed with it". This round's scanner was the fourth. A
 brace-walking token scanner is apparently a shape this tree grows regularly and gets wrong by default.
 
-### Eb57-12 — 🔴 `LspConnection`'s frame cap was pinned by NOTHING, and the class calls itself the sharpest of the three
+### E543 — 🔴 `LspConnection`'s frame cap was pinned by NOTHING, and the class calls itself the sharpest of the three
 
 **Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: real gap in this round's own
 work. **Measured full-suite. Fixed this round.**
@@ -17170,7 +17170,7 @@ Fixed with three rows mirroring the stdio shape — refusal at `cap + 1` (names 
 buffer dropped, `$pendingContentLength` reset), silence at exactly `cap`, and a third pinning the
 body-phase call site's DORMANCY, below.
 
-### Eb57-13 — the body-phase cap call is dormant by construction, and four pre-existing `tests/MCP/` swallowers
+### E544 — the body-phase cap call is dormant by construction, and four pre-existing `tests/MCP/` swallowers
 
 **Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: two handoffs. **Measured.**
 
@@ -17194,7 +17194,7 @@ so it cannot go quietly reachable.
 All four still go red today, but on the fail/expectation message rather than on the cause. The fix is
 mechanical: move the `fail()` out of the `try` into an `assertNotNull($caught, …)` after it.
 
-### Eb57-14 — a compensating control was cited that did not exist
+### E545 — a compensating control was cited that did not exist
 
 **Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: process finding. **Measured.
 Fixed this round.**
@@ -17213,7 +17213,7 @@ keeping as an entry because the failure mode is invisible by construction: a sur
 elsewhere is only as good as someone having read that elsewhere.
 
 
-### Ec57-1 — twenty-two swallowing `catch` clauses whose body asserts, and therefore cannot go silently green
+### E546 — twenty-two swallowing `catch` clauses whose body asserts, and therefore cannot go silently green
 
 **DEFERRED (round 57, lane c).** `ExpectationFailedException` extends `AssertionFailedError` extends
 `PHPUnit\Framework\Exception` extends `\RuntimeException` (MEASURED, PHPUnit 10.5.64, and now asserted by
@@ -17246,7 +17246,7 @@ copy the counts above into a later round: re-derive them from that method.
 
 ---
 
-### Ec57-2 — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
+### E547 — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
 
 **DEFERRED (round 57, lane c).** `SymbolCitationDriftTest` now resolves a bare `{@see …()}` in a `tests/`
 file against the classes that file declares, but ONLY for a member spelled as a test method — the
@@ -17285,7 +17285,7 @@ shapes than the six the test-symbol census handles.
 
 ---
 
-### Ec57-3 — `CONTRIBUTING.md` still documents two of the `path-repo-check` commands
+### E548 — `CONTRIBUTING.md` still documents two of the `path-repo-check` commands
 
 **DEFERRED (round 57, lane c) — out of lane, one file.** `tools/check-path-repos.php --help` now prints
 the exact commands the CI job runs, in order, with the `git checkout -- .` that must follow the
@@ -17299,7 +17299,7 @@ already written in `--help` and can be lifted.
 
 ---
 
-### Ec57-4 — `tools/gen-docs.php` has no guard, and it writes files nobody may hand-edit
+### E549 — `tools/gen-docs.php` has no guard, and it writes files nobody may hand-edit
 
 **DEFERRED (round 57, lane c).** `tools/tests/` exists and is wired into CI now, but it holds exactly one
 test file and it is for `check-path-repos.php`. `tools/gen-docs.php` generates every page under
@@ -17311,7 +17311,7 @@ only signal is a reviewer noticing. A `--check` mode plus a CI step is the same 
 
 ---
 
-### Ec57-5 — E490 did not reproduce in 53 takes, and 53 takes cannot tell a fix from luck
+### E550 — E490 did not reproduce in 53 takes, and 53 takes cannot tell a fix from luck
 
 **MEASURED, round 57, lane c. A definite outcome, and it is not "closed".** Configuration, so the number
 means something (rule 3): PHP 8.3.6, this box, `candy-pty` at `1dea13c4f` (unchanged this round — the
@@ -17344,7 +17344,7 @@ one arm has reached ~230.
 
 ---
 
-### Ec57-6 — `tools/` is outside every doc-drift roster in the tree, and the split-repo boundary is why
+### E551 — `tools/` is outside every doc-drift roster in the tree, and the split-repo boundary is why
 
 **DEFERRED (round 57, lane c) — with the measurement that decides it.** Round 57 shipped a stacked
 doc-comment pair into `tools/tests/CheckPathReposTest.php` in the same round whose subject was the
@@ -17367,7 +17367,7 @@ different mechanism. That is a round's scope decision, not a fix agent's. MEASUR
 
 ---
 
-### Ec57-7 — `setup-php`'s `tools: phpunit` is unpinned, so `path-repo-check` follows PHPUnit's latest major
+### E552 — `setup-php`'s `tools: phpunit` is unpinned, so `path-repo-check` follows PHPUnit's latest major
 
 **DEFERRED (round 57, lane c) — one line.** The `path-repo-check` job installs a PHPUnit PHAR with
 `tools: phpunit`, which resolves to the newest major that supports the requested PHP. The job does no
@@ -17383,7 +17383,7 @@ verified in both its with- and without-`--bootstrap` shapes.
 
 ---
 
-### Ec57-8 — the `%d`-parametrised child budgets are REPORTED but never EVALUATED
+### E553 — the `%d`-parametrised child budgets are REPORTED but never EVALUATED
 
 **DEFERRED (round 57, lane c) — deliberately, and the reason is the finding.**
 `ChildWallClockBudgetTest` reads every literal `timeout -s KILL <n>` in `tests/` and asserts each is under
