@@ -527,10 +527,6 @@ final class McpMessageResultTypeTest extends TestCase
     // =========================================================================
 
     /**
-     * Handshakes normally, then answers `tools/call` with whatever type the
-     * requested tool name asks for.
-     */
-    /**
      * Answers `initialize` with a LEGAL but MCP-invalid `"result": null`, and
      * every later message the same way. Spelled by hand rather than through
      * `json_encode()` so the null is unmistakably a present key.
@@ -547,6 +543,10 @@ final class McpMessageResultTypeTest extends TestCase
         }
         PHP;
 
+    /**
+     * Handshakes normally, then answers `tools/call` with whatever type the
+     * requested tool name asks for.
+     */
     private const SCALAR_RESULT_SERVER = <<<'PHP'
         <?php
         while (($line = fgets(STDIN)) !== false) {

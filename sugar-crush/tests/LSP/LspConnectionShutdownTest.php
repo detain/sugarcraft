@@ -429,25 +429,6 @@ final class LspConnectionShutdownTest extends TestCase
         $this->assertFalse($connection->isConnected());
     }
 
-    /**
-     * Ignores SIGTERM, and reports its pid ONLY ONCE THE HANDLER IS INSTALLED.
-     *
-     * THE ORDER OF THOSE LINES IS THE FIXTURE. Written the other way round, the
-     * sibling suite's equivalent let a "remove the signal-9 escalation" mutation
-     * SURVIVE: teardown ran before the child reached `pcntl_signal()`, so SIGTERM
-     * killed it at its DEFAULT disposition and the bound was quietly measuring a
-     * well-behaved server. The pid file is the readiness handshake, and
-     * {@see connectedOver()} waits on it before returning.
-     *
-     * A POLLING loop rather than one long `usleep()`: a signal interrupts
-     * `usleep()` and the script would then simply END, which is indistinguishable
-     * from a well-behaved exit and would make the fixture useless in the other
-     * direction.
-     *
-     * It never answers a single LSP message, which is deliberate — nothing here
-     * is about the protocol, and a fixture that spoke it would be able to fail
-     * for protocol reasons.
-     */
     // =========================================================================
     // The pipes are closed BEFORE the reap, and that is not hygiene
     // =========================================================================
@@ -604,6 +585,25 @@ final class LspConnectionShutdownTest extends TestCase
         exit(1);
         PHP;
 
+    /**
+     * Ignores SIGTERM, and reports its pid ONLY ONCE THE HANDLER IS INSTALLED.
+     *
+     * THE ORDER OF THOSE LINES IS THE FIXTURE. Written the other way round, the
+     * sibling suite's equivalent let a "remove the signal-9 escalation" mutation
+     * SURVIVE: teardown ran before the child reached `pcntl_signal()`, so SIGTERM
+     * killed it at its DEFAULT disposition and the bound was quietly measuring a
+     * well-behaved server. The pid file is the readiness handshake, and
+     * {@see connectedOver()} waits on it before returning.
+     *
+     * A POLLING loop rather than one long `usleep()`: a signal interrupts
+     * `usleep()` and the script would then simply END, which is indistinguishable
+     * from a well-behaved exit and would make the fixture useless in the other
+     * direction.
+     *
+     * It never answers a single LSP message, which is deliberate — nothing here
+     * is about the protocol, and a fixture that spoke it would be able to fail
+     * for protocol reasons.
+     */
     private const STUBBORN_SERVER = <<<'PHP'
         <?php
         pcntl_async_signals(true);

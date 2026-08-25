@@ -511,12 +511,23 @@ final class StdioMcpServer implements McpServer
             // before the fix: `0` and `0.0` both arrived at the model as `''`,
             // `5` and `false` as `'5'` and `'false'`.
             //
-            // The `=== false` arm is a RETURN-TYPE FORMALITY, not a live path:
-            // `null` is answered above, arrays and strings take the other
-            // branches, so all this call can ever see is a bool, an int or a
-            // float from `json_decode()`, and `json_encode()` cannot fail on
-            // those. It is spelled explicitly anyway because `text` is declared
-            // `string` and `json_encode()` is declared `string|false`.
+            // The `=== false` arm is a RETURN-TYPE FORMALITY, not a live path.
+            //
+            // WHAT THIS SAID: "`null` is answered above ... so all this call can
+            // ever see is a bool, an int or a float from `json_decode()`."
+            // WHAT IS TRUE NOW: the gate above tests `!$response->resultSet`, not
+            // `result === null`, so a legal `"result": null` is a RESULT and
+            // reaches here — see that gate's own comment. The reachable set is
+            // `null`, a bool, an int or a float; arrays and strings still take the
+            // other branches.
+            // WHY THIS STILL EARNS ITS PLACE: the conclusion did not move with the
+            // premise. `json_encode()` cannot fail on any of those four either, so
+            // the arm is still dead in fact — `json_encode(null)` is the STRING
+            // `"null"`, which is precisely how a null result reaches the model as
+            // the text `null` instead of as the empty string the `?:` above would
+            // have made of it. The arm is spelled out anyway because `text` is
+            // declared `string` and `json_encode()` is declared `string|false`;
+            // nothing but the type system asks for it.
             $encoded = json_encode($response->result);
 
             return ['content' => [[

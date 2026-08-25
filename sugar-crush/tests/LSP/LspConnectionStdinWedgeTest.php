@@ -614,15 +614,15 @@ final class LspConnectionStdinWedgeTest extends TestCase
         @rmdir($dir);
     }
 
+    /** Spelled once, so the templates and {@see withFraming()} cannot drift apart. */
+    private const FRAMING_MARKER = 'SC_FRAMING_HELPERS';
+
     /**
      * The `Content-Length` reader/writer every fixture below shares. Spelled once
      * and interpolated, so a framing bug in the fixture cannot make one row pass
      * and another fail for reasons that have nothing to do with the class under
      * test.
      */
-    /** Spelled once, so the templates and {@see withFraming()} cannot drift apart. */
-    private const FRAMING_MARKER = 'SC_FRAMING_HELPERS';
-
     private const FRAMING_HELPERS = <<<'PHP'
         function sc_read_framed() {
             $header = '';
