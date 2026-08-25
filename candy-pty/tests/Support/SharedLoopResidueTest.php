@@ -128,11 +128,26 @@ final class SharedLoopResidueTest extends TestCase
     }
 
     /**
-     * AND THE REAL CLASS LEAVES NOTHING BEHIND. This is the regression proper:
-     * it runs the pool test's own loop work through the shared loop and asserts
-     * the loop is clean afterwards.
+     * THE LOOP IS CLEAN BY THE TIME THIS FILE RUNS — a weaker claim than the
+     * one this test was first written to make, and it is stated weakly on
+     * purpose.
+     *
+     * WHAT THIS SAID: "AND THE REAL CLASS LEAVES NOTHING BEHIND. This is the
+     * regression proper." WHAT IS TRUE NOW: it was not the regression and it
+     * could not have been. Restoring the leak in `PtyPoolReactLoopTest` left
+     * this test GREEN, because that file's own third test consumes the orphan
+     * cap — it waits out the remaining 4.8 seconds, the cap fires, calls
+     * `Loop::stop()`, and is gone — so a later observer always finds a clean
+     * loop. The assertion was looking in the right direction at the wrong
+     * moment. The regression proper now lives in that class's own
+     * `tearDown()`, which is the only window the leak is visible from.
+     * WHY THIS STILL EARNS ITS PLACE: it is the arm that would notice a leak
+     * from somewhere OTHER than that class — a future test that starts driving
+     * the shared facade and never gets a `tearDown()` of its own — and it
+     * costs nothing. It is an ordering-dependent statement about whatever ran
+     * before it, which is why it is not the guard anything rests on.
      */
-    public function testThePoolSuiteLeavesNothingArmedOnTheSharedLoop(): void
+    public function testTheSharedLoopIsCleanByTheTimeThisFileRuns(): void
     {
         $this->assertSame(
             ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0],

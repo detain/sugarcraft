@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\PtyPool;
+use SugarCraft\Pty\Tests\Support\SharedLoopResidue;
 
 /**
  * Integration test: PtyPool works inside a ReactPHP loop session without
@@ -21,6 +22,42 @@ use SugarCraft\Pty\PtyPool;
  */
 final class PtyPoolReactLoopTest extends TestCase
 {
+    /**
+     * NOTHING THIS CLASS ARMS ON THE SHARED LOOP MAY OUTLIVE THE TEST THAT
+     * ARMED IT.
+     *
+     * THE CHECK IS HERE AND NOT IN A GUARD OF ITS OWN, and the reason is a
+     * mutation that SURVIVED. A standalone test asserting "the shared loop is
+     * clean" was written first, and restoring the leak did not red it: this
+     * file's own third test consumes the orphan cap -- it waits the remaining
+     * 4.8s, the cap fires, calls `Loop::stop()`, and is gone -- so by the time
+     * any later test looked, the loop was clean again. The leak is invisible
+     * from everywhere except the moment immediately after it happens, which is
+     * exactly here.
+     *
+     * This is the one file in the suite that drives the shared `Loop::` facade
+     * with timers; every other loop test builds its own `StreamSelectLoop` for
+     * isolation, as `tests/bootstrap.php` explains. So the obligation is local
+     * and the guard is local with it.
+     */
+    protected function tearDown(): void
+    {
+        $residue = SharedLoopResidue::census();
+
+        $this->assertSame(
+            ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0],
+            $residue,
+            'this test left something armed on the SHARED loop: ' . SharedLoopResidue::describe()
+                . '. A leaked one-shot timer makes the NEXT Loop::run() in this suite return on '
+                . 'that timer\'s callback instead of on its own work - a pass for the wrong '
+                . 'reason, which measured as 4.8 seconds and not as a failure. A leaked '
+                . 'PERIODIC is worse: Loop::run() never returns while one is armed, so the '
+                . 'next test hangs rather than fails. Cancel every handle on every path out, '
+                . 'including the path where a safety cap fired - cancelling an already-'
+                . 'cancelled timer is a no-op.',
+        );
+    }
+
     private function requirePtySyscalls(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
