@@ -16655,3 +16655,36 @@ against the committed pages — the classic drift shape: the generator and its o
 only signal is a reviewer noticing. A `--check` mode plus a CI step is the same wiring
 `path-repo-check` just got.
 
+
+---
+
+### Ec57-5 — E490 did not reproduce in 53 takes, and 53 takes cannot tell a fix from luck
+
+**MEASURED, round 57, lane c. A definite outcome, and it is not "closed".** Configuration, so the number
+means something (rule 3): PHP 8.3.6, this box, `candy-pty` at `1dea13c4f` (unchanged this round — the
+lane touched no `candy-*` file, verified with `git diff --name-only`), every take
+`cd candy-pty && vendor/bin/phpunit --testdox` with a 7/7 in-lane symlink closure.
+
+- **Arm A, candy-pty alone, 49 takes.** All `rc=0`, all `630 / 1494 / 16 skipped / 1 warning`, 48s each.
+- **Arm C — THE EXPERIMENT THAT HAD NEVER BEEN RUN: the full `sugar-crush` suite and then `candy-pty`,
+  back to back in one script, 4 cycles.** That is the only context the single observed hang occurred in.
+  All four clean, and byte-identical: `10137 / 154739 / 1` then `630 / 1494 / 16 / 1w` every time.
+- Arm A ran CONCURRENTLY with the lane's own `sugar-crush` runs for most of its 49 takes, so a
+  contended box is covered too.
+
+**53 takes, 0 events.** One-sided 95% upper bound on the per-take rate: `1 - 0.05^(1/53)` ≈ **5.5%**. The
+prior estimate is 1 in ~76 ≈ 1.3%, which sits comfortably inside that bound — so **this round does NOT
+distinguish "the leaked-timer fix closed it" from "it did not happen to fire".** Bounding at the prior
+rate needs roughly **230** consecutive clean takes (≈3.1 hours at 48s each); halving it needs ~460.
+
+**The instrument was checked before the quiet run was believed** (rule 15): with
+`CANDY_PTY_HANG_BUDGET=0.6` the watchdog fired, SIGKILLed the runner at `rc=137`, and printed the named
+test (`Integration\EOFGraceTest::testVeofDrainsTailBytesBeforeChildExit`), its in-flight time, its
+`ps`/wchan line, its open-fd count and its children. A watchdog that never fires and a dead one produce
+identical green suites; this one is alive.
+
+**Arm B — takes at `a8acfcc9` / `d38b644f4`, to ask whether round 55 caused it — was NOT run.** It needs
+a second checkout with its own resolving `vendor/sugarcraft` closure, and it needs the SAME N again to
+say anything: two arms of 53 with zero events in each distinguish nothing. It is only worth doing after
+one arm has reached ~230.
+
