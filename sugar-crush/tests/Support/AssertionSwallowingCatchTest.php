@@ -29,6 +29,24 @@ use PHPUnit\Framework\TestCase;
  * been written from the shape of the first example rather than from the
  * hierarchy.
  *
+ * AND THE FIRST DRAFT OF THAT FIX MADE THE SAME MISTAKE ONE LEVEL DOWN. It
+ * spelled the hierarchy as six literal strings and intersected them with the
+ * types as WRITTEN — so an alphabet whose whole argument is the class hierarchy
+ * was in fact keyed on spelling, and in this tree the PHPUnit types are spelled
+ * fully qualified most of the time while the one qualified name in the list
+ * never occurs at all. Five of the eight PHPUnit-typed catches were invisible.
+ * The decision is now {@see swallowsAnAssertionFailure()}, which RESOLVES the
+ * name a `catch` writes — through the file's own `use` imports and namespace —
+ * and asks `is_a(ExpectationFailedException::class, $caught, true)`. A spelling
+ * cannot buy its way in or out (rule 40), and a name that resolves to nothing
+ * is REPORTED rather than assumed harmless (rule 14).
+ *
+ * THE WALK DESCENDS INTO A `try` BODY. It used to resume at the end of the
+ * outer block, which skipped every nested `try` wholesale — ten sites in this
+ * tree, MEASURED — so a `catch` inside one was never judged at all. That is
+ * worse than judging it wrongly: the report and the blind spot are the same
+ * empty list.
+ *
  * WHAT THIS GUARD REDS ON, and it is deliberately the narrow half: a `try`
  * whose body asserts, paired with a `catch` that can swallow the failure and
  * whose OWN body neither asserts nor rethrows. There the failure is gone with
@@ -43,13 +61,23 @@ use PHPUnit\Framework\TestCase;
  * block's assertions, so the diagnostic is about the wrong exception — but it
  * cannot go silently green, because those assertions were written for the
  * exception the code under test throws and will not hold for a
- * `AssertionFailedError`. There are around twenty such sites (the count is
- * derived by {@see swallowingCatches()} on every run and is deliberately not
- * written down as a number here, rule 18). Restructuring them is a mechanical
- * change across files five audit lanes own concurrently, and it is filed as a
- * follow-up rather than half-done. {@see testTheWiderSwallowingPopulationIsStillVisible()}
- * keeps the scanner honest about it: if that population collapses to nothing,
- * this instrument has gone blind rather than the tree having got clean.
+ * `AssertionFailedError`. The count is derived by {@see swallowingCatches()} on
+ * every run and is deliberately not written down here (rule 18) — an earlier
+ * draft of this sentence said "around twenty", which is a cardinality over
+ * `tests/` and was wrong within two commits of being written. Restructuring
+ * them is a mechanical change across files five audit lanes own concurrently,
+ * and it is filed as a follow-up rather than half-done.
+ * {@see testTheWiderSwallowingPopulationIsStillVisible()} keeps the scanner
+ * honest about it: if that population collapses to nothing, this instrument has
+ * gone blind rather than the tree having got clean.
+ *
+ * AND ONE SHAPE IS DELIBERATELY NOT RED, BECAUSE IT IS THE FIX. A `catch` that
+ * RECORDS the failure into a variable an assertion after the `try` then reads
+ * is exactly what this guard's own failure message prescribes; classifying it
+ * as silent would red on correct code and hand the next reader an exemption row
+ * to write instead — rule 33, where the classifier rather than the code is the
+ * defect. The test for it is structural and not textual
+ * ({@see recordsForLater()}), so no comment can buy it.
  *
  * @internal
  */
@@ -59,23 +87,17 @@ final class AssertionSwallowingCatchTest extends TestCase
     use TestFileWalkTrait;
 
     /**
-     * Every type whose `catch` swallows a failed assertion.
+     * Caught type names this scan could not resolve to a real symbol.
      *
-     * ASSERTED, NOT TRUSTED, by {@see testTheHierarchyThisGuardRestsOnIsWhatItSays()}.
-     * A PHPUnit upgrade that re-parented `ExpectationFailedException` would
-     * make this list wrong in the direction that matters — too narrow — and
-     * nothing else in the suite would notice.
+     * REPORTED, NOT DROPPED (rule 14). A `catch` whose type cannot be resolved
+     * is a `catch` this guard has no opinion about, and an instrument that
+     * silently has no opinion is indistinguishable from one that has a clean
+     * verdict. {@see testEveryCaughtTypeInTestsResolvesToARealSymbol()} reds on
+     * a non-empty list.
      *
      * @var list<string>
      */
-    private const SWALLOWS_AN_ASSERTION_FAILURE = [
-        'Throwable',
-        'Exception',
-        'RuntimeException',
-        'PHPUnit\\Framework\\Exception',
-        'AssertionFailedError',
-        'ExpectationFailedException',
-    ];
+    private array $unresolvable = [];
 
 
     /**
@@ -102,9 +124,28 @@ final class AssertionSwallowingCatchTest extends TestCase
                 'Exception',
             ],
             $chain,
-            'a failed assertion no longer has the ancestry this guard scans for; the type list '
-            . 'in SWALLOWS_AN_ASSERTION_FAILURE has to be re-derived from this chain',
+            'a failed assertion no longer has the ancestry this guard scans for; the reasoning '
+            . 'in this file has to be re-derived from this chain rather than the assertion relaxed',
         );
+
+        // AND THE DECISION, over each link and over a type that is NOT one.
+        // The scan asks `is_a(ExpectationFailedException::class, $caught, true)`
+        // — "is the caught type a SUPERTYPE of a failed assertion" — which is
+        // the question, and which no list of spellings can answer.
+        foreach ([...$chain, 'Throwable'] as $ancestor) {
+            $this->assertTrue(
+                is_a(ExpectationFailedException::class, $ancestor, true),
+                $ancestor . ' is on the ancestry of a failed assertion but the test this scan '
+                . 'makes says otherwise',
+            );
+        }
+        foreach (['TypeError', 'InvalidArgumentException', 'LogicException'] as $unrelated) {
+            $this->assertFalse(
+                is_a(ExpectationFailedException::class, $unrelated, true),
+                $unrelated . ' cannot catch a failed assertion, so a catch on it must not be '
+                . 'reported; this scan says it can, and would flag correct code',
+            );
+        }
 
         // AND THE CONSEQUENCE, DEMONSTRATED RATHER THAN INFERRED: a catch that
         // looks narrow eats the assertion.
@@ -154,7 +195,7 @@ final class AssertionSwallowingCatchTest extends TestCase
      * discussing this very defect. `token_get_all()` sees a heredoc body as one
      * string token, so a fixture's own `catch` is correctly invisible.
      *
-     * @return list<array{file: string, line: int, types: list<string>, catchAsserts: bool, rethrows: bool}>
+     * @return list<array{file: string, line: int, types: list<string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}>
      */
     private function swallowingCatches(): array
     {
@@ -179,12 +220,14 @@ final class AssertionSwallowingCatchTest extends TestCase
     /**
      * The same scan over one source, so a fixture can drive it (rule 15).
      *
-     * @return list<array{line: int, types: list<string>, catchAsserts: bool, rethrows: bool}>
+     * @return list<array{line: int, types: list<string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}>
      */
     private function swallowingCatchesIn(string $source): array
     {
         $tokens = token_get_all($source);
         $count = \count($tokens);
+        $imports = $this->importsIn($source);
+        $namespace = $this->namespaceOf($source);
         $found = [];
 
         for ($i = 0; $i < $count; $i++) {
@@ -209,20 +252,266 @@ final class AssertionSwallowingCatchTest extends TestCase
                 $types = $this->caughtTypes($tokens, $k, $count);
                 [$catchStart, $catchEnd] = $this->braceRun($tokens, $k, $count);
 
-                if ($tryAsserts && array_intersect($types, self::SWALLOWS_AN_ASSERTION_FAILURE) !== []) {
+                if ($tryAsserts && $this->swallowsAnAssertionFailure($types, $imports, $namespace)) {
                     $found[] = [
                         'line' => $line,
                         'types' => $types,
                         'catchAsserts' => $this->assertsBetween($tokens, $catchStart, $catchEnd),
                         'rethrows' => $this->rethrowsBetween($tokens, $catchStart, $catchEnd),
+                        'recordsForLater' => $this->recordsForLater($tokens, $catchStart, $catchEnd, $count),
                     ];
                 }
                 $k = $catchEnd + 1;
             }
-            $i = $tryEnd;
+            // DESCEND INTO THE `try` BODY RATHER THAN STEPPING OVER IT. Jumping
+            // to `$tryEnd` skipped every nested `try` wholesale — a blind spot
+            // with ten sites in this tree, MEASURED, and the reason a
+            // `catch (\Throwable)` inside one was invisible rather than judged.
+            // Resuming at `$tryStart` visits each `T_TRY` exactly once: the
+            // outer one has just been handled and the walk moves forward from
+            // its opening brace, so a nested one is found on its own terms.
+            $i = $tryStart;
         }
 
         return $found;
+    }
+
+    /**
+     * Whether any of the types this `catch` names can catch a failed assertion.
+     *
+     * THE QUESTION IS `is_a(ExpectationFailedException::class, $caught, true)`
+     * — is the caught type a SUPERTYPE of what a failed `assert*()` throws —
+     * and it is asked of a RESOLVED symbol, never of a spelling.
+     *
+     * WHAT THIS REPLACED, AND WHY (rule 7). It used to be a list of six literal
+     * strings intersected with the tokens as written, holding the UNQUALIFIED
+     * `AssertionFailedError` and `ExpectationFailedException` alongside a
+     * FULLY-QUALIFIED `PHPUnit\Framework\Exception`. In this tree those first
+     * two are spelled fully qualified most of the time and the third does not
+     * occur at all, so the alphabet's spelling set and the tree's were nearly
+     * disjoint for exactly the two types the hierarchy argument is about — the
+     * scan was blind to most of the PHPUnit-typed catches while its doc-block
+     * claimed to derive its alphabet from the hierarchy. Rule 11: a census
+     * reports zero for whatever its alphabet cannot express, and an alphabet
+     * written as spellings expresses spellings.
+     *
+     * ANYTHING THAT CANNOT BE RESOLVED IS RECORDED AND NOT ASSUMED HARMLESS
+     * (rule 14); {@see testEveryCaughtTypeInTestsResolvesToARealSymbol()} reds
+     * on it.
+     *
+     * @param list<string>          $types
+     * @param array<string, string> $imports alias => fully-qualified
+     */
+    private function swallowsAnAssertionFailure(array $types, array $imports, string $namespace): bool
+    {
+        $swallows = false;
+        foreach ($types as $written) {
+            $fqn = $this->resolveCaughtType($written, $imports, $namespace);
+            if ($fqn === null) {
+                $this->unresolvable[] = $written;
+
+                continue;
+            }
+            if (is_a(ExpectationFailedException::class, $fqn, true)) {
+                $swallows = true;
+            }
+        }
+
+        return $swallows;
+    }
+
+    /**
+     * A type as a `catch` spells it, resolved to a symbol that exists.
+     *
+     * Three bases in order, which is how PHP itself resolves a name in a
+     * namespaced file: as written (a leading `\` has already been stripped by
+     * {@see caughtTypes()}, so a fully-qualified name lands here first), then
+     * through the file's own `use` imports, then relative to the file's own
+     * namespace.
+     */
+    private function resolveCaughtType(string $written, array $imports, string $namespace): ?string
+    {
+        $written = ltrim($written, '\\');
+        if ($written === '') {
+            return null;
+        }
+
+        $candidates = [$written];
+        $head = explode('\\', $written)[0];
+        if (isset($imports[$head])) {
+            $candidates[] = $imports[$head] . substr($written, \strlen($head));
+        }
+        if ($namespace !== '') {
+            $candidates[] = $namespace . '\\' . $written;
+        }
+
+        foreach ($candidates as $candidate) {
+            if (class_exists($candidate) || interface_exists($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The `use` imports one source declares, alias => fully-qualified.
+     *
+     * `use function`/`use const` are excluded — they import a different symbol
+     * table and can never name a catchable type — and a grouped `use A\{B, C};`
+     * is left out rather than half-parsed, which makes any type it imports
+     * UNRESOLVABLE and therefore reported rather than silently unmatched.
+     *
+     * @return array<string, string>
+     */
+    private function importsIn(string $source): array
+    {
+        preg_match_all(
+            '/^use\s+(?!function\s|const\s)(\\\\?[A-Za-z_][A-Za-z0-9_\\\\]*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*;/m',
+            $source,
+            $matches,
+            PREG_SET_ORDER,
+        );
+
+        $imports = [];
+        foreach ($matches as $row) {
+            $fqn = ltrim($row[1], '\\');
+            $position = strrpos($fqn, '\\');
+            $short = $position === false ? $fqn : substr($fqn, $position + 1);
+            $imports[($row[2] ?? '') !== '' ? $row[2] : $short] = $fqn;
+        }
+
+        return $imports;
+    }
+
+    /**
+     * The namespace a source declares, or `''`.
+     *
+     * BYTE-IDENTICAL TO THE COPY IN {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest},
+     * deliberately, and the parameter is named for that rather than for this
+     * file. `DuplicatedTestHelperDriftTest` reports two copies of one private
+     * helper that agree except for a single token — the shape where a fix lands
+     * only in the copy a lane happens to own — and it reported exactly that on
+     * the first draft of this method, where the parameter was `$source`.
+     * Identical copies are the one state it treats as safe. Change one and
+     * change both, or lift it into a trait.
+     */
+    private function namespaceOf(string $text): string
+    {
+        return preg_match('/^namespace\s+([^;]+);/m', $text, $m) === 1 ? trim($m[1]) : '';
+    }
+
+    /**
+     * Whether the catch body RECORDS the failure for an assertion that follows
+     * the `try` statement.
+     *
+     * THIS IS THE SHAPE THIS GUARD'S OWN FAILURE MESSAGE ASKS FOR, and without
+     * it the guard reds on the fix it prescribes. `tests/Providers/…` holds the
+     * canonical form: a `try` calling an assertion helper, a
+     * `catch (\PHPUnit\Framework\AssertionFailedError) { $failed = true; }`,
+     * and `assertTrue($failed, …)` on the next line. The catch body neither
+     * asserts nor rethrows, so the two older tests classified it as SILENT —
+     * and it is the deliberately-correct negative test of a validator. Rule 33:
+     * when a guard offers an exemption row for code that is right, the
+     * classifier is the defect.
+     *
+     * THE TEST IS STRUCTURAL, NOT TEXTUAL (rule 40). It is not "the catch body
+     * does something"; it is that a variable ASSIGNED in the catch body appears
+     * inside the argument list of an `assert*()`/`fail()` call reached before
+     * the enclosing function ends. A comment cannot buy it, and neither can a
+     * bare assignment nobody reads.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     */
+    private function recordsForLater(array $tokens, int $catchStart, int $catchEnd, int $count): bool
+    {
+        $recorded = [];
+        for ($i = $catchStart + 1; $i < $catchEnd; $i++) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_VARIABLE) {
+                continue;
+            }
+            $j = $i + 1;
+            while ($j < $catchEnd && \is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                $j++;
+            }
+            if ($j < $catchEnd && $tokens[$j] === '=') {
+                $recorded[$tokens[$i][1]] = true;
+            }
+        }
+        if ($recorded === []) {
+            return false;
+        }
+
+        // THE WINDOW IS THE REST OF THE ENCLOSING FUNCTION, and it ends where
+        // the brace depth would go negative — the `}` that closes the method
+        // this try/catch sits in. Reading past it would let an assertion in the
+        // NEXT method excuse this one.
+        $depth = 0;
+        for ($i = $catchEnd + 1; $i < $count; $i++) {
+            if ($tokens[$i] === '{' || (\is_array($tokens[$i]) && \in_array($tokens[$i][0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true))) {
+                $depth++;
+
+                continue;
+            }
+            if ($tokens[$i] === '}') {
+                if ($depth === 0) {
+                    return false;
+                }
+                $depth--;
+
+                continue;
+            }
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_STRING) {
+                continue;
+            }
+            $name = $tokens[$i][1];
+            if (!str_starts_with($name, 'assert') && $name !== 'fail') {
+                continue;
+            }
+            if ($this->argumentsMention($tokens, $i, $count, $recorded)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the call whose name is at `$from` passes one of `$names`.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param array<string, true>                           $names
+     */
+    private function argumentsMention(array $tokens, int $from, int $count, array $names): bool
+    {
+        $i = $from;
+        while ($i < $count && $tokens[$i] !== '(') {
+            if ($tokens[$i] === ';' || $tokens[$i] === '{') {
+                return false;
+            }
+            $i++;
+        }
+        $depth = 0;
+        for (; $i < $count; $i++) {
+            if ($tokens[$i] === '(') {
+                $depth++;
+
+                continue;
+            }
+            if ($tokens[$i] === ')') {
+                $depth--;
+                if ($depth === 0) {
+                    return false;
+                }
+
+                continue;
+            }
+            if (\is_array($tokens[$i]) && $tokens[$i][0] === T_VARIABLE && isset($names[$tokens[$i][1]])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -357,7 +646,7 @@ final class AssertionSwallowingCatchTest extends TestCase
      * Rule 2: when a mutation survives, suspect the assertion's window before
      * the mutation's relevance.
      *
-     * @param list<array{file?: string, line: int, types: list<string>, catchAsserts: bool, rethrows: bool}> $rows
+     * @param list<array{file?: string, line: int, types: list<string>, catchAsserts: bool, rethrows: bool, recordsForLater: bool}> $rows
      *
      * @return list<string>
      */
@@ -365,7 +654,7 @@ final class AssertionSwallowingCatchTest extends TestCase
     {
         $silent = [];
         foreach ($rows as $row) {
-            if ($row['catchAsserts'] || $row['rethrows']) {
+            if ($row['catchAsserts'] || $row['rethrows'] || $row['recordsForLater']) {
                 continue;
             }
             $silent[] = ($row['file'] ?? '(fixture)') . ':' . $row['line']
@@ -425,6 +714,26 @@ final class AssertionSwallowingCatchTest extends TestCase
             'no catch(\\RuntimeException) is being reported, so the alphabet has narrowed back to '
             . '\\Throwable and most of the population is unseen',
         );
+
+        // AND THE SPELLING-INDEPENDENCE, IN THE REAL TREE. A PHPUnit type
+        // written FULLY QUALIFIED is the exact shape the string-matching
+        // alphabet could not express — five of eight PHPUnit-typed catches were
+        // invisible to it. If none is reported, the decision has gone back to
+        // comparing spellings, and it will be reporting a clean tree over the
+        // half it can read.
+        $viaFullyQualifiedPhpUnitType = array_filter(
+            $all,
+            static fn (array $r): bool => array_filter(
+                $r['types'],
+                static fn (string $t): bool => str_starts_with($t, 'PHPUnit\\'),
+            ) !== [],
+        );
+        $this->assertNotSame(
+            [],
+            $viaFullyQualifiedPhpUnitType,
+            'no catch on a fully-qualified PHPUnit type is being reported, so the scan is '
+            . 'matching spellings again rather than resolving the caught name',
+        );
     }
 
     /**
@@ -455,6 +764,24 @@ final class AssertionSwallowingCatchTest extends TestCase
                 public function noAssertionInTry(): void {
                     try { $this->run(); } catch (\RuntimeException) { }
                 }
+                public function fullyQualifiedPhpUnitType(): void {
+                    try { $this->assertSame(1, 1); } catch (\PHPUnit\Framework\AssertionFailedError) { }
+                }
+                public function recordsForLater(): void {
+                    $failed = false;
+                    try { $this->assertSame(1, 1); } catch (\PHPUnit\Framework\AssertionFailedError) { $failed = true; }
+                    $this->assertTrue($failed, 'x');
+                }
+                public function recordsAndNeverReads(): void {
+                    $failed = false;
+                    try { $this->assertSame(1, 1); } catch (\RuntimeException) { $failed = true; }
+                    $this->assertTrue(true, 'x');
+                }
+                public function nestedInsideATryBody(): void {
+                    try {
+                        try { $this->assertSame(1, 1); } catch (\RuntimeException) { }
+                    } catch (\TypeError) { }
+                }
             }
             PHP;
 
@@ -462,9 +789,13 @@ final class AssertionSwallowingCatchTest extends TestCase
 
         $this->assertSame(
             [
-                ['line' => 4, 'types' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false],
-                ['line' => 7, 'types' => ['Throwable'], 'catchAsserts' => true, 'rethrows' => false],
-                ['line' => 10, 'types' => ['Exception'], 'catchAsserts' => false, 'rethrows' => true],
+                ['line' => 4, 'types' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 7, 'types' => ['Throwable'], 'catchAsserts' => true, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 10, 'types' => ['Exception'], 'catchAsserts' => false, 'rethrows' => true, 'recordsForLater' => false],
+                ['line' => 19, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 23, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => true],
+                ['line' => 28, 'types' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 33, 'types' => ['RuntimeException'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
             ],
             $rows,
             'the scanner does not agree with a source whose every catch was written to be '
@@ -477,11 +808,59 @@ final class AssertionSwallowingCatchTest extends TestCase
         // input passed every assertion in this file (MEASURED — that mutation
         // SURVIVED before this was added).
         $this->assertSame(
-            ['(fixture):4 catch(RuntimeException)'],
+            [
+                '(fixture):4 catch(RuntimeException)',
+                '(fixture):19 catch(PHPUnit\\Framework\\AssertionFailedError)',
+                '(fixture):28 catch(RuntimeException)',
+                '(fixture):33 catch(RuntimeException)',
+            ],
             $this->silentIn($rows),
-            'the silent-shape filter does not pick out the one row written to be silent, so the '
+            'the silent-shape filter does not pick out the rows written to be silent, so the '
             . "guard's empty-list assertion over tests/ is satisfied by an instrument that "
             . 'answers empty for everything',
+        );
+    }
+
+    /**
+     * Every `catch` type in `tests/` resolves to a symbol that exists.
+     *
+     * RULE 14, AND IT IS THE HALF THAT MAKES THE VERDICT ABOVE MEAN ANYTHING.
+     * The scan decides by asking a resolved class whether it is a supertype of
+     * a failed assertion; a type it cannot resolve gets no opinion at all, and
+     * a guard that quietly has no opinion looks exactly like one with a clean
+     * verdict. This makes the unresolvable list visible instead.
+     */
+    public function testEveryCaughtTypeInTestsResolvesToARealSymbol(): void
+    {
+        $this->swallowingCatches();
+
+        $this->assertSame(
+            [],
+            array_values(array_unique($this->unresolvable)),
+            'a catch names a type this scan cannot resolve, so it has no opinion about that '
+            . 'catch and says so rather than reporting the file clean. Teach the resolver the '
+            . 'shape (a grouped `use`, an alias) rather than dropping the occurrence',
+        );
+
+        // AND THE RESOLVER ANSWERS A QUESTION WHOSE ANSWER IS KNOWN, in both
+        // polarities, because an empty list is also what a resolver that
+        // answers every name returns (E228).
+        $imports = ['AFE' => 'PHPUnit\\Framework\\AssertionFailedError'];
+        $this->assertSame(
+            'PHPUnit\\Framework\\AssertionFailedError',
+            $this->resolveCaughtType('AFE', $imports, 'SugarCraft\\Crush\\Tests\\Support'),
+            'an aliased import does not resolve, so every catch written through one is silently '
+            . 'unclassified',
+        );
+        $this->assertSame(
+            'RuntimeException',
+            $this->resolveCaughtType('RuntimeException', [], 'SugarCraft\\Crush\\Tests\\Support'),
+            'a global type does not resolve from inside a namespaced file',
+        );
+        $this->assertNull(
+            $this->resolveCaughtType('NoSuchTypeWasEverDeclared', [], 'SugarCraft\\Crush\\Tests'),
+            'the resolver invents a symbol for a name that does not exist, so the empty list '
+            . 'above proves nothing',
         );
     }
 }
