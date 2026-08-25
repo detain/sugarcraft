@@ -345,21 +345,44 @@ final class AssertionSwallowingCatchTest extends TestCase
     }
 
     /**
+     * The rows in `$rows` where the failure vanishes: neither asserted on nor
+     * rethrown.
+     *
+     * EXTRACTED BECAUSE A MUTATION OF IT SURVIVED. Written inline in the guard
+     * below, `if (true) { continue; }` here — the change that makes the guard
+     * report nothing at all, ever — passed the whole file: the guard's
+     * assertion is `[]` and an instrument that returns `[]` satisfies it, and
+     * the known-answer fixture drove `swallowingCatchesIn()` one level lower
+     * and never reached this decision. The fixture asserts on THIS now as well.
+     * Rule 2: when a mutation survives, suspect the assertion's window before
+     * the mutation's relevance.
+     *
+     * @param list<array{file?: string, line: int, types: list<string>, catchAsserts: bool, rethrows: bool}> $rows
+     *
+     * @return list<string>
+     */
+    private function silentIn(array $rows): array
+    {
+        $silent = [];
+        foreach ($rows as $row) {
+            if ($row['catchAsserts'] || $row['rethrows']) {
+                continue;
+            }
+            $silent[] = ($row['file'] ?? '(fixture)') . ':' . $row['line']
+                . ' catch(' . implode('|', $row['types']) . ')';
+        }
+
+        return $silent;
+    }
+
+    /**
      * No assertion failure disappears into a catch that does nothing with it.
      */
     public function testNoCatchSilentlyEatsAnAssertionFailure(): void
     {
-        $silent = [];
-        foreach ($this->swallowingCatches() as $row) {
-            if ($row['catchAsserts'] || $row['rethrows']) {
-                continue;
-            }
-            $silent[] = $row['file'] . ':' . $row['line'] . ' catch(' . implode('|', $row['types']) . ')';
-        }
-
         $this->assertSame(
             [],
-            $silent,
+            $this->silentIn($this->swallowingCatches()),
             "this catch can catch PHPUnit's own assertion failure — a failed assert*() or fail() "
             . 'inside the try lands here — and its body neither asserts nor rethrows, so the '
             . 'failure is gone and the test continues as if the assertion had passed. Move the '
@@ -446,6 +469,19 @@ final class AssertionSwallowingCatchTest extends TestCase
             $rows,
             'the scanner does not agree with a source whose every catch was written to be '
             . 'classified one way; with this red, its verdict over tests/ is worthless',
+        );
+
+        // AND THE DECISION THE GUARD ACTUALLY MAKES, over the same rows. The
+        // fixture's first catch is the silent shape and its other two are not;
+        // without this, a filter that answered "nothing is silent" for every
+        // input passed every assertion in this file (MEASURED — that mutation
+        // SURVIVED before this was added).
+        $this->assertSame(
+            ['(fixture):4 catch(RuntimeException)'],
+            $this->silentIn($rows),
+            'the silent-shape filter does not pick out the one row written to be silent, so the '
+            . "guard's empty-list assertion over tests/ is satisfied by an instrument that "
+            . 'answers empty for everything',
         );
     }
 }
