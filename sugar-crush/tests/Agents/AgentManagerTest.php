@@ -2544,6 +2544,63 @@ final class AgentManagerTest extends TestCase
     }
 
     /**
+     * THE UNION READING, which the test above cannot see: `git push --force` is
+     * ONE segment, so `Deny` and `Allow` agree on it and mutating the action
+     * from Deny to Allow SURVIVED. The divergence needs a chain in which only
+     * SOME segment is denied — `Deny` fires (union, the safe direction for a
+     * refusal), `Allow` would not (intersection), and the grant `Bash(git *)`
+     * admits every segment, so under the wrong action the call sneaks past both
+     * checks.
+     */
+    public function testTheDenylistFiresOnAChainWhereOnlyOneSegmentIsDenied(): void
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'git status && git push --force'])],
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: static fn(): PermissionGate => new PermissionGate(PermissionMode::BypassPermissions),
+            toolRegistry: $this->fakeRegistry('Bash', 'Read'),
+        );
+        $manager->register(new Agent(
+            name: 'chained',
+            description: 'chained description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: ['Bash(git *)'],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: ['Bash(git push*)'],
+        ));
+        $subAgent = $manager->createSubAgent('chained', 'ship it');
+
+        // The premise, asserted rather than assumed: the GRANT admits this
+        // command outright, so anything that stops it came from the denylist.
+        $this->assertTrue(
+            (new \SugarCraft\Crush\Permissions\PermissionRule('Bash(git *)', \SugarCraft\Crush\Permissions\PermissionAction::Allow))
+                ->matches(new ToolCall('Bash', ['command' => 'git status && git push --force'])),
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'a denied segment must not ride in on its neighbours');
+        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+    }
+
+    /**
      * A denylist with NO grant is still enforced. Silence about `tools` is
      * silence; naming a tool you refuse is a statement.
      */
