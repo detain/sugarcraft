@@ -93,7 +93,7 @@ final class PtyPoolReactLoopTest extends TestCase
         // Every 10 ms: acquire, immediately release, increment counter.
         // If a single release fails to close the master fd (signal
         // double-handling), the next acquire hits EBUSY / ENFILE / EMFILE.
-        Loop::addPeriodicTimer(0.01, function ($timer) use ($pool, &$iterations, $maxIterations): void {
+        $cycle = Loop::addPeriodicTimer(0.01, function ($timer) use ($pool, &$iterations, $maxIterations): void {
             $pair = null;
             try {
                 $pair = $pool->acquire(80, 24);
@@ -110,12 +110,31 @@ final class PtyPoolReactLoopTest extends TestCase
             }
         });
 
-        Loop::addTimer(5.0, function (): void {
+        $cap = Loop::addTimer(5.0, function (): void {
             // Safety cap — stop after 5 s even if iterations < max.
             Loop::stop();
         });
 
         Loop::run();
+
+        // BOTH HANDLES ARE CANCELLED UNCONDITIONALLY, and this is not tidiness.
+        // This is the one file in the suite that drives the SHARED loop, and
+        // the cap used to survive the test that armed it. What that cost was
+        // not slowness: the NEXT test's `Loop::run()` returned because this
+        // orphan called `Loop::stop()`, not because its own work had finished.
+        // Measured on PHP 8.3.6 —
+        // testDrainInsideLoopAfterMixedAcquireRelease takes 0.002s run alone
+        // and took 4.797s run after this one, which is the 5.0s cap less the
+        // ~0.2s spent here.
+        //
+        // The periodic is the worse of the two and it leaks on the path nobody
+        // exercises: it cancels itself only when the iteration count is
+        // reached, so a run that ended on the CAP leaves a periodic armed on
+        // the shared loop for ever, and a periodic never lets `Loop::run()`
+        // return at all. Cancelling an already-cancelled timer is a no-op, so
+        // both are cancelled on every path out.
+        Loop::cancelTimer($cap);
+        Loop::cancelTimer($cycle);
 
         $this->assertGreaterThanOrEqual(
             $maxIterations,
