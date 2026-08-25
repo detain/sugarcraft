@@ -16591,3 +16591,67 @@ for the classifier rather than weakening it.
 tokens** — not reported at `DRIFT_BOUND` 1, nor at 2, 3, 4, 5, 8 or 12. Both now use
 `TestFileWalkTrait`. Filed because the lesson outlives the fix: a census that walks the tree is exactly
 the kind of helper that gets copied, and this guard's bound is tuned for one-token drift.
+
+---
+
+### Ec57-1 — twenty swallowing `catch` clauses whose body asserts, and therefore cannot go silently green
+
+**DEFERRED (round 57, lane c).** `ExpectationFailedException` extends `AssertionFailedError` extends
+`PHPUnit\Framework\Exception` extends `\RuntimeException` (MEASURED, PHPUnit 10.5.64, and now asserted by
+`tests/Support/AssertionSwallowingCatchTest.php`). So `catch (\RuntimeException)` — the type someone
+reaches for when they want to be NARROW — swallows a failed assertion exactly as completely as
+`catch (\Throwable)` does.
+
+Twenty-one sites in `tests/` have an assertion inside a `try` whose `catch` can swallow it. One had an
+EMPTY catch body and is fixed; two more caught `\Throwable` and are fixed. The remaining ~18 all have a
+`fail('…')` inside the `try` and a catch body that asserts on `$e->getMessage()`. They cannot pass while
+asserting nothing — the catch's assertions were written for the exception the code under test throws and
+will not hold for an `AssertionFailedError` — but the DIAGNOSTIC is wrong: the reader is shown a substring
+failure against this test's own fail() message rather than "the call did not throw".
+
+The fix is mechanical and identical everywhere: record whether it threw, assert AFTER the `try`. It is
+deferred because it touches `tests/Agents/` (×8), `tests/Cli/`, `tests/MCP/` (×4), `tests/Providers/`
+(×3) and `tests/Workflows/` concurrently with three audit lanes. The generator is
+`AssertionSwallowingCatchTest::swallowingCatches()` — it already reports these rows with
+`catchAsserts => true`; widening the guard is deleting one `continue`.
+
+---
+
+### Ec57-2 — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
+
+**DEFERRED (round 57, lane c).** `SymbolCitationDriftTest` now resolves a bare `{@see …()}` in a `tests/`
+file against the classes that file declares, but ONLY for a member spelled as a test method — the
+test-symbol subset the census claims. Of 1,095 bare self-citations in 447 files, 11 resolve to nothing;
+three named a test method and are fixed. The other eight name a PRODUCTION method
+(`{@see drain()}`, `{@see pump()}`, `{@see forPaths()}`, `{@see readResponse()}`, `{@see __destruct()}`,
+`{@see finish()}`, `{@see producedCount()}`, `{@see selectedProviderLabel()}`, `{@see skippedFiles()}`,
+`{@see warnPermissionConfigOnce()}`) and are almost certainly meant to point at the class under test
+rather than at the test class. Generator:
+`scratchpad r57c/selfcite2.php` — walk `tests/`, flatten doc-comment continuations, match
+`\{@see\s+(\w+)\(\)\s*\}`, resolve against every class declared in the file.
+
+That is the near edge of the larger unbuilt instrument: a census of citations of PRODUCTION symbols.
+`{@see self::foo()}`, `{@see $this->bar}` and plain class references are far more numerous and have more
+shapes than the six the test-symbol census handles.
+
+---
+
+### Ec57-3 — `CONTRIBUTING.md` still documents two of the five `path-repo-check` commands
+
+**DEFERRED (round 57, lane c) — out of lane, one file.** `tools/check-path-repos.php --help` now prints
+the exact five commands the CI job runs, in order, with the `git checkout -- .` that must follow the
+injection. `CONTRIBUTING.md` documents `--no-lib-path-repos` and `--fix --strict-closure` only, and does
+not mention `--unused` (a hard gate) or `tools/tests/` (now a gate) at all. One paragraph; the content is
+already written in `--help` and can be lifted.
+
+---
+
+### Ec57-4 — `tools/gen-docs.php` has no guard, and it writes files nobody may hand-edit
+
+**DEFERRED (round 57, lane c).** `tools/tests/` exists and is wired into CI now, but it holds exactly one
+test file and it is for `check-path-repos.php`. `tools/gen-docs.php` generates every page under
+`docs/lib/`, which `AGENTS.md` forbids editing by hand, and nothing checks that a regeneration is a no-op
+against the committed pages — the classic drift shape: the generator and its output can disagree and the
+only signal is a reviewer noticing. A `--check` mode plus a CI step is the same wiring
+`path-repo-check` just got.
+
