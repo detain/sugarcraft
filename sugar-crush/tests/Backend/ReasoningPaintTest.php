@@ -380,15 +380,24 @@ final class ReasoningPaintTest extends TestCase
      * one is discarded at drain time rather than painted under a cancellation
      * notice).
      *
-     * **What this test does NOT pin, stated because the obvious reading is
-     * wrong.** Both paths ALSO drop the empty delta, and that half is
-     * unobservable here — measured, removing either drop leaves this file
+     * **What this test does NOT pin, and what now does.** Both paths ALSO drop
+     * the empty delta, and that half is invisible to every assertion in THIS
+     * test — measured, removing either drop leaves the assertions below
      * entirely green, because the empty fragment is appended to a string
      * accumulator and `$s . ''` is the identity. It never reaches
      * {@see \SugarCraft\Crush\Renderer}, which tests `$liveThought !== ''`, so
-     * no bare `💭` appears either. The drops are a cost guard on inbox churn,
-     * not a correctness one, and no assertion on painted text can see them go.
-     * Do not read the green here as covering them.
+     * no bare `💭` appears either.
+     *
+     * WHAT THIS SAID: "no assertion on painted text can see them go. Do not
+     * read the green here as covering them." WHAT IS TRUE NOW: the first
+     * sentence is still exactly right and the second was the wrong conclusion
+     * to draw from it. The drops are a cost guard on INBOX CHURN, and the inbox
+     * is not the painted text — `Chat`'s shared `\ArrayObject` can be handed in
+     * at construction and counted directly, which sees a drop that no
+     * accumulator ever will. WHY THE PARAGRAPH STILL EARNS ITS PLACE: the
+     * measurement in it is correct and load-bearing, because it is the reason
+     * the drops need a test of their own rather than a line in this one —
+     * {@see testBothPathsDropTheEmptyDeltaBeforeItReachesTheInbox()} (E530).
      *
      * The double announces `''` deliberately, even though
      * {@see ObservesReasoning::completeAsync()} promises never to: it makes the
@@ -417,6 +426,96 @@ final class ReasoningPaintTest extends TestCase
             $seamText,
             $liveText,
             'the dormant entry point and the live sink have drifted - one of them changed and the other did not',
+        );
+    }
+
+    /**
+     * **E530 — the empty-delta drop itself, on BOTH copies of it.**
+     *
+     * {@see testTheDormantEntryPointAndTheLiveSinkAgree()} pins that the two
+     * paths AGREE; until this test existed nothing pinned that either of them
+     * DROPS. That gap was real and it was argued for: the paragraph above used
+     * to end "no assertion on painted text can see them go", which is true and
+     * was mistaken for "nothing can". The measurement it rested on — remove
+     * either drop and the painted text is unchanged, because `$s . ''` is the
+     * identity — is correct about the ACCUMULATOR and says nothing about the
+     * INBOX, which is where the drop actually acts. Rule 2: the window was
+     * wrong, not the mutation.
+     *
+     * The inbox is observable without reflection. `Chat`'s constructor takes
+     * the shared `\ArrayObject` as an optional parameter (it defaults to a
+     * fresh one), every `mutate()` clone is handed the SAME instance, and
+     * {@see \SugarCraft\Crush\Chat::scheduleBackendCompletion()}'s `static`
+     * `$onReasoning` closure captures that same object — so one array handed in
+     * here sees every append both paths make, and counting it is exactly the
+     * "cost guard on inbox churn" claim stated in the code.
+     *
+     * COUNTED BEFORE ANY PUMP, deliberately: {@see
+     * \SugarCraft\Crush\Chat::pumpLiveToolEvents()} drains destructively and
+     * coalesces a run of same-class same-generation deltas into one append, so
+     * after quiescence an undropped `''` is invisible again for the same reason
+     * the painted text is. The drop is observable in the window between the
+     * append and the drain, and nowhere after it.
+     *
+     * BOTH POLARITIES (rule 33/25): a non-empty fragment must still ARRIVE. An
+     * assertion that only counted zero would pass just as green against an
+     * `enqueueReasoning()` mutated to return unconditionally, which is a
+     * strictly worse defect than the one being pinned.
+     */
+    public function testBothPathsDropTheEmptyDeltaBeforeItReachesTheInbox(): void
+    {
+        // --- the dormant seam ---
+        $seamInbox = new \ArrayObject();
+        $seam = new Chat(inFlight: true, liveToolEvents: $seamInbox);
+
+        $seam->enqueueReasoning('');
+        $this->assertCount(
+            0,
+            $seamInbox,
+            'Chat::enqueueReasoning() queued an empty ReasoningDelta - the drop is gone',
+        );
+
+        $seam->enqueueReasoning('kept');
+        $this->assertCount(
+            1,
+            $seamInbox,
+            'the positive half: a real fragment must still reach the inbox, or the zero above '
+                . 'is what an unconditionally-returning enqueueReasoning() would also produce',
+        );
+
+        // --- the live sink, the copy that has no `$this` to call the seam ---
+        $liveInbox = new \ArrayObject();
+        $backend = new ReasoningRecorderBackend(['', 'kept ', '', 'and kept'], 'done');
+        $chat = new Chat(backend: $backend, inputBuf: 'go', liveToolEvents: $liveInbox);
+
+        [$inFlight, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'submitting produced no command');
+        $this->assertCount(0, $liveInbox, 'something reached the inbox before the turn ran');
+        $cmd();
+
+        // Four announced, two of them empty. The texts are asserted alongside
+        // the count so that a live sink which dropped the WRONG two - or which
+        // appended two entries of some other class - cannot satisfy this.
+        $arrived = [];
+        foreach ($liveInbox as [, $event]) {
+            $this->assertInstanceOf(ReasoningDelta::class, $event);
+            $arrived[] = $event->text;
+        }
+
+        $this->assertSame(
+            ['kept ', 'and kept'],
+            $arrived,
+            'the live $onReasoning sink queued an empty ReasoningDelta, or dropped a real one. '
+                . 'The backend announces four fragments and two of them are empty; the inbox '
+                . 'must hold exactly the two non-empty ones, in order, BEFORE the pump runs.',
+        );
+
+        // And the drop must not have cost the turn its reply: the two copies of
+        // this guard exist on a display-only channel, so a fix that dropped too
+        // much would still paint nothing and still look green above.
+        $this->assertSame(
+            'kept and kept',
+            $this->pumpToQuiescence($inFlight)->reasoningText(),
         );
     }
 
