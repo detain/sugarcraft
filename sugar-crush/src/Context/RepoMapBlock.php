@@ -112,11 +112,18 @@ use SugarCraft\Crush\Support\ContainedPath;
  *     claim — nor should it, since the next reader cannot either. WHAT IS TRUE NOW:
  *     the figure was a fourth copy of a census this file has restated and been
  *     wrong about three times, and "several times" was not arithmetic anyone
- *     had run — MEASURED on PHP 8.3.6, a fully-qualified listing comes to about
- *     one and a half times {@see MAX_SECTION_BYTES}, over it but not several
- *     times it, while at BARE SHORT-NAME width it is roughly half the cap and
- *     would comfortably FIT. The WIDTH the claim is made at was load-bearing
- *     and the sentence never stated it; it does now. WHY THIS STILL EARNS ITS
+ *     had run — MEASURED on PHP 8.3.6, a fully-qualified listing OVERRUNS
+ *     {@see MAX_SECTION_BYTES} but does not come to several times it, while at
+ *     BARE SHORT-NAME width the same listing FITS comfortably inside the cap.
+ *     The WIDTH the claim is made at was load-bearing and the sentence never
+ *     stated it; it does now. NEITHER MULTIPLE IS WRITTEN HERE, and the
+ *     revision that first stated them wrote one of them as a bare ratio with
+ *     nothing asserting it — MEASURED on the shipped tree: inverting that
+ *     sentence to say the short-name listing was NINE TIMES the cap and could
+ *     not fit left the whole suite green. A multiple in this prose is a
+ *     cardinality with no generator, which is the defect the paragraph below
+ *     is about; both halves are BOUNDS asserted by the test named next, not
+ *     ratios recorded here. WHY THIS STILL EARNS ITS
  *     PLACE: the reason the listing was not built is that it does not fit, and
  *     that is the part worth keeping. It is DERIVED from this tree and from
  *     {@see MAX_SECTION_BYTES} by
@@ -300,17 +307,28 @@ final readonly class RepoMapBlock
      * times over. What is asserted instead — from the live tree and from this
      * constant, by
      * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold()}
-     * — is the order-of-magnitude claim this sentence actually makes, which
-     * survives the tree septupling while the multiple does not survive one
-     * commit. An earlier revision claimed "two orders of magnitude", which was
-     * the arithmetic being rounded in the direction that flattered the bound.
+     * — is the order-of-magnitude claim this sentence actually makes, together
+     * with a deliberate factor of slack on top of it, so the claim survives the
+     * tree growing several times over while the multiple does not survive one
+     * commit.
+     *
+     * TWO REVISIONS OF THIS SENTENCE HAVE NOW OVERSTATED THE SLACK, both in
+     * the direction that flattered the bound. The first claimed "two orders of
+     * magnitude". The second, written in the commit that removed the digits,
+     * claimed the order of magnitude "survives the tree SEPTUPLING" — it does
+     * not: the assertion holds only while the tree stays under a tenth of this
+     * constant, and seven times today's size is over that, so the sentence
+     * written to replace a stale multiple stated a multiple that was already
+     * false. That is why the surviving multiple is not written down but
+     * ASSERTED: a ratio in prose has no generator and rots into exactly this,
+     * twice in one file in one round.
      *
      * NO FIGURE IN THIS FILE RESTATES `src/`'s CENSUS ANY MORE, and that
      * absence is itself asserted, by
      * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()}.
      *
-     * WHAT THIS PARAGRAPH SAID: first "286 files here and 305 top-level types
-     * above", then a correction naming WHERE the two live figures were and
+     * WHAT THIS PARAGRAPH SAID: first a file count and a top-level-type count,
+     * spelled out; then a correction naming WHERE the two live figures were and
      * which test asserted them. WHAT IS TRUE NOW: there are no live figures
      * left to name. Both restatements were removed in the same commit as the
      * assertions that pinned them, because removing either one alone leaves the
@@ -322,9 +340,21 @@ final readonly class RepoMapBlock
      * constant a normal package sits, immediately above. Both are now checked
      * as arguments. The history stays because a reader who finds no numbers
      * here and adds "helpful" ones back would be the fourth; the record of the
-     * first three is the only thing that stops them. They shipped STALE once
-     * written as 284/303 in the same commit that moved the census to 285/304
-     * thirty lines away in its own message.
+     * first three is the only thing that stops them. They shipped STALE once,
+     * written into this file by the very commit whose own message, thirty lines
+     * away, moved the census past them.
+     *
+     * THE HISTORICAL FIGURES ARE ELIDED RATHER THAN QUOTED, and the second
+     * reason is the one nobody had. The first is the argument in WHAT WAS
+     * DELIBERATELY NOT BUILT above: the guard cannot tell a quotation from a
+     * claim, and nor can the next reader. The second is arithmetic — a STALE
+     * census figure is a number the tree GROWS INTO. The declaration counts
+     * this paragraph used to quote sat just above the live file count, so a
+     * handful of honest additions to `src/` would have made the guard report a
+     * historical quotation as a restatement. MEASURED before the elision, on
+     * PHP 8.3.6: green at one and at five added source files, RED at six. The
+     * distance that replaced them is no longer prose either; it is asserted by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()}.
      */
     public const MAX_SOURCE_FILES = 20000;
 

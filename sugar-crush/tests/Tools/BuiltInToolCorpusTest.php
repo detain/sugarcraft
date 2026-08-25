@@ -254,8 +254,17 @@ final class BuiltInToolCorpusTest extends TestCase
      * Two lanes that each added one file both read +1, and the merge needs +2."
      * WHAT IS TRUE NOW: no assertion in this file is a function of how many
      * files `src/` happens to contain, so there is no literal left to re-derive
-     * and no side left to choose — adding a source file is GREEN here, and that
-     * is pinned in both polarities rather than asserted. WHY THIS STILL EARNS
+     * and no side left to choose — adding a source file is GREEN here. THAT
+     * CLAIM IS BOUNDED RATHER THAN ABSOLUTE, and an earlier version of this
+     * sentence said it was "pinned in both polarities" when nothing in the tree
+     * pinned either one. One assertion here is still a function of the count,
+     * indirectly: {@see testRepoMapBlockNoLongerRestatesTheSourceCensus()}
+     * reports a derived figure appearing as a bare integer in `RepoMapBlock`,
+     * so a tree that GROWS INTO an unrelated literal in that file reds it. That
+     * distance is the bound, it is asserted by
+     * {@see testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()} rather
+     * than described, and the failure text names the resolution — reword the
+     * collision, never re-derive a count. WHY THIS STILL EARNS
      * ITS PLACE: the advice was never wrong, it was unsatisfiable, and saying
      * why is the whole argument for the shape this file now has. Three lanes
      * each re-deriving the same count in three worktrees produce three answers
@@ -263,8 +272,11 @@ final class BuiltInToolCorpusTest extends TestCase
      * textually clean while being arithmetically wrong afterwards. The stronger
      * conclusion, which is what replaced the literals: a test that counts the
      * tree and asserts the tree's count is a CHANGE-DETECTOR, not an invariant.
-     * It reds on every honest addition — a false positive that cost this repo
-     * five separate cross-lane collisions — and it stays green through any
+     * It reds on every honest addition — a false positive this repo has paid
+     * for at more than one merge, deliberately unquantified because a count of
+     * past collisions in a doc-block is the same defect one level up: a
+     * cardinality with no generator and no citation, in the paragraph arguing
+     * against cardinalities with no generator — and it stays green through any
      * change that preserves the total, which is the false negative nobody was
      * counting. So this sentence survives as the standing instruction to the
      * next person tempted to add one back: write the INVARIANT the count was
@@ -273,6 +285,35 @@ final class BuiltInToolCorpusTest extends TestCase
     private const CENSUS_RESOLUTION = 'this file deliberately asserts NO cardinality over src/. '
         . 'If you are resolving a merge by re-deriving a count here, stop: '
         . 'the claim wanted is the invariant the count stood in for, not the count.';
+
+    /**
+     * THE RESOLUTION FOR THE RESTATEMENT GUARD, which is NOT the resolution
+     * above and was wrongly given it.
+     *
+     * WHAT THE GUARD SAID WHEN IT FIRED: {@see CENSUS_RESOLUTION} — "this file
+     * deliberately asserts NO cardinality over src/ … the claim wanted is the
+     * invariant the count stood in for". WHAT IS TRUE NOW: that sentence is
+     * correct about the BALANCE, which is where it belongs, and actively
+     * misleading here. This guard fires holding a number it read out of
+     * `RepoMapBlock`, so it tells the reader there is nothing to re-derive
+     * while showing them a digit; and its two real resolutions — delete the
+     * restatement, or reword an unrelated figure the tree has grown into — are
+     * neither of them "write the invariant instead". Rule 32: the failure text
+     * of a guard is read by someone resolving a merge, not debugging a test, so
+     * it has to name the resolution that is actually correct for THIS guard.
+     */
+    private const RESTATEMENT_RESOLUTION = 'no figure in RepoMapBlock may restate the census of src/. '
+        . 'If the integer named above is a restatement, delete it — the argument it supports is '
+        . 'asserted from the live tree and needs no digit. If it is a COINCIDENCE (a byte figure, a '
+        . 'constant, a historical quotation) that the tree has simply grown into, reword THAT figure '
+        . 'where it lives. Never weaken the scanner, and never re-derive a count here.';
+
+    /**
+     * How close an unrelated literal in `RepoMapBlock` may come, from ABOVE, to
+     * a figure the restatement guard derives. A policy, not a count: it does
+     * not move when a source file is added.
+     */
+    private const RESTATEMENT_HEADROOM = 100;
 
     /**
      * THE SYMBOL-KIND POLICY, which is what was left when the census was taken
@@ -363,8 +404,13 @@ final class BuiltInToolCorpusTest extends TestCase
             $this->assertGreaterThan(
                 0,
                 $counts[$kind],
-                "src/ contains at least one {$kind} symbol; zero here means the classifier stopped answering, "
-                . 'not that the tree changed shape',
+                "src/ contains at least one {$kind} symbol. This is a BOUND, not a count — it does "
+                . 'not move when a file is added. Zero here is most likely the classifier having '
+                . 'stopped answering, and this assertion cannot tell that apart from a tree that '
+                . 'genuinely lost its last symbol of a kind; check '
+                . 'testTheSymbolKindClassifierStillNamesEveryShapeIncludingTheTwoPinnedAtZero() '
+                . 'first, and if the classifier is alive then the tree changed shape and this '
+                . 'bound is what needs re-arguing',
             );
         }
     }
@@ -507,13 +553,36 @@ final class BuiltInToolCorpusTest extends TestCase
      * policy {@see testEverySourceFileDeclaresItsPsr4Symbol()} makes through
      * `nonClassSources()` and
      * {@see testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
-     * makes through reflection — three independent instruments over one claim,
-     * which is the arrangement that survives one of them going quiet.
+     * makes through reflection.
      *
-     * It replaces `assertSame(316, $declarations)` and `assertSame(297, count($files))`,
-     * which were the same two numbers written down instead of related. Neither
-     * literal could fail for a reason anyone wanted to hear about; this can,
-     * and {@see testTheDeclarationBalanceSeesAFileThatDoesNotDeclareItsPsr4Symbol()}
+     * WHAT THIS SAID: "three independent instruments over one claim, which is
+     * the arrangement that survives one of them going quiet." WHAT IS TRUE NOW:
+     * they are not independent, and the mechanism they share does not go quiet.
+     * MEASURED: two of the three gate on the SAME
+     * `class_exists() / interface_exists() / trait_exists()` triple, so they
+     * answer together and they fail together. And on a file that declares
+     * something other than its PSR-4 symbol that triple is three autoload
+     * attempts on one undeclared name; Composer's `ClassLoader::$includeFile`
+     * closure is a bare `include $file;` rather than `include_once`, so the
+     * second attempt re-executes the file and PHP fatals on the redeclaration.
+     * The runner exits rc 255. Quiet is the one thing it is not. WHY THIS
+     * PARAGRAPH STILL EARNS ITS PLACE: the corrected version is a better
+     * argument for the balance than the wrong one was. The token stream is the
+     * only instrument here that reads a source file WITHOUT asking PHP to load
+     * it, which is the whole of its independence — and on the real tree it is
+     * also the only one that can still report, because the reflection census is
+     * declared above it and takes the runner down first.
+     *
+     * It replaces two `assertSame()` calls that spelled the declaration count
+     * and the file count as literals — the same two numbers written down
+     * instead of related. THE DIGITS ARE ELIDED HERE, and deliberately: they
+     * are exactly what {@see testRepoMapBlockNoLongerRestatesTheSourceCensus()}
+     * forbids `RepoMapBlock` to carry, and this file cannot ask a production
+     * doc-block to stop spelling a census it spells itself nine lines from the
+     * fixture it builds by concatenation to avoid spelling it (rules 17/26).
+     * Neither literal could fail for a reason anyone wanted to hear about; the
+     * balance can, and
+     * {@see testTheDeclarationBalanceSeesAFileThatDoesNotDeclareItsPsr4Symbol()}
      * shows it doing so.
      */
     public function testTheDeclarationBalanceHoldsAcrossTheWholeSourceTree(): void
@@ -534,6 +603,17 @@ final class BuiltInToolCorpusTest extends TestCase
      * synthetic tree, first well-formed and then with one mis-namespaced file,
      * so the assertion next door is shown to be capable of parting rather than
      * merely observed not to have.
+     *
+     * ⚠️ THE ABSOLUTE TOTALS ARE ASSERTED, NOT ONLY THEIR DIFFERENCE, and that
+     * is what makes this a fixture rather than a second reading of the same
+     * dead instrument. MEASURED: with {@see declarationTotals()} mutated to
+     * `return [0, 0]` unconditionally, an earlier version of this test was
+     * GREEN — `0 - 0 === 0` satisfied the balance and `0 !== 1` satisfied the
+     * parting — so it validated {@see secondaryDeclarations()} alone and left
+     * `declarationTotals()` validated only by the whole-tree assertion this
+     * fixture exists to validate. Rule 25's exact shape, one level down from
+     * rule 15: an expectation that a dead instrument also satisfies is not
+     * evidence, and a difference of two zeros is one.
      */
     public function testTheDeclarationBalanceSeesAFileThatDoesNotDeclareItsPsr4Symbol(): void
     {
@@ -541,6 +621,13 @@ final class BuiltInToolCorpusTest extends TestCase
 
         [$files, $declarations] = $this->declarationTotals($this->probeDir);
         $secondary = $this->secondaryDeclarations($this->probeDir, self::PROBE_PREFIX);
+        $this->assertSame(
+            [1, 1],
+            [$files, $declarations],
+            'one probe file declaring one type — the component a returns-zero declarationTotals() '
+            . 'cannot satisfy, and without which every assertion in this test is a difference of '
+            . 'numbers the instrument never had to compute',
+        );
         $this->assertSame($declarations - $files, array_sum(array_map('count', $secondary)));
 
         // Declares `CorpusProbe\Elsewhere\Skewed` from a path that names
@@ -549,6 +636,11 @@ final class BuiltInToolCorpusTest extends TestCase
 
         [$files, $declarations] = $this->declarationTotals($this->probeDir);
         $secondary = $this->secondaryDeclarations($this->probeDir, self::PROBE_PREFIX);
+        $this->assertSame(
+            [2, 2],
+            [$files, $declarations],
+            'two probe files, each declaring exactly one type',
+        );
         $this->assertNotSame(
             $declarations - $files,
             array_sum(array_map('count', $secondary)),
@@ -613,27 +705,46 @@ final class BuiltInToolCorpusTest extends TestCase
      * ⚠️ THE OLD PROSE WAS WRONG ABOUT THIS, and nothing caught it because only
      * the digit was asserted, never the claim the digit supported. It said such
      * a listing would be "several times this whole block's budget". MEASURED on
-     * this tree, on PHP 8.3.6: at fully-qualified width it is about one and a
-     * half times the cap — over it, but not "several times" it — and at BARE
-     * SHORT-NAME width it comes to roughly half the cap and would comfortably
-     * FIT. So the WIDTH the claim is made at is load-bearing and the sentence
-     * never stated it. The assertion below names the width explicitly. (Neither
-     * measured byte figure is written into `src/`: it is a cardinality over the
-     * tree, and this test is the generator.)
+     * this tree, on PHP 8.3.6: at fully-qualified width it OVERRUNS the cap but
+     * does not come to several times it, and at BARE SHORT-NAME width the same
+     * listing FITS comfortably inside it. So the WIDTH the claim is made at is
+     * load-bearing and the sentence never stated it.
+     *
+     * ⚠️ AND THE CORRECTION WAS ITSELF UNPINNED, which is the half worth
+     * writing down. The commit that replaced "several times" wrote two RATIOS
+     * into `RepoMapBlock`'s prose — one for each width — and asserted neither;
+     * only `> MAX_SECTION_BYTES` was checked, which the short-name half does
+     * not even mention. MEASURED, by mutating the prose rather than reading it:
+     * inverting the short-name sentence to say the listing was NINE TIMES the
+     * cap and could not fit left the FULL SUITE green. So both halves are
+     * bounds here now, and no ratio is written in `src/` at all: the widths are
+     * cardinalities over the tree and this test is their generator.
      *
      * ARGUMENT 2, from {@see RepoMapBlock::MAX_SOURCE_FILES}: the walk's
      * backstop is generous because it is a backstop and not a policy, and a
      * package this size sits well under it. Asserted as ORDER OF MAGNITUDE
      * rather than as the exact multiple — the multiple moves with every file
-     * added, which is what kept sending that paragraph stale, while the order
-     * of magnitude survives the tree roughly septupling.
+     * added, which is what kept sending that paragraph stale.
+     *
+     * ⚠️ TWO REVISIONS HAVE NOW OVERSTATED HOW MUCH GROWTH THE ORDER-OF-
+     * MAGNITUDE CLAIM SURVIVES, both in the direction that flattered the bound:
+     * "two orders of magnitude" first, then "the tree roughly SEPTUPLING" — and
+     * the second was written in the commit that removed the stale multiple, was
+     * false when written, and was carried in this doc-block too. MEASURED: the
+     * claim holds while the tree stays under a tenth of the constant, and seven
+     * times today's size is past that. The bound below therefore asserts the
+     * order of magnitude WITH a deliberate factor of slack, so the surviving
+     * multiple is a number the suite derives rather than a word anyone chose.
      */
     public function testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold(): void
     {
         $fullyQualifiedListing = 0;
+        $shortNameListing = 0;
         foreach (BuiltInToolCorpus::sourceFiles($this->srcDir) as $relative) {
             foreach (BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative) as $type) {
                 $fullyQualifiedListing += \strlen($type) + 1;
+                $separator = strrpos($type, '\\');
+                $shortNameListing += \strlen($separator === false ? $type : substr($type, $separator + 1)) + 1;
             }
         }
 
@@ -645,13 +756,34 @@ final class BuiltInToolCorpusTest extends TestCase
             . 'design note has outlived its reason and the note is what needs rewriting',
         );
 
+        $this->assertLessThan(
+            RepoMapBlock::MAX_SECTION_BYTES * 3,
+            $fullyQualifiedListing,
+            'the design note corrects an earlier "several times the budget" to "over it, but not '
+            . 'several times over it". That correction is unpinned prose unless this holds, and it '
+            . 'is the reason the note names a WIDTH: if the listing really has grown to several '
+            . 'times the cap, the corrected sentence is now the stale one',
+        );
+
+        $this->assertLessThan(
+            intdiv(RepoMapBlock::MAX_SECTION_BYTES * 2, 3),
+            $shortNameListing,
+            'the same listing at BARE SHORT-NAME width is argued to FIT comfortably inside '
+            . 'MAX_SECTION_BYTES — that is the whole reason the design note has to state a width '
+            . 'at all, and nothing asserted it until this line. If it no longer fits, the WIDTH '
+            . 'half of the note is what needs rewriting, not the cap',
+        );
+
         [$files] = $this->declarationTotals($this->srcDir);
         $this->assertGreaterThan(
-            $files * 10,
+            $files * 10 * 3,
             RepoMapBlock::MAX_SOURCE_FILES,
             'MAX_SOURCE_FILES is argued as a backstop a normal package sits more than an order of '
-            . 'magnitude under; if this package no longer does, the constant is now a policy and '
-            . 'its doc-block says otherwise',
+            . 'magnitude under, with room for the tree to more than triple before that stops being '
+            . 'true. The slack is the assertion, because the two revisions that wrote the slack '
+            . 'down as prose ("two orders of magnitude", then "septupling") both overstated it. If '
+            . 'this fires, the constant is becoming a policy rather than a backstop: re-argue it or '
+            . 'raise it, and correct the doc-block in the same commit',
         );
 
         // And the prose still MAKES both arguments. Flattened first: a
@@ -688,13 +820,43 @@ final class BuiltInToolCorpusTest extends TestCase
      * a pattern must not trip over the guard that documents it (rule 26).
      *
      * RESIDUAL DOMAIN, stated because a guard that cannot say what it misses is
-     * a licence: this matches the two derived figures as standalone integers
-     * anywhere in the file, so a coincidence — `src/` growing to exactly the
-     * value of one of `RepoMapBlock`'s own constants — would report a false
-     * positive. The resolution then is to reword the collision, NOT to weaken
-     * the scanner. The historical figures the file preserves under rule 7 are
-     * untouched by construction: they are stale by definition, so they are not
-     * today's derivation.
+     * a licence — and MEASURED, because the first version of this paragraph
+     * stated it wrong in both directions.
+     *
+     * FALSE POSITIVES. This matches the two derived figures as standalone
+     * integers anywhere in the file, so a coincidence — `src/` growing into the
+     * value of some unrelated literal — reports a restatement that is not one.
+     * WHAT THIS SAID: "the historical figures the file preserves under rule 7
+     * are untouched BY CONSTRUCTION: they are stale by definition, so they are
+     * not today's derivation." WHAT IS TRUE NOW: that was a numeric contingency
+     * wearing the word "construction" (rule 8), and it was false as written. A
+     * stale census figure is a number the tree GROWS INTO, and the historical
+     * DECLARATION counts the file preserved sat just above the live FILE count.
+     * MEASURED, by adding well-formed source files rather than by argument:
+     * green at one added file and at five, RED at six. Two separate causes, and
+     * NEITHER ALONE WAS ENOUGH — the digits are elided from `RepoMapBlock` now,
+     * and {@see standaloneIntegers()} stopped a grouped byte figure decomposing
+     * into a three-digit candidate. The remaining distance is asserted by
+     * {@see testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()} rather
+     * than promised here, which is the whole difference between the two
+     * versions of this paragraph.
+     *
+     * FALSE NEGATIVES, which the first version did not mention at all. The
+     * alphabet is TWO of the census components this file retired — the file
+     * count and the top-level-declaration count — so a restatement phrased in
+     * any of the others (the secondary total, the count of files carrying one,
+     * or any single symbol-kind count) is unguarded. MEASURED: inserting a
+     * genuine restatement into `RepoMapBlock`'s production prose using the
+     * secondary total left the whole suite green. WIDENING THE ALPHABET WAS
+     * MEASURED AND REJECTED, not overlooked: those components are SMALL, and
+     * this scanner shape matches a bare integer anywhere in a file that is full
+     * of small integers. Measured on this tree, the nearest literal above the
+     * concrete-symbol count is eleven away and the count of files carrying a
+     * secondary declaration is ALREADY present in the file — so widening buys a
+     * false negative back at the price of a guard that reds on the next commit
+     * to touch an unrelated constant. The two figures in the alphabet are the
+     * two that are distinctive enough for this shape to carry; a component
+     * small enough to collide needs a different instrument, not a longer list.
      */
     public function testRepoMapBlockNoLongerRestatesTheSourceCensus(): void
     {
@@ -704,17 +866,96 @@ final class BuiltInToolCorpusTest extends TestCase
         $this->assertSame(
             [],
             $this->restatedFigures($block, [$files, $declarations]),
-            'RepoMapBlock restates a census of src/ again — ' . self::CENSUS_RESOLUTION,
+            'RepoMapBlock restates a census of src/ again. ' . self::RESTATEMENT_RESOLUTION,
         );
 
-        $fixture = '     * because it is a backstop and not a policy: `src/` here is '
+        // The known POSITIVE (rule 15), built by concatenation so the offending
+        // digits are never spelled in this file (rule 26).
+        $restatement = '     * because it is a backstop and not a policy: `src/` here is '
             . $files . ' files, so' . "\n" . '     * a normal package is comfortably under it.';
 
         $this->assertSame(
             [$files],
-            $this->restatedFigures($fixture, [$files, $declarations]),
+            $this->restatedFigures($restatement, [$files, $declarations]),
             'the scanner asserting the absence above must still be able to SEE a restatement',
         );
+
+        // The known NEGATIVE, and it is the shape this guard got WRONG: a
+        // grouped byte figure whose trailing digits happen to be today's file
+        // count is a number about package lines, not a census of src/. Paired
+        // with the positive above in the same test, because on its own an
+        // expectation of `[]` is also what a DEAD scanner returns (rule 25).
+        $coincidence = '     * renders 1' . ',' . $files . ' B of package lines at the clip below.';
+
+        $this->assertSame(
+            [],
+            $this->restatedFigures($coincidence, [$files, $declarations]),
+            'a digit-group separator is part of a number, not a boundary between two — reading it as '
+            . 'a boundary false-positived every grouped byte figure in RepoMapBlock',
+        );
+    }
+
+    /**
+     * THE RESIDUAL DOMAIN OF THE GUARD ABOVE, DERIVED INSTEAD OF PROMISED.
+     *
+     * WHY THIS IS A TEST AND NOT A SENTENCE. The guard's own doc-block used to
+     * claim its false-positive domain was closed "by construction". It was not;
+     * it was closed by an arithmetic accident that held at six added source
+     * files and no further, and prose cannot notice when an accident stops
+     * holding. What the domain actually IS, exactly: the distance from each
+     * derived figure UP to the nearest integer literal in `RepoMapBlock`. That
+     * is a quantity, so it can be asserted, and once asserted the guard tells
+     * you its bound is shrinking on the commit that shrinks it — instead of
+     * telling a lane six additions later that it restated a census it never
+     * touched.
+     *
+     * DIRECTION IS DELIBERATE, and it is why this is not simply a distance.
+     * Only literals ABOVE the derived figures are reachable, because those
+     * figures grow with the tree. {@see RepoMapBlock::MAX_PACKAGES} sits BELOW
+     * today's file count and is not a defect and must not be reworded — the
+     * tree passed it going up, and only a SHRINKING tree could reach it again.
+     * The failure text names that case rather than leaving the next reader to
+     * rediscover it.
+     *
+     * The first assertion is this test's liveness component (rule 15): a
+     * {@see standaloneIntegers()} that had stopped answering returns no literal
+     * above anything, and an empty list would otherwise sail through a `min()`
+     * that never ran.
+     */
+    public function testTheRestatementGuardHasRoomBeforeItsNextFalsePositive(): void
+    {
+        [$files, $declarations] = $this->declarationTotals($this->srcDir);
+        $literals = $this->standaloneIntegers(
+            (string) file_get_contents($this->srcDir . '/Context/RepoMapBlock.php'),
+        );
+
+        foreach (['file count' => $files, 'top-level declaration count' => $declarations] as $label => $figure) {
+            $above = array_values(array_filter($literals, static fn (int $n): bool => $n > $figure));
+
+            $this->assertNotSame(
+                [],
+                $above,
+                "no integer literal in RepoMapBlock sits above src/'s {$label} — RepoMapBlock's own "
+                . 'caps are larger than that, so this means the scanner stopped answering, not that '
+                . 'the file changed',
+            );
+
+            $nearest = min($above);
+
+            $this->assertGreaterThan(
+                self::RESTATEMENT_HEADROOM,
+                $nearest - $figure,
+                "RepoMapBlock carries the integer {$nearest}, which is within "
+                . self::RESTATEMENT_HEADROOM . " of src/'s {$label} ({$figure}) and above it. "
+                . 'testRepoMapBlockNoLongerRestatesTheSourceCensus() matches a standalone integer '
+                . 'ANYWHERE in that file, so the tree growing into that literal will be reported as '
+                . 'a restatement it is not. ' . self::RESTATEMENT_RESOLUTION . ' A figure that must '
+                . 'keep its exact spelling is a deliberate decision to raise RESTATEMENT_HEADROOM, '
+                . 'in the same commit and with the reason written down. (Only literals ABOVE the '
+                . 'figure are checked: a smaller one is unreachable unless src/ SHRINKS past it, '
+                . 'which is a different conversation and a rarer one.)',
+            );
+        }
     }
 
     /**
@@ -723,14 +964,54 @@ final class BuiltInToolCorpusTest extends TestCase
      */
     private function restatedFigures(string $source, array $figures): array
     {
+        $present = $this->standaloneIntegers($source);
         $found = [];
         foreach (array_values(array_unique($figures)) as $figure) {
-            if (preg_match('/(?<![0-9])' . $figure . '(?![0-9])/', $source) === 1) {
+            if (\in_array($figure, $present, true)) {
                 $found[] = $figure;
             }
         }
 
         return $found;
+    }
+
+    /**
+     * Every integer literal in $source, with a DIGIT-GROUP SEPARATOR read as
+     * part of its number rather than as a boundary between two.
+     *
+     * WHAT THIS REPLACES: one `preg_match('/(?<![0-9])<figure>(?![0-9])/')` per
+     * figure. WHY IT WAS WRONG: a comma satisfies BOTH of those lookarounds, so
+     * every grouped byte figure in {@see RepoMapBlock}'s doc-blocks decomposed
+     * into a standalone three-digit candidate and became a census collision.
+     * MEASURED on PHP 8.3.6, end to end rather than by reading the regex:
+     * retuning ONE unrelated byte figure — a number about package lines, with
+     * nothing to do with `src/` — so that its last three digits were today's
+     * file count made the guard report a restatement. Normalising the separator
+     * away and THEN taking maximal digit runs removes the decomposition instead
+     * of special-casing it.
+     *
+     * RESIDUAL DOMAIN, because a scanner that cannot say what it mis-reads is a
+     * licence (rule 14): the normaliser cannot distinguish a group separator
+     * from a comma-separated list of single digits, so a JSON-array example
+     * spelled in prose reads as one integer rather than as its elements. Named
+     * rather than fixed. The alternative boundary rule — one that treats a
+     * trailing comma as ending a number — was measured on this same file and is
+     * worse in the direction rule 14 cares about: it DROPS the leading element
+     * of such a list entirely rather than mis-joining it, and a guard that
+     * silently drops what it cannot parse has a hole shaped like the next
+     * defect.
+     *
+     * @return list<int>
+     */
+    private function standaloneIntegers(string $source): array
+    {
+        $normalised = (string) preg_replace('/(?<=[0-9]),(?=[0-9])/', '', $source);
+        preg_match_all('/[0-9]+/', $normalised, $matches);
+
+        return array_values(array_unique(array_map(
+            static fn (string $digits): int => (int) $digits,
+            $matches[0],
+        )));
     }
 
     /**
