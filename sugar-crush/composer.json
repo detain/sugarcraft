@@ -74,6 +74,13 @@
             "SugarCraft\\Crush\\Tests\\": "tests/"
         }
     },
+    "extra": {
+        "sugarcraft": {
+            "deferred-wiring": {
+                "sugarcraft/candy-kit": "E453. NOT a stale require and NOT spent: added by commit ddd9560d0 for one named, still-open item - restyling Cli\\Help::screen() with candy-kit's Banner/Section/HelpText. It is unwired because the restyle was costed and deferred, not because nobody remembers why: candy-kit's primitives emit ANSI unconditionally and --help is routinely piped, so a faithful restyle needs a posix_isatty() guard the item never specified, against a 145-line heredoc and a HelpTest that asserts line-start regexes any SGR prefix breaks. tools/check-path-repos.php --unused reports it as PRUNE_REQUIRE_AND_REPO and that report is a CANDIDATE by the tool's own words; this row is the by-hand confirmation it asks for, in the direction of keeping the dependency. Delete this row when the wiring lands - never to quiet the check."
+            }
+        }
+    },
     "minimum-stability": "dev",
     "prefer-stable": true
 }
