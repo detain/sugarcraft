@@ -14766,3 +14766,98 @@ wiring than carrying a stale require.
 `candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
+
+### Ec55-1 — the descriptor guard's own horizon: `autoload` was never the right reachability question
+
+**Round 55, lane c.** RESOLVED in-lane; recorded because the SHAPE recurs.
+
+E449 said the sibling walk follows `autoload` and misses what a library execs or ships as an example.
+Measured across the reachable closure at `a8acfcc9`: the autoload roots cover **438** of the closure's
+PHP files and **562** sit outside them — the guard reported clean over more than half of what it was
+nominally watching. The partition is not exotic: `tests` 421, `lang` 88, `examples` 51, `bin` 1, one
+library-root tool config.
+
+Two of those five ARE reachable in the sense this guard cares about, and neither is an autoload
+question. `lang/` is executed **in this process** — `candy-core/src/I18n/T.php::load()` spells the load
+`$data = require $path`, and a `require` is not an autoload, so no manifest names those files. `bin/`
+runs as **our child** — `candy-pty/src/Spawn.php` prepends `[PHP_BINARY, bin/pty-shim.php]`, so the shim
+inherits every descriptor we hold. `LIB_HORIZON` rosters all five with the mechanism, and the walk now
+reads the two that qualify.
+
+**THE GENERALISABLE PART, and it is not the widening.** A roster saying a directory is walked is not
+evidence that the walk reads it. Reverting the widening in one line left all 14 tests green — the
+assertion total moved and nothing failed — because every check on the widening was derived from a walk
+the TEST does, while `libSourceFiles()` is a different walk. Any instrument with a roster describing its
+own scope has this hole. **Assert the generator's output against the roster, not the roster against the
+tree.**
+
+### Ec55-2 — E447's diagnosis was wrong: `runExec`'s spec is readable, and no arm was asking about siblings
+
+**Round 55, lane c.** RESOLVED in-lane.
+
+E447 calls `candy-core/src/Program.php::runExec`'s descriptor spec "assembled by a helper and unreadable
+to every instrument". The helper (`childDescriptor()`) builds the **values**. The spec is
+`$req->captureOutput ? [0 => $in, 1 => ['pipe','w'], 2 => ['pipe','w']] : [0 => $in, 1 => $out, 2 => $err]`,
+and both arms carry the integer keys 0, 1, 2 — so which fds it names never depended on the condition,
+and the scanner reads keys. It was refusing a shape nobody had taught it. Measured over the reachable
+closure: 8 sibling spawn sites, 1 unreadable → 0.
+
+The second half is the arm round 54 left narrow: unreadability was only ever asked of `sugar-crush/src`,
+which is the one place it could be answered by reading a diff. It is now asked across the closure.
+
+**A DIFFERENTIAL ORACLE BUILT FOR AN UNRELATED QUESTION FOUND THE REAL DEFECT.** Running the scanner
+against a copy with one clause deleted, over 14 adversarial spellings, showed zero differences for that
+clause — and one corpus row disagreeing with what the spec plainly said. Measured, PHP 8.3.6:
+`$d = [0 => ['pipe','r']] + [1 => ['pipe','w']];` answered fds `[0]`. The union names 0 and 1.
+`topLevelArrayElements()` returned at the first top-level `]` and dropped the rest, so a **half-read spec
+was reported as complete** — a wrong answer, not a refusal, which then passes the readability arm as an
+ordinary two-fd spec. `[0=>1] ?: [1=>2]` had it too. Both now refuse.
+
+### Ec55-3 — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
+
+**Round 55, lane c.** NOT DONE. Costed, and the cost is the finding.
+
+E448's premise reproduces exactly. Scanning all 57 non-`sugar-crush` monorepo libs: **6 exposed spawns,
+3 of them in libraries outside sugar-crush's closure** — `sugar-dash/ExternalModule.php::startProcess`,
+`sugar-reel/FfmpegDecoder.php::open`, `sugar-reel/AudioPlayer.php::start`. All three are `long`, all
+three spec 0,1,2 only, and no guard anywhere sees them.
+
+**E448's own suggestion — promotion into `candy-testing` — was measured and is the weaker option.**
+
+- `candy-testing` is require-dev'd by **21 of 58** libs. `sugar-reel` is one; **`sugar-dash` is not**
+  (it require-devs `candy-vcr` only). So promotion reaches 1 of the 2 blind libraries.
+- **`sugar-crush` does not require-dev `candy-testing`.** Moving the harness out of this package means
+  adding that dev dep, which means `composer update`, which every lane is forbidden to run and which
+  voids the vendor closure. It is a supervisor action, exactly as `ddd9560d0` was.
+- **A scanner in a library is inert until a test in each consumer invokes it.** The harness would move;
+  the coverage would not follow. Reaching all 58 costs 58 dev-dep bumps plus 58 test files, and reaching
+  zero new sites until the first of them lands.
+
+**RECOMMENDED INSTEAD: a `tools/` script plus a step in `ci.yml`'s `path-repo-check` job**, beside
+`check-path-repos.php`. It is a repo-wide property, it belongs where the repo-wide properties already
+live, it reaches 58/58 immediately, and it changes no package's dependencies. Cost: one script, one CI
+step. Out of lane c's file list, hence not done here.
+
+### Ec55-4 — E453: `--unused` is candidate-grade output wired in as a hard gate
+
+**Round 55, lane c.** RESOLVED, with a forced out-of-lane edit to `tools/check-path-repos.php`.
+
+`candy-kit` is **not spent**. `git log -S` on the manifest names `ddd9560d0`, which says what it was
+added for: Phase 3 item 5b, restyling `Cli\Help::screen()`. Still open, and deferred with a measured
+reason rather than forgotten — candy-kit's primitives emit ANSI unconditionally, `--help` is routinely
+piped, so a faithful restyle needs a `posix_isatty()` guard the item never specified, against a 145-line
+heredoc and a `HelpTest` asserting line-start regexes any SGR prefix breaks.
+
+**The root cause is not the dependency.** `--unused`'s own usage text says its findings are CANDIDATES
+and to "confirm by hand before pruning" — and `ci.yml` runs it as a hard gate with no
+`continue-on-error`. A candidate confirmed by hand **in the keep direction** therefore failed the build
+with no way to say so, leaving two exits: prune something somebody deliberately kept, or delete the CI
+step. `DEFERRED_WIRING` is the third, read from `extra.sugarcraft.deferred-wiring` in the consuming lib's
+own manifest; the row still prints, with its reason, under its own heading.
+
+The tool's doc-block also claimed `--unused` is "NOT wired into CI", which was already false when E453
+was filed. Rewritten, not deleted.
+
+**STILL OPEN, and it is the general form:** three of the four `path-repo-check` steps have no local
+counterpart. `ManifestDependencyReachTest` closes the `--unused` one for `sugar-crush` only. Every other
+lib, and the closure and injection passes, remain checks the merge checklist cannot see.
