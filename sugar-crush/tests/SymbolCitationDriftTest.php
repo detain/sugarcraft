@@ -133,9 +133,22 @@ final class SymbolCitationDriftTest extends TestCase
      * A citation is routinely broken over a line boundary by the 80-column
      * wrap, and every leading ` * ` in between belongs to the comment rather
      * than to the reference. Folding is applied to the WHOLE file rather than
-     * only inside comments: the only false fold would be a source line that
-     * begins with `*`, which PSR-12 does not produce, and the alternative — a
-     * comment-aware pass — buys nothing a citation census can use.
+     * only inside comments, and the justification for that is REWRITTEN rather
+     * than repeated (rule 7).
+     *
+     * WHAT IT SAID: "the only false fold would be a source line that begins
+     * with `*`, which PSR-12 does not produce". WHAT IS TRUE NOW: PSR-12 has
+     * nothing to say about a third of this roster. `docs/*.md` is markdown,
+     * where a line beginning with `*` is an ordinary bullet — so the argument
+     * was scoped to PHP and applied to markdown. (MEASURED at this commit: no
+     * page under `docs/` uses `*` bullets, they all use `-`. That is luck, not
+     * the reason.) WHY FOLDING IS SAFE ANYWAY, which is the reason that
+     * actually holds: a false fold JOINS a bullet onto the line above it and
+     * deletes the marker. Every shape this census matches — a `{@see …}`, a
+     * backticked token — is self-contained within one line and is matched by a
+     * regex with no line anchor, so a fold can neither destroy one nor invent
+     * one. It can only change the whitespace around it. A comment-aware pass
+     * would cost a tokeniser per file and buy nothing a citation census reads.
      */
     private function flatten(string $text): string
     {

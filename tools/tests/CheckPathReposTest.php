@@ -17,11 +17,19 @@ declare(strict_types=1);
  * REWRITTEN RATHER THAN DELETED: someone believed it, and the next reader will
  * reach for the same command.
  *
- * HOW TO RUN IT, both of which are exercised:
+ * HOW TO RUN IT:
  *
  *     candy-core/vendor/bin/phpunit --no-configuration \
  *         --bootstrap candy-core/vendor/autoload.php tools/tests/
- *     phpunit --no-configuration tools/tests/     # a phpunit PHAR, as CI uses
+ *     phpunit --no-configuration --colors=never tools/tests/   # a PHAR, as CI does
+ *
+ * ONLY THE FIRST HAS BEEN EXERCISED HERE, and an earlier draft of this line
+ * claimed both were (rule 7). There is no `phpunit` on the development box's
+ * `PATH`, so the PHAR form is exercised by CI and by nothing else. What WAS
+ * checked locally is the half that distinguishes them: the same run with NO
+ * `--bootstrap` at all, which is the shape CI uses, and which the autoload
+ * hunt below has to survive. Do not restore the stronger sentence without
+ * running the PHAR.
  *
  * IT WAS DORMANT FOR SIX MONTHS AND IT PASSES. No `phpunit.xml` in the tree
  * references `tools/tests/`, no CI job ran it, and nothing autoloads
