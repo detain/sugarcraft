@@ -946,9 +946,26 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'of a keyword, so no list of keywords can express it (E565)',
         );
 
-        // THE OTHER POLARITY. Absence means PUBLIC, not "whatever was asked
-        // for": under a private alphabet the same pair must not appear.
-        [$privateDrifted] = self::driftReport($sources, [\T_PRIVATE]);
+        // THE OTHER POLARITY, AND BOTH SIDES OF THE PAIR MUST BE IMPLICIT FOR
+        // IT TO SEE ANYTHING. The first version of this row reused $sources
+        // above, whose A.php is EXPLICITLY public — so an arm answering yes to
+        // every alphabet still matched only B.php, one declaration is not a
+        // pair, and the report came back empty for the wrong reason. Measured:
+        // the mutation making absence answer every alphabet SURVIVED that row
+        // and is KILLED by this one (rule 2 — the window, not the mutation).
+        $bothImplicit = [
+            'a/A.php' => "<?php\nclass A { function testCopied() " . $bodyA . " }\n",
+            'b/B.php' => "<?php\nclass B { function testCopied() " . $bodyB . " }\n",
+        ];
+        [$publicPair] = self::driftReport($bothImplicit, [\T_PUBLIC]);
+        $this->assertArrayHasKey(
+            'testCopied',
+            $publicPair,
+            'two implicitly-public copies of one test method are not a pair, so the row below '
+                . 'asserts an emptiness that has nothing to do with the alphabet',
+        );
+
+        [$privateDrifted] = self::driftReport($bothImplicit, [\T_PRIVATE]);
         $this->assertSame(
             [],
             array_keys($privateDrifted),
