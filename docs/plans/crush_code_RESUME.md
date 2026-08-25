@@ -6,7 +6,155 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 0-NOW-60. ROUND 59 CLOSED (floor 10281) — the E562 audit came back empty, and that is the stronger answer
+## 0-NOW-61. ROUND 60 CLOSED (floor 10351) — the `src/` census is decoupled, and the next thing to run is NOT this plan
+
+**CLOSED at `09139a807`, base `88374be64`.** Run `wf_e28fe5ce-ce4`, 9 agents, zero errors.
+**The merge went GREEN first try** (third consecutive) and **both totals were exactly additive**.
+Backlog **630 → 651**; round 60's 21 provisional ids are now **E631–E651**.
+
+| package | floor at close |
+|---|---|
+| **sugar-crush** | **10351 / 160648 / 1 skipped / rc 0** — MEASURED |
+| **tools/tests** | **58 / 214 / rc 0** — MEASURED |
+| **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** — MEASURED |
+| candy-core · candy-flip · candy-mosaic | **CARRIED from round 55, NOT re-measured.** An inference, not an observation. |
+
+### 🔴 READ THIS BEFORE ANYTHING ELSE: THE PROMPT PLAN RUNS NEXT, AND IT INVALIDATES THINGS IN HERE
+
+**The decision on record is: run `prompt_plan.md` to completion FIRST, then come back for round 61.**
+Round 60 cleared the two crush_code items that blocked it (§2.6 of `prompt_plan.md`, rows 1 and 5).
+While that plan runs, **launch no crush_code round** — rows 2 and 7 of its interference table are
+free only because no round is in flight, and they re-block the instant one is.
+
+**Everything in the section below is what the prompt plan will make WRONG in this file, in the
+briefs, and in the backlog.** None of it is a blocker. All of it fails SILENTLY if not re-derived.
+
+#### 1. THE FLOOR. Re-measure it. Never carry it.
+
+Every figure in the table above is dead the moment the prompt plan lands. It adds ~11 files under
+`sugar-crush/src/` and hundreds of assertions.
+
+🔴 **This is not a hypothetical: round 60's brief shipped round 58's floor to three lanes and was
+caught 30 seconds after launch, by reading the script rather than by any check.** `node --check`,
+nine rendered prompts and dry-run commands all passed over it, because a floor paragraph is *data*
+to the script and an *instruction* to the agent, and no static check crosses that boundary.
+
+- **Round 61's floor block must be OBSERVED at its own base**, by running the suites. Not copied
+  from this file, and not copied from `prompt_worklog.md` either — that records the prompt plan's
+  own baseline, which is an input, not the crush_code floor.
+- **`candy-core` / `candy-flip` / `candy-mosaic` have been carried since round 55.** Round 60's
+  brief asserted they were "measured at this exact commit, per E167" and that was false. If a lane
+  touches one, it MEASURES it.
+- **Diff the new floor block against this table before launching.** Every round.
+
+#### 2. THE SKIP-COUNT CANARY WILL SILENTLY MISFIRE
+
+Every lane brief hardcodes: *"the skip count must stay exactly 1"*, the one skip being
+`tests/MCP/McpClientTest.php`, and tells lanes that **a 2 means the vendor closure is gone and every
+figure since is void**. If the prompt plan legitimately adds a skip, three round-61 lanes each
+conclude their sandbox is broken and stop — a correct-looking closure failure with no closure failure.
+
+`prompt_plan.md` already treats an added `markTestSkipped` as a **finding** (its §lines 173, 2117),
+so it should not drift there casually. But **verify the count before writing round 61's brief**, and
+if it moved for a real reason, re-baseline the canary in the brief and say why in the same sentence.
+
+#### 3. LINE NUMBERS AND QUOTED CODE IN OPEN BACKLOG ENTRIES WILL ROT
+
+The prompt plan's **phases 4, 8 and 9** rewrite `sugar-crush/src/Chat.php`,
+`src/Context/ContextCompactor.php` and `src/Tools/BuiltIn/Bash.php`. This backlog has open entries
+quoting exactly those files **with line numbers and inline code**. They do not go red; they go
+**stale**, which is worse.
+
+- **Re-verify any entry against the tree before scheduling it.** Precedent: round 60's C7 arrived
+  claiming `$defaultTools` was "inert end to end" and it was materially wrong — the field was
+  consumed faithfully and died one step later.
+- The same applies to entries citing `src/Agents/*` and `src/App/App.php` — round 60 rewrote those
+  itself, so entries written before it may already be stale.
+- **E651 is a live example of the class**: `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`,
+  and lane c moved that file.
+
+#### 4. THE SANDBOXES MUST BE RE-CUT, NOT RECYCLED
+
+`/home/sites/crush-lane-{a,b,c}` are `cp -a` copies at `09139a807`. After the prompt plan they are
+far behind. **Re-cut from the new master**, then verify, per lane, before launch:
+
+```sh
+php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/sugar-crush/vendor/sugarcraft/*"),"is_link"))."\n";'  # 18
+php -r 'echo count(array_filter(glob("/home/sites/crush-lane-a/candy-pty/vendor/sugarcraft/*"),"is_link"))."\n";'     # 7
+```
+
+Do NOT settle this with `ls` — `ls -l | grep -c '^l'` has printed a correct-looking 18 twice while
+every entry was a real directory. **Never run `composer install`/`update` in a lane root.**
+
+#### 5. TREE-SIZE BOUNDS: THE PROMPT PLAN FITS, WITH ROOM — BUT THE TEST COUNT STILL MOVES
+
+Round 60 removed the `src/` file-COUNT census. **MEASURED (E638):** green at +1/+6/+220/+222, first
+red at **+223** added source files. The prompt plan's ~11 files are nowhere near it, and the census
+guard itself has **650 files** of room. **Before round 60 this was green at +5 and red at +6** —
+that coupling is what the round removed, and it is why the prompt plan can now proceed.
+
+🔴 **But the suite's TEST COUNT is still a function of `src/`'s size (E634)** — one data provider
+enumerates the tree, so **each added `src/` file adds +1 test** plus assertions from per-file loops
+elsewhere. **Do NOT cite a constant for the assertion delta.** E634 retracts its own predecessor's
+"+58"; two later measurements both give +53, and the delta depends on the **shape** of the file
+added. It is a measurement, not a property — which is the whole reason item 1 above says *observe*.
+
+If a bound in E638's table does red, the instruction is to **rewrite `RepoMapBlock`'s design note**,
+never to loosen the bound back toward an invented ratio. E638's withdrawn fourth bound —
+`MAX_SECTION_BYTES * 2 / 3`, a margin standing in for the word *"comfortably"* — reddened at ~+60
+files and would have re-imposed the coupling inside the fix for it.
+
+#### 6. WHAT THE PROMPT PLAN WILL NOT TOUCH
+
+`prompt_plan.md` declares `docs/plans/crush_code_*.md` **read-only** to itself. So this file, the
+worklog and the backlog survive intact — **the rot is in what they SAY about the tree, not in the
+files themselves.** Nothing here needs merging; everything here needs re-verifying.
+
+### NEW STANDING RULES FROM ROUND 60
+
+- **55 — verify the brief's PROSE, not only what executes.** A floor block is data to the script and
+  an instruction to the agent. `node --check`, a rendered prompt and a dry-run command all pass over
+  a stale figure. Diff every inherited paragraph against the previous round's close before launch.
+- **56 — do not predict merge colour.** Rounds 57, 58 and 60 each named a specific mechanism and each
+  was wrong (57 predicted clean and went red; 58 and 60 predicted red and went green). The mechanisms
+  were real and did not fire. **Run the merged suite; it is the only instrument that works.**
+- **57 — rule 54, corrected: the first lane merges clean iff master has not moved IN THE CONTENDED
+  FILE.** Master moved twice this round and lane a still landed clean, because the commits touched
+  RESUME and the prompt-plan files, not the backlog.
+- **58 — a margin nobody derived is a coupling nobody counted.** If a bound needs slack, argue the
+  slack on its own terms; never smuggle an adverb from the prose in as a ratio in the assertion.
+
+⚠️ **RULE 47'S RATE, and it moved in an unexpected direction.** Round 60 added **three** more
+supervisor-authored false claims — the stale floor, the false "measured at this exact commit" for
+three packages, and the over-broad no-new-`src/`-files constraint (**measured unnecessary for 1–5
+files**). But **no lane found a false claim in the part of the brief it was checking**: lane b, the
+lane prediction (a) aimed at, reported ownership, scope and floors all correct. **The lane that
+caught me was lane a, about a constraint imposed on the other two.**
+
+### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
+
+1. **RUN `prompt_plan.md` TO COMPLETION FIRST.** Then re-read the section above before setting up
+   round 61. Round 60 is closed and merged; all three sandboxes are recycled and clean at
+   `09139a807`.
+2. **Round 61 has no lanes chosen.** 21 fresh entries (E631–E651) landed this round, several of them
+   live fail-open findings worth ranking: **E644** (`AgentManager::executeAll()`, the live parallel
+   path, bypasses the tool grant entirely), **E639** (no production caller supplies a registry),
+   **E643** (the skill grant has the identical fail-open shape and was not fixed), **E648** (the live
+   worker `require`s an autoloader path taken off the wire).
+3. **Publication state — RE-MEASURE IT, never infer it.** ⚠️ **The user commits into this working
+   copy directly and pushes it themselves**, so local-vs-remote moves without the supervisor doing
+   anything. `prompt_plan.md` was modified in the working tree during this very close-out.
+4. **E490 is answered but NOT closed.** Pooled 538 takes, zero events, bound 0.5553%. **60 more takes
+   (~48 min) with an instrument row armed FIRST** excludes 1-in-200 at 95%. Independent of the prompt
+   plan; can run at any time.
+5. 🔴 **THE BACKLOG HAS NO OPEN/CLOSED MARKER.** Most entries carry no disposition stamp, and that is
+   **not** a count of open items. Do not infer outstanding work by counting unmarked entries.
+   Known pre-existing file defects: **`E70`, `E71`, `E72` are referenced in the body with no heading,
+   and `E78` is duplicated.**
+
+---
+
+## 0-NOW-60 (now superseded). ROUND 59 CLOSED (floor 10281) — the E562 audit came back empty, and that is the stronger answer
 
 **CLOSED at `1621bb7d7`, base `e4c69b04e`.** Recovery run `wf_146e1913-ca2`, 8 agents, zero errors.
 **The merge went GREEN first try** (second consecutive). Backlog **592 → 630**; round 59's 37 provisional

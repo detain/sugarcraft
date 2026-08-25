@@ -11597,6 +11597,158 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 60 — the census is decoupled and the horizon moved from +6 files to +223; the merge went green where red was predicted for the third time; and the brief nearly shipped a stale floor
+
+**CLOSED at `09139a807`, base `88374be64`.** Run `wf_e28fe5ce-ce4`, 9 agents, 0 errors, 2h41m.
+Backlog **630 → 651** (E631–E651, 21 entries).
+
+| package | floor at close | vs base |
+|---|---|---|
+| **sugar-crush** | **10351 / 160648 / 1 skipped / rc 0** — MEASURED | +70 / +1270 |
+| **tools/tests** | **58 / 214 / rc 0** — MEASURED | unchanged |
+| **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** — MEASURED | unchanged |
+| candy-core · candy-flip · candy-mosaic | **CARRIED from round 55, NOT re-measured.** An inference. | — |
+
+Lane figures: a **10287 / 159406**, b **10326 / 159730**, c **10300 / 160268**.
+
+### THE ROUND ALMOST SHIPPED ROUND 58's FLOOR, AND NOTHING THAT RUNS WOULD HAVE CAUGHT IT
+
+The round was launched once as `wf_a05bbe95-ca2` and killed ~30s in, before any agent produced
+output. `crush-round-60.js` was built by patching round 59's script; `BASE`, `ROUND`, lane keys,
+file lists, scope regexes and schema were all correct, and **the inherited prose was not**. The
+brief told three lanes the suite floors at `10269 / 159236` (round 58's number) and candy-pty at
+`630 / 1494`, then instructed each to observe its baseline and reproduce it exactly.
+
+**Pre-launch verification had checked everything that executes and nothing that is merely read** —
+`node --check`, nine rendered prompts, both required commands dry-run in all three sandboxes. A
+floor paragraph is data to the script and an instruction to the agent, and no static check crosses
+that boundary. Two further false claims came out with it: `candy-core`/`candy-flip`/`candy-mosaic`
+were asserted as *"measured by the supervisor at this exact commit, per E167"* when they are carried
+from round 55 and were never measured at this base, and `tools/tests` 58/214 — which *was* measured
+— was missing entirely.
+
+**Rule 52 was applied and then argued down to its reason.** The prediction was NOT invalidated,
+because rule 52 exists to stop a killed round's *partial work* from being scored against a document
+that did not anticipate it. Zero agents read a prompt; there was no partial work. That distinction
+is now written into the prediction file rather than left as a judgement call.
+
+**The cost is a real detection opportunity spent by the supervisor instead of measured on the
+lanes** — "observe your baseline" plus the `briefWasWrongAbout` field exist for exactly this. So
+side-prediction (e) was added at relaunch: with the floor correct, `briefWasWrongAbout` comes back
+empty about the floor. **It did, and two lanes went further than that** — lane b re-measured
+`10281 / 159378 / 1 / rc 0` at `88374be64` by restoring its five files and got it exactly; lane a
+reproduced its own review-sha floor to the assertion. **The correction was right, and it is the
+first floor in this plan verified independently by two lanes rather than asserted by one supervisor.**
+
+### THE KEYSTONE LANDED, AND THE NUMBER THAT MATTERS IS +6 → +223
+
+`BuiltInToolCorpusTest` hard-coded eleven scalars across five assertions that were a function of how
+many files `src/` happens to contain, and `RepoMapBlock.php` restated the same census **in production
+prose**. Both are gone. What replaced them are bounds with derived headroom.
+
+**MEASURED, both polarities, by lane a (E638):** before the fix, adding source files was green at +5
+and **red at +6**. After it, green at +1/+6/+220/**+222**, first red at **+223** — and that red is a
+design note about listing widths genuinely expiring, not a census false positive. The census guard
+itself now has **650 files** of room. Removal verified too: `src/` back to 297, tree clean.
+
+**The withdrawn fourth bound is the better lesson.** The short-name bound was first written as
+`< MAX_SECTION_BYTES * 2 / 3` — an invented margin standing in for the word *"comfortably"* in the
+prose. Measured, it reddened at about **+60 files**, which would have re-imposed most of the coupling
+the round exists to remove, **inside the fix for it**. The word came out of the prose and the ratio
+came out of the assertion. **A margin nobody derived is a coupling nobody counted.**
+
+### THE MERGE WENT GREEN, PREDICTED RED, FOR THE THIRD TIME IN FOUR ROUNDS
+
+**Both totals were exactly additive** — `10281+6+45+19 = 10351` and `159378+28+352+890 = 160648`,
+to the unit on both. That is not the E354 exception failing to appear; it is the exception's
+precondition being absent. E354's non-additivity comes from censuses that count *files*, so a
+sibling's new file changes your total. **All three lanes reported `newSrcFilesAdded: 0`** (s1 HIT),
+the per-paragraph counts lane a found in `GlobFigureDriftTest` are file-local, and the three source
+sets were disjoint. Additivity here is a derived consequence, not luck — and it would have broken
+had any lane added one file.
+
+**Conflicts: 2, not the predicted 3, and the first merge landed CLEAN.** The prediction reasoned
+that master would move between base and merge, so lane a would conflict too. Master *did* move —
+`d4b9c7950` and `2b53302af` — but touched `RESUME`/`prompt_plan`/`prompt_resume`, **not the backlog**.
+🔴 **Rule 54's condition is not "master moved"; it is "master moved IN THE CONTENDED FILE."** The
+induced rule was rewritten once already this plan for having an unstated precondition, and its
+replacement had one too.
+
+**On predicting merge colour: rounds 57, 58 and 60 all got it wrong** — 57 predicted disjoint-and-
+clean and went red, 58 and 60 predicted red and went green. Three consecutive misses, each with a
+*specific named mechanism* rather than a hedge, and each mechanism was real and simply did not fire.
+**The honest conclusion is that this supervisor cannot predict merge colour, and the instrument that
+works is running the merged suite.** Round 58's write-up said "run the merged suite either way";
+that is now the only claim about merge colour worth writing down.
+
+### SIDE-PREDICTIONS
+
+| # | prediction | outcome |
+|---|---|---|
+| tests | 10307, point estimate | **MISS** — 10351, +44 |
+| assertions | ≥ 159,500 | HIT (160,648) — a deliberately weak bound |
+| skipped / rc | 1 / 0 | HIT, exact |
+| tools · candy-pty | unchanged | HIT both |
+| backlog | 630 → 645–662 | HIT (651) |
+| merge | RED, two named mechanisms | **MISS** — green |
+| conflicts | 3, including the first | **MISS** — 2, first clean |
+| s1 | `newSrcFilesAdded == 0` for b and c | HIT — 0 for all three |
+| s2 | all three scope outputs empty again | **MISS** — a and c non-empty |
+| s3 | lane a runs the acceptance test in both polarities | HIT, exceeded (5 probe sizes) |
+| a | lane finds a FURTHER thing the brief got wrong | HIT — but see below |
+| b | `Bash(git:*)` is the hard part, not the wiring | **HIT, strongly** — E641, E645 |
+| c | lane c does not end with a real LLM call | HIT — E647, E649 filed honestly |
+| e | `briefWasWrongAbout` empty about the floor | HIT — two lanes re-measured it |
+
+**s2's miss is the mechanism working, not failing.** Lane a's two out-of-lane files and lane c's five
+were *reported with verification* — each proved forced by reverting to base and observing a tree-wide
+guard red (`SymbolCitationDriftTest`, exactly 3 orphaned citations). Round 59's empty outputs and
+round 60's populated-but-justified outputs are both the scope check doing its job; **predicting the
+empty case as the success signal was rule 51's error made again by the person who wrote rule 51.**
+
+🔴 **PREDICTION (a) HIT IN THE WRONG LANE, AND THE CORRECTION IS AGAINST ME.** It predicted lane b
+would find a further false claim in the C7 brief. Lane b found none — it reported the brief's
+ownership block, scope regex and floors all correct. **Lane a found the false claim instead, and it
+was mine about lanes b and c:** the brief said they were forbidden to add a `src/` file *"precisely
+because your census would red them for it."* Measured, the census red at **+6 and no sooner**, so for
+one to five files the constraint was **not needed at all**. The round's central operational
+constraint was over-broad, it cost two lanes something for nothing, and the lane it was imposed on
+was not the lane that caught it.
+
+### WHAT THE THREE LANES ACTUALLY FOUND
+
+- **Lane a (E631–E638)** — a mis-namespaced `src/` file is a hard fatal, not a report; the corpus
+  file's own doc-block was the *fifth* restatement of the census; a figure asserted while the claim
+  it supported was **false** and unasserted; and E634, which retracts its own predecessor's
+  instruction — a per-file delta was filed as "+58, cite this entry not E383", and two later
+  measurements both give **+53**. **The correction was the same defect as the thing it corrected:** a
+  load-bearing figure with no generator. The instruction is withdrawn; the delta depends on the
+  *shape* of the file added and is a measurement, not a property.
+- **Lane b (E639–E645)** — C7 wired, and the inherited claim "inert end to end" confirmed wrong: it
+  died one step past `Agent::fromDefinition()`, in an `executeSubAgent()` `CompleteRequest` built with
+  no `tools:`. The strings-vs-objects trap was real and is filed twice (E641 `WorkflowEngine` puts
+  declaration *strings* where providers call `->name()`; E645 a foreign preset's `Bash(git:*)` is
+  imported verbatim and silently unmatchable). Three fail-open siblings filed unfixed: the skill
+  grant (E643), `executeAll()` — **the live parallel path** — bypassing the grant entirely (E644),
+  and no production caller supplying a registry at all (E639).
+- **Lane c (E646–E651)** — the fabricated worker replaced, and the seam reported honestly rather than
+  claimed: a sub-agent worker still runs with **no tools and nothing says so at runtime** (E647),
+  nothing in `src/` can give it a provider (E649), and the live worker `require`s an autoloader path
+  **taken off the wire** (E648).
+
+### FOR THE NEXT SUPERVISOR
+
+- **Check the brief's prose, not just its code.** Everything that executes was verified before both
+  launches; the defect was in a paragraph. Diff the floor block against the previous round's close
+  before launching, every time.
+- **Do not predict merge colour.** Three rounds, three specific mechanisms, three misses.
+- **Rule 54, corrected:** the first lane merges clean iff master has not moved **in the contended
+  file**.
+- **Rule 51, applied to itself:** name the artefact a control produces — and a justified, verified
+  out-of-lane report is that artefact just as much as an empty one is.
+
+---
+
 ## ROUND 59 — the E562 audit came back EMPTY, which is the stronger answer; the scope mechanism worked by leaving no trace; and my pre-launch prediction was for a round that never ran
 
 ### CLOSED — merged, measured, renumbered
