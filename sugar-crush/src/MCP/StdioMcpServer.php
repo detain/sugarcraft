@@ -1072,6 +1072,32 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
+     * The keys {@see \SugarCraft\Crush\MCP\McpTool::fromArray()} reads out of a
+     * tool definition, each with the check that says whether the value would
+     * satisfy the constructor parameter it lands in.
+     *
+     * ⚠️ THIS IS A HAND MIRROR OF ANOTHER CLASS, AND THAT IS THE HAZARD. A
+     * fourth `$data[...]` in `fromArray()` reopens exactly the `TypeError` this
+     * filter exists to close, and nothing about adding one would red a test that
+     * merely exercised the three keys below. It is a CONST rather than a literal
+     * inside the method so that
+     * `StdioMcpServerToolListRobustnessTest::testTheTypeFilterStillMirrorsEveryKeyMcpToolReads()`
+     * can read it and compare it against `fromArray()`'s actual subscripts and
+     * `McpTool`'s actual parameter types.
+     *
+     * `serverName` is absent deliberately: `fromArray()` takes it from its own
+     * second parameter, not from the definition, so it is not a key a peer's
+     * reply can put a wrong type into.
+     *
+     * @var array<string, callable-string>
+     */
+    private const TOOL_DEFINITION_TYPES = [
+        'name' => 'is_string',
+        'description' => 'is_string',
+        'inputSchema' => 'is_array',
+    ];
+
+    /**
      * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries a
      * third party got wrong instead of failing the server over them.
      *
@@ -1151,32 +1177,6 @@ final class StdioMcpServer implements McpServer
      *
      * @param array<mixed> $def
      */
-    /**
-     * The keys {@see \SugarCraft\Crush\MCP\McpTool::fromArray()} reads out of a
-     * tool definition, each with the check that says whether the value would
-     * satisfy the constructor parameter it lands in.
-     *
-     * ⚠️ THIS IS A HAND MIRROR OF ANOTHER CLASS, AND THAT IS THE HAZARD. A
-     * fourth `$data[...]` in `fromArray()` reopens exactly the `TypeError` this
-     * filter exists to close, and nothing about adding one would red a test that
-     * merely exercised the three keys below. It is a CONST rather than a literal
-     * inside the method so that
-     * `StdioMcpServerToolListRobustnessTest::testTheTypeFilterStillMirrorsEveryKeyMcpToolReads()`
-     * can read it and compare it against `fromArray()`'s actual subscripts and
-     * `McpTool`'s actual parameter types.
-     *
-     * `serverName` is absent deliberately: `fromArray()` takes it from its own
-     * second parameter, not from the definition, so it is not a key a peer's
-     * reply can put a wrong type into.
-     *
-     * @var array<string, callable-string>
-     */
-    private const TOOL_DEFINITION_TYPES = [
-        'name' => 'is_string',
-        'description' => 'is_string',
-        'inputSchema' => 'is_array',
-    ];
-
     private static function toolDefinitionIsWellTyped(array $def): bool
     {
         foreach (self::TOOL_DEFINITION_TYPES as $key => $check) {

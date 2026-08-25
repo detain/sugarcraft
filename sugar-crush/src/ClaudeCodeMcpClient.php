@@ -184,10 +184,13 @@ final class ClaudeCodeMcpClient
      * Set when {@see sendMessage()} gives up part-way through a message. The
      * framing here is NDJSON, so — unlike `Content-Length` — the stream has a
      * resynchronisation point and a fragment is not terminal. But it is not free
-     * either: MEASURED, three consecutive takes, a 200068-byte message against a
+     * either: MEASURED, three consecutive takes, a 200092-byte message against a
      * 65536-byte pipe capacity leaves 65536 bytes in the pipe, and the NEXT
      * message's bytes are appended to them, so the child reads ONE 65578-byte
-     * line that is unparseable and BOTH messages are lost.
+     * line that is unparseable and BOTH messages are lost. See
+     * {@see sendMessage()} for the exact envelope those two figures come from,
+     * and for the earlier reading of 200068 that its stated generator does not
+     * produce.
      *
      * So the next send leads with a bare newline. That costs the child one
      * malformed line it was going to get anyway, and buys back the message that
@@ -349,12 +352,34 @@ final class ClaudeCodeMcpClient
      * MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive takes,
      * identical — a `tools/call` carrying 200000 bytes of arguments:
      *
-     *     payload 200068 bytes  ->  fwrite() returned 65536 (the pipe capacity)
+     *     payload 200092 bytes  ->  fwrite() returned 65536 (the pipe capacity)
      *     the child then read ONE 65578-byte line, unparseable
      *
      * 65578, not 65536, is the whole finding: the next message this client sent
      * supplied the newline that terminated the fragment, so it was consumed INTO
      * the malformed line and lost with it. One short write costs two messages.
+     *
+     * ⚠️ THE PAYLOAD FIGURE, CORRECTED, AND WHY IT IS WORTH A PARAGRAPH.
+     * WHAT THIS SAID: "payload 200068 bytes" for that generator.
+     * WHAT IS TRUE NOW: 200068 is reproducible only from a hand-built envelope
+     * with a bare `params` key. Followed through THIS codebase's own factory —
+     * the shape this file's probe builds, `McpMessage::request('1', 'tools/call',
+     * ['name' => 'x', 'arguments' => ['t' => str_repeat('x', 200000)]])` — the
+     * JSON is 200092 bytes, and the payload `sendMessage()` pushes is 200093 with
+     * its newline. PHP 8.3.6, three consecutive takes, identical; the probe
+     * prints the same quantity as `PAYLOAD:` every run.
+     * WHY IT MATTERS THAT IT WAS WRONG: nothing about the finding turns on the
+     * number - anything past 65536 short-writes - but a figure whose stated
+     * generator does not produce it cannot be checked by the next reader, and
+     * checking it is the only thing the generator is for.
+     *
+     * THE SECOND TERM OF 65578 IS THE NEXT MESSAGE, and it is 42 bytes: 65536
+     * bytes of truncated fragment plus the following request's JSON, whose own
+     * newline terminates the joined line. `McpMessage::request('1', 'ping', null)
+     * ->toJson()` is exactly 42 bytes on this host, which is how that half
+     * re-derives. This is a PRE-FIX reading: the probe as it stands sends no
+     * second message, so the suite does not reproduce 65578 and is not trying to
+     * - the two-arm rows pin the BEHAVIOUR, and this paragraph is the archaeology.
      *
      * THREE DIFFERENCES FROM THE NDJSON SIBLING, and they are why this is not a
      * copy of `writeLine()`:

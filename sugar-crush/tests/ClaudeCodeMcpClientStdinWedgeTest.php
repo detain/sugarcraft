@@ -25,8 +25,16 @@ use SugarCraft\Crush\McpMessage;
  * arguments against a child that reads NDJSON lines and reports each line's
  * length:
  *
- *     payload 200068 bytes  ->  fwrite() returned 65536, the pipe capacity
+ *     payload 200092 bytes  ->  fwrite() returned 65536, the pipe capacity
  *     the child then read ONE 65578-byte line, unparseable
+ *
+ * ⚠️ 200092, NOT THE 200068 THIS SAID. Followed through the factory the probe
+ * below actually calls, the JSON is 200092 bytes and the payload with its
+ * newline is 200093; 200068 comes from a hand-built envelope with a bare
+ * `params` key and no `name`/`arguments` structure. The probe prints the same
+ * quantity as `PAYLOAD:` on every run, so the file was contradicting its own
+ * output. See {@see ClaudeCodeMcpClient::sendMessage()} for the full note,
+ * including where 65578's second term of 42 bytes comes from.
  *
  * 65578 rather than 65536 is the finding. The NEXT message this client sent
  * supplied the newline that terminated the fragment, so it was swallowed INTO
