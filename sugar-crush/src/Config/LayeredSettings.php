@@ -414,13 +414,20 @@ final class LayeredSettings
      * `Bootstrap::reportProjectTierToolRemovals()` WAS THE OTHER SITE, AND THIS
      * PARAGRAPH WAS WRONG ABOUT IT IN THREE WAYS AT ONCE. WHAT IT SAID: that
      * Bootstrap "is the other site `SETTINGS.md` named"; that its being the
-     * ONLY remaining one was itself asserted; and that the assertion was
-     * `GlobFigureDriftTest::testTheSettingsPageNamesExactlyTheSourceFilesStillCarryingTheStaleFigure()`.
+     * ONLY remaining one was itself asserted; and that the assertion was a
+     * `GlobFigureDriftTest` method named for the settings page naming exactly
+     * the source files that still carried the stale figure. (That method name
+     * is DESCRIBED here rather than spelled, and deliberately: a phantom
+     * symbol written in citation form is indistinguishable — to a reader and
+     * to {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest} alike — from
+     * a citation that resolves, which is the whole subject of this paragraph.
+     * Do not "restore" the literal name; quoting a dead symbol in citation
+     * form is the defect, not the record of it.)
      * WHAT IS TRUE NOW: `SETTINGS.md` names no sites at all — it states a
      * CARDINALITY instead, because a list of filenames is exactly what went
      * stale in round 43; the number of sites still carrying the figure is ZERO,
-     * `Bootstrap` having been rewritten in round 44; and no test method of that
-     * name exists — it is
+     * `Bootstrap` having been rewritten in round 44; and no test method
+     * answering that description has ever existed — the assertion is
      * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()},
      * renamed by the same commit that emptied the census. All three sentences
      * were falsified by the commit that wrote them. WHY THIS STILL EARNS ITS
