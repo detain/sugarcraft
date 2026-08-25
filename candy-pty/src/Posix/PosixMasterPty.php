@@ -250,14 +250,61 @@ final class PosixMasterPty implements MasterPty
             // must be closed explicitly or tty_hangup() never fires.
         }
 
-        // Dup the fd before closing to prevent FD reuse race. When we
-        // went through the stream path, our libc fd may have been
-        // recycled by an unrelated open() between our fopen() and
-        // this close(). Duping first gives us a stable reference.
+        // WHAT THIS BLOCK USED TO BE: `self::libc()->dup($this->fd);`,
+        // discarding the return value, under a comment saying it existed to
+        // "prevent FD reuse race" -- that our libc fd may have been recycled
+        // by an unrelated open() between our fopen() and this close(), so
+        // duping first gives us a stable reference.
+        //
+        // WHAT IS TRUE NOW, in two parts.
+        //
+        // 1. The leak was real and is fixed. `dup(2)` returns a NEW
+        //    descriptor, and one that nothing ever closes is a leak of
+        //    exactly one descriptor per master that was read from or written
+        //    to -- every one of them still pinning the master side of a pty
+        //    the caller believes it has closed. MEASURED on this box, PHP
+        //    8.3.6, counting entries of `/proc/self/fd` whose readlink is
+        //    `/dev/ptmx`, over five open/write/close cycles: 1, 2, 3, 4, 5
+        //    leaked -- linear in the number of closes. Five further cycles
+        //    that never materialise the stream leak none, which is the
+        //    control: the leak was this branch and not `open()`. Releasing
+        //    the dup is what `tty_hangup()` needs, and
+        //    PosixMasterPtyTest::testClosingAMasterThatWasWrittenToLeaksNoDescriptor()
+        //    pins it against a live witness pty.
+        //
+        // 2. The RACE the old comment named cannot occur, and the dup could
+        //    not prevent it if it could. MEASURED, PHP 8.3.6, reading
+        //    /proc/self/fd/* either side of each call: `fopen('php://fd/N')`
+        //    ALLOCATES A NEW descriptor (fd 4 -> the stream got 5) and
+        //    `fclose()` closes that new one, leaving 4 open. `$this->fd` is
+        //    therefore open continuously from posix_openpt() until the
+        //    `close()` below, and its number is never free during the window
+        //    the old comment described. Worse, `dup($this->fd)` is taken
+        //    AFTER the `fclose()` above, so had the number ever been
+        //    recycled it would duplicate whatever now owns it -- it can
+        //    neither detect the substitution nor prevent it.
+        //
+        // WHY THE DUP STILL EARNS ITS PLACE: honestly, on the evidence, only
+        // as a deliberately retained seam. MEASURED: removing the dup AND its
+        // release together is behaviourally inert across candy-pty's Posix
+        // suite -- `vendor/bin/phpunit --filter Posix` gives
+        // 165 tests / 394 assertions / 1 warning / 2 skipped / rc 0, the same
+        // figures as with it. It costs two syscalls and defers the hangup by
+        // that much. It is kept rather than deleted because dormant code in
+        // this tree is wired or justified, never quietly removed, and because
+        // no search for a caller pattern that WOULD need a stable reference
+        // has been run -- "no reachable caller was found" has not been
+        // established, only "no test notices". If someone establishes that,
+        // this block is the thing to delete, and the paragraph above is the
+        // measurement to re-take first.
+        $stableFd = -1;
         if ($usedStream) {
-            self::libc()->dup($this->fd);
+            $stableFd = self::libc()->dup($this->fd);
         }
         $rc = self::libc()->close($this->fd);
+        if ($stableFd >= 0) {
+            self::libc()->close($stableFd);
+        }
         // Surface only failures from the pure-libc path where rc != 0
         // means the master fd never closed.
         if ($rc !== 0 && !$usedStream) {

@@ -542,6 +542,38 @@ final class PosixBackend implements Backend
      * parent's raw-mode session is still live. Only the process that
      * actually called enableRawMode() may take the terminal back out of
      * raw mode - a forked child silently skips the real syscall instead.
+     *
+     * ## Why this calls restore() on the snapshot and not apply()
+     *
+     * WHAT THIS LINE USED TO BE: `$this->saved->apply()`. WHAT IS TRUE: that
+     * put the terminal back only on the FFI backend, and was a silent no-op on
+     * the `stty` one -- the fallback that exists precisely for hosts without
+     * ext-ffi, i.e. the hosts least able to notice. `Termios::current()` hands
+     * back an immutable SNAPSHOT, and the two implementations record the
+     * restore target differently: `PosixTermios::current()` copies the captured
+     * struct into the snapshot's `$original` AND its live buffer, so `apply()`
+     * and `restore()` are the same syscall there; `SttyTermios::current()`
+     * records the `stty -g` string in `$savedMode` and leaves `$raw` false, and
+     * `SttyTermios::apply()` opens with `if (!$this->raw) { return; }`. So the
+     * snapshot's `apply()` did nothing at all, and the method that replays
+     * `$savedMode` -- `restore()`, which is on the `Termios` contract for
+     * exactly this -- was never reached from here.
+     *
+     * MEASURED on this box, PHP 8.3.6, GNU coreutils `stty`, a real pty slave,
+     * reading the device with `stty -a` at each step (ICANON and ECHO both
+     * cleared = raw):
+     *
+     *   backend        before      after enableRawMode()   after restore()
+     *   PosixTermios   cooked      raw                     cooked
+     *   SttyTermios    cooked      raw                     RAW  <- the defect
+     *
+     * The user-visible shape of that row is a program that exits leaving the
+     * terminal in raw mode and no echo, which is the `reset(1)` bug. Calling
+     * `restore()` is identical for `PosixTermios` (same buffer, same
+     * `tcsetattr`) and correct for `SttyTermios`, so nothing is traded for it.
+     * Pinned on a real pty by
+     * {@see \SugarCraft\Core\Tests\Util\Tty\PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()}
+     * and on the seam by `PosixBackendInjectedTermiosTest`.
      */
     public function restore(): void
     {
@@ -555,7 +587,7 @@ final class PosixBackend implements Backend
 
             return;
         }
-        $this->saved->apply();
+        $this->saved->restore();
         $this->termios = null;
         $this->saved = null;
         $this->ownerPid = null;
