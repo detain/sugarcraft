@@ -401,6 +401,35 @@ final class ManifestDependencyReachTest extends TestCase
                 . '- the prefix matching is dead and the absence below is worthless.',
         );
 
+        // Rule 25, and it is this arm's own hole rather than the one below's:
+        // `[]` is what idleDeferrals() returns when it is working AND when it
+        // is dead, and the fixture that proves otherwise runs against a
+        // synthetic manifest. This pushes THIS manifest through the same call
+        // with one input flipped - every recorded row pretended to be reached -
+        // so the known positive is measured on the real rows the assertion
+        // below is about.
+        $recorded = (array) ($manifest['extra']['sugarcraft']['deferred-wiring'] ?? []);
+        self::assertNotSame(
+            [],
+            $recorded,
+            'this package records no deferrals at all, so the control below proves nothing and '
+                . 'the assertion after it is vacuous. Retire both, or find out why the row went.',
+        );
+        self::assertSame(
+            \array_map(
+                static fn (string $p): string => $p . ': src/ reaches it, so the wiring has landed',
+                \array_keys($recorded),
+            ),
+            self::idleDeferrals(
+                $manifest,
+                $reached + \array_fill_keys(\array_keys($recorded), true),
+                $ambiguous,
+            ),
+            'told that every recorded deferral is reached from src/, the classifier must report '
+                . 'every one of them. It does not, so it cannot see this manifest\'s rows at all '
+                . 'and the empty result asserted next is what a dead instrument returns.',
+        );
+
         // A ROW THAT IS SUPPRESSING NOTHING IS AN EXEMPTION, NOT A RECORD, and
         // it is checked BEFORE the finding below so that the reader who added
         // a row to quiet this test is told so directly rather than watching it
