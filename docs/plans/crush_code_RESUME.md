@@ -6,7 +6,57 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 🟢 ROUND 59 IS **RUNNING** — launched 2026-08-25, run id `wf_a06a8acb-ecc`
+## 🟢 ROUND 59 IS **RUNNING — AS A MIXED RECOVERY** — run id `wf_146e1913-ca2`
+
+🔴 **THE FIRST LAUNCH (`wf_a06a8acb-ecc`) HIT A SESSION LIMIT, AND THE DAMAGE WAS UNEVEN.** Second kill in
+two rounds. **This one is NOT round 58's shape and a round-58-shaped recovery would have been wrong:**
+
+| lane | state at the kill | recovery stage |
+|---|---|---|
+| **a** | 6 commits, tree clean; **the headline item (E562's audit) never started** | `Finish → Review → Fix` |
+| **b** | 🔴 **IMPLEMENT COMPLETE, and its report survived in the journal** | **`Review → Fix`, stage 1 bypassed with the cached report** |
+| **c** | 8 commits, tree clean; E585/E583 never started | `Finish → Review → Fix` |
+
+**No lane tree was dirty**, so unlike round 58 nothing had to be rescued out of a working copy.
+**Lane b is E452's recipe used as intended**: the cached stage result is fed to the *real* `reviewPrompt`,
+so the prompt is regenerated exactly rather than approximated.
+
+⚠️ **A DEFECT IN THE RECOVERY SCRIPT WAS CAUGHT BY RENDERING, AGAIN.** Because lane b skips `finishPrompt`,
+its `PROVENANCE` block — which carries "do not undo the scope finding" and the E571 correction — **was
+never going to be delivered.** Provenance is now injected into the review stage as well. Nine prompts
+rendered and checked; `node --check` would have shown nothing.
+
+### 🔴 THE SCOPE MECHANISM WORKED ON ITS FIRST OUTING, AND CAUGHT A DEFECT IN THE BRIEF
+
+Round 59 replaced ownership-prose with a per-lane regex, a command, and two required schema fields (E591).
+**Lane b's very first finding is that items 1 and 2 of its own brief commission edits to files it does not
+own** — `tests/SwallowingCatchCensusTest.php` (tests root, owned by *nobody* this round) and
+`tests/Support/AssertionSwallowingCatchTest.php` (**lane a's**). Both were rejected by its scope regex, so
+the lane **measured instead of editing** and filed `Eb59-1`. **The supervisor wrote a brief that sent a lane
+out of its own lane, and the machine check caught it in the first stage.** Three rounds of prose never did
+that. Side-prediction s2 confirmed.
+
+⚠️ **AND ANOTHER BRIEF ITEM WAS FALSE: `EngineBackend::MAX_FRAME_BYTES` is `public`, not `private`.** E571
+said private and prescribed reflection. That is the third supervisor-authored brief defect in two rounds
+(E592 has the other two) — rule 47 is not decoration.
+
+### ✅ E490 IS ANSWERED — 240 TAKES, ZERO EVENTS (E593)
+
+**The campaign is COMPLETE.** 240 takes, every one `rc=0` and byte-identical; `EVENTS.txt` is two lines and
+both are the deliberate instrument check.
+
+| N | 95% one-sided upper bound |
+|---|---|
+| 53 (round 57) | 5.50% |
+| 165 (round 58 close) | 1.80% |
+| **240 (final)** | **1.2405%** |
+
+**Prior estimate 1 in 76 = 1.3158%, so the prior rate is now EXCLUDED at 95% — by 0.075 points.** 🔴 **This
+does NOT mean E490 is fixed.** 1.2405% is not zero and a hang at 1 in 500 is entirely consistent with 240
+clean takes. Lane c is asked to recommend a disposition WITH the arithmetic beside it. **The watchdog
+requirement below stays until that disposition is agreed.**
+
+### (superseded) the first round-59 launch — `wf_a06a8acb-ecc`
 
 **Round 58 is CLOSED, merged and recorded. Round 59 launched from base `e4c69b04e`** — nine agents,
 three lanes, `implement → review → fix` pipelined.
