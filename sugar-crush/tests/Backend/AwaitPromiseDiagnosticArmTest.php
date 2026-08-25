@@ -56,9 +56,12 @@ use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
  *
  * A `try` with only a `finally` is deliberately not this guard's subject: an
  * assertion failure propagates out of it untouched, which is the behaviour the
- * guard exists to preserve. MEASURED at the time of writing, that is most of
- * the population — the scanner sees ~20 `try` statements containing
- * `awaitPromise()` and only four carry a swallowing `catch` at all.
+ * guard exists to preserve. That is the large majority of the `try` statements
+ * containing `awaitPromise()`. No count is written here: a cardinality over
+ * `tests/` is invalidated by any lane's next merge (rule 18), and the first
+ * draft of this paragraph said "~20" where the measured figure was 17. The
+ * number this guard needs is derived instead - it asserts that the walk found
+ * a swallowing site AT ALL before reporting that none of them offends.
  *
  * WHY A SECOND RESOLVER RATHER THAN {@see
  * \SugarCraft\Crush\Tests\Support\AssertionSwallowingCatchTest::resolveCaughtType()}.
