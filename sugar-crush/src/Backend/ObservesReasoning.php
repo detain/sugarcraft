@@ -21,9 +21,12 @@ use SugarCraft\Crush\Message;
  *
  * ## Why a capability and NOT a fifth parameter on {@see Backend}
  *
- * MEASURED, not assumed, because the obvious fix is the wrong one. PHP treats
- * an implementation with FEWER parameters than its interface as a load-time
- * fatal — `Declaration of X::completeAsync(…) must be compatible with
+ * MEASURED, not assumed, because the obvious fix is the wrong one — and
+ * measured BY A TEST, {@see
+ * \SugarCraft\Crush\Tests\Backend\BackendContractWideningTest}, which
+ * compiles each case in a fresh interpreter rather than restating this
+ * paragraph. PHP treats an implementation with FEWER parameters than its
+ * interface as a load-time fatal — `Declaration of X::completeAsync(…) must be compatible with
  * Backend::completeAsync(…)` — even when the interface's extra parameter is
  * optional. Four-parameter `completeAsync()` declarations are the NORM in this
  * package's own test doubles and, by the same rule, in every third-party backend
@@ -31,8 +34,12 @@ use SugarCraft\Crush\Message;
  * point ("anything that returns text"). Widening it would break all of them at
  * once, and would do so at `require` time rather than at the call. (How many
  * there are is deliberately not written here — it moves whenever anyone adds a
- * double. The count as it stood, and the generator that produced it, are in the
- * hardening backlog; what this paragraph needs is that the number is not zero.)
+ * double. What this paragraph needs is that the number is not zero, and that
+ * is now derived rather than recorded: {@see
+ * \SugarCraft\Crush\Tests\Backend\BackendContractWideningTest::testAtLeastOneSHIPPEDBackendDeclaresTheNarrowFourParameterForm()}
+ * walks `src/Backend/` and reds if the narrow population empties — and reds
+ * just as loudly if the WIDE one does, so "some are narrow" cannot be satisfied
+ * by a walk that found nothing at all.)
  *
  * This is exactly the reasoning {@see ReportsContextWindow} already gives for
  * the same choice, and the shape is deliberately identical, down to the
@@ -45,7 +52,12 @@ use SugarCraft\Crush\Message;
  * four-parameter `completeAsync()`, and the sink would be dropped on the floor
  * with no diagnostic — userland functions accept surplus positional arguments
  * silently. Redeclaring the method here makes the claim a STRUCTURAL fact the
- * engine enforces at load time rather than a promise in prose.
+ * engine enforces at load time rather than a promise in prose. Both halves of
+ * that sentence are pinned: {@see
+ * \SugarCraft\Crush\Tests\Backend\BackendContractWideningTest::testASurplusPositionalArgumentToAUserlandMethodIsDroppedSilently()}
+ * for the silent drop a marker would have allowed, and {@see
+ * \SugarCraft\Crush\Tests\Backend\BackendContractWideningTest::testAFourParameterBackendCLAIMINGToObserveReasoningCannotLoad()}
+ * for the load-time fatal the redeclaration puts in its place.
  *
  * ## Why the three other in-repo backends do NOT implement it
  *
