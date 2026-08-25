@@ -11597,6 +11597,168 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 58 — killed by a session limit and recovered, the merge stayed green when it was predicted red, and the ownership mechanism was finally measured to death
+
+**CLOSED at `CLOSESHA`, from base `535d721ff`.** Killed once, recovered once; twelve agents in total across
+both runs, zero errors in the recovery. Backlog **555 → 592**.
+
+| package | floor at close |
+|---|---|
+| **sugar-crush** | **10269 / 159236 / 1 skipped / rc 0** |
+| **tools/tests** | **28 / 136 / rc 0** (was 9 / 41 two rounds ago) |
+| **candy-pty** | **630 / 1494 / 16 / 1 warning / rc 0** — see the campaign below; measured **165+ times**, not once |
+| candy-core · candy-flip · candy-mosaic | CARRIED, not re-measured — `git diff --name-only` shows no file in any of them |
+
+### THE ROUND DIED FIRST, AND WHAT SURVIVED IS THE POINT
+
+A session limit killed all three implementers **~9.5 minutes in**, with three `started` records and **zero
+completions** — so `resumeFromRunId` cached nothing, on top of E452 already saying it cannot recover a
+`pipeline()` round. Implement had reached **2 of 5 items (a), 0 of 4 (b), 3 of 7 (c)**, so the recovery was
+`Finish → Review → Fix`, as in round 56.
+
+**Lane b had 12 files and 246 insertions uncommitted** — its entire swallowing-catch sweep, in exactly the
+prescribed shape, **never executed by anyone**. Both dirty trees were committed verbatim as labelled WIP
+before anything else touched those roots, and the recovery brief told each finisher, per commit, what was
+the agent's own work and what was a supervisor-committed draft by someone no longer there to explain it.
+
+🔴 **TWO DEFECTS IN THE RECOVERY SCRIPT WERE CAUGHT BY RENDERING THE PROMPTS, AND `node --check` SAW
+NEITHER.** An undeclared `CAMPAIGN` const — a runtime `ReferenceError` that would have killed all three
+agents at launch — and a doubled backslash that would have shown agents `` \`E549\` `` instead of
+`` `E549` ``. **Parsing a workflow script is not rendering it. Render one prompt per lane before every
+launch**, and diff it against what you meant to say.
+
+### 🔴 E490 — THE CAMPAIGN IS THE SUPERVISOR'S NOW, AND THAT IS ITSELF THE FINDING
+
+Round 58's lane c was told, in red, to start the E490 campaign **before anything else**. Its transcript
+contains **zero** campaign calls across 43 tool uses. **Compliance with a 🔴 "before you do anything else"
+instruction: 0 of 1.**
+
+So the supervisor ran it directly instead: **240 takes of `candy-pty` in the main checkout, each
+watchdogged on its own pid**, started at the recovery launch and running alongside all nine agents. At the
+close it had reached **165+ takes with ZERO events**, no lane having touched a `candy-*` file all round.
+
+**The bound, stated the way rule 45 demands:**
+
+| N clean takes | 95% one-sided upper bound on the per-take rate |
+|---|---|
+| 53 (round 57) | 5.50% |
+| 165 | **1.80%** |
+| 240 (the target) | **1.24%** |
+
+**The prior estimate is ≈1 in 76 = 1.32%.** So 165 takes still does not exclude it — but **240 does, and
+only just.** That is the first N at which this campaign says something the previous two rounds could not,
+and it is why the target was set there rather than at a round number.
+
+🔴 **THE REAL LESSON IS ABOUT WHO RUNS A LONG MEASUREMENT.** A three-hour campaign does not belong to an
+agent that has a context limit and thirteen other items competing for it. It belongs to the supervisor,
+which has neither. Lane c reported the campaign this round instead of running it, and that separation is
+worth keeping permanently.
+
+### THE PREDICTION: ONE EXACT, ONE MISS ON EACH FIGURE, AND A RED THAT NEVER CAME
+
+| claim | outcome |
+|---|---|
+| sugar-crush tests **10285** EXACT | ❌ **10269, −16** |
+| sugar-crush assertions ≥ **160,000** | ❌ **159,236**, short by 764 |
+| skipped exactly 1 · rc 0 | ✅ |
+| candy-pty UNCHANGED (explicitly not repeating round 57's ≥632 error) | ✅ |
+| backlog 555 → 575–592 | ✅ **592** — landed exactly on the upper bound |
+| backlog conflicts **2×**, not 3× | ✅ **exactly 2** |
+| 🔴 **the merged suite goes RED again** | ❌ **green** |
+| (a) E490 gets N between 120–260 and is not closed | ✅ on track at 165+ |
+| (b) E529 gets deleted, not derived | ❌ **falsified — and better than predicted** |
+| (c) ownership map checked by ≥ 2 of 3 lanes | ❌ **0 of 3** |
+| (d) at least one lane reports its brief wrong | ✅ (3, 3 and 1 items) |
+| (e) a survivor that is a fact about the tree, not the guard | ❌ not reported by any lane |
+
+**The test total was EXACTLY additive** — 10215 + 45 + 6 + 3 = 10269 — so the miss is entirely in the
+**+70 estimate**, not in the merge behaving unexpectedly. The round lost ~9.5 minutes of work plus a full
+re-derivation to the kill, and +54 is what that bought.
+
+🔴 **THE RED MERGE WAS PREDICTED AND DID NOT HAPPEN, AND THAT PREDICTION WAS THE RIGHT ONE TO MAKE.** It
+argued that lane b was building a tree-wide census over `tests/` while lanes a and c created new test files
+it had never seen — the exact overlap that reddened round 57. It merged clean and green. **The assertion
+total exceeded the lane sum by only +20** (159,236 against 159,216), which is the same E354 mechanism firing
+faintly rather than not at all. Round 57's prediction was wrong to argue disjointness; this one was wrong
+to argue overlap. The honest reading is that **file-level and guard-level reasoning both under-determine
+the outcome**, and the merged suite has to be run either way.
+
+### 🔴 E591 — THE OWNERSHIP MECHANISM IS PROSE, AND PROSE IS NOT READ
+
+| round | map's state | lanes mentioning it |
+|---|---|---|
+| 56 | **stale** — shipped round 53's map (E492) | **0 of 3** |
+| 57 | freshly written, self-flagging; **rule 42 added in response** | **1 of 3** |
+| 58 | **reconciled against every lane's file list before launch**, and said so | **0 of 3** |
+
+Round 57's side-prediction (e) said in writing that a fallback to ≤1 would be *"a measured verdict that
+adding a rule ABOUT a rule does not change the rate, and the ownership mechanism needs to stop being
+prose."* **That is now the measurement**, over three rounds and nine lanes.
+
+**And the sharpest instance is in the same round.** Lane a flagged two files as out-of-lane edits because
+*"no explicit list was in my brief."* The list was in its brief, under a heading reading `## YOUR FILES —
+the split is strict this round`, and one of the two files is its **first entry** — verified by re-rendering
+the exact prompt the agent received. Both edits were in fact in-lane. **The edits were right and the
+reasoning was invented.**
+
+### 🔴 E592 — TWO OF THE SUPERVISOR'S OWN BRIEF ITEMS WERE FALSE
+
+One lane's five-item brief carried **two items that were false as written**, both authored here:
+
+- **E527's rule was stated INVERTED.** The brief said PHP lets an implementation declare fewer parameters
+  than its interface, so a new interface parameter is silently absent. Measured on 8.3.6: false in both
+  halves and **not symmetric** — widening an interface method is a **load-time fatal**. That is the reason
+  reasoning arrived as a capability interface and not a fifth parameter.
+- **E529 was FALSE AS FILED and had been promoted to the lane's headline item.** The guard it said did not
+  exist lives in `BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()`. The lane proved it by
+  **mutating the prose**: `316`→`317` and `297 files`→`298 files` each turn that test red.
+
+Both came from restating a backlog entry in the supervisor's own words at brief-writing time without
+re-deriving it. E529's original entry had itself reasoned from an absence — `grep -c` returned 0 in the file
+it expected — **without asking whether the guard lived somewhere else.**
+
+### WHAT THE LANES FOUND
+
+🔴 **Lane a's best finding came from ignoring the prescription's scope.** The review commissioned a guard
+for **three** sites; building it over the whole of `tests/` found a **fourth**, and the fourth was the only
+dangerous one. `StreamingCommandBackendTest::testACancelledCompletionReapsItsChild()` wrapped
+`awaitPromise()` in `catch (\RuntimeException)`, and `AssertionFailedError` extends
+`PHPUnit\Framework\Exception` extends `\RuntimeException` — **asserted in the guard, not assumed** — so that
+arm swallowed the harness's own timeout and discarded it as the rejection it was expecting. Its three
+siblings still reddened through their `instanceof` assertions. **This one could come out GREEN on a hang.**
+That is E546's actual shape, three files from where E546 was reported to be.
+
+Lane a also reproduced every MAJOR itself rather than repeating the review (rule 12) — including
+reconstructing the pre-fix tree and running the whole suite to confirm nothing pinned the arms — and hit
+**rule 43 on its own work**: it implemented a prescription exactly, then mutated its own fix and found the
+property was *arranged* rather than *asserted*.
+
+**Lane b found that a token brace-walk counts braces inside string literals.** `token_get_all('<?php $s =
+"$a}";')` yields a `T_ENCAPSED_AND_WHITESPACE` whose text is exactly `}`. An offender carrying one was
+reported **zero** times. Both comparisons are now gated on `is_string()`, and mutating each gate separately
+kills its **own** fixture, so neither is redundant. It also caught itself propagating a reviewer's sentence
+into a source comment before checking it (rule 12, verbatim) — `@PSR12` *does* carry
+`single_import_per_statement` — and the conclusion survived stronger than the false premise.
+
+**Lane c corrected two of its own predecessor's stamped-MEASURED doc-blocks**, both citing the wrong thing:
+one claiming `DuplicatedTestHelperDriftTest`'s roster is `src/` alone when the guard uses
+`TestFileWalkTrait::everyTestFile()` rooted at `tests/`, and one citing the pre-existing `docs-links` CI job
+for work that landed in the new `docs-generated` job. Both conclusions survived; both citations were wrong.
+
+### NEW STANDING RULES
+
+- **47** — **a brief is not a measurement, and it carries MORE authority than a review**, because nothing
+  downstream is asked to falsify it. An item that asserts a mechanism must cite the measurement or say it
+  is unverified. **And the converse: "my brief does not say X" is checkable in one grep** — check it before
+  you act on it.
+- **48** — **build the guard over the POPULATION, not over the sites the prescription names.** Three
+  commissioned, four found, and the fourth was the only one that could go green on a hang.
+- **49** — **a brace walk over `token_get_all()` must gate its comparisons on `is_string()`.**
+  `T_ENCAPSED_AND_WHITESPACE` text can be exactly `{` or `}`.
+- **50** — **a long measurement belongs to the supervisor, not to an agent.** A three-hour campaign given to
+  an agent with a context limit and thirteen other items was simply never started — 0 of 1.
+
+
 ## ROUND 57 — the merge went red on two guards, one of which was itself the defect, and E490 finally got a number
 
 **CLOSED at `CLOSESHA`, from base `1dea13c4f`.** Three lanes, nine agents, zero errors, 2h35m.
