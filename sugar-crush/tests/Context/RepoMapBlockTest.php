@@ -1253,7 +1253,8 @@ final class RepoMapBlockTest extends TestCase
             );
         }
 
-        $rendered = RepoMapBlock::capture($root)->render();
+        $block = RepoMapBlock::capture($root);
+        $rendered = $block->render();
 
         // THE POSITIVE HALF: every fact in the block came out of a manifest.
         foreach (['candy-alpha', 'sugar-beta', 'Acme\\Alpha\\', 'Acme\\Beta\\', 'The alpha package.', 'The beta package.'] as $fromManifest) {
@@ -1265,16 +1266,32 @@ final class RepoMapBlockTest extends TestCase
             );
         }
 
+        // THE WINDOW, AND IT IS THE HALF THE FIRST REVISION GOT WRONG. render()
+        // clips every line at MAX_ENTRY_BYTES, and this repository's own
+        // docblock records that most real package lines already clip - so a
+        // markdown read whose bytes land past the clip is INVISIBLE to an
+        // absence assertion taken on the render. MEASURED: with the sentinel
+        // appended to each description rather than prepended, so it falls off
+        // the end of the line, the render-only version of this test was GREEN.
+        // packages() and sourceDirectories() are the same facts uncapped and
+        // unclipped, so the absence is asserted over those as well.
+        $unclipped = $rendered . "\n" . var_export($block->packages(), true)
+            . "\n" . var_export($block->sourceDirectories(), true);
+
+        // ... and the window itself must not be empty for the wrong reason
+        // (rule 15): the uncapped view has to still carry the manifest facts.
+        $this->assertStringContainsString('The alpha package.', $unclipped);
+
         // THE ARGUMENT ITSELF: nothing came out of either markdown document.
         foreach ([$matchupsSentinel, $namesSentinel] as $sentinel) {
             $this->assertStringNotContainsString(
                 $sentinel,
-                $rendered,
+                $unclipped,
                 'RepoMapBlock read one of the two hand-maintained markdown documents. The '
                     . 'monorepo half of P8.8 is implemented generically from composer manifests '
                     . 'precisely so it works on repositories that are not this one; a parser for '
                     . "these two files binds a shipped feature to their formatting.\n"
-                    . $rendered,
+                    . $unclipped,
             );
         }
     }

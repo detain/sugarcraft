@@ -64,8 +64,25 @@ use SugarCraft\Crush\Support\ContainedPath;
  * measured rather than restated, against a fixture whose markdown carries
  * sentinels the render must not contain, by
  * {@see \SugarCraft\Crush\Tests\Context\RepoMapBlockTest::testTheMonorepoHalfIsDerivedFromManifestsAndNeverFromTheTwoMarkdownFiles()}.
- * The digits are gone rather than corrected, because a hand-updated number is
- * the same defect one round later.
+ * WHAT THIS FIX'S OWN SENTENCE SAID: "The digits are gone rather than
+ * corrected, because a hand-updated number is the same defect one round later."
+ * WHAT IS TRUE: it describes the retired census and nothing else, and read as
+ * a statement about this FILE it is false. The two constant docblocks below
+ * still restate this repository's package count, its rendered byte totals, its
+ * description-length median and how many of its lines clip. Each of those was
+ * re-derived and is correct today; not one of them is asserted by anything, and
+ * the median in particular moves on a `description` edit in ANY sub-package's
+ * manifest. WHY THE SENTENCE STILL EARNS ITS PLACE: its PRINCIPLE is right, and
+ * is why the census above was retired rather than bumped - what was wrong was
+ * reading it as a claim about the whole file. The survivors are recorded in the
+ * hardening backlog together with the generator that produces them, because
+ * they need one of two resolutions and a hand-edit is neither: they follow
+ * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest}'s pattern of
+ * asserting this file's prose against a derivation, or they become WHAT THIS
+ * SAID records like the one above. {@see
+ * \SugarCraft\Crush\Tests\Context\RepoMapBlockTest}'s own opening note
+ * forbids measuring against the real checkout, so the derivation cannot simply
+ * be moved into that file as it stands.
  *
  * The FIRST half is likewise not taken literally, for a narrower reason.
  * `vendor/composer/autoload_psr4.php` exists only after `composer install` has
