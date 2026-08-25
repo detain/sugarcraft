@@ -183,6 +183,139 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
     // Fixtures
     // =========================================================================
 
+    /**
+     * THE FILTER IS A HAND MIRROR OF A CLASS IT DOES NOT OWN, AND DRIFT REOPENS
+     * THE DEFECT SILENTLY.
+     *
+     * {@see StdioMcpServer::TOOL_DEFINITION_TYPES} lists three keys with three
+     * checks. Those three are exactly what {@see McpTool::fromArray()} subscripts
+     * out of `$data` today, and the checks match the constructor parameters they
+     * land in. Nothing enforced that. A fourth `$data['newField'] ?? ...` reading
+     * into a typed parameter reopens precisely the `TypeError` this file exists
+     * to close, and every row above it would stay green — they exercise the three
+     * keys that already work.
+     *
+     * So the correspondence is DERIVED here rather than restated: the keys come
+     * out of `fromArray()`'s own source, the expected checks out of
+     * {@see McpTool}'s constructor via reflection, and the const is required to
+     * agree with both in both directions — a missing key is drift, and a stale
+     * extra key is drift too.
+     *
+     * ⚠️ THE FIXTURE IS THE POINT. This row's central assertion is "two sets are
+     * equal", which a scanner that has stopped finding anything satisfies as
+     * happily as a correct one — an empty set equals an empty set. The first
+     * block therefore pushes a KNOWN-ANSWER source through the same extractor and
+     * requires it to return a specific non-empty set, including a key that is NOT
+     * in the const. If the extractor dies, that block reds before the comparison
+     * is ever reached.
+     *
+     * ⚠️ AND IT REFUSES WHAT IT CANNOT CLASSIFY. A constructor parameter whose
+     * type is not in the small map below FAILS the row rather than being skipped.
+     * A guard that quietly ignores the unparseable has a hole shaped exactly like
+     * the next defect.
+     */
+    public function testTheTypeFilterStillMirrorsEveryKeyMcpToolReads(): void
+    {
+        // ---- The known-answer control, first, because everything after it is a
+        // comparison that a dead extractor would satisfy.
+        $fixture = <<<'PHP'
+            public static function fromArray(array $data, string $serverName): self
+            {
+                return new self(
+                    alpha: $data['alpha'] ?? '',
+                    beta: $data['beta'] ?? [],
+                    gamma: $data['gamma'] ?? 0,
+                    serverName: $serverName,
+                );
+            }
+            PHP;
+
+        $this->assertSame(
+            ['alpha', 'beta', 'gamma'],
+            self::dataSubscriptsIn($fixture),
+            'the extractor cannot read $data[...] subscripts out of a source it was handed, so '
+            . 'the comparison below would be two empty sets agreeing with each other',
+        );
+        $this->assertNotContains(
+            'gamma',
+            array_keys($this->toolDefinitionTypes()),
+            'the control fixture has to contain a key the const does NOT, or "the extractor '
+            . 'found something" is indistinguishable from "the extractor echoed the const"',
+        );
+
+        // ---- The real comparison.
+        $reader = new \ReflectionMethod(McpTool::class, 'fromArray');
+        $source = (string) file_get_contents((string) $reader->getFileName());
+        $lines = explode("\n", $source);
+        $body = implode("\n", array_slice(
+            $lines,
+            $reader->getStartLine() - 1,
+            $reader->getEndLine() - $reader->getStartLine() + 1,
+        ));
+
+        $read = self::dataSubscriptsIn($body);
+        $this->assertNotSame([], $read, 'no $data subscripts found in fromArray() at all');
+
+        $filter = $this->toolDefinitionTypes();
+
+        $this->assertSame(
+            $read,
+            array_keys($filter),
+            'the type filter and McpTool::fromArray() no longer read the same keys. A key '
+            . 'fromArray() reads and the filter does not is a reopened TypeError on a peer\'s '
+            . 'reply — add it with the check matching its constructor parameter. A key the '
+            . 'filter carries and fromArray() no longer reads is a stale row — drop it.',
+        );
+
+        $expected = [];
+        foreach ((new \ReflectionClass(McpTool::class))->getConstructor()?->getParameters() ?? [] as $param) {
+            if (!in_array($param->getName(), $read, true)) {
+                continue;   // supplied by fromArray()'s own arguments, not by $data
+            }
+            $type = $param->getType();
+            $name = $type instanceof \ReflectionNamedType ? $type->getName() : '';
+            $checks = ['string' => 'is_string', 'array' => 'is_array', 'int' => 'is_int', 'bool' => 'is_bool', 'float' => 'is_float'];
+
+            $this->assertArrayHasKey(
+                $name,
+                $checks,
+                "McpTool::\${$param->getName()} is typed `{$name}`, which this row does not know how "
+                . 'to check. Add it to the map here — do NOT relax the assertion, and do NOT widen '
+                . "McpTool's property types to make it go away, which would close this row by "
+                . 'reopening the defect.',
+            );
+            $expected[$param->getName()] = $checks[$name];
+        }
+
+        $this->assertSame(
+            $expected,
+            $filter,
+            'a key is checked with the wrong predicate, so a value of the wrong type still '
+            . 'reaches the constructor and still raises the TypeError',
+        );
+    }
+
+    /** @return array<string, string> */
+    private function toolDefinitionTypes(): array
+    {
+        /** @var array<string, string> $types */
+        $types = (new \ReflectionClass(StdioMcpServer::class))->getConstant('TOOL_DEFINITION_TYPES');
+
+        return $types;
+    }
+
+    /**
+     * Every `$data['key']` subscript in a PHP source fragment, in order, deduped.
+     *
+     * @return list<string>
+     */
+    private static function dataSubscriptsIn(string $php): array
+    {
+        preg_match_all('/\$data\[\x27([A-Za-z_][A-Za-z0-9_]*)\x27\]/', $php, $m);
+
+        return array_values(array_unique($m[1]));
+    }
+
     private function serverAnswering(string $toolsJson): StdioMcpServer
     {
         $script = $this->tempDir . '/tools_' . md5($toolsJson) . '.php';
