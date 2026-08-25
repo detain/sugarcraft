@@ -2721,6 +2721,382 @@ final class AgentManagerTest extends TestCase
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
     }
 
+    // -------------------------------------------------------------------------
+    // WHAT THE FIRST ROUND OF THIS ITEM DID NOT PIN. Every per-call test above
+    // emits exactly ONE ToolCall, and a model returning two calls in one
+    // response is the ordinary case. Measured at the round-60 review: adding
+    // `break;` to the end of evaluateToolCalls()'s loop -- so only call #1 is
+    // ever grant-checked, denylist-checked or gate-checked -- SURVIVED the
+    // whole sugar-crush suite. So did turning the gate-null `continue` into a
+    // `return`. Both are pinned below.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param list<ToolCall> $calls
+     * @param list<string>   $grant
+     * @param list<string>   $deny
+     * @return array{AgentManager, SubAgent}
+     */
+    private function subAgentEmittingCalls(
+        array $calls,
+        array $grant,
+        array $deny = [],
+        ?PermissionMode $mode = null,
+        ?\Closure $approver = null,
+        ?array $registry = null,
+    ): array {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: $calls,
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: $mode === null ? null : static fn(): PermissionGate => new PermissionGate($mode),
+            permissionApprover: $approver,
+            toolRegistry: $registry,
+        );
+        $manager->register(new Agent(
+            name: 'multi',
+            description: 'multi description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $grant,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: $deny,
+        ));
+
+        return [$manager, $manager->createSubAgent('multi', 'do both')];
+    }
+
+    /**
+     * EVERY call in a response is evaluated, not just the first. The refusal
+     * must name the SECOND call's tool, which is the half a `break` after the
+     * first iteration silently loses.
+     */
+    public function testASecondToolCallInTheSameResponseIsAlsoGrantChecked(): void
+    {
+        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+            [
+                new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts']),
+                new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
+            ],
+            ['Read'],
+            mode: PermissionMode::BypassPermissions,
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'the loop must not stop after the first call');
+        $this->assertStringContainsString('Tool call "Edit"', $caught->getMessage());
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+    }
+
+    /**
+     * The same loop, with NO gate attached — the arm whose `continue` a `return`
+     * would silently convert into "grant-check the first call only". Without an
+     * assertion here, `continue`->`return` is invisible across the whole suite.
+     */
+    public function testASecondToolCallIsGrantCheckedWithNoGateAttached(): void
+    {
+        [$manager, $registered] = $this->subAgentEmittingCalls(
+            [
+                new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts']),
+                new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
+            ],
+            ['Read'],
+        );
+
+        // Same reachable gateless state testAToolTheAgentNeverDeclaredIsRefusedEvenWithNoGate
+        // documents: createSubAgent() always attaches a gate and the field is
+        // readonly, so the caller-built SubAgent executeAll() registers is the
+        // shape that reaches executeSubAgent() with none.
+        $subAgent = new SubAgent(
+            id: 'multigateless_' . bin2hex(random_bytes(6)),
+            agent: $registered->agent,
+            task: 'do both',
+        );
+        $this->assertNull($subAgent->permissionGate, 'the premise of this test');
+
+        $map = new \ReflectionProperty(AgentManager::class, 'subAgents');
+        $map->setValue($manager, [$subAgent->id => $subAgent] + $map->getValue($manager));
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'the gate-null arm must continue, not return');
+        $this->assertStringContainsString('Tool call "Edit"', $caught->getMessage());
+        $this->assertStringContainsString('(mode: unknown)', $caught->getMessage());
+    }
+
+    /**
+     * The DENYLIST half of the same loop: call #1 is clean, call #2 is denied.
+     * A `break` loses this one too, and the denylist is the half that fails
+     * DANGEROUS rather than merely narrow.
+     */
+    public function testASecondToolCallIsAlsoDenylistChecked(): void
+    {
+        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+            [
+                new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
+                new ToolCall(name: 'Bash', arguments: ['command' => 'git push --force']),
+            ],
+            ['Bash(git *)'],
+            ['Bash(git push*)'],
+            mode: PermissionMode::BypassPermissions,
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('is refused by the denylist', $caught->getMessage());
+    }
+
+    /**
+     * THE ORDER IS THE POINT, AND THE APPROVER IS THE WITNESS.
+     *
+     * evaluateToolCalls() checks the grant FIRST AND UNCONDITIONALLY, and its
+     * comment gives the reason: settling the agent's own question here keeps a
+     * call the agent never asked for from ever reaching a blocking approval
+     * prompt. Nothing pinned that. Measured at the round-60 review, skipping
+     * the grant check whenever the gate answers `Ask` — an out-of-grant call
+     * routed to the human approver, precisely the outcome the comment says is
+     * prevented — SURVIVED.
+     *
+     * `PermissionMode::Default` answers `Ask` for `Edit`, and this approver
+     * would say YES, so under that mutation the call is ALLOWED and this test
+     * reds in two places at once: no refusal, and the approver was consulted.
+     */
+    public function testAnOutOfGrantCallNeverReachesTheApprover(): void
+    {
+        $asked = [];
+
+        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+            [new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd'])],
+            ['Read'],
+            mode: PermissionMode::Default,
+            approver: static function (ToolCall $call) use (&$asked): bool {
+                $asked[] = $call->name;
+
+                return true;
+            },
+        );
+
+        // The premise, asserted rather than assumed: this gate really does
+        // answer Ask for this call, so a grant check that ran second would
+        // genuinely hand it to the approver.
+        $this->assertSame(
+            PermissionDecision::Ask,
+            (new PermissionGate(PermissionMode::Default))
+                ->evaluate(new ToolCall('Edit', ['file_path' => '/etc/passwd'])),
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'the grant must settle this before the gate is consulted');
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertSame([], $asked, 'a call the agent never asked for must not reach the approver');
+    }
+
+    /**
+     * The other polarity, so the test above is not simply "the approver is
+     * never called": a call INSIDE the grant does reach it, and its yes is what
+     * lets the call through.
+     */
+    public function testACallInsideTheGrantDoesReachTheApprover(): void
+    {
+        $asked = [];
+
+        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+            [new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd'])],
+            ['Edit'],
+            mode: PermissionMode::Default,
+            approver: static function (ToolCall $call) use (&$asked): bool {
+                $asked[] = $call->name;
+
+                return true;
+            },
+        );
+
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertSame(['Edit'], $asked);
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+    }
+
+    /**
+     * THE PRODUCTION SHAPE OF THE MALFORMED-DENYLIST GUARD, which the roster
+     * test beside it cannot reach.
+     *
+     * refuseCallOutsideGrant() parses BOTH lists for their side effect before
+     * matching anything, so a malformed entry throws rather than degrading into
+     * a rule that happens never to fire — and it degrades quietly: measured on
+     * PHP 8.3.6, `new PermissionRule('Bash(rm -rf *', Deny)` constructs fine,
+     * yields argumentPattern() === null and a tool-NAME pattern of
+     * `Bash(rm -rf *`, which matches no tool that exists. The denial silently
+     * never fires.
+     *
+     * WHY THE EXISTING ROSTER TEST DOES NOT COVER THIS. resolveGrantedTools()
+     * validates the denylist only AFTER its `$patterns === []` early return, so
+     * an agent with no grant never reaches that validation — and it is skipped
+     * entirely when the manager holds no registry, which is every production
+     * caller today. On that path these two calls are the ONLY validation that
+     * runs at all. Measured at the round-60 review: deleting both of them from
+     * refuseCallOutsideGrant() SURVIVED the whole sugar-crush suite.
+     */
+    public function testAMalformedDenylistIsRefusedAtCallTimeWithNoRegistryAndNoGrant(): void
+    {
+        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+            [new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /'])],
+            [],
+            ['Bash(rm -rf *'],
+            mode: PermissionMode::BypassPermissions,
+        );
+
+        // The premise, measured rather than assumed: this pattern really does
+        // degrade into a name pattern that matches nothing, so nothing else in
+        // the pipeline would stop the call.
+        $degraded = new \SugarCraft\Crush\Permissions\PermissionRule(
+            'Bash(rm -rf *',
+            \SugarCraft\Crush\Permissions\PermissionAction::Deny,
+        );
+        $this->assertNull($degraded->argumentPattern());
+        $this->assertFalse($degraded->matches(new ToolCall('Bash', ['command' => 'rm -rf /'])));
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'a malformed denial must throw, not silently never match');
+        $this->assertStringContainsString('disallowedTools pattern "Bash(rm -rf *"', $caught->getMessage());
+        $this->assertStringContainsString('unterminated', $caught->getMessage());
+    }
+
+    /**
+     * The GRANT list's half of the same side-effect parse, on the same
+     * registry-less path — so deleting either namePatterns() call from
+     * refuseCallOutsideGrant() reds, not just the denylist one.
+     */
+    public function testAMalformedGrantIsRefusedAtCallTimeWithNoRegistry(): void
+    {
+        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+            [new ToolCall(name: 'Read', arguments: ['file_path' => '/etc/hosts'])],
+            ['Read(x'],
+            mode: PermissionMode::BypassPermissions,
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('tools pattern "Read(x"', $caught->getMessage());
+        $this->assertStringContainsString('unterminated', $caught->getMessage());
+    }
+
+    /**
+     * THE TRAP IN THE WIRING, PINNED SO THE NEXT AGENT MEETS IT AS A RED TEST
+     * RATHER THAN AS A BROKEN SESSION.
+     *
+     * resolveGrantedTools() refuses a declaration that matches no tool in the
+     * registry, and that is correct ONLY while the registry it is handed is the
+     * UNFILTERED ceiling. `Bootstrap::tools()` does not return that: it returns
+     * `filterToolSet($tools)`, already narrowed by the operator's own
+     * `allowedTools`/`disabledTools`, and `filterToolSet()`'s own doc-block
+     * names `disabledTools: ["*"]` as a SUPPORTED way to ask for a toolless
+     * agent. So handing this method the filtered set turns a documented
+     * configuration into a hard refusal.
+     *
+     * MEASURED on PHP 8.3.6 at the round-60 review, by reflection against
+     * `Bootstrap::tools()`'s eleven-tool ceiling: with `Bash` removed, FIVE of
+     * the six built-in presets throw (only `architect` survives); with the
+     * registry empty, all six do.
+     *
+     * This test asserts the SEMANTICS rather than that figure — a count over
+     * the preset table would rot the moment a preset changes, and the figure is
+     * recorded above as the reason the semantics matter. What it pins is that
+     * an absence caused by policy is indistinguishable here from a typo, which
+     * is exactly why the wiring is not the one-liner the backlog first called
+     * it.
+     */
+    public function testAPolicyNarrowedRegistryIsIndistinguishableFromATypo(): void
+    {
+        $caught = null;
+
+        try {
+            // The ceiling holds Bash; this session's policy removed it. The
+            // declaration is correct and the operator asked for the narrowing.
+            $this->captureSubAgentRequest(['Read', 'Bash'], $this->fakeRegistry('Read', 'Grep'));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull(
+            $caught,
+            'if this stops throwing, resolveGrantedTools() has been changed to intersect — '
+            . 'update AgentManager::resolveGrantedTools()\'s doc-block and the backlog entry with it',
+        );
+        $this->assertStringContainsString('"Bash"', $caught->getMessage());
+        $this->assertStringContainsString('match no tool this session offers', $caught->getMessage());
+
+        // The same message a genuine typo produces, byte for byte in its shape.
+        // THIS is the finding: the method cannot tell the two apart, so a
+        // caller that hands it a filtered set converts a supported config into
+        // a crash.
+        $typo = null;
+
+        try {
+            $this->captureSubAgentRequest(['Read', 'Reed'], $this->fakeRegistry('Read', 'Grep'));
+        } catch (\RuntimeException $e) {
+            $typo = $e;
+        }
+
+        $this->assertNotNull($typo);
+        $this->assertSame(
+            str_replace('"Bash"', '<absent>', $caught->getMessage()),
+            str_replace('"Reed"', '<absent>', $typo->getMessage()),
+            'policy-narrowed and typo\'d declarations produce the identical refusal',
+        );
+    }
+
     private function createAgent(
         string $name = 'test-agent',
         string $prompt = 'Test prompt',
