@@ -183,13 +183,22 @@ Exit codes:
   1  Issues detected (closure drift, or --unused prune candidates)
   2  Fatal error (cannot resolve monorepo root)
 
-WHAT CI RUNS, IN ORDER, so you can run it before it runs you. The
-`path-repo-check` job in .github/workflows/ci.yml is these commands and nothing
-else; three of them had no counterpart anyone had written down, which is why a
-contributor could be failed by a check they had no way to reproduce. THIS BLOCK
-IS CHECKED AGAINST THE WORKFLOW, not proof-read: add a step there without adding
-it here and CheckPathReposTest reds, which is the only reason a block of prose
-about CI is worth writing at all.
+WHAT CI RUNS, IN ORDER, so you can run it before it runs you. THIS BLOCK IS
+CHECKED AGAINST THE WORKFLOW, not proof-read: add a step there without adding it
+here and CheckPathReposTest reds, which is the only reason a block of prose about
+CI is worth writing at all.
+
+WHAT THIS PARAGRAPH USED TO SAY: "The `path-repo-check` job in
+.github/workflows/ci.yml is these commands and nothing else". WHAT IS TRUE NOW:
+they are the `tools-guards` job and the `path-repo-check` job, which `needs:`
+it. The first line below moved into a job of its own because a red from
+tools/tests/ was arriving under the name "Path-repo policy" and misdescribing
+itself — those files now also pin a scanner copied from sugar-crush, so a
+one-token change there failed a job whose name says composer manifests. WHY THE
+REST STILL EARNS ITS PLACE: the SET did not move when the jobs did, and the set
+is what you can run. Three of these had no counterpart anyone had written down,
+which is why a contributor could be failed by a check they had no way to
+reproduce.
 
     phpunit --no-configuration --colors=never tools/tests/   # this script's own guard
     php tools/check-path-repos.php --no-lib-path-repos

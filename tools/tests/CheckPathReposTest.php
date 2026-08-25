@@ -58,6 +58,27 @@ use PHPUnit\Framework\TestCase;
 
 final class CheckPathReposTest extends TestCase
 {
+    /**
+     * The CI jobs whose `run:` steps the `--help` block claims to reproduce.
+     *
+     * TWO JOBS RATHER THAN ONE SINCE E589. `tools/tests/` used to be the first
+     * step of `path-repo-check`, so a red from a file in this directory arrived
+     * under a job called "Path-repo policy" — which for the stacked-doc-comment
+     * copy pin means a `sugar-crush` contributor is told a manifest gate failed
+     * when nothing about manifests changed. The step became the `tools-guards`
+     * job; `path-repo-check` `needs:` it, so a red there still stops the
+     * manifest verdicts being read as evidence.
+     *
+     * ORDER IS IRRELEVANT HERE and deliberately so: {@see tidyCommands()} sorts
+     * and de-duplicates, and the claim being checked is a SET — "these are the
+     * commands, run them before you push" — not a sequence. The sequence is
+     * carried by the workflow's own `needs:` and by the order of the lines in
+     * the `--help` block, neither of which this comparison can see.
+     *
+     * @var list<string>
+     */
+    private const CI_JOBS = ['tools-guards', 'path-repo-check'];
+
     use TmpTree;
 
     protected function setUp(): void
@@ -227,6 +248,19 @@ final class CheckPathReposTest extends TestCase
      * help reds; a command left in the help after its step is deleted reds too.
      * Comparing sets rather than asserting containment is what makes the second
      * half work.
+     *
+     * WHAT THIS SAID WHEN IT WAS WRITTEN: that the block is compared against
+     * "the path-repo-check job", singular. WHAT IS TRUE NOW: those commands
+     * live in TWO jobs. `tools/tests/` was split out into `tools-guards`
+     * because a red from these files was arriving under a job called
+     * "Path-repo policy" and misdescribing itself (E589); `path-repo-check`
+     * `needs:` it, so the ordering the single job encoded is unchanged. WHY
+     * THIS STILL EARNS ITS PLACE: the claim was never about a job, it was about
+     * a contributor being able to reproduce every gate before pushing, and the
+     * SET of commands did not move when the jobs did. It is now taken over
+     * {@see CI_JOBS} — and the split is exactly the kind of edit that could
+     * have left this guard reading one job and reporting a clean set, which is
+     * why the known-positive below is PER JOB rather than over the union.
      */
     public function testTheHelpTextNamesExactlyWhatTheWorkflowRuns(): void
     {
@@ -234,19 +268,28 @@ final class CheckPathReposTest extends TestCase
         $workflow = \file_get_contents($root . '/.github/workflows/ci.yml');
         $this->assertIsString($workflow, 'ci.yml is unreadable, so this comparison speaks for nothing');
 
-        $fromWorkflow = $this->pathRepoCheckCommands($workflow);
+        // KNOWN-POSITIVE FIRST, AND PER JOB (rule 15). Both sides are parsed
+        // out of text, and two empty lists compare equal — which is exactly
+        // what a parser that has stopped matching produces on both sides at
+        // once. A union-only check is weaker still: with two jobs on the
+        // roster, a parser that silently sees only one of them is non-empty
+        // and reports a set that is missing a whole gate.
+        $collected = [];
+        foreach (self::CI_JOBS as $job) {
+            $found = $this->ciJobCommands($workflow, $job);
+            $this->assertNotSame(
+                [],
+                $found,
+                'the ' . $job . ' job parsed to no commands at all, so the comparison below is '
+                . 'missing every gate that job runs. The job block or the run: shape has '
+                . 'changed and this parser has to be taught it — or the job was renamed, in '
+                . 'which case update CI_JOBS',
+            );
+            $collected = [...$collected, ...$found];
+        }
+        $fromWorkflow = $this->tidyCommands($collected);
         $fromHelp = $this->helpTextCiCommands($this->runScript($root, ['--help'])['output']);
 
-        // KNOWN-POSITIVE FIRST (rule 15). Both sides are parsed out of text,
-        // and two empty lists compare equal — which is exactly what a parser
-        // that has stopped matching produces on both sides at once.
-        $this->assertNotSame(
-            [],
-            $fromWorkflow,
-            'the path-repo-check job parsed to no commands at all, so the comparison below is '
-            . 'two empty lists agreeing with each other. The job block or the run: shape has '
-            . 'changed and this parser has to be taught it',
-        );
         $this->assertNotSame(
             [],
             $fromHelp,
@@ -256,20 +299,77 @@ final class CheckPathReposTest extends TestCase
         $this->assertSame(
             $fromWorkflow,
             $fromHelp,
-            "the --help text's \"WHAT CI RUNS\" block and the path-repo-check job in "
-            . '.github/workflows/ci.yml have diverged. A contributor reads that block to '
-            . 'reproduce the job before pushing; if it is missing a step they are failed by a '
-            . 'check they had no way to run. Update the block in tools/check-path-repos.php, '
-            . 'not this assertion',
+            "the --help text's \"WHAT CI RUNS\" block and the " . \implode(' + ', self::CI_JOBS)
+            . ' jobs in .github/workflows/ci.yml have diverged. A contributor reads that block '
+            . 'to reproduce those jobs before pushing; if it is missing a step they are failed '
+            . 'by a check they had no way to run. Update the block in '
+            . 'tools/check-path-repos.php, not this assertion',
         );
     }
 
     /**
-     * Every shell command the `path-repo-check` job runs, normalised.
+     * The workflow parser reads the job it is asked for, and only that job.
+     *
+     * RULE 25, AND THE REASON IT IS HERE RATHER THAN ASSUMED. The check above
+     * became a two-job comparison the moment `tools/tests/` was split into its
+     * own CI job, and it now leans on this parser to tell two adjacent jobs
+     * apart. Three ways that can be wrong all leave the real comparison green:
+     * reading every job whatever the name (the union is then a superset that
+     * happens to match the help block today), reading the FIRST job whatever
+     * the name, and running past a job's end into the next one's steps.
+     *
+     * The fixture answers all three, and deliberately puts the wanted job
+     * BETWEEN two decoys so "first job" and "last job" are both wrong answers.
+     */
+    public function testTheWorkflowParserReadsTheJobItIsAskedFor(): void
+    {
+        $workflow = <<<'YAML'
+            jobs:
+              decoy-before:
+                steps:
+                  - run: echo before
+              wanted:
+                steps:
+                  - run: echo alpha   # a trailing comment, stripped
+                  - name: a block scalar
+                    run: |
+                      echo beta
+                      echo gamma
+              decoy-after:
+                steps:
+                  - run: echo after
+            YAML;
+
+        $this->assertSame(
+            ['echo alpha', 'echo beta', 'echo gamma'],
+            $this->ciJobCommands($workflow, 'wanted'),
+            'the parser did not return exactly the run: commands of the job it was asked for',
+        );
+
+        $this->assertSame(
+            ['echo before'],
+            $this->ciJobCommands($workflow, 'decoy-before'),
+            'the parser returns the same job whatever name it is given',
+        );
+
+        $this->assertSame(
+            [],
+            $this->ciJobCommands($workflow, 'absent'),
+            'the parser invented commands for a job that is not in the workflow',
+        );
+    }
+
+    /**
+     * Every shell command one named job runs, normalised.
+     *
+     * TAKES THE JOB NAME rather than hard-coding it: the commands this file
+     * compares against `--help` are spread over {@see CI_JOBS} since E589's
+     * split, and a parser that could only ever answer for one of them would
+     * have made that split silently drop a gate from the comparison.
      *
      * @return list<string> sorted
      */
-    private function pathRepoCheckCommands(string $workflow): array
+    private function ciJobCommands(string $workflow, string $job): array
     {
         $lines = \explode("\n", $workflow);
         $commands = [];
@@ -278,7 +378,7 @@ final class CheckPathReposTest extends TestCase
 
         foreach ($lines as $line) {
             if (\preg_match('/^  ([A-Za-z0-9_-]+):\s*$/', $line, $m) === 1) {
-                $inJob = $m[1] === 'path-repo-check';
+                $inJob = $m[1] === $job;
                 $blockIndent = null;
 
                 continue;

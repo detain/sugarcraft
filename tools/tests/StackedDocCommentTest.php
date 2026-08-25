@@ -26,10 +26,12 @@ use PHPUnit\Framework\TestCase;
  * round: a guard HERE may read `sugar-crush`, and never the reverse.
  *
  * WHY THE SCANNER IS A COPY, WHICH IS NORMALLY THE WRONG ANSWER. The zero-copy
- * shape was tried first and MEASURED not to work. `.github/workflows/ci.yml`'s
- * `path-repo-check` job — the only job that runs these files — does NO
- * `composer install` at all (it reads manifests, it does not resolve them),
- * which is why it installs a PHPUnit PHAR instead of borrowing a lib's. There
+ * shape was tried first and MEASURED not to work. The job that runs these files
+ * — `tools-guards` in `.github/workflows/ci.yml`, which THIS VERY PIN is the
+ * reason for, since a red here used to arrive under a job named "Path-repo
+ * policy" and misdescribe itself (E589) — does NO `composer install` at all.
+ * Nothing under `tools/` is a composer package, so there is no per-lib
+ * `vendor/bin/phpunit` to borrow and the job installs a PHPUnit PHAR. There
  * is therefore no autoloader for `SugarCraft\Crush\Tests\*` in that job, and
  * `require`-ing the canonical guard to reach its scanner by reflection dies
  * before PHPUnit reports anything: VERIFIED on this box, PHP 8.3.6, it fatals
