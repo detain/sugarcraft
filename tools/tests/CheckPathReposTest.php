@@ -360,6 +360,110 @@ final class CheckPathReposTest extends TestCase
     }
 
     /**
+     * The manifest job still runs only after the guard job.
+     *
+     * WHY THIS EXISTS, AND IT IS A HOLE THIS ROUND OPENED. `tools/tests/` used
+     * to be the FIRST STEP of `path-repo-check`, and a step's position inside a
+     * job is an ordering nothing has to assert — the runner enforces it. E589's
+     * split moved that step into `tools-guards` and replaced the ordering with a
+     * `needs:` edge, which is a declaration in a file and can be deleted like
+     * any other. MEASURED: with `needs: [tools-guards]` removed from
+     * `path-repo-check`, the whole of `tools/tests/` was GREEN — 29 tests, 140
+     * assertions — while three doc-blocks in this tree (this file's
+     * {@see CI_JOBS}, the `--help` block in `tools/check-path-repos.php`, and
+     * the job comment in `ci.yml`) all asserted the edge was there.
+     *
+     * That is prose claiming a mechanism with no generator. It is asserted now.
+     */
+    public function testTheManifestJobStillRunsAfterTheGuardJob(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $workflow = \file_get_contents($root . '/.github/workflows/ci.yml');
+        $this->assertIsString($workflow, 'ci.yml is unreadable, so this assertion speaks for nothing');
+
+        // THE FIXTURE FIRST, because `[]` is also what a reader that has stopped
+        // matching returns (rule 25), and the negative arms below are all `[]`.
+        // `second` carries the edge as a COMMENT: a reader keyed on text rather
+        // than on the line's shape would report it as a declaration.
+        $fixture = <<<'YAML'
+            jobs:
+              first:
+                needs: [alpha, beta]
+                steps:
+                  - run: echo one
+              second:
+                # needs: [gamma] — prose about an edge, not an edge
+                steps:
+                  - run: echo two
+            YAML;
+
+        $this->assertSame(
+            ['alpha', 'beta'],
+            $this->ciJobNeeds($fixture, 'first'),
+            'the needs: reader cannot read an edge it is pointed straight at',
+        );
+        $this->assertSame(
+            [],
+            $this->ciJobNeeds($fixture, 'second'),
+            'the needs: reader counted a commented-out edge as a declared one',
+        );
+        $this->assertSame(
+            [],
+            $this->ciJobNeeds($fixture, 'absent'),
+            'the needs: reader invented an edge for a job that is not in the workflow',
+        );
+
+        $this->assertSame(
+            ['tools-guards'],
+            $this->ciJobNeeds($workflow, 'path-repo-check'),
+            'path-repo-check no longer declares `needs: [tools-guards]`. Every verdict that '
+            . 'job prints is produced by tools/check-path-repos.php, and a run of it whose own '
+            . 'classifiers are red is not evidence about the manifests — which is why '
+            . 'tools/tests/ used to be that job\'s first step. Restore the edge, or rewrite '
+            . 'the three doc-blocks that say it is there (this file\'s CI_JOBS, the --help CI '
+            . 'block, and the job comment in ci.yml)',
+        );
+    }
+
+    /**
+     * The job names one named job declares in `needs:`, sorted, or `[]`.
+     *
+     * READS THE LINE'S SHAPE, NOT ITS TEXT (rule 40): a `needs:` at exactly the
+     * job-key indent, with an inline list. A comment mentioning the edge, or a
+     * `needs:` belonging to a different job, is not a declaration.
+     *
+     * @return list<string> sorted
+     */
+    private function ciJobNeeds(string $workflow, string $job): array
+    {
+        $inJob = false;
+        foreach (\explode("\n", $workflow) as $line) {
+            if (\preg_match('/^  ([A-Za-z0-9_-]+):\s*$/', $line, $m) === 1) {
+                $inJob = $m[1] === $job;
+
+                continue;
+            }
+            if (!$inJob) {
+                continue;
+            }
+            if (\preg_match('/^    needs:\s*\[([^\]]*)\]\s*$/', $line, $m) === 1) {
+                $names = \array_values(\array_filter(
+                    \array_map(
+                        static fn (string $n): string => \trim($n, " \t'\""),
+                        \explode(',', $m[1]),
+                    ),
+                    static fn (string $n): bool => $n !== '',
+                ));
+                \sort($names);
+
+                return $names;
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Every shell command one named job runs, normalised.
      *
      * TAKES THE JOB NAME rather than hard-coding it: the commands this file
