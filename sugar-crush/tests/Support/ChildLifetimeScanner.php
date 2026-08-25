@@ -761,6 +761,26 @@ final class ChildLifetimeScanner
      */
     private static function keysOf(string $literal): ?array
     {
+        $arms = self::ternaryArms($literal);
+        if ($arms !== null) {
+            $first = self::keysOf($arms[0]);
+            $second = self::keysOf($arms[1]);
+
+            if ($first === null || $second === null) {
+                return null;
+            }
+
+            // AGREEMENT IS THE WHOLE CONDITION, and disagreement is a null
+            // rather than a union or a first-arm guess. If the branches name
+            // different fds then which fds the spec names is a RUNTIME fact,
+            // and a syntactic instrument saying otherwise is the confident
+            // wrong answer this class exists to avoid.
+            \sort($first);
+            \sort($second);
+
+            return $first === $second ? $first : null;
+        }
+
         $elements = self::topLevelArrayElements($literal);
         if ($elements === null) {
             return null;
@@ -803,6 +823,157 @@ final class ChildLifetimeScanner
         }
 
         return \range(0, $positional - 1);
+    }
+
+    /**
+     * The two arms of a top-level ternary, or null when the literal is not one.
+     *
+     * E447. `candy-core/src/Program.php::runExec()` spells its descriptor spec
+     * `$descriptors = $req->captureOutput ? [...] : [...]`, and until this
+     * method existed that was the ONE unreadable spec in the whole reachable
+     * closure - the local-variable path resolved the assignment perfectly and
+     * then handed {@see keysOf()} a conditional expression it could only
+     * refuse. The refusal was correct and the diagnosis "this spec cannot be
+     * read" was not: BOTH arms are array literals with the integer keys 0, 1
+     * and 2, so the fds the spec names do not depend on the condition at all.
+     *
+     * WHY THIS IS NOT AN EXPRESSION EVALUATOR, and where the line is. Exactly
+     * ONE top-level `?` and ONE top-level `:` qualify. A nested ternary, a
+     * short `?:`, a `match`, anything with more or fewer - null, which
+     * {@see specFds()}'s caller treats as a finding rather than as an absence
+     * of one. Rule 14: the guard goes red on what it cannot parse.
+     *
+     * `??` CANNOT BE MISTAKEN FOR A `?` HERE, measured on PHP 8.3.6 rather
+     * than assumed: the null-coalescing operator lexes as the single token
+     * T_COALESCE, and `?->` as T_NULLSAFE_OBJECT_OPERATOR, so neither ever
+     * appears as the bare `?` string token this counts.
+     *
+     * A RETURN TYPE'S `:` IS AT DEPTH 0, AND THE SENTENCE THAT SAID OTHERWISE
+     * WAS INVERTED. WHAT IT SAID: "a `:` from a named argument or a return
+     * type is always inside parentheses and so is never at depth 0 of an
+     * expression." WHAT IS TRUE, measured on PHP 8.3.6 with the same depth
+     * accounting this method uses: the named-argument half holds - `foo(a: 1)`
+     * produces no depth-0 `?` or `:` at all - and the return-type half is
+     * backwards. `fn(): array => [0 => 1]` puts the `:` at depth 0, and
+     * `fn(): ?array => [0 => 1]` puts a bare `?` there too. WHY THE
+     * BEHAVIOUR IS STILL CORRECT, which is a different claim from the one that
+     * sentence made: a return type's `:` always arrives BEFORE any conditional
+     * `?`, so it meets `$question === null` and refuses; the nullable type's
+     * `?` sits after that `:` and is never reached. The refusal is real, it is
+     * just performed by the ordering rule rather than by parenthesis depth.
+     * WHY THIS EARNS ITS PLACE RATHER THAN BEING DELETED: it names the two
+     * shapes a reader will otherwise re-derive, and it marks the ordering rule
+     * as load-bearing - loosening `$question === null` to accept a leading `:`
+     * would silently start reading arrow-function bodies as ternary arms.
+     * Pinned by the 'arrow fn with a return type' and 'arrow fn with a
+     * nullable return type' cases in
+     * {@see \SugarCraft\Crush\Tests\Support\ChildLifetimeScannerFixtureTest::descriptorSpecs()}.
+     *
+     * @return array{0:string,1:string}|null
+     */
+    private static function ternaryArms(string $literal): ?array
+    {
+        $tokens = \token_get_all('<?php ' . $literal . ';');
+        $depth = 0;
+        $question = null;
+        $colon = null;
+
+        foreach ($tokens as $i => $token) {
+            $text = self::tokenText($token);
+
+            if (\in_array($text, ['[', '(', '{'], true)) {
+                $depth++;
+
+                continue;
+            }
+            if (\in_array($text, [']', ')', '}'], true)) {
+                $depth--;
+
+                continue;
+            }
+            if ($depth !== 0 || !\is_string($token)) {
+                continue;
+            }
+
+            if ($text === '?') {
+                // DORMANT AS A DIFFERENCE, KEPT AS THE CONTRACT, and both
+                // halves are measured rather than argued. A differential
+                // oracle - this method against a copy with these three lines
+                // deleted - found ZERO differing answers over an adversarial
+                // corpus of top-level spellings. The clause below refuses
+                // every multi-`?` shape that corpus can produce, because a
+                // second `?` at depth 0 always arrives with a second `:`
+                // behind it.
+                //
+                // THE CORPUS IS IN THE TREE, WHICH IT WAS NOT. What this
+                // comment used to cite was a count - "14 adversarial top-level
+                // spellings on PHP 8.3.6" - measured by a script in a
+                // scratchpad that no longer exists, so the one argument for
+                // keeping two clauses a mutation records as individually
+                // surviving could not be re-run by the next reader. Rule 3
+                // applies to a sentence as much as to a figure: a measurement
+                // whose generator is gone is a claim. The spellings now live
+                // as named cases in
+                // {@see \SugarCraft\Crush\Tests\Support\ChildLifetimeScannerFixtureTest::descriptorSpecs()}
+                // - nested ternary with and without parentheses, `?:`, `??`,
+                // an array-union tail, a match expression, an array
+                // dereference, a spread, named arguments, and both arrow-
+                // function return-type shapes - so deleting these three lines
+                // and running that provider IS the differential, on any tree,
+                // by anybody. No count is written here on purpose (rule 18):
+                // the provider is the list.
+                //
+                // THE REDUNDANCY IS SYMMETRIC, WHICH THE FIRST READING OF THIS
+                // MISSED. Deleting the `:` clause instead leaves the suite
+                // green too - each of the two refusals covers the other's
+                // cases on its own. Deleting BOTH reds the
+                // nested-ternary-without-parentheses fixture. So the PAIR is
+                // load-bearing and neither member is individually, which is
+                // what defence in depth looks like under mutation and is worth
+                // saying plainly: a reader who mutates one of these, sees
+                // green, and removes it has not measured what they think.
+                //
+                // NOT DELETED, and the reason is not sentiment. The rule this
+                // method advertises is "exactly one top-level `?` and one
+                // top-level `:`", and one of those two halves would otherwise
+                // be enforced only as a side effect of the other. A later
+                // loosening of the `:` clause - to tolerate a named argument,
+                // say - would silently take this half with it, and the
+                // resulting answer would be an fd set read off one arm of an
+                // expression with two conditions in it. Pinned as behaviour
+                // rather than as a line by the 'nested ternary without
+                // parentheses' fixture, which asserts the refusal without
+                // asserting which clause performs it.
+                if ($question !== null) {
+                    return null;
+                }
+                $question = $i;
+            } elseif ($text === ':') {
+                if ($colon !== null || $question === null) {
+                    return null;
+                }
+                $colon = $i;
+            }
+        }
+
+        if ($question === null || $colon === null) {
+            return null;
+        }
+
+        $first = \trim(self::codeText($tokens, $question + 1, $colon - 1));
+        $second = \trim(self::codeText($tokens, $colon + 1, \count($tokens) - 1));
+
+        // The trailing `;` this method appended to make the source lexable.
+        $second = \rtrim($second);
+        if (\str_ends_with($second, ';')) {
+            $second = \rtrim(\substr($second, 0, -1));
+        }
+
+        if ($first === '' || $second === '') {
+            return null;
+        }
+
+        return [$first, $second];
     }
 
     /** Whether an array element's own top level carries a `=>`. */
@@ -1019,6 +1190,39 @@ final class ChildLifetimeScanner
                 $current = \trim($current);
                 if ($current !== '') {
                     $elements[] = $current;
+                }
+
+                // AN ARRAY LITERAL FOLLOWED BY ANYTHING IS NOT AN ARRAY
+                // LITERAL, and until this check existed the answer was WRONG
+                // rather than refused - the one polarity this class is written
+                // to avoid. MEASURED on PHP 8.3.6, before the check:
+                // `$d = [0 => ['pipe','r']] + [1 => ['pipe','w']];` answered
+                // fds `[0]`. The union names 0 AND 1. It is not a spec the
+                // scanner could not read; it is a spec the scanner read half
+                // of and reported as complete, which then passes
+                // DescriptorInheritanceGuardTest's readability arm as a
+                // perfectly ordinary two-fd spec.
+                //
+                // FOUND BY A DIFFERENTIAL ORACLE run for an unrelated question
+                // - whether the multi-`?` refusal in ternaryArms() can ever
+                // change an answer - which is the argument for building the
+                // oracle rather than reading the clause. `[0=>1] ?: [1=>2]`
+                // answered `[0]` for the same reason.
+                //
+                // Only SIGNIFICANT tokens count: whitespace, comments and the
+                // `;` this method's caller appends are the ordinary tail of a
+                // well-formed literal.
+                for ($j = $i + 1; $j < $count; $j++) {
+                    $tail = $tokens[$j];
+                    if (\is_array($tail)
+                        && \in_array($tail[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                        continue;
+                    }
+                    if (\is_string($tail) && $tail === ';') {
+                        continue;
+                    }
+
+                    return null;
                 }
 
                 return $elements;

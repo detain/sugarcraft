@@ -427,6 +427,171 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             [0, 1],
         ];
 
+        // E447. A TERNARY WHOSE ARMS AGREE. `candy-core/src/Program.php::runExec()`
+        // spells its spec `$req->captureOutput ? [0 => $childIn, 1 => ['pipe','w'],
+        // 2 => ['pipe','w']] : [0 => $childIn, 1 => $childOut, 2 => $childErr]`
+        // - copied from the source rather than paraphrased, because a quotation
+        // a reader cannot find by searching for it is worse than a summary -
+        // and it was
+        // the ONE unreadable spec in the whole reachable closure. The refusal
+        // was correct and the diagnosis was not: both arms carry the integer
+        // keys 0, 1 and 2, so which fds the spec names does not depend on the
+        // condition at all. Only the VALUES do, and this instrument reads
+        // keys.
+        $ternary = static fn (string $a, string $b): string => "<?php\nclass C {\n    private \$h;\n"
+            . "    public function m(array \$pipes) {\n        \$d = \$c ? {$a} : {$b};\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n";
+
+        yield 'ternary whose arms name the same fds' => [
+            $ternary("[0 => \$in, 1 => ['pipe','w'], 2 => ['pipe','w']]", "[0 => \$in, 1 => \$out, 2 => \$err]"),
+            [0, 1, 2],
+        ];
+
+        // ORDER IS NOT PART OF THE ANSWER. The arms name a SET of fds; a
+        // branch that happens to spell them in a different order names the
+        // same set, and refusing it would red correct code.
+        yield 'ternary whose arms agree out of order' => [
+            $ternary("[1 => ['pipe','w'], 0 => ['pipe','r']]", "[0 => ['pipe','r'], 1 => ['pipe','w']]"),
+            [0, 1],
+        ];
+
+        // THE POLARITY THAT MATTERS MOST. If the branches name DIFFERENT fds
+        // then which fds the spec names is a runtime fact, and answering with
+        // either arm - or with their union - would be the confident wrong
+        // answer this instrument exists to avoid.
+        yield 'ternary whose arms disagree' => [
+            $ternary("[0 => ['pipe','r']]", "[0 => ['pipe','r'], 3 => ['pipe','w']]"),
+            null,
+        ];
+
+        // The line is drawn at exactly one top-level `?` and one top-level
+        // `:`; everything past that is an expression evaluator this is not.
+        yield 'nested ternary' => [$ternary("(\$e ? [0 => 1] : [0 => 1])", '[0 => 1]'), null];
+
+        // WITHOUT the parentheses, which is a different code path and the one
+        // the "exactly one top-level `?`" rule is about. Asserted as a
+        // REFUSAL, deliberately not as a claim about which clause performs it:
+        // a differential oracle showed the multi-`?` clause and the trailing
+        // `:` clause currently refuse the same set, so a fixture naming one of
+        // them would pin an implementation detail instead of the contract.
+        yield 'nested ternary without parentheses' => [
+            $ternary('[0 => 1]', "\$e ? [0 => 2] : [0 => 3]"),
+            null,
+        ];
+
+        // AN ARRAY LITERAL FOLLOWED BY ANYTHING IS NOT AN ARRAY LITERAL, and
+        // this used to be answered WRONG rather than refused: measured on PHP
+        // 8.3.6, `[0 => ['pipe','r']] + [1 => ['pipe','w']]` reported fds
+        // `[0]`, having read the first operand and dropped the union that adds
+        // fd 1. A half-read spec reported as complete passes the guard's
+        // readability arm as an ordinary two-fd spec, which is the polarity
+        // this scanner exists to avoid.
+        yield 'array union' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [0 => ['pipe','r']] + [1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array literal with an elvis tail' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [0 => ['pipe','r']] ?: [1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'ternary arm that is not an array' => [$ternary('$x', '[0 => 1]'), null];
+
+        // `?:` and `??` lex as their own tokens on PHP 8.3.6 (T_COALESCE, and
+        // a short ternary has no `?` followed by a separate `:` to pair), so
+        // neither is mistaken for the conditional this reads. Pinned rather
+        // than reasoned about: both are one character from the shape above.
+        yield 'short ternary' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = \$c ?: [0 => ['pipe','r']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'null coalesce' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = \$c ?? [0 => ['pipe','r'], 1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // A RETURN TYPE'S `:` IS AT DEPTH 0, WHICH ternaryArms()' DOC-BLOCK
+        // USED TO DENY. Measured on PHP 8.3.6: `fn(): array => ...` puts the
+        // `:` at depth 0 and `fn(): ?array => ...` puts a bare `?` there too,
+        // so the parenthesis-depth argument that comment made was inverted.
+        // The refusal is real and comes from the ORDERING rule instead - a
+        // return type's `:` arrives before any conditional `?` and meets
+        // `$question === null`. Pinned here so the real reason is a test
+        // rather than a sentence, and so loosening that rule reds.
+        yield 'arrow fn with a return type' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = (fn(): array => [0 => ['pipe','r']])();\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'arrow fn with a nullable return type' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = (fn(): ?array => [0 => ['pipe','r']])();\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // NAMED ARGUMENTS. The spec is a perfectly readable literal and this
+        // scanner reads the SECOND POSITIONAL argument, so it must refuse
+        // rather than read whatever happens to sit in position two. Rule 14:
+        // the site is still reported - a refused spec is a finding, and a
+        // dropped call site is not.
+        yield 'named arguments' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$this->h = @proc_open(command: 'x', "
+            . "descriptor_spec: [0 => ['pipe','r'], 1 => ['pipe','w']], pipes: \$pipes);\n"
+            . "    }\n}\n",
+            null,
+        ];
+
+        // Two more shapes the ternary reader is one character away from, and
+        // one it is not: a `match` is not a conditional expression this parses,
+        // and an array literal that is immediately dereferenced is the same
+        // trailing-content defect the array-union case above records.
+        yield 'match expression' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = match(\$c) { true => [0 => 1], default => [0 => 1] };\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array dereference tail' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [[0 => 1]][0];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array() long-form union' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = array(0 => 1) + array(1 => 2);\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'spread' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [...\$base, 2 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // THE REFUSALS ABOVE NEED A COMPANION THAT IS NOT ONE (rule 25). A
+        // provider made entirely of `null` expectations is satisfied by a
+        // keysOf() that returns null unconditionally, and these two are the
+        // nearest neighbours of shapes it must refuse: a trailing comma is one
+        // token from the union case, and a comment between ternary arms is one
+        // token from the nested-ternary case. Both must still be READ.
+        yield 'trailing comma in a keyed spec' => [
+            $wrap("[0 => ['pipe','r'], 1 => ['pipe','w'],]"),
+            [0, 1],
+        ];
+        yield 'comment between ternary arms' => [$ternary('[0 => 1] /* pick */', '[0 => 1]'), [0]];
+
         // The scope floor: a spec assigned in an EARLIER method is not this
         // call's spec, and borrowing it would be an answer from another
         // function's body.

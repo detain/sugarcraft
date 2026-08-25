@@ -208,6 +208,143 @@ final class DescriptorInheritanceGuardTest extends TestCase
     private const LIB_SCOPE = 'vendor/sugarcraft';
 
     /**
+     * Every top-level directory in a reachable library that its autoload roots
+     * do NOT cover, and whether this walk reads it anyway.
+     *
+     * E449, AND THE MEASUREMENT IS THE FINDING. The lib walk derives its files
+     * from each library's `autoload` section, which is a correct answer to
+     * "what can this process load" and a WRONG answer to "what can run with
+     * this process's descriptors open". Counted across the reachable closure
+     * on this tree by a census whose generator is
+     * {@see testEveryFileOutsideAnAutoloadRootIsClassified()} itself: the
+     * autoload roots cover well under half of the closure's PHP files, and
+     * before this roster every file outside them was invisible to every arm
+     * here - so the guard reported CLEAN over a surface it had never looked
+     * at, which is rule 15's dead-instrument shape one level up from a dead
+     * scanner.
+     *
+     * ⚠️ NO FIGURE IS WRITTEN IN THIS DOC-BLOCK ON PURPOSE (rule 18): a
+     * sibling's merge moves every one of those counts in a sentence no test
+     * reads. The partition is re-derived on every run instead, and an
+     * unclassified segment reds.
+     *
+     * `walked => true` MEANS THIS WALK READS IT, and each such row carries the
+     * MECHANISM that makes the directory run with our descriptors, verified
+     * against the source rather than inferred from the directory's name
+     * (rule 8). `walked => false` means the walk deliberately does not, and
+     * the row is the argument for why not - which is a thing a reader can
+     * disagree with, unlike an absence.
+     *
+     * EVERY ROW MUST MATCH A REAL FILE, `walked => false` INCLUDED, and this
+     * is the half the first version of the roster left out. WHAT THE UNWALKED
+     * ROWS USED TO BE: pinned by nothing - no mechanism, no hit count, no
+     * cardinality - so `walked => false` was a flag that made a whole
+     * directory kind invisible and could not go stale visibly, which is the
+     * complaint this doc-block makes about `walked` two paragraphs down.
+     * WHAT IS TRUE NOW: an attack demonstrated it rather than an argument -
+     * an unreadable `proc_open()` spec planted under a library's `docs/` ran
+     * GREEN through the whole test, and so did the same file at a library
+     * root. Every row is now asserted to match at least one file in the
+     * closure. WHY THE DISTINCTION STILL EARNS ITS PLACE: `walked` still
+     * decides whether the files are SCANNED; it just no longer decides
+     * whether they are COUNTED.
+     *
+     * THE ROSTER IS THE HORIZON, so a library that grows a kind of directory
+     * nobody has rostered reds
+     * {@see testEveryFileOutsideAnAutoloadRootIsClassified()} rather than
+     * being skipped in silence. That is rule 14 at directory granularity: the
+     * guard goes red on what it cannot classify. (No count of rows is written
+     * here on purpose, rule 18 - the roster below IS the list, and a sentence
+     * naming its size is wrong the first time somebody adds one.)
+     *
+     * `mechanism` IS THE EVIDENCE, AND IT IS WHAT MAKES A ROW FALSIFIABLE.
+     * Every `walked => true` row names a file in the closure and a marker in
+     * it, and {@see testEveryFileOutsideAnAutoloadRootIsClassified()} asserts
+     * the BICONDITIONAL: marker present means the row must be walked, marker
+     * gone means it must not be. Without it `walked` is a flag anybody can
+     * flip to `false` to make a directory disappear from the walk while the
+     * reason beside it still says the code runs in this process - a narrowing
+     * with a justification attached that has stopped being true, which is the
+     * one shape rule 7 exists for. With it, flipping the flag reds.
+     *
+     * @var array<string, array{walked:bool, reason:string, mechanism?:array{0:string,1:string}}>
+     */
+    private const LIB_HORIZON = [
+        // WALKED. Not in any autoload section, and executed in THIS process
+        // all the same: `candy-core/src/I18n/T.php::load()` spells the load
+        // `$data = require $path;` where $path is `<lang dir>/<locale>.php`,
+        // and every lib registers its own directory through `T::register()`.
+        // A `require` is not an autoload, so no manifest mentions these files
+        // and the derivation could never have reached them.
+        'lang' => [
+            'walked' => true,
+            'reason' => 'executed in this process by a runtime require in candy-core '
+                . 'I18n\T::load(), not by the autoloader, so no autoload root names it',
+            'mechanism' => ['candy-core/src/I18n/T.php', 'require $path'],
+        ],
+
+        // WALKED, and for a DIFFERENT reachability - this one is the gap
+        // ACCOUNTED_FOR_IN_LIBS' doc-block named and filed rather than fixed.
+        // `candy-pty/src/Spawn.php` holds `SHIM_RELATIVE = '/../bin/pty-shim.php'`
+        // and prepends `[PHP_BINARY, <shim>]` to the command it spawns, so the
+        // shim runs as OUR CHILD and inherits every descriptor we had open;
+        // anything it spawned in turn would inherit them again. Loadability
+        // was never the right question for it.
+        'bin' => [
+            'walked' => true,
+            'reason' => 'exec\'d as a child of this process - candy-pty Spawn::SHIM_RELATIVE '
+                . 'runs bin/pty-shim.php under PHP_BINARY, so it inherits our descriptors',
+            'mechanism' => ['candy-pty/src/Spawn.php', "SHIM_RELATIVE = '/../bin/pty-shim.php'"],
+        ],
+
+        // NOT WALKED, and this is the one derived reason rather than a
+        // measured one: Composer registers a package's `autoload-dev` only
+        // when that package is the ROOT of the install, so a sibling's tests
+        // cannot be loaded from this process however many spawns they hold -
+        // and they hold plenty. This is the largest single class of file
+        // outside the horizon by a wide margin.
+        'tests' => [
+            'walked' => false,
+            'reason' => 'a sibling\'s autoload-dev is registered for the ROOT package only, so '
+                . 'its tests are not loadable here; they are that library\'s own suite to guard',
+        ],
+
+        // NOT WALKED. In no autoload section of any lib in the closure, and
+        // nothing in any lib's autoloaded source runs one. MEASURED, and named
+        // because the reader who finds them should not conclude the guard
+        // missed them: `candy-focus/examples/focus-ring.php` really does hold
+        // exposed spawns, and it is a demo a human runs by hand.
+        'examples' => [
+            'walked' => false,
+            'reason' => 'not autoloaded and not exec\'d by any lib\'s own code - a demo a human '
+                . 'runs by hand, in its own process, with its own descriptors',
+        ],
+
+        // THERE WAS A `docs` ROW HERE, AND ITS OWN REASON IS WHY IT IS GONE.
+        // WHAT IT SAID: "prose; the reachable closure has no PHP under any
+        // docs/ directory today", offered as "a measurement rather than a
+        // licence". WHAT IS TRUE NOW: the measurement was right - there is no
+        // `.php` under any `docs/` in the closure - and that is exactly what
+        // made the row a licence. It pre-approved a directory kind that does
+        // not exist, and an unreadable spec planted under `candy-core/docs/`
+        // ran green through this entire test. WHY THE REASONING STILL EARNS ITS
+        // PLACE, rather than being deleted with the row: the argument it wanted
+        // somebody to make one day is now FORCED to happen - with no row, the
+        // first `docs/*.php` in the closure reds this test as unclassified,
+        // which is what THE ROSTER IS THE HORIZON promises above and is
+        // strictly stronger than a pre-written answer.
+
+        // NOT WALKED. A PHP file at a library's own root, which today is one
+        // tool config (`.php-cs-fixer.dist.php`). It is loaded by php-cs-fixer
+        // in a separate process and by nothing here.
+        '' => [
+            'walked' => false,
+            'reason' => 'a PHP file at the library root - a tool config loaded by that tool in '
+                . 'its own process, never by this one',
+        ],
+    ];
+
+    /**
      * Exposed spawns in reachable SIBLING libraries. E418.
      *
      * WHY THE GUARD WIDENED. Round 53 built this instrument, rostered seven
@@ -845,6 +982,387 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * Where a library-relative path sits with respect to that library's own
+     * autoload roots: `null` inside one, otherwise the top-level segment.
+     *
+     * PURE, AND SEPARATE FROM THE WALK for the same reason
+     * {@see autoloadRoots()} is: it is the half of the reachability argument
+     * that can be pinned against literals rather than against whatever the
+     * closure happens to hold today, which
+     * {@see testTheHorizonClassifierReadsTheRoots()} does in both polarities.
+     *
+     * `str_starts_with($relative, $root)` WOULD BE WRONG AND WOULD LOOK RIGHT.
+     * A root of `src` must not swallow `srcx/Foo.php`, so the separator is
+     * part of the comparison; without it a whole sibling directory disappears
+     * into a root that does not contain it, and disappearing is precisely the
+     * failure E449 is about.
+     *
+     * AN EMPTY ROOT IS THE PACKAGE ROOT and covers everything. It is answered
+     * honestly here rather than filtered out, because {@see libSourceFiles()}
+     * refuses it loudly and a filter here would turn that refusal into a
+     * silent skip.
+     *
+     * @param list<string> $roots
+     */
+    private static function horizonSegment(string $relative, array $roots): ?string
+    {
+        foreach ($roots as $root) {
+            if ($root === '' || $relative === $root || \str_starts_with($relative, $root . '/')) {
+                return null;
+            }
+        }
+
+        $slash = \strpos($relative, '/');
+
+        return $slash === false ? '' : \substr($relative, 0, $slash);
+    }
+
+    /**
+     * The top-level segment of a file that is outside the autoload roots AND
+     * outside {@see LIB_HORIZON}, or null when the file is accounted for.
+     *
+     * THE WHOLE DECISION IN ONE PURE CALL, and that is the point rather than
+     * tidiness. Its caller asserts a set is EMPTY, so the roster lookup has to
+     * be reachable by a known-positive fixture in the same test - and a lookup
+     * spelled inline in the walk is reachable only by a real unclassified file,
+     * which by construction the tree does not have. Rule 25: a fixture whose
+     * expected value is what a dead instrument returns proves nothing, and
+     * `[]` is what an inline `isset()` deleted outright returns too.
+     *
+     * @param list<string> $roots
+     */
+    private static function unrosteredSegment(string $relative, array $roots): ?string
+    {
+        $segment = self::horizonSegment($relative, $roots);
+
+        if ($segment === null || isset(self::LIB_HORIZON[$segment])) {
+            return null;
+        }
+
+        return $segment;
+    }
+
+    /**
+     * Every PHP file in the reachable closure is either walked or classified.
+     *
+     * E449. THIS IS THE ARM THAT MAKES THE GUARD SAY WHAT IT CANNOT SEE.
+     * Everything else here asserts that a walk found nothing wrong, and the
+     * walk's own horizon was, until this test, an unexamined property of the
+     * `autoload` sections it derives files from. A library that starts
+     * shipping a runnable `daemon/` or `hooks/` directory was invisible - not
+     * flagged, not skipped-with-a-reason, invisible - and the guard went on
+     * reporting clean.
+     *
+     * WHAT IT ASSERTS, in the order it matters:
+     *
+     *  1. The classifier is ALIVE (rule 15/25). An unclassified segment is
+     *     reported for a synthetic path before any absence below is believed,
+     *     because "no unclassified segments" is also what a classifier that
+     *     always answers `null` returns.
+     *  2. Every walked LIB_HORIZON row still matches real files. A widening
+     *     that has stopped reaching anything is a widening in name only, and
+     *     rule 35: a figure landing where it landed before is a question, not
+     *     a confirmation.
+     *  3. No PHP file in any reachable library sits outside both the autoload
+     *     roots and the roster.
+     *
+     * NO TOTAL IS ASSERTED (rule 18). The partition's sizes move with every
+     * sibling merge; what may not move is whether a file is accounted for.
+     */
+    public function testEveryFileOutsideAnAutoloadRootIsClassified(): void
+    {
+        self::assertSame(
+            'daemon',
+            self::unrosteredSegment('daemon/Run.php', ['src']),
+            'the horizon classifier is dead - it cannot see an unrostered directory outside the '
+                . 'autoload roots, so the absence asserted below is what it would report for any '
+                . 'tree at all.',
+        );
+        self::assertNull(
+            self::unrosteredSegment('lang/en.php', ['src']),
+            'and the other polarity, without which the line above is satisfied by a classifier '
+                . 'that reports every file in the closure - which would red correct trees and '
+                . 'teach the next reader to widen the roster until it stopped.',
+        );
+
+        $base = \dirname(__DIR__, 2) . '/' . self::LIB_SCOPE;
+        self::assertDirectoryExists($base, self::LIB_SCOPE . ' is missing, so nothing can be classified.');
+
+        $libs = \glob($base . '/*', \GLOB_ONLYDIR) ?: [];
+        \sort($libs);
+
+        $unclassified = [];
+        $segmentHits = [];
+        $rootBasenames = [];
+        $seen = 0;
+
+        foreach ($libs as $lib) {
+            $name = \basename($lib);
+            $decoded = \json_decode((string) \file_get_contents($lib . '/composer.json'), true);
+            self::assertIsArray($decoded, $name . '/composer.json did not decode to an array.');
+            $roots = self::autoloadRoots($decoded);
+
+            /** @var \SplFileInfo $file */
+            foreach (new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator((string) \realpath($lib), \FilesystemIterator::SKIP_DOTS),
+            ) as $file) {
+                if (!$file->isFile() || $file->getExtension() !== 'php') {
+                    continue;
+                }
+
+                $relative = \substr($file->getPathname(), \strlen((string) \realpath($lib)) + 1);
+
+                // A library's own installed dependencies are not the library.
+                // Excluded here rather than in the roster because it is not a
+                // horizon question at all: those files belong to a third
+                // package and are reached, if at all, through ITS manifest.
+                if (\str_starts_with($relative, 'vendor/')) {
+                    continue;
+                }
+
+                $seen++;
+
+                if (self::unrosteredSegment($relative, $roots) !== null) {
+                    $unclassified[] = $name . '/' . $relative;
+
+                    continue;
+                }
+
+                // EVERY rostered segment is counted, not only the walked ones.
+                // A `walked => false` row used to be pinned by nothing at all -
+                // no mechanism, no hit count, no cardinality - so it licensed a
+                // directory whether or not that directory still existed. The
+                // liveness assertion below is what turns the row back into a
+                // claim, and this is the tally it reads.
+                $segment = self::horizonSegment($relative, $roots);
+                if ($segment !== null && isset(self::LIB_HORIZON[$segment])) {
+                    $segmentHits[$segment] = ($segmentHits[$segment] ?? 0) + 1;
+
+                    if ($segment === '') {
+                        $rootBasenames[\basename($relative)] = true;
+                    }
+                }
+            }
+        }
+
+        // What libSourceFiles() ACTUALLY yields, keyed by horizon segment,
+        // taken from {@see $horizonEmissions} - which the generator fills at
+        // the yield site rather than being re-derived from the key here. The
+        // key cannot answer this honestly: see that property's doc-block.
+        // The generator has to be drained before the tally means anything.
+        foreach ($this->libSourceFiles() as $_key => $_source) {
+            // Drained for its side effect on $horizonEmissions.
+        }
+        $emitted = $this->horizonEmissions;
+
+        // A closure of empty directories classifies perfectly.
+        self::assertGreaterThan(
+            100,
+            $seen,
+            'only ' . $seen . ' PHP files were found across the whole reachable closure, which '
+                . 'is far too few - the walk is pointed somewhere wrong and the partition below '
+                . 'is empty rather than clean.',
+        );
+
+        foreach (self::LIB_HORIZON as $segment => $row) {
+            self::assertNotSame('', \trim($row['reason']), $segment . ' is rostered without a reason.');
+
+            if (isset($row['mechanism'])) {
+                [$file, $marker] = $row['mechanism'];
+                $path = $base . '/' . $file;
+                self::assertFileExists($path, $segment . "'s mechanism cites " . $file
+                    . ', which is no longer in the closure. The row is unfalsifiable until the '
+                    . 'citation is repaired or the row is retired.');
+
+                self::assertSame(
+                    $row['walked'],
+                    \str_contains((string) \file_get_contents($path), $marker),
+                    $segment . " is rostered walked=" . \var_export($row['walked'], true)
+                        . ', and ' . $file . ' now says otherwise. THE MARKER IS THE EVIDENCE: '
+                        . 'if it is present the directory runs with our descriptors and the walk '
+                        . 'must read it; if it is gone the mechanism has been removed and the row '
+                        . 'is stale. Do not flip the flag to match - work out which happened.',
+                );
+            } else {
+                self::assertNotSame(
+                    true,
+                    $row['walked'],
+                    $segment . ' is walked with no mechanism recorded. A walked row is a claim '
+                        . 'that the directory runs with this process\'s descriptors, and a claim '
+                        . 'with no citation cannot go stale visibly.',
+                );
+            }
+
+            // EVERY ROW MUST STILL MATCH SOMETHING - `walked => false` INCLUDED.
+            // This half was missing, and an attack found it rather than a
+            // reading: a `proc_open()` whose spec is a method call, planted
+            // under a library's `docs/`, left this whole test GREEN, and so did
+            // the same file at a library root. A row that matches nothing is
+            // not a classification, it is a standing permission for a directory
+            // kind that may no longer exist - which is the same shape as an
+            // ACCOUNTED_FOR exemption written for correct code, and the same
+            // standard {@see testNoReachableLibRowIsStale()} already applies to
+            // UNREADABLE_IN_LIBS two functions away. It was not applied here.
+            $liveness = $row['walked'] === true
+                ? <<<TEXT
+                    LIB_HORIZON says this walk reads `{$segment}/`, and there is no such file
+                    anywhere in the reachable closure any more.
+
+                    The widening is dead. Either the directory was renamed in every
+                    library at once - in which case fix the row - or the classifier has
+                    started answering `null` for it, in which case those files are being
+                    counted as autoloaded and every arm here is quietly reading a
+                    different set than it says it does.
+                    TEXT
+                : <<<TEXT
+                    LIB_HORIZON rosters `{$segment}/` as deliberately NOT walked, and there is
+                    no such file anywhere in the reachable closure to not walk.
+
+                    THE RESOLUTION IS TO DELETE THE ROW, not to keep it against the day
+                    the directory comes back. An unwalked row is an argument that a
+                    specific set of real files cannot reach this process; with no files
+                    behind it, it is a licence outliving the thing it licensed, and it
+                    silently pre-approves whatever lands there next. Deleted, the first
+                    file to appear in `{$segment}/` reds this test as unclassified and
+                    somebody has to make the argument then, with the file in front of
+                    them - which is what THE ROSTER IS THE HORIZON is supposed to mean.
+                    TEXT;
+
+            self::assertArrayHasKey($segment, $segmentHits, $liveness);
+
+            if ($row['walked'] !== true) {
+                continue;
+            }
+
+            // THE HALF THAT WAS MISSING, AND A MUTATION FOUND IT RATHER THAN A
+            // READING. Everything above this line is derived from a walk this
+            // TEST does over the filesystem. libSourceFiles() - the generator
+            // every other arm in this file consumes - is a SEPARATE walk, and
+            // nothing tied the two together: making libSourceFiles() skip every
+            // horizon segment outright, which is E449's widening reverted in
+            // one line, left all 14 tests green. The assertion total moved and
+            // no assertion failed, which is a silent narrowing with a roster
+            // still describing the wide behaviour.
+            //
+            // Rule 35's shape: the roster is not evidence that the walk reads
+            // what it says. Only the walk's own output is.
+            self::assertSame(
+                $segmentHits[$segment],
+                $emitted[$segment] ?? 0,
+                $segment . ' is rostered as walked and libSourceFiles() emitted '
+                    . ($emitted[$segment] ?? 0) . ' of its ' . $segmentHits[$segment] . ' files. '
+                    . 'The generator every other arm here consumes is reading a different set '
+                    . 'from the one this roster describes, so those arms are scanning less than '
+                    . 'they claim - which is exactly the invisibility E449 is about, reintroduced '
+                    . 'behind a roster that still says otherwise.',
+            );
+        }
+
+        // THE UNWALKED ROW WITH THE WIDEST REACH, PINNED TO THE ONE THING IT
+        // WAS MEASURED AGAINST. `''` is not a directory: it matches EVERY
+        // `.php` file at EVERY library's root, and its reason - "a tool config
+        // loaded by that tool in its own process" - was measured against a
+        // single file. A row that broad is the one place a runnable script can
+        // arrive already exempted, so the reason is asserted rather than
+        // asserted-once-and-trusted: the basenames are re-derived from the
+        // filesystem on every run and compared to the set the reason describes.
+        //
+        // Rule 18: this is a SET the test derives, not a count written into
+        // prose. A sibling adding a root-level file moves it, and moving it is
+        // the point.
+        $basenames = \array_keys($rootBasenames);
+        \sort($basenames);
+        self::assertSame(['.php-cs-fixer.dist.php'], $basenames, <<<'TEXT'
+            A library-root `.php` file has appeared that is not the tool config
+            LIB_HORIZON's `''` row was written for.
+
+            The `''` row exempts every PHP file at every library's root on the
+            strength of one measured example, so a new one arrives PRE-APPROVED -
+            which is precisely how a runnable script gets past a roster that looks
+            thorough. Decide what the new file is:
+
+              a tool config, run by its own tool in its own process - add its
+              basename here, and the row keeps covering it honestly.
+
+              anything this process can load or exec - it does not belong under the
+              `''` row at all. Give it its own treatment, the way `bin/` and `lang/`
+              got theirs, with the mechanism measured off the source.
+            TEXT);
+
+        \sort($unclassified);
+        self::assertSame([], $unclassified, <<<'TEXT'
+            A PHP file in a reachable library sits outside that library's autoload
+            roots AND outside LIB_HORIZON, so no arm of this guard has ever looked
+            at it and none of them said so.
+
+            THIS IS NOT AUTOMATICALLY A DEFECT IN THE FILE. It is a directory nobody
+            has classified. Add a LIB_HORIZON row for its top-level segment, with
+            the MECHANISM measured off the source rather than guessed from the name:
+
+              walked => true   the directory runs with this process's descriptors -
+                               it is required at runtime (like lang/), or exec'd as
+                               our child (like candy-pty's bin/). The walk then reads
+                               it, and a spawn in there needs a roster row like any
+                               other.
+              walked => false  it cannot reach this process, and the reason is the
+                               row. "We do not scan it" is not a reason.
+
+            DELETING THE FILE'S DIRECTORY FROM THE WALK IS NOT A RESOLUTION, and
+            neither is narrowing LIB_SCOPE. Before E449 every one of these files was
+            invisible, and the guard reported clean over all of them.
+            TEXT);
+    }
+
+    /**
+     * The horizon classifier, pinned against literals in both polarities.
+     *
+     * The arm above asserts a set is empty, and a classifier that answers
+     * `null` for everything empties it perfectly. This one cannot be satisfied
+     * that way: half its cases demand a non-null answer and half demand null,
+     * so no constant return passes it.
+     */
+    public function testTheHorizonClassifierReadsTheRoots(): void
+    {
+        self::assertNull(
+            self::horizonSegment('src/Spawn.php', ['src']),
+            'a file inside an autoload root is already walked and is not a horizon question.',
+        );
+
+        self::assertSame(
+            'srcx',
+            self::horizonSegment('srcx/Foo.php', ['src']),
+            'a root must match a whole path SEGMENT. A prefix test would swallow this entire '
+                . 'directory into a root that does not contain it - which is the exact shape of '
+                . 'the invisibility E449 is about, one level down.',
+        );
+
+        self::assertSame(
+            'lang',
+            self::horizonSegment('lang/en.php', ['src']),
+            'the runtime-required directory the autoload derivation could never reach.',
+        );
+
+        self::assertSame(
+            '',
+            self::horizonSegment('.php-cs-fixer.dist.php', ['src']),
+            'a PHP file at the library root has no segment, and the empty string is a roster '
+                . 'key like any other rather than a reason to drop it.',
+        );
+
+        self::assertSame(
+            'tests',
+            self::horizonSegment('tests/Deep/Nested/Case.php', ['src', 'lib']),
+            'the TOP-level segment, not the deepest - the roster classifies directories.',
+        );
+
+        self::assertNull(
+            self::horizonSegment('anything/at/all.php', ['']),
+            'an empty root is the package root and covers everything; libSourceFiles() refuses '
+                . 'it loudly, and answering it dishonestly here would turn that refusal into a '
+                . 'silent skip.',
+        );
+    }
+    /**
      * A row that matches nothing is the only thing that notices a dead scanner.
      *
      * This is the assertion that cannot be satisfied by an instrument returning
@@ -1013,6 +1531,136 @@ final class DescriptorInheritanceGuardTest extends TestCase
             TEXT);
     }
 
+    /**
+     * Unreadable descriptor specs in a REACHABLE SIBLING LIBRARY. E447.
+     *
+     * EMPTY, AND THE EMPTINESS IS THE ROUND'S RESULT RATHER THAN ITS
+     * PREMISE. When this arm was written there was exactly one member -
+     * `candy-core/Program.php::runExec`, whose spec is
+     * `$req->captureOutput ? [...] : [...]` - and E447 offered two ways out:
+     * make it readable, or make the unreadability explicit and rostered. It
+     * turned out to be the first: the refusal was correct and the DIAGNOSIS
+     * was not. Both arms of that ternary carry the integer keys 0, 1 and 2, so
+     * which fds the spec names never depended on the condition; only the
+     * VALUES did, and this instrument reads keys.
+     * {@see ChildLifetimeScanner::ternaryArms()} reads it now and
+     * `ChildLifetimeScannerFixtureTest::descriptorSpecs()` pins the shape in
+     * both polarities.
+     *
+     * SO WHY DOES THE ROSTER EXIST AT ALL. Because the src twin's advice -
+     * "spell the spec where the call can see it, or widen the scanner" - is
+     * advice sugar-crush can act on for its OWN files and cannot act on for a
+     * sibling's. A future unreadable spec in candy-pty is not this package's
+     * to rewrite, and a guard whose only resolution is an edit the reader
+     * cannot make gets weakened instead of used. A row here says: this spec is
+     * unreadable, a person looked at it, and widening the scanner was judged
+     * the wrong trade.
+     *
+     * A ROW IS NOT AN EXEMPTION FOR A HIGH FD. An unreadable spec is the one
+     * shape about which this guard can make NO statement at all, so a row is
+     * strictly a record that the blindness is known.
+     *
+     * @var array<string, string>
+     */
+    private const UNREADABLE_IN_LIBS = [];
+
+    /**
+     * No spawn in the reachable closure has a spec nothing can read.
+     *
+     * E447, AND THE ARM ROUND 54 DELIBERATELY DID NOT WIDEN. Its sugar-crush
+     * twin has existed for two rounds and stops at this package's `src/`,
+     * which left the unreadability question unasked over every sibling - and
+     * a sibling is exactly where it could not be answered by reading the diff,
+     * because the diff is in another package.
+     *
+     * SEPARATE FROM THE SRC TWIN rather than a widened loop inside it, for the
+     * reason all the lib arms here are separate: this one reds when SOMEBODY
+     * ELSE changes a file, and the reader deserves to be told that in the
+     * message instead of deducing it.
+     */
+    public function testNoDescriptorSpecInAReachableLibIsUnreadable(): void
+    {
+        // Rule 15, in THIS test. What follows asserts a set is empty, and a
+        // scanner that answered `fds => [0]` for everything would empty it
+        // just as convincingly as a closure with no unreadable spec in it.
+        $probe = ChildLifetimeScanner::scan(
+            "<?php\nclass F { private \$h; function m(\$p) { \$this->h = proc_open('x', \$this->spec(), \$p); } }\n",
+        )['sites'];
+        self::assertCount(1, $probe, 'the scanner found no site in the probe at all - it is dead.');
+        self::assertNull(
+            $probe[0]['fds'],
+            'a spec behind a method call must read as unreadable; if it does not, the absence '
+                . 'asserted below is what this scanner reports for every tree.',
+        );
+
+        $unreadable = [];
+        $scanned = 0;
+        foreach ($this->libSourceFiles() as $relative => $source) {
+            $scanned++;
+            foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
+                $key = $relative . '::' . $site['function'];
+                if ($site['fds'] === null && !isset(self::UNREADABLE_IN_LIBS[$key])) {
+                    $unreadable[] = $key;
+                }
+            }
+        }
+
+        $this->assertLibWalkIsLive($scanned);
+
+        self::assertSame([], $unreadable, <<<'TEXT'
+            A proc_open() in a SIBLING LIBRARY has a descriptor spec
+            ChildLifetimeScanner cannot read, so nothing anywhere is checking which
+            fds it names - and unlike an exposed spawn, this one cannot even be
+            reported accurately, because the instrument has no opinion to report.
+
+            YOU ARE PROBABLY RESOLVING A MERGE. This walk reads through
+            vendor/sugarcraft, so a change in candy-core or candy-pty reds THIS
+            suite and the diff in front of you is very likely not the cause.
+
+            THE RESOLUTIONS, best first:
+
+              1. WIDEN THE SCANNER, if the spec is readable in principle and this
+                 instrument simply cannot spell it yet. That is what E447 turned
+                 out to be: a ternary whose two arms name the same fds is not an
+                 unreadable spec, it is a shape nobody had taught it. Pin the new
+                 shape in ChildLifetimeScannerFixtureTest, in BOTH polarities.
+              2. A ROW IN UNREADABLE_IN_LIBS, when widening is the wrong trade.
+                 The row is a record that the blindness is known, never an
+                 exemption for what the spec might contain.
+
+            ASKING THE SIBLING TO REWRITE ITS SPEC IS RESOLUTION 3, not 1: it is a
+            real fix and it is an edit this package cannot make from here.
+            TEXT);
+
+        $stale = [];
+        foreach (self::UNREADABLE_IN_LIBS as $key => $reason) {
+            self::assertNotSame('', \trim($reason), $key . ' is recorded without a reason.');
+            $stale[] = $key;
+        }
+
+        // Vacuous while the roster is empty, and live the moment it is not:
+        // every row must still name a real site, or it is a licence outliving
+        // the thing it licensed.
+        $found = [];
+        if ($stale !== []) {
+            foreach ($this->libSourceFiles() as $relative => $source) {
+                foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
+                    if ($site['fds'] === null) {
+                        $found[] = $relative . '::' . $site['function'];
+                    }
+                }
+            }
+        }
+
+        self::assertSame(
+            [],
+            \array_values(\array_diff($stale, $found)),
+            'a row in UNREADABLE_IN_LIBS matches nothing any more. Either the library made the '
+                . 'spec readable, or the scanner learned to read it - in both cases delete the '
+                . 'row and say which. A row that matches nothing is a licence outliving the '
+                . 'thing it licensed.',
+        );
+    }
     /**
      * Naming a high fd replaces THAT fd and inherits every other one.
      *
@@ -1705,6 +2353,29 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * Horizon files {@see libSourceFiles()} actually yielded, segment => count.
+     *
+     * RECORDED AT THE YIELD SITE, WHICH IS THE ONLY PLACE THAT KNOWS. The
+     * count it replaces was derived from the key: `explode('/', $key)[1]`,
+     * read as the horizon segment. That is true for a horizon key and a guess
+     * for an autoload-root key, where the second component is whatever
+     * directory happens to sit inside the root - so a sibling adding
+     * `src/lang/Foo.php` or `src/bin/Foo.php` would inflate this tally while
+     * the filesystem partition it is compared against did not move, and the
+     * resulting failure text would accuse E449's widening of a narrowing that
+     * a different lane's new directory had caused. Measured on this tree,
+     * PHP 8.3.6: zero such files today, so this is a misdirection waiting
+     * rather than a live one - which is the point of fixing it while the
+     * generator is being read anyway.
+     *
+     * Only meaningful once the generator has been drained; it is reset when
+     * the generator's body first runs, not when the method is called.
+     *
+     * @var array<string, int>
+     */
+    private array $horizonEmissions = [];
+
+    /**
      * Every reachable sibling library's loadable sources, keyed `<lib>/<path>`.
      *
      * THE ROOTS ARE READ, NOT ASSUMED. This walk used to go to `<lib>/src`
@@ -1723,6 +2394,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
     private function libSourceFiles(): iterable
     {
         $base = \dirname(__DIR__, 2) . '/' . self::LIB_SCOPE;
+        $this->horizonEmissions = [];
 
         // Loud rather than skipped: this suite cannot have loaded without it,
         // so its absence means the walk is being pointed somewhere new - and a
@@ -1758,6 +2430,8 @@ final class DescriptorInheritanceGuardTest extends TestCase
                     . 'and the walk must not decide that quietly.',
             );
 
+            $emitted = [];
+
             foreach ($roots as $root) {
                 self::assertNotSame(
                     '',
@@ -1767,36 +2441,101 @@ final class DescriptorInheritanceGuardTest extends TestCase
                         . 'than a default.',
                 );
 
-                $path = $lib . '/' . $root;
+                // An autoload root is stripped from the key, which is why the
+                // rosters read `candy-pty/Spawn.php` and not
+                // `candy-pty/src/Spawn.php`. Predates this method and is left
+                // alone: every roster key in this file is spelled that way.
+                foreach (self::phpUnder($lib . '/' . $root) as $relative => $source) {
+                    // A root that IS a file keys as the root itself, which is
+                    // what the pre-E449 walk did for a `files` autoload entry.
+                    $key = $name . '/' . ($relative === '' ? $root : $relative);
+                    self::assertArrayNotHasKey($key, $emitted, self::DUPLICATE_KEY);
+                    $emitted[$key] = true;
 
-                if (\is_file($path)) {
-                    if (\pathinfo($path, \PATHINFO_EXTENSION) === 'php') {
-                        yield $name . '/' . $root => (string) \file_get_contents($path);
-                    }
-
-                    continue;
-                }
-
-                if (!\is_dir($path)) {
-                    continue;
-                }
-
-                $files = [];
-                /** @var \SplFileInfo $file */
-                foreach (new RecursiveIteratorIterator(
-                    new RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
-                ) as $file) {
-                    if ($file->isFile() && $file->getExtension() === 'php') {
-                        $files[] = $file->getPathname();
-                    }
-                }
-                \sort($files);
-
-                foreach ($files as $each) {
-                    yield $name . '/' . \substr($each, \strlen($path) + 1)
-                        => (string) \file_get_contents($each);
+                    yield $key => $source;
                 }
             }
+
+            // E449. The autoload roots answer "what can this process LOAD",
+            // and this guard's question is "what can RUN with this process's
+            // descriptors open" - which is a strictly larger set. The
+            // directories where the two differ, and the mechanism that makes
+            // each one run, are rostered in LIB_HORIZON; the ones marked
+            // walked are read here. Their keys keep the segment
+            // (`candy-pty/bin/pty-shim.php`) because unlike an autoload root
+            // the segment is not implied by anything.
+            foreach (self::LIB_HORIZON as $segment => $row) {
+                if ($row['walked'] !== true || $segment === '') {
+                    continue;
+                }
+
+                foreach (self::phpUnder($lib . '/' . $segment) as $relative => $source) {
+                    $key = $name . '/' . $segment . ($relative === '' ? '' : '/' . $relative);
+                    self::assertArrayNotHasKey($key, $emitted, self::DUPLICATE_KEY);
+                    $emitted[$key] = true;
+                    $this->horizonEmissions[$segment] = ($this->horizonEmissions[$segment] ?? 0) + 1;
+
+                    yield $key => $source;
+                }
+            }
+        }
+    }
+
+    /**
+     * A failure nothing in this tree produces today, which is why it is spelled
+     * once rather than reasoned about at two call sites.
+     *
+     * A key emitted twice is a file SCANNED twice, and every count in this
+     * file - every `count` in both rosters, and the walk-is-live floor - is
+     * arithmetic over these keys. It is reachable the moment an autoload root
+     * and a LIB_HORIZON segment overlap (a lib autoloading `src` that contains
+     * a `bin/`, say), and the failure is silent inflation rather than an
+     * error, so it goes red instead.
+     */
+    private const DUPLICATE_KEY = 'the same library file was yielded twice, so every count '
+        . 'derived from this walk is inflated. An autoload root and a LIB_HORIZON segment '
+        . 'have started naming the same file; disambiguate the key before trusting any figure.';
+
+    /**
+     * Every `.php` file at or under a path, keyed by its path relative to it.
+     *
+     * A FILE path yields ONE entry keyed by the empty string, leaving the
+     * caller to spell the key - which is the point: a `files` autoload entry
+     * keys as the entry itself, and its basename would silently rename it. A
+     * missing path yields nothing, because a root or segment a given library
+     * simply does not have is not a finding -
+     * {@see testEveryFileOutsideAnAutoloadRootIsClassified()} is what notices
+     * a directory nobody has classified.
+     *
+     * @return iterable<string, string>
+     */
+    private static function phpUnder(string $path): iterable
+    {
+        if (\is_file($path)) {
+            if (\pathinfo($path, \PATHINFO_EXTENSION) === 'php') {
+                yield '' => (string) \file_get_contents($path);
+            }
+
+            return;
+        }
+
+        if (!\is_dir($path)) {
+            return;
+        }
+
+        $files = [];
+        /** @var \SplFileInfo $file */
+        foreach (new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+        ) as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php') {
+                $files[] = $file->getPathname();
+            }
+        }
+        \sort($files);
+
+        foreach ($files as $each) {
+            yield \substr($each, \strlen($path) + 1) => (string) \file_get_contents($each);
         }
     }
 

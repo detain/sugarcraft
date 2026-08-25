@@ -131,10 +131,22 @@ pulled in transitively:
                            require nor in any direct require's transitive
                            closure (a lingering dead entry).
 
---unused is read-only (no auto-prune) and NOT wired into CI; it prints a per-lib
-report and exits 1 on any finding. Each flagged require is annotated with
-`tests_uses: yes|no` (whether the lib's tests/ still reference the dep — a "yes"
-means the prune is a move-to-require-dev, not a delete). Findings are CANDIDATES:
+--unused is read-only (no auto-prune); it prints a per-lib report and exits 1 on
+any finding. WHAT THIS PARAGRAPH USED TO SAY, and it was already false when
+E453 was filed: "NOT wired into CI". WHAT IS TRUE NOW - measured off the
+workflow rather than remembered: `.github/workflows/ci.yml`'s `path-repo-check`
+job runs `--unused` as an ordinary step with no continue-on-error, so it is a
+HARD GATE on every push. WHY THE REST OF THE PARAGRAPH STILL EARNS ITS PLACE:
+the findings really are candidates, and gating on candidate-grade output is the
+tension E453 is about. `DEFERRED_WIRING` is the release valve - a candidate
+confirmed by hand in the KEEP direction, recorded in the consuming lib's own
+manifest under `extra.sugarcraft.deferred-wiring.<package>`, prints with its
+reason and does not count as a finding. Pruning a dependency somebody
+deliberately kept, or deleting the CI step, were the only two exits before it.
+
+Each flagged require is annotated with `tests_uses: yes|no` (whether the lib's
+tests/ still reference the dep — a "yes" means the prune is a
+move-to-require-dev, not a delete). Findings are CANDIDATES:
 confirm by hand before pruning (a dep referenced only via a string class-name or
 composer script, not a namespace, will read as unused here).
 
@@ -500,6 +512,34 @@ if ($unused) {
 
         $lines = [];
 
+        // A dependency whose absence from src/ has already been CONFIRMED BY
+        // HAND, in the direction of keeping it, and the reason recorded in the
+        // consuming lib's own manifest under
+        // `extra.sugarcraft.deferred-wiring`.
+        //
+        // E453. WHY THIS EXISTS AT ALL: this pass prints CANDIDATES - its own
+        // usage text says so, and says "confirm by hand before pruning" - and
+        // ci.yml runs it as a hard gate. Those two facts together mean a
+        // candidate a human HAS confirmed, in the keep direction, fails the
+        // build with no way to say so, and the only exits are pruning a
+        // dependency somebody deliberately kept or deleting the CI step. A
+        // deferred-wiring row is the missing third answer, and it lives in the
+        // manifest rather than in an allowlist here so that the record sits
+        // next to the require it is about.
+        //
+        // IT DOES NOT SILENCE THE CHECK. The row still prints, still names the
+        // dep, and still carries the reason to the reader; it just does not
+        // count as a finding. An empty or missing reason is not a row.
+        $deferredWiring = static function (array $manifest, string $depSlug): ?string {
+            $rows = $manifest['extra']['sugarcraft']['deferred-wiring'] ?? null;
+            if (!\is_array($rows)) {
+                return null;
+            }
+            $reason = $rows['sugarcraft/' . $depSlug] ?? null;
+
+            return \is_string($reason) && \trim($reason) !== '' ? \trim($reason) : null;
+        };
+
         // (1) Unused DIRECT (production) requires.
         foreach ($directDeps as $depSlug) {
             $prefixes = $psr4PrefixesOf($depSlug);
@@ -515,6 +555,16 @@ if ($unused) {
             }
             if ($namespaceHits($srcDir, $prefixes) !== []) {
                 continue; // referenced in src/ — genuinely used.
+            }
+            $deferred = $deferredWiring($data['manifest'], $depSlug);
+            if ($deferred !== null) {
+                $lines[] = \sprintf(
+                    '  - %-23s sugarcraft/%s  (recorded in extra.sugarcraft.deferred-wiring: %s)',
+                    'DEFERRED_WIRING',
+                    $depSlug,
+                    \strlen($deferred) > 120 ? \substr($deferred, 0, 117) . '...' : $deferred
+                );
+                continue;
             }
             // Would the dep still be pulled in if we dropped THIS direct require?
             // Reachable from every OTHER production require plus every require-dev
@@ -575,6 +625,16 @@ if ($unused) {
 
     \printf("check-path-repos --unused: scanned %d libs\n", \count($libData));
     if ($unusedFindings === 0) {
+        // A DEFERRED_WIRING row is not a finding and IS still output, which is
+        // the difference between recording a decision and silencing a check.
+        // Nearly shipped the other way round: the early exit here sits three
+        // hundred lines from where those rows are built, so the first version
+        // of this change produced a clean run that mentioned nothing at all
+        // while its own comment claimed the rows still print.
+        if ($report !== '') {
+            \fwrite(\STDOUT, "\nRecorded deferrals (not findings — confirmed by hand, kept on purpose):\n\n");
+            \fwrite(\STDOUT, $report);
+        }
         \fwrite(\STDOUT, "check-path-repos --unused: no dead path-repo deps found\n");
         exit(0);
     }
