@@ -14309,3 +14309,60 @@ box at `606a131c`, PHP 8.3.6, four takes: **1477, 1476, 1476, 1476** — tests, 
 identical every time. 1476 is right as the usual value and the brief is not wrong, but the assertion count
 is not a constant, and a lane that measures once and sees 1477 should not conclude it broke something.
 The `+1` was not chased down; whichever test it is, it has an environment-dependent assertion in it.
+
+---
+
+### Ea54-7 — candy-pty's assertion wobble is ONE named test, and Ea54-6 understates it in two ways
+
+**Recorded 2026-08-25 by the round-54 lane-a recovery run.** Severity: measurement hygiene / merge-floor
+correctness. candy-pty is **not** edited by this lane; it is read by candy-core's descriptor census, and
+its figures are quoted as a round floor, which is why this is worth a number.
+
+**Ea54-6 is refuted in both of its quantitative halves.** It says 1476 is "the usual value" and that the
+count "moves by ±1", from four takes. MEASURED at `5bef36cb`, PHP 8.3.6, this box, **20 consecutive
+takes**, `cd candy-pty && vendor/bin/phpunit`, tests/skips/warnings/rc identical throughout
+(`606 / 16 skipped / 1 warning / rc 0`):
+
+| assertions | takes |
+|---|---|
+| 1475 | 2 |
+| 1476 | 7 |
+| **1477** | **10** |
+| 1478 | 1 |
+
+So the mode is **1477, not 1476**, and the spread is four distinct values (1475–1478), not two. A lane
+comparing a single take against a floor of 1476 can be off by ±2 in either direction while nothing at all
+is wrong.
+
+**The varying test is now identified, which Ea54-6 left open.** Generator: six further takes run with
+`--log-junit`, then the per-`<testcase assertions="…">` attribute compared across all six runs
+(`simplexml_load_file` + `//testcase`, comparing 606 keys). Of **606 tests, exactly one** has a
+non-constant count:
+
+```
+SugarCraft\Pty\Tests\Integration\ResizeRaceTest::testResizeRaceProducesUntornWidths
+   assertions across the six runs: 94, 96, 94, 94, 96, 93
+```
+
+**Mechanism, read from the source and not inferred from the number**: the test spawns
+`bash -c 'while true; do tput cols; sleep 0.01; done'` on a pty slave, resizes the master 50 times at
+20 ms intervals over ~1 s while draining, then asserts **once per captured line**. The number of lines the
+child emits inside that window is a function of host scheduling, so the assertion count is timing-derived
+by construction. It is a legitimate integration test; the count is simply not a suite constant.
+
+**STEP (the actionable part):** stop quoting candy-pty's assertion count as a floor. A floor for this
+package should be `tests / skipped / warnings / rc` only, with the assertion count recorded as a RANGE and
+attributed to this test. If a hard number is genuinely wanted, the fix is inside the test — accumulate the
+per-line checks and assert once on the aggregate, so one assertion covers N lines — but that is a
+candy-pty change and no lane owns it this round.
+
+**Unresolved, and deliberately left open: the round-54 reviewer observed `Failures: 1` on one of eleven
+takes at `9c93f095` and could not reproduce it in eight further takes; the failing test's name was not
+captured.** It did **not** reproduce here either: 20 takes at `5bef36cb`, all `rc=0`, plus the six
+JUnit-logged takes, all `rc=0` — **26 consecutive green takes**. Across the reviewer's 11 and this run's 26
+that is **one red in 37 takes**, still uncharacterised. Whoever picks this up should capture per-take
+output AND `--log-junit` (the JUnit file names the failing test even when the console output is lost) and
+should suspect `ResizeRaceTest` first: it is the one test in the package already known to depend on host
+timing, and its `WALLCLOCK_BUDGET_SEC` assertion is exactly the shape that fails under load. **Note that
+three lanes share this box**, so a sibling lane's suite running concurrently is a plausible trigger and
+would not reproduce in a quiet tree — which is consistent with both failures to reproduce.
