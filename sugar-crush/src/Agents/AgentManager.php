@@ -913,6 +913,17 @@ final class AgentManager
                 implode(', ', array_map(static fn(string $d): string => '"' . $d . '"', $unresolved)),
                 $this->toolRegistry === []
                     ? 'the registry is empty'
+                    // THE `array_filter` IS DORMANT, AND IS KEPT DELIBERATELY.
+                    // It can never remove anything: the loop above throws on
+                    // the first non-Tool entry, so reaching this line at all
+                    // means every entry passed that check. It stays because it
+                    // is what makes the `array_map`'s `Tool $t` parameter type
+                    // safe by inspection rather than by an argument about a
+                    // throw thirty lines up — delete it and a later edit that
+                    // softens that throw turns this message into a TypeError
+                    // raised while reporting someone else's error. Written down
+                    // because its SHAPE suggests it is filtering a mixed
+                    // registry, and it is not.
                     : implode(', ', array_map(
                         static fn(Tool $t): string => $t->name(),
                         array_filter($this->toolRegistry, static fn($t): bool => $t instanceof Tool),

@@ -19223,6 +19223,21 @@ Pinned by `AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromA
 that a policy-narrowed absence and a typo produce the byte-identical refusal. That test is the trap's
 tripwire: it names this entry's decision in its failure message.
 
+### Eb60-7 — `GRANT_PROBES` proves a grant CAN fire, never that it does not OVER-fire
+
+**RECORDED, not fixed — the guard's alphabet limit (rule 11).**
+`AgentDefinitionTest::declarationDefect()` calls a preset's argument-scoped declaration clean once
+ONE probe call matches it. That is a lower bound on the grant and says nothing about its upper bound:
+`Bash(git*)` — no space — satisfies the `git status` probe and ALSO admits `gitfoo bar`, because
+`fnmatch('git*', 'gitfoo bar')` is true. The doc-block is honest about this ("proving the grant
+admits something real"), so this is a coverage note rather than a false claim.
+
+Closing it means a second probe table of calls each declaration must REFUSE, which is a different
+kind of fixture: the "can fire" table is derivable from the declaration, the "must not fire" table is
+a judgement about what the preset meant. Worth doing when a preset ships a grant whose upper bound
+actually matters — today the only argument-scoped declaration in the built-in set is `Bash(git *)`,
+whose trailing space makes the over-fire case not arise.
+
 ### Eb60-5 — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
 
 **DEFERRED, out of lane (`src/Workflows/WorkflowEngine.php`, `src/Workflows/WorkflowTask.php`).**
