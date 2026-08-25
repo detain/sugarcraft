@@ -14861,3 +14861,51 @@ was filed. Rewritten, not deleted.
 **STILL OPEN, and it is the general form:** three of the four `path-repo-check` steps have no local
 counterpart. `ManifestDependencyReachTest` closes the `--unused` one for `sugar-crush` only. Every other
 lib, and the closure and injection passes, remain checks the merge checklist cannot see.
+
+### Ec55-5 — the tool's `deferred-wiring` lookup never expires a row, for any of the other 57 libs
+
+Round 55's review found this in `sugar-crush`'s copy and it is fixed there; the same never-expires
+property is still live in `tools/check-path-repos.php`. Its `$deferredWiring` closure is consulted only
+for a dependency the pass has ALREADY decided is dead, so nothing ever asks whether the row is still
+suppressing a real finding. Measured, in-lane, PHP 8.3.6: adding rows for `sugarcraft/candy-core`
+(reached from `src/` on every page) and `sugarcraft/package-that-does-not-exist` (not even a require) to
+`sugar-crush/composer.json` left `--unused` at rc 0 saying nothing about either, and
+`ManifestDependencyReachTest` green at 2 tests / 26 assertions.
+
+`ManifestDependencyReachTest::idleDeferrals()` now reds on all four idle shapes — a row for a package
+this manifest does not require, a non-`sugarcraft/*` package, a dep `src/` already reaches, and a dep
+whose namespace does not resolve — but only for `sugar-crush`. A row in any of the other 57 manifests is
+still an exemption nothing expires, which is rule 33's shape: an exemption written for correct code is a
+licence, and it is where the next real offender hides.
+
+**The fix belongs in the tool, not in a package**, because it is a property of every manifest: after
+building the report, walk every `extra.sugarcraft.deferred-wiring` block and report a row that did not
+suppress a finding this run. `idleDeferrals()` is the reference implementation and the four reasons it
+distinguishes are the ones worth printing — a count cannot tell a wired dep from a package nobody
+requires. `tools/` was assigned to no lane in round 55, which is why this is filed rather than done.
+
+### Ec55-6 — `LIB_HORIZON`'s unwalked rows were unfalsifiable, and the roster's own promise was false
+
+Recorded because the DEMONSTRATION is reusable, not because the defect is still open — it is fixed at
+round 55 lane c. `walked => true` rows were pinned in both polarities by a `mechanism` citation.
+`walked => false` rows were pinned by nothing: no mechanism, no hit count, no cardinality.
+
+Measured with a known-answer control first. An identical probe — a class whose `proc_open()` spec is
+`$this->spec()`, unreadable, with `UNREADABLE_IN_LIBS` empty — planted at three paths:
+
+| probe path | roster row | result |
+|---|---|---|
+| `candy-core/lang/…` | `walked => true` | rc 1, two arms red |
+| `candy-core/docs/…` | `walked => false` | **rc 0, OK (15 tests, 3737 assertions)** |
+| `candy-core/…` (library root, segment `''`) | `walked => false` | **rc 0, OK (15 tests, 3737 assertions)** |
+
+The `docs` row also falsified the roster's own doc-block, which promised that a library growing an
+unrostered kind of directory reds rather than being skipped in silence: `docs` WAS that kind, it was
+pre-rostered, and it did not red. Zero `.php` files exist under any `docs/` directory in the closure
+(generator: `census.php`, all 18 libs, no sampling, PHP 8.3.6), so the row licensed a directory kind that
+does not exist.
+
+**The generalisable rule:** a roster row that classifies without being required to MATCH something is an
+exemption with the falsifiability filed off. Every roster in this tree that carries a "we deliberately do
+not look here" row should be checked for the same hole — the standard was already being applied to
+`UNREADABLE_IN_LIBS` two functions away in the same file, and simply had not been applied here.
