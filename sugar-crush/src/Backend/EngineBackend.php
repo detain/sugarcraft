@@ -161,7 +161,26 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * ⚠️ PUBLIC HERE MEANS "READABLE BY THE FAMILY", NOT "TUNABLE". Moving this
      * number moves all four framers at once, which is the intent; the two
      * suites named above will red, and that is the deliberate-change signal,
-     * not an obstacle.
+     * not an obstacle. RE-MEASURED at this commit: raising this to 128 MiB
+     * produces two failures, one in each of those files.
+     *
+     * ⚠️ AND THAT SAME MEASUREMENT IS THE BEFORE-AND-AFTER, which is the only
+     * reason to trust the sentence above. Round 58 ran it on the tree as it
+     * then stood and recorded the result in the two framers' doc-blocks; those
+     * paragraphs were rewritten this round and the measurement went with them,
+     * so it is restored here, once, rather than three times. WHAT IT SAID:
+     *
+     *     MEASURED on PHP 8.3.6 by raising the engine's constant to 128 MiB and
+     *     running the two suites that exist to pin this bound … both stayed
+     *     green. No whole-suite run was made under that mutation.
+     *
+     * WHY IT STILL EARNS ITS PLACE, GIVEN THE ANSWER HAS SINCE FLIPPED: green
+     * then and red now is the whole argument. At the time all four classes held
+     * their own literal, so moving this number moved ONE of them and the suites
+     * that check the bound never compared the four to each other. The pair of
+     * results is the evidence that the derivation changed something real, and a
+     * reader who sees only today's red has no way to tell a guard that works
+     * from a guard that was never able to fail.
      */
     public const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
