@@ -63,12 +63,33 @@ interface ObservesReasoning extends Backend
      * {@see Backend::complete()} plus a live observer of the model's thinking.
      *
      * @param callable|null $onReasoning `function(string $delta): void`. A
-     *                      DELTA, never a running total. The EMPTY string never
-     *                      reaches it: an empty fragment is meaningful one layer
-     *                      down — for {@see EngineBackend} it is a heartbeat
-     *                      that moves the idle deadline for a chunk with nothing
-     *                      to show — and is meaningless as a paint instruction,
-     *                      so it is dropped before the caller's sink is called.
+     *                      DELTA, never a running total. **The EMPTY string DOES
+     *                      reach it here, and a sink passed to this method must
+     *                      tolerate one.**
+     *
+     *                      WHAT THIS SAID BEFORE: that the empty string never
+     *                      reaches the sink, because it is meaningless as a
+     *                      paint instruction and is dropped before the caller
+     *                      is called. WHAT IS TRUE NOW: that guarantee is real,
+     *                      but it belongs to {@see completeAsync()} and only to
+     *                      it — stated on this method it was inverted.
+     *                      {@see EngineBackend::complete()} assigns this
+     *                      callable straight to the `$progressSink` it threads
+     *                      into {@see \SugarCraft\Crush\Runtime::run()},
+     *                      untouched, and that runtime reports `''` for a chunk
+     *                      that carried nothing showable. Held by
+     *                      `ReasoningProgressTest::testTheSyncPathDeliversTheEmptyHeartbeatBecauseTheChildNeedsIt()`,
+     *                      which asserts three empty deltas arrive.
+     *                      WHY THE REASONING STILL EARNS ITS PLACE: the WHY was
+     *                      right and only the WHICH-METHOD was wrong. An empty
+     *                      fragment is meaningful one layer down — for
+     *                      {@see EngineBackend} it is the heartbeat that moves
+     *                      the idle deadline for a chunk with nothing to show —
+     *                      and it is meaningless as a paint instruction. That is
+     *                      exactly why the ASYNC path, whose caller is a
+     *                      painter, filters it, and why the SYNC path, which
+     *                      runs inside the child that writes the frames, must
+     *                      not.
      */
     public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null): Message;
 
@@ -83,7 +104,17 @@ interface ObservesReasoning extends Backend
      * {@see EngineBackend} carries each fragment back over its socket as its
      * own frame rather than calling the sink where it is produced.
      *
-     * @param callable|null $onReasoning see {@see complete()}
+     * @param callable|null $onReasoning `function(string $delta): void`. As
+     *                      {@see complete()}, EXCEPT that here the empty string
+     *                      never arrives: this method's caller is a painter, and
+     *                      an empty delta is a heartbeat with nothing to paint.
+     *                      {@see EngineBackend::completeAsync()} enforces it on
+     *                      BOTH of its paths — the forked path drops an
+     *                      empty-`text` reasoning frame in the parent, and the
+     *                      pcntl-less blocking fallback wraps the sink in a
+     *                      filter — because a consumer painting live thinking
+     *                      cannot be expected to know which one it got. Held in
+     *                      both polarities by `ReasoningProgressTest`.
      */
     public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface;
 }
