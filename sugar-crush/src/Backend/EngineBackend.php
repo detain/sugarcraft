@@ -120,10 +120,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * independent literals to each other.
      *
      * WHY THIS STILL EARNS ITS PLACE, i.e. why widening the visibility is not
-     * merely convenience: a constant expression referencing another class's
-     * constant is a LOAD-TIME fact, so the family can no longer disagree at
-     * all. The reflection test remains, but its job changed -- it now pins that
-     * every member DERIVES rather than that four literals happen to match.
+     * merely convenience: the claimants no longer hold a COPY of the number, so
+     * the family cannot disagree about it at all. The reflection test remains,
+     * but its job changed -- it now pins that every member DERIVES rather than
+     * that four literals happen to match.
+     *
+     * ⚠️ AND NARROWING THIS AGAIN FAILS LATE, NOT EARLY, WHICH IS THE ARGUMENT
+     * FOR THE TEST RATHER THAN AGAINST IT. MEASURED on PHP 8.3.6: a class
+     * constant whose initialiser names another class's constant is evaluated
+     * LAZILY, on first access -- `class_exists()` on all three claimants still
+     * answers true with this constant private, and what throws is the READ,
+     * `Error: Cannot access private constant`. So the damage would not surface
+     * at load; it would surface inside a framing path the moment one checked
+     * its bound, which is the worst place to find out.
      *
      * ⚠️ PUBLIC HERE MEANS "READABLE BY THE FAMILY", NOT "TUNABLE". Moving this
      * number moves all four framers at once, which is the intent; the two

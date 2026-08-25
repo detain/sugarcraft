@@ -427,13 +427,18 @@ final class FrameCapFamilyTest extends TestCase
         // literals. This is the assertion that names that consequence.
         $this->assertTrue(
             $engine->getReflectionConstant(self::CONSTANT)->isPublic(),
-            'EngineBackend::MAX_FRAME_BYTES is no longer public. Three classes initialise their '
-            . 'own cap from it by name, and PHP cannot read a private constant from another '
-            . 'class at all -- so narrowing this does not merely fail a test, it makes '
-            . 'LspConnection, StdioMcpServer and ClaudeCodeMcpClient unloadable. If the '
-            . 'visibility must narrow, every claimant has to go back to spelling the '
-            . 'arithmetic, and testEveryClaimantDerivesTheCapRatherThanSpellingIt() below is '
-            . 'the test that then has to change with it',
+            'EngineBackend::MAX_FRAME_BYTES is no longer public. Three classes initialise '
+            . 'their own cap from it BY NAME, and PHP cannot read a private constant from '
+            . 'another class -- so narrowing this breaks LspConnection, StdioMcpServer and '
+            . 'ClaudeCodeMcpClient. MEASURED on PHP 8.3.6, it breaks them LATE: a constant '
+            . 'expression naming another class\'s constant is evaluated lazily on first '
+            . 'access, so all three classes still LOAD, and what throws is the read -- '
+            . '"Error: Cannot access private constant" -- raised inside whichever framing '
+            . 'path happened to check its bound first. That is why this is asserted here '
+            . 'rather than left to the type system. If the visibility must narrow, every '
+            . 'claimant has to go back to spelling the arithmetic, and '
+            . 'testEveryClaimantDerivesTheCapRatherThanSpellingIt() below is the test that '
+            . 'then has to change with it',
         );
 
         $this->assertNotSame([], self::claimants());
