@@ -8,6 +8,92 @@ Summary + Implementation Plan, 209-2160 are the 13 research dossiers.
 
 ---
 
+## Round 54 — the descriptor census finished, two real MCP bugs, and a round that survived two kills
+
+**Closed 2026-08-25 at `49ae499e`, base `606a131c`.** Three lanes. The round was interrupted TWICE by
+the environment — a host reboot at 7-of-9 agents, then a session limit during the recovery — and both
+interruptions landed in the fix stage. It still closed on an exact prediction.
+
+### THE MERGED FLOOR
+
+| package | floor | delta |
+|---|---|---|
+| sugar-crush | **9994 / 144819 / 1 skipped / rc 0** | +48 tests, +550 assertions |
+| candy-core | **842 / 7573 / 25 / rc 0** | +23 tests, +183 assertions |
+| candy-flip | **83 / 227 / 2 / rc 0** | unchanged |
+| backlog | **428 → 452** | 21 lane ids (E429-E449) + 3 supervisor (E450-E452) |
+
+🔴 **THE PREDICTION WAS EXACT ON BOTH NUMBERS — tests for the twelfth consecutive round, assertions for
+the third.** It was written to a file before the first merge command ran, as always. Predicted
+`9994 / 144819`; measured `9994 / 144819`.
+
+**And that is the outcome I explicitly said I expected LEAST.** The prediction named three possible
+results for the rule-32 semantic risk and argued for (a) or (b) over (c) — exactly-the-sum. It came out
+(c). Because a number landing where you predicted is not evidence when you predicted it would not, the
+instrument was checked rather than trusted: lane c's widened `DescriptorInheritanceGuard` **does** roster
+`MCP/StdioMcpServer.php::start`, so it is alive on the file lane b rewrote. The count did not move
+because lane b's 312 added lines are a stderr DRAIN, not a new rostered spawn site — there was nothing
+for the census to count. Outcome (c) is genuine, not a dead guard.
+
+### WHAT THE LANES DID
+
+- **a — candy-core descriptor census, finished.** E368 sites 2 and 4 closed by resolving a stream to its
+  real descriptor; E404 (the census could not see the METHOD spelling of its own sinks — rule 11, attack
+  the alphabet); E398. Then the hidden-cast trace-back, which spoke only `$x`: a cast parked in
+  `$this->fd` or `$tty[0]` classified as the benign shape, *"the same defect with a line break in it"*,
+  and the array spelling is the one the FIRST census of this family died of. Four rostered rows are
+  spelled `$this->fd`. The lane also found and killed a live trap while re-observing its own baseline: a
+  worktree at the base commit with `candy-core/vendor` SYMLINKED resolved `SugarCraft\Core\` back to the
+  LANE's HEAD source, which would have measured HEAD's src against the base's tests and produced a
+  confident, entirely bogus floor. It checked the resolved path, copied vendor instead, and re-checked.
+- **b — two real MCP runtime bugs.** E411, the identical undrained-stderr wedge round 53 fixed elsewhere,
+  now drained; E412, `McpMessage::parse()` no longer `TypeError`s on a conforming scalar `"result": true`;
+  a zero result no longer reaches the model as empty text. **E413 was FALSIFIED** — the lane built a
+  tripwire for the CI pools instead of removing the platform gates, and the tripwire reds on a pool it
+  cannot parse rather than reading it wrong (rule 14).
+- **c — closed the leak its own guard proves.** E418 widened the descriptor guard to the reachable
+  sibling libraries, deriving the walk's roots from each lib's manifest instead of asserting a census in
+  prose. E425's receipt. And, in the spirit rule 33 was written for last round, `fef79751d`: *naming fd 3
+  was an exemption from the descriptor guard and not a fix.*
+
+**All three lanes corrected themselves in commit messages** — a mechanism claim wrong in the lane's own
+comment, a pin that cleared the cache it was testing, and on lane c a rule-25 claim measured and found
+false. Lane b refuted four of its reviewer's six prescriptions with measurements, one of which would have
+produced a false positive.
+
+### 🔴 WHAT THE INTERRUPTIONS TAUGHT — E450, and it is the round's most valuable finding
+
+The pipeline is implement → review → fix, so **a review is a snapshot of the tree as the IMPLEMENTER left
+it.** When a fix agent is killed and relaunched it is handed that same review — of a tree that no longer
+exists — and told not to redo committed work. Measured at the merge: **six of lane c's thirteen commits,
+and nine of lane a's seventeen, had been reviewed by nobody at all.**
+
+The recovery brief steered away from the risk: "map the reviewer's findings onto commits" points at the
+surface that HAS been reviewed. Lane c said so itself, unprompted — *"the brief's real gap was the inverse
+of what it warned about … that unreviewed surface was where the remaining risk actually lived."* Filed as
+E450, with the fix: a recovery brief must state the review's tree position and name the unreviewed
+commits as the FIRST task, or better, re-run the review against current HEAD. A stale review is worse
+than no review, because it looks authoritative.
+
+Also filed: **E451** (the orphan-`php -S` invariant is unreadable while a suite runs — measured 3, then 2,
+then 0/0/0 on the same host minutes apart) and **E452** (`resumeFromRunId` cannot resume a `pipeline()`
+run; recover by rebuilding prompts from the script itself).
+
+### THE RECOVERY MECHANIC, for the next time this happens
+
+Everything under `~/.claude` survived — every lane commit, the round script, the journal, the per-agent
+transcripts. **All of `/tmp` did not**, taking the staged sweep script and the lanes' scratchpads.
+Anything a round needs across a reboot belongs in git or under `~/.claude`.
+
+Lane a's 21 minutes of uncommitted work was preserved WITHOUT committing it red: `git stash create` plus
+`git update-ref refs/rescue/r54a-mid-edit` snapshots the tree into git while leaving the working tree
+exactly as the killed agent left it. It was one assertion short — `self::$fd` returned `VARIABLE` because
+the new left-hand-side walk requires a `T_VARIABLE` root, a guard with a stated reason. The relaunched
+agent resolved it on the merits rather than by retreat: it kept the row, taught the walk to admit the
+static spelling, and added negative-polarity rows (`a DIFFERENT static property`, `the same name on
+another class`) so the widening cannot pass by matching everything. `static::$fd` remains unexpressible
+and reports UNCLASSIFIED — the correct failure direction, and pinned.
+
 ## Round 54 — IN FLIGHT (this entry is a checkpoint, not a result)
 
 **Base `606a131c` · run `wf_945b0ccb-cb9`, task `wpfjwoxt2` · launched 2026-08-24, three lanes.** Base

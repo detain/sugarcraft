@@ -14664,3 +14664,75 @@ findings above are real and belong to the libraries that own them. If the second
 root list and `E448`'s promotion of the scanner into `candy-testing` is the cheaper way to get there.
 This is a scope decision, not a defect, and it should not be settled inside a guard's doc-block by
 whoever next touches it.
+
+---
+
+## Round 54 — supervisor. E450-E452.
+
+### E450 — 🔴 WHEN A KILLED LANE IS RELAUNCHED, THE COMMITS IT MADE BEFORE DYING ARE REVIEWED BY NOBODY
+
+**Recorded 2026-08-25 by the round-54 supervisor.** Severity: structural, and it will recur on every
+interruption. **Measured.** Found by lane c, unprompted, as the thing its recovery brief got wrong.
+
+Round 54 was interrupted twice — a host reboot, then a session limit — and both times the lanes were in
+the FIX stage. The pipeline is implement → review → fix, so the review is a snapshot of the tree as the
+IMPLEMENTER left it. Every commit a fix agent makes after that point is, by construction, unreviewed.
+That is fine in a normal round, because the fix agent's own report closes the loop. It is NOT fine when
+the fix agent is killed and relaunched, because the relaunched agent is handed the SAME review — a
+review of a tree that no longer exists — and its recovery brief tells it not to redo committed work.
+
+MEASURED at the merge: lane c's review was written at a tree 7 commits over the base; its HEAD at
+relaunch was 13. **Six of thirteen commits had been seen by no reviewer at all.** Lane a is worse: the
+review was written at `9c93f095`, 8 commits over the base, and HEAD at relaunch was `5bef36cb`, 17
+commits over — **nine unreviewed commits.** Both lanes caught this themselves and audited the gap; lane
+c stated it flatly: *"the brief's real gap was the inverse of what it warned about … that unreviewed
+surface — not the review's findings list — was where the remaining risk actually lived."*
+
+The recovery brief actively steered AWAY from the risk. It said "do not redo committed work" and "map
+the reviewer's findings onto commits", which points the agent at the findings list — precisely the
+surface that HAS been reviewed — and says nothing about the surface that has not.
+
+**STEP:** a recovery brief for a killed FIX agent must state the review's tree position explicitly
+(`the review was written at <sha>, N commits over base; HEAD is now <sha>, M commits over`) and name
+reviewing the M−N unreviewed commits as the FIRST task, ahead of the findings mapping. Better still,
+re-run the review stage against the current HEAD rather than replaying the stale one — the review is
+cheap relative to a fix, and a stale review is worse than no review because it looks authoritative.
+
+### E451 — the orphaned-`php -S` invariant cannot be measured while any suite is running
+
+**Recorded 2026-08-25 by the round-54 supervisor.** Severity: measurement hygiene. Sharpens `E428`.
+**Measured.**
+
+`E428` established that `pgrep -af 'php -S' | wc -l` self-matches and answers 1 on a clean host, and
+replaced it with `ps -eo args= | grep -c '[p]hp -S'`. That form is correct but it is still not a valid
+reading while a suite is in flight: the suites spawn `php -S` children legitimately and reap them within
+seconds. MEASURED at the round-54 merge, same host, same command, minutes apart: **3** while the
+sugar-crush suite was running, **2** moments after it finished, **0 / 0 / 0** on three consecutive
+samples once the tree was quiet. A supervisor sampling at either of the first two moments records a leak
+that does not exist, and — worse — one that will not reproduce.
+
+**STEP:** the invariant is "zero orphans **with no suite running**". State the precondition wherever the
+check is written down, and take the reading after the last suite exits, not alongside it. If a non-zero
+count ever appears on a quiet tree, `ps -o pid,etimes,args=` and filter on `etimes` — a genuine orphan
+outlives the run that made it, and that is the property worth asserting.
+
+### E452 — `resumeFromRunId` cannot resume a `pipeline()` run, and the failure mode is silent rework
+
+**Recorded 2026-08-25 by the round-54 supervisor.** Severity: harness. **Measured.**
+
+Resume replays the longest unchanged PREFIX of `agent()` calls. Under `pipeline()` the call ORDER is set
+by completion times, not by the script, so the prefix cannot be reproduced across runs. MEASURED on the
+round-54 recovery: the original run's journal recorded impl×3, then `review_b`, `review_a`, `review_c`,
+then the fix stage. Resuming replayed the three implements from cache and then started **three review
+agents** — including lane b's, whose fix had already completed and landed. It was killed after ~90s.
+
+Nothing errors. The run simply redoes work, and redoes it against trees that have moved past the state
+the replayed prompts describe — a reviewer told "the implementer has finished and committed" would have
+been looking at a tree carrying a full fix stage on top.
+
+**STEP:** do not reach for `resumeFromRunId` on a `pipeline()` round. Recover by rebuilding the missing
+prompts FROM THE SCRIPT: read it as text, truncate at the `phase('Implement')` line, rewrite
+`export const meta` to `const meta`, `require()` it, and call the real `fixPrompt`/`reviewPrompt` with
+the cached stage results pulled out of `journal.jsonl`. That regenerates each prompt byte-identically —
+verified this round at 53,445 and 51,840 chars — and lets exactly the missing agents be relaunched while
+completed lanes are left untouched. See `E450` for what such a brief must additionally say.
