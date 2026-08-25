@@ -14942,3 +14942,68 @@ progress is the defect.**
   pass on a fix that emits the frame somewhere the timer cannot see it. Add the tool-call-only case.
   Per rule 16 the acceptance test is a mutation of THE FIX: re-gate the reasoning branch on
   `content !== ''` and the test must go red.
+
+### E457 — 🔴 `grep` in an agent shell is ugrep, not GNU grep, and `grep -qv` silently always answers "no"
+
+**Measured 2026-08-25 by the round-55 supervisor,** after a monitor raised a false alarm about a lane
+agent that had in fact completed twenty minutes earlier. Severity: it makes a whole class of verification
+step quietly wrong, and nothing errors.
+
+`type -a grep` in an agent shell reports **`grep is a function`** before it reports `/usr/bin/grep`. The
+harness installs a shell function that shadows `grep` and routes to **ugrep** (`ugrep 7.8.4`) via the
+`claude` binary. So every bare `grep` an agent types — including every `grep` in this backlog's own
+verification recipes — is ugrep.
+
+**The measured divergence:**
+
+```
+printf 'aaa started\nbbb result\n' | grep -qv started          # -> exit 1   (ugrep)
+printf 'aaa started\nbbb result\n' | /usr/bin/grep -qv started # -> exit 0   (GNU)
+```
+
+`grep -qv PATTERN` is the standard idiom for *"does any line NOT match?"*. Under ugrep it returns false
+even when such a line plainly exists — verified against a real two-line input where `grep -v` (no `-q`)
+prints the line and exits 0 while `grep -qv` exits 1 on the very same data. **A check written as
+`grep -qv X && fail` therefore never fires,** and a check written as `grep -qv X && pass` never passes.
+Neither prints a warning.
+
+**What this does NOT affect — bounded, and measured rather than assumed:**
+
+- **The backlog counts are sound.** `grep -cE '^#{2,3} E'` returns **456** under both ugrep and
+  `/usr/bin/grep`, and the highest id is 456 under both. Every round's entry count stands.
+- **Scripts and CI are unaffected.** The function is defined but **not exported** (`declare -Fx` does not
+  list it), so a `#!/bin/bash` script, a `tools/*.php` shell-out, or a GitHub Actions step gets real GNU
+  grep. The shadow reaches inline agent commands only.
+- `git grep` is git's own implementation and is unaffected.
+
+**STEP:**
+
+1. **Never write `grep -qv` in a verification step.** Use `! grep -q PATTERN` (negate the exit status
+   outside grep), or `[ "$(grep -cv PATTERN f)" -gt 0 ]`, both of which agree across implementations.
+2. Where a check is load-bearing for a merge figure, call **`/usr/bin/grep` by absolute path** and say in
+   the recipe why. A path that names its implementation cannot be shadowed by a profile change later.
+3. 🔴 **Carry a known-positive control** (rules 15/25). The monitor that found this now opens with
+   `/usr/bin/grep -qv x /dev/null` and prints whether the idiom is sane before it trusts any alarm it
+   raises. A dead instrument and a quiet instrument produce identical silence — see [[E451]] for the same
+   lesson learned about the orphaned-`php -S` count, and rule 35.
+4. Audit the shell idioms in this backlog's own STEP blocks for other GNU-isms assumed of `grep` — `-P`,
+   `-z`, and `--null-data` are already special-cased by the shadow function and fall through to real grep,
+   which means the failure surface is *specifically* the flags it does NOT special-case.
+
+**Postscript, and it is the more useful half.** The first replacement monitor opened with
+`/usr/bin/grep -qv x /dev/null` as its control — and the control reported FAILED. The grep was fine; the
+**control** was broken. `/dev/null` has no lines, so no line can ever be *selected* by an inverted match,
+and the check can only ever exit 1. It was a control that could not pass, which is worth exactly as much
+as no control at all, and it would have discredited every real alarm the monitor went on to raise.
+
+🔴 **A control must be a KNOWN POSITIVE, and it is worth also asserting the KNOWN NEGATIVE.** The working
+form checks both directions, so an implementation that answers "yes" to everything is caught alongside one
+that answers "no" to everything:
+
+```sh
+if printf 'a\nb\n' | grep -qv a && ! printf 'a\na\n' | grep -qv a; then echo sane; fi
+```
+
+That is rule 15/25 aimed one level further in than usual: it is not enough to instrument the measurement,
+the instrument's own self-test has to be capable of failing for the right reason and passing for the right
+reason. Both times today the wrong answer arrived as silence rather than as an error — see [[E451]].

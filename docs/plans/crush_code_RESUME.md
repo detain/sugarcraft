@@ -83,6 +83,14 @@ and checkpointed, so reusing that channel would corrupt the conversation rather 
 
 Both are round-56 candidates. Neither was injected into a running lane.
 
+**E457 — a bare `grep` in an agent shell is ugrep, not GNU grep.** The harness shadows `grep` with a shell
+function; measured, `grep -qv` returns 1 where GNU returns 0, so the standard *"does any line NOT match?"*
+idiom silently always answers no. Backlog counts are unaffected (456 under both, verified) and scripts/CI
+are unaffected (the function is not exported) — the shadow reaches inline agent commands only. Use
+`! grep -q` or an absolute `/usr/bin/grep` in anything load-bearing, and carry a control that can actually
+fail: the first control written for this was `-qv x /dev/null`, which can never pass because an empty file
+has no line to select.
+
 ### NEW STANDING RULES THIS ROUND
 
 - **34** — if you inherit a lane with commits above the tree your review was written at, **review those
@@ -98,9 +106,12 @@ closure restored and verified → round 55 launched. **Nothing from that instruc
 
 ### AT THE MERGE
 
-Merge a→b→c. **Renumber from E457** (the backlog closed round 54 at 454 entries, and **E455 and E456 were
-then taken mid-round by two user-reported bugs** — see the section below — so both are SPOKEN FOR;
-re-derive the base yourself with `grep -cE '^#{2,3} E'` and a `sort -n | tail -1` before you trust any number written
+Merge a→b→c. 🔴 **DO NOT trust a renumber base written in this file — DERIVE IT.** Three ids (E455-E457)
+were taken mid-round after round 55's lanes were already cut, and this line has been edited three times to
+chase them; the next reader should assume it is stale again. Run
+`/usr/bin/grep -oE '^#{2,3} E[0-9]+' docs/plans/crush_code_hardening_backlog.md | /usr/bin/grep -oE '[0-9]+' | sort -n | tail -1`
+and renumber from **that + 1**. (Absolute path deliberate — a bare `grep` in an agent shell is ugrep, see
+E457.) As of this writing the answer is 457, so the base is 458. Re-derive it anyway with `grep -cE '^#{2,3} E'` and a `sort -n | tail -1` before you trust any number written
 here). Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
 Measure the merged floor for **sugar-crush, candy-core, candy-flip** and **candy-pty if lane a touched
 it**. Verify skips stay exactly 1, closure 18/18 · 3/3 · 6/6 · 7/7, `check-path-repos` rc 0, config md5
