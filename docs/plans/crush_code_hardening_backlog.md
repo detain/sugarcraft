@@ -14736,3 +14736,33 @@ prompts FROM THE SCRIPT: read it as text, truncate at the `phase('Implement')` l
 the cached stage results pulled out of `journal.jsonl`. That regenerates each prompt byte-identically —
 verified this round at 53,445 and 51,840 chars — and lets exactly the missing agents be relaunched while
 completed lanes are left untouched. See `E450` for what such a brief must additionally say.
+
+### E453 — CI's path-repo policy job is RED on master, and has been for at least two pushes
+
+**Recorded 2026-08-25 by the round-54 supervisor.** Severity: real, and it is red on `master` right now.
+**Measured** from the GitHub Actions log of run `32779921676` (`492352ea`, a docs-only push, so this is
+NOT round-54 fallout — it predates the merge).
+
+```
+Dead path-repo dependencies (candidates for pruning):
+sugar-crush:
+  - PRUNE_REQUIRE_AND_REPO  sugarcraft/candy-kit  tests_uses: no  (not reachable via other requires or require-dev)
+1 finding(s). Read-only report
+##[error]Process completed with exit code 1.
+```
+
+`sugar-crush` requires `sugarcraft/candy-kit`, nothing in `src/` or `tests/` reaches it, and the policy
+job exits 1 on that. Note the local guard does NOT catch this: `php tools/check-path-repos.php
+--no-lib-path-repos` exits 0 at the same commit, because it checks a different property. **The
+supervisor's merge checklist has therefore been passing a check that CI fails**, which is the more
+important half of this finding — a green local invariant that does not imply a green CI one.
+
+🔴 **THE OBVIOUS FIX IS THE WRONG ONE.** The report's own recommendation is `PRUNE_REQUIRE_AND_REPO`, and
+the standing rule is that dormant code gets WIRED or documented as an intentional seam, never deleted.
+`candy-kit` is a foundation lib; a `sugar-crush` that cannot reach it is more likely to be missing a
+wiring than carrying a stale require.
+
+**STEP:** decide which it is, with evidence. Either (a) find what `sugar-crush` was meant to use
+`candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the
+manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
+Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
