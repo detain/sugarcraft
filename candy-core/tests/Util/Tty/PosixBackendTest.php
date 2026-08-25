@@ -218,6 +218,24 @@ final class PosixBackendTest extends TestCase
         }
 
         if (!$fdDirectoryIsLive) {
+            // A guard must go red on what it cannot account for rather than
+            // skip it. On Linux `/dev/fd` is a symlink to `/proc/self/fd`
+            // (MEASURED on this box: `readlink('/dev/fd')` is
+            // `/proc/self/fd`), so with procfs mounted the probe above CANNOT
+            // legitimately answer no -- if it does, the probe is broken and
+            // the whole point of this test is that a broken probe is how it
+            // spent its life not running.
+            if (PHP_OS_FAMILY === 'Linux' && is_dir('/proc/self/fd') && is_dir('/dev/fd')) {
+                self::fail(
+                    'the /dev/fd probe answered no on a Linux host with procfs mounted and /dev/fd '
+                    . 'present. That is the probe, not the host: on Linux /dev/fd is a symlink to '
+                    . '/proc/self/fd and a descriptor held open is always visible through it. '
+                    . 'Suspect a resource-id cast where a descriptor belongs, or a handle closed '
+                    . 'before the path is stat()ed - this test skipped for its entire life on '
+                    . 'exactly those two mistakes.',
+                );
+            }
+
             $this->markTestSkipped('/dev/fd/<n> is not a live view of this process on this host.');
         }
 
