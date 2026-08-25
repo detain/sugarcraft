@@ -15804,7 +15804,7 @@ candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608
 **STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
 stays open on its own evidence.
 
-## Round 56 — lane a (the bugs the user hit). Ea56-1 … Ea56-4.
+## Round 56 — lane a (the bugs the user hit). Ea56-1 … Ea56-5.
 
 *Provisional lane-prefixed ids (rule 20); the supervisor renumbers at merge.*
 
@@ -15842,6 +15842,16 @@ child and the deadline is reset by the parent whether or not `$onReasoning` is n
 not: `Chat::backendCmd()` calls `$backend->completeAsync($history, $onToken, $cancellation, $onEvent)`
 with four arguments, so no live caller passes a fifth and the model's thinking is still invisible until
 the turn settles and `Renderer::renderReasoning()` paints the finished `Message::$reasoning`.
+
+**Step 0, added by the round-56 review and easy to miss because PHP will not complain.** `Backend`
+itself declares `completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation
+= null, ?callable $onEvent = null)` — FOUR parameters. `$onReasoning` exists on `EngineBackend` only.
+VERIFIED on PHP 8.3.6 that a userland method accepts extra arguments silently (`func_num_args()` returns
+5 for a two-parameter method called with five, no error and no warning), so a `Chat::backendCmd()` that
+simply passes a fifth argument would work against `EngineBackend` and **no-op against `EchoBackend`,
+`CommandBackend` and `StreamingCommandBackend`** — a live capability gap that fails as "thinking never
+paints on this backend" rather than as anything a test or a type checker would catch. Widen the interface
+declaration and all four implementations FIRST, in their own commit, then wire the caller.
 
 **The shape of the fix, which is the same shape `TokenDelta` already uses** and is written down here so
 it does not have to be re-derived: (1) a `ReasoningDelta` Msg beside `src/TokenDelta.php`; (2) in
@@ -15893,7 +15903,8 @@ measure.
 `completeAsync()`'s own source with `ReflectionMethod` and counting `addTimer(self::
 COMPLETE_TIMEOUT_SECONDS` occurrences, under a comment stating the honest reason: the ceiling "cannot be
 exercised in a unit test without waiting out the real 120 s". That reason no longer holds.
-`ReasoningProgressTest::ScaledClockLoop` is a `LoopInterface` whose streams are real — real
+`ScaledClockLoop` — a sibling top-level class in `tests/Backend/ReasoningProgressTest.php`, not a member
+of the test class — is a `LoopInterface` whose streams are real — real
 `stream_select()` on the real socket pair, real frames off a real forked child — and whose TIMERS run on a
 clock scaled 500 virtual seconds to the real second, so `addTimer(120)` is armed unchanged and crossed in
 240 ms of wall time. Its known-positive control
@@ -15904,3 +15915,17 @@ that harness.
 behavioural test does not, namely that the timer is armed in exactly ONE place. The work is to add the
 behavioural arm for "an ordinary multi-step tool turn outlives the ceiling", which is the original §1 E1
 defect and is still pinned only by prose.
+
+### Ea56-5 — three test doubles hold generic names at the top level of a SHARED test namespace
+
+**Recorded 2026-08-25 by lane a, from its own review.** Severity: low, merge hygiene.
+
+`StreamingDouble`, `BatchDouble`, `ThinkThenFailDouble` and `ScaledClockLoop` are declared at the top
+level of `SugarCraft\Crush\Tests\Backend`, in `tests/Backend/ReasoningProgressTest.php`. Nothing
+collides in the tree today. The failure mode if something does is the nasty one: a sibling lane adding
+its own `StreamingDouble` in another file of the same namespace merges with no textual conflict and
+fatals at autoload, in a file neither author edited.
+
+Cheap fix, whenever anyone is in that file for another reason: nest each double as a private class of the
+test, or prefix them (`E456StreamingDouble`). Not done in-round because it is a rename across a file
+another lane may hold, and a rename conflict is worse than the risk it removes.
