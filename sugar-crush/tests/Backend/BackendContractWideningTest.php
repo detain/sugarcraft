@@ -209,10 +209,28 @@ final class BackendContractWideningTest extends TestCase
      */
     public function testTheSameFourParameterBodyLoadsFineAgainstBackendItself(): void
     {
-        [$rc, $output] = $this->compileInFreshInterpreter(
-            self::fourParameterProbe('HonestBackend', Backend::class),
-            autoload: true,
+        $control = self::fourParameterProbe('HonestBackend', Backend::class);
+
+        // "THE SAME BODY" IS ASSERTED, NOT ONLY ARRANGED. Sharing the builder
+        // makes divergence hard to introduce by editing; it does not make it
+        // impossible, because either call site could wrap the result. MEASURED
+        // (rule 43): with the control's fourth parameter stripped at the call
+        // site - the exact defect this test's docblock used to describe - the
+        // shared-builder version was still green. So the two bodies are
+        // compared here, and the only difference either may carry is the pair
+        // of names that makes them two probes rather than one.
+        $belowTheHeader = static fn (string $probe): string => substr($probe, (int) strpos($probe, "\n"));
+
+        $this->assertSame(
+            $belowTheHeader(self::fourParameterProbe('LiarBackend', ObservesReasoning::class)),
+            $belowTheHeader($control),
+            'the control is no longer the same class body as the probe it is controlling for, so '
+                . 'it varies the interface AND something else at once and cannot isolate the '
+                . 'fifth parameter of completeAsync(). The `final class X implements Y` line is '
+                . 'the ONLY difference the two are allowed.',
         );
+
+        [$rc, $output] = $this->compileInFreshInterpreter($control, autoload: true);
 
         $this->assertSame(0, $rc, "the four-parameter control did not load against Backend:\n{$output}");
         $this->assertStringContainsString(self::LOADED, $output);
