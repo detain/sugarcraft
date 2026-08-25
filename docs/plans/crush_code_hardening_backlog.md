@@ -15962,3 +15962,141 @@ Scanner alive-checked against a planted fixture. Also censused for macOS-runner 
 
 **The operative rule is therefore not "never write `grep -qv`" but "an agent-shell `grep -r` cannot see
 ignored files".** Use `/usr/bin/grep` for any census whose answer is load-bearing.
+
+---
+
+### Ec56-7 — 🔴 the HOME census's exemption could be bought with a sentence, and the fix's own comment bought it
+
+**FIXED this round (review finding F1).** `OneSidedHomeSandboxTest` skipped any file whose source
+*contained* the string `HomeSandboxTrait`. `Integration/MultiAgentRefactorTest` — the file the guard was
+built for — acquired an explanatory comment naming the trait **in the same commit that fixed it**, so
+reverting the fix left the guard **green**: the census no longer looked at the file at all.
+
+**Measured on PHP 8.3.6 over `tests/`:** 41 files contain the string, 34 actually `use` the trait, 7 were
+exempt on prose alone. (The review said 33/8; it missed `Integration/WorkflowResumptionTest.php`, which
+uses the trait fully qualified with a leading backslash.) Two of the seven mattered: that file, and the
+guard itself.
+
+**The fix asks the question precisely.** `usesHomeSandboxTrait()` reads the token stream and accepts only
+a `use` inside a class body naming the trait; a comment, a top-level import and a closure's capture list
+each fail it. **Tightening cost nothing** — the roster is the same nine files either way, because every
+prose-mentioning file that touches `HOME` was already sandboxing both spellings.
+
+**And the guard was hiding from its own census.** It classified as `{server:false, env:true}` — one-sided
+— because the environment regex scans from the call's opening parenthesis to the next closing one, and a
+concatenated argument contains none, so it matched straight across the split the file used to keep itself
+out. Only the substring skip kept it off its own roster. Now pinned by a test asserting the file does not
+match its own scanner, which caught **two** literals while this very fix was being written.
+
+**The alphabet widened too (F5).** `??=` and `.=` are writes; `==`/`!=` are reads and no longer counted;
+`$_ENV['HOME']` is tracked as a third axis, because **nothing under `src/` reads `$_ENV` at all** — a file
+moving only that has sandboxed nothing while appearing to try.
+
+---
+
+### Ec56-8 — 🔴 the subject classifier excused the exact defect it claimed it could not
+
+**FIXED this round (review finding F2).** `isSubjectSpelling()` cleared a pair when each side's differing
+token was a **prefix** of its own file's subject, and the doc-block asserted the opposite in so many
+words: *"a helper in `FooTest` that reflects `Bar` is not excused, and that asymmetry is the point."*
+`str_starts_with('TaskStatus', 'Task')` is true. A `test*` method in `Agents/TaskStatusTest` changed to
+reflect `Task` — the canonical copied-and-not-updated defect — was subtracted from the report and the
+guard stayed **rc 0**. The families where this bites are exactly the specialised variants a test is copied
+FROM: `Agent`/`AgentManager`, `Team`/`TeamConfig`, `Task`/`TaskStatus`.
+
+**The review offered two remedies; a third is strictly better than both.** Measured through the guard's
+own `driftReport`/`partitionBySubject` on PHP 8.3.6: the `test*` population offers 54 candidate pairs,
+admitted by prefix **and** by `===` alike; the `private` population offers 2, of which prefix admits 1 and
+`===` admits 0. So tightening to `===` closes the hole at the cost of putting `maxStderrBytes` back as a
+prose row — the row E481 had just retired. Instead: **require an exact match when the subject is itself a
+declared type under `src/`, and allow a proper prefix only when it is not.** A scenario-suffixed name like
+`LspConnectionStdinWedgeTest` has no type of its own and is genuinely about `LspConnection`;
+`TaskStatusTest` is about a real `TaskStatus` and must say so. That admits all 55 legitimate pairs and
+rejects `Task`/`TaskStatus`. A dead `src/` scan fails **safe** — it can only make the rule stricter — and
+its liveness is asserted rather than assumed.
+
+---
+
+### Ec56-9 — two guards in one file prescribed opposite actions for one edit
+
+**FIXED this round (review finding F3).** `testNoCopiedTestMethodHasDriftedUnrecorded()` offers *"add the
+name to `ACCEPTED_DIVERGENCE`"* as a remedy, but `testEveryAcceptedDivergenceStillDescribesADriftedPair()`
+ran the **private** walk alone, so a row for a public test method matched nothing, landed in `$overtaken`,
+and was met with *"Delete the row."* Following the first guard's advice reddened the second.
+
+**Verified in both directions.** A public `test*` method made to diverge by exactly one token (a
+`T_LNUMBER`, which the subject classifier can never explain) plus the row the guard asks for: **rc 0**
+with the union, **rc 1 — "Delete the row" — without it.**
+
+---
+
+### Ec56-10 — 🔴 the E490 hang watchdog could SIGKILL a healthy run at bootstrap
+
+**FIXED this round (review finding F4).** The state directory is
+`sys_get_temp_dir()/candy-pty-hang-watchdog-<pid>` — a pid and nothing else — and `install()` tolerated it
+already existing without clearing the heartbeat inside. **Reproduced end to end:** seed one for a
+process's own pid, load the real `tests/bootstrap.php`, and the runner is SIGKILLed *before a single test
+executes*, with the forensic dump naming a test that is not running. That is **rc 137 with no `Tests:`
+line — the exact signature of the hang the watchdog exists to diagnose**, which makes it the worst
+available false positive.
+
+**Self-amplifying:** the watchdog firing is precisely what leaves the directory behind, because `stop()`
+cannot run through a SIGKILL. Confirmed by experiment that a *normal* rc-0 run leaks nothing, so the
+trigger is specifically an abnormal termination followed by pid reuse. `pid_max` is 4194304 on this box;
+CI containers commonly run 32768, and leaked directories never expire.
+
+**Two independent defences**, because either alone sufficed and neither should be the only one:
+`install()` clears inherited state before spawning, and the parent stamps the child with the instant it
+armed so the child ignores older records. `armedAt` is taken in the **parent** — the parent may write the
+first test's heartbeat before the child runs its first line, and a watchdog that ignores the first test
+misses the hang a suite starts with. Pinned in both polarities plus end to end; the clearing was extracted
+so it could be killed by a mutation of its own, since a defence no mutation can kill reads as dead code to
+the next person tidying up.
+
+---
+
+### Ec56-11 — the residue census gave a comfortable zero for the residue with the worst consequence
+
+**FIXED this round (review finding F6).** `SharedLoopResidue`'s doc-block says a guard must go red on what
+it cannot read, and applied that to an unknown loop **class** while leaving a known loop's unread
+**properties** answering zero. `StreamSelectLoop::run()` continues while any of four things is non-empty;
+the census counted three.
+
+**The missing one is the one that matters.** Of the conditions that keep `run()` alive,
+`readStreams || writeStreams || !signals->isEmpty()` is the branch that sets `$timeout = null` —
+`stream_select()` with no timeout at all, i.e. the `wchan: do_select` state that the class itself names as
+the E490 candidate. A leaked signal handler reaches it with no stream involved. **Measured:** with a
+signal added, the census answered `{timers:0, readStreams:0, writeStreams:0}`.
+
+**And the first draft of the new test wedged the suite**, which is the finding inside the finding. It
+drained the future-tick queue via `Loop::run()` — which passes in isolation and blocks for ever in the
+full suite, because `run()` returns only when nothing is left and any earlier test's read stream keeps it
+in `stream_select()`. The out-of-process watchdog caught it and named the test, which is what E490 built
+it for. The test now drains the queue's own `tick()` and touches nothing else.
+
+---
+
+### Ec56-12 — a load-bearing justification was a number in prose with no generator
+
+**FIXED this round (review finding F7, rule 18).** The entire argument for running the drift guard over
+`test*` rather than the whole `public` alphabet was a doc-block sentence: *"the whole alphabet reads 8,556
+declarations and reports 520 it cannot place."* Nothing re-derived it. It read **8,559** at the review's
+HEAD and **8,562** after this round's own commits — every public method added anywhere under `tests/`
+moves it, including the ones added by the guard's own file.
+
+The claim is now a test that derives both halves, asserts the **shape** of the unplaceable declarations
+rather than only their number (every one a name declared twice in one file by an anonymous test double),
+and keeps the counts in failure text where they are generated. A further stale claim in the same file was
+corrected rather than deleted: *"every one of the 54 is a `tryFrom`/`from` enum test"* — **seven are
+not**, and they are ordinary behavioural tests duplicated across two suites, which strengthens the case
+for the classifier rather than weakening it.
+
+---
+
+### Ec56-13 — the round that widened the duplicated-helper guard added a duplicate it cannot see
+
+**FIXED this round (review finding F13).** `OneSidedHomeSandboxTest::everyTestFile()` was a near-copy of
+`DuplicatedTestHelperDriftTest::everyTestFile()`, restructured just enough that the divergence is **20
+tokens** — not reported at `DRIFT_BOUND` 1, nor at 2, 3, 4, 5, 8 or 12. Both now use
+`TestFileWalkTrait`. Filed because the lesson outlives the fix: a census that walks the tree is exactly
+the kind of helper that gets copied, and this guard's bound is tuned for one-token drift.
