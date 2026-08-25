@@ -314,6 +314,73 @@ final class McpMessageResultTypeTest extends TestCase
     // =========================================================================
 
     /**
+     * A SERVER THAT ANSWERS `initialize` WITH `"result": null` COMES UP EMPTY
+     * RATHER THAN THROWING, AND ONE THAT ANSWERS NOTHING STILL THROWS.
+     *
+     * {@see StdioMcpServer::start()}'s gate reads "did the server answer at all",
+     * and its old spelling — `result === null && error === null` — could not tell a
+     * null answer from no answer. It never had to: `parse()` rejected the
+     * null-result message upstream, so `$response` was simply null and that arm
+     * distinguished nothing. Now that the message parses, the gate is
+     * `!$response->resultSet` and the two cases genuinely diverge, so the choice
+     * has to be made deliberately rather than inherited.
+     *
+     * COMING UP EMPTY IS THE CHOICE, and it matches what
+     * {@see \SugarCraft\Crush\MCP\McpClient::startServer()} exists to do: one
+     * misbehaving server must not cost the session. A null handshake result is
+     * MCP-invalid — the spec says an object carrying a `protocolVersion` — but the
+     * outcome of registering it is a server with zero tools, which is
+     * indistinguishable from skipping it and costs no exception.
+     *
+     * SILENCE IS A DIFFERENT EVENT and still fails loudly. That polarity is the
+     * second half of this test, without which the first is satisfied by a
+     * `start()` that has stopped failing at all.
+     */
+    public function testANullHandshakeResultComesUpEmptyWhileSilenceStillFails(): void
+    {
+        $script = $this->tempDir . '/nullinit.php';
+        file_put_contents($script, self::NULL_HANDSHAKE_SERVER);
+
+        $server = new StdioMcpServer(
+            name: 'nullinit',
+            command: PHP_BINARY,
+            args: [$script],
+            env: [],
+            startTimeoutSeconds: 5.0,
+        );
+
+        try {
+            $server->start();
+            $this->assertSame(
+                [],
+                $server->listTools(),
+                'a server whose handshake result was null reported tools it cannot have',
+            );
+        } finally {
+            $server->stop();
+        }
+
+        $silent = $this->tempDir . '/silent.php';
+        file_put_contents($silent, '<?php sleep(10);');
+        $mute = new StdioMcpServer(
+            name: 'silent',
+            command: PHP_BINARY,
+            args: [$silent],
+            env: [],
+            startTimeoutSeconds: 1.0,
+        );
+
+        try {
+            $mute->start();
+            $this->fail('a server that answered nothing at all was reported as started');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Failed to start MCP server: silent', $e->getMessage());
+        } finally {
+            $mute->stop();
+        }
+    }
+
+    /**
      * WIDENING `$result` TO `mixed` RELOCATES THE CRASH RATHER THAN CLOSING IT,
      * UNLESS `callTool()` IS FIXED TOO — that method is declared `: array` and
      * returned `$response->result` directly, so `"result": true` simply became a
@@ -463,6 +530,23 @@ final class McpMessageResultTypeTest extends TestCase
      * Handshakes normally, then answers `tools/call` with whatever type the
      * requested tool name asks for.
      */
+    /**
+     * Answers `initialize` with a LEGAL but MCP-invalid `"result": null`, and
+     * every later message the same way. Spelled by hand rather than through
+     * `json_encode()` so the null is unmistakably a present key.
+     */
+    private const NULL_HANDSHAKE_SERVER = <<<'PHP'
+        <?php
+        while (($line = fgets(STDIN)) !== false) {
+            $msg = json_decode($line, true);
+            if (!is_array($msg) || !isset($msg['id'])) {
+                continue;
+            }
+            echo '{"jsonrpc":"2.0","id":', json_encode((string) $msg['id']), ',"result":null}', "\n";
+            flush();
+        }
+        PHP;
+
     private const SCALAR_RESULT_SERVER = <<<'PHP'
         <?php
         while (($line = fgets(STDIN)) !== false) {
