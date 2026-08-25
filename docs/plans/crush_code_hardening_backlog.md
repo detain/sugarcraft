@@ -15704,3 +15704,44 @@ does not exist.
 exemption with the falsifiability filed off. Every roster in this tree that carries a "we deliberately do
 not look here" row should be checked for the same hole — the standard was already being applied to
 `UNREADABLE_IN_LIBS` two functions away in the same file, and simply had not been applied here.
+
+## Round 55 — supervisor. E490.
+
+### E490 — 🔴 candy-pty hung INDEFINITELY on the merged tree, once in two takes, and a hang is invisible to CI as anything but a timeout
+
+**Observed 2026-08-25 by the round-55 supervisor** while measuring the merged floor at `b489405ba`.
+Severity: intermittent, unreproduced, and deliberately filed anyway — see rule 14.
+
+**Take 1 (hung).** `vendor/bin/phpunit` in `candy-pty` stalled at roughly **363 of 608** and never
+advanced. Evidence collected from `/proc` while it was still wedged, rather than inferred afterwards:
+
+- `State: S (sleeping)`, `wchan: do_select` — blocked in a select, not spinning.
+- **Two `/dev/ptmx` descriptors open** (fds 5 and 6).
+- A `sleep` child reaped every few seconds, an unbroken run of `<defunct>` entries — so a poll loop was
+  running and its exit condition never became true.
+- 0.1% CPU across nine minutes. Killed by PID at 08:52 elapsed. The last thing on stdout was a fixture
+  printing `hello`, which points at an echo round-trip integration test.
+- stdin was a **socket, not a tty**.
+
+**Take 2 (green, 37 seconds).** Same commit, same tree, same non-tty stdin, `--testdox`:
+`608 / 1401 / 16 skipped / 1 warning / rc 0` — **exactly** lane a's reported figures. So the merged floor
+stands and the round is not blocked. But the hang was real, and it happened first.
+
+🔴 **Why this is worth an id rather than a shrug.** A test that FAILS is reported. A test that HANGS is
+reported as nothing at all: locally it looks like a slow suite, and in CI it looks like a job timeout with
+no failing test named. This suite is also exactly the one round 55 rewrote — `ResizeRaceTest` (E459,
+timing-derived assertions removed) and `PosixMasterPty::close()` (E462, the `/dev/ptmx` leak). Two
+`/dev/ptmx` fds held open by a wedged process is the same resource E462 is about, which is suggestive and
+is NOT evidence. One occurrence in two takes is not a diagnosis.
+
+**STEP:**
+
+1. Re-run `candy-pty` alone in a loop — 20+ takes, non-tty stdin, capturing `--testdox` so the LAST NAMED
+   test is recorded on every take. Get the failing test's name before theorising about the cause.
+2. **Compare against `a8acfcc9`**, the pre-round base, under the same loop. If the base hangs too, this is
+   pre-existing and E459/E462 are exonerated; if only the merged tree hangs, it is one of those two.
+3. Whatever the outcome, this suite needs a **bounded wait**: an integration test that polls a pty with
+   `sleep` and no deadline can only ever hang, never fail. That is the defect class, independent of which
+   test is holding the descriptors.
+4. Note for whoever runs step 1: `timeout` does not reliably kill a wedged PTY/FFI child. Spawn a
+   watchdog that kills the ONE recorded pid and nothing else — a global `pkill` is prohibited here.
