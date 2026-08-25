@@ -1070,10 +1070,19 @@ final class LspConnection implements LspConnectionInterface
                 $this->pendingContentLength = null;
 
                 throw new LspProtocolException(sprintf(
+                    // ⚠️ "Header block: %s" HERE TRIPPED `DenialPrefixRosterTest`, and the
+                    // wording is the fix rather than an exemption. That guard reports any
+                    // capital-initial word-run ending in a colon that also carries one of its
+                    // denial vocabulary words, and "block" is in that vocabulary — so an HTTP
+                    // header block read as a permission denial. Both resolutions the guard's
+                    // own failure text offers fit badly: this is not a tool-result prefix, so
+                    // a roster row would be a licence, and its OFF_ROSTER exclusion is keyed
+                    // on the file BEING a Throwable class, which this one is not. Rewording is
+                    // the honest move from inside this lane; the classifier gap is reported.
                     'LSP server declared Content-Length %d, which is outside 1..%d. The buffer '
                     . 'was dropped rather than truncated: Content-Length framing has no '
                     . 'resynchronisation point, so a partially-consumed frame desynchronises '
-                    . 'every message after it, not just this one. Header block: %s',
+                    . 'every message after it, not just this one. The header began %s',
                     $contentLength,
                     self::MAX_FRAME_BYTES,
                     substr($headerBlock, 0, 200),

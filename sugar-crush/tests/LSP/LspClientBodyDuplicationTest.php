@@ -68,6 +68,18 @@ final class LspClientBodyDuplicationTest extends TestCase
      */
     private const MAX_SHARED_TAIL_TOKENS = 40;
 
+    /**
+     * The token kinds that OPEN a brace besides the bare `{` byte.
+     *
+     * `T_CURLY_OPEN` is `"{$x}"`; `T_DOLLAR_OPEN_CURLY_BRACES` is `"${x}"`,
+     * deprecated since PHP 8.2 and still tokenized on this host (8.3.6). Both
+     * close with a bare `}`, which is why a scanner counting only the bare byte
+     * loses a level — see the note at the depth counter.
+     *
+     * @var list<int>
+     */
+    private const BRACE_OPENERS = [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES];
+
     public function testNoTwoMethodsInLspClientShareABody(): void
     {
         // ---- Known-positive first: everything after this is an assertion of
@@ -141,6 +153,69 @@ final class LspClientBodyDuplicationTest extends TestCase
             . 'MAX_SHARED_TAIL_TOKENS — the doc-block records the 60-token gap it sits in, '
             . 'and a number moved to fit an offender is not a threshold.',
         );
+    }
+
+    /**
+     * THE SCANNER'S OWN BRACE COUNTING, PINNED, BECAUSE ITS FIRST DRAFT GOT IT
+     * WRONG AND EVERY OTHER ROW IN THIS FILE DEPENDS ON IT.
+     *
+     * PHP opens a brace with three tokens and closes it with one. A scanner
+     * counting depth on the bare `{` byte alone loses a level at
+     * `T_DOLLAR_OPEN_CURLY_BRACES` (text `${`) and ends the body at the first
+     * interpolated string — MEASURED on PHP 8.3.6 against this file's first
+     * draft, which returned `'$x = 1; $s = "${x'` for a method whose body
+     * continued for two more statements.
+     *
+     * ⚠️ THE FIXTURES ARE BUILT BY CONCATENATION AND THE OPENERS ARE NEVER
+     * SPELLED IN THIS FILE'S PROSE, deliberately: a sweep over the pattern would
+     * otherwise eat the row that documents it, which has happened twice in this
+     * tree. The token CONSTANTS are named (a sibling guard requires it and is
+     * right to); the string forms are assembled below.
+     *
+     * ⚠️ AND EACH ARM CARRIES A TAIL MARKER, so "the body was read" is checked
+     * by finding the LAST statement rather than by the body being non-empty. An
+     * empty-versus-truncated distinction is exactly what the first draft failed.
+     */
+    public function testTheScannerCountsEveryBraceOpenerPhpUses(): void
+    {
+        $dollar = '$';
+        $arms = [
+            'bare'          => '1',
+            'curly_open'    => '"{' . $dollar . 'x}"',
+            'dollar_open'   => '"' . $dollar . '{x}"',
+            'nested_call'   => '"{' . $dollar . 'this->x()}"',
+        ];
+
+        foreach ($arms as $name => $expression) {
+            $php = '<?php class F { public function m(): string { $x = 1; $s = ' . $expression . '; '
+                . 'return $s . "TAIL_' . strtoupper($name) . '"; } }';
+
+            $bodies = self::methodBodiesIn($php);
+
+            $this->assertArrayHasKey('m', $bodies, "the {$name} arm produced no method at all");
+            $this->assertStringContainsString(
+                'TAIL_' . strtoupper($name),
+                $bodies['m'],
+                "the body was truncated before its last statement on the {$name} arm. A brace "
+                . 'opener the depth counter does not recognise is closed by a bare `}` it does, '
+                . 'so the walk loses a level and the body ends early — which makes two methods '
+                . 'differing only AFTER an interpolated string compare equal, and hides a real '
+                . 'pair. See BRACE_OPENERS.',
+            );
+        }
+    }
+
+    /**
+     * AND IT REFUSES WHAT IT CANNOT PARSE rather than reporting a clean census
+     * over half a file (rule 14). Without this row, the guard above is satisfied
+     * by a scanner that silently drops anything awkward.
+     */
+    public function testTheScannerRefusesASourceItCannotParse(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/does not close/');
+
+        self::methodBodiesIn('<?php class F { public function m(): void { $x = 1;');
     }
 
     /**
@@ -223,8 +298,31 @@ final class LspClientBodyDuplicationTest extends TestCase
             $body = '';
             $closed = false;
             for (; $k < $count; $k++) {
-                $text = is_array($tokens[$k]) ? $tokens[$k][1] : $tokens[$k];
-                if ($text === '{') {
+                $token = $tokens[$k];
+                $text = is_array($token) ? $token[1] : $token;
+
+                // ⚠️ THREE OPENERS, ONE CLOSER, AND COUNTING TEXT ALONE WAS A
+                // MEASURED DEFECT IN THIS FILE'S FIRST DRAFT. PHP opens a brace
+                // with a bare `{`, with `T_CURLY_OPEN` (whose text IS `{`, so it
+                // happened to work) and with `T_DOLLAR_OPEN_CURLY_BRACES` — whose
+                // text is `${`, which `$text === '{'` does not match. All three
+                // close with a BARE `}`. MEASURED on PHP 8.3.6 against the old
+                // predicate:
+                //
+                //     public function a(): string { $x = 1; $s = "${x}";
+                //         return $s . 'TAIL_MARKER'; }
+                //     ->  body '$x = 1; $s = "${x'        (TRUNCATED)
+                //
+                // The `}` closing the interpolation decremented a depth the `${`
+                // had never incremented, so the body ended at the first
+                // interpolated string. Two methods differing only AFTER such a
+                // string would then compare equal, and a real pair could be
+                // missed. Caught by `Tests\Support\InterpolationOpenerTokenTest`,
+                // which exists because this is the third scanner to get it wrong.
+                $opens = $text === '{'
+                    || (is_array($token) && \in_array($token[0], self::BRACE_OPENERS, true));
+
+                if ($opens) {
                     $depth++;
                     if ($depth === 1) {
                         continue;
