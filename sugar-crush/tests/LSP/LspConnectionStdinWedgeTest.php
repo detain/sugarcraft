@@ -25,24 +25,40 @@ use SugarCraft\Crush\LSP\LspConnection;
  *     resynchronisation point, so every subsequent reply would be parsed against
  *     the fragment.
  *
- * THE PIPE CAPACITY IS 65536 BYTES ON THIS HOST AND BOTH SIDES MUST EXCEED IT.
- * Generator: a `Content-Length`-framed child that writes N bytes to stderr
- * unprompted after the handshake, against a parent sending an M-byte request,
- * 8s bound. PHP 8.3.6, Linux 6.8, three consecutive takes, identical every time
- * (this is the same table {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerStderrDrainTest}
- * measured for the NDJSON sibling, re-measured here against this framing):
+ * ⚠️ THE THRESHOLD IS ONE DRAIN PASS, NOT ONE PIPE BUFFER, AND GETTING THAT
+ * WRONG MADE THIS FILE VACUOUS ONCE ALREADY. The obvious figure is the 65536-byte
+ * pipe capacity, and it is the one the NDJSON sibling
+ * ({@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerStderrDrainTest}) uses. It
+ * is the WRONG figure here, because the two write loops drain differently:
+ * `StdioMcpServer::writeLine()` SELECTS on fd 2, whereas
+ * {@see LspConnection::writeMessage()} calls {@see LspConnection::drainStderr()}
+ * unconditionally BEFORE each write attempt — and that one call absorbs up to
+ * 16 × 8192 = 131072 bytes. A flood that fits inside a single pass is emptied
+ * before the write ever starts, the child goes back to reading, and a BLOCKING
+ * fd 0 completes the write anyway.
  *
- *     N=100000 M=200000 -> WEDGED (bound hit)   <- both sides over capacity
- *     N=1000   M=200000 -> ok, 0.4s             <- stderr under capacity
- *     N=100000 M=1000   -> ok, 0.4s             <- write under capacity
+ * Generator: a child that writes N bytes to stderr and then reads stdin forever;
+ * a parent that performs one 16 × 8192 drain pass and then a BLOCKING write of M
+ * bytes; 5s external bound (the failure is an `fwrite()` that never returns, so
+ * nothing inside the process can observe it). PHP 8.3.6, Linux 6.8, three
+ * consecutive takes, identical every time:
  *
- * The two control rows are in the table because without them the wedge row is
- * satisfied by a fixture that was never capable of blocking anything.
+ *     N=100000  M=200000  -> drained 100000, wrote 200000, 0.00s  <- ONE PASS ATE IT
+ *     N=200000  M=200000  -> WEDGED (bound hit)
+ *     N=400000  M=200000  -> WEDGED (bound hit)
+ *     N=1000000 M=200000  -> WEDGED (bound hit)
+ *     N=1000000 M=1000    -> drained 131072, wrote 1000, 0.00s    <- write under capacity
  *
- * ⚠️ PHP VERSION AND KERNEL ARE PART OF THAT FIGURE. 65536 is Linux's default
- * pipe capacity, not a PHP constant. The tests do not depend on the exact number
- * — they depend on {@see WEDGE_BYTES} being comfortably above whatever it is on
- * the runner — but the number in this doc-block is a measurement of this host.
+ * The first row is the one that matters: it is where {@see WEDGE_BYTES} used to
+ * sit, and with it there the mutation that puts fd 0 back into blocking mode
+ * SURVIVED the whole file. The last row is the control that says the wedge needs
+ * both sides to be oversized.
+ *
+ * ⚠️ PHP VERSION AND KERNEL ARE PART OF THESE FIGURES. 65536 is Linux's default
+ * pipe capacity and 131072 is this class's own 16-read drain bound; neither is a
+ * PHP constant. The tests do not depend on the exact numbers — they depend on
+ * {@see WEDGE_BYTES} being comfortably above both — but the numbers here are a
+ * measurement of this host and nothing else.
  *
  * THE WEDGE ROWS ARE OBSERVED FROM OUTSIDE, in a child `php` process with this
  * process holding the clock. Unfixed, a blocking fd 0 does not fail slowly, it
@@ -52,10 +68,16 @@ use SugarCraft\Crush\LSP\LspConnection;
  */
 final class LspConnectionStdinWedgeTest extends TestCase
 {
-    /** Above the measured 65536-byte pipe capacity: this WILL block the child. */
-    private const WEDGE_BYTES = 100000;
+    /**
+     * Above BOTH the 65536-byte pipe capacity and the 131072-byte single-drain
+     * pass — see the class doc-block for why the second bound is the binding one
+     * and what happened when this constant only cleared the first. 400000 leaves
+     * three passes of headroom, so the row stays discriminating if this class's
+     * 16-read drain bound is ever raised.
+     */
+    private const WEDGE_BYTES = 400000;
 
-    /** Below it: the child never blocks, so the control rows pass either way. */
+    /** Below both: the child never blocks, so the control rows pass either way. */
     private const SAFE_BYTES = 1000;
 
     /**
