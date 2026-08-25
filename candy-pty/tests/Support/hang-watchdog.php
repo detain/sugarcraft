@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Out-of-process hang watchdog for the candy-pty suite (E490).
  *
- * Argv: <parentPid> <heartbeatPath> <budgetSeconds>
+ * Argv: <parentPid> <heartbeatPath> <budgetSeconds> [<armedAtUnixTime>]
  *
  * Polls the heartbeat file the parent rewrites on every `Test\Prepared`
  * event. When the CURRENT test has been in flight longer than the budget,
@@ -33,6 +33,16 @@ declare(strict_types=1);
 $parentPid = isset($argv[1]) ? (int) $argv[1] : 0;
 $heartbeat = $argv[2] ?? '';
 $budget    = isset($argv[3]) ? (float) $argv[3] : 0.0;
+
+// The instant the PARENT armed this watchdog. Any heartbeat older than that
+// was written by a different run whose state directory this one inherited --
+// the directory is named for a pid alone, and the SIGKILL this process
+// delivers is exactly what prevents the previous owner from cleaning up. A
+// record from such a run is arbitrarily old, so it fires instantly: measured,
+// the runner died during bootstrap before one test had executed, and the
+// report named a test that was not running. Optional, and 0.0 disables the
+// check, so an older parent still works with this script.
+$armedAt = isset($argv[4]) ? (float) $argv[4] : 0.0;
 
 if ($parentPid <= 0 || $heartbeat === '' || $budget <= 0.0) {
     \fwrite(\STDERR, "hang-watchdog: usage: hang-watchdog.php <pid> <heartbeatPath> <budgetSeconds>\n");
@@ -99,6 +109,13 @@ while (true) {
         continue;
     }
     [$startedAt, $testName] = $beat;
+
+    // Predates our arming -> it belongs to a previous occupant of this pid.
+    // Ignored rather than acted on, and NOT treated as "no test in flight":
+    // the parent overwrites it as soon as it prepares a test of its own.
+    if ($armedAt > 0.0 && $startedAt < $armedAt) {
+        continue;
+    }
 
     $age = \microtime(true) - $startedAt;
     if ($age < $budget) {

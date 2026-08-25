@@ -116,6 +116,23 @@ final class HangWatchdog
             return false;
         }
 
+        // THE DIRECTORY MAY ALREADY EXIST, AND ITS CONTENTS ARE THEN A TRAP.
+        // The name carries only a pid, and `stop()` -- the only thing that
+        // removes it -- cannot run when the runner is SIGKILLed, which is
+        // precisely what this watchdog does to it. So a fired watchdog leaves
+        // its own state behind, and the next process to be given that pid
+        // inherits a heartbeat describing a test that finished long ago.
+        // Measured: with such a file seeded, the runner is SIGKILLed during
+        // bootstrap, before a single test executes, and the forensic dump
+        // names a test that is not running. That failure is rc 137 with no
+        // `Tests:` line -- indistinguishable from the hang this exists to
+        // diagnose. Clearing it here is the deterministic half of the fix;
+        // `armedAt` below is the half that does not depend on this succeeding.
+        @\unlink($dir . '/heartbeat');
+        foreach ((array) @\glob($dir . '/heartbeat.*.tmp') as $stale) {
+            @\unlink((string) $stale);
+        }
+
         $self = new self($dir . '/heartbeat', $dir);
         if (!$self->spawn($budgetSec)) {
             @\rmdir($dir);
@@ -243,6 +260,14 @@ final class HangWatchdog
      */
     private function spawn(float $budgetSec): bool
     {
+        // ARMED-AT IS PASSED DOWN so the child can refuse a record that predates
+        // it. Taken HERE, in the parent, and not in the child: the child's own
+        // start time is useless for this, because the parent may well write the
+        // first test's heartbeat before the child has run its first line, and a
+        // watchdog that ignores the first test is a watchdog that misses the
+        // hang the suite starts with. Every legitimate heartbeat is written
+        // after this instant; every stale one predates it.
+        $armedAt = \microtime(true);
         $script = __DIR__ . '/hang-watchdog.php';
         if (!\is_file($script)) {
             return false;
@@ -255,7 +280,14 @@ final class HangWatchdog
         ];
         $pipes = [];
         $proc = @\proc_open(
-            [\PHP_BINARY, $script, (string) \getmypid(), $this->heartbeatPath, (string) $budgetSec],
+            [
+                \PHP_BINARY,
+                $script,
+                (string) \getmypid(),
+                $this->heartbeatPath,
+                (string) $budgetSec,
+                \sprintf('%.6f', $armedAt),
+            ],
             $descriptors,
             $pipes,
         );

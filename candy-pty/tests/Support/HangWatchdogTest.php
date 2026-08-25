@@ -36,6 +36,9 @@ final class HangWatchdogTest extends TestCase
     /** @var list<string> */
     private array $paths = [];
 
+    /** @var list<string> fixture state directories, removed in tearDown() */
+    private array $dirs = [];
+
     protected function tearDown(): void
     {
         foreach ($this->victims as $victim) {
@@ -58,8 +61,18 @@ final class HangWatchdogTest extends TestCase
             if (\is_file($path)) {
                 @\unlink($path);
             }
+            foreach ((array) @\glob($path . '.*.tmp') as $stale) {
+                @\unlink((string) $stale);
+            }
         }
         $this->paths = [];
+
+        // Exact paths again: each of these was created by tempPath() in THIS
+        // process and is named with this pid plus six random bytes.
+        foreach ($this->dirs as $dir) {
+            @\rmdir($dir);
+        }
+        $this->dirs = [];
     }
 
     private function requireProcessControl(): void
@@ -300,6 +313,165 @@ final class HangWatchdogTest extends TestCase
     }
 
     /**
+     * A HEARTBEAT FROM A PREVIOUS RUN MUST NOT KILL THIS ONE.
+     *
+     * The state directory is named for a pid and nothing else, and the one
+     * thing that removes it -- `stop()` -- is precisely what cannot run when
+     * this watchdog SIGKILLs its runner. So a watchdog that fires leaves its
+     * own heartbeat behind, and the next process handed that pid inherits a
+     * record that is arbitrarily old and therefore fires instantly.
+     *
+     * Measured before the fix: with such a file seeded, the runner died during
+     * bootstrap with rc 137 before a single test executed, and the forensic
+     * dump named a test that was not running. That is rc 137 with no `Tests:`
+     * line -- the exact signature of the hang this watchdog exists to
+     * diagnose, which makes it the worst possible false positive.
+     */
+    public function testAHeartbeatFromBeforeTheWatchdogWasArmedIsIgnored(): void
+    {
+        $this->requireProcessControl();
+
+        $victim = $this->spawnVictim();
+        $heartbeat = $this->tempPath('predates');
+
+        // Backdated far past the budget - the shape that fires immediately.
+        \file_put_contents(
+            $heartbeat,
+            HangWatchdog::heartbeatPayload('Ghost\\PreviousRun::testFromAnotherProcess', \microtime(true) - 999.0),
+        );
+
+        $budget = 1.0;
+        $proc = $this->startWatchdog($victim, $heartbeat, $budget, $pipes, \microtime(true));
+
+        try {
+            // The stale arm fires within one poll (0.5s); four budget-widths
+            // is ample room for a false positive to show itself.
+            \usleep((int) ($budget * 4 * 1_000_000));
+
+            $this->assertTrue(
+                $this->isAlive($victim),
+                'a heartbeat written BEFORE the watchdog was armed killed the runner. That '
+                    . 'record belongs to a previous occupant of this pid, and acting on it '
+                    . 'produces an rc 137 with no summary - indistinguishable from the hang '
+                    . 'this watchdog reports on, except that it names a test that is not running',
+            );
+            $status = \proc_get_status($proc);
+            $this->assertTrue($status['running'], 'the watchdog must still be watching, not exited');
+        } finally {
+            $this->reapWatchdog($proc, $pipes);
+        }
+    }
+
+    /**
+     * AND THE FILTER MUST NOT DISARM THE REAL CASE.
+     *
+     * Rule 15's positive component for the test above: "ignores an old record"
+     * and "ignores every record" are the same green. A record written AFTER
+     * arming, and then allowed to age past the budget, must still kill -- so
+     * this runs the same `armedAt` argument through the same script and
+     * asserts the opposite outcome.
+     */
+    public function testAHeartbeatWrittenAfterArmingStillKillsWhenItOverruns(): void
+    {
+        $this->requireProcessControl();
+
+        $victim = $this->spawnVictim();
+        $heartbeat = $this->tempPath('afterarming');
+
+        $armedAt = \microtime(true);
+        // Written after arming, and already past a 1s budget.
+        \file_put_contents(
+            $heartbeat,
+            HangWatchdog::heartbeatPayload('Fixture\\WedgedTest::testNeverReturns', $armedAt + 0.001),
+        );
+
+        $report = $this->runWatchdog($victim, $heartbeat, 1.0, 20.0, $armedAt);
+
+        $this->assertSame(1, $report['exitCode'], 'the watchdog must exit 1 after firing');
+        $this->assertFalse(
+            $this->isAlive($victim),
+            'a record written after arming was ignored, so the armedAt filter has disarmed the '
+                . 'watchdog outright rather than only rejecting inherited state',
+        );
+        $this->assertStringContainsString('Fixture\\WedgedTest::testNeverReturns', $report['stderr']);
+    }
+
+    /**
+     * END TO END, THROUGH THE REAL `install()`.
+     *
+     * The two tests above drive the watchdog script directly. This one seeds a
+     * stale heartbeat at the exact path `install()` will choose -- the child
+     * does it itself, so the pid is its own -- and then loads the real
+     * `tests/bootstrap.php`. Before the fix this child was SIGKILLed during
+     * bootstrap and exited 137.
+     *
+     * It covers the OTHER half of the fix as well: `install()` unlinking
+     * inherited state before spawning. Either half alone is enough to keep
+     * this green, which is deliberate -- they are independent defences, and
+     * the mutation table records that each one is separately load-bearing.
+     */
+    public function testBootstrapSurvivesAStaleHeartbeatLeftAtItsOwnStatePath(): void
+    {
+        $this->requireProcessControl();
+
+        $bootstrap = \dirname(__DIR__) . '/bootstrap.php';
+        $this->assertFileExists($bootstrap, 'the real bootstrap is what this test is about');
+
+        // No backslash escapes anywhere in this snippet: a `\\n` or a `\\t`
+        // written here is interpreted when this file is read, not when the
+        // child runs, and it breaks the heredoc's own indentation.
+        $code = <<<'PHP'
+            $dir = sys_get_temp_dir() . '/candy-pty-hang-watchdog-' . getmypid();
+            @mkdir($dir, 0700, true);
+            file_put_contents(
+                $dir . '/heartbeat',
+                sprintf('%.6f' . chr(9) . '%s', microtime(true) - 999.0, 'Ghost\PreviousRun::testFromAnotherProcess')
+            );
+            require __BOOTSTRAP__;
+            usleep(2500000);
+            echo 'SURVIVED';
+            @unlink($dir . '/heartbeat');
+            foreach ((array) @glob($dir . '/heartbeat.*.tmp') as $t) { @unlink($t); }
+            @rmdir($dir);
+            PHP;
+
+        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $pipes = [];
+        $proc = \proc_open(
+            // str_replace, NOT sprintf: the snippet contains its own `%.6f`
+            // and `%s`, which sprintf would consume as conversions.
+            [\PHP_BINARY, '-r', \str_replace('__BOOTSTRAP__', \var_export($bootstrap, true), $code)],
+            $descriptors,
+            $pipes,
+        );
+        $this->assertIsResource($proc, 'could not spawn the bootstrap probe');
+
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        $exit = \proc_close($proc);
+
+        $this->assertSame(
+            0,
+            $exit,
+            'loading the real bootstrap with an inherited heartbeat at its own state path did '
+                . 'not exit cleanly. Exit 137 here is the watchdog SIGKILLing the runner before '
+                . "any test ran. stderr was:\n" . $stderr,
+        );
+        $this->assertStringContainsString(
+            'SURVIVED',
+            $stdout,
+            'the probe did not reach the end of its own script',
+        );
+        $this->assertStringNotContainsString(
+            'HANG WATCHDOG',
+            $stderr,
+            'the watchdog fired on a record it inherited rather than one this run wrote',
+        );
+    }
+
+    /**
      * The watchdog must retire on its own when the runner disappears, or a
      * killed run would leave a process behind on every take.
      */
@@ -450,9 +622,22 @@ final class HangWatchdogTest extends TestCase
 
     private function tempPath(string $tag): string
     {
-        $path = \sys_get_temp_dir()
+        // A DIRECTORY PER FIXTURE, and the heartbeat inside it. These paths are
+        // handed to watchdogWritingTo(), which derives `stateDir` from
+        // `dirname()` -- so a heartbeat sitting directly in the system temp
+        // directory would make `stateDir` the system temp directory itself, and
+        // `stop()` ends with `@rmdir($this->stateDir)` and a glob-unlink. Today
+        // nothing calls `stop()` on a fixture-built watchdog, so this is a trap
+        // rather than a live bug; it is a trap worth removing while three lanes
+        // are running suites that own other files in there.
+        $dir = \sys_get_temp_dir()
             . '/candy-pty-hang-watchdog-fixture-' . $tag . '-' . \getmypid() . '-' . \bin2hex(\random_bytes(6));
+        @\mkdir($dir, 0o700, true);
+        $this->dirs[] = $dir;
+
+        $path = $dir . '/heartbeat';
         $this->paths[] = $path;
+
         return $path;
     }
 
@@ -460,11 +645,21 @@ final class HangWatchdogTest extends TestCase
      * @param array<int, resource> $pipes
      * @return resource
      */
-    private function startWatchdog(int $victimPid, string $heartbeat, float $budget, ?array &$pipes)
-    {
+    private function startWatchdog(
+        int $victimPid,
+        string $heartbeat,
+        float $budget,
+        ?array &$pipes,
+        ?float $armedAt = null,
+    ) {
+        $argv = [\PHP_BINARY, __DIR__ . '/hang-watchdog.php', (string) $victimPid, $heartbeat, (string) $budget];
+        if ($armedAt !== null) {
+            $argv[] = \sprintf('%.6f', $armedAt);
+        }
+
         $pipes = [];
         $proc = \proc_open(
-            [\PHP_BINARY, __DIR__ . '/hang-watchdog.php', (string) $victimPid, $heartbeat, (string) $budget],
+            $argv,
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
         );
@@ -494,9 +689,14 @@ final class HangWatchdogTest extends TestCase
     /**
      * @return array{exitCode: int|null, stderr: string}
      */
-    private function runWatchdog(int $victimPid, string $heartbeat, float $budget, float $timeoutSec): array
-    {
-        $proc = $this->startWatchdog($victimPid, $heartbeat, $budget, $pipes);
+    private function runWatchdog(
+        int $victimPid,
+        string $heartbeat,
+        float $budget,
+        float $timeoutSec,
+        ?float $armedAt = null,
+    ): array {
+        $proc = $this->startWatchdog($victimPid, $heartbeat, $budget, $pipes, $armedAt);
         $stderr = '';
         try {
             $deadline = \microtime(true) + $timeoutSec;
