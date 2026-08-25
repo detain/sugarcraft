@@ -776,7 +776,19 @@ final class AgentWorkerPoolTest extends TestCase
         // Baseline: a single agent run through the real ProcessExecutor
         // directly (executeOne() bypasses fork/pool bookkeeping entirely),
         // establishing the "one unit of real work" latency to compare against.
-        $baselinePool = new AgentWorkerPool(maxConcurrent: 1);
+        // workerProvider rather than an injected executor, and the distinction
+        // is load-bearing HERE specifically: injecting an ExecutorInterface
+        // sets AgentWorkerPool::$customExecutor, which routes every dispatch
+        // down the synchronous in-parent path and would delete the very fork
+        // this test exists to drive. workerProvider configures the executor the
+        // pool builds for itself, leaving the fork path intact.
+        //
+        // ['type' => 'echo'] is EchoProvider, a real ProviderInterface with no
+        // network behind it — the pool's fork path now runs a genuine provider
+        // round trip rather than the fabricating worker it used to get by
+        // default. Without a provider the default worker refuses, which is
+        // correct for production and is not a fixture.
+        $baselinePool = new AgentWorkerPool(maxConcurrent: 1, workerProvider: ['type' => 'echo']);
         $baselineStart = hrtime(true);
         $baselineResult = $baselinePool->executeOne($this->makeAgent('bounded-baseline'), $this->request);
         $baselineDurationNs = hrtime(true) - $baselineStart;
@@ -792,7 +804,7 @@ final class AgentWorkerPoolTest extends TestCase
             $this->makeAgent('bounded-c'),
         ];
 
-        $realPool = new AgentWorkerPool(maxConcurrent: 3);
+        $realPool = new AgentWorkerPool(maxConcurrent: 3, workerProvider: ['type' => 'echo']);
 
         // The elapsed-time assertion below is NOT a bound: it is evaluated
         // after the loop, so a pool that never settles never reaches it. The
@@ -855,7 +867,9 @@ final class AgentWorkerPoolTest extends TestCase
         ini_set('error_log', $logFile);
 
         try {
-            $pool = new AgentWorkerPool(maxConcurrent: 2);
+            // See the note in the bounded-duration test above for why this is
+            // workerProvider and not an injected executor.
+            $pool = new AgentWorkerPool(maxConcurrent: 2, workerProvider: ['type' => 'echo']);
 
             $forceProp = new \ReflectionProperty(AgentWorkerPool::class, 'forcePcntlUnavailableForTesting');
             $forceProp->setAccessible(true);

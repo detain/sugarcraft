@@ -152,6 +152,15 @@ final class ReadPathCensusTest extends TestCase
         'Agents/ProcessExecutor.php|file_get_contents' => [
             'PROCESS_DERIVED — `/proc/meminfo`, a kernel interface named by a literal',
         ],
+        'Agents/ProcessExecutor.php|require' => [
+            'PROCESS_DERIVED — inside the GENERATED live worker script: the composer '
+                . 'autoload of the installation already executing this code. The path is '
+                . 'computed in the PARENT (ProcessExecutor::autoloadPath(), two climbs from '
+                . '__DIR__) and reaches the child only down the stdin pipe proc_open() just '
+                . 'created for it, so no party outside this process can name it; the child '
+                . 'refuses a value that is not is_file(). Same shape and same verdict as '
+                . 'Sessions/BackgroundSupervisor.php|require',
+        ],
         'Agents/TeamManager.php|file_get_contents' => [
             'SELF_LOCATED — the team registry this manager writes under `~/.sugar-crush`',
         ],
@@ -572,7 +581,11 @@ final class ReadPathCensusTest extends TestCase
         }
 
         $this->assertSame(
-            ['Sessions/BackgroundSupervisor.php|require', 'Workflows/WorkflowRegistry.php|require'],
+            [
+                'Agents/ProcessExecutor.php|require',
+                'Sessions/BackgroundSupervisor.php|require',
+                'Workflows/WorkflowRegistry.php|require',
+            ],
             array_keys($execute),
             'the execute paths in src/, named — a new one is a change worth reading twice',
         );

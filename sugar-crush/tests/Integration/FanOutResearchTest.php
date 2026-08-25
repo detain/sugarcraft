@@ -126,7 +126,15 @@ final class FanOutResearchTest extends TestCase
         // same proxy AgentWorkerPoolTest's R14a real-fork test uses to
         // establish "one unit of real work" latency to compare the
         // concurrent run against.
-        $baselinePool = new AgentWorkerPool(maxConcurrent: 1);
+        // workerProvider, NOT an injected executor: injecting one sets
+        // AgentWorkerPool::$customExecutor and routes every dispatch down the
+        // synchronous in-parent path, deleting the fork this test measures.
+        // ['type' => 'echo'] selects EchoProvider — a real ProviderInterface
+        // with no network — so the default worker has a model to consult.
+        // Without one it now refuses rather than fabricating an answer
+        // (ProcessExecutor::createLiveWorkerScript()), which is correct for
+        // production and unusable as a fixture.
+        $baselinePool = new AgentWorkerPool(maxConcurrent: 1, workerProvider: ['type' => 'echo']);
         $baselineStart = hrtime(true);
         $baselineResult = $baselinePool->executeOne(
             new SubAgent(
@@ -139,7 +147,7 @@ final class FanOutResearchTest extends TestCase
         $baselineDurationNs = hrtime(true) - $baselineStart;
         $this->assertSame(AgentStatus::Completed, $baselineResult->status);
 
-        $pool = new AgentWorkerPool(maxConcurrent: 5);
+        $pool = new AgentWorkerPool(maxConcurrent: 5, workerProvider: ['type' => 'echo']);
 
         $start = hrtime(true);
         $collected = [];

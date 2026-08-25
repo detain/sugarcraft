@@ -158,6 +158,27 @@ final class AgentWorkerPool
     public function __construct(
         private readonly int $maxConcurrent = 5,
         ?ExecutorInterface $executor = null,
+        /**
+         * The provider spec handed to the DEFAULT executor this pool builds.
+         *
+         * Two parameters rather than one because they are not alternatives.
+         * Injecting `$executor` sets `$customExecutor`, and that flag selects
+         * a different dispatch path entirely — the synchronous in-parent one,
+         * with no fork and no live progress ({@see startAgent()}). A caller who
+         * only wants to say WHICH MODEL the default worker consults must be
+         * able to do that without silently opting out of forking, which is
+         * what passing a hand-built ProcessExecutor would do.
+         *
+         * Null means the default worker has no provider and will refuse rather
+         * than fabricate — see
+         * {@see ProcessExecutor::createLiveWorkerScript()}. Nothing in `src/`
+         * passes this yet, so that is the shipped behaviour; the parameter is
+         * the seam a production wiring uses, and the one the pool's own
+         * fork-path tests use to get a worker that actually answers.
+         *
+         * @var ?array<string, mixed>
+         */
+        private readonly ?array $workerProvider = null,
     ) {
         $this->executor = $executor;
         $this->customExecutor = $executor !== null;
@@ -1444,8 +1465,40 @@ final class AgentWorkerPool
         return $parsed !== false ? $parsed : null;
     }
 
+    /**
+     * Build the pool's own executor when none was injected.
+     *
+     * Forwards {@see $workerProvider} and NOTHING else, deliberately: the
+     * simulation opt-in is not plumbed through here, so no construction of a
+     * pool can select a fabricating worker. The only way to reach that script
+     * is to build a {@see ProcessExecutor} directly and ask for it, which is
+     * what the executor's own tests do and what nothing in `src/` does.
+     */
+    /**
+     * The provider spec this pool hands to the default executor it builds.
+     *
+     * Public because a caller that RECONSTRUCTS a pool has to carry it over,
+     * and one does: {@see \SugarCraft\Crush\Workflows\WorkflowEngine} builds
+     * a fresh pool per parallel stage so stage-level maxConcurrent does not
+     * mutate the shared instance. That reconstruction already carried
+     * {@see getExecutor()} across; without this it silently dropped the
+     * provider, so a workflow's parallel stage would talk to no model while
+     * its sequential stages talked to one — a divergence with no error and no
+     * log line, visible only as an agent that answers nothing.
+     *
+     * Latent until something sets a provider, which nothing in `src/` does
+     * yet. Fixed at the same time as the seam it depends on rather than left
+     * for whoever first wires a real provider to discover.
+     *
+     * @return ?array<string, mixed>
+     */
+    public function workerProvider(): ?array
+    {
+        return $this->workerProvider;
+    }
+
     private function createDefaultExecutor(): ExecutorInterface
     {
-        return new ProcessExecutor();
+        return new ProcessExecutor(workerProvider: $this->workerProvider);
     }
 }

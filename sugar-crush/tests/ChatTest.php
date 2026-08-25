@@ -1722,10 +1722,40 @@ final class ChatTest extends TestCase
         $this->assertSame($config, $chat->agentPoolConfig());
 
         // Pool is built from config when executeAgents is called with no pool set.
-        // Use a non-empty agents array so this actually exercises the built pool's
-        // default ProcessExecutor happy path (a self-contained inline worker
-        // simulation with no real network calls — see ProcessExecutorTest) rather
-        // than short-circuiting on an empty array.
+        // Use a non-empty agents array so this actually exercises the built
+        // pool's default ProcessExecutor rather than short-circuiting on an
+        // empty array.
+        //
+        // ## WHAT THIS USED TO SAY, AND WHAT IT USED TO ASSERT
+        //
+        // "the default ProcessExecutor happy path (a self-contained inline
+        // worker simulation with no real network calls)", and then that the
+        // agent's output was exactly
+        // '[ConfigBuiltPoolAgent] Task finished: Say hello'.
+        //
+        // ## WHAT IS TRUE NOW
+        //
+        // There is no happy path here, because there is no provider here.
+        // ProcessExecutor's default worker consults a real ProviderInterface
+        // and REFUSES — an error frame and a non-zero exit — when none is
+        // configured, and Chat::executeAgents() configures none: it builds its
+        // executor from AgentPoolConfig, which carries a concurrency and a
+        // timeout and no provider at all.
+        //
+        // ## WHY THIS TEST STILL EARNS ITS PLACE, AND IS STRONGER FOR IT
+        //
+        // What it verifies is unchanged — that executeAgents() really does
+        // build a pool from config and really does dispatch through it — and
+        // the evidence is now something only a real dispatch can produce: a
+        // failure whose message comes from a spawned child process. The old
+        // sentence it asserted was invented by that child and was
+        // indistinguishable from a model's answer, which is precisely the
+        // property that made the executor's fabrication worth removing.
+        //
+        // It also records the state of the production sub-agent path plainly:
+        // Chat cannot dispatch a sub-agent to a model today. That is a gap in
+        // Chat's wiring, not in the executor, and it is a gap this assertion
+        // will notice being closed.
         $subAgent = new \SugarCraft\Crush\Agents\SubAgent(
             id: 'config-built-pool-agent',
             agent: new Agent(
@@ -1751,10 +1781,11 @@ final class ChatTest extends TestCase
         $collected = iterator_to_array($results, false);
         $this->assertCount(1, $collected);
         $this->assertSame('config-built-pool-agent', $collected[0]->agentId);
-        $this->assertTrue($collected[0]->isSuccess());
-        $this->assertSame(
-            '[ConfigBuiltPoolAgent] Task finished: Say hello',
-            $collected[0]->output,
+        $this->assertFalse($collected[0]->isSuccess());
+        $this->assertNull($collected[0]->output);
+        $this->assertStringContainsString(
+            'Refusing to fabricate',
+            (string) $collected[0]->error?->getMessage(),
         );
     }
 
