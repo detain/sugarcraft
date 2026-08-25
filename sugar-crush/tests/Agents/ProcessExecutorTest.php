@@ -10,9 +10,12 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\ProcessExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
+use SugarCraft\Crush\Messages\AssistantMessage;
+use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\EchoProvider;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 
 /**
  * Tests for ProcessExecutor - process-based agent executor.
@@ -642,6 +645,464 @@ final class ProcessExecutorTest extends TestCase
             model: 'test-model',
             messages: [new \stdClass()],
         ));
+    }
+
+    /**
+     * Every turn keeps its ROLE across the wire, not just its text.
+     *
+     * MEASURED before this test existed: replacing the child's whole
+     * role-dispatch `match` with `new UserMessage($content)` — collapsing every
+     * turn to a user turn — SURVIVED the entire suite, 10293 tests green.
+     * `testLiveWorkerCarriesMessageObjectsAcrossTheWire` sends one UserMessage,
+     * so it pins the CONTENT and cannot see the role at all.
+     *
+     * The distinguishing shape is a conversation whose LAST turn is not the
+     * last USER turn. {@see EchoProvider::echo()} answers with the last message
+     * whose `role()` is `user`, so with roles intact the answer is the earlier
+     * turn and with the roles collapsed it is the later one. The two markers
+     * are asserted in both polarities so a worker that returned neither cannot
+     * pass by returning nothing.
+     */
+    public function testLiveWorkerKeepsEachTurnsRoleAcrossTheWire(): void
+    {
+        $agent = new SubAgent(
+            id: 'live-role-agent-' . uniqid((string) getmypid(), true),
+            agent: $this->agent->agent,
+            task: 'THIS-IS-THE-TASK-NOT-THE-CONVERSATION',
+        );
+
+        $executor = new ProcessExecutor(timeoutSeconds: 30, workerProvider: ['type' => 'echo']);
+
+        $result = $executor->execute($agent, new CompleteRequest(
+            model: 'test-model',
+            messages: [
+                new UserMessage('MARKER-FROM-THE-USER-TURN'),
+                new AssistantMessage('MARKER-FROM-THE-ASSISTANT-TURN'),
+            ],
+        ));
+
+        $this->assertSame(AgentStatus::Completed, $result->status);
+        $this->assertStringContainsString(
+            'MARKER-FROM-THE-USER-TURN',
+            (string) $result->output,
+            'the provider answered something other than the last USER turn',
+        );
+        $this->assertStringNotContainsString(
+            'MARKER-FROM-THE-ASSISTANT-TURN',
+            (string) $result->output,
+            'the assistant turn arrived as a user turn, so every role collapsed in transit',
+        );
+    }
+
+    /**
+     * A tool result that FAILED does not arrive at the model as one that
+     * succeeded.
+     *
+     * `ToolResultMessage::toArray()` carries `is_error`; the child used to
+     * rebuild with `new ToolResultMessage($id, $content)` and take the
+     * parameter's `false` default, so the one bit that says "this tool call
+     * went wrong" was dropped in transit. Asserted on the RECONSTRUCTION the
+     * child performs rather than on a provider's reaction to it, because
+     * EchoProvider reads only user turns and could not see the difference —
+     * the point being that nothing downstream can, which is why the loss was
+     * silent.
+     *
+     * Two halves, and both are needed. The child really is driven — the script
+     * is extracted, run in a real process, and handed the turn exactly as
+     * `spawnWorker()` would put it — which proves the rebuilt turn does not
+     * fatal the worker. The flag itself is then asserted over the SAME wire
+     * bytes in this process, because no provider in the tree reads `is_error`
+     * and so no child could report on it.
+     */
+    public function testTheChildKeepsAToolResultsErrorFlagAndItsCallId(): void
+    {
+        $frames = $this->driveLiveWorker([
+            'type' => 'startup',
+            'autoload' => (string) $this->reflectAutoloadPath(),
+            'provider' => ['type' => 'echo'],
+            'agent' => ['id' => 'a', 'name' => 'A', 'model' => 'm', 'prompt' => null],
+            'task' => '',
+            'request' => [
+                'model' => 'm',
+                'messages' => [
+                    (new ToolResultMessage('call-42', 'the tool blew up', true))->toArray(),
+                    (new UserMessage('ping'))->toArray(),
+                ],
+                'tools' => null,
+                'systemPrompt' => null,
+                'temperature' => null,
+                'maxTokens' => null,
+            ],
+        ], sendExecute: true);
+
+        // The run itself must succeed — a child that fatalled while rebuilding
+        // the turn would also "not lose the flag", and that is not the claim.
+        $complete = null;
+        foreach ($frames as $frame) {
+            if (($frame['type'] ?? '') === 'complete') {
+                $complete = $frame;
+            }
+        }
+
+        $this->assertNotNull($complete, 'the child never completed: ' . var_export($frames, true));
+        $this->assertSame('completed', $complete['status'] ?? null);
+
+        // And the reconstruction itself, in this process, over the SAME wire
+        // bytes the child was handed. This is the assertion the child cannot
+        // make for itself, because no provider in the tree reads is_error.
+        $wire = (new ToolResultMessage('call-42', 'the tool blew up', true))->toArray();
+        $rebuilt = new ToolResultMessage(
+            (string) ($wire['tool_call_id'] ?? ''),
+            (string) ($wire['content'] ?? ''),
+            (bool) ($wire['is_error'] ?? false),
+        );
+        $this->assertTrue($rebuilt->isError(), 'toArray() no longer carries is_error');
+        $this->assertSame('call-42', $rebuilt->toolCallId());
+    }
+
+    /**
+     * The startup frame carries the request the parent built — on the WIRE.
+     *
+     * This is the one assertion that can be made about `request.tools`, and it
+     * had to be made because nothing else reads that field: MEASURED, mutating
+     * {@see ProcessExecutor::encodeTools()} to `return null` unconditionally
+     * survived the whole suite. Neither worker script reads it, so no
+     * behavioural test can see it; the frame is the artefact, so the frame is
+     * what is asserted.
+     *
+     * The capture is a stand-in `php` binary — an executable script that
+     * answers `ready` and then copies its stdin to a file — so the bytes
+     * checked here are the bytes `spawnWorker()` actually wrote, not a
+     * re-derivation of them.
+     */
+    public function testTheStartupFrameCarriesTheRequestTheParentBuilt(): void
+    {
+        $dir = sys_get_temp_dir() . '/sc_r60c_wire_' . uniqid((string) getmypid(), true);
+        $this->assertTrue(mkdir($dir, 0o700, true));
+        $capture = $dir . '/captured-stdin';
+        $binary = $dir . '/fake-php';
+
+        // `-r <script>` is ignored on purpose: this stands in for the PHP
+        // binary only so that spawnWorker() has something to write into.
+        file_put_contents(
+            $binary,
+            "#!/bin/sh\nprintf '{\"type\":\"ready\"}\\n'\ncat > " . escapeshellarg($capture) . "\n",
+        );
+        $this->assertTrue(chmod($binary, 0o700));
+
+        $executor = new ProcessExecutor(
+            binaryPath: $binary,
+            timeoutSeconds: 30,
+            workerProvider: ['type' => 'echo'],
+        );
+
+        $agent = new SubAgent(
+            id: 'wire-agent-' . uniqid((string) getmypid(), true),
+            agent: $this->agent->agent,
+            task: 'WIRE-TASK',
+        );
+
+        $spawn = new \ReflectionMethod(ProcessExecutor::class, 'spawnWorker');
+        /** @var array{stdin: resource, stdout: resource, stderr: resource, process: resource} $descriptor */
+        $descriptor = $spawn->invoke($executor, $agent, new CompleteRequest(
+            model: 'wire-model',
+            messages: [new UserMessage('WIRE-CONVERSATION')],
+            tools: [['name' => 'grep'], 'sed', new \stdClass()],
+        ));
+
+        // cat only flushes on EOF, so the write side has to go first.
+        fclose($descriptor['stdin']);
+        $deadline = microtime(true) + 5.0;
+        $raw = '';
+        while (microtime(true) < $deadline) {
+            $raw = (string) @file_get_contents($capture);
+            if (str_contains($raw, "\n")) {
+                break;
+            }
+            usleep(20_000);
+        }
+        $executor->cancelAll();
+
+        $startup = json_decode(strtok($raw, "\n") ?: '', true);
+        $this->assertIsArray($startup, 'nothing decodable reached the worker: ' . var_export($raw, true));
+        $this->assertSame('startup', $startup['type'] ?? null);
+
+        // The tool NAMES, which is the whole reason encodeTools() is not a
+        // bare null: a request granting three tools and one granting none must
+        // not be byte-identical on the wire.
+        $this->assertSame(
+            ['grep', 'sed', '<unencodable stdClass>'],
+            $startup['request']['tools'] ?? null,
+            'the frame no longer says which tools the parent believed it was granting',
+        );
+
+        // And the fields the same frame is the only record of.
+        $this->assertSame(
+            [['role' => 'user', 'content' => 'WIRE-CONVERSATION']],
+            $startup['request']['messages'] ?? null,
+        );
+        $this->assertSame('WIRE-TASK', $startup['task'] ?? null);
+        $this->assertSame(['type' => 'echo'], $startup['provider'] ?? null);
+        $this->assertIsString($startup['autoload'] ?? null);
+        $this->assertFileExists((string) $startup['autoload']);
+
+        @unlink($capture);
+        @unlink($binary);
+        @rmdir($dir);
+    }
+
+    /**
+     * A worker whose startup frame never arrived says so, instead of blaming
+     * the parent for not asking it to run.
+     *
+     * `createLiveWorkerScript()`'s doc-block enumerates "no startup line" among
+     * the prerequisites that end in an `error` frame. MEASURED at the tree that
+     * sentence was committed in, it did not: `if (!$executeReceived)` was
+     * tested FIRST, and the startup loop consumes lines until it finds a
+     * `startup` frame — so a parent whose startup line was malformed has
+     * already had its `execute` eaten, both conditions are true, and the
+     * timeout branch won. The operator was told the parent never asked for
+     * execution when in fact the config frame was unreadable.
+     *
+     * Both branches are asserted, in the same test, because a reorder that
+     * made this one reachable by making the other one dead would be the same
+     * defect facing the other way.
+     */
+    public function testTheWorkerNamesAMissingStartupFrameRatherThanTheExecuteTimeout(): void
+    {
+        $malformed = $this->driveLiveWorkerRaw("{\"type\":\"not-a-startup\"}\n{\"type\":\"execute\"}\n");
+        $this->assertSame('error', $this->terminalFrame($malformed)['type'] ?? null);
+        $this->assertStringContainsString(
+            'no startup message',
+            (string) ($this->terminalFrame($malformed)['message'] ?? ''),
+            'a malformed startup frame is still reported as an execute timeout',
+        );
+
+        // The control: a VALID startup with no execute behind it must still be
+        // the execute timeout, or the reorder simply moved the blind spot.
+        $valid = $this->driveLiveWorkerRaw(json_encode([
+            'type' => 'startup',
+            'autoload' => $this->reflectAutoloadPath(),
+            'provider' => ['type' => 'echo'],
+            'agent' => ['id' => 'a', 'name' => 'A', 'model' => 'm', 'prompt' => null],
+            'task' => 't',
+            'request' => ['model' => 'm', 'messages' => [], 'tools' => null],
+        ]) . "\n");
+        $this->assertStringContainsString(
+            'Timeout waiting for execute',
+            (string) ($this->terminalFrame($valid)['message'] ?? ''),
+            'the execute-timeout branch went dead when the startup check moved above it',
+        );
+    }
+
+    /**
+     * The worker autoloader resolves in an INSTALLED layout, not only in the
+     * checkout this suite happens to run in.
+     *
+     * MEASURED on PHP 8.3.6 against a synthetic install: from
+     * `app/vendor/sugarcraft/sugar-crush/src/Agents`, the two-climb form the
+     * first version of `autoloadPath()` used yields
+     * `app/vendor/sugarcraft/sugar-crush/vendor/autoload.php`, which does not
+     * exist — so every sub-agent in any Composer consumer of this package hit
+     * the child's "Worker autoloader is not readable" refusal. The application
+     * autoloader is four levels up.
+     *
+     * ⚠️ WHAT THIS TEST CANNOT DO, stated so nobody reads more into a green
+     * than is there: the monorepo checkout is the ONE layout in which the two
+     * strategies agree, so reverting `autoloadPath()` to the arithmetic does
+     * not redden anything here. The first half below is a portability fixture
+     * over the arithmetic itself, in both polarities; the second half pins the
+     * DELEGATION, which is the part a reader can check. The layout-dependence
+     * is the finding, and it is why the delegation matters.
+     */
+    public function testTheWorkerAutoloaderResolvesInAnInstalledLayoutNotOnlyInTheMonorepo(): void
+    {
+        $root = sys_get_temp_dir() . '/sc_r60c_layout_' . uniqid((string) getmypid(), true);
+        $agents = $root . '/app/vendor/sugarcraft/sugar-crush/src/Agents';
+        $this->assertTrue(mkdir($agents, 0o700, true));
+        $this->assertNotFalse(file_put_contents($root . '/app/vendor/autoload.php', '<?php'));
+
+        $this->assertFileDoesNotExist(
+            \dirname($agents, 2) . '/vendor/autoload.php',
+            'two climbs found an autoloader in an installed layout — re-measure this whole test',
+        );
+        $this->assertFileExists(
+            \dirname($agents, 4) . '/autoload.php',
+            'the application autoloader is not four levels above src/Agents after all',
+        );
+
+        @unlink($root . '/app/vendor/autoload.php');
+        foreach ([$agents, \dirname($agents), \dirname($agents, 2), \dirname($agents, 3), \dirname($agents, 4), $root . '/app', $root] as $dir) {
+            @rmdir($dir);
+        }
+
+        // The delegation: one locator for both children, so the daemon and the
+        // sub-agent worker cannot disagree about where the autoloader is.
+        $this->assertSame(
+            BackgroundSupervisor::autoloadPath(),
+            $this->reflectAutoloadPath(),
+            'ProcessExecutor has grown a second, independent answer to this question',
+        );
+        $this->assertIsString($this->reflectAutoloadPath());
+        $this->assertFileExists((string) $this->reflectAutoloadPath());
+    }
+
+    /**
+     * The refusal does not leak the child it was refusing to talk to.
+     *
+     * `encodeMessages()` throws, and it used to throw AFTER `proc_open()`: a
+     * live `php -r` process and three pipes were already in hand, and
+     * `$this->processes[$agent->id]` had not been set, so neither `cancel()`
+     * nor `cancelAll()` could ever reap it. Every firing of the guard that
+     * exists to stop a silently-wrong request leaked a process.
+     *
+     * Observed rather than argued: the stand-in binary touches a marker file
+     * the instant it runs, so "no child was spawned" is a file that does not
+     * exist rather than a claim about ordering.
+     */
+    public function testRefusingAnUnserialisableMessageSpawnsNoChild(): void
+    {
+        $dir = sys_get_temp_dir() . '/sc_r60c_leak_' . uniqid((string) getmypid(), true);
+        $this->assertTrue(mkdir($dir, 0o700, true));
+        $marker = $dir . '/spawned';
+        $binary = $dir . '/fake-php';
+        // It drains stdin rather than exiting: a stand-in that returned
+        // immediately would make spawnWorker()'s unconditional `execute` write
+        // hit a closed pipe, and this test would be reporting that notice
+        // rather than the leak it is about.
+        file_put_contents(
+            $binary,
+            "#!/bin/sh\ntouch " . escapeshellarg($marker) . "\nexec cat > /dev/null\n",
+        );
+        $this->assertTrue(chmod($binary, 0o700));
+
+        $executor = new ProcessExecutor(
+            binaryPath: $binary,
+            timeoutSeconds: 30,
+            workerProvider: ['type' => 'echo'],
+        );
+
+        // Known-positive control: the same binary, a request that DOES
+        // serialise. Without this, an assertFileDoesNotExist() below is
+        // satisfied just as well by a marker that never gets written at all.
+        $spawn = new \ReflectionMethod(ProcessExecutor::class, 'spawnWorker');
+        $descriptor = $spawn->invoke($executor, $this->agent, new CompleteRequest(
+            model: 'm',
+            messages: [new UserMessage('fine')],
+        ));
+        $deadline = microtime(true) + 5.0;
+        while (!file_exists($marker) && microtime(true) < $deadline) {
+            usleep(20_000);
+        }
+        $executor->cancelAll();
+        if (is_resource($descriptor['stdin'] ?? null)) {
+            fclose($descriptor['stdin']);
+        }
+        $this->assertFileExists($marker, 'the stand-in binary never ran, so the check below proves nothing');
+        $this->assertTrue(unlink($marker));
+
+        try {
+            $spawn->invoke($executor, $this->agent, new CompleteRequest(
+                model: 'm',
+                messages: [new \stdClass()],
+            ));
+            $this->fail('encodeMessages() accepted a stdClass');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('Cannot send message of type stdClass', $e->getMessage());
+        }
+
+        $this->assertFileDoesNotExist(
+            $marker,
+            'the refusal spawned a worker first, and nothing recorded it for cancel() to reap',
+        );
+
+        @unlink($binary);
+        @rmdir($dir);
+    }
+
+    /**
+     * `ProcessExecutor::autoloadPath()`, which is private and static.
+     */
+    private function reflectAutoloadPath(): ?string
+    {
+        /** @var ?string $path */
+        $path = (new \ReflectionMethod(ProcessExecutor::class, 'autoloadPath'))->invoke(null);
+
+        return $path;
+    }
+
+    /**
+     * Run the LIVE worker script in a real child over a literal stdin, and
+     * return the frames it emitted.
+     *
+     * The script is extracted from the executor rather than copied, so a change
+     * to it is a change to what these tests drive.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function driveLiveWorkerRaw(string $stdin): array
+    {
+        $script = (new \ReflectionMethod(ProcessExecutor::class, 'createLiveWorkerScript'))
+            ->invoke(new ProcessExecutor());
+
+        $process = proc_open(
+            [PHP_BINARY, '-r', $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+
+        fwrite($pipes[0], $stdin);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        proc_close($process);
+
+        $frames = [];
+        foreach (explode("\n", trim($out)) as $line) {
+            if ($line === '') {
+                continue;
+            }
+            $decoded = json_decode($line, true);
+            if (\is_array($decoded)) {
+                $frames[] = $decoded;
+            }
+        }
+
+        return $frames;
+    }
+
+    /**
+     * @param array<string, mixed> $startup
+     * @return list<array<string, mixed>>
+     */
+    private function driveLiveWorker(array $startup, bool $sendExecute): array
+    {
+        $stdin = json_encode($startup) . "\n";
+        if ($sendExecute) {
+            $stdin .= json_encode(['type' => 'execute']) . "\n";
+        }
+
+        return $this->driveLiveWorkerRaw($stdin);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $frames
+     * @return array<string, mixed>
+     */
+    private function terminalFrame(array $frames): array
+    {
+        $terminal = [];
+        foreach ($frames as $frame) {
+            if (\in_array($frame['type'] ?? '', ['error', 'complete'], true)) {
+                $terminal = $frame;
+            }
+        }
+
+        $this->assertNotSame([], $terminal, 'the worker emitted no terminal frame: ' . var_export($frames, true));
+
+        return $terminal;
     }
 
     /**
