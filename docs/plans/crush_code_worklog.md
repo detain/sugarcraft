@@ -11597,13 +11597,189 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
-## ROUND 59 — 🔴 IN FLIGHT (base `e4c69b04e`, THREE lanes, recovery run `wf_146e1913-ca2`)
+## ROUND 59 — the E562 audit came back EMPTY, which is the stronger answer; the scope mechanism worked by leaving no trace; and my pre-launch prediction was for a round that never ran
 
-> 🔴 **THIS ENTRY IS NOT A CLOSE. IT MUST BE CONVERTED WHEN THE ROUND CLOSES, AND THERE IS A PRECEDENT FOR
-> FORGETTING.** Round 52's launch entry sat here reading `IN FLIGHT` for **four rounds** until the
-> rounds-52-55 backfill found it, and by then what its lanes had measured was gone. Everything below the
-> line `### WHAT MUST BE FILLED IN AT CLOSE` is missing on purpose. **Fill it in from the merge, not from
-> this entry.**
+### CLOSED — merged, measured, renumbered
+
+**CLOSED at `1621bb7d7`, from base `e4c69b04e`.** Recovery run `wf_146e1913-ca2`: **8 agents, 8 done,
+zero errors**. Backlog **592 → 630** by max id (count 591 → 629; the +38 reconciles exactly as
+37 lane entries + `E593`, the campaign entry the supervisor added to master after the base was cut).
+
+| package | floor at close | vs base |
+|---|---|---|
+| **sugar-crush** | **10281 / 159378 / 1 skipped / rc 0** | +12 tests, +142 assertions |
+| **tools/tests** | **58 / 214 / rc 0** | +30 tests, +78 assertions |
+| **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** | +14 tests, +291 assertions |
+| candy-core · candy-flip · candy-mosaic | CARRIED, not re-measured | no file touched in any of them |
+
+**The merge went GREEN on the first try** — no red, no fix pass. Second consecutive green merge.
+
+### 🔴 THE PREDICTION SCORECARD, AND THE HEADLINE IS THAT I SCORED THE WRONG PREDICTION
+
+`round59-prediction.txt` was written before the FIRST launch, for a round of three full
+`implement → review → fix` lanes. **That round was killed at ~9.5 minutes and never ran.** What ran was a
+recovery in which lane b skipped implement entirely (its cached report was fed to review) and lanes a and c
+finished a partial implement. **Nobody wrote a replacement prediction at recovery time**, so the pre-launch
+document was scored against a smaller round than it described. Scored anyway, because refusing to score it
+would be the more flattering choice:
+
+| claim | predicted | measured | verdict |
+|---|---|---|---|
+| sugar-crush tests | **10329 EXACT** | **10281** | ❌ **MISSED by 48, too high** |
+| sugar-crush assertions | ≥ 161,000 | 159,378 | ❌ **MISSED, 1,622 below the range floor** |
+| sugar-crush skipped / rc | 1 / 0 | 1 / 0 | ✅ |
+| tools/tests | ≥ 28, rc 0 | 58, rc 0 | ✅ |
+| candy-pty | **UNCHANGED** 630 / 1494 / 16 | **644 / 1785 / 16** | ❌ **MISSED** — lane c added 14 tests there |
+| backlog | 592 → 610–628 | 592 → **630** | ❌ missed by 2, just above the range |
+| merge conflicts | **2×**, "the first lane merged always lands clean" | **3×**, the first included | ❌ **and the stated mechanism was wrong** |
+| **the merge goes GREEN** | GREEN | **GREEN** | ✅ |
+
+**THE EXACT-TEST-COUNT STREAK IS BROKEN AT 15 ROUNDS, and the honest reading is that the kill broke it,
+not the arithmetic.** +60 was a reasonable estimate for the round described; the round delivered +12.
+
+**The conflict prediction failed for a reason worth keeping.** "The first lane merged always lands clean"
+was true of every previous round because master had not moved since the base was cut. This round it had:
+`054761134` (E593), `178ebe925` and `80d17ee67` all landed on master, in `docs/plans/`, AFTER the lanes
+branched. **A rule induced from rounds where the supervisor did not commit between base and merge does not
+survive a round where the supervisor did.**
+
+⚠️ **AND MY MERGE-DAY PREDICTION CONTAINED A FALSE PREMISE OF ITS OWN.** Written immediately before the
+merge, it opened *"Rounds 57 and 58 both went RED at the merge."* **Round 58 went GREEN** — this file's own
+round-58 heading says so. Rule 47 is usually about briefs; here the supervisor put a false historical claim
+into a prediction document, where nothing downstream is asked to falsify it either.
+
+**The merge-day prediction's other half was satisfied and pinned nothing (rule 43).** It predicted
+assertions `>= 159378` — "overshoot, or exactly equal if the censuses happen to be file-count-invariant".
+Measured: **exactly 159378.** The reasoning behind it — that lane a's per-file censuses would rise once
+lane b's new files arrived — was **wrong, because lane b added no new test file at all.** Exactly one file
+was added under `sugar-crush/tests/` in the whole round (lane a's `DuplicatedDocBlockLineTest.php`).
+A claim written to be true whether or not its mechanism holds tells you nothing when it comes true.
+
+### SIDE-PREDICTIONS
+
+| # | claim | verdict |
+|---|---|---|
+| s1 | all three lanes emit `laneScopeCommand` + `laneScopeOutput` | ✅ **CONFIRMED** — 3/3, schema-enforced |
+| s2 | at least one lane's scope output is NON-EMPTY | ❌ **FALSIFIED — and this is the round's best result** |
+| s3 | ownership-map disagreement findings drop to 0 or 1 | ✅ **CONFIRMED at 0** |
+| a | E490 reported with its bound, NOT closed | ✅ **CONFIRMED, and exceeded** |
+| b | the E562 audit finds ≥1 unreproducible verdict | ❌ **FALSIFIED — it found none, and backed it** |
+| c | at least one lane reports its brief was wrong | ✅ **CONFIRMED** — 12th consecutive round |
+| d | E566 is not nineteen fixes | ✅ **CONFIRMED exactly** |
+
+🔴 **s2 IS FALSIFIED IN THE DIRECTION THAT VINDICATES THE MECHANISM, AND THE PREDICTION CONFLATED TWO
+THINGS.** All three scope outputs came back `(empty)`; `outOfLaneFiles` is `[]` for every lane. That is the
+first round since 55 with **zero** out-of-lane edits. The prediction assumed "the mechanism catches
+something" would SHOW UP as a non-empty scope output — but a scope check that works removes the edit before
+it happens, so a working mechanism produces exactly the evidence the prediction read as failure. Lane b hit
+the case: **items 1 and 2 of its own brief commissioned edits to files it does not own**, it refused them,
+measured instead, and filed the finding. Its scope output is empty *because* the mechanism worked.
+**The observable to predict on is the FINDING, not the diff.**
+
+🔴 **(b) IS THE ROUND'S HEADLINE, AND THE NULL RESULT IS STRONGER THAN THE HIT WOULD HAVE BEEN.** E562
+recorded a mutation harness that scored `No tests executed!` (rc 0) as a **SURVIVAL**, and asked for every
+backlog `SURVIVED` verdict that could have been manufactured that way to be re-run or marked unverified.
+The audit ran and **found nothing unverifiable.** The prediction had pre-committed to demanding the list if
+the answer came back "none", and the list was produced:
+
+- **The population's own alphabet was the first finding (rule 11).** `SURVIVED` in capitals appears 37
+  times; the prose spellings of the same verdict — *stayed green*, *still green*, *was not killed*,
+  *unkillable* — add **12 more entries**. A census keyed on the word `SURVIVED` misses a third of them.
+- Every row is settled by one of three independent properties: the mutated run's own test count is quoted,
+  a matched control at the same scope was KILLED in the same run, or the same mutation was later killed by
+  the entry's own fix.
+- **E562's stated trigger is itself wrong.** `--filter` is a SUBSTRING match, so a truncated method name
+  still selects the test and yields a real verdict; only a typo that breaks the substring relation empties
+  the selection. Measured three ways. Anyone re-checking a verdict by asking "does this method exist" is
+  asking a question that decides nothing in either direction.
+- **The transferable rule:** *a survival row with no killed neighbour and no test count is not evidence.*
+  This file has none only because of the habit of writing the control down.
+- **And a SURVIVED verdict decays silently** in a way a KILLED verdict does not. E408's survival was re-run
+  at whole-suite scope and CONFIRMED — and the entry had never recorded a scope at all.
+
+### WHAT THE LANES FOUND
+
+- **Lane a — the plan's own instruments.** The E562 audit above, plus: a population floor that sat *below
+  one of its two halves* (and a `bin/` root reading zero files); a by-reference declaration comment that was
+  inverted, where the review's own prescribed mechanism was also wrong (`&` is
+  `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG` on PHP 8.1+, so the literal fix was a silent no-op); and a
+  family the review never saw — **a reserved word used as a method name lexes as its keyword, never as
+  `T_STRING`**, which hides 30 declarations including the 22 `::new()` factories `CLAUDE.md` mandates.
+  🔴 **Its own first fix for the floor pinned nothing** — the assertion iterated the same constant the walk
+  read, so emptying it emptied both sides. Caught by mutating its own fix, not by reading it.
+- **Lane b — census blind spots and the frame-cap family.** Its brief sent it out of lane twice (above),
+  and `E571`'s premise was false: `EngineBackend::MAX_FRAME_BYTES` is `public`, not `private`, so the
+  prescribed reflection was unnecessary. Its central deliverable — a derivation guard — was found by review
+  **not to do the job its four new doc-blocks guaranteed**, proven by a whole-suite mutation.
+- **Lane c — tooling, CI, and the E490 report.** A shared body extractor **fail-opened on string
+  interpolation**: `"{$a}"` opens with `T_CURLY_OPEN` (an array token) and closes with a plain `'}'` string
+  token, so the brace walk counted a close it never counted an open for and returned a truncated body. The
+  decisive measurement is that the defective polarity ran *more* assertions than the fixed one and still
+  passed. Latent, not live — both pinned pairs extract identically either way.
+
+### E490 — AND THE SUPERVISOR'S OWN N WAS 298 TAKES SHORT
+
+Side-prediction (a) is confirmed and then some. Lane c verified both campaign logs from the raw TSVs and
+found the supervisor had counted only its own 240 takes:
+
+| campaign | tree | takes | rc≠0 | rule-15 instrument row |
+|---|---|---|---|---|
+| supervisor | `sugarcraft/candy-pty` | 240 | none | **yes** (`rc=137`) |
+| round-58 lane c | `crush-lane-c/candy-pty` | **298** | none | **no** |
+
+All 538 rows byte-identical. **The pooled bound is 0.5553%, not 1.2405%** — and the inversion this caused
+is the finding: `E593` recommended *"stop running takes — excluding 1-in-200 costs 598 takes"* as a price
+nobody would pay. **538 were already banked. 60 more takes (~48 minutes) reaches 598.** The entry argued
+against doing something it was one hour away from having done.
+
+Three caveats are recorded rather than buried, because a pooling decision turns on them: different trees;
+**overlapping windows** (~2.5h concurrent, so the takes are not load-independent); and the 298-take half
+**has no instrument row**, so its watchdog was never shown to fire. That asymmetry is the main reason to
+read 0.5553% as optimistic. **E490 remains OPEN.**
+
+### THE CLOSE ITSELF — TWO THINGS WORTH RECORDING
+
+1. 🔴 **THE FIRST FLOOR MEASUREMENT WAS KILLED BY THE SUPERVISOR'S OWN WATCHDOG.** The suite was launched
+   under `setsid` and the watchdog armed on `$!` — which is the `setsid` wrapper, not PHPUnit — then fired
+   `kill -9 -$PID` on that **process group**, which contained the real run. It died at ~1171/10281 with no
+   summary line and no `WATCHDOG FIRED` marker in the log, i.e. **it looked exactly like a hang** — in the
+   one package with a real hang history. Re-run without `setsid`, watchdog armed on the actual pid: clean
+   in 06:34. *A watchdog that kills a process GROUP must be armed on a pid you can prove is in that group
+   and that nothing else you care about is.*
+2. **The renumber's guards earned their place again.** All 37 provisional ids were at one heading level this
+   time (round 58 had a lane ship at `h2`, where a level-specific regex silently skipped 11), and every
+   provisional id appearing in the file also appeared as a heading, so no cross-reference dangled.
+   **A pre-existing anomaly was measured rather than assumed:** `E70`, `E71` and `E72` are referenced in the
+   body but have no heading, and `E78` is duplicated — present identically at `e4c69b04e`, so not this
+   round's doing. Filed as a known defect of the file rather than silently repaired.
+
+### NEW STANDING RULES
+
+🔴 **RULE 51 — PREDICT THE FINDING, NOT THE DIFF.** A guard that works removes the evidence a naive
+prediction looks for. s2 predicted a non-empty scope output as proof the scope mechanism was catching
+things; the mechanism caught the biggest thing it has ever caught and left the scope output empty. When
+predicting on a preventive control, name the artefact the control PRODUCES (a filed finding, a refusal, a
+measurement taken instead of an edit), never the damage it prevents.
+
+🔴 **RULE 52 — A KILLED ROUND INVALIDATES ITS PREDICTION, AND SOMEBODY MUST SAY SO IN WRITING.** The
+pre-launch prediction described three full lanes; the recovery ran something smaller and nobody wrote a
+replacement. Scoring the original against the recovery is scoring the wrong document. **At recovery time,
+either re-predict for the round that will actually run, or record in the prediction file that it has been
+invalidated and why.**
+
+🔴 **RULE 53 — A SURVIVED VERDICT HAS AN EXPIRY DATE AND NO EXPIRY CHECK.** A KILLED verdict does not
+decay — the killer goes on killing until someone deletes it, and deleting it reds something. A SURVIVED
+verdict asserts that NOTHING covers a line, and every test added anywhere can falsify it silently. **Record
+the SCOPE with every survival** — E408's had none for fifty rounds.
+
+🔴 **RULE 54 — AN INDUCED RULE DIES WHEN ITS UNSTATED PRECONDITION CHANGES.** "The first lane merged always
+lands clean" held for every prior round and failed here, because it silently assumed master had not moved
+since the base was cut. **When a rule is induced from history, write down the condition that history
+shared.**
+
+**RULE 47's RATE IS NOW WORTH TRACKING.** Supervisor-authored false claims: round 58 → 2 (E527 inverted,
+E529 false as filed), round 59 → 2 (E571 `public` not `private`; the merge prediction's "57 and 58 both
+went red"). **Four in three rounds, and the brief is the artefact nothing downstream is asked to falsify.**
 
 **Launched from `e4c69b04e`.** Floor measured there, tree clean:
 
@@ -11690,20 +11866,6 @@ green runs and a dead watchdog are the same log.
 **Rule 50 earned its place on its first outing.** Round 58 handed this campaign to a lane as a 🔴 "before
 anything else" instruction and it was never started — 0 of 1 (E584). Run by the supervisor it completed
 while nine agents worked alongside it.
-
-### WHAT MUST BE FILLED IN AT CLOSE
-
-- [ ] merged floor (sugar-crush, tools/tests), and whether the merge went red — **the prediction says
-      GREEN and names E566's `T_FUNCTION`→`T_FN` widening as the one thing that could falsify it**
-- [ ] the prediction scorecard against `.../workflows/scripts/round59-prediction.txt` — tests **10329
-      EXACT**, assertions **≥161,000**, conflicts **2×**, backlog **610–628**, plus s1/s2/s3 and (a)–(d)
-- [ ] **s2 is already CONFIRMED** (lane b's out-of-lane brief items) — record it
-- [ ] whether **E562's audit** found a mutation verdict in the backlog that cannot be reproduced —
-      side-prediction (b), and the highest-value question in the round
-- [ ] lane c's **recommended disposition for E490**, with the arithmetic beside it
-- [ ] id renumber from **E594** (E593 is the campaign), and the backlog total
-- [ ] new standing rules, and whether **rule 47's rate** (brief defects) is worth tracking as a figure
-
 
 ## ROUND 58 — killed by a session limit and recovered, the merge stayed green when it was predicted red, and the ownership mechanism was finally measured to death
 

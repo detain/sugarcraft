@@ -6,178 +6,85 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 🟢 ROUND 59 IS **RUNNING — AS A MIXED RECOVERY** — run id `wf_146e1913-ca2`
+## 0-NOW-60. ROUND 59 CLOSED (floor 10281) — the E562 audit came back empty, and that is the stronger answer
 
-🔴 **THE FIRST LAUNCH (`wf_a06a8acb-ecc`) HIT A SESSION LIMIT, AND THE DAMAGE WAS UNEVEN.** Second kill in
-two rounds. **This one is NOT round 58's shape and a round-58-shaped recovery would have been wrong:**
+**CLOSED at `1621bb7d7`, base `e4c69b04e`.** Recovery run `wf_146e1913-ca2`, 8 agents, zero errors.
+**The merge went GREEN first try** (second consecutive). Backlog **592 → 630**; round 59's 37 provisional
+ids are now **E594–E630**.
 
-| lane | state at the kill | recovery stage |
-|---|---|---|
-| **a** | 6 commits, tree clean; **the headline item (E562's audit) never started** | `Finish → Review → Fix` |
-| **b** | 🔴 **IMPLEMENT COMPLETE, and its report survived in the journal** | **`Review → Fix`, stage 1 bypassed with the cached report** |
-| **c** | 8 commits, tree clean; E585/E583 never started | `Finish → Review → Fix` |
-
-**No lane tree was dirty**, so unlike round 58 nothing had to be rescued out of a working copy.
-**Lane b is E452's recipe used as intended**: the cached stage result is fed to the *real* `reviewPrompt`,
-so the prompt is regenerated exactly rather than approximated.
-
-⚠️ **A DEFECT IN THE RECOVERY SCRIPT WAS CAUGHT BY RENDERING, AGAIN.** Because lane b skips `finishPrompt`,
-its `PROVENANCE` block — which carries "do not undo the scope finding" and the E571 correction — **was
-never going to be delivered.** Provenance is now injected into the review stage as well. Nine prompts
-rendered and checked; `node --check` would have shown nothing.
-
-### 🔴 THE SCOPE MECHANISM WORKED ON ITS FIRST OUTING, AND CAUGHT A DEFECT IN THE BRIEF
-
-Round 59 replaced ownership-prose with a per-lane regex, a command, and two required schema fields (E591).
-**Lane b's very first finding is that items 1 and 2 of its own brief commission edits to files it does not
-own** — `tests/SwallowingCatchCensusTest.php` (tests root, owned by *nobody* this round) and
-`tests/Support/AssertionSwallowingCatchTest.php` (**lane a's**). Both were rejected by its scope regex, so
-the lane **measured instead of editing** and filed `Eb59-1`. **The supervisor wrote a brief that sent a lane
-out of its own lane, and the machine check caught it in the first stage.** Three rounds of prose never did
-that. Side-prediction s2 confirmed.
-
-⚠️ **AND ANOTHER BRIEF ITEM WAS FALSE: `EngineBackend::MAX_FRAME_BYTES` is `public`, not `private`.** E571
-said private and prescribed reflection. That is the third supervisor-authored brief defect in two rounds
-(E592 has the other two) — rule 47 is not decoration.
-
-### ✅ E490 IS ANSWERED — 240 TAKES, ZERO EVENTS (E593)
-
-**The campaign is COMPLETE.** 240 takes, every one `rc=0` and byte-identical; `EVENTS.txt` is two lines and
-both are the deliberate instrument check.
-
-| N | 95% one-sided upper bound |
+| package | floor at close |
 |---|---|
-| 53 (round 57) | 5.50% |
-| 165 (round 58 close) | 1.80% |
-| **240 (final)** | **1.2405%** |
-
-**Prior estimate 1 in 76 = 1.3158%, so the prior rate is now EXCLUDED at 95% — by 0.075 points.** 🔴 **This
-does NOT mean E490 is fixed.** 1.2405% is not zero and a hang at 1 in 500 is entirely consistent with 240
-clean takes. Lane c is asked to recommend a disposition WITH the arithmetic beside it. **The watchdog
-requirement below stays until that disposition is agreed.**
-
-### (superseded) the first round-59 launch — `wf_a06a8acb-ecc`
-
-**Round 58 is CLOSED, merged and recorded. Round 59 launched from base `e4c69b04e`** — nine agents,
-three lanes, `implement → review → fix` pipelined.
-
-| package | floor at `e4c69b04e` |
-|---|---|
-| **sugar-crush** | **10269 / 159236 / 1 skipped / rc 0** — MEASURED |
-| **tools/tests** | **28 / 136 / rc 0** — MEASURED (was 9 / 41 two rounds ago) |
-| **candy-pty** | **630 / 1494 / 16 / 1 warning / rc 0** — MEASURED **175+ times**, see the campaign |
+| **sugar-crush** | **10281 / 159378 / 1 skipped / rc 0** — MEASURED |
+| **tools/tests** | **58 / 214 / rc 0** — MEASURED |
+| **candy-pty** | **644 / 1785 / 16 / 1 warning / rc 0** — MEASURED |
 | candy-core · candy-flip · candy-mosaic | **CARRIED, not re-measured.** An inference, not an observation. |
 
-Script: `.../workflows/scripts/crush-round-59.js` · Prediction:
-`.../workflows/scripts/round59-prediction.txt`, written BEFORE launch.
+### THE THREE THINGS WORTH CARRYING OUT OF ROUND 59
 
-### 🔴 THE OWNERSHIP MECHANISM CHANGED THIS ROUND — THIS IS THE ROUND'S REAL EXPERIMENT
+1. 🔴 **E562's AUDIT FOUND NOTHING, AND BACKED IT.** Every standing `SURVIVED` verdict in the backlog is
+   settled by a quoted test count, a killed control at the same scope, or a later kill of the same
+   mutation. **Nothing is unverified.** Two corrections came with it: the population's alphabet was wrong
+   (37 capitalised rows, plus **12 more** the word `SURVIVED` cannot see), and **E562's stated trigger is
+   false** — `--filter` is a SUBSTRING match, so a truncated method name still runs the test.
+2. 🔴 **THE SCOPE MECHANISM PRODUCED ZERO OUT-OF-LANE EDITS** — all three `laneScopeOutput`s empty,
+   `outOfLaneFiles` `[]` everywhere, first such round since 55. It caught a brief that sent lane b at two
+   files it does not own; the lane refused and measured instead. **This falsified side-prediction s2,
+   which had predicted a non-empty scope output as the evidence of success** — see rule 51.
+3. **E490 IS STILL OPEN, and the supervisor's own N was 298 takes short.** Pooled across both campaigns:
+   **538 takes, zero events, bound 0.5553%.** `E593` argued against a 598-take threshold as unaffordable
+   while 538 were already banked — **60 more takes (~48 min) reaches it.** Three caveats keep 0.5553%
+   optimistic: different trees, ~2.5h of overlapping run windows, and the 298-take half **has no
+   instrument row**, so its watchdog was never shown to fire.
 
-E591 measured that ownership-as-prose does not work, and found the defect underneath it: **`fixPrompt`
-carried no file list, no ownership map and no work description at all** — and the fix stage is the one
-under most pressure to edit out of lane, because it acts on reviewer prescriptions that routinely name
-files the lane does not own. Round 59 changes four things:
+### NEW STANDING RULES FROM ROUND 59
 
-1. **A `scopeRegex` per lane**, and the exact command to run a diff against it.
-2. **`laneScopeCommand` and `laneScopeOutput` are REQUIRED fields of the structured output.** The schema is
-   enforced at the tool-call layer; prose is not.
-3. **Scope is in all three stages**, fix included.
-4. **Every path in the ownership block was verified with `git ls-tree`** — the block itself, not only the
-   per-lane lists, which is the gap E573 found.
+- **51 — predict the FINDING, not the diff.** A preventive control that works erases the evidence a naive
+  prediction looks for. Name the artefact the control produces (a filed finding, a refusal, a measurement
+  taken instead of an edit), never the damage it prevents.
+- **52 — a killed round invalidates its prediction, and somebody must say so in writing.** At recovery
+  time, either re-predict for the round that will actually run, or stamp the prediction file INVALIDATED.
+- **53 — a SURVIVED verdict has an expiry date and no expiry check.** A KILLED verdict cannot decay; a
+  survival asserts that *nothing* covers a line and any new test can falsify it silently. **Record the
+  scope with every survival.**
+- **54 — an induced rule dies when its unstated precondition changes.** "The first lane merged always
+  lands clean" assumed master had not moved since the base was cut. Write down the condition the history
+  shared.
 
-🔴 **THE CHECK EARNED ITS PLACE BEFORE LAUNCH.** It caught two bad paths in this round's own map —
-`tests/DuplicatedTestHelperDriftTest.php` and `tests/GlobFigureDriftTest.php`, both really one directory
-deeper. Under the old regime they would have shipped and a lane would have filed them, as in rounds 57
-and 58. **The scope regexes were also tested in both polarities before launch** (in-scope files admitted,
-out-of-scope files rejected) — rule 15 applied to the harness itself.
-
-### THE ROUND-59 LANES
-
-- **a — the plan's own instruments.** 🔴 **E562's AUDIT is the headline: a mutation harness scored
-  `No tests executed!` as a SURVIVAL**, because a `--filter` naming a missing method exits 0. Two verdicts
-  were produced that way. The harness is fixed; **the job is going back through the backlog's mutation
-  tables and finding every `SURVIVED` that could have come from a broken run** — a survival is what this
-  plan uses to justify leaving code unpinned. Then E586, E566 (nineteen token walks keyed on `T_FUNCTION`
-  with no `T_FN`), E565, E579.
-- **b — census blind spots and the frame-cap family.** E572 (the swallowing-catch census's two *stated*
-  blind spots), E577 + E578 (a resolver honest about being wrong is not the same as right), E571 (make the
-  frame-cap "inheritance" a derivation — `ReflectionClass::getConstant()` reads the private constant),
-  E569 + E576, E570.
-- **c — tooling, CI, and the E490 report.** The campaign report, E585, E588, E583, E589.
+⚠️ **RULE 47'S RATE: four supervisor-authored false claims in three rounds** (round 58: E527 inverted,
+E529 false as filed; round 59: E571 `public` not `private`, and the merge prediction's "57 and 58 both
+went red" — round 58 went green). **The brief and the prediction are the two artefacts nothing downstream
+is asked to falsify.**
 
 ### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
 
-**Status as of the round-59 recovery launch. The recovery `wf_146e1913-ca2` was RUNNING when this was
-written — 5 of 8 agents had reported and 3 were still working. Nothing below assumes it finished.**
-
-1. 🔴 **ROUND 59 IS NOT CLOSED, AND ITS WORKLOG ENTRY SAYS `IN FLIGHT`.** `crush_code_worklog.md`'s
-   `## ROUND 59` entry records everything measured BEFORE the merge and ends with a checklist headed
-   **`WHAT MUST BE FILLED IN AT CLOSE`**. **Convert it at the close — do not leave it.** Round 52's launch
-   entry sat there reading `IN FLIGHT` for four rounds until the rounds-52-55 backfill found it, and by
-   then what its lanes had measured was gone.
-   **The close-out cycle is:** merge a → b → c (`--no-ff`, backlog conflicts expected, keep BOTH sides) →
-   verify invariants → measure the merged floor under a watchdog → renumber provisional ids **from E594**
-   → convert the worklog entry → update this file → launch round 60.
-2. **Publication state — RE-MEASURE IT, never infer it.** At this writing `git ls-remote origin master`
-   answered **`37779685b`** with **68 commits local**. ⚠️ **The user commits into this working copy
-   directly and pushes it themselves.** Round 58 saw `9b32796b8 prompt expantion` and `37779685b update`
-   appear mid-round — `prompt_expand.md`, a 4,063-line research dossier authored as `Test User`. It is
-   legitimately in the tree; the lanes never saw it, having branched earlier.
-3. ✅ **E490 IS ANSWERED — see E593. It is NOT closed, and the distinction is the point.** The campaign
-   completed at **240 takes, zero events**; the 95% upper bound is **1.2405%** against a **1.3158%** prior,
-   so the prior rate is excluded — **by 0.075 percentage points.** 1.2405% is not zero, and a hang at
-   1 in 500 is entirely consistent with 240 clean takes. **Lane c owes a recommended disposition with the
-   arithmetic beside it.** Until that is agreed, the watchdog requirement below stays.
-   ⚠️ Raw data is under `/tmp/.../scratchpad/r58campaign/`, and **`/tmp` does not survive a reboot.**
-4. 🔴 **E562's AUDIT IS THE HIGHEST-VALUE OPEN QUESTION IN THE PLAN.** A mutation harness scored
-   `No tests executed!` as a **SURVIVAL** (a `--filter` naming a missing method exits 0), and **two verdicts
-   were produced that way.** A survival verdict is what this plan uses to justify leaving code unpinned.
-   The audit — going back through the backlog's mutation tables for every `SURVIVED` a filter-based run
-   could have produced — **had not been started when the round was killed.** Lane a owns it and was told to
-   do it first.
-5. **Three supervisor-authored brief defects in two rounds** (E592: E527 inverted, E529 false as filed;
-   round 59: E571's `private` is actually `public`). **Rule 47 exists because of this.** A brief item that
-   asserts a mechanism must cite the measurement or say it is unverified.
-6. `left_steps.md` (repo root, UNTRACKED) predates E455–E593 and **has no generator** — it was a read-only
-   agent sweep. Best regenerated at a close, where it can absorb a whole round's ids at once.
-
-### 🔴 NEVER RUN A SUITE WITHOUT A WATCHDOG — E490 IS STILL LIVE
-
-A hang is not a failure: it looks like a slow suite locally and a job timeout naming nothing in CI.
-
-```sh
-vendor/bin/phpunit --testdox > out.log 2>&1 &
-P=$!
-for t in $(seq 1 300); do kill -0 $P 2>/dev/null || break; sleep 1; done
-kill -0 $P 2>/dev/null && { echo "HUNG"; kill -TERM $P; sleep 2; kill -KILL $P; }
-```
-
-`timeout` does NOT reliably kill a wedged PTY/FFI child, and a global `pkill` is prohibited.
-**candy-pty's own `HangWatchdog` was re-confirmed alive** at `CANDY_PTY_HANG_BUDGET=0.6` (SIGKILL,
-`rc=137`, test named). It bounds a wedged TEST, not a wedged runner.
-
-### 🔴 RENDER EVERY PROMPT BEFORE EVERY LAUNCH — `node --check` IS NOT ENOUGH
-
-Round 58's recovery script had two defects that parsed cleanly: an **undeclared `CAMPAIGN` const** (a
-runtime `ReferenceError` that would have killed all three agents at launch) and a doubled backslash that
-would have shown agents `` \`E549\` ``. Truncate the script at its `phase(...)` line, `require()` it, and
-render one prompt per lane per stage. Round 59 was checked this way — 9 prompts, all three stages.
-
-### NEW STANDING RULES FROM ROUND 58
-
-- **47** — **a brief is not a measurement, and it carries MORE authority than a review**, because nothing
-  downstream is asked to falsify it. Two of five items in one lane's brief were false as written (E592).
-  **And the converse: "my brief does not say X" is checkable in one grep.**
-- **48** — **build the guard over the POPULATION, not the sites the prescription names.** Three
-  commissioned, four found, and the fourth was the only one that could go GREEN on a hang.
-- **49** — **a brace walk over `token_get_all()` must gate on `is_string()`.** `T_ENCAPSED_AND_WHITESPACE`
-  text can be exactly `{` or `}`.
-- **50** — **a long measurement belongs to the supervisor, not to an agent.** A three-hour campaign handed
-  to a lane as its first instruction was never started — 0 of 1.
+1. **ROUND 60 IS PREPARED BUT NOT LAUNCHED.** Its three lanes are E252/E409, C7, and C4/C8/E59 — chosen
+   because they are the crush_code items that BLOCK the separate prompt-architecture plan
+   (`prompt_plan.md`), not because they are the next items in the ledger. Script and briefs:
+   `.../workflows/scripts/crush-round-60.js`. **Read `round60-prediction.txt` before launching; per rule
+   52, re-predict if the round is killed and recovered.**
+   🔴 **THE ROUND HAS AN INTERNAL ORDERING CONSTRAINT AND IT IS NOT OPTIONAL** — see the script's
+   `NO NEW src/ FILES` clause. Lane a is dismantling the `src/` file-count census that lanes b and c would
+   otherwise red by merely adding a file.
+2. **Publication state — RE-MEASURE IT, never infer it.** ⚠️ **The user commits into this working copy
+   directly and pushes it themselves**, so local-vs-remote moves without the supervisor doing anything.
+   `prompt_expand.md` (4,063 lines) arrived that way mid-round-58, authored as `Test User`.
+3. **E490 is answered but NOT closed.** See above. The next concrete action is 60 more takes with an
+   instrument row armed FIRST, which would exclude 1-in-200 at 95%.
+4. **`left_steps.md` is stale AND WRONG, with no generator.** One of its claims — that `crush_code.md` no
+   longer exists — is false; the file is present and tracked. Its counts predate E455–E593 entirely.
+   Treat it as a weak hint, verify anything taken from it, or regenerate it.
+5. 🔴 **THE BACKLOG HAS NO OPEN/CLOSED MARKER.** 505 of ~590 entries carry no disposition stamp, and that
+   is **not** 505 open items. Do not infer outstanding work by counting unmarked entries.
+   Known file defects, measured and pre-existing: **`E70`, `E71`, `E72` are referenced in the body but
+   have no heading, and `E78` is duplicated.**
+6. **A separate plan now exists and is NOT part of this one.** `prompt_plan.md` / `prompt_worklog.md` /
+   `prompt_resume.md` execute `prompt_expand.md`. It is mentioned here only so the two are not run into
+   each other: **only one plan may claim the whole-suite floor in a given window**, because this plan
+   scores an exact predicted test count and that one adds hundreds of assertions.
 
 ---
 
-## 0-NOW-59. ROUND 58 CLOSED (floor 10269) — killed and recovered, green where red was predicted, and a census the supervisor got wrong
+## 0-NOW-59 (now superseded). ROUND 58 CLOSED (floor 10269) — killed and recovered, green where red was predicted, and a census the supervisor got wrong
 
 **Closed 2026-08-25 at `e4c69b04e`, from base `535d721ff`.** Backlog **555 → 592**.
 Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 58`.
