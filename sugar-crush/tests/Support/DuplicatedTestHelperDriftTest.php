@@ -1008,6 +1008,122 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     }
 
     /**
+     * EVERY SPELLING OF A DECLARATION NAME, AND THE ONE SHAPE THAT MUST STILL
+     * BE REFUSED.
+     *
+     * The name walk in {@see declarationsIn()} used to accept exactly one
+     * spelling — a `T_STRING` immediately after `function` — and two real
+     * spellings fell outside it, in opposite and both bad ways:
+     *
+     *   * A BY-REFERENCE declaration. Measured through that method on PHP
+     *     8.3.6 before the fix: `public function &byRef()` was filed as a
+     *     declaration whose name could not be read, and the implicitly-public
+     *     `function &byRef()` produced NO ROW AT ALL. The second is E565's own
+     *     defect surviving inside E565's own fix — an absent modifier, made
+     *     invisible again by an ampersand.
+     *   * A RESERVED WORD used as a method name, legal since PHP 7.0 and
+     *     lexed as the keyword rather than as `T_STRING`. THIRTY in this
+     *     package, twenty-two of them `::new()`, which this repo's conventions
+     *     mandate as the default root factory for every class — so the
+     *     population is not an accident and is not going to shrink.
+     *
+     * RULE 15 / RULE 25: EVERY ROW BELOW THAT EXPECTS AN EMPTY `unparseable`
+     * HAS A POSITIVE HALF IN THE SAME TEST. The truncated source at the end
+     * must still be REPORTED, so "nothing was unreadable" is a statement about
+     * the sources rather than about a branch that has stopped reporting. That
+     * row is also the only pin on the unreadable-name branch itself: with it
+     * absent, collapsing the anonymous-function discriminator to a bare
+     * `if ($name === null) { continue; }` — which silently drops every
+     * declaration this scanner cannot name — left the whole class green.
+     */
+    public function testTheNameWalkReadsEverySpellingOfADeclarationName(): void
+    {
+        $bodyA = '{ $x = 1; return $x; }';
+        $bodyB = '{ $x = 2; return $x; }';
+
+        // (1) BY REFERENCE, EXPLICITLY PUBLIC.
+        [$byRef, $byRefUnparseable] = self::driftReport(
+            [
+                'a/A.php' => "<?php\nclass A { public function &copied(): array " . $bodyA . " }\n",
+                'b/B.php' => "<?php\nclass B { public function &copied(): array " . $bodyB . " }\n",
+            ],
+            [\T_PUBLIC],
+        );
+        $this->assertSame(
+            [],
+            $byRefUnparseable,
+            'a by-reference declaration was filed as one whose name cannot be read. The `&` sits '
+                . 'between `function` and the name and is not the end of it',
+        );
+        $this->assertArrayHasKey(
+            'copied',
+            $byRef,
+            'a by-reference helper copied into two files and drifted was not compared at all',
+        );
+
+        // (2) BY REFERENCE AND IMPLICITLY PUBLIC — E565's spelling wearing an
+        // ampersand, which is the combination that was silently dropped.
+        [$bare, $bareUnparseable] = self::driftReport(
+            [
+                'a/A.php' => "<?php\nclass A { function &copied(): array " . $bodyA . " }\n",
+                'b/B.php' => "<?php\nclass B { function &copied(): array " . $bodyB . " }\n",
+            ],
+            [\T_PUBLIC],
+        );
+        $this->assertSame([], $bareUnparseable, 'an implicitly-public by-reference declaration was unreadable');
+        $this->assertArrayHasKey(
+            'copied',
+            $bare,
+            'a helper written with NEITHER a visibility keyword NOR a `T_STRING` name was '
+                . 'invisible to this scanner. Both halves of that spelling are absences, and an '
+                . 'alphabet made of keywords and token ids cannot express either',
+        );
+
+        // (3) A RESERVED WORD AS THE NAME, in the private alphabet this
+        // guard's main census runs. `match` lexes as `T_MATCH`.
+        [$reserved, $reservedUnparseable] = self::driftReport([
+            'a/A.php' => "<?php\nclass A { private function match(): int " . $bodyA . " }\n",
+            'b/B.php' => "<?php\nclass B { private function match(): int " . $bodyB . " }\n",
+        ]);
+        $this->assertSame(
+            [],
+            $reservedUnparseable,
+            'a method named with a reserved word was filed as unreadable. PHP has allowed that '
+                . 'since 7.0 and hands the name back as the KEYWORD token, so a check on '
+                . '`T_STRING` selects only the names that happen not to collide with one',
+        );
+        $this->assertArrayHasKey('match', $reserved, 'a drifted helper named `match` was not compared');
+
+        // (4) AND THE CLOSURES ARE STILL CLOSURES. Stepping over `&` must not
+        // turn an anonymous by-reference function into a declaration.
+        [, $closureUnparseable] = self::driftReport(
+            ['c/C.php' => "<?php\nclass C { public function testA() { \$f = function &() { \$x = 1; return \$x; }; return \$f; } }\n"],
+            [\T_PUBLIC],
+        );
+        $this->assertSame(
+            [],
+            $closureUnparseable,
+            'an anonymous BY-REFERENCE function was filed as a declaration whose name cannot be '
+                . 'read. `function &()` is a closure exactly as `function ()` is',
+        );
+
+        // (5) RULE 14, AND THE POSITIVE HALF OF ALL FOUR ROWS ABOVE. A source
+        // this scanner genuinely cannot name must be REPORTED. Post-fix the
+        // only shape that reaches it is a truncated declaration, which is a
+        // real thing a file on disk can be.
+        [, $truncatedUnparseable] = self::driftReport(['d/D.php' => "<?php\nclass D {\n    private function "]);
+        $this->assertNotSame(
+            [],
+            $truncatedUnparseable,
+            'a declaration carrying an explicit visibility keyword whose name this scanner '
+                . 'cannot read was silently skipped instead of reported. That is the branch the '
+                . 'anonymous-function discriminator exists to protect: without it every '
+                . 'unnameable declaration is dropped, and a helper dropped is indistinguishable '
+                . 'from a helper cleared',
+        );
+    }
+
+    /**
      * WIDENING THE VISIBILITY ALPHABET TO `protected` ADDS NO HELPER AT ALL,
      * ONLY PHPUnit'S OWN LIFECYCLE HOOKS - and that is the argument for the
      * restriction, standing where a sentence asserting it used to.
@@ -1980,7 +2096,34 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 if (\is_array($candidate) && $candidate[0] === \T_WHITESPACE) {
                     continue;
                 }
-                if (\is_array($candidate) && $candidate[0] === \T_STRING) {
+                // A BY-REFERENCE `&` SITS BETWEEN `function` AND THE NAME and
+                // is stepped over, not read as the end of the search. It is
+                // matched on the token's TEXT because its ID is not stable
+                // across the versions this package supports: on PHP 8.1+ (this
+                // host is 8.3.6) it is an ARRAY token,
+                // `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`, and before that
+                // it was the bare one-byte string. Rule 49's trap — an array
+                // token whose text is one punctuation byte — does not reach
+                // here: this walk is positioned immediately after a
+                // `T_FUNCTION`, where no interpolated string can begin.
+                if ($candidate === '&' || (\is_array($candidate) && $candidate[1] === '&')) {
+                    continue;
+                }
+                // THE NAME IS AN IDENTIFIER, NOT NECESSARILY A `T_STRING`.
+                // PHP has allowed a reserved word as a METHOD name since 7.0,
+                // and the lexer hands that name back as the KEYWORD token:
+                // `function new()` yields `T_NEW`, `function match()` yields
+                // `T_MATCH`, `function default()` yields `T_DEFAULT`. Asking
+                // the token ID therefore answers "anonymous" for a declaration
+                // that is plainly named. Measured on PHP 8.3.6 over `tests/`,
+                // `src/` and `bin/sugarcrush`: THIRTY declarations are of this
+                // shape, twenty-two of them the `::new()` root factory this
+                // repo's own conventions mandate for every class, and two of
+                // them PRIVATE — which is this guard's own population. All
+                // thirty are in `src/`, so like the absent-modifier arm below
+                // this is an untriggered hole rather than a live miss (E363's
+                // shape), and the convention pushing on it is the repo's.
+                if (\is_array($candidate) && self::isIdentifier($candidate[1])) {
                     $name = $candidate[1];
                 }
 
@@ -1988,9 +2131,26 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             }
 
             // A `function` with no name is a closure, not a declaration this
-            // guard has any business comparing — and it is excluded here rather
-            // than reported, because `&` after `function` is a by-reference
-            // NAMED declaration and reaches the arm below with its name read.
+            // guard has any business comparing — and it is excluded here
+            // rather than reported.
+            //
+            // WHAT THIS SAID: "`&` after `function` is a by-reference NAMED
+            // declaration and reaches the arm below with its name read".
+            // WHAT IS TRUE NOW: it did not, and the mechanism offered for it
+            // was wrong as well. Measured through this very method on PHP
+            // 8.3.6 before the name loop learned to step over `&`:
+            // `public function &byRef()` came back with an EMPTY name and was
+            // filed as a declaration whose name cannot be read, and the
+            // implicitly-public `function &byRef()` produced no row at all —
+            // silently dropped, which is exactly the spelling E565 exists to
+            // catch, still open in the by-reference form. WHY THIS EXCLUSION
+            // STILL EARNS ITS PLACE: the loop above now steps over `&`, so a
+            // by-reference declaration really does arrive here with its name
+            // read and this arm sees only genuine closures. The sentence
+            // describes the code for the first time rather than the other way
+            // round, and
+            // {@see testTheNameWalkReadsEverySpellingOfADeclarationName()}
+            // is what keeps it that way.
             if ($name === null && !self::carriesVisibility($tokens, $i, [\T_PRIVATE, \T_PROTECTED, \T_PUBLIC], false)) {
                 continue;
             }
@@ -2026,6 +2186,21 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         }
 
         return $found;
+    }
+
+    /**
+     * Whether $text has the shape of a PHP label — what a method NAME looks
+     * like, asked of the text rather than of the token ID.
+     *
+     * The token ID cannot answer it. A method named with a reserved word
+     * lexes as that keyword, so `T_STRING` selects only the names that
+     * happen not to collide with one — see the census in
+     * {@see declarationsIn()}. The label grammar is the real question, and
+     * it is the same one PHP itself applies.
+     */
+    private static function isIdentifier(string $text): bool
+    {
+        return \preg_match('/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*$/', $text) === 1;
     }
 
     /**
