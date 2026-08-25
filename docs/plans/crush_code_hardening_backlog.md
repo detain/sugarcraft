@@ -17458,3 +17458,82 @@ existing one, so the method below it lost its documentation — caught immediate
 sibling finding this entry sits beside, in the same run. **That is the guard pair working exactly as
 intended, on the supervisor, one commit after it caught the lanes.**
 
+
+### Eb58-1 — `src/ClaudeCodeMcpClient.php` still claims an inheritance nothing checks *for it*
+
+`FrameCapFamilyTest` (round 58) pins that all three `MAX_FRAME_BYTES` claimants agree with
+`EngineBackend::MAX_FRAME_BYTES`, and rewrote the doc-blocks in `src/LSP/LspConnection.php` and
+`src/MCP/StdioMcpServer.php` to cite the pin instead of asserting derivation. **`src/ClaudeCodeMcpClient.php`
+carries the same stale sentence — "SIXTY-FOUR MEBIBYTES, inherited rather than invented" — and was outside
+round 58 lane b's file list**, so it was left alone. The class IS in `claimants()`, so the VALUE is pinned;
+only its prose still overstates. One paragraph, same three-part form as the other two.
+
+### Eb58-2 — the same E541 defect one word over: `required` reads an HTTP 401 as a denial
+
+E541 was fixed by narrowing `block(?:ed)?` to the verb forms. **`required` has the identical shape and was
+deliberately NOT narrowed**, because `Permission required:` is a live `DenialKind` case and the term is
+load-bearing for it. MEASURED on PHP 8.3.6 against `DENIAL_SHAPE` + `DENIAL_TERMS` as they now stand, each
+of these is reported as a denial-shaped literal:
+
+| literal | frame matched |
+|---|---|
+| `Authorization Required:` | `Authorization Required:` |
+| `Proxy Authorization Required: yes` | `Proxy Authorization Required:` |
+| `Content-Length required: the header is mandatory` | `Length required:` |
+| `Content-Length is required:` | `Length is required:` |
+
+None occurs in `src/` today — the only `required` hit is the roster's own `Permission required:` — so this
+is latent, exactly as E541 was until `LspConnection` wrote the phrase. `src/LSP/` and `src/MCP/` are the
+files most likely to write one. There is no free narrowing here: the honest options are to key the term on
+a preceding permission noun, or to accept the false positive and make the guard's failure text name
+"reword, do not add a row" as the resolution.
+
+### Eb58-3 — `EngineBackend::MAX_FRAME_BYTES` is `private`, so the family cannot name it
+
+The reason `FrameCapFamilyTest` exists at all. PHP 8.3.6 cannot initialise a `const` from another class's
+private constant, so three classes spell `64 * 1024 * 1024` and a reflection-driven test holds them
+together. **Promoting the engine's constant to `public` collapses all of it**: each claimant writes
+`private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;` and the derivation becomes a language
+fact. `FrameCapFamilyTest` already asserts the constant IS still private, with a failure message saying to
+do exactly this when that stops being true. `src/Backend/EngineBackend.php` is not lane b's file.
+
+### Eb58-4 — the swallowing-catch census's two stated blind spots
+
+`SwallowingCatchCensusTest` refuses a general-purpose exception type caught around an asserting try, and
+says in its own doc-block what it cannot see. Both remain open:
+
+1. **An assertion reached indirectly.** The try body is judged by its own token stream, so a helper called
+   from inside the try whose body asserts — `$this->drainTheChild()` — is invisible, and a wide catch
+   around it is not reported. `StdioMcpServerHandshakeTest::timeStartOf()` was exactly this shape before
+   round 58 repaired it, and every caller inherited the swallow.
+2. **Swallowing that is not a catch at all.** `set_error_handler()` installed over an asserting region
+   intercepts the failure with no try/catch anywhere.
+
+Closing (1) needs a call-graph pass over test-local private methods, which is a real piece of work rather
+than a widening.
+
+### Eb58-5 — the round-58 ownership map names a lane-c file that does not exist
+
+The map's preamble states that every path in it "was verified to exist at `535d721ff` before this brief was
+written (E334)". `git ls-tree 535d721ff sugar-crush/tests/` has no `StackedDocCommentTest.php`, which the
+map lists among lane c's four test-root files. Round 57's map/brief disagreement was found by one lane of
+three; this round's was reconciled before launch and still carries one bad path. **The E334 check evidently
+does not cover the ownership block**, only the per-lane file lists.
+
+### Eb58-6 — the round-58 brief's E546 distribution was one short, in `Providers/`
+
+The brief states 22 sites: "test root ×4, `tests/Agents/` ×8, `tests/Cli/` ×2, `tests/MCP/` ×4,
+`tests/Providers/` ×3, `tests/Workflows/` ×1". Re-measured at `535d721ff` with round 57's own generator
+(`census_swallow.php`, PHP 8.3.6, alphabet unchanged): **23**, with `tests/Providers/` at **4** — the extra
+being `Providers/ToolSchemaEncodingTest.php:364 catch(\PHPUnit\Framework\AssertionFailedError)`, which is
+correct code and one of the four deliberate survivors. Every other bucket matched exactly. Harmless here
+because the missed row needed no fix, but a distribution used to decide "am I done" was wrong by one.
+
+### Eb58-7 — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
+
+`parsePresetFile()` throws `"Invalid YAML frontmatter in: {$filePath}"` when `Frontmatter::parse()` returns
+a non-array. MEASURED on PHP 8.3.6: malformed YAML never reaches it — `Frontmatter::parse()` raises
+Symfony's `ParseException` first, and that escapes `load()` uncaught (`getPrevious()` is null). The branch
+is reachable only for frontmatter that parses to a scalar, e.g. `---\nfoo\n---`. A round-58 draft assumed
+the wrong branch and asserted the filename appears in the message, which was red. Worth a test naming the
+scalar case, or a note saying which input reaches it.
