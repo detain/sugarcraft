@@ -15745,3 +15745,61 @@ is NOT evidence. One occurrence in two takes is not a diagnosis.
    test is holding the descriptors.
 4. Note for whoever runs step 1: `timeout` does not reliably kill a wedged PTY/FFI child. Spawn a
    watchdog that kills the ONE recorded pid and nothing else — a global `pkill` is prohibited here.
+
+### E491 — 🔴 `retryOnEintr()`'s EINTR detection could never be true, so candy-pty has NEVER retried an interrupted select
+
+**Measured 2026-08-25 by the round-55 supervisor** while writing the first behavioural test the helper
+has ever had (see [[E490]]). Severity: a signal turns an ordinary wait into a thrown exception, in a
+library whose entire job is talking to processes that send signals. **Fixed, mutation-checked.**
+
+`PosixMasterPty::retryOnEintr()` exists to retry `stream_select()` when it is interrupted; its docblock
+explains the design at length. It decided EINTR with `Libc::errno() !== Libc::EINTR`. **Measured, PHP
+8.3.6, reading errno on the line immediately after the call:**
+
+```
+stream_select returned: false after 1.00s      <- interrupted by SIGALRM
+Libc::errno() right after: 0   (EINTR = 4)     <- NOT EINTR
+error_get_last(): "stream_select(): Unable to select [4]: Interrupted system call (max_fd=4)"
+```
+
+PHP raises its own warning before returning, and that path resets the C-level errno before any userland
+code — an FFI shim included — can read it. So the guard was always true, the function returned `false` on
+every interruption, and **the retry loop had never executed a single time.** `read()` turns that `false`
+into `throw new PtyException('read.select_failed')`, so a plain SIGCHLD from a reaped child could surface
+as a fatal read error.
+
+**Why 55 rounds did not see it.** The helper's only test asserted `method_exists()` and inspected a
+`ReflectionMethod`, under a comment conceding *"We can't actually call retryOnEintr with invalid args due
+to by-ref signature."* Nothing ever CALLED it. A dead instrument reporting green — the same shape as
+[[E451]] and rule 35, now found in `src/` rather than in the harness.
+
+**FIXED** by reading the errno PHP still reports, in the warning text, and matching it NUMERICALLY:
+`/Unable to select \[(\d+)\]/` compared against `Libc::EINTR`. The strerror string is locale-dependent and
+"Interrupted system call" is not a stable token; the bracketed number is. `error_clear_last()` runs before
+each `stream_select()` so the message inspected is that call's. The errno read is KEPT and tried first —
+it is correct wherever it works and this is a fallback, not a replacement (rule 6).
+
+**A SECOND defect in the same function, fixed in the same commit.** The retry re-passed the caller's
+ORIGINAL `$sec`/`$usec`, so every interruption restarted the full wait. All three production callers pass
+a finite timeout (`MultiPump`, `PosixPump`, `read()`'s select arm), so all three could be stretched past
+their own deadline without bound by signals arriving faster than the timeout — which is exactly what a
+suite reaping children generates. A finite timeout is now a deadline computed once, with the remainder
+recomputed per retry; expiry returns `0` (nothing ready), never `false`, because callers turn `false` into
+a thrown exception and an expired deadline is not an error. A null timeout still means "block until
+ready" and is retried unchanged.
+
+**Acceptance is a mutation of THE FIX (rule 16), both halves independently:** reverting EINTR detection to
+errno-only KILLED it; disabling the deadline recompute KILLED it (3 s deadline → ~6 s wait). Restored:
+green. The timing test is the proof the retry runs at all — it now completes in **3.03 s for a 3 s
+deadline across three interruptions**, which the pre-fix code could not do in either direction.
+
+**The new test is gated, and the gates were chosen by measurement, not by copying.** This host has
+`pcntl_alarm` but NOT `pcntl_setitimer` (nor `ITIMER_REAL`), so the first draft — written against
+`setitimer` — SKIPPED SILENTLY and was worth nothing. Whole-second alarm granularity is why the deadline
+under test is 3 s rather than 1 s. The null-timeout arm is deliberately ungated so something still runs
+where the EINTR arm must skip.
+
+candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608 / 1401 / 16).
+
+**STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
+stays open on its own evidence.

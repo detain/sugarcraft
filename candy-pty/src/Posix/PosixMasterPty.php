@@ -338,20 +338,93 @@ final class PosixMasterPty implements MasterPty
      */
     public static function retryOnEintr(array &$read, ?array &$write, ?array &$except, ?int $sec, ?int $usec): int|false
     {
+        // A FINITE timeout is a deadline, so it is computed ONCE here and the
+        // remainder recomputed per retry. The retry used to re-pass the
+        // caller's original $sec/$usec, which restarts the full wait on every
+        // interruption: under a signal arriving faster than the timeout -- 200
+        // pty acquire/release cycles reaping children is exactly that -- the
+        // deadline never converges and the caller blocks past its own budget
+        // with nothing to show for it. Every production caller passes a finite
+        // timeout (MultiPump, PosixPump, and read()'s select arm), so every one
+        // of them was exposed. A null timeout means "block until ready" by
+        // contract and is retried unchanged.
+        $deadline = $sec === null ? null : \microtime(true) + $sec + (($usec ?? 0) / 1_000_000);
+
         while (true) {
+            // error_clear_last() so the message inspected below is THIS call's
+            // and never a stale one from earlier in the process.
+            \error_clear_last();
             $ready = @\stream_select($read, $write, $except, $sec, $usec);
             if ($ready !== false) {
                 return $ready;
             }
             // stream_select returned false — check if it was EINTR.
-            if (Libc::errno() !== Libc::EINTR) {
+            if (!self::wasInterrupted()) {
                 return false;
             }
             // EINTR: dispatch any pending signal handlers and retry.
             if (\function_exists('pcntl_signal_dispatch')) {
                 @\pcntl_signal_dispatch();
             }
+
+            if ($deadline !== null) {
+                $remaining = $deadline - \microtime(true);
+                if ($remaining <= 0) {
+                    // Timed out DURING the interruption. Reported as 0 (the
+                    // stream_select "nothing became ready" answer) rather than
+                    // false, because false means a real error and callers turn
+                    // it into a thrown PtyException -- an expired deadline is
+                    // not an error.
+                    return 0;
+                }
+                // Decomposed with intdiv/% so $usec can never reach 1_000_000,
+                // which stream_select rejects; same guard as read()'s arm.
+                $totalUsec = (int) ($remaining * 1_000_000);
+                $sec = \intdiv($totalUsec, 1_000_000);
+                $usec = $totalUsec % 1_000_000;
+            }
         }
+    }
+
+    /**
+     * Did the `stream_select()` that just returned `false` fail with EINTR?
+     *
+     * MEASURED on PHP 8.3.6: `Libc::errno()` reads 0 immediately after an
+     * interrupted `stream_select()`, not `EINTR`. PHP raises its own warning
+     * first, and that path resets the C-level errno before any userland code —
+     * FFI shim included — can read it. So the errno test this helper was
+     * originally written as could never be true, and the EINTR retry it guards
+     * had never executed once. Nothing caught it because the only coverage the
+     * function had was a `method_exists()` assertion.
+     *
+     * PHP does still report the number, in the warning text:
+     *
+     *     stream_select(): Unable to select [4]: Interrupted system call (max_fd=4)
+     *
+     * The bracketed value is errno, so it is matched NUMERICALLY rather than by
+     * the strerror string — `strerror()` output is locale-dependent and
+     * "Interrupted system call" is not a stable token, while `[4]` is.
+     *
+     * The errno read is kept and tried FIRST: it is correct wherever it works,
+     * costs one FFI call, and this fallback is only needed on builds that clear
+     * errno on the way out. Neither source is removed in favour of the other.
+     */
+    private static function wasInterrupted(): bool
+    {
+        if (Libc::errno() === Libc::EINTR) {
+            return true;
+        }
+
+        $last = \error_get_last();
+        if ($last === null || !isset($last['message'])) {
+            return false;
+        }
+
+        if (\preg_match('/Unable to select \[(\d+)\]/', (string) $last['message'], $m) !== 1) {
+            return false;
+        }
+
+        return (int) $m[1] === Libc::EINTR;
     }
 
     private function assertOpen(): void
