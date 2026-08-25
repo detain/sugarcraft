@@ -1466,15 +1466,6 @@ final class AgentWorkerPool
     }
 
     /**
-     * Build the pool's own executor when none was injected.
-     *
-     * Forwards {@see $workerProvider} and NOTHING else, deliberately: the
-     * simulation opt-in is not plumbed through here, so no construction of a
-     * pool can select a fabricating worker. The only way to reach that script
-     * is to build a {@see ProcessExecutor} directly and ask for it, which is
-     * what the executor's own tests do and what nothing in `src/` does.
-     */
-    /**
      * The provider spec this pool hands to the default executor it builds.
      *
      * Public because a caller that RECONSTRUCTS a pool has to carry it over,
@@ -1497,6 +1488,15 @@ final class AgentWorkerPool
         return $this->workerProvider;
     }
 
+    /**
+     * Build the pool's own executor when none was injected.
+     *
+     * Forwards {@see $workerProvider} and NOTHING else, deliberately: the
+     * simulation opt-in is not plumbed through here, so no construction of a
+     * pool can select a fabricating worker. The only way to reach that script
+     * is to build a {@see ProcessExecutor} directly and ask for it, which is
+     * what the executor's own tests do and what nothing in `src/` does.
+     */
     private function createDefaultExecutor(): ExecutorInterface
     {
         return new ProcessExecutor(workerProvider: $this->workerProvider);
