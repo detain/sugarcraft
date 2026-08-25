@@ -9,11 +9,13 @@ use PHPUnit\Framework\TestCase;
 /**
  * A CHILD BOUND AT THE TEST'S OWN CEILING IS A BOUND THAT NEVER REPORTS.
  *
- * This suite launches `bin/sugarcrush` as a real child in a dozen places, each
- * wrapped in `timeout -s KILL N` so a wedged child cannot stall the run. The
- * test then asserts on the child's exit status — 137 when the budget killed it,
- * something else when it did not — and that assertion is the whole point of the
- * wrapper.
+ * This suite launches a real child in a dozen places, each wrapped in
+ * `timeout(1)` so a wedged child cannot stall the run. The test then asserts on
+ * the child's exit status — 137 when the budget killed it, something else when
+ * it did not — and that assertion is the whole point of the wrapper. Most sites
+ * spell the wrapper `-s KILL N`; two spell it with no flag at all, and reading
+ * this paragraph as though the first spelling were the only one is how the
+ * census below came to miss them for as long as it did.
  *
  * BUT THE PARENT HAS A BUDGET TOO. `phpunit.xml` sets `enforceTimeLimit` with a
  * `defaultTimeLimit`, enforced by `pcntl_alarm()`, and with `failOnRisky` an
@@ -95,13 +97,26 @@ use PHPUnit\Framework\TestCase;
  * wrapper whose budget it cannot read as `unresolved` rather than as absent,
  * so the interpolated form reds instead of disappearing.
  *
- * AND THIS FILE DOES NOT SPELL EITHER FORM (rule 26, and rule 40 under it).
- * The census walks its own directory, so a wrapper-and-number written out in a
- * paragraph here is scraped as a real child budget and a wrapper-and-`%d` is
- * scraped as a real parametrised one — which is exactly how the liveness arm
- * below came to be satisfied by the sentence describing it. Every occurrence
- * in this file is assembled at run time, and
- * {@see testThisFileIsNotItsOwnEvidence()} pins that.
+ * THIS FILE IS INSIDE ITS OWN ROSTER, AND WHERE THAT BINDS HAS MOVED. WHAT
+ * THIS SAID: "this file does not spell either form … the census walks its own
+ * directory, so a wrapper-and-number written out in a PARAGRAPH here is scraped
+ * as a real child budget." WHAT IS TRUE NOW: a paragraph is not, and cannot be.
+ * {@see wallClockWrappersIn()} reads `T_CONSTANT_ENCAPSED_STRING` and
+ * `T_ENCAPSED_AND_WHITESPACE` and nothing else, so a comment is outside the
+ * scan by CONSTRUCTION rather than by everyone remembering not to write one —
+ * which is rule 40's point, an exemption keyed on structure and not on text.
+ * The old raw-text scan really did read prose, and really did count two
+ * doc-block sentences elsewhere in `tests/` as live child budgets.
+ *
+ * WHY THE DISCIPLINE STILL EARNS ITS PLACE, NARROWED: the constraint is now on
+ * STRING LITERALS, and it is stricter there than the old one was anywhere. No
+ * literal in this file may carry the wrapper followed by whitespace — not with
+ * a number after it, not with `%d`, not with nothing — because the trailing
+ * form is a reported row too. Every occurrence goes through the wrapper
+ * constant, whose two halves are literals carrying no wrapper at all, and
+ * {@see testThisFileIsNotItsOwnEvidence()} pins all three buckets rather than
+ * two. Prose may now say `timeout -s KILL N` in as many words as it likes; a
+ * fixture may not.
  *
  * MEASURED ON PHP 8.3.6, PHPUnit 10.5.64. `timeout(1)` is coreutils and is not
  * a PHP behaviour, so the stamp is provenance for the surrounding claims.
