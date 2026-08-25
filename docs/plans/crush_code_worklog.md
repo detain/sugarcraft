@@ -11597,6 +11597,148 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 57 — the merge went red on two guards, one of which was itself the defect, and E490 finally got a number
+
+**CLOSED at `CLOSESHA`, from base `1dea13c4f`.** Three lanes, nine agents, zero errors, 2h35m.
+Backlog **523 → 555**.
+
+| package | floor at close |
+|---|---|
+| **sugar-crush** | **10215 / 156961 / 1 skipped / rc 0** |
+| **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** |
+| candy-core | 842 / 7587 / 24 — **NOT re-run**, no lane touched it |
+| candy-flip | 83 / 227 / 2 — **NOT re-run** |
+| candy-mosaic | 459 / 7753 / 6 — **NOT re-run** |
+
+> The three untouched packages are carried forward, **not measured**. `git diff --name-only` shows no file
+> in any of them, so a run would have re-measured the floor and nothing else — but "unchanged" is an
+> inference here and the table says so rather than implying a fourth observation.
+
+### THE PREDICTION: TESTS EXACT FOR THE FOURTEENTH ROUND, AND TWO HONEST MISSES
+
+Predicted before the first merge: **10214 tests EXACT**, assertions **≥150,000** (a deliberately weak
+bound, with the reason written down). The merge measured **10214** — exact — and the FLOOR is **10215**
+because the merge went red and the fix added one test. **Those are two different numbers answering two
+different questions**, exactly as in round 53: 10214 is the prediction's verdict, 10215 is the floor.
+
+| claim | outcome |
+|---|---|
+| sugar-crush tests 10214 EXACT | ✅ **10214 at the merge** (14th consecutive) |
+| sugar-crush assertions ≥ 150,000 | ✅ **156961** — the bound was weak and said so |
+| skipped exactly 1 · rc 0 | ✅ |
+| candy-pty **≥ 632** tests | ❌ **630** — see below |
+| backlog 523 → 543–555 | ✅ **553** at the renumber, 555 after the merge findings |
+| backlog conflicts **3×**, one per lane merge | ❌ **2×** — lane a merged clean, being first |
+| every source set disjoint; **no second conflict at all** | ⚠️ **no second GIT conflict, but the merge went RED** |
+| (a) E493 falsified, not built | ✅ exactly |
+| (b) E494 lands, the round's only user-visible change | ✅ |
+| (c) E490 gets N takes and a stated bound, not a third "still open" | ✅ **exactly, and better than asked** |
+| (d) at least one lane reports its brief wrong | ✅ all three (3, 3 and 5 items) |
+| (e) at least one lane checks the ownership map | ✅ **one of three** — and it found a real defect |
+
+🔴 **THE candy-pty MISS IS INSTRUCTIVE AND THE PREDICTION EARNED IT.** ≥632 assumed E490 work would add
+tests. It did not, because **E490 work is a measurement campaign, not code** — the lane touched no
+`candy-*` file at all, verified with `git diff --name-only`, so candy-pty sat at its floor. The prediction
+had itself described E490 as "a measurement campaign, not code" three lines above the number it then
+contradicted. **A prediction can be internally inconsistent and still read as confident.**
+
+🔴 **AND THE CONFLICT PREDICTION WAS RIGHT ABOUT GIT AND WRONG ABOUT THE SUITE.** It said "EVERY SOURCE SET
+PREDICTED DISJOINT … this round predicts NO second conflict at all." No second *textual* conflict occurred.
+The merged suite went **red on two tests**. Round 53's prediction named this exact hazard in writing and
+round 57's did not — **the source sets were disjoint by FILE and overlapping by GUARD**, which is the one
+thing a file-level disjointness argument cannot see.
+
+### 🔴 THE RED MERGE — ONE GUARD FOUND A REAL DEFECT, THE OTHER GUARD *WAS* THE DEFECT
+
+Both failures were lane c's newly-widened guards firing on lanes a and b's brand-new files. Zero textual
+conflict; neither lane could have seen either alone.
+
+**E554 is real.** Lane b's new `tests/MCP/StdioMcpServerToolListRobustnessTest.php` stacked a 31-line
+doc-block directly above a second one. PHP attaches only the last of a run, so the first documented
+nothing, and the method it actually describes —
+`testTheTypeFilterStillMirrorsEveryKeyMcpToolReads()`, 120 lines below — carried no doc-block at all. Fixed
+by MOVING the block onto its method rather than merging the two, since they document different tests, with
+**attachment verified by `ReflectionMethod::getDocComment()` rather than by eye**.
+
+**E555 is the classifier.** Lane c's backtick widening scraped `` `SugarCraft\Crush\Tests\Backend` `` out of
+the four doubles lane a created — where the sentence explains which shared namespace they were lifted OUT
+of — and reported all four as dangling class citations. **Both files were correct.** The guard's blessed
+remedy is "rename the citation", and taking it would have damaged correct prose to satisfy a broken
+scanner. **RULE 33, third occurrence in four rounds.**
+
+Its author had anticipated the case and covered exactly half of it: the negative fixture already pinned
+that a namespace prefix spelled `Foo\Bar\` **with** its trailing separator is not scraped. The spelling
+**without** one reached the dangling list.
+
+🔴 **THE THIRD MUTATION IS THE PART WORTH KEEPING.** M1 and M2 of the fix died at once. M3 — dropping the
+empty-directory clause — **survived, and that was a fact about the tree rather than about the guard**: no
+empty directory exists under `tests/` or `src/` for it to trip over. Rule 41 says a survivor's excuse does
+not transfer and rule 15 says an unfired instrument is indistinguishable from a dead one, so the clause was
+made pinnable instead of excused: the new test creates a real empty directory, asserts the citation IS
+dangling, drops one `.php` file into it, and asserts through the same call that it is not. M3 now dies.
+
+**And the fix for E555 tripped E554's guard** — the new test stacked its own doc-block and stole the next
+method's, caught in the same run, on the supervisor, one commit after the pair caught the lanes.
+
+### 🔴 E490 — 53 TAKES, 0 EVENTS, AND A LANE THAT REFUSED TO CALL THAT A FIX
+
+Two rounds of "still open with a candidate" ended with an actual number. Arm A ran candy-pty alone **49
+times**, mostly concurrent with the lane's own sugar-crush runs, so a contended box is covered. **Arm C ran
+the experiment that had never been run** — the full sugar-crush suite then candy-pty back to back, the only
+context the single observed hang ever occurred in — four cycles, all byte-identical.
+
+**The lane then declined to close it, correctly.** The one-sided 95% upper bound on the per-take rate after
+53 clean takes is ≈**5.5%**; the prior estimate is ≈**1.3%**, which sits comfortably inside it. **So the
+round does not distinguish "round 56's leaked-timer fix closed it" from "it did not happen to fire."**
+Reaching the prior rate needs ≈230 consecutive clean takes. Arm B — takes at `a8acfcc9` versus `d38b644f4`
+— was deliberately NOT run, because two arms of 53 with zero events in each distinguish nothing.
+
+**The instrument was checked before the quiet run was believed** (rule 15): at `CANDY_PTY_HANG_BUDGET=0.6`
+the watchdog fired, SIGKILLed the runner at `rc=137`, and named the test, its in-flight time, its wchan
+line, its open-fd count and its children.
+
+### THE OWNERSHIP-MAP RATE MOVED, AND ONE OBSERVATION IS ALL IT IS
+
+Round 56 measured **0 of 3** lanes noticing a contradiction in their own brief, and rule 42 was added in
+response. Round 57's map was freshly written and flagged itself. **One lane of three checked it — and found
+a real defect**: the map granted lane b all of `sugar-crush/src/MCP/` while its brief's file list enumerated
+three files. The lane reported the disagreement, said which reading it followed, and explicitly did not
+resolve it. **0/3 → 1/3.** That is a movement, not a solution; round 58's map and file lists were reconciled
+against each other before launch so that any disagreement a lane finds next round is news.
+
+### WHAT ELSE THE LANES FOUND
+
+**Lane a** shipped E494 — the last hop of E456, so the model's thinking is finally painted — and then its
+review caught that the live display **froze past 120 characters**: frames for a 340-char and a 3790-char
+accumulation were byte-identical. It also found, by mutating its own fix, that a drift test it had just
+written **asserted a mechanism that is false** (appending `''` to a string accumulator is the identity, so
+the frame never changes), and corrected the prose rather than the test. **E493 was falsified, not built**,
+exactly as side-prediction (a) called.
+
+**Lane b** falsified two premises with measurements — E508's ("payload size is irrelevant") and its own
+Eb57-7, which it retracted against its own work — and found that the neighbour of a surviving mutation was
+**not** equivalent either, which is rule 41 firing in the round after it was written.
+
+**Lane c** wired `tools/check-path-repos.php`'s own guard into CI after finding it had existed, **unrun,
+for six months**, and measured that `tools/` sits outside every doc-drift roster in the tree — along with
+why the obvious one-line fix is wrong (it would red in the split clone where `tools/` does not exist).
+
+### NEW STANDING RULES
+
+- **43** — **a prescription can be honestly satisfied and still pin nothing.** Lane b was told to pin a
+  dormancy and did, with `assertLessThan($cap + 1, $cap)` — true whatever the code does. Measured: with the
+  header guard's bound mutated to `cap/2`, the suite stayed green. **Satisfy a prescription, then mutate
+  the thing it was supposed to pin.** Rule 38's mirror image.
+- **44** — **a review that quotes prose but names no file sends the fix agent to the wrong one.** Round 57's
+  MAJOR 3 quoted the sentences and said "committed in its own file"; the fix agent checked the obvious
+  candidate first, where the finding does not reproduce, and a less careful one would have called it false.
+- **45** — **N quiet takes bound a rate; they do not prove a fix.** The one-sided 95% bound is
+  `1 - 0.05^(1/N)`. State N, state the bound, state the N you would need.
+- **46** — **prose claiming derivation is not derivation.** Three framing classes each spell
+  `64 * 1024 * 1024` as their own literal under doc-blocks calling the value "inherited rather than
+  invented". Nothing pins the inheritance.
+
+
 ## ROUND 56 — a client restart killed all three implementers, the transcripts were the recovery channel, and the first prediction miss in thirteen rounds
 
 **CLOSED at `8e8af356a`, from base `d38b644f4`.** Three lanes, nine agents in the recovery run, zero
