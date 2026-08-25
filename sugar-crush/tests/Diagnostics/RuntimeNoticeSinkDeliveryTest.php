@@ -1351,7 +1351,7 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      *
      * EXTRACTED FROM THE GUARD SO THE ROSTER IS A PARAMETER, and the roster
      * being a parameter is the whole point: it lets
-     * {@see testAFileTheScanCannotReadFailsRatherThanScoringZero()} drive the
+     * {@see testARosterEntryTheScanCannotReadFailsRatherThanScoringZero()} drive the
      * unreadable-file arm at a scratch path instead of at a `0000` file created
      * inside `src/`.
      *
