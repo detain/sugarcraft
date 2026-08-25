@@ -428,8 +428,11 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         ];
 
         // E447. A TERNARY WHOSE ARMS AGREE. `candy-core/src/Program.php::runExec()`
-        // spells its spec `$req->captureOutput ? [0 => $in, 1 => ['pipe','w'],
-        // 2 => ['pipe','w']] : [0 => $in, 1 => $out, 2 => $err]`, and it was
+        // spells its spec `$req->captureOutput ? [0 => $childIn, 1 => ['pipe','w'],
+        // 2 => ['pipe','w']] : [0 => $childIn, 1 => $childOut, 2 => $childErr]`
+        // - copied from the source rather than paraphrased, because a quotation
+        // a reader cannot find by searching for it is worse than a summary -
+        // and it was
         // the ONE unreadable spec in the whole reachable closure. The refusal
         // was correct and the diagnosis was not: both arms carry the integer
         // keys 0, 1 and 2, so which fds the spec names does not depend on the

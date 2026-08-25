@@ -142,9 +142,11 @@ tension E453 is about. `DEFERRED_WIRING` is the release valve - a candidate
 confirmed by hand in the KEEP direction, recorded in the consuming lib's own
 manifest under `extra.sugarcraft.deferred-wiring.<package>`, prints with its
 reason and does not count as a finding. Pruning a dependency somebody
-deliberately kept, or deleting the CI step, were the only two exits before it. Each flagged require is annotated with
-`tests_uses: yes|no` (whether the lib's tests/ still reference the dep — a "yes"
-means the prune is a move-to-require-dev, not a delete). Findings are CANDIDATES:
+deliberately kept, or deleting the CI step, were the only two exits before it.
+
+Each flagged require is annotated with `tests_uses: yes|no` (whether the lib's
+tests/ still reference the dep — a "yes" means the prune is a
+move-to-require-dev, not a delete). Findings are CANDIDATES:
 confirm by hand before pruning (a dep referenced only via a string class-name or
 composer script, not a namespace, will read as unused here).
 
