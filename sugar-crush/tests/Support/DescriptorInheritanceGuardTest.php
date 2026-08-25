@@ -1112,6 +1112,18 @@ final class DescriptorInheritanceGuardTest extends TestCase
             }
         }
 
+        // What libSourceFiles() ACTUALLY yields, keyed by horizon segment. Its
+        // horizon keys keep their segment (`candy-pty/bin/pty-shim.php`) while
+        // an autoload root is stripped from its own, so the second path
+        // component is the segment for exactly the files this is counting.
+        $emitted = [];
+        foreach ($this->libSourceFiles() as $key => $_source) {
+            $parts = \explode('/', $key);
+            if (isset($parts[2]) && (self::LIB_HORIZON[$parts[1]]['walked'] ?? false) === true) {
+                $emitted[$parts[1]] = ($emitted[$parts[1]] ?? 0) + 1;
+            }
+        }
+
         // A closure of empty directories classifies perfectly.
         self::assertGreaterThan(
             100,
@@ -1164,6 +1176,29 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 counted as autoloaded and every arm here is quietly reading a
                 different set than it says it does.
                 TEXT);
+
+            // THE HALF THAT WAS MISSING, AND A MUTATION FOUND IT RATHER THAN A
+            // READING. Everything above this line is derived from a walk this
+            // TEST does over the filesystem. libSourceFiles() - the generator
+            // every other arm in this file consumes - is a SEPARATE walk, and
+            // nothing tied the two together: making libSourceFiles() skip every
+            // horizon segment outright, which is E449's widening reverted in
+            // one line, left all 14 tests green. The assertion total moved and
+            // no assertion failed, which is a silent narrowing with a roster
+            // still describing the wide behaviour.
+            //
+            // Rule 35's shape: the roster is not evidence that the walk reads
+            // what it says. Only the walk's own output is.
+            self::assertSame(
+                $walkedHits[$segment],
+                $emitted[$segment] ?? 0,
+                $segment . ' is rostered as walked and libSourceFiles() emitted '
+                    . ($emitted[$segment] ?? 0) . ' of its ' . $walkedHits[$segment] . ' files. '
+                    . 'The generator every other arm here consumes is reading a different set '
+                    . 'from the one this roster describes, so those arms are scanning less than '
+                    . 'they claim - which is exactly the invisibility E449 is about, reintroduced '
+                    . 'behind a roster that still says otherwise.',
+            );
         }
 
         \sort($unclassified);
