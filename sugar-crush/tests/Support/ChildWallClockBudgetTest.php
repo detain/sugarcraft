@@ -33,12 +33,22 @@ use PHPUnit\Framework\TestCase;
  * instead" — and had picked 20 seconds for exactly that reason. The prose was
  * right and unenforced; twelve later call sites were written without it.
  *
- * WHAT THIS ASSERTS, and it is a RELATION rather than a number: every literal
- * `timeout -s KILL N` in `tests/` has `N` strictly under the `defaultTimeLimit`
- * that `phpunit.xml` actually declares, with headroom. Both sides are READ from
- * the tree, so editing either one is caught: raising a child budget reds here,
- * and so does lowering `defaultTimeLimit` under an existing child budget. No
- * count is asserted (rule 18) — the census re-derives itself.
+ * WHAT THIS ASSERTS, and it is a RELATION rather than a number: every child
+ * wall-clock wrapper in `tests/` has a budget strictly under the
+ * `defaultTimeLimit` that `phpunit.xml` actually declares, with headroom. Both
+ * sides are READ from the tree, so editing either one is caught: raising a
+ * child budget reds here, and so does lowering `defaultTimeLimit` under an
+ * existing child budget. No count is asserted (rule 18) — the census
+ * re-derives itself.
+ *
+ * WHAT THIS SAID, AND THE SENTENCE WAS THE DEFECT: "every literal
+ * `<wrapper> -s KILL N`". That named the shape the scan could express, and the
+ * scan could express two. {@see childBudgets()} carries the measurement — two
+ * live sites used the plain unflagged form and neither census had ever seen
+ * them, so raising one to 300 against a 60-second parent limit left the whole
+ * guard green. The alphabet now covers the flags `timeout(1)` accepts, and a
+ * budget token it recognises but cannot evaluate becomes a REPORTED row rather
+ * than a silent absence.
  *
  * THE PARAMETRISED FORM IS EVALUATED NOW, AND FINDING THAT OUT COST THE CLAIM
  * THAT SAID IT NEED NOT BE. WHAT THIS PARAGRAPH SAID: a budget passed through
@@ -69,10 +79,21 @@ use PHPUnit\Framework\TestCase;
  * FALSIFICATION, not a figure this guard asserts — the guard asserts the
  * relation, and re-derives every number in it on every run.
  *
- * TWO INSTRUMENTS WALK THE SAME POPULATION, deliberately. The regex census
- * scrapes raw text and cannot read a value; the token census reads values and
- * only sees `sprintf()` calls. Either going blind is invisible on its own, and
- * neither can go blind without disagreeing with the other.
+ * TWO INSTRUMENTS WALK THE SAME POPULATION, AND THE CLAIM THAT THEY COVER EACH
+ * OTHER WAS TOO STRONG. WHAT THIS SAID: "either going blind is invisible on its
+ * own, and neither can go blind without disagreeing with the other." WHAT IS
+ * TRUE NOW: measured by mutation, one shape took BOTH out at the same instant.
+ * Respelling an existing budget as an interpolation — `"... KILL {$bound} ..."`
+ * — leaves no digits for the text census and no `%d` for the token census, so
+ * the site simply left the population: no row, no `unresolved` entry, and no
+ * disagreement for {@see testBothCensusesSeeTheSameParametrisedSites()} to
+ * catch, because two censuses that both see nothing agree perfectly. WHY THE
+ * PAIRING STILL EARNS ITS PLACE: the cross-check is real and it does catch a
+ * census going blind ONE AT A TIME, which is the likelier accident. What it
+ * cannot catch is a site LEAVING the population, and that is now a separate
+ * mechanism rather than a hope — {@see wallClockWrappersIn()} reports a
+ * wrapper whose budget it cannot read as `unresolved` rather than as absent,
+ * so the interpolated form reds instead of disappearing.
  *
  * AND THIS FILE DOES NOT SPELL EITHER FORM (rule 26, and rule 40 under it).
  * The census walks its own directory, so a wrapper-and-number written out in a
@@ -108,6 +129,19 @@ final class ChildWallClockBudgetTest extends TestCase
     private const REQUIRED_HEADROOM_SECONDS = 10;
 
     /**
+     * The wrapper command itself, spelled in halves.
+     *
+     * RULE 26/40, AND THIS FILE HAS PAID FOR IT ONCE ALREADY. The census walks
+     * `tests/`, which includes this file. Every occurrence of the command in
+     * this file's own STRING LITERALS goes through here, so no literal here
+     * ever carries the word followed by a space — which is the shape the scan
+     * below keys on. {@see testThisFileIsNotItsOwnEvidence()} pins that the
+     * census sees nothing here at all, and it is a token-stream fact rather
+     * than a promise about prose.
+     */
+    private const WRAPPER = 'time' . 'out';
+
+    /**
      * The per-test limit `phpunit.xml` actually declares, read rather than
      * remembered.
      *
@@ -137,38 +171,166 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
-     * Every literal child budget in `tests/`, and every parametrised one.
+     * Every child wall-clock wrapper in `tests/`, in all three classifications.
      *
-     * @return array{literal: list<array{0: string, 1: int, 2: int}>, parametrised: list<string>}
+     * WHAT THIS SAID, AND WHY THE SENTENCE COST MORE THAN THE CODE: "every
+     * literal child budget in `tests/`, and every parametrised one". WHAT IS
+     * TRUE NOW: it was never every one. The scan was
+     * `/<wrapper> -s KILL (\d+|%d)/` over raw source, and an alphabet is
+     * coverage (rule 11) — that one could express exactly two shapes and
+     * silently answered "no budget here" to everything else. MEASURED at the
+     * commit that widened it, two LIVE sites were invisible to it:
+     * `tests/Backend/CommandBackendTest.php` and
+     * `tests/Backend/StreamingCommandBackendTest.php` both wrap a probe in the
+     * plain `<wrapper> 10` form with no signal flag. Raising either to 300 —
+     * five times the parent's whole limit — left the guard GREEN. A second
+     * shape was worse: spelling an existing budget as an interpolation
+     * (`"... KILL {$bound} ..."`) removed the site from BOTH censuses at once,
+     * so it produced no `unresolved` row and no cross-census disagreement
+     * either, which falsified this file's own claim that neither instrument
+     * can go blind without the other noticing.
+     *
+     * WHAT THE ALPHABET IS NOW: the wrapper, optionally preceded by a printf
+     * conversion (`%s<wrapper>` is how one real site builds its prefix, and
+     * `\b` does not fire between `s` and `t`), then any run of the flags
+     * `timeout(1)` accepts ahead of its duration, then one budget token. The
+     * token is classified rather than required: a run of digits is `literal`,
+     * `%d` is `parametrised` and goes to the resolver, and ANYTHING ELSE the
+     * alphabet can recognise as a budget — another conversion, a `{$var}`, a
+     * shell `$VAR`, a suffixed duration like `10s` — becomes an `unresolved`
+     * row carrying the token it choked on (rule 14). So does a literal that
+     * ENDS at the wrapper, which is what an interpolated or concatenated budget
+     * looks like from inside the token stream.
+     *
+     * IT READS STRING LITERALS, NOT RAW TEXT, and that is the structural half
+     * (rule 40). The old raw scan also matched prose: two of the rows it
+     * reported at the widening commit were sentences in doc-blocks describing
+     * the shape, counted as real child budgets. Reading only
+     * `T_CONSTANT_ENCAPSED_STRING` and `T_ENCAPSED_AND_WHITESPACE` drops both
+     * without needing to know anything about what the prose says.
+     *
+     * WHAT IT STILL CANNOT SEE, said plainly rather than left to be discovered:
+     * a wrapper assembled ACROSS a concatenation in a way that puts no
+     * whitespace at the literal's end — `'time' . 'out 5 sh'` is invisible, and
+     * so is a budget built by `implode()` or read from a variable that never
+     * appears in a string. The first of those is this file's own discipline and
+     * would be a deliberate act anywhere else; the second lands in `unresolved`
+     * whenever the wrapper and the whitespace are in the same literal, which is
+     * every spelling seen in this tree.
+     *
+     * @return array{
+     *     literal: list<array{0: string, 1: int, 2: int}>,
+     *     parametrised: list<string>,
+     *     unresolved: list<string>,
+     * }
      */
     private function childBudgets(): array
     {
         $literal = [];
         $parametrised = [];
+        $unresolved = [];
 
         foreach (self::everyTestFile() as $relative => $path) {
-            $source = self::readOrFail($path);
             $label = 'tests/' . $relative;
 
-            // THE ALPHABET IS BOTH FORMS AND THE UNPARSEABLE ONE IS REPORTED,
-            // not dropped. `%d` is how the two files that got this right spell
-            // it, and a scan that matched only digits would report those as
-            // absent — the same clean-looking zero rule 14 is about.
-            preg_match_all('/timeout -s KILL (\d+|%d)/', $source, $matches, PREG_OFFSET_CAPTURE);
-            foreach ($matches[1] as $hit) {
-                $line = substr_count(substr($source, 0, (int) $hit[1]), "\n") + 1;
-                if ($hit[0] === '%d') {
+            foreach (self::wallClockWrappersIn(self::readOrFail($path)) as [$line, $kind, $seconds, $why]) {
+                if ($kind === 'literal') {
+                    $literal[] = [$label, $line, $seconds];
+
+                    continue;
+                }
+                if ($kind === 'parametrised') {
                     $parametrised[] = $label . ':' . $line;
 
                     continue;
                 }
-                $literal[] = [$label, $line, (int) $hit[0]];
+                $unresolved[] = $label . ':' . $line . ' — ' . $why;
             }
         }
         sort($literal);
         sort($parametrised);
+        sort($unresolved);
 
-        return ['literal' => $literal, 'parametrised' => $parametrised];
+        return ['literal' => $literal, 'parametrised' => $parametrised, 'unresolved' => $unresolved];
+    }
+
+    /**
+     * Every child wall-clock wrapper in ONE source, classified, from the tokens.
+     *
+     * The three classifications are `literal` (the budget is a run of digits,
+     * carried in element 2), `parametrised` (it is `%d`, and
+     * {@see resolvedParametrisedIn()} is what reads its value) and `unresolved`
+     * (element 3 says what the scan choked on). A shape this cannot reduce is
+     * NEVER dropped — a census that quietly ignores what it cannot parse has a
+     * hole shaped exactly like the next defect (rule 14).
+     *
+     * @return list<array{0: int, 1: string, 2: int, 3: string}>
+     */
+    private static function wallClockWrappersIn(string $source): array
+    {
+        // A printf conversion binds tight against the wrapper (`%s<wrapper>`),
+        // and `\b` does not fire between two word characters — so the left
+        // boundary has to name that case rather than rely on `\b`.
+        $before = '(?:^|[^A-Za-z0-9_%]|%[a-zA-Z]|%\d+\$[a-zA-Z])';
+        $flags = '(?:[ \t]+(?:-[sk][ \t]+[^\s\'"]+|--(?:signal|kill-after)=[^\s\'"]+'
+            . '|--(?:preserve-status|foreground|verbose)|-v))';
+        $budget = '(?:\d+|%\d+\$[a-zA-Z]|%[a-zA-Z]|\{\$[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*|\d[\w.]*)';
+        $whole = '/' . $before . self::WRAPPER . '\b(' . $flags . '*)[ \t]+(' . $budget . ')(?![\w.])/';
+        $cut = '/' . $before . self::WRAPPER . '\b(' . $flags . '*)[ \t]+$/';
+
+        $rows = [];
+
+        foreach (token_get_all($source) as $token) {
+            if (!\is_array($token)
+                || !\in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+                continue;
+            }
+            $text = $token[1];
+            $start = $token[2];
+            // A LITERAL CAN SPAN LINES, so the token's own line is where it
+            // BEGINS and the row's line is that plus the newlines ahead of the
+            // hit. The regex census used to derive this from a whole-file
+            // offset; the two agree.
+            $at = static fn (int $offset): int => $start + substr_count(substr($text, 0, $offset), "\n");
+
+            if (preg_match_all($whole, $text, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) > 0) {
+                foreach ($matches as $hit) {
+                    [$word, $offset] = $hit[2];
+                    if (preg_match('/^\d+$/', $word) === 1) {
+                        $rows[] = [$at($offset), 'literal', (int) $word, ''];
+
+                        continue;
+                    }
+                    if ($word === '%d') {
+                        $rows[] = [$at($offset), 'parametrised', 0, ''];
+
+                        continue;
+                    }
+                    $rows[] = [
+                        $at($offset),
+                        'unresolved',
+                        0,
+                        'the budget is `' . $word . '`, which is neither an integer literal nor '
+                        . 'the `%d` the token census knows how to follow. Spell it as a digit, '
+                        . 'or teach the resolver this shape — do not leave it unread',
+                    ];
+                }
+            }
+
+            if (preg_match($cut, $text, $tail, PREG_OFFSET_CAPTURE) === 1) {
+                $rows[] = [
+                    $at($tail[0][1]),
+                    'unresolved',
+                    0,
+                    'the wrapper is at the very END of a string literal, so its budget arrives '
+                    . 'from an interpolation or a concatenation and is not in any text this '
+                    . 'census can read. That shape is invisible to the token census too, which '
+                    . 'is why it reds here rather than going quiet in both',
+                ];
+            }
+        }
+
+        return $rows;
     }
 
     /**
@@ -186,7 +348,7 @@ final class ChildWallClockBudgetTest extends TestCase
      */
     private static function needle(): string
     {
-        return 'timeout -s ' . 'KILL ' . '%d';
+        return self::WRAPPER . ' -s ' . 'KILL ' . '%d';
     }
 
     /**
@@ -205,7 +367,10 @@ final class ChildWallClockBudgetTest extends TestCase
      * skipped what it could not read would report a clean tree over a roster it
      * had narrowed itself, which is exactly the hole the regex census left.
      *
-     * @return array{resolved: list<array{0: string, 1: int, 2: int}>, unresolved: list<string>}
+     * @return array{
+     *     resolved: list<array{0: string, 1: int, 2: int, 3: string}>,
+     *     unresolved: list<string>,
+     * }
      */
     private static function resolvedParametrisedIn(string $label, string $source): array
     {
@@ -247,7 +412,12 @@ final class ChildWallClockBudgetTest extends TestCase
             $row = $label . ':' . $token[2];
             $ordinal = self::conversionOrdinalOf($format);
             if ($ordinal === null) {
-                $unresolved[] = $row . ' — the placeholder is not among the format\'s conversions';
+                $unresolved[] = $row . ' — ' . (preg_match('/%\d+\$/', $format) === 1
+                    ? 'the format uses POSITIONAL conversions (`%n$`), which decouple conversion '
+                        . 'order from argument position — this resolver counts conversions and '
+                        . 'would answer a confident wrong number. Spell the budget without a '
+                        . 'positional conversion, or teach the resolver to read one'
+                    : 'the placeholder is not among the format\'s conversions');
 
                 continue;
             }
@@ -263,8 +433,8 @@ final class ChildWallClockBudgetTest extends TestCase
 
                 continue;
             }
-            foreach ($seconds as $value) {
-                $resolved[] = [$label, $token[2], $value];
+            foreach ($seconds as [$value, $via]) {
+                $resolved[] = [$label, $token[2], $value, $via];
             }
         }
 
@@ -272,24 +442,33 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
-     * One argument's value, as every integer it can be, or `null` and a reason.
+     * One argument's value, as every integer it can be WITH WHERE EACH CAME
+     * FROM, or `null` and a reason.
+     *
+     * THE PROVENANCE IS NOT DECORATION. A resolved row's `file:line` is the
+     * `sprintf()` CALL, and the number frequently lives somewhere else
+     * entirely — a `self::` constant near the top of the file, or an argument
+     * two callers away. A failure message that sends the reader to the call
+     * line and shows a number that is not written there is a message that
+     * costs a search; {@see tooLooseIn()} prints this instead.
      *
      * @param array{0: int, 1: int}  $span
      * @param array<string, ?int>    $consts
+     * @param array<string, true>    $seen
      *
-     * @return array{0: ?list<int>, 1: string}
+     * @return array{0: ?list<array{0: int, 1: string}>, 1: string}
      */
-    private static function resolveArgument(array $tokens, array $span, array $consts): array
+    private static function resolveArgument(array $tokens, array $span, array $consts, array $seen = []): array
     {
         $significant = self::significantIn($tokens, $span);
 
         if (\count($significant) === 1 && \is_array($tokens[$significant[0]])) {
             $only = $tokens[$significant[0]];
             if ($only[0] === T_LNUMBER) {
-                return [[(int) $only[1]], ''];
+                return [[[(int) $only[1], 'an integer literal at the call site']], ''];
             }
             if ($only[0] === T_VARIABLE) {
-                return self::resolveThroughParameter($tokens, $significant[0], $consts);
+                return self::resolveThroughParameter($tokens, $significant[0], $consts, $seen);
             }
         }
 
@@ -307,7 +486,7 @@ final class ChildWallClockBudgetTest extends TestCase
                 return [null, 'self::' . $name . ' is declared but its value is not an integer literal'];
             }
 
-            return [[$consts[$name]], ''];
+            return [[[$consts[$name], 'self::' . $name]], ''];
         }
 
         return [null, 'the argument is `' . self::textOf($tokens, $significant)
@@ -325,11 +504,16 @@ final class ChildWallClockBudgetTest extends TestCase
      * against the ceiling.
      *
      * @param array<string, ?int> $consts
+     * @param array<string, true> $seen
      *
-     * @return array{0: ?list<int>, 1: string}
+     * @return array{0: ?list<array{0: int, 1: string}>, 1: string}
      */
-    private static function resolveThroughParameter(array $tokens, int $variable, array $consts): array
-    {
+    private static function resolveThroughParameter(
+        array $tokens,
+        int $variable,
+        array $consts,
+        array $seen = [],
+    ): array {
         $name = $tokens[$variable][1];
 
         $function = null;
@@ -359,6 +543,17 @@ final class ChildWallClockBudgetTest extends TestCase
             return [null, $callee . '() has an unterminated parameter list'];
         }
 
+        // A HELPER THAT PASSES ITS OWN PARAMETER BACK TO ITSELF WOULD RECURSE
+        // UNTIL THE STACK DIES, and a PHP fatal is neither a kill nor a
+        // survival — it wedges the guard instead of reddening it, which is the
+        // one failure mode a mutation run cannot classify. Not present in this
+        // tree; refused rather than left to be discovered.
+        if (isset($seen[$callee])) {
+            return [null, $callee . '() is reached from inside its own argument list, so '
+                . 'resolving ' . $name . ' would recurse without end'];
+        }
+        $seen[$callee] = true;
+
         $position = null;
         foreach ($parameters as $index => $span) {
             foreach (self::significantIn($tokens, $span) as $j) {
@@ -386,12 +581,12 @@ final class ChildWallClockBudgetTest extends TestCase
             if ($arguments === null || !isset($arguments[$position])) {
                 return [null, 'a call to ' . $callee . '() passes nothing at position ' . $position];
             }
-            [$resolved, $why] = self::resolveArgument($tokens, $arguments[$position], $consts);
+            [$resolved, $why] = self::resolveArgument($tokens, $arguments[$position], $consts, $seen);
             if ($resolved === null) {
                 return [null, 'through ' . $callee . '() parameter ' . $name . ': ' . $why];
             }
-            foreach ($resolved as $value) {
-                $values[] = $value;
+            foreach ($resolved as [$value, $via]) {
+                $values[] = [$value, $name . ', passed to ' . $callee . '() as ' . $via];
             }
         }
 
@@ -443,9 +638,23 @@ final class ChildWallClockBudgetTest extends TestCase
      * `%%` IS AN ESCAPE AND NOT A CONVERSION, so a format carrying one before
      * the placeholder shifts every ordinal after it by one if that is missed —
      * which resolves the WRONG argument and answers a confident wrong number.
+     *
+     * AND A POSITIONAL CONVERSION BREAKS THE WHOLE PREMISE, so this refuses to
+     * answer at all rather than answering wrongly. `%n$` decouples the ordinal
+     * from the argument index: in `sprintf('%2$s <wrapper> -s KILL %d', 20, 300)`
+     * the placeholder is the SECOND conversion but consumes the FIRST argument,
+     * so counting conversions returns 300 where the truth is 20 — and inverted,
+     * a real budget of 300 resolves to 20 and passes. Positional conversions do
+     * already occur in this tree, just not in a wrapper format yet. Reporting
+     * `null` here routes the site into `unresolved` with that reason, which is
+     * rule 14: red on what it cannot parse, never a confident wrong number.
      */
     private static function conversionOrdinalOf(string $format): ?int
     {
+        if (preg_match('/%\d+\$/', $format) === 1) {
+            return null;
+        }
+
         $placeholder = strpos($format, self::needle());
         if ($placeholder === false) {
             return null;
@@ -610,7 +819,10 @@ final class ChildWallClockBudgetTest extends TestCase
     /**
      * Every parametrised budget in `tests/`, resolved, and every one that is not.
      *
-     * @return array{resolved: list<array{0: string, 1: int, 2: int}>, unresolved: list<string>}
+     * @return array{
+     *     resolved: list<array{0: string, 1: int, 2: int, 3: string}>,
+     *     unresolved: list<string>,
+     * }
      */
     private function resolvedParametrisedBudgets(): array
     {
@@ -657,27 +869,53 @@ final class ChildWallClockBudgetTest extends TestCase
      *
      * EXTRACTED BECAUSE A MUTATION OF IT SURVIVED. Written inline in the guard
      * below, widening the comparison by a hundred seconds — which switches the
-     * check off — passed the whole file: every budget in the tree is 20 against
-     * a ceiling of 50, so nothing sits near the boundary and no real row can
-     * tell a working comparison from a disabled one. That is rule 25 exactly:
+     * check off — passed the whole file, because no real row sat near the
+     * boundary and none could tell a working comparison from a disabled one.
+     *
+     * WHAT THIS SAID about why: "every budget in the tree is 20 against a
+     * ceiling of 50". WHAT IS TRUE NOW: that was not true even at the commit
+     * that wrote it. The resolver below reads 6 and 30 as well as 20, and the
+     * widened census reads 10 — the sentence described the shape the ceiling
+     * comparison was ORIGINALLY written against, not the tree it shipped into.
+     * WHY THE REASONING STILL EARNS ITS PLACE: the argument never depended on
+     * the population being uniform, only on its being far from the boundary,
+     * and it still is — the largest budget this census can see is 30 against a
+     * ceiling of 50. A number in this paragraph is exactly the thing that rots;
+     * {@see testTheComparisonRejectsBudgetsWhoseAnswerIsKnown()} derives the
+     * property instead. That is rule 25 exactly:
      * a fixture whose expected value is what a DEAD instrument returns proves
      * nothing. {@see testTheComparisonRejectsBudgetsWhoseAnswerIsKnown()} drives
      * this with rows either side of the boundary.
      *
-     * @param list<array{0: string, 1: int, 2: int}> $literal
+     * A ROW WHOSE VALUE IS NOT WRITTEN AT ITS OWN LINE SAYS SO, and that is the
+     * second reason this method exists rather than the first. The rows folded
+     * in from the token census carry a `file:line` that is the `sprintf()`
+     * CALL, while the number itself lives in a constant or in a caller's
+     * argument list — so a reader sent to `SuiteChildStdinIsolationTest.php:421`
+     * finds `-s KILL %d` there and no number at all. Element 3, when a row has
+     * one, is {@see resolveArgument()}'s provenance for that value, and it is
+     * printed rather than dropped.
+     *
+     * @param list<array{0: string, 1: int, 2: int, 3?: string}> $rows
      *
      * @return list<string>
      */
-    private function tooLooseIn(array $literal, int $ceiling): array
+    private function tooLooseIn(array $rows, int $ceiling): array
     {
         $tooLoose = [];
-        foreach ($literal as [$label, $line, $seconds]) {
-            if ($seconds > $ceiling) {
-                // ASSEMBLED for the same reason the fixture's expectations are:
-                // a literal here is a match for this census's own scan of this
-                // file.
-                $tooLoose[] = $label . ':' . $line . ' — ' . 'timeout -s ' . 'KILL ' . $seconds;
+        foreach ($rows as $row) {
+            [$label, $line, $seconds] = $row;
+            if ($seconds <= $ceiling) {
+                continue;
             }
+            // ASSEMBLED for the same reason the fixture's expectations are: a
+            // literal here is a match for this census's own scan of this file.
+            $report = $label . ':' . $line . ' — ' . self::WRAPPER . ' -s ' . 'KILL ' . $seconds;
+            $via = $row[3] ?? '';
+            if ($via !== '') {
+                $report .= ' (parametrised; the value is not at that line — it comes from ' . $via . ')';
+            }
+            $tooLoose[] = $report;
         }
 
         return $tooLoose;
@@ -703,7 +941,7 @@ final class ChildWallClockBudgetTest extends TestCase
         // is inside its own roster: a literal command-and-number written here
         // is scraped by the census as a real child budget, and the first draft
         // of this fixture reported ITSELF as two offenders.
-        $shape = 'timeout -s ' . 'KILL ';
+        $shape = self::WRAPPER . ' -s ' . 'KILL ';
         $this->assertSame(
             [
                 'fixture/OneOver.php:3 — ' . $shape . '51',
@@ -791,6 +1029,14 @@ final class ChildWallClockBudgetTest extends TestCase
                 $budgets['parametrised'],
                 static fn (string $row): bool => str_starts_with($row, $self . ':'),
             )),
+            // AND THE THIRD BUCKET, which is the one this file would land in if
+            // its own assembly ever slipped: a literal here that ends at the
+            // wrapper reports as `unresolved`, not as a budget, and would
+            // otherwise red the guard from inside the file that defines it.
+            array_values(array_filter(
+                $budgets['unresolved'],
+                static fn (string $row): bool => str_starts_with($row, $self . ':'),
+            )),
         );
 
         $this->assertSame(
@@ -839,10 +1085,20 @@ final class ChildWallClockBudgetTest extends TestCase
      * deriving it rather than remembering it.
      *
      * TWO INDEPENDENT INSTRUMENTS OVER ONE POPULATION, and they must agree
-     * (rule 14). The regex census scrapes raw text; the token census walks
-     * `sprintf()` calls. Either one going blind is invisible on its own — an
-     * empty verdict looks identical to a clean tree — and neither can go blind
-     * without the other disagreeing here.
+     * (rule 14). The text census scrapes string literals; the token census
+     * walks `sprintf()` calls. Either one going blind is invisible on its own —
+     * an empty verdict looks identical to a clean tree — and this is what says
+     * so when only ONE of them goes blind.
+     *
+     * WHAT THIS SAID: "neither can go blind without the other disagreeing
+     * here." WHAT IS TRUE NOW: that holds for a census being blinded and not
+     * for a site LEAVING the population. Measured by mutation, respelling a
+     * real budget as an interpolation removed it from both censuses in the same
+     * edit — no rows either side, so the counts still matched and this arm
+     * stayed green. WHY IT STILL EARNS ITS PLACE: one census going blind is the
+     * likelier accident and this is the only thing that catches it; the shape
+     * it cannot see is covered by {@see wallClockWrappersIn()}'s `unresolved`
+     * bucket instead, which reds on a wrapper whose budget it cannot read.
      *
      * THEY ARE COMPARED ON FILES AND COUNTS, NOT ON `file:line`, and that is
      * deliberate rather than a weakening: the regex reports the line of the
@@ -893,6 +1149,123 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
+     * The census classifies shapes whose answer is already known.
+     *
+     * RULE 15 AND RULE 25, AND THE ARM THAT PAID FOR THEM. The guard over the
+     * real tree asserts `[]` for `unresolved`, and `[]` is also what a census
+     * that matches NOTHING returns — so an empty verdict there is evidence
+     * only if something in the same suite shows the scanner still classifying.
+     * Every fixture here is a positive: each one names the classification it
+     * must produce, so a blinded scanner reds on the fixture rather than
+     * passing quietly over the tree.
+     *
+     * THE ALPHABET IS THE COVERAGE (rule 11), so the fixtures are chosen to be
+     * the shapes the OLD alphabet could not express rather than the ones it
+     * could. Two of them are the live sites it was measured to have missed —
+     * the plain form with no signal flag, and a budget arriving by
+     * interpolation — and the acceptance test for the widening is that these go
+     * red without it, not that the tree stays green with it.
+     *
+     * EVERY FIXTURE ASSEMBLES THE WRAPPER (rule 26). This file is inside the
+     * census's own roster; spelling the command here with a number after it
+     * would make the file its own evidence, which is the defect
+     * {@see testThisFileIsNotItsOwnEvidence()} exists to catch.
+     */
+    public function testTheCensusClassifiesShapesWhoseAnswerIsKnown(): void
+    {
+        $of = static function (string $body): array {
+            $rows = [];
+            foreach (self::wallClockWrappersIn("<?php\n" . $body . "\n") as [, $kind, $seconds, $why]) {
+                $rows[] = $kind === 'literal' ? 'literal:' . $seconds : $kind . ':' . $why;
+            }
+
+            return $rows;
+        };
+        $w = self::WRAPPER;
+
+        // THE PLAIN FORM, WITH NO SIGNAL FLAG. Two live sites spell it this way
+        // and the old alphabet — which required `-s KILL` — reported neither.
+        $this->assertSame(
+            ['literal:10'],
+            $of("shell_exec('" . $w . " 10 ' . PHP_BINARY);"),
+            'the plain wrapper form is not seen, which is the exact hole two live sites sat in',
+        );
+
+        // THE FLAGGED FORM, in every spelling timeout(1) takes ahead of the
+        // duration. If the flag run is not consumed, the FLAG is read as the
+        // budget and each of these becomes an unresolved row.
+        $this->assertSame(
+            ['literal:20', 'literal:21', 'literal:22', 'literal:23'],
+            $of(
+                "exec('" . $w . " -s KILL 20 x');\n"
+                . "exec('" . $w . " -k 5 -s KILL 21 x');\n"
+                . "exec('" . $w . " --signal=KILL 22 x');\n"
+                . "exec('" . $w . " --foreground 23 x');"
+            ),
+            'a flag run ahead of the duration is not consumed, so a flag is being read as the budget',
+        );
+
+        // A CONVERSION BOUND TIGHT AGAINST THE WRAPPER. One real site builds its
+        // prefix that way, and `\b` does not fire between `s` and `t` — a left
+        // boundary spelled `\b<wrapper>` misses it silently.
+        $this->assertSame(
+            ['literal:24'],
+            $of("exec(sprintf('%s" . $w . " -s KILL 24 %s', \$p, \$c));"),
+            'a wrapper preceded by a printf conversion is invisible, so a `%s`-prefixed launch '
+            . 'is certified as carrying no budget',
+        );
+
+        // THE PLACEHOLDER, which is the token census's half.
+        $this->assertSame(
+            ['parametrised:'],
+            $of("exec(sprintf('" . $w . " -s KILL %d x', \$n));"),
+            'the parametrised form is no longer routed to the resolver',
+        );
+
+        // AN INTERPOLATED BUDGET, which is the shape that used to vanish from
+        // BOTH censuses at once: no digits for this one and no `%d` for the
+        // token census, so it produced no row and no disagreement either.
+        $interpolated = $of("exec(\"" . $w . " -s KILL {\$bound} x\");");
+        $this->assertCount(1, $interpolated, 'an interpolated budget produced no row at all');
+        $this->assertStringStartsWith('unresolved:', $interpolated[0]);
+        $this->assertStringContainsString(
+            'END of a string literal',
+            $interpolated[0],
+            'the row for an interpolated budget does not say why it could not be read',
+        );
+
+        // AND EVERY OTHER TOKEN THE ALPHABET RECOGNISES AS A BUDGET BUT CANNOT
+        // EVALUATE lands in the same bucket WITH the token (rule 14).
+        foreach (['$BUDGET' => 'a shell variable', '10s' => 'a suffixed duration', '%s' => 'a string conversion'] as $token => $what) {
+            $row = $of("exec('" . $w . " -s KILL " . $token . " x');");
+            $this->assertCount(1, $row, $what . ' produced no row at all');
+            $this->assertStringStartsWith('unresolved:', $row[0], $what . ' was classified as a budget');
+            $this->assertStringContainsString('`' . $token . '`', $row[0], $what . ' was reported without naming the token');
+        }
+
+        // THE NEGATIVE HALF, and it is the reason this scan reads the TOKEN
+        // STREAM rather than raw text (rule 40). Prose that happens to use the
+        // word is not a launch, and neither is a doc-block describing one — the
+        // old raw scan counted two such sentences as real child budgets.
+        $this->assertSame(
+            [],
+            $of(
+                "/** the " . $w . " 90 in this sentence is prose */\n"
+                . "// and so is a " . $w . " -s KILL 91 in a line comment\n"
+                . "\$x = 'the " . $w . " after the fact never fired';"
+            ),
+            'prose is being counted as a child budget, so the census reports offenders that do '
+            . 'not exist and its empty verdict over the tree means less than it appears to',
+        );
+
+        // AND A BARE MENTION WITH NOTHING AFTER IT IS NOT A LAUNCH EITHER,
+        // which is exactly the discipline this file applies to itself: the
+        // wrapper at a literal's end with no trailing space is how every
+        // occurrence here is spelled.
+        $this->assertSame([], $of("\$s = '" . $w . "' . ' -s ' . 'KILL ' . 92;"));
+    }
+
+    /**
      * The resolver answers sources whose answer is already known.
      *
      * RULE 15 AND RULE 25 TOGETHER. `assertSame([], $unresolved)` over the real
@@ -921,26 +1294,65 @@ final class ChildWallClockBudgetTest extends TestCase
 
         // AN INTEGER LITERAL, and the placeholder is the only conversion.
         $plain = $of("function a() { sprintf('@BUDGET@', 21); }");
-        $this->assertSame([['fixture.php', 3, 21]], $plain['resolved'], 'a literal budget did not resolve');
+        $this->assertSame(
+            [['fixture.php', 3, 21, 'an integer literal at the call site']],
+            $plain['resolved'],
+            'a literal budget did not resolve',
+        );
         $this->assertSame([], $plain['unresolved']);
 
         // A `self::` CONSTANT, which is how four of the five real sites spell it.
         $const = $of("const B = 22;\nfunction a() { sprintf('@BUDGET@', self::B); }");
-        $this->assertSame([['fixture.php', 4, 22]], $const['resolved'], 'a self:: constant budget did not resolve');
+        $this->assertSame(
+            [['fixture.php', 4, 22, 'self::B']],
+            $const['resolved'],
+            'a self:: constant budget did not resolve, or resolved without saying where the '
+            . 'number actually lives',
+        );
 
         // THE ORDINAL, with a conversion AHEAD of the placeholder. A resolver
         // that always took argument 1 answers 'first' here and this reds.
         $shifted = $of("function a() { sprintf('%s @BUDGET@ %s', 'first', 23, 'third'); }");
-        $this->assertSame([['fixture.php', 3, 23]], $shifted['resolved'], 'the placeholder was counted as the wrong conversion');
+        $this->assertSame(
+            [['fixture.php', 3, 23, 'an integer literal at the call site']],
+            $shifted['resolved'],
+            'the placeholder was counted as the wrong conversion',
+        );
+
+        // AND A POSITIONAL CONVERSION IS REFUSED RATHER THAN MISCOUNTED. Here
+        // the placeholder is the SECOND conversion and consumes the FIRST
+        // argument, so a resolver that counts conversions answers 300 where the
+        // truth is 20 — greener than answering nothing, and wrong. MEASURED on
+        // PHP 8.3.6 rather than reasoned about: this exact format renders as
+        // `300 <wrapper> -s KILL 20`, because a positional conversion does not
+        // advance the sequential counter. The budget really is 20, and 300 is
+        // precisely the number the counting resolver would have certified.
+        $positional = $of("function a() { sprintf('%2\$s @BUDGET@', 20, 300); }");
+        $this->assertSame([], $positional['resolved'], 'a positional format was resolved by conversion order anyway');
+        $this->assertCount(1, $positional['unresolved'], 'a positional format was dropped rather than reported');
+        $this->assertStringContainsString(
+            'POSITIONAL',
+            $positional['unresolved'][0],
+            'the report of a positional format does not say what it choked on, so the reader '
+            . 'cannot tell it from any other unreadable budget',
+        );
 
         // AND `%%` IS AN ESCAPE, NOT A CONVERSION. Counting it shifts every
         // ordinal after it by one, which resolves 'first' instead of 24.
         $escaped = $of("function a() { sprintf('100%% %s @BUDGET@', 'first', 24); }");
-        $this->assertSame([['fixture.php', 3, 24]], $escaped['resolved'], '%% was counted as a conversion');
+        $this->assertSame(
+            [['fixture.php', 3, 24, 'an integer literal at the call site']],
+            $escaped['resolved'],
+            '%% was counted as a conversion',
+        );
 
         // A CONCATENATED FORMAT, which is how the longest real site spells it.
         $joined = $of("function a() { sprintf('@BUDGET@ ' . '%s', 25, 'tail'); }");
-        $this->assertSame([['fixture.php', 3, 25]], $joined['resolved'], 'a concatenated format string was not decoded');
+        $this->assertSame(
+            [['fixture.php', 3, 25, 'an integer literal at the call site']],
+            $joined['resolved'],
+            'a concatenated format string was not decoded',
+        );
 
         // THROUGH A PARAMETER, WITH TWO CALLERS AND TWO ANSWERS — the real
         // shape, and the reason the resolver returns a list rather than a
@@ -951,9 +1363,29 @@ final class ChildWallClockBudgetTest extends TestCase
             . "function b(int \$bound) { sprintf('@BUDGET@', \$bound); }"
         );
         $this->assertSame(
-            [['fixture.php', 6, 26], ['fixture.php', 6, 27]],
+            [
+                ['fixture.php', 6, 26, '$bound, passed to b() as self::LOW'],
+                ['fixture.php', 6, 27, '$bound, passed to b() as self::HIGH'],
+            ],
             $viaParameter['resolved'],
-            'a budget handed down as a parameter did not resolve to every value its callers pass',
+            'a budget handed down as a parameter did not resolve to every value its callers '
+            . 'pass, or resolved without naming the caller the value came from — which is the '
+            . 'half that makes a failure at line 6 readable, since line 6 has no number on it',
+        );
+
+        // AND A HELPER THAT FEEDS ITSELF IS REFUSED, not recursed into. A PHP
+        // stack fatal is neither a kill nor a survival: it wedges the guard
+        // instead of reddening it, which is the one outcome a mutation run
+        // cannot classify.
+        $cyclic = $of(
+            "function a() { \$this->b(3); }\n"
+            . "function b(int \$n) { \$this->b(\$n); sprintf('@BUDGET@', \$n); }"
+        );
+        $this->assertSame([], $cyclic['resolved']);
+        $this->assertStringContainsString(
+            'recurse without end',
+            $cyclic['unresolved'][0] ?? '',
+            'a self-feeding helper was followed rather than refused',
         );
 
         // AND THE RULE-14 HALF: what it cannot read is REPORTED WITH A REASON,
@@ -997,7 +1429,23 @@ final class ChildWallClockBudgetTest extends TestCase
         // token stream and checked here exactly like a literal, so a `%d` site
         // whose constant is raised over the ceiling reds in the same breath as
         // a digit would. {@see resolvedParametrisedIn()}
-        $rows = array_merge($this->childBudgets()['literal'], $this->resolvedParametrisedBudgets()['resolved']);
+        $budgets = $this->childBudgets();
+
+        // AND A SHAPE THE CENSUS COULD NOT REDUCE IS A RED, NOT A SHRUG
+        // (rule 14). This bucket is empty in this tree and the fixtures in
+        // {@see testTheCensusClassifiesShapesWhoseAnswerIsKnown()} are what
+        // stop that emptiness being the answer a dead scanner also gives.
+        $this->assertSame(
+            [],
+            $budgets['unresolved'],
+            'a child wall-clock wrapper was found whose budget this census cannot read, and it '
+            . 'is REPORTED rather than dropped: an unreadable budget certified as absent is '
+            . 'exactly the hole the old digits-or-%d alphabet left, and two live sites sat in '
+            . 'it. Spell the budget as a digit at the wrapper, or widen the alphabet in '
+            . 'wallClockWrappersIn() — do not delete the row',
+        );
+
+        $rows = array_merge($budgets['literal'], $this->resolvedParametrisedBudgets()['resolved']);
 
         $this->assertSame(
             [],
@@ -1023,8 +1471,22 @@ final class ChildWallClockBudgetTest extends TestCase
      * RULE 15. `assertSame([], $tooLoose)` above passes just as well when the
      * regex matches nothing at all — which is precisely what would happen if
      * someone reworded the launch helper. The literal population is the control;
-     * the parametrised list is named separately so the form this scan CANNOT
-     * evaluate is visible rather than quietly missing (rule 14).
+     * the parametrised list is named separately so that form stays visible
+     * rather than quietly missing (rule 14).
+     *
+     * WHAT THIS SAID: the parametrised list is named separately "so the form
+     * this scan CANNOT evaluate is visible". WHAT IS TRUE NOW: it is evaluated.
+     * {@see resolvedParametrisedBudgets()} walks the token stream and resolves
+     * every one of those sites to a number, and
+     * {@see testEveryChildWallClockBudgetLeavesTheParentAlarmRoomToLose()}
+     * folds the results in beside the literal rows and compares both against
+     * the same ceiling. WHY THE ARM STILL EARNS ITS PLACE: it is no longer
+     * about what cannot be evaluated, it is the liveness control for the
+     * REGEX census specifically. That census is what tells the token census
+     * which files to look at, and a rewording that blinds it would leave the
+     * resolver walking an empty roster and reporting a clean tree —
+     * {@see testBothCensusesSeeTheSameParametrisedSites()} only catches a
+     * disagreement, and two censuses that both see nothing agree perfectly.
      */
     public function testTheParametrisedFormIsSeenAndReported(): void
     {
@@ -1040,10 +1502,11 @@ final class ChildWallClockBudgetTest extends TestCase
         $this->assertNotSame(
             [],
             $budgets['parametrised'],
-            'no `timeout -s ' . 'KILL %d` site is being reported. Either every file that passes '
+            'no `' . self::WRAPPER . ' -s ' . 'KILL %d` site is being reported. Either every file that passes '
             . 'its budget through sprintf() has been rewritten — in which case this arm should '
-            . 'go — or the scan has stopped seeing that form, and it is exactly the form whose '
-            . 'value this guard cannot check. NOTE the needle above is ASSEMBLED: spelling it '
+            . 'go — or the scan has stopped seeing that form, and this census is what hands '
+            . 'the resolver its roster: blind it and the resolver walks an empty tree and '
+            . 'reports it clean. NOTE the needle above is ASSEMBLED: spelling it '
             . 'here makes this file its own evidence, which is how this arm passed while the '
             . 'scan was blind to every other file '
             . '(see testThisFileIsNotItsOwnEvidence())',
