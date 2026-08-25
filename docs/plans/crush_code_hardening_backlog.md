@@ -17458,3 +17458,155 @@ existing one, so the method below it lost its documentation — caught immediate
 sibling finding this entry sits beside, in the same run. **That is the guard pair working exactly as
 intended, on the supervisor, one commit after it caught the lanes.**
 
+
+### Ea58-1 — 🔴 E529 IS FALSE AS FILED, and the figure it missed was hiding across a line break
+
+**Round 58, lane a. MEASURED.** E529 says `src/Context/RepoMapBlock.php` carries two `src/`
+cardinalities (297 and 316) that nothing verifies, citing that `tests/Context/RepoMapBlockTest.php`
+matches neither. It matches neither because the guard is not there. `RepoMapBlock.php`'s own doc-block
+names `BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()`, and that test asserts BOTH
+restatements against the derived census with `assertStringContainsString(sprintf(...))`.
+
+| mutation of the PROSE | result |
+|---|---|
+| `` `src/` here declares 316 top-level `` → `317` | `BuiltInToolCorpusTest` **RED** |
+| `` `src/` here is 297 files `` → `298 files` | `BuiltInToolCorpusTest` **RED** |
+
+**Rule 44 in its purest form: the finding was written by looking at the wrong file.** This is the
+eleventh wrong reviewer/brief prescription across five rounds.
+
+🔴 **WHAT IT MISSED IS THE INTERESTING HALF.** The same file carried a THIRD restated cardinality —
+"Measured on this checkout it finds 58 packages…" — pinned by nothing. It was correct (measured:
+`RepoMapBlock::capture()` on this root returns exactly 58), and it was **invisible to a line-oriented
+search**, because the doc-block wraps between `finds 58` and `packages`. **A round whose entire subject
+was this file's restated censuses walked straight past it.** Rule 17 is usually cited about matching
+prose in a test; it applies just as hard to a human or an agent grepping for a finding.
+
+**Resolution:** the digits are gone rather than corrected. The load-bearing half was never the count, it
+was "GENERICALLY, from those manifests" — the reason the monorepo half of P8.8 is not a parser for
+`docs/MATCHUPS.md` and `PROJECT_NAMES.md`. That is now measured against a fixture whose two markdown
+documents carry sentinels the render must not contain, with the positive half and an on-disk sentinel
+check in the same test. Mutation: making `capture()` read the two documents kills it.
+
+**FOR THE NEXT CENSUS-HUNTING ROUND:** a figure that wraps across a doc-block line is not findable by
+grep. Flatten `^\s*\*\s?` before searching for a restated number, or the search reports zero for the
+same reason the assertion would have.
+
+### Ea58-2 — the implicitly-nullable scanner was blind to TWO of PHP's own spellings
+
+**Round 58, lane a. E526/E531 closed.** E526's remaining two offenders were exactly where the class
+doc-block said — `src/Workflows/Workflow.php::mutate()` — and are fixed; the guard now WALKS all of
+`src/` instead of globbing one directory.
+
+E531 is the half worth keeping. Enumerating the alphabet (rule 11) found two real misses, both measured
+on PHP 8.3.6:
+
+| spelling | before | why it matters |
+|---|---|---|
+| `callable $a = \null` | **MISSED** | one `T_NAME_FULLY_QUALIFIED` token, so the literal compare saw `\null`. Reflects as `?callable`, `allowsNull()` true — the same implicit nullability, the same 8.4 deprecation |
+| `fn (callable $a = null) => 1` | **MISSED ENTIRELY** | arrow functions declare parameters under `T_FN`, which was outside the keyword alphabet. A guard whose whole subject is that spelling was blind to one of the two ways PHP spells a function |
+
+`PARAM_KINDS` now names every verdict the classifier can reach, checked in BOTH directions — the tree
+census reds on a kind that is not named, and a fixture test reds on a named kind nothing can produce.
+Without the second, the cure for the first is to append a name and the constant decays into a comment.
+
+🔴 **AND BOTH WIDENINGS SHIPPED UNPINNED, IN THE SAME COMMIT.** `PARAMETER_LIST_KEYWORDS`' doc-block
+cited `parameterListKeywordSpellings()` — **a method that was never written.** Reverting the constant to
+`[T_FUNCTION]`, the entire widening, left the file GREEN. Rule 41 then applied: the neighbour one line
+away, the `\null` fix, was **also** unpinned and also green when reverted. **Two dead widenings in one
+commit, both found by mutating the fix rather than by reading it (rule 43), and the second only because
+the first was killed and its neighbours were mutated anyway.**
+
+### Ea58-3 — E528 is a SEAM, not a drift; the guard's silence was correct
+
+**Round 58, lane a. Both halves of the finding refuted with measurements.** E528 asks for the two
+`runOnScaledClock()` copies to be consolidated, and warns that `DuplicatedTestHelperDriftTest` "exists to
+catch exactly this and did not".
+
+**WHY THE GUARD DID NOT FIRE:** because this pair is outside its stated alphabet, in writing. It reports
+same-named private helpers whose bodies agree except for at most `DRIFT_BOUND` (= 1) tokens per side, and
+lists "TWO TOKENS APART OR MORE" **first** under WHAT IT DELIBERATELY CANNOT SEE. Driving that guard's own
+`driftReport()` at widening bounds on PHP 8.3.6:
+
+| bound | names reported | `runOnScaledClock` |
+|---|---|---|
+| 1 (shipped) | 13 | absent |
+| 2 | 16 | absent |
+| 16 | 48 | absent |
+| 128 | 134 | absent |
+| unbounded | 152 | **present**, cores 165 vs 128 |
+
+It is a DRIFT detector. These two are not a drifted copy; they are two different helpers sharing a name.
+
+**WHY THEY ARE NOT CONSOLIDATED:** `EngineBackendTest::runOnScaledClock()`'s doc-block already argued it
+AND stated the trigger — "if a third caller appears, promote it to `Support/`". There is no third caller.
+Rule 6: the seam is documented and its dormancy pinned, not deleted. What was genuinely missing is that
+the trigger was a **sentence** — it fired only if whoever added the third copy happened to read the right
+doc-block first. `ScaledClockHelperSeamTest` is that trigger as a test, with the remedy in its failure
+text in both directions, a token recogniser checked in both polarities, and the "these are two different
+helpers" claim keyed on parameter count rather than on either doc-block's prose (rule 40).
+
+### Ea58-4 — the brief's own E527 premise was inverted, and PHP is not symmetric here
+
+**Round 58, lane a. RE-MEASURED independently on PHP 8.3.6**, after the killed lane-a agent's file
+recorded the same conclusion. The round brief states: *"PHP lets an implementation declare fewer
+parameters than its interface, so a new one added to the interface is silently absent in every
+implementation that does not take it."* **False in both halves.**
+
+| case | PHP 8.3.6 |
+|---|---|
+| implementation declares FEWER parameters than the interface | `Declaration of X::m() must be compatible with I::m()` — **load-time fatal, rc 255** |
+| implementation declares MORE, all OPTIONAL | **accepted** |
+| implementation declares MORE, one REQUIRED | **load-time fatal, rc 255** |
+| surplus positional argument at the CALL to a userland method | **silently dropped**, no diagnostic |
+
+The silent-surplus behaviour the inverted claim describes is real and belongs to the **call**, not the
+declaration — and it is exactly why `ObservesReasoning` redeclares `completeAsync()` instead of being a
+bare marker interface: a marker would make the capability a promise, and a four-parameter backend would
+swallow the fifth argument with the suite green.
+
+**`src/Backend.php` already carried the doc-block E527 asked for, and it states the rule CORRECTLY.**
+What was missing was the measurement behind its "(measured; …)". That is now
+`tests/Backend/BackendContractWideningTest.php`.
+
+### Ea58-5 — three `catch (\Throwable)` sites in `tests/Backend/`, and what they actually cost
+
+**Round 58, lane a.** E546's family is lane b's this round and lane b is fenced out of `tests/Backend/`,
+so these three were reachable by nobody else. **They are NOT E546's shape** — no assertion runs inside
+the `try`, so PHPUnit's own `ExpectationFailedException` cannot be swallowed from the test body, and
+reporting them as silent-pass defects would have been wrong.
+
+What they cost is the **diagnostic**. `awaitPromise()` ends in `$this->fail('Promise did not settle
+within the test timeout')`. Measured, by shrinking that helper's safety timer so the promise cannot
+settle:
+
+| | failure text |
+|---|---|
+| bare `catch (\Throwable)` | `Failed asserting that 'Promise did not settle within the test timeout' contains "cancelled"` |
+| narrowed | `Promise did not settle within the test timeout` |
+
+Both red; only one names the problem. The two `CommandBackend` copies assert `instanceof RuntimeException`
+instead, where the real message is not quoted at all.
+
+### Ea58-6 — this round's ownership map and lane a's file list DISAGREE, again
+
+**Round 58, lane a. Reported, not resolved.** The brief states the map and each lane's file list "were
+reconciled before launch, deliberately", so a disagreement is news. There is one:
+
+* **map, lane a bullet:** `sugar-crush/tests/Context/` — the whole directory
+* **lane a's own FILES section:** `sugar-crush/tests/Context/RepoMapBlockTest.php` — one file of eleven
+
+Lane a followed the intersection and touched only `RepoMapBlockTest.php`, so nothing was breached either
+way. **This is the same shape round 57's lane b found (`src/MCP/`), one round after the reconciliation
+that was supposed to prevent it.** The rate of lanes checking the map is now 2/6 across two rounds.
+
+### Ea58-7 — a mutation harness that scored "No tests executed!" as a SURVIVAL
+
+**Round 58, lane a, found in its own harness.** A `--filter` naming a method that does not exist makes
+PHPUnit print `No tests executed!` and **exit 0**, which the harness read as "the mutation survived". Two
+verdicts were produced that way before the filter typo was noticed. This is round 44's family (`--filter`
+silently overridden; `grep -c` reporting nothing on control bytes) with a fourth proximate cause.
+
+The harness now refuses a run whose output contains `No tests executed`, and that refusal has its own
+known-answer control. **Rule 14 applies to the mutation harness itself: a verdict it cannot compute must
+be a DISCARD, never a survival — and "survival" is the direction that silently retires a finding.**
