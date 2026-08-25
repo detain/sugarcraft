@@ -325,7 +325,16 @@ final class ChildWallClockBudgetTest extends TestCase
 
             if (preg_match($cut, $text, $tail, PREG_OFFSET_CAPTURE) === 1) {
                 $rows[] = [
-                    $at($tail[0][1]),
+                    // GROUP 1, NOT THE WHOLE MATCH. `$before` CONSUMES the
+                    // character ahead of the wrapper, and in a multi-line
+                    // literal that character is the newline — so the whole
+                    // match starts on the previous line and the row was short
+                    // by one. The flag run starts immediately after the
+                    // wrapper and cannot contain a newline, so its offset is
+                    // on the wrapper's own line whether or not it is empty.
+                    // The other arm was already right: it reports from the
+                    // BUDGET group, which is past the flags.
+                    $at($tail[1][1]),
                     'unresolved',
                     0,
                     'the wrapper is at the very END of a string literal, so its budget arrives '
@@ -1314,6 +1323,20 @@ final class ChildWallClockBudgetTest extends TestCase
             $of("\$b = <<<SH\nfoo\n" . $w . " 49 y\nSH;"),
             'a wrapper on the second line of a heredoc body is reported at the line the body '
             . 'starts on rather than at its own',
+        );
+
+        // AND THE SAME CORRECTION ON THE OTHER ARM, which is where rule 41 sent
+        // me: the two multi-line fixtures above pinned the WHOLE-MATCH arm and
+        // the mutation ONE LINE AWAY — the unresolved arm's own offset — still
+        // survived. Excusing a survivor does not transfer to its neighbour, and
+        // neither does killing one.
+        $trailing = $of("\$c = \"foo\nbar\n" . $w . " -s KILL {\$x} y\";");
+        $this->assertCount(1, $trailing, 'a multi-line interpolated wrapper produced no row');
+        $this->assertStringStartsWith(
+            '4:unresolved:0:',
+            $trailing[0],
+            'an interpolated wrapper on the third line of a multi-line literal is reported at '
+            . "the literal's own line rather than at its own",
         );
 
         // THE NEGATIVE HALF, and it is the reason this scan reads the TOKEN
