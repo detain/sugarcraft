@@ -248,7 +248,11 @@ final class BackendContractWideningTest extends TestCase
                 continue;
             }
             $count = (new \ReflectionMethod($class, 'completeAsync'))->getNumberOfParameters();
-            ($count === 4 ? $narrow : $wide)[] = $class . " ({$count})";
+            if ($count === 4) {
+                $narrow[] = $class . " ({$count})";
+            } else {
+                $wide[] = $class . " ({$count})";
+            }
         }
 
         $this->assertNotSame(
