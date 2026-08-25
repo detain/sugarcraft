@@ -6,9 +6,23 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## ⏸️ ROUND 56 IS PREPPED BUT **NOT LAUNCHED** — the user asked to pause here
+## 🟢 ROUND 56 IS **RUNNING** — launched 2026-08-25, run id `wf_7c73518b-ad8`
 
-**Round 55 is CLOSED and merged. Round 56 is built, validated, and waiting on one word.** Script
+**Round 55 is CLOSED, merged and PUSHED. Round 56 launched from base `d38b644f4`** — nine agents,
+three lanes, `implement -> review -> fix` pipelined. Prediction written BEFORE the first merge to
+`round56-prediction.txt` in the session scratchpad: **10167 tests EXACT**, assertions **>= 152,200** as a
+lower bound, skip count pinned at **1**, plus a predicted second conflict in
+`sugar-crush/src/Runtime.php` (lane a owns it for E456 while lane b dispatches MCP tools through it) and
+three falsifiable side-predictions, the sharpest being that **E490 will NOT be root-caused this round**.
+If a lane claims a root cause for E490, demand the reproducer before believing it.
+
+⚠️ **Two defects were found in the prepped script at launch time and fixed** — its `COMMON` block still
+carried round 55's BASE floors (`9946 / 144269 / 1`, candy-core `819 / 7390 / 25`) and omitted candy-pty
+entirely, while the per-lane briefs carried the correct ones. Every lane would have measured a baseline
+that disagreed with its own rule block. **A prepped-but-unlaunched script is not a validated script:
+re-check its floors against the base commit at launch, because the base moved after it was written.**
+
+Script
 (DURABLE path — never launch from a scratchpad path, `/tmp` does not survive a reboot):
 `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-56.js`
 
@@ -68,17 +82,18 @@ most valuable thing to come out of it, and it is unrecoverable afterwards.
 
 ### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
 
-1. 🔴 **THE PUSH STATE IS NOT WHAT THIS FILE SAID, AND NOBODY IN THIS SESSION RAN `git push`.**
-   VERIFIED with `git ls-remote origin master`: **`758f44d12` IS on `detain/sugarcraft`** — so round 55's
-   three lane merges and the E458-E489 renumber are PUBLIC and CI has run on them. The main repo's
-   reflog records three pushes on 2026-08-25 (01:07, 01:20, 04:09), all as `update by push`, meaning they
-   originated from `/home/sites/sugarcraft` itself. **No hook explains it**: `.git/hooks/` contains only
-   `.sample` files, `core.hooksPath` is unset, and no matching cron was found. The supervisor did not
-   issue any of them. Working assumption: the user pushes from their own terminal. **Do not treat "I did
-   not push" as "it is not published" in this repo — check `git ls-remote` instead.**
-   Still LOCAL-ONLY at the time of writing: `c03affeec` (E490), **`d38b644f4` (the candy-pty src fix)**
-   and `d421a364b` (the round-55 close). Confirm with `git rev-list --count origin/master..HEAD` rather
-   than trusting this line — it has already been wrong once.
+1. ✅ **NOTHING IS UNPUSHED — and the "repo pushes itself" mystery is CLOSED: it is the user.**
+   VERIFIED `git ls-remote origin master` == local `HEAD` == **`4ecff10d3`, 0 unpushed**. Round 55's three
+   lane merges, the E458-E489 renumber, **the candy-pty `retryOnEintr` src fix (`d38b644f4`)** and the
+   round-55 close are all PUBLIC, and CI has run on them. Earlier this file recorded three unexplained
+   pushes on 2026-08-25 (01:07, 01:20, 04:09) logged as `update by push` from `/home/sites/sugarcraft`
+   itself, with no hook, no `core.hooksPath` and no cron to explain them — **the user confirmed they push
+   from their own terminal.** No automation is involved.
+   **The rule that survives this: never infer publication state from your own actions.** "I did not run
+   `git push`" does NOT mean "it is not published" in this repo, because a second party pushes the same
+   working copy. Check `git ls-remote origin master` — that is the only reliable answer, and this line has
+   already been wrong once in the other direction.
+
 2. **E490 is open and unexplained** — 1 hang in ~76 takes, 0/60 on `--filter PtyPool`, 0/15 full-suite.
    The untried experiment is the one context it actually happened in: sugar-crush THEN candy-pty, in the
    same script, repeatedly. Lane c owns it.

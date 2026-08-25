@@ -114,7 +114,7 @@ E457 also cost a lesson worth more than the finding: the first control written t
 inverted match can select, so the control could never pass. A control must be a known positive, and
 asserting the known negative too catches an implementation that answers yes to everything.
 
-### A correction worth carrying forward: this repo pushes itself
+### A correction worth carrying forward: the supervisor does not control publication
 
 The supervisor told the user twice that round 55's work was unpushed. **It was not.**
 `git ls-remote origin master` returns `758f44d12`, so the lane merges and the renumber were already on
@@ -126,6 +126,14 @@ The lesson is procedural, not forensic: **"I did not push" is not evidence that 
 `git ls-remote` is, and it costs one command. This matters because the push authorisation model in this
 plan assumes the supervisor controls when work becomes public, and that assumption is false here. Anything
 that must NOT reach GitHub cannot be protected by declining to push it.
+
+**RESOLVED, same day.** The user confirmed the pushes are theirs, issued by hand from their own terminal
+against the same working copy — there is no automation, no hook and no cron, and the forensic search for
+one was looking for the wrong kind of cause. Round 55's close plus the candy-pty `retryOnEintr` fix
+(`d38b644f4`) went public the same way, and `git ls-remote origin master` now matches local `HEAD` at
+`4ecff10d3` with 0 unpushed. The procedural lesson is unchanged and is the part worth keeping: publication
+state is a property of the remote, not of your own action log, and a second party can change it between
+any two of your commands.
 
 ### Backlog
 
