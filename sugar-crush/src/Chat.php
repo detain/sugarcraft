@@ -29,7 +29,9 @@ use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 use SugarCraft\Crush\Tui\Pane;
 use SugarCraft\Crush\Tui\SessionPicker;
 use SugarCraft\Crush\Backend\CancellationToken;
+use SugarCraft\Crush\Backend\ObservesReasoning;
 use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Events\ReasoningDelta;
 use SugarCraft\Crush\Events\TokenDelta;
 use SugarCraft\Crush\Events\ToolFinished;
 use SugarCraft\Crush\Events\ToolStarted;
@@ -172,12 +174,13 @@ final class Chat implements Model
      * {@see AssistantMsg::$generation}.
      *
      * Also carries {@see TokenDelta}s — the assistant's reply as it is written
-     * (crush_code.md Phase 0 item 13) — on this SAME queue rather than one of
-     * its own, because the order of "the model said this" against "the model
-     * called that tool" is the story of an agentic turn and two queues could
-     * not preserve it.
+     * (crush_code.md Phase 0 item 13) — and {@see ReasoningDelta}s — the
+     * model's thinking while it writes it (E456/E494) — on this SAME queue
+     * rather than ones of their own, because the order of "the model thought
+     * this", "the model said this" and "the model called that tool" is the
+     * story of an agentic turn and three queues could not preserve it.
      *
-     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta}>
+     * @var \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta|ReasoningDelta}>
      */
     private readonly \ArrayObject $liveToolEvents;
 
@@ -793,6 +796,27 @@ final class Chat implements Model
          */
         private readonly string $streamingText = '',
         /**
+         * The model's THINKING so far this step — the accumulation of this
+         * turn's {@see ReasoningDelta}s, drained off {@see $liveToolEvents} by
+         * {@see pumpLiveToolEvents()} (E456/E494).
+         *
+         * A field of its own rather than a flavour of {@see $streamingText},
+         * and the separation is a CORRECTNESS boundary, not a styling one.
+         * {@see Runtime::runStreaming()} accumulates the token channel's bytes
+         * into the {@see Messages\AssistantMessage} that the agentic loop feeds
+         * back to the model and that the transcript checkpoints; the two
+         * accumulators are painted differently AND must never be merged, or a
+         * thought would be re-sent to the model as something the assistant
+         * said. {@see Tests\Backend\ReasoningPaintTest} pins both halves.
+         *
+         * Cleared on exactly the occasions {@see $streamingText} is, for
+         * exactly its reasons: on {@see ToolStarted} because the thinking that
+         * introduced a call belongs to the step that is now over, and on settle
+         * because the finished {@see Message} carries its own `reasoning` which
+         * {@see Renderer} paints from the transcript instead.
+         */
+        private readonly string $reasoningText = '',
+        /**
          * The project root this session was launched against — `--root`'s
          * value as {@see \SugarCraft\Crush\Cli\Bootstrap::chat()} resolved
          * it, or null for a Chat built without one.
@@ -1233,7 +1257,11 @@ final class Chat implements Model
             // the user would read as a complete answer. Clearing here rather
             // than in each branch keeps the two exits (plain reply, tool
             // calls) from drifting apart.
-            $settled = $this->mutate(['streamingText' => '']);
+            // The thinking goes with it: the settled Message carries its own
+            // `reasoning`, which {@see Renderer::renderAssistantTurn()} paints
+            // from the transcript, so leaving the live accumulation up would
+            // show the same thought twice.
+            $settled = $this->mutate(['streamingText' => '', 'reasoningText' => '']);
 
             // Check if the message has tool calls to execute
             if ($message->toolCalls !== [] && $this->tools !== []) {
@@ -1479,6 +1507,7 @@ final class Chat implements Model
                 // generation bump also strands any delta still in the inbox,
                 // so nothing can type into the void after this.
                 'streamingText' => '',
+                'reasoningText' => '',
                 // The generation bump does NOT cover a summarization: the latch
                 // is $pendingCompactionId, deliberately not the generation
                 // counter (see that property's docblock). Releasing it here is
@@ -2937,9 +2966,10 @@ final class Chat implements Model
     {
         $events = [];
         foreach ($this->liveToolEvents as [, $event]) {
-            // TokenDelta shares the queue (see the property docblock) but is
-            // not a tool lifecycle event, and this accessor's contract is.
-            if ($event instanceof TokenDelta) {
+            // TokenDelta and ReasoningDelta share the queue (see the
+            // property docblock) but are not tool lifecycle events, and this
+            // accessor's contract is.
+            if ($event instanceof TokenDelta || $event instanceof ReasoningDelta) {
                 continue;
             }
             $events[] = $event;
@@ -2973,6 +3003,37 @@ final class Chat implements Model
     }
 
     /**
+     * Append one fragment of the model's THINKING to the live inbox
+     * ({@see $liveToolEvents}) — written through by a
+     * {@see Backend\ObservesReasoning} backend's `$onReasoning` callback
+     * (E456/E494).
+     *
+     * Mutating for the reason {@see enqueueToken()} is: the callback fires
+     * inside the backend — for {@see Backend\EngineBackend} on the ReactPHP
+     * readable edge that drains a `reasoning` frame off the fork's socket —
+     * where a returned Chat would have nowhere to go.
+     *
+     * NOT a {@see enqueueToken()} call with different styling. A thought
+     * routed onto the token channel would end up in
+     * {@see $streamingText}, and one layer down it would end up in the
+     * {@see Messages\AssistantMessage} the model is re-sent; see
+     * {@see ReasoningDelta}.
+     *
+     * @param int|null $generation see {@see enqueueToolEvent()} — a thought
+     *                             from a turn the user has since aborted is
+     *                             dropped at drain time rather than painted
+     *                             under the cancellation notice.
+     */
+    public function enqueueReasoning(string $text, ?int $generation = null): void
+    {
+        if ($text === '') {
+            return;
+        }
+
+        $this->liveToolEvents[] = [$generation ?? $this->generation, new ReasoningDelta($text)];
+    }
+
+    /**
      * The in-flight reply as far as it has arrived; empty outside a turn, and
      * outside a turn the model has actually started answering.
      *
@@ -2982,6 +3043,21 @@ final class Chat implements Model
     public function streamingText(): string
     {
         return $this->streamingText;
+    }
+
+    /**
+     * The model's thinking for the current step as far as it has arrived;
+     * empty outside a turn, and outside a turn whose backend reports reasoning
+     * at all.
+     *
+     * {@see Renderer} reads this to paint the thought above the reply, dimmed
+     * and collapsed, so a model that thinks for two minutes before its first
+     * content byte is visibly working instead of showing a frozen
+     * "assistant is thinking…".
+     */
+    public function reasoningText(): string
+    {
+        return $this->reasoningText;
     }
 
     /**
@@ -3016,9 +3092,12 @@ final class Chat implements Model
      * re-schedules, so a queue full of an aborted turn's events empties
      * instead of blocking the ones behind it.
      *
-     * {@see TokenDelta}s are the one exception to one-entry-per-update, and
-     * are COALESCED: a run of consecutive deltas is folded into a single
-     * append. One-at-a-time is what makes a tool call's running→done walk
+     * {@see TokenDelta}s and {@see ReasoningDelta}s are the exception to
+     * one-entry-per-update, and are COALESCED: a run of consecutive deltas OF
+     * THE SAME KIND is folded into a single append. Same kind, because the two
+     * accumulate into different fields and folding across the boundary would
+     * append one channel's bytes to the other's — the precise corruption
+     * {@see ReasoningDelta} exists to prevent. One-at-a-time is what makes a tool call's running→done walk
      * visible, but a delta has no such two-state shape — it is text — and a
      * provider emits hundreds to thousands of them per reply. Rendering the
      * whole transcript once per token would spend the turn repainting instead
@@ -3047,13 +3126,22 @@ final class Chat implements Model
         // the end is O(n) for the same result.
         $consumed = 0;
         $text = null;
-        if ($event instanceof TokenDelta) {
-            $text = $event->text;
+        $thought = null;
+        if ($event instanceof TokenDelta || $event instanceof ReasoningDelta) {
+            // Coalesce only entries of the SAME class as the head, so a run of
+            // thinking never folds into the reply's accumulator or the reverse.
+            $kind = $event::class;
+            $run = $event->text;
             while (($peek = $pending[$consumed] ?? null) !== null
-                && $peek[1] instanceof TokenDelta
+                && $peek[1] instanceof $kind
                 && $peek[0] === $generation) {
                 $consumed++;
-                $text .= $peek[1]->text;
+                $run .= $peek[1]->text;
+            }
+            if ($event instanceof TokenDelta) {
+                $text = $run;
+            } else {
+                $thought = $run;
             }
         }
 
@@ -3070,6 +3158,10 @@ final class Chat implements Model
             return [$this->mutate(['streamingText' => $this->streamingText . $text]), $more];
         }
 
+        if ($thought !== null) {
+            return [$this->mutate(['reasoningText' => $this->reasoningText . $thought]), $more];
+        }
+
         $next = $event instanceof ToolStarted
             ? $this->appendToolRunningPlaceholder($event)
             // A ToolFinished deliberately does NOT reset the partial: the
@@ -3084,7 +3176,7 @@ final class Chat implements Model
         // docblock for why an accumulation spanning steps would visibly
         // shrink when the turn settles.
         if ($event instanceof ToolStarted) {
-            $next = $next->mutate(['streamingText' => '']);
+            $next = $next->mutate(['streamingText' => '', 'reasoningText' => '']);
         }
 
         return [$next, $more];
@@ -5447,6 +5539,10 @@ final class Chat implements Model
             // screen when the pump next runs.
             'liveToolEvents' => $this->liveToolEvents,
             'streamingText' => $this->streamingText,
+            // A field missing from this map silently resets on the next
+            // keystroke - for this one that means the thinking on screen
+            // vanishes the moment the user touches the keyboard mid-turn.
+            'reasoningText' => $this->reasoningText,
             'keyHelp' => $this->keyHelp,
             'input' => $this->input,
             // Passed by object identity, for the reason 'liveToolEvents' above
@@ -6323,9 +6419,10 @@ final class Chat implements Model
             'generation' => $generation,
             'lastActivityAt' => new \DateTimeImmutable(),
             // Belt-and-braces: every settled/cancelled path already clears
-            // this, but a new turn must start from a blank partial no matter
-            // how the previous one ended.
+            // these, but a new turn must start from a blank partial and a blank
+            // thought no matter how the previous one ended.
             'streamingText' => '',
+            'reasoningText' => '',
         ]);
 
         // Auto-save checkpoint before processing prompt
@@ -7226,6 +7323,7 @@ final class Chat implements Model
             'history' => [],
             'inputBuf' => '',
             'streamingText' => '',
+            'reasoningText' => '',
             'scrollOffset' => 0,
             'expanded' => [],
             'pendingCompactionId' => null,
@@ -7485,11 +7583,48 @@ final class Chat implements Model
                 $inbox[] = [$generation, $event];
             };
 
-            // Both handlers share the inbox with the LIVE pump
+            // E494 - the last hop of E456, and the reason the user could watch
+            // a frozen "assistant is thinking..." for two minutes while the
+            // thinking itself was already crossing EngineBackend's socket. The
+            // channel was built end to end in round 56 and then nobody passed a
+            // sink, so every reasoning frame reached the parent process and was
+            // dropped on the floor.
+            //
+            // NO embedder seam and no `$next->streaming` gate, deliberately, on
+            // both counts unlike $onToken above. Reasoning is display-only: it
+            // never enters $history, never reaches the model and never reaches
+            // a checkpoint (see {@see ReasoningDelta}), so there is nothing here
+            // an embedder's callback could be needed for and nothing a
+            // streaming-off session would be protected from. What "streaming
+            // off" turns off is incremental delivery of the ANSWER; a thought
+            // has no non-incremental form to fall back to - the settled
+            // Message's own `reasoning` is what the transcript shows afterwards,
+            // and this is the only chance to show it as it happens.
+            $onReasoning = static function (string $delta) use ($inbox, $generation): void {
+                if ($delta === '') {
+                    return;
+                }
+                $inbox[] = [$generation, new ReasoningDelta($delta)];
+            };
+
+            // All three handlers share the inbox with the LIVE pump
             // ({@see Chat::pumpLiveToolEvents()}), and both drain it
             // destructively - so an event is applied exactly once no matter
             // which of the two got to it first.
-            return $backend->completeAsync($history, $onToken, $cancellation, $onEvent)->then(
+            //
+            // ASKED STRUCTURALLY, never by class name and never by arity
+            // sniffing: a backend that can report thinking declares
+            // {@see Backend\ObservesReasoning}, and one that cannot is called
+            // with the four arguments its signature actually documents. Passing
+            // the fifth unconditionally would "work" - PHP drops surplus
+            // positional arguments to a userland method without a murmur - and
+            // that silence is exactly the failure mode this branch exists to
+            // make impossible to reintroduce.
+            $promise = $backend instanceof ObservesReasoning
+                ? $backend->completeAsync($history, $onToken, $cancellation, $onEvent, $onReasoning)
+                : $backend->completeAsync($history, $onToken, $cancellation, $onEvent);
+
+            return $promise->then(
                 static function (Message $msg) use ($inbox, $generation): ?Msg {
                     $events = self::drainToolEventInbox($inbox, $generation);
 
@@ -7521,21 +7656,25 @@ final class Chat implements Model
      * they can only be an aborted turn's, and the resolving turn's
      * {@see BackendToolEventsMsg} would carry them under the wrong stamp.
      *
-     * Undrained {@see TokenDelta}s are discarded outright, whatever their
-     * generation. They share the inbox (see {@see $liveToolEvents}) but not
-     * this destination: {@see BackendToolEventsMsg} carries tool lifecycle
-     * states, and the settled Message beside them already contains every byte
-     * those deltas described. Applying them here would in any case be too late
-     * to be streaming — the turn is over.
+     * Undrained {@see TokenDelta}s and {@see ReasoningDelta}s are discarded
+     * outright, whatever their generation. They share the inbox (see
+     * {@see $liveToolEvents}) but not this destination:
+     * {@see BackendToolEventsMsg} carries tool lifecycle states, and the
+     * settled Message beside them already contains every byte those deltas
+     * described — its content for the one, its `reasoning` for the other.
+     * Applying them here would in any case be too late to be streaming — the
+     * turn is over.
      *
-     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta}> $inbox
+     * @param \ArrayObject<int, array{0: int, 1: ToolStarted|ToolFinished|TokenDelta|ReasoningDelta}> $inbox
      * @return list<ToolStarted|ToolFinished>
      */
     private static function drainToolEventInbox(\ArrayObject $inbox, int $generation): array
     {
         $events = [];
         foreach ($inbox as [$eventGeneration, $event]) {
-            if ($eventGeneration === $generation && !$event instanceof TokenDelta) {
+            if ($eventGeneration === $generation
+                && !$event instanceof TokenDelta
+                && !$event instanceof ReasoningDelta) {
                 $events[] = $event;
             }
         }
@@ -8809,8 +8948,9 @@ final class Chat implements Model
             'pendingCompactionId' => $request['id'],
             'lastActivityAt' => new \DateTimeImmutable(),
             // Belt-and-braces, same rule dispatchTurn() follows: whatever is
-            // about to be sent starts from a blank partial.
+            // about to be sent starts from a blank partial and a blank thought.
             'streamingText' => '',
+            'reasoningText' => '',
         ]);
 
         return [$next, $request['cmd']];

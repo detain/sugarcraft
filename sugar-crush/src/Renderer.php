@@ -1057,6 +1057,31 @@ final class Renderer
             max(1, $chat->rows() - 2),
         );
         if ($chat->inFlight) {
+            // E494 - the model's THINKING while the turn runs, painted above
+            // the reply and below whatever has already settled. This is the
+            // last hop of E456: round 56 carried a reasoning fragment from the
+            // provider's chunk across {@see Backend\EngineBackend}'s fork and
+            // out of a callback that nobody passed, so a user daily-driving
+            // this app watched a static "assistant is thinking..." while the
+            // thinking was arriving and being discarded.
+            //
+            // Through {@see renderReasoning()}, the SAME collapsed, dimmed,
+            // 120-char treatment a settled Message's own `reasoning` gets in
+            // {@see renderAssistantTurn()}, rather than a second style: a
+            // MiniMax-M2.7 trace runs to thousands of tokens and painting it in
+            // full would push the answer off-screen turn after turn, and having
+            // the live thought and the settled one look different would read as
+            // two different things rather than one thing before and after.
+            //
+            // ABOVE the partial, not below it, and the order is load-bearing
+            // rather than aesthetic: the model thinks and then speaks, so a
+            // thought under the prose it produced would invert the causality
+            // the transcript is meant to show.
+            $thinking = $chat->reasoningText();
+            if ($thinking !== '') {
+                $thought = self::renderReasoning($thinking, $theme);
+                $body = $body === '' ? $thought : $body . "\n\n" . $thought;
+            }
             // The reply so far, when the model has started writing one
             // (crush_code.md Phase 0 item 13). It sits ABOVE the spinner
             // rather than replacing it: the turn is still running - more text
