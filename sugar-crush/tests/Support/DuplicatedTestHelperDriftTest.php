@@ -1121,6 +1121,36 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'unnameable declaration is dropped, and a helper dropped is indistinguishable '
                 . 'from a helper cleared',
         );
+
+        // (6) WHICH OF THE TWO AMPERSAND SPELLINGS IS DOING THE WORK, DERIVED
+        // FROM THE RUNNING INTERPRETER RATHER THAN ASSERTED IN PROSE. On this
+        // PHP the `&` after `function` is an ARRAY token, so the text arm is
+        // the live one and the bare-string disjunct beside it is dormant —
+        // mutation-checked, removing the string spelling alone leaves this
+        // class green and removing the array spelling alone reds it. The
+        // dormant half stays for the reason the same shape stays in
+        // {@see bodyOf()}: it costs one comparison and it is what makes this
+        // walk correct on the PHP versions where the lexer answered the other
+        // way. This row is what stops that being a belief — the day the
+        // interpreter changes its mind, it reds and names the disjunct to
+        // swap.
+        $ampersand = null;
+        $probe = \token_get_all('<?php class A { public function &b() {} }');
+        foreach ($probe as $index => $token) {
+            if (\is_array($token) && $token[0] === \T_FUNCTION) {
+                $ampersand = $probe[$index + 2];
+
+                break;
+            }
+        }
+        $this->assertIsArray(
+            $ampersand,
+            'the `&` between `function` and a by-reference name is no longer an array token on '
+                . 'this PHP, so the LIVE disjunct in the name walk is now the bare-string one '
+                . 'and the array-token comparison beside it has become the dormant half. Swap '
+                . 'which of the two this test calls dormant; do not delete either',
+        );
+        $this->assertSame('&', $ampersand[1], 'the token after `function` in a by-reference declaration is not the ampersand at all');
     }
 
     /**
