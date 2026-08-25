@@ -8,6 +8,51 @@ Summary + Implementation Plan, 209-2160 are the 13 research dossiers.
 
 ---
 
+## Round 55 — IN FLIGHT (this entry is a checkpoint, not a result)
+
+**Launched 2026-08-25 from `a8acfcc9`.** Run `wf_0de018d2-8ba`, task `wn1fah05y`. Three lanes:
+**a** audits the instruments every figure rests on (E438, E434/E435, E432) · **b** finishes the MCP/stdio
+defect family (E443, E444+E439, E441, E437) · **c** takes reach and reachability (E449, E448, E447, E453).
+
+Base floors, observed at `a8acfcc9` **after** the composer sweep and a verified closure restore:
+sugar-crush `9994 / 144819 / 1`, candy-core `842 / 7573 / 25`, candy-flip `83 / 227 / 2`, candy-pty
+`606 / 1476 / 16 / 1 warning`. They match the pre-sweep floor exactly, so the sweep round-tripped.
+
+**Two new standing rules, both distilled from round 54's interruptions rather than from its code:**
+**34** — if you inherit a lane with commits above the tree your review was written at, review those
+commits FIRST. **35** — when a prediction resolves quietly, prove the instrument is alive before you
+accept the number.
+
+### The round-54 close, in full, because the user authorised the whole sequence
+
+Merged and verified → pushed → org sync green → `composer update` across all 59 manifests, **every one
+`rc=0`** → closure restored and verified → round 55 launched. The sweep is a genuine end-to-end check
+that the split libs resolve the way an outside consumer gets them, and they do.
+
+🔴 **The restore is where the interesting failure was, and it is now E454.** The documented procedure —
+`check-path-repos.php --fix --strict-closure`, `composer update`, revert the manifests — **does not
+restore the closure.** It left candy-flip at 4/6 and candy-pty at 3/7. The tool walks the `require` graph
+only (its own `--help` says so), so every miss was a `require-dev` sibling; a lib whose harness comes
+from a sibling gets a *Packagist copy* of `candy-testing` while its runtime deps are symlinks, and
+nothing announces it. `candy-buffer` was invisible even after hand-adding the direct dev deps, because it
+is reached only through `candy-testing`'s own requires.
+
+**And the repair is not idempotent with the tool.** `--fix` rewrites `repositories[]` to the require-graph
+closure, so re-running it after a manual repair deletes the hand-added entries. Measured: a state that
+had reached 5/6 and 6/7 fell back to 5/6 and **4/7** purely because `--fix` ran again before the last
+append. Invisible unless closure is re-verified after every step — which is the real lesson, since the
+tool exiting 0 says nothing whatsoever about `vendor/`.
+
+The procedure that works, in one atomic pass: `--fix --strict-closure` first, then append a path repo for
+every sibling directory (Composer ignores unused ones), then a single `composer update`, then revert the
+manifests, then verify with `is_link()` + `realpath()`. That reached 18/18 · 3/3 · 6/6 · 7/7 in one go.
+
+Also filed: **E453** — CI's path-repo policy job is RED on `master` over a dead `sugarcraft/candy-kit`
+require in `sugar-crush`, while the local `--no-lib-path-repos` guard exits 0 at the same commit. The
+more important half is that **the merge checklist has been passing a check CI fails.** The report
+recommends pruning; the standing rule says dormant code gets wired or documented, never deleted, and
+`candy-kit` is a foundation lib — so it went to lane c as a decision to make with evidence, not a prune.
+
 ## Round 54 — the descriptor census finished, two real MCP bugs, and a round that survived two kills
 
 **Closed 2026-08-25 at `49ae499e`, base `606a131c`.** Three lanes. The round was interrupted TWICE by

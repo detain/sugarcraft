@@ -6,42 +6,59 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## ✅ NO ROUND IS IN FLIGHT — ROUND 54 CLOSED, ROUND 55 NOT YET LAUNCHED
+## ⏳ ROUND 55 IS IN FLIGHT RIGHT NOW — read this before starting anything
 
-**Round 54 closed 2026-08-25 at `49ae499e`.** Floors, findings and the two kill-recoveries are in
-§0-NOW-55 immediately below. Backlog is at 452 entries.
+**Launched 2026-08-25 from master `a8acfcc9`, tree clean. THREE lanes.**
+**Run `wf_0de018d2-8ba`, task `wn1fah05y`.** Script (DURABLE path — never launch from a scratchpad path,
+`/tmp` does not survive a reboot):
+`/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-55.js`
 
-Lane dirs `/home/sites/crush-lane-{a,b,c}` still sit at their round-54 heads (`4600a1a2`, `e99eb5cd`,
-`e05454c3`), all merged. Refresh them for round 55 by `git fetch` + `reset --hard` + `clean -fdq` —
-**NOT `cp -a`**, which repoints vendor symlinks out of the lane. `refs/rescue/r54a-mid-edit` in lane a
-can be deleted once round 55 is cut.
+**BASE FLOORS, OBSERVED at `a8acfcc9` AFTER the composer sweep AND a verified closure restore:**
 
-### 🔴 STANDING OPERATOR INSTRUCTION FOR ROUND 54's CLOSE — THE USER ASKED FOR ALL OF IT, IN ORDER
+| package | tests / assertions / skipped / rc |
+|---|---|
+| sugar-crush | **9994 / 144819 / 1 / rc 0** |
+| candy-core | **842 / 7573 / 25 / rc 0** |
+| candy-flip | **83 / 227 / 2 / rc 0** |
+| candy-pty | **606 / 1476 / 16 / 1 warning / rc 0** — 🔴 **the assertion count is NOT stable, see E434/E435; 1476 is one sample from a 1475-1478 range and lane a is chasing it** |
+| candy-mosaic | 459 / 7753 / 6 / rc 0 (untouched since round 52) |
 
-The user authorised this sequence explicitly on 2026-08-24. **Do not stop between the steps for
-confirmation; stop only for a decision that is genuinely theirs.**
+These were re-measured AFTER the sweep and the closure restore, and they match the pre-sweep floor
+exactly — so the sweep round-tripped cleanly and the base is valid.
 
-1. ~~**Merge, renumber, measure, verify**~~ ✅ **DONE 2026-08-25** — merged a→b→c at `49ae499e`,
-   renumbered E429-E449, floor `9994 / 144819 / 1`, every invariant green. Steps 2-6 below are OPEN.
-2. **PUSH `master` to `origin`.** This is the one outward-facing step and it IS authorised for this
-   round. `origin/master` was already at `492352ea` before round 54 finished (no hooks in this repo —
-   another session pushed it), so check `git ls-remote origin master` first rather than assuming a
-   backlog of unpushed work.
-3. **Wait a few minutes** for `sync-sugarcraft.yml` to split the monorepo into `sugarcraft/<lib>` and for
-   Packagist to pick the new versions up. ⚠️ **`splitsh-lite` output SHAs are NOT `git subtree split`
-   SHAs** — anything that targets a per-lib commit must use pinned `splitsh-lite v1.0.1`.
-4. **`composer update` in the root AND in every lib dir.** Script is staged at
-   `<scratchpad>/composer-sweep.sh` (58 lib manifests plus the root; per-dir logs under
-   `<scratchpad>/sweep/`). This is a genuine end-to-end check that the libs resolve the way an outside
-   consumer gets them.
-5. 🔴 **THEN RESTORE THE CLOSURE, BEFORE ANY LANE MEASURES ANYTHING.** `composer update` replaces every
-   `vendor/sugarcraft/*` symlink with a Packagist copy, which is exactly what voids 18/18 · 3/3 · 6/6.
-   Re-inject with `php tools/check-path-repos.php --fix --strict-closure`, `composer update` in the libs
-   that matter, then `git checkout -- '*/composer.json'` so nothing leaks into a commit — and **verify by
-   `is_link()` + `realpath()` prefix, never by `ls`.** ⚠️ **Any figure measured between step 4 and a
-   verified closure is VOID.** Do not quote one, and do not let a lane branch from that state.
-6. **Launch round 55**, then update `crush_code_worklog.md`, this file, and the backlog so the session
-   can be compacted safely.
+**Lane dirs** `/home/sites/crush-lane-{a,b,c}` were `git fetch` + `reset --hard` + `clean -fdq` to
+`a8acfcc9` (NOT re-copied). Closure verified per lane per package by `is_link()` + `realpath()`:
+**18/18 · 3/3 · 6/6 · 7/7 in all three.** `refs/rescue/r54a-mid-edit` has been deleted — that work is in
+master. DO NOT DELETE the lane dirs until the merged floor is measured.
+
+### THE LANES
+
+- **a — the instruments every other figure rests on.** E438 (🔴 the "exactly 1 skipped" canary is a LINUX
+  figure, rests on more than one file, and is asserted NOWHERE — 55 rounds have checked it by eye),
+  E434+E435 (candy-pty's assertion count wobbles 1475-1478 across takes at one commit; it is ONE named
+  test), E432 (the stty-fallback test is skipped by a gate built on the very defect it would catch).
+- **b — finish the MCP/stdio defect family.** E443 (the undrained blocking stdin write exists in a THIRD
+  and FOURTH class — `LSP/LspConnection.php` sets non-blocking on pipes 1 and 2 but not 0), E444+E439
+  (the EINTR branch has no liveness check, on a path already outside `start()`'s deadline), E441, E437
+  (a legal `"result": null` is still unparseable — round 54 fixed the scalar case and left null).
+- **c — reach and reachability.** E449 (the sibling walk follows `autoload`, so code a library EXECS or
+  ships as an example is invisible — the guard reports clean over a surface it never looked at), E448
+  (three exposed spawns in libs `sugar-crush` cannot reach; promotion into `candy-testing` is the
+  candidate), E447, **E453** (CI's path-repo policy job is RED on a dead `candy-kit` require and the
+  local guard exits 0 on the same commit).
+
+### NEW STANDING RULES THIS ROUND
+
+- **34** — if you inherit a lane with commits above the tree your review was written at, **review those
+  commits first**. Round 54 measured six of thirteen and nine of seventeen commits reviewed by nobody.
+- **35** — when a prediction resolves quietly, **prove the instrument is alive before accepting the
+  number**. A silent census and a dead census produce identical numbers.
+
+### 🔴 THE OPERATOR SEQUENCE FOR ROUND 54's CLOSE IS COMPLETE
+
+All six steps the user authorised on 2026-08-24 are done: merged and verified → pushed (`a8acfcc9` on
+`origin`) → org sync completed green → `composer update` swept all 59 manifests, every one `rc=0` →
+closure restored and verified → round 55 launched. **Nothing from that instruction is outstanding.**
 
 ### AT THE MERGE
 

@@ -14766,3 +14766,32 @@ wiring than carrying a stale require.
 `candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
+
+### E454 — `--fix --strict-closure` cannot restore the closure by itself, and re-running it UNDOES a manual repair
+
+**Recorded 2026-08-25 by the round-54 supervisor.** Severity: procedural, and it silently voids figures.
+**Measured** during round 54's post-sweep closure restore.
+
+The documented restore is `check-path-repos.php --fix --strict-closure` → `composer update` →
+`git checkout -- '*/composer.json'`. MEASURED after the round-54 `composer update` sweep, that procedure
+left **`candy-flip` at 4/6 and `candy-pty` at 3/7** by `is_link()` + `realpath()`. Two independent gaps:
+
+1. **The tool walks the `require` graph only.** Its own `--help` says so. Every miss was a `require-dev`
+   sibling — `candy-buffer`, `candy-testing`, `candy-vcr`, `candy-vt` — so a lib whose test harness comes
+   from a sibling gets a Packagist COPY of it while its runtime deps are symlinks. A suite measured in
+   that state runs the published `candy-testing` against local `src`, and nothing says so.
+2. **Transitive-through-dev is invisible even after hand-adding the direct dev deps.** `candy-buffer`
+   reaches these libs only via `candy-testing`'s own requires, so adding the direct dev siblings fixed
+   5/6 and 6/7 and no more.
+
+🔴 **AND THE REPAIR IS NOT IDEMPOTENT WITH THE TOOL.** `--fix` REWRITES `repositories[]` to the
+require-graph closure, so running it again after a manual repair silently DELETES the hand-added dev
+entries. Measured: a run that had reached 5/6 and 6/7 fell back to 5/6 and **4/7** because `--fix` was
+re-run before appending one more entry. The regression is invisible unless closure is re-verified after
+every single step.
+
+**STEP:** restore in ONE atomic pass — `--fix --strict-closure` FIRST, then append a path repo for every
+sibling directory (unused path repos are ignored by Composer), then a single `composer update`, then
+`git checkout -- '*/composer.json'`, then verify. That reached 18/18 · 3/3 · 6/6 · 7/7 in one go. Never
+re-run `--fix` between the append and the update. And **verify with `is_link()` + `realpath()` after the
+LAST step, not after the tool** — the tool exiting 0 says nothing about `vendor/`.
