@@ -192,25 +192,35 @@ final class BareCitationDriftTest extends TestCase
     {
         $tag = '{@' . 'see ';
 
-        // Both blocks open on line 3 and both citations sit on line 5, so a
-        // reader can check the expectation against the fixture by counting.
-        $unwrapped = "<?php\n\n/**\n * padding\n * " . $tag . "testAbsentOne()}\n */\nclass A {}";
-        $wrapped = "<?php\n\n/**\n * padding\n * " . $tag . "\n * testAbsentTwo()}\n */\nclass B {}";
+        // THREE SHAPES, AND THE THIRD IS WHAT MAKES THE FAILURE TEXT BELOW
+        // TRUE RATHER THAN PLAUSIBLE. All three blocks open on line 3 and all
+        // three citations sit on line 5, so a reader checks them by counting.
+        // `noMarkers` reaches its citation over continuation lines that carry
+        // NO asterisk — legal, if unidiomatic — so the flattening never touches
+        // the newlines in front of it. That is the row that separates the two
+        // ways this can break, and both separations are mutation-checked.
+        $noMarkers = "<?php\n\n/**\n   padding\n   " . $tag . "testAbsentOne()}\n */\nclass A {}";
+        $unwrapped = "<?php\n\n/**\n * padding\n * " . $tag . "testAbsentTwo()}\n */\nclass B {}";
+        $wrapped = "<?php\n\n/**\n * padding\n * " . $tag . "\n * testAbsentThree()}\n */\nclass C {}";
 
         $this->assertSame(
             [
-                'unwrapped' => [['name' => 'testAbsentOne', 'line' => 5]],
-                'wrapped' => [['name' => 'testAbsentTwo', 'line' => 5]],
+                'noMarkers' => [['name' => 'testAbsentOne', 'line' => 5]],
+                'unwrapped' => [['name' => 'testAbsentTwo', 'line' => 5]],
+                'wrapped' => [['name' => 'testAbsentThree', 'line' => 5]],
             ],
             [
+                'noMarkers' => self::citationsNamingNothing($noMarkers),
                 'unwrapped' => self::citationsNamingNothing($unwrapped),
                 'wrapped' => self::citationsNamingNothing($wrapped),
             ],
-            'a reported line is wrong. Both citations sit on line 5 of a doc-block that opens '
-            . 'on line 3. If only the `wrapped` row is off, the continuation flattening is '
-            . 'consuming the newline along with the ` * ` marker; if both are off, the offset '
-            . 'arithmetic is gone. Either way the rows this guard prints point at the wrong '
-            . 'line, which is the whole of what it is for',
+            'a reported line is wrong. All three citations sit on line 5 of a doc-block that '
+            . 'opens on line 3. READ `noMarkers` FIRST: it is the row with no ` * ` in front '
+            . 'of its citation, so the continuation flattening cannot affect it. If it is off '
+            . 'too, the offset arithmetic is gone and every row is just the start line of its '
+            . 'doc-block. If it is right and the other two are off, the flattening is eating the '
+            . 'newline along with the marker. Either way the `file:line` rows this guard '
+            . 'prints point at the wrong line, which is the whole of what it is for',
         );
     }
 
