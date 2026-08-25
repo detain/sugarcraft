@@ -877,6 +877,28 @@ final class ChildLifetimeScanner
             }
 
             if ($text === '?') {
+                // DORMANT AS A DIFFERENCE, KEPT AS THE CONTRACT, and both
+                // halves are measured rather than argued. A differential
+                // oracle - this method against a copy with these three lines
+                // deleted, over 14 adversarial top-level spellings on PHP
+                // 8.3.6 (nested ternary with and without parentheses, `?:`
+                // chained, `??`, `?->`, a ternary inside a call argument, an
+                // array-union tail) - found ZERO differing answers. The
+                // trailing `:` clause below already refuses every multi-`?`
+                // shape those spellings can produce, because a second `?` at
+                // depth 0 always arrives with a second `:` behind it.
+                //
+                // NOT DELETED, and the reason is not sentiment. The rule this
+                // method advertises is "exactly one top-level `?` and one
+                // top-level `:`", and one of those two halves would otherwise
+                // be enforced only as a side effect of the other. A later
+                // loosening of the `:` clause - to tolerate a named argument,
+                // say - would silently take this half with it, and the
+                // resulting answer would be an fd set read off one arm of an
+                // expression with two conditions in it. Pinned as behaviour
+                // rather than as a line by the 'nested ternary without
+                // parentheses' fixture, which asserts the refusal without
+                // asserting which clause performs it.
                 if ($question !== null) {
                     return null;
                 }
@@ -1123,6 +1145,39 @@ final class ChildLifetimeScanner
                 $current = \trim($current);
                 if ($current !== '') {
                     $elements[] = $current;
+                }
+
+                // AN ARRAY LITERAL FOLLOWED BY ANYTHING IS NOT AN ARRAY
+                // LITERAL, and until this check existed the answer was WRONG
+                // rather than refused - the one polarity this class is written
+                // to avoid. MEASURED on PHP 8.3.6, before the check:
+                // `$d = [0 => ['pipe','r']] + [1 => ['pipe','w']];` answered
+                // fds `[0]`. The union names 0 AND 1. It is not a spec the
+                // scanner could not read; it is a spec the scanner read half
+                // of and reported as complete, which then passes
+                // DescriptorInheritanceGuardTest's readability arm as a
+                // perfectly ordinary two-fd spec.
+                //
+                // FOUND BY A DIFFERENTIAL ORACLE run for an unrelated question
+                // - whether the multi-`?` refusal in ternaryArms() can ever
+                // change an answer - which is the argument for building the
+                // oracle rather than reading the clause. `[0=>1] ?: [1=>2]`
+                // answered `[0]` for the same reason.
+                //
+                // Only SIGNIFICANT tokens count: whitespace, comments and the
+                // `;` this method's caller appends are the ordinary tail of a
+                // well-formed literal.
+                for ($j = $i + 1; $j < $count; $j++) {
+                    $tail = $tokens[$j];
+                    if (\is_array($tail)
+                        && \in_array($tail[0], [\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT], true)) {
+                        continue;
+                    }
+                    if (\is_string($tail) && $tail === ';') {
+                        continue;
+                    }
+
+                    return null;
                 }
 
                 return $elements;

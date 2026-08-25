@@ -464,6 +464,37 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         // The line is drawn at exactly one top-level `?` and one top-level
         // `:`; everything past that is an expression evaluator this is not.
         yield 'nested ternary' => [$ternary("(\$e ? [0 => 1] : [0 => 1])", '[0 => 1]'), null];
+
+        // WITHOUT the parentheses, which is a different code path and the one
+        // the "exactly one top-level `?`" rule is about. Asserted as a
+        // REFUSAL, deliberately not as a claim about which clause performs it:
+        // a differential oracle showed the multi-`?` clause and the trailing
+        // `:` clause currently refuse the same set, so a fixture naming one of
+        // them would pin an implementation detail instead of the contract.
+        yield 'nested ternary without parentheses' => [
+            $ternary('[0 => 1]', "\$e ? [0 => 2] : [0 => 3]"),
+            null,
+        ];
+
+        // AN ARRAY LITERAL FOLLOWED BY ANYTHING IS NOT AN ARRAY LITERAL, and
+        // this used to be answered WRONG rather than refused: measured on PHP
+        // 8.3.6, `[0 => ['pipe','r']] + [1 => ['pipe','w']]` reported fds
+        // `[0]`, having read the first operand and dropped the union that adds
+        // fd 1. A half-read spec reported as complete passes the guard's
+        // readability arm as an ordinary two-fd spec, which is the polarity
+        // this scanner exists to avoid.
+        yield 'array union' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [0 => ['pipe','r']] + [1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array literal with an elvis tail' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [0 => ['pipe','r']] ?: [1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
         yield 'ternary arm that is not an array' => [$ternary('$x', '[0 => 1]'), null];
 
         // `?:` and `??` lex as their own tokens on PHP 8.3.6 (T_COALESCE, and
