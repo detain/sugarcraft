@@ -139,43 +139,119 @@ final class ResizeRaceTest extends TestCase
 
         $this->assertNotSame('', $captured, 'no output captured from `tput cols` loop');
 
-        // tput cols emits each width followed by "\n". The PTY in cooked
-        // mode translates "\n" → "\r\n", so split on either, then drop
-        // empties to tolerate the race between resize + the slave's
-        // "\n" write.
+        $reading = self::readWidths($captured);
+
+        $this->assertSame(
+            [],
+            $reading['unexpected'],
+            \sprintf(
+                'torn read: numeric line(s) %s are not among %s (captured: %s)',
+                \implode(',', $reading['unexpected']),
+                \implode(',', self::WIDTHS),
+                \var_export($captured, true),
+            ),
+        );
+        $this->assertGreaterThan(
+            0,
+            $reading['numeric'],
+            'expected at least one numeric width line in `tput cols` output',
+        );
+    }
+
+    /**
+     * The torn-read detector, run against a reading whose answer is known.
+     *
+     * {@see testResizeRaceProducesUntornWidths()} asserts an ABSENCE -- that no
+     * numeric line falls outside the resize set -- and an absence is also what a
+     * detector that matches nothing reports. The aggregate form above makes that
+     * failure mode cheaper to reach than the old per-line one did: neutralise
+     * the `ctype_digit()` arm, or the set lookup, and `unexpected` is `[]` on
+     * every host forever while `numeric` quietly goes to zero. Only the second
+     * assertion above would notice, and only for one of those two mutations.
+     *
+     * So the same static reader is driven here with a transcript carrying the
+     * exact artifact the live test exists to catch: a width of 120 torn across
+     * two reads as `1` and `20`, with the CR/LF translation a cooked PTY
+     * applies, plus one of the non-numeric bash job-control lines the live
+     * reader is supposed to ignore.
+     */
+    public function testTheTornReadDetectorSeesATornRead(): void
+    {
+        $torn = self::readWidths("80\r\n1\r\n20\r\n[1]+  Done\r\n132\r\n");
+
+        $this->assertSame(['1', '20'], $torn['unexpected'], 'the detector missed a torn read');
+        $this->assertSame(4, $torn['numeric'], 'the detector miscounted the numeric lines');
+
+        $clean = self::readWidths("80\r\n120\r\n100\r\n132\r\n90\r\n\r\n");
+
+        $this->assertSame([], $clean['unexpected'], 'the detector invented a torn read');
+        $this->assertSame(5, $clean['numeric'], 'the detector lost a clean width line');
+
+        $this->assertSame(
+            ['numeric' => 0, 'unexpected' => []],
+            self::readWidths(''),
+            'an empty capture is not a reading; the live test asserts non-emptiness separately',
+        );
+    }
+
+    /**
+     * Split a captured stream into width lines and answer with the count of
+     * numeric lines and the ones outside {@see WIDTHS}.
+     *
+     * ## Why this is one aggregate answer and not an assertion per line
+     *
+     * WHAT THE LOOP HERE USED TO DO: call `assertArrayHasKey()` once per numeric
+     * line, inside the test. WHAT IS TRUE ABOUT THAT: the number of lines the
+     * child emits inside a ~1 s window is a function of host scheduling, so the
+     * test's ASSERTION COUNT was timing-derived by construction -- and it is the
+     * only test in this package that is. MEASURED at `5bef36cb`, PHP 8.3.6, 20
+     * consecutive full-suite takes with tests, skips, warnings and rc identical
+     * throughout: the package's assertion total came out 1475 twice, 1476 seven
+     * times, 1477 ten times and 1478 once. Six further takes logged as JUnit and
+     * compared per `<testcase assertions="...">` across all 606 tests found
+     * exactly one non-constant entry, this test, at 94/96/94/94/96/93.
+     *
+     * WHY THAT EARNS A REWRITE RATHER THAN A NOTE: this package's figures are
+     * quoted as a floor by the work that consumes it, and a suite whose
+     * assertion count is not a function of its source cannot be a floor -- a
+     * lane comparing one take against 1476 can be off by two in either direction
+     * with nothing wrong at all. Folding the per-line checks into one assertion
+     * over the aggregate keeps every line checked and makes the count a
+     * property of the source again.
+     *
+     * The reader itself is unchanged in what it tolerates: blank lines between
+     * writes are ignored, and so is anything non-numeric, because bash emits
+     * job-control and signal-status lines on some hosts. `tput cols` writes each
+     * width followed by "\n" and a cooked PTY translates that to "\r\n", so the
+     * split accepts either ending.
+     *
+     * Static and separate from the test body so that
+     * {@see testTheTornReadDetectorSeesATornRead()} can push a KNOWN-TORN
+     * transcript through this exact code rather than through a copy of it.
+     *
+     * @param  string $captured raw bytes read from the master
+     * @return array{numeric:int, unexpected:list<string>}
+     */
+    private static function readWidths(string $captured): array
+    {
         $lines = \preg_split('/\r\n|\r|\n/', $captured) ?: [];
         $widths = \array_fill_keys(\array_map('strval', self::WIDTHS), true);
 
-        $sawWidth = false;
+        $numeric = 0;
+        $unexpected = [];
+
         foreach ($lines as $raw) {
             $line = \trim($raw);
-            if ($line === '') {
-                // Empty between writes — fine.
+            if ($line === '' || !\ctype_digit($line)) {
                 continue;
             }
-            // Bash may emit job-control or signal-status messages on
-            // some hosts; skip anything that obviously isn't a width.
-            // The whole assertion is: every line that LOOKS numeric
-            // must be a known width.
-            if (!\ctype_digit($line)) {
-                continue;
+
+            $numeric++;
+            if (!\array_key_exists($line, $widths)) {
+                $unexpected[] = $line;
             }
-            $this->assertArrayHasKey(
-                $line,
-                $widths,
-                \sprintf(
-                    'torn read: numeric line %s is not one of %s (captured: %s)',
-                    \var_export($line, true),
-                    \implode(',', self::WIDTHS),
-                    \var_export($captured, true),
-                ),
-            );
-            $sawWidth = true;
         }
 
-        $this->assertTrue(
-            $sawWidth,
-            'expected at least one numeric width line in `tput cols` output',
-        );
+        return ['numeric' => $numeric, 'unexpected' => $unexpected];
     }
 }
