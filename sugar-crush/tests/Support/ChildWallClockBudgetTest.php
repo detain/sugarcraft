@@ -1293,6 +1293,29 @@ final class ChildWallClockBudgetTest extends TestCase
             . 'tokeniser names rather than the line the command is written on',
         );
 
+        // AND A LITERAL THAT SPANS LINES, which is the arm that MUTATION FOUND
+        // MISSING. Replacing the row's line with the token's own line SURVIVED
+        // every fixture above, because each of their literals is one line long
+        // and the heredoc's wrapper sits on the first line of its body — so
+        // the correction added zero everywhere and nothing could tell it from
+        // a deleted one. Rule 2: the mutation was relevant, the window was
+        // wrong. MEASURED on PHP 8.3.6: `token_get_all()` reports a multi-line
+        // single-quoted string at the line it STARTS on, and a heredoc body at
+        // the line the body starts on — in both shapes below the wrapper is
+        // two lines further down, so an uncorrected line is short by two.
+        $this->assertSame(
+            ['4:literal:47:' . $w . ' -s KILL'],
+            $of("\$a = 'set -e\nfoo\n" . $w . " -s KILL 47 x';"),
+            'a wrapper on the third line of a multi-line string literal is reported at the '
+            . "literal's own line rather than at its own",
+        );
+        $this->assertSame(
+            ['4:literal:49:' . $w],
+            $of("\$b = <<<SH\nfoo\n" . $w . " 49 y\nSH;"),
+            'a wrapper on the second line of a heredoc body is reported at the line the body '
+            . 'starts on rather than at its own',
+        );
+
         // THE NEGATIVE HALF, and it is the reason this scan reads the TOKEN
         // STREAM rather than raw text (rule 40). Prose that happens to use the
         // word is not a launch, and neither is a doc-block describing one — the
