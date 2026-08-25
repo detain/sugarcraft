@@ -772,11 +772,11 @@ final class AgentManager
             // visible to the model. `Agent::fromArray()` defaults `tools` to
             // `[]` and several in-tree Agents are built with it literally, so
             // `[]` is "this agent says nothing about tools" far more often than
-            // it is "this agent forbids all of them". Sending `tools: []` would
-            // put an empty array on the wire, which OpenAI-shaped providers
-            // read as a real (empty) tool block rather than as absence, so this
-            // returns null — the same `?:` reading {@see \SugarCraft\Crush\Runtime}
-            // already applies to `App::$tools`.
+            // it is "this agent forbids all of them". Sending `tools: []` is
+            // NOT the same request as sending none — see the measurement at
+            // this method's return — so this returns null, the same `?:`
+            // reading {@see \SugarCraft\Crush\Runtime} already applies to
+            // `App::$tools`.
             return null;
         }
 
@@ -862,11 +862,27 @@ final class AgentManager
         }
 
         // EMPTY AFTER THE DENY IS `null`, NOT `[]`, on the same argument the
-        // no-declaration branch above makes: `[]` is a real (empty) tool block
-        // to an OpenAI-shaped provider rather than absence, and an agent whose
-        // whole grant its own denylist removes wants no tools, not an empty
-        // one. The two spellings are indistinguishable to this project's
-        // providers today; they are not indistinguishable on the wire.
+        // no-declaration branch above makes: an agent whose whole grant its own
+        // denylist removes wants NO tools, not an empty tool block.
+        //
+        // MEASURED at this commit rather than assumed, because a first draft of
+        // this comment said the two spellings were indistinguishable to this
+        // project's providers and that is FALSE for four of the six.
+        // `OpenAIProvider`, `CustomProvider` and `SglangProvider` each gate on
+        // `$request->tools !== null` ALONE, so `[]` puts a present-but-empty
+        // `tools` key in the payload where `null` omits the key; and
+        // `ClaudeCodeProvider` turns `[]` into `allowedTools: ''`, an empty
+        // allow-list rather than an absent one. Only `VertexProvider` gates on
+        // `!== null && !== []` and cannot tell them apart. `BedrockProvider`
+        // and `EchoProvider` never read the field at all. Re-derive rather
+        // than trust this paragraph — it is a fact about six files this class
+        // does not own, and it rots the day one of them changes:
+        //
+        //     /usr/bin/grep -n 'request->tools' src/Providers/*Provider.php
+        //
+        // The DECISION does not rest on the paragraph. It is pinned by
+        // AgentManagerTest::testAFullyDeniedGrantIsNotReportedAsUnresolvable,
+        // which reds if this returns `[]`.
         return $granted === [] ? null : $granted;
     }
 
