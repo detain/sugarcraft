@@ -2277,7 +2277,14 @@ final class AgentManagerTest extends TestCase
             $caught = $e;
         }
 
-        $this->assertNotNull($caught, 'BypassPermissions settles the GATE, never the grant');
+        // NOT "the gate would have allowed this". MEASURED on PHP 8.3.6:
+        // PermissionGate(BypassPermissions) answers Deny for
+        // Bash(command: 'rm -rf /'), so what this proves is ORDER — the grant
+        // is settled first, and its message is the one that survives. An
+        // earlier version of this line said BypassPermissions "settles the
+        // GATE, never the grant", which reads as a claim the gate would have
+        // let the call through; it would not.
+        $this->assertNotNull($caught, 'the grant is checked before the gate, so its refusal is the one reported');
         $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
         $this->assertStringContainsString('Bash(git *)', $caught->getMessage());
         $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
@@ -2952,6 +2959,62 @@ final class AgentManagerTest extends TestCase
 
         $this->assertSame(['Edit'], $asked);
         $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+    }
+
+    /**
+     * THE APPROVED-THEN-UNCHECKED HOLE, found by mutating this fix rather than
+     * by reading it.
+     *
+     * The three tests above pin that call #2 is evaluated, but each reaches the
+     * end of the loop body by a path that `continue`s out early — a gateless
+     * agent and an `Allow` decision both skip the approver. So a `break` placed
+     * at the very END of the loop body SURVIVED all of them: it only cuts the
+     * loop when the gate answered `Ask` AND the approver said yes, which is the
+     * one path nothing exercised twice. That is a real escape, not an
+     * equivalent mutant — a human who approves the first of two calls would
+     * silently un-police the second.
+     */
+    public function testASecondCallIsStillCheckedAfterTheFirstWasApproved(): void
+    {
+        $asked = [];
+
+        [$manager, $subAgent] = $this->subAgentEmittingCalls(
+            [
+                // `Bash` and not `Read`: under Default the gate auto-ALLOWS a
+                // read-only tool, and an Allow `continue`s past the approver —
+                // which is the very path this test has to avoid, since the hole
+                // is specific to a call that was ASKED about and approved.
+                new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
+                new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
+            ],
+            ['Bash(git *)'],
+            mode: PermissionMode::Default,
+            approver: static function (ToolCall $call) use (&$asked): bool {
+                $asked[] = $call->name;
+
+                return true;
+            },
+        );
+
+        $this->assertSame(
+            PermissionDecision::Ask,
+            (new PermissionGate(PermissionMode::Default))
+                ->evaluate(new ToolCall('Bash', ['command' => 'git status'])),
+            'the premise: call #1 must reach the approver, not be auto-allowed',
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertSame(['Bash'], $asked, 'the first call is in the grant and is approved');
+        $this->assertNotNull($caught, 'approving call #1 must not un-police call #2');
+        $this->assertStringContainsString('Tool call "Edit"', $caught->getMessage());
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
     }
 
     /**
