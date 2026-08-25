@@ -1,0 +1,720 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tests\LSP;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\LSP\LspConnection;
+
+/**
+ * A LANGUAGE SERVER THAT TALKS TOO MUCH ON STDERR MUST NOT WEDGE THE EDITOR, AND
+ * A MESSAGE THAT DOES NOT FIT IN ONE WRITE MUST NOT BE HALF-SENT.
+ *
+ * {@see LspConnection::connect()} took fds 1 and 2 out of blocking mode and left
+ * fd 0 in it, and {@see LspConnection::writeMessage()} was a single `@fwrite()`
+ * that checked only `=== false`. Two defects:
+ *
+ *  1. THE DEADLOCK. A server parked in `write(2)` on a full stderr pipe is not
+ *     reading its stdin either. Once the parent's own stdin buffer filled, the
+ *     blocking `fwrite()` held the only thread that could have run
+ *     {@see LspConnection::drainStderr()} and released the server.
+ *  2. THE SILENT DESYNC. A short `fwrite()` returns an int below `strlen()`, not
+ *     `false`, so a partial message was reported as sent. The header had already
+ *     promised the server N bytes; `Content-Length` framing has no
+ *     resynchronisation point, so every subsequent reply would be parsed against
+ *     the fragment.
+ *
+ * THE PIPE CAPACITY IS 65536 BYTES ON THIS HOST AND BOTH SIDES MUST EXCEED IT.
+ * Generator: a `Content-Length`-framed child that writes N bytes to stderr
+ * unprompted after the handshake, against a parent sending an M-byte request,
+ * 8s bound. PHP 8.3.6, Linux 6.8, three consecutive takes, identical every time
+ * (this is the same table {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerStderrDrainTest}
+ * measured for the NDJSON sibling, re-measured here against this framing):
+ *
+ *     N=100000 M=200000 -> WEDGED (bound hit)   <- both sides over capacity
+ *     N=1000   M=200000 -> ok, 0.4s             <- stderr under capacity
+ *     N=100000 M=1000   -> ok, 0.4s             <- write under capacity
+ *
+ * The two control rows are in the table because without them the wedge row is
+ * satisfied by a fixture that was never capable of blocking anything.
+ *
+ * ⚠️ PHP VERSION AND KERNEL ARE PART OF THAT FIGURE. 65536 is Linux's default
+ * pipe capacity, not a PHP constant. The tests do not depend on the exact number
+ * — they depend on {@see WEDGE_BYTES} being comfortably above whatever it is on
+ * the runner — but the number in this doc-block is a measurement of this host.
+ *
+ * THE WEDGE ROWS ARE OBSERVED FROM OUTSIDE, in a child `php` process with this
+ * process holding the clock. Unfixed, a blocking fd 0 does not fail slowly, it
+ * does not return at all, so an in-process assertion would hang PHPUnit rather
+ * than report anything. Same instrument the rest of the process-shaped tests in
+ * this suite use — nothing installed, nothing networked.
+ */
+final class LspConnectionStdinWedgeTest extends TestCase
+{
+    /** Above the measured 65536-byte pipe capacity: this WILL block the child. */
+    private const WEDGE_BYTES = 100000;
+
+    /** Below it: the child never blocks, so the control rows pass either way. */
+    private const SAFE_BYTES = 1000;
+
+    /**
+     * A request payload big enough to overfill the parent's OWN stdin pipe. An
+     * LSP `textDocument/didOpen` carrying a source file reaches this routinely.
+     */
+    private const OVERSIZED_BYTES = 200000;
+
+    /** Small enough to fit in one pipe buffer with the framing header. */
+    private const SMALL_BYTES = 1000;
+
+    /**
+     * The request timeout handed to the fixtures. Generous next to the 0.4s the
+     * drained path measures, so a row that fails is failing on the DRAIN and not
+     * on a budget that was too tight to begin with.
+     */
+    private const REQUEST_TIMEOUT_SECONDS = 10.0;
+
+    /**
+     * The external clock, deliberately BELOW {@see REQUEST_TIMEOUT_SECONDS}: a
+     * regression that leaves the deadline in place but removes the drain returns
+     * an `ioError` at 10s, and a regression that also restores the blocking pipe
+     * never returns at all. This bound reports both as the same failure.
+     */
+    private const BOUND_SECONDS = 8.0;
+
+    private string $tempDir;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->tempDir = sys_get_temp_dir() . '/sc_lsp_stdinwedge_' . bin2hex(random_bytes(6));
+        mkdir($this->tempDir, 0o755, true);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->removeTree($this->tempDir);
+
+        parent::tearDown();
+    }
+
+    // =========================================================================
+    // Defect 1 — the deadlock
+    // =========================================================================
+
+    /**
+     * THE HEADLINE. An oversized request against a server already parked in
+     * `write(2)` on a full stderr pipe completes, and completes INTACT.
+     *
+     * The fixture echoes back the byte length it received, so this row proves
+     * three things at once: the write finished, the framing survived it, and the
+     * server was reachable afterwards. A drain that ran but wrote a prefix would
+     * satisfy "completed" and fail the length.
+     */
+    public function testAnOversizedRequestSurvivesAServerAlreadyBlockedOnStderr(): void
+    {
+        [$rc, $out, $elapsed] = $this->runProbe(self::WEDGE_BYTES, self::OVERSIZED_BYTES);
+
+        $this->assertSame(
+            0,
+            $rc,
+            sprintf(
+                'a %d-byte request against a server flooding %d bytes of stderr did not complete '
+                . '(rc=%d) after %.2fs — stdin and stderr are deadlocked against each other. '
+                . 'Output: %s',
+                self::OVERSIZED_BYTES,
+                self::WEDGE_BYTES,
+                $rc,
+                $elapsed,
+                trim($out) === '' ? '(none)' : trim($out),
+            ),
+        );
+        $this->assertSame(
+            self::OVERSIZED_BYTES,
+            $this->reportedInt($out, 'ECHOED'),
+            'the server received a different number of bytes than were sent, so the framed '
+            . 'message was truncated on the way out. Output: ' . trim($out),
+        );
+    }
+
+    /**
+     * CONTROL A — the same oversized request, stderr UNDER the pipe capacity.
+     * The child never blocks, so this row must pass with or without the drain,
+     * which is what makes the row above a statement about the drain rather than
+     * about the fixture.
+     */
+    public function testTheOversizedRequestWasOnlyEverAtRiskBecauseOfTheFlood(): void
+    {
+        [$rc, $out, ] = $this->runProbe(self::SAFE_BYTES, self::OVERSIZED_BYTES);
+
+        $this->assertSame(0, $rc, 'the probe itself is broken: ' . trim($out));
+        $this->assertSame(self::OVERSIZED_BYTES, $this->reportedInt($out, 'ECHOED'));
+
+        // The control has to be a control OF something. A fixture that stopped
+        // writing stderr altogether would pass this row for a reason that says
+        // nothing about the pipe capacity, so the flood is asserted exactly —
+        // a flood below the cap is never truncated.
+        $this->assertSame(
+            self::SAFE_BYTES,
+            $this->reportedInt($out, 'TAILAFTER'),
+            'the quiet fixture did not write its stderr, so this row is not a control for the '
+            . 'flooding one. Output: ' . trim($out),
+        );
+    }
+
+    /**
+     * CONTROL B — the full flood, but a request UNDER the pipe capacity. The
+     * parent's write fits in one buffer and returns before the child's silence
+     * can matter, so this row too must pass either way.
+     *
+     * It also carries the proof that the FLOOD IS REAL, which neither of the
+     * rows above can give on its own: the tail is pinned to
+     * {@see LspConnection}'s own cap, which can only be reached if strictly more
+     * than one cap's worth of stderr actually arrived.
+     */
+    public function testTheFloodIsRealAndASmallRequestWasNeverAtRisk(): void
+    {
+        [$rc, $out, ] = $this->runProbe(self::WEDGE_BYTES, self::SMALL_BYTES);
+
+        $this->assertSame(0, $rc, 'the probe itself is broken: ' . trim($out));
+        $this->assertSame(self::SMALL_BYTES, $this->reportedInt($out, 'ECHOED'));
+        $this->assertSame(
+            $this->maxStderrBytes(),
+            $this->reportedInt($out, 'TAILAFTER'),
+            'the flood fixture did not deliver more than one cap of stderr, so the wedge row '
+            . 'above is passing against a server that was never capable of blocking. Output: '
+            . trim($out),
+        );
+    }
+
+    /**
+     * AND THE CHILD REALLY WAS STILL BLOCKED when the oversized write began —
+     * without this, the headline row degrades silently into control A.
+     *
+     * With C the pipe capacity and B the bytes the parent had absorbed when the
+     * request started, the child can only have FINISHED its flood if
+     * WEDGE_BYTES - B <= C. A B below that threshold rules "already finished"
+     * out.
+     *
+     * ⚠️ A LOW B IS ALSO WHAT A FIXTURE THAT NEVER FLOODED AT ALL WOULD REPORT,
+     * so the two assertions below are a CONJUNCTION and neither is the proof
+     * alone. The second pins the post-exchange tail to the cap, which is reachable
+     * only if strictly more than one cap's worth of stderr actually arrived — so
+     * together they say the child wrote past the capacity AND had not got through
+     * it when the oversized write began, i.e. it was parked in `write(2)`,
+     * ignoring its stdin, for the duration of that write.
+     *
+     * MEASURED, three consecutive takes, PHP 8.3.6 / Linux 6.8: B = 0 every time
+     * against a threshold of 34464.
+     */
+    public function testTheChildHadNotFinishedItsFloodWhenTheOversizedWriteBegan(): void
+    {
+        [$rc, $out, ] = $this->runProbe(self::WEDGE_BYTES, self::OVERSIZED_BYTES);
+
+        $this->assertSame(0, $rc, 'the probe itself is broken: ' . trim($out));
+
+        $threshold = self::WEDGE_BYTES - self::MEASURED_PIPE_CAPACITY_BYTES;
+        $this->assertLessThan(
+            $threshold,
+            $this->reportedInt($out, 'TAILBEFORE'),
+            sprintf(
+                'the parent had already absorbed enough stderr (>= %d of the child\'s %d bytes) '
+                . 'for the child to have FINISHED its flood before the oversized write began, so '
+                . 'this file cannot vouch for a blocked child. Output: %s',
+                $threshold,
+                self::WEDGE_BYTES,
+                trim($out),
+            ),
+        );
+        $this->assertSame(
+            $this->maxStderrBytes(),
+            $this->reportedInt($out, 'TAILAFTER'),
+            'the exchange absorbed less than one cap of stderr, so the low TAILBEFORE above is '
+            . 'reporting a fixture that never flooded rather than a child that was still '
+            . 'blocked. Output: ' . trim($out),
+        );
+    }
+
+    /**
+     * The pipe capacity measured in this class's doc-block, as a number the
+     * assertion above can do arithmetic with rather than a figure in prose. A
+     * host with a LARGER pipe makes that proof unsound, and reds there rather
+     * than passing on reasoning that no longer holds.
+     */
+    private const MEASURED_PIPE_CAPACITY_BYTES = 65536;
+
+    /**
+     * FD 0 IS NON-BLOCKING, asserted structurally as well as behaviourally.
+     *
+     * The behavioural rows above are the real evidence, but they run out of
+     * process and take seconds; this one is instant and names the exact line. It
+     * is not redundant with them either: it fails on a `connect()` that never set
+     * the mode, whereas they fail on the CONSEQUENCE, and a future refactor could
+     * plausibly break one without the other.
+     */
+    public function testConnectTakesAllThreePipesOutOfBlockingMode(): void
+    {
+        $connection = $this->connectionTo($this->deafServerScript(), timeout: 0.2);
+
+        try {
+            $pipes = $this->pipesOf($connection);
+
+            foreach ([0, 1, 2] as $fd) {
+                $this->assertFalse(
+                    stream_get_meta_data($pipes[$fd])['blocked'],
+                    "fd $fd is still in blocking mode — a blocking fd 0 is the stdin half of the "
+                    . 'stderr deadlock, and a blocking fd 1 or 2 re-creates the read half',
+                );
+            }
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    // =========================================================================
+    // Defect 2 — the silent desync
+    // =========================================================================
+
+    /**
+     * A WRITE THAT COULD NOT FINISH REPORTS FAILURE. The old single `fwrite()`
+     * returned a short int for exactly this case and the caller read it as
+     * success.
+     *
+     * The fixture reads nothing at all, so the parent's stdin pipe fills at one
+     * buffer and never drains. With a 1s budget the write is abandoned part-way,
+     * and `sendRequest()` must answer an io error rather than going on to wait
+     * for a reply to a message the server never received in full.
+     */
+    public function testAWriteThatCannotFinishIsReportedAsAFailureRatherThanASuccess(): void
+    {
+        $connection = $this->connectionTo($this->deafServerScript(), timeout: 1.0);
+
+        try {
+            $started = microtime(true);
+            $response = $connection->sendRequest('textDocument/didOpen', [
+                'text' => str_repeat('x', self::OVERSIZED_BYTES),
+            ]);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertTrue($response->isError, 'a half-written message was reported as sent');
+            $this->assertStringContainsString('Failed to write message', (string) $response->errorMessage);
+            $this->assertLessThan(
+                self::BOUND_SECONDS,
+                $elapsed,
+                sprintf('the write was not bounded by the request timeout (%.2fs elapsed)', $elapsed),
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    /**
+     * ...AND THE SESSION IS MARKED UNUSABLE, because `Content-Length` framing
+     * cannot resynchronise. The server has consumed a header promising bytes that
+     * never arrived; there is no point in the stream at which either side can
+     * agree where the next message starts.
+     *
+     * Pinned on the latch's OBSERVABLE consequence — the next send fails
+     * immediately — rather than on the private flag, so a refactor that keeps the
+     * behaviour and drops the field still passes.
+     */
+    public function testAPartiallyWrittenMessagePoisonsTheConnectionForGood(): void
+    {
+        $connection = $this->connectionTo($this->deafServerScript(), timeout: 1.0);
+
+        try {
+            $connection->sendRequest('textDocument/didOpen', [
+                'text' => str_repeat('x', self::OVERSIZED_BYTES),
+            ]);
+
+            $started = microtime(true);
+            $next = $connection->sendRequest('textDocument/hover', []);
+            $elapsed = microtime(true) - $started;
+
+            $this->assertTrue(
+                $next->isError,
+                'a later request was attempted on a stream whose framing is desynchronised, so '
+                . 'its reply would be parsed against the abandoned fragment',
+            );
+            $this->assertStringContainsString('Failed to write message', (string) $next->errorMessage);
+            $this->assertLessThan(
+                0.5,
+                $elapsed,
+                sprintf(
+                    'the later request took %.2fs, so it went to the wire and waited rather than '
+                    . 'failing fast on the latch',
+                    $elapsed,
+                ),
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    /**
+     * THE OTHER POLARITY, and without it the latch above is satisfied by a flag
+     * that is simply always set. A write abandoned before its FIRST byte is a
+     * lost message, not a broken stream: the server saw nothing, so the next
+     * request must still go out normally.
+     *
+     * Driven by handing {@see LspConnection::writeMessage()} a deadline that has
+     * already passed, which trips the loop's first check with the payload
+     * untouched — the one way to reach a zero-byte abandonment deterministically.
+     */
+    public function testAWriteAbandonedBeforeItsFirstByteLeavesTheConnectionUsable(): void
+    {
+        $connection = $this->connectionTo($this->echoServerScript(self::SAFE_BYTES), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        try {
+            $connection->initialize();
+
+            $write = new \ReflectionMethod($connection, 'writeMessage');
+            $write->setAccessible(true);
+
+            $this->assertFalse(
+                $write->invoke($connection, ['jsonrpc' => '2.0', 'method' => 'nope'], microtime(true) - 1.0),
+                'an already-expired deadline must abandon the write',
+            );
+
+            $response = $connection->sendRequest('echoLength', ['text' => str_repeat('x', self::SMALL_BYTES)]);
+
+            $this->assertFalse(
+                $response->isError,
+                'a write abandoned with nothing written poisoned the connection anyway, so the '
+                . 'latch fires on lost messages as well as on desynchronised ones',
+            );
+            $this->assertSame(self::SMALL_BYTES, $response->result['length'] ?? -1);
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    // =========================================================================
+    // Fixtures and helpers
+    // =========================================================================
+
+    /** @return array{0: int, 1: string, 2: float} rc, stdout+stderr, elapsed */
+    private function runProbe(int $floodBytes, int $requestBytes): array
+    {
+        $probe = $this->tempDir . '/probe_' . $floodBytes . '_' . $requestBytes . '.php';
+        file_put_contents($probe, sprintf(
+            self::PROBE_TEMPLATE,
+            var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            var_export($this->blockedServerScript($floodBytes), true),
+            self::REQUEST_TIMEOUT_SECONDS,
+            $requestBytes,
+        ));
+
+        return $this->runBounded([PHP_BINARY, $probe], self::BOUND_SECONDS);
+    }
+
+    private function connectionTo(string $script, float $timeout): LspConnection
+    {
+        $connection = new LspConnection('unused', [$script]);
+        $connection->connect(PHP_BINARY, [], null, $timeout);
+
+        return $connection;
+    }
+
+    /**
+     * A server that answers `initialize` and THEN floods stderr unprompted, so
+     * it is sitting blocked in its own `write()` — not waiting for a header —
+     * when the parent's next write begins.
+     *
+     * ⚠️ THE ORDERING IS THE WHOLE TEST, AND THE SECOND MESSAGE IS NOT AN
+     * ARBITRARY CHOICE. Two earlier arrangements were VACUOUS, and the second was
+     * caught only by the accounting row below:
+     *
+     *  - Flooding in RESPONSE to a message lets {@see LspConnection::refill()}
+     *     drain it while collecting the reply, so the child is idle at the header
+     *     read by the time the parent writes again.
+     *  - Flooding after the FIRST message (`initialize`) is drained by the fix
+     *     itself: {@see LspConnection::initialize()} then sends the `initialized`
+     *     NOTIFICATION, and the write loop's own drain empties the pipe on the
+     *     way past. MEASURED: the parent reported 65536 absorbed bytes BEFORE the
+     *     oversized write had begun.
+     *
+     * The flood therefore lands after message two — the last thing `initialize()`
+     * sends — so nothing runs between it and the request under test.
+     */
+    private function blockedServerScript(int $floodBytes): string
+    {
+        $path = $this->tempDir . '/blocked_' . $floodBytes . '.php';
+        file_put_contents($path, $this->withFraming(sprintf(self::BLOCKED_SERVER_TEMPLATE, $floodBytes)));
+
+        return $path;
+    }
+
+    /** A well-behaved server: answers every message, floods only on request. */
+    private function echoServerScript(int $floodBytes): string
+    {
+        $path = $this->tempDir . '/echo_' . $floodBytes . '.php';
+        file_put_contents($path, $this->withFraming(sprintf(self::ECHO_SERVER_TEMPLATE, $floodBytes)));
+
+        return $path;
+    }
+
+    /** A server that reads NOTHING, so the parent's stdin pipe fills and stays full. */
+    private function deafServerScript(): string
+    {
+        $path = $this->tempDir . '/deaf.php';
+        file_put_contents($path, self::DEAF_SERVER);
+
+        return $path;
+    }
+
+    /**
+     * Splice {@see FRAMING_HELPERS} into a fixture template.
+     *
+     * FAILS LOUDLY on a template that carries no marker rather than writing a
+     * fixture with no framing helpers in it — that fixture would exit at its
+     * first `sc_read_framed()` call, the connection would see a server that says
+     * nothing, and every row above would go red for a reason that has nothing to
+     * do with the class under test.
+     */
+    private function withFraming(string $template): string
+    {
+        $this->assertStringContainsString(
+            self::FRAMING_MARKER,
+            $template,
+            'the fixture template lost its framing-helper marker',
+        );
+
+        return str_replace(self::FRAMING_MARKER, self::FRAMING_HELPERS, $template);
+    }
+
+    /** @param array<int, string> $argv @return array{0: int, 1: string, 2: float} */
+    private function runBounded(array $argv, float $budgetSeconds): array
+    {
+        $process = proc_open($argv, [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes);
+        $this->assertIsResource($process, 'could not spawn the probe');
+
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+
+        $start = microtime(true);
+        $deadline = $start + $budgetSeconds;
+        $out = '';
+        $timedOut = false;
+
+        while (true) {
+            $out .= (string) stream_get_contents($pipes[1]);
+            $out .= (string) stream_get_contents($pipes[2]);
+
+            if (!proc_get_status($process)['running']) {
+                break;
+            }
+            if (microtime(true) >= $deadline) {
+                $timedOut = true;
+                break;
+            }
+            usleep(5000);
+        }
+
+        $elapsed = microtime(true) - $start;
+
+        if ($timedOut) {
+            // Signal 9 rather than SIGTERM: the point of this branch is that a
+            // probe wedged in a blocking write does not get to decide when it
+            // stops.
+            proc_terminate($process, 9);
+        }
+
+        $out .= (string) stream_get_contents($pipes[1]);
+        $out .= (string) stream_get_contents($pipes[2]);
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+        $rc = proc_close($process);
+
+        return [$timedOut ? -1 : $rc, $out, $elapsed];
+    }
+
+    /**
+     * Pull one `LABEL:<int>` line out of a probe's stdout.
+     *
+     * FAILS rather than returning a sentinel when the label is missing or is not
+     * followed by digits: a reader that answered 0 for "the probe never said"
+     * would turn a broken probe into a passing blocked-child proof, which is the
+     * exact shape of hole this readout exists to close.
+     */
+    private function reportedInt(string $out, string $label): int
+    {
+        $this->assertSame(
+            1,
+            preg_match('/^' . preg_quote($label, '/') . ':(\d+)$/m', $out, $m),
+            "the probe did not report a $label:<int> line, so its accounting cannot be read at "
+            . 'all. Output: ' . trim($out),
+        );
+
+        return (int) $m[1];
+    }
+
+    /** @return array<int, resource> */
+    private function pipesOf(LspConnection $connection): array
+    {
+        $property = new \ReflectionProperty($connection, 'pipes');
+        $property->setAccessible(true);
+
+        /** @var array<int, resource> $pipes */
+        $pipes = $property->getValue($connection);
+
+        return $pipes;
+    }
+
+    /** Read off the class rather than restated, so the cap cannot drift from it. */
+    private function maxStderrBytes(): int
+    {
+        return (int) (new \ReflectionClass(LspConnection::class))->getConstant('MAX_STDERR_BYTES');
+    }
+
+    private function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) ? $this->removeTree($path) : @unlink($path);
+        }
+
+        @rmdir($dir);
+    }
+
+    /**
+     * The `Content-Length` reader/writer every fixture below shares. Spelled once
+     * and interpolated, so a framing bug in the fixture cannot make one row pass
+     * and another fail for reasons that have nothing to do with the class under
+     * test.
+     */
+    /** Spelled once, so the templates and {@see withFraming()} cannot drift apart. */
+    private const FRAMING_MARKER = 'SC_FRAMING_HELPERS';
+
+    private const FRAMING_HELPERS = <<<'PHP'
+        function sc_read_framed() {
+            $header = '';
+            while (($line = fgets(STDIN)) !== false) {
+                if ($line === "\r\n" || $line === "\n") {
+                    break;
+                }
+                $header .= $line;
+            }
+            if (!preg_match('/Content-Length:\s*(\d+)/i', $header, $m)) {
+                return null;
+            }
+            $len = (int) $m[1];
+            $body = '';
+            while (strlen($body) < $len) {
+                $chunk = fread(STDIN, $len - strlen($body));
+                if ($chunk === false || $chunk === '') {
+                    return null;
+                }
+                $body .= $chunk;
+            }
+            return json_decode($body, true);
+        }
+        function sc_write_framed(array $msg) {
+            $json = json_encode($msg);
+            echo 'Content-Length: ', strlen($json), "\r\n\r\n", $json;
+            flush();
+        }
+        function sc_reply(array $msg) {
+            $method = (string) ($msg['method'] ?? '');
+            if ($method === 'initialize') {
+                return ['capabilities' => ['textDocumentSync' => 1]];
+            }
+            if ($method === 'echoLength' || $method === 'textDocument/didOpen') {
+                return ['length' => strlen((string) ($msg['params']['text'] ?? ''))];
+            }
+            return [];
+        }
+        PHP;
+
+    /**
+     * %d bytes of stderr, written unprompted the moment the handshake is done.
+     * Above the pipe capacity the child parks inside that `fwrite()` and stops
+     * reading stdin, which is the state the oversized write has to meet.
+     */
+    private const BLOCKED_SERVER_TEMPLATE = <<<'PHP'
+        <?php
+        SC_FRAMING_HELPERS
+        $noise = str_repeat('e', %d);
+        $seen = 0;
+        while (($msg = sc_read_framed()) !== null) {
+            $seen++;
+            if (isset($msg['id'])) {
+                sc_write_framed(['jsonrpc' => '2.0', 'id' => $msg['id'], 'result' => sc_reply($msg)]);
+            }
+            if ($seen === 2) {
+                fwrite(STDERR, $noise);
+            }
+        }
+        PHP;
+
+    /** %d bytes of stderr, written in reply to each message rather than unprompted. */
+    private const ECHO_SERVER_TEMPLATE = <<<'PHP'
+        <?php
+        SC_FRAMING_HELPERS
+        $noise = str_repeat('e', %d);
+        while (($msg = sc_read_framed()) !== null) {
+            if ($noise !== '') {
+                fwrite(STDERR, $noise);
+            }
+            if (isset($msg['id'])) {
+                sc_write_framed(['jsonrpc' => '2.0', 'id' => $msg['id'], 'result' => sc_reply($msg)]);
+            }
+        }
+        PHP;
+
+    /**
+     * Reads NOTHING and says nothing, so the parent's stdin pipe fills at one
+     * buffer and stays full for as long as the child lives. The sleep is longer
+     * than any budget in this file so the child cannot exit and turn the wedge
+     * into an EPIPE by accident.
+     */
+    private const DEAF_SERVER = <<<'PHP'
+        <?php
+        sleep(30);
+        PHP;
+
+    /**
+     * %s autoloader path · %s server script path · %f request timeout ·
+     * %d bytes of request payload.
+     *
+     * Reports the absorbed stderr either side of the exchange, because the byte
+     * accounting is what tells the parent whether the child was still blocked
+     * when the write began.
+     */
+    private const PROBE_TEMPLATE = <<<'PHP'
+        <?php
+        require %s;
+        $c = new SugarCraft\Crush\LSP\LspConnection('unused', [%s]);
+        $c->connect(PHP_BINARY, [], null, %F);
+        $c->initialize();
+        // Let the child reach its unprompted stderr write and PARK in it. Nothing
+        // in this class drains outside a write loop or a refill, so the sleep
+        // cannot itself absorb the flood — TAILBEFORE stays honest.
+        usleep(200000);
+        echo 'TAILBEFORE:', strlen($c->stderrTail()), "\n";
+        $r = $c->sendRequest('echoLength', ['text' => str_repeat('x', %d)]);
+        echo 'TAILAFTER:', strlen($c->stderrTail()), "\n";
+        if ($r->isError) {
+            echo 'ERROR:', $r->errorMessage ?? '(none)', "\n";
+            $c->disconnect();
+            exit(1);
+        }
+        echo 'ECHOED:', $r->result['length'] ?? -1, "\n";
+        $c->disconnect();
+        PHP;
+}
