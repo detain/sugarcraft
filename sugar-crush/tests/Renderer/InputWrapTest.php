@@ -111,6 +111,20 @@ final class InputWrapTest extends TestCase
                 substr_count(implode('', $box), '█'),
                 "at {$cols} columns the block cursor was lost or duplicated by the wrap",
             );
+            // The upper bound alone cannot see a fix that wraps too NARROW, and
+            // "too narrow" is the direction every arithmetic slip in this
+            // budget travels: MEASURED, spelling the chrome as 6 instead of 4
+            // paints this draft 5 cells short of the pane at 60 columns, and
+            // wrapping at a hard-coded 12 paints it 45 short. Both used to
+            // pass. The draft is 40 four-letter words, so a correct wrap always
+            // has a row that reaches the budget exactly and the box is exactly
+            // as wide as the terminal.
+            $this->assertSame(
+                $cols,
+                self::widestRow($box),
+                "at {$cols} columns the box came out " . self::widestRow($box)
+                    . ' cells wide - a draft this long must fill the pane, not sit inside it',
+            );
         }
     }
 
@@ -141,14 +155,20 @@ final class InputWrapTest extends TestCase
         // wider one, so the width bound above cannot see it on its own: 240
         // cells of text is 720 bytes, and a byte wrap at 54 would paint 14 rows
         // of ~18 cells. Assert the box actually fills the pane it was given.
-        $widest = 0;
-        foreach ($box as $row) {
-            $widest = max($widest, Width::of($row));
-        }
-        $this->assertGreaterThanOrEqual(
-            $cols - 2,
-            $widest,
-            'the CJK draft wrapped far narrower than the pane - the fitter is counting bytes, not cells',
+        //
+        // The bound is $cols and not `$cols - 2`. WHAT IT SAID, with the
+        // slack: that two cells of give were harmless. WHAT IS TRUE NOW: two
+        // cells is exactly the magnitude of the arithmetic slips this budget
+        // suffers, and MEASURED, `INPUT_CHROME_COLS` spelled 6 instead of 4
+        // lands this draft on 58 - it PASSED the old bound with the box
+        // painted two cells narrower than the terminal at every width. WHY A
+        // LOWER BOUND STILL EARNS ITS PLACE: unchanged, and it is the half the
+        // upper bound cannot do - a byte wrap fails NARROW, not wide.
+        $this->assertSame(
+            $cols,
+            self::widestRow($box),
+            'the CJK draft came out ' . self::widestRow($box) . ' cells wide against a ' . $cols
+                . '-column pane - either the fitter is counting bytes, or the width budget is wrong',
         );
     }
 
@@ -214,6 +234,42 @@ final class InputWrapTest extends TestCase
         $this->assertStringContainsString('> abcd█', $box[0]);
     }
 
+    /**
+     * The narrow-pane branch of the prompt indent, which nothing pinned and
+     * whose failure mode is total erasure rather than an overflow.
+     *
+     * `renderInput()` drops the `"> "` prompt below the width at which the
+     * indent would leave no text column at all. The boundary is `$inner >
+     * INPUT_PROMPT_COLS`, and it is strict on purpose: MEASURED on PHP 8.3.6,
+     * `Renderer::wrapToPane('hello world█', 0)` returns a single EMPTY row, so
+     * spelling that comparison `>=` paints `"> "` and nothing else at 6
+     * columns — the draft and the block cursor both vanish while the box, the
+     * border and the frame all still look right.
+     *
+     * Three widths, one either side of the boundary and one on it: at 5 the
+     * prompt is already gone, at 6 it is dropped by this branch, at 7 it is
+     * affordable and painted.
+     */
+    public function testTheDraftSurvivesThePaneTooNarrowToAffordThePrompt(): void
+    {
+        foreach ([5 => '', 6 => '', 7 => '> '] as $cols => $expectedPrompt) {
+            $box = $this->inputBox($this->chat('hello world', $cols));
+            $inner = self::insideBorder($box[0]);
+
+            $this->assertStringStartsWith(
+                $expectedPrompt . 'h',
+                $inner,
+                "at {$cols} columns the draft's first cell is not painted - row 0 is "
+                    . var_export($inner, true),
+            );
+            $this->assertSame(
+                1,
+                substr_count(implode('', $box), '█'),
+                "at {$cols} columns the block cursor was lost or duplicated",
+            );
+        }
+    }
+
     // =====================================================================
     // fixtures
     // =====================================================================
@@ -228,10 +284,19 @@ final class InputWrapTest extends TestCase
      *
      * Found by predicate rather than by position: the frame's row count moves
      * with the transcript, the tab strip and the agent pane, so an index would
-     * pin this file to an unrelated layout. The box is the run of rows between
-     * the `╭`-cornered box that opens after the transcript shell closes — in
-     * practice, the LAST border-cornered run in the frame before the status
-     * bar — so it is located from the bottom.
+     * pin this file to an unrelated layout.
+     *
+     * WHAT THIS SAID: that the box is located by its `╭` corner.
+     * WHAT IS TRUE NOW: it never was. The walk below matches `└` and then
+     * `┌`, which is what {@see \SugarCraft\Sprinkles\Border::normal()} — the
+     * border {@see \SugarCraft\Crush\Renderer::renderInput()} actually asks for
+     * — paints; `╭` belongs to the ROUNDED border, which this box does not
+     * use. Checked against `Border::normal()` rather than assumed.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the reason for locating the box
+     * from the BOTTOM is the load-bearing half and is unchanged — the box is
+     * the last border-cornered run in the frame before the status bar, and
+     * anything below its closing border (status bar, slash menu, agent pane) is
+     * skipped by the same walk.
      *
      * @return list<string>
      */
@@ -262,6 +327,22 @@ final class InputWrapTest extends TestCase
         self::assertGreaterThan($open + 1, $close, 'the input box has no content rows at all');
 
         return array_values(array_slice($rows, $open + 1, $close - $open - 1));
+    }
+
+    /**
+     * The widest row of the box, in cells — the measure both width bounds are
+     * expressed against, so the two can never drift apart.
+     *
+     * @param list<string> $box
+     */
+    private static function widestRow(array $box): int
+    {
+        $widest = 0;
+        foreach ($box as $row) {
+            $widest = max($widest, Width::of($row));
+        }
+
+        return $widest;
     }
 
     /** The text of a box content row, its `│` walls and one pad cell removed. */
