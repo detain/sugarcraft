@@ -26,10 +26,12 @@ use PHPUnit\Framework\TestCase;
  * round: a guard HERE may read `sugar-crush`, and never the reverse.
  *
  * WHY THE SCANNER IS A COPY, WHICH IS NORMALLY THE WRONG ANSWER. The zero-copy
- * shape was tried first and MEASURED not to work. `.github/workflows/ci.yml`'s
- * `path-repo-check` job — the only job that runs these files — does NO
- * `composer install` at all (it reads manifests, it does not resolve them),
- * which is why it installs a PHPUnit PHAR instead of borrowing a lib's. There
+ * shape was tried first and MEASURED not to work. The job that runs these files
+ * — `tools-guards` in `.github/workflows/ci.yml`, which THIS VERY PIN is the
+ * reason for, since a red here used to arrive under a job named "Path-repo
+ * policy" and misdescribe itself (E589) — does NO `composer install` at all.
+ * Nothing under `tools/` is a composer package, so there is no per-lib
+ * `vendor/bin/phpunit` to borrow and the job installs a PHPUnit PHAR. There
  * is therefore no autoloader for `SugarCraft\Crush\Tests\*` in that job, and
  * `require`-ing the canonical guard to reach its scanner by reflection dies
  * before PHPUnit reports anything: VERIFIED on this box, PHP 8.3.6, it fatals
@@ -62,6 +64,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class StackedDocCommentTest extends TestCase
 {
+    use PhpFunctionBodyTokens;
+
     /**
      * The canonical implementation this file's scanner is a copy of.
      */
@@ -243,6 +247,69 @@ final class StackedDocCommentTest extends TestCase
             ),
             'a nested brace closed the body early',
         );
+
+        // AND NEITHER MAY AN INTERPOLATION BRACE, WHICH IS THE SHAPE THE
+        // FIXTURE ABOVE CANNOT EXPRESS (rule 11). Its alphabet is `if (…) {…}`
+        // — a brace that is a plain string token on both sides — so it is
+        // silent about the asymmetric ones. MEASURED on PHP 8.3.6: inside a
+        // string, `{$a}` opens with an ARRAY token (`T_CURLY_OPEN`), `${a}`
+        // with `T_DOLLAR_OPEN_CURLY_BRACES`, and BOTH close with the plain
+        // string `'}'`. A walk testing only `$token === '{'` counts the close
+        // and not the open, so the body ends at the interpolation. Every row
+        // below therefore carries a statement AFTER the string: truncation is
+        // only visible as the absence of something that follows.
+        //
+        // EVERY FIXTURE SOURCE IS SINGLE-QUOTED. A double-quoted one would
+        // interpolate in THIS file and the fixture would never carry the bytes
+        // it is about (rule 26).
+        self::assertSame(
+            ['$s', '=', '"', 'a', '{', '$a', '}', 'b', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "a{$a}b"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a `{$a}` interpolation closed the body early: the opening brace is a T_CURLY_OPEN '
+            . 'array token and only the closing one is the string `}`, so an opener test of '
+            . '`$token === \'{\'` alone counts one close it never counted an open for',
+        );
+
+        self::assertSame(
+            ['$s', '=', '"', 'a', '${', 'a', '}', 'b', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "a${a}b"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a `${a}` interpolation closed the body early — the same defect as the row above '
+            . 'with T_DOLLAR_OPEN_CURLY_BRACES as the opener, and a fix that names only '
+            . 'T_CURLY_OPEN leaves this half of it open',
+        );
+
+        // THE MIRROR IMAGE, PINNED IN THE OTHER POLARITY (rules 41 and 49). A
+        // LITERAL brace inside a string arrives as `T_ENCAPSED_AND_WHITESPACE`
+        // whose text is exactly `}` or exactly `{` — an ARRAY, which the strict
+        // `===` against a string rejects. That is correct and it is an accident
+        // of the comparison rather than an intent, so widening the opener test
+        // to any token whose TEXT is `{` would break these two rows while
+        // leaving the two above green.
+        self::assertSame(
+            ['$s', '=', '"', '$a', '}', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "$a}"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a literal `}` inside a string ended the body: it is T_ENCAPSED_AND_WHITESPACE, '
+            . 'not the string token `}`, and must not be counted',
+        );
+
+        self::assertSame(
+            ['$s', '=', '"', '$a', '{', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "$a{"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a literal `{` inside a string was counted as an opening brace, so the body now '
+            . 'runs one level too deep and never closes',
+        );
     }
 
     /**
@@ -271,63 +338,6 @@ final class StackedDocCommentTest extends TestCase
         return $files;
     }
 
-    /**
-     * The significant tokens of one named function's body, or `[]`.
-     *
-     * Whitespace and comments are dropped so the comparison is about behaviour;
-     * braces are matched so a nested block cannot end the body early.
-     *
-     * @return list<string>
-     */
-    private static function functionBodyTokens(string $source, string $name): array
-    {
-        $tokens = token_get_all($source);
-        $count = \count($tokens);
-
-        for ($i = 0; $i < $count; $i++) {
-            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FUNCTION) {
-                continue;
-            }
-            $named = null;
-            for ($j = $i + 1; $j < $count; $j++) {
-                if (\is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
-                    continue;
-                }
-                $named = $j;
-
-                break;
-            }
-            if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][1] !== $name) {
-                continue;
-            }
-
-            $depth = 0;
-            $body = [];
-            for ($j = $named; $j < $count; $j++) {
-                $token = $tokens[$j];
-                if ($token === '{') {
-                    $depth++;
-                    if ($depth === 1) {
-                        continue;
-                    }
-                } elseif ($token === '}') {
-                    $depth--;
-                    if ($depth === 0) {
-                        return $body;
-                    }
-                }
-                if ($depth === 0) {
-                    continue;
-                }
-                if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
-                    continue;
-                }
-                $body[] = \is_array($token) ? $token[1] : $token;
-            }
-        }
-
-        return [];
-    }
 
     /**
      * The 1-indexed lines of every doc-comment immediately followed by another

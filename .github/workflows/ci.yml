@@ -149,8 +149,40 @@ jobs:
   #
   # The monorepo root keeps its full closure in git — the root IS the directory
   # those ../ urls resolve against.
-  path-repo-check:
-    name: 'Path-repo policy'
+  # WHAT THIS JOB IS AND WHY IT IS NOT PART OF `path-repo-check`.
+  #
+  # `tools/tests/` began life as the guard for `tools/check-path-repos.php`'s
+  # classifiers — which is why it was a STEP of the path-repo job, running
+  # first so that a red there meant the manifest verdicts underneath it were
+  # not worth reading. That ordering is preserved by `needs:` below, and is now
+  # sharper: a red here SKIPS the manifest job rather than burying it.
+  #
+  # THE REASON FOR THE SPLIT IS THE JOB NAME, NOT THE ORDERING. `tools/tests/`
+  # has since grown guards that have nothing to do with composer manifests, and
+  # one of them — `tools/tests/StackedDocCommentTest.php` — pins its copy of a
+  # scanner against the canonical implementation in
+  # `sugar-crush/tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php`. So a
+  # contributor who changes `stackedDocCommentLines()` by one token in
+  # `sugar-crush` gets a red from a job called "Path-repo policy", whose name
+  # offers no hint at all of the reason. That is a real cost — a red whose name
+  # misdescribes it is read as flaky infrastructure — and this job's name is
+  # the fix. The failure text names the file to port the change into; the job
+  # name now names the family the failure belongs to.
+  #
+  # AND THE NAME HAD TO MOVE AGAIN, ONE ROUND LATER, FOR THE SAME REASON.
+  # WHAT IT SAID: "tools/ guards (classifiers, docs generator, scanner-copy
+  # drift)". WHAT IS TRUE NOW: `tools/tests/BareCitationDriftTest.php` reads
+  # every `.php` file under `candy-pty/` as well — `src/`, `bin/` and `tests/`
+  # — so editing a doc-block in a PUBLISHED package can now red this job, and
+  # that name told a contributor working in `candy-pty` nothing whatsoever.
+  # WHY THE PARAGRAPH ABOVE STILL EARNS ITS PLACE: it is the argument, and the
+  # argument generalises past the case that produced it. A job under `tools/`
+  # that reaches into other packages will keep acquiring reasons to red that
+  # its own directory name cannot express, so the name states the REACH rather
+  # than trying to enumerate the guards. The enumeration is what rotted in one
+  # round; `tools/tests/` is what a reader should go and list.
+  tools-guards:
+    name: 'tools/ guards (+ drift pins that read candy-pty/ and sugar-crush/)'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -159,9 +191,9 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-          # phpunit as a PHAR, for the tools/tests step below. This job does no
-          # composer install (it reads manifests, it does not resolve them), so
-          # there is no per-lib vendor/bin/phpunit to borrow.
+          # phpunit as a PHAR. Nothing under `tools/` is a composer package —
+          # there is no `tools/composer.json` and so no per-lib
+          # `vendor/bin/phpunit` to borrow, in this job or any other.
           #
           # PINNED TO 10 DELIBERATELY. Bare `tools: phpunit` resolves to the
           # newest major supporting the requested PHP, so this job would follow
@@ -171,14 +203,27 @@ jobs:
           # the change goes red. See CONTRIBUTING.md, which documents the same
           # pin for the local form of this command.
           tools: phpunit:10
-      # THE GUARD FOR THE SCRIPT THE REST OF THIS JOB GATES ON, and it existed
-      # unrun for six months: tools/tests/CheckPathReposTest.php is referenced
-      # by no phpunit.xml, no composer autoload and, until now, no workflow.
-      # Every step below is a hard gate whose classifier nothing checked.
-      # It runs FIRST, deliberately — a red here means the verdicts underneath
-      # it are not worth reading.
-      - name: Verify the path-repo checker's own classifiers
+      # THESE FILES EXISTED UNRUN FOR SIX MONTHS: referenced by no phpunit.xml,
+      # no composer autoload and, until round 58, no workflow. Every step of
+      # `path-repo-check` is a hard gate whose classifier nothing checked.
+      - name: Verify the tools/ guards
         run: phpunit --no-configuration --colors=never tools/tests/
+
+  path-repo-check:
+    name: 'Path-repo policy'
+    runs-on: ubuntu-latest
+    # RUNS AFTER THE CLASSIFIER GUARD, for the same reason that guard used to be
+    # this job's first step: every verdict below is produced by
+    # `tools/check-path-repos.php`, and a run of it whose own classifiers are
+    # red is not evidence about the manifests.
+    needs: [tools-guards]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.3'
+          coverage: none
       - name: Verify no sibling path-repos in published manifests
         run: php tools/check-path-repos.php --no-lib-path-repos
       - name: Verify the root closure is complete

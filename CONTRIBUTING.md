@@ -57,12 +57,13 @@ verify no injected entries leaked in:
 php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 ```
 
-That is one of **five** gates the `path-repo-check` job in
-`.github/workflows/ci.yml` runs, and until now this file documented only two
-of them — so a contributor could pass everything CONTRIBUTING asked for and
-still be failed by CI on a check they had never been told about. Run the whole
-set before you push; each must exit 0, and none of them needs a
-`composer install`:
+That is one of **five** gates `.github/workflows/ci.yml` runs without a
+`composer install`, and until recently this file documented only two of them —
+so a contributor could pass everything CONTRIBUTING asked for and still be
+failed by CI on a check they had never been told about. They live in two jobs:
+the first command below is the `tools-guards` job, and the other four are
+`path-repo-check`, which `needs:` it. Run the whole set before you push; each
+must exit 0:
 
 ```sh
 phpunit --no-configuration --colors=never tools/tests/  # the checker's own guards

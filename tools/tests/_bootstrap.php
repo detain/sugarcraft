@@ -122,3 +122,108 @@ trait TmpTree
         \rmdir($dir);
     }
 }
+
+/**
+ * The significant tokens of one named function's body.
+ *
+ * WHY THIS IS SHARED RATHER THAN COPIED A THIRD TIME. `tools/tests/` now
+ * carries TWO drift pins of the same shape — `StackedDocCommentTest` pins its
+ * copy of `sugar-crush`'s stacked-doc-comment scanner, and `ToolsEnvRosterTest`
+ * pins `candy-pty`'s copy of the environment scanner. Both answer "have these
+ * two implementations diverged" by comparing token streams, and a divergence
+ * detector that itself existed in two copies would be the joke writing itself.
+ *
+ * The extractor is checked against sources whose answers are already known by
+ * {@see StackedDocCommentTest::testTheBodyExtractorReadsTheFunctionItIsAskedFor()}
+ * — an extractor that always returned `[]`, or always the first function in the
+ * file, satisfies every equality that uses it perfectly (rule 25).
+ */
+trait PhpFunctionBodyTokens
+{
+    /**
+     * The significant tokens of one named function's body, or `[]`.
+     *
+     * Whitespace and comments are dropped so the comparison is about behaviour;
+     * braces are matched so a nested block cannot end the body early.
+     *
+     * A BRACE IS NOT ALWAYS A STRING TOKEN, AND THE FIRST DRAFT OF THIS WALK
+     * ASSUMED IT WAS. WHAT IT SAID: the sentence above, with `$token === '{'`
+     * as its only opener test. WHAT IS TRUE, MEASURED on PHP 8.3.6: inside a
+     * double-quoted string or a heredoc, `token_get_all()` emits the OPENING
+     * brace of `"{$a}"` as an ARRAY token (`T_CURLY_OPEN`) and of `"${a}"` as
+     * `T_DOLLAR_OPEN_CURLY_BRACES`, while emitting the matching CLOSING brace
+     * as the plain string `'}'`. A body containing either therefore counted one
+     * close it had never counted an open for, `$depth` fell to 0 early, and the
+     * function returned a TRUNCATED body:
+     *
+     *     $s = "a{$a}b"; return 1;   =>   ["$s", "=", '"', "a", "{", "$a"]
+     *
+     * WHY THAT MATTERED RATHER THAN BEING UNTIDY. Both callers are drift pins
+     * that compare two copies of one function for EQUALITY. Truncate both sides
+     * at the same interpolation and a real divergence after it compares equal —
+     * the guard passes on exactly the change it exists to catch, and
+     * `assertNotSame([], ...)` does not save it because a truncated body is not
+     * empty. Adding the interpolation to both copies is what the failure text
+     * itself tells a contributor to do ("port the change across"), so the
+     * blind spot was reachable by following the instructions.
+     *
+     * THE MIRROR-IMAGE SHAPE IS ALREADY SAFE, and it is safe by accident of the
+     * strict comparison rather than by intent, so it is pinned too (rule 49):
+     * `"$a}"` yields a `T_ENCAPSED_AND_WHITESPACE` whose text is exactly `}`
+     * and `"$a{"` one whose text is exactly `{`. Those are ARRAYS, and `===`
+     * against a string rejects them, so a literal brace inside a string is
+     * correctly not counted in either direction. Both shapes are fixtures on
+     * {@see StackedDocCommentTest::testTheBodyExtractorReadsTheFunctionItIsAskedFor()}.
+     *
+     * @return list<string>
+     */
+    private static function functionBodyTokens(string $source, string $name): array
+    {
+        $tokens = token_get_all($source);
+        $count = \count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FUNCTION) {
+                continue;
+            }
+            $named = null;
+            for ($j = $i + 1; $j < $count; $j++) {
+                if (\is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                    continue;
+                }
+                $named = $j;
+
+                break;
+            }
+            if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][1] !== $name) {
+                continue;
+            }
+
+            $depth = 0;
+            $body = [];
+            for ($j = $named; $j < $count; $j++) {
+                $token = $tokens[$j];
+                if ($token === '{' || (\is_array($token) && \in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
+                    $depth++;
+                    if ($depth === 1) {
+                        continue;
+                    }
+                } elseif ($token === '}') {
+                    $depth--;
+                    if ($depth === 0) {
+                        return $body;
+                    }
+                }
+                if ($depth === 0) {
+                    continue;
+                }
+                if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                $body[] = \is_array($token) ? $token[1] : $token;
+            }
+        }
+
+        return [];
+    }
+}

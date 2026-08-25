@@ -18895,3 +18895,278 @@ a trait (true for an enum). A family member legitimately declared in either woul
 message blaming the scanner for source it read perfectly well — correct code answered with a misdirecting
 failure, which is where an exemption row gets written for a defect that is really in the classifier.
 Pair all four: `class_exists() || interface_exists() || trait_exists() || enum_exists()`.
+
+### Ec59-1 — E490's campaign excludes the prior rate; pooled it is 60 takes short of excluding 1-in-200
+
+**THIS ENTRY UNDERSTATED N BY 298 TAKES IN ITS FIRST VERSION.** It reported the supervisor's
+240-take campaign as though it were the only one. There are **two** completed E490 campaigns, both
+`candy-pty`, both the same take form (`vendor/bin/phpunit --testdox`), both watchdogged per-PID,
+both entirely clean. The second was verified here from its raw TSV and its runner script, not from
+a summary:
+
+| campaign | tree | takes | contiguous | events | rc≠0 | rule-15 instrument row |
+|---|---|---|---|---|---|---|
+| supervisor (`r58campaign/takes.tsv`) | `/home/sites/sugarcraft/candy-pty` | **240** | 1..240 ✔ | 0 | none | **yes** — `instrument rc=137` at `CANDY_PTY_HANG_BUDGET=0.6` |
+| round 58 lane c (`r58c/campaign-takes.tsv`) | `/home/sites/crush-lane-c/candy-pty` | **298** | 1..298 ✔ | 0 (`campaign-events.log` never created) | none | **no** |
+
+Every row in both is byte-identical at `Tests: 630, Assertions: 1494, Warnings: 1, Skipped: 16.` —
+one distinct result string across 538 takes. The 298-take run was `campaign.stop`-ed at 298 of
+`MAX=400`, not exhausted.
+
+**The arithmetic, stated the way rule 45 requires.** The one-sided 95% upper bound after N clean
+takes is `1 - 0.05^(1/N)`.
+
+| N | bound | 1 in … | note |
+|---|---|---|---|
+| 240 (as first reported) | 1.2405% | 81 | correct for that campaign alone |
+| 298 (the one that was missed) | 1.0002% | 100 | |
+| **538 (pooled)** | **0.5553%** | **180** | |
+| — | 1.3158% | 76 | the prior estimate |
+
+**THE PRACTICAL INVERSION, WHICH IS WHY THE UNDERCOUNT MATTERED.** The first version's headline
+recommendation was *"stop running takes — excluding 1-in-200 costs 598 takes"*, presented as a cost
+nobody would pay. **538 are already banked. Sixty more takes — about 48 minutes of wall clock —
+reaches 598.** The entry argued against doing something it was one hour away from having done.
+
+**Caveats, stated rather than hidden, because they are what a pooling decision turns on:**
+
+- The two campaigns ran on **different trees** (`/home/sites/sugarcraft` vs the lane copy). Pooling
+  assumes the flake rate is a property of the suite rather than of a commit. That is the same
+  assumption the 1-in-76 prior rests on, so pooling is not a new leap — but it is a leap.
+- Their windows **overlap**: the lane campaign ran 11:17–15:16, the supervisor's finished at 16:07.
+  For roughly two and a half hours both were running on this box, so the takes are not independent
+  with respect to machine load. The direction of that bias is arguable (concurrent load makes a
+  timing-sensitive wedge *more* likely to surface, not less), which is exactly why it is recorded
+  instead of resolved.
+- **The 298-take campaign has no rule-15 instrument row.** Its wall watchdog was never shown to
+  fire, so a wedged run might have been recorded as an ordinary take. Those 298 takes are therefore
+  weaker evidence than the supervisor's 240, and any future campaign must arm the instrument check
+  first. This asymmetry is the single biggest reason to treat 0.5553% as an optimistic bound.
+
+**The scaling, unchanged:** to exclude 1 in 200 needs **598** takes, 1 in 500 needs **1497**, 1 in
+1000 needs **2995**. From 538 banked that is **+60**, **+959** (~12.8 h) and **+2457** (~32.8 h).
+
+**Recommended disposition: (ii) KEEP OPEN, with the pooled bound recorded — not "closed".** The
+reasoning is unchanged and survives the correction: the campaign falsified a *rate*, not a
+*mechanism*. Nothing in 538 takes identifies what was wedging the loop, so there is no causal claim
+to retire; the only thing retired is the 1-in-76 estimate. Retiring E490 outright would also retire
+the instrumentation argument, and the instrumentation is the part earning its keep —
+`SharedLoopResidue` and the per-class `tearDown()` census exist because of this hunt and have caught
+a real leak. **Concretely: mark 1-in-76 SUPERSEDED, record 0.5553% as the standing bound, and make
+the next 60 takes an explicit yes/no decision rather than an assumed no** — with an instrument row
+this time, so the pooled N is uniformly rule-15 clean.
+
+**Rule 45's own lesson, restated because this entry broke it and then broke it again:** a quiet
+campaign reported without its bound is an unearned closure — and a bound computed on part of the
+evidence is an unearned *non*-closure. State N, state where every take in N came from, state the
+bound, state the N you would need.
+
+### Ec59-2 — E585 was already fixed, and the brief promoted it as open
+
+Round 59's lane-c brief listed E585 as "the same shape still open". **It is not.** Measured in the
+tree at `e4c69b04e`: `ChildWallClockBudgetTest::wallClockWrappersIn()` already reads
+`T_CONSTANT_ENCAPSED_STRING` and `T_ENCAPSED_AND_WHITESPACE` tokens rather than raw text, already
+classifies rather than requires a budget token, and already routes what it cannot evaluate into
+`unresolved`. The class doc-block already carries the widening in rule 7's three-part form,
+including the "two censuses that both see nothing agree perfectly" finding. E585's own backlog entry
+says so in its own words — *"Fixed by widening, not by narrowing the prose"* — with a two-row
+mutation table.
+
+This is **rule 47** with a second instance: a brief carries more authority than a review because
+nothing downstream is asked to falsify it. It is also the second consecutive round in which a lane's
+brief named an already-closed item as its headline work. **The file is `sugar-crush/tests/Support/`,
+which is lane a's this round**, so the brief additionally directed lane c at a file lane c may not
+touch.
+
+### Ec59-3 — no citation guard walked `tools/` or `candy-pty/`, and one of the two offenders was a refuted mechanism claim
+
+E583 left the bare-citation alphabet question open for "a round where one lane owns `tests/`".
+**The alphabet was never the reachable half of it.** Every `.php` file under `tools/` and under
+`candy-pty/` sat outside every citation guard in the repo, for the plainest reason available: the
+only such guard is `sugar-crush`'s `SymbolCitationDriftTest`, and neither tree is inside
+`sugar-crush`. Applying E583's *narrow* alphabet (test-shaped names only, the one whose answer is not
+a judgement call) to that population reported **two** unresolvable citations, both real:
+
+- `tools/tests/ToolsEnvRosterTest.php` — `scriptRoster()` cited a sibling test method under its
+  pre-rename name. A rename leftover committed **this round**, by the lane that owns the file.
+- `candy-pty/tests/Support/SharedLoopResidueTest.php` — the class doc-block cited
+  `testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()`, which **no longer exists**.
+
+**The second is the finding.** The sentence around it asserted that the leak the file was written
+for "is pinned directly, in <that method>, by driving that class's own loop work here". The nearest
+real method says the *opposite* in its own doc-block: restoring the leak in `PtyPoolReactLoopTest`
+left it GREEN, because that file's third test waits out the orphan cap and a later observer always
+finds a clean loop. **A mechanism claim was standing with nothing under it, pointing at a method that
+refutes it.** A bare citation naming nothing is the visible symptom; the unreferenced mechanism claim
+is the defect, and it is the shape rule 8 exists for.
+
+**TWO CLAIMS IN THE FIRST VERSION OF THIS ENTRY WERE THEMSELVES WRONG, AND BOTH WERE MECHANISM
+CLAIMS WRITTEN WITHOUT MEASUREMENT — rule 8 landing on the entry that invokes it.**
+
+1. *"`SymbolCitationDriftTest` walks `sugar-crush/tests` and nothing else."* **False.** Its
+   `citations()` reads `foreach ([['src', 'php'], ['tests', 'php'], ['docs', 'md']] as ...)` — all
+   three. What is scoped to `tests/` is the bare-test-name **shape** only, in `scrape()`, and
+   deliberately: its own comment gives the same reason this entry gives, that elsewhere the shape is
+   overwhelmingly a production method on the class being documented. The conclusion above survives
+   the correction; the reason does not. **The distinction is load-bearing:** the false version reads
+   as "`sugar-crush/src` is unguarded", and the round-59 implement stage duly filed a deferred
+   finding saying exactly that. **THAT DEFERRED FINDING IS WITHDRAWN.** `src/` is in
+   `SymbolCitationDriftTest`'s roster; adding `sugar-crush/src` to `BareCitationDriftTest::ROOTS` on
+   the strength of it would red on precisely the class of correct citation this entry measures below
+   (`spl_object_id()`, `budgetFromEnv()`).
+
+2. *"a method that has never existed anywhere in this repo"*, and *"a rename had left a mechanism
+   claim standing"*. **Both false, and checkable in one `git log -S`:**
+
+   ```
+   f1ffc409f  2026-08-25 05:53:05  + public function testThePoolSuiteLeavesNothingArmed...
+                                   + * {@see testThePoolSuiteLeavesNothingArmed...()}, by
+   cd365f8ec  2026-08-25 05:54:28  - public function testThePoolSuiteLeavesNothingArmed...
+   ```
+
+   Both hunks are in that same file. The method was declared **alongside its citation** and both were
+   correct; E490's follow-up commit **deleted** the method 83 seconds later and left the prose behind.
+   Not a rename — a removal. The corrected history *strengthens* the case for the guard rather than
+   weakening it: catching a citation orphaned by a deletion is worth more than catching a typo,
+   because the sentence around it goes on reading like a statement of fact. The guard's failure text
+   said "that is usually a rename", which sent a reader looking for the wrong thing; it now says to
+   look for a deletion first.
+
+**The population is 147 files, and that number is in this entry only because it is being retired.**
+The first version said 141, which was the pre-commit tree minus `examples/` and `lang/` — already
+stale in its own paragraph, rule 18 exactly. The guard derives its population at run time and
+asserts specific files by NAME (`BareCitationDriftTest.php` itself, `SharedLoopResidueTest.php`,
+`candy-pty/src/PtyPool.php`) rather than counting, precisely so no cardinality has to be maintained
+here. Do not re-add one.
+
+**Three shapes the narrow alphabet cannot express, censused with rule-15 controls** so that each
+zero is a measured zero rather than a dead instrument's: the block-tag spelling `@see testX()`
+without braces (**0** test-shaped; control run with the "not preceded by `{`" condition removed takes
+the hit count from 1 to 53); inherited or trait test methods, which would be cited correctly and
+reported anyway because "declared in this file" is the whole of the question (**0** live — no file in
+the population declares a `test*` another inherits); and `function &testX()`, which never registers
+as declared because `&` is the first significant token after `T_FUNCTION` (**0** live). None is live,
+so none is fixed; all three are written into the guard's doc-block so the next zero it reports is one
+someone can size.
+
+**The alphabet's own boundary is now pinned in both directions.** The narrowing direction always was
+(`/^testZZ/` reds four ways). The widening direction was not: relaxing `/^test[A-Z0-9]/` to `/^test/`
+**survived** the whole of `tools/tests/`, so the long justification of the exact shape could have been
+widened into a different alphabet with nothing noticing. One fixture row (`{@see testing()}` expects
+`[]`) closes it.
+
+**The alphabet choice is measured, not assumed (rule 16).** Widening it to every bare citation was
+run as a mutation: it reds **two correct files** in this population and finds **no** additional real
+offender — `candy-pty/src/PtyPool.php:41` cites `spl_object_id()`, a PHP built-in, and
+`candy-pty/tests/Support/HangWatchdogTest.php:115` cites `budgetFromEnv()`, a real
+`public static function` on the class under test. For this population, widening buys 0 true positives
+and 2 false ones. That is E583's "the two numbers answer different questions" with a count attached.
+
+**Rule 17 was load-bearing rather than decorative.** Measured on PHP 8.3.6, one `T_DOC_COMMENT` token
+can carry a `@see` tag and its argument on two lines with the ` * ` continuation marker between them,
+so a scanner matching the raw token text reports **zero** for it — an absence indistinguishable from
+a clean tree. The guard flattens the marker first and a wrapped fixture pins it; deleting the
+flattening reds.
+
+### Ec59-4 — an inherited figure disagreed with the brief's floor, and the brief was right
+
+Round 59's killed lane-c agent recorded `tools/tests` at `29 / 137` for `e4c69b04e`; the brief said
+`28 / 136`. Settled by extracting the tree at that exact commit with `git archive` and running it:
+**28 tests, 136 assertions, rc 0.** The brief is correct and the inherited observation is not — most
+likely measured after the agent's own first commit. Recorded because the standing rules assume the
+brief is the thing that rots (rule 42, rule 47) and this is the converse: **a handed-down
+"OBSERVED" figure is a measurement you did not watch anyone take**, and it is as capable of being
+wrong as a brief. The `git archive` technique is cheap — under a minute — and settles it without a
+worktree.
+
+### Ec59-5 — a brace walk over `token_get_all()` fail-opened on an interpolation brace, and two drift pins rested on it
+
+**FIXED this round; recorded because the shape generalises and rule 49 named only half of it.**
+
+`tools/tests/_bootstrap.php`'s shared `PhpFunctionBodyTokens::functionBodyTokens()` matched braces
+with `$token === '{'` and `$token === '}'`. MEASURED on PHP 8.3.6, inside a double-quoted string or
+a heredoc:
+
+| source | opening brace | closing brace |
+|---|---|---|
+| `"{$a}"` | `T_CURLY_OPEN` — an **array** token | `'}'` — a plain **string** token |
+| `"${a}"` | `T_DOLLAR_OPEN_CURLY_BRACES` — an **array** token | `'}'` — a plain **string** token |
+| `"$a}"` | — | `T_ENCAPSED_AND_WHITESPACE`, text exactly `}` (array) |
+| `"$a{"` | `T_ENCAPSED_AND_WHITESPACE`, text exactly `{` (array) | — |
+
+The walk therefore counted a close it had never counted an open for, `$depth` fell to zero early,
+and the body came back **truncated**: `$s = "a{$a}b"; return 1;` extracted as
+`["$s", "=", '"', "a", "{", "$a"]`.
+
+**Why that was a fail-open rather than a wrong answer.** Both callers are drift pins that compare
+two copies of one function for EQUALITY — `ToolsEnvRosterTest` against `candy-pty`'s
+`envAccessesIn()`, `StackedDocCommentTest` against `sugar-crush`'s `stackedDocCommentLines()`.
+Truncate both sides at the same interpolation and a real divergence *after* it compares equal.
+MEASURED, filtered to the drift pin alone: with a genuine divergence (dropping
+`\T_NAME_FULLY_QUALIFIED` from one copy) **plus** `$note = "scanning {$source}";` added identically
+to **both** copies, the pin was **GREEN — 1 test, 10 assertions, rc 0**. With the fix, the same
+scenario is **RED**. The `assertNotSame([], ...)` guard does not save it, because a truncated body is
+not empty. And the interpolation reaches both copies by a contributor doing exactly what the failure
+text tells them to: *"Port the change across"*.
+
+**The generalisable rule, as a superset of rule 49.** Rule 49 says a brace walk must gate its
+comparisons on `is_string()` so that an encapsed `}` is not counted. That is the *closing* half. The
+*opening* half is that two array tokens are genuine opening braces and must be counted:
+`T_CURLY_OPEN` and `T_DOLLAR_OPEN_CURLY_BRACES`. A walk that gets only one half right is wrong in one
+direction or the other, and neither direction shows up as a red — one truncates, one never
+terminates. Pin all four shapes; the fix carries a fixture for each.
+
+**Not active at the time of the fix:** no pinned body carried a `{$` or `${` yet. The reason nothing
+said so is rule 11 — the pre-existing fixture's alphabet was `if (true) { return 1; }`, both braces
+plain string tokens, under a comment naming this exact failure mode.
+
+### Ec59-6 — the `Environment:` row reader red-flagged ordinary wrapped prose and then prescribed damage
+
+**FIXED this round; recorded because it is rule 33's shape with a measurement attached.**
+
+`ToolsEnvRosterTest::environmentBlockNames()` called an indented line a variable row when its first
+token matched `[A-Z][A-Z0-9_]*` followed by whitespace, under a doc-block asserting that "a
+continuation line is indented too but starts with prose, so the leading token settles it". The
+leading token settles nothing: `A `, `AND `, `NOT `, `CI ` are ordinary English line openers.
+
+**MEASURED on the tree as it shipped.** Re-wrapping ONE sentence of `tools/gen-docs.php`'s own help
+— zero words added or removed, `AND WRITE under, instead` moved to a line start — took the suite RED
+with `0 => 'gen-docs.php — AND'` and the message *"…are read by nothing in it … Delete the row, or
+restore the read."* **Both halves of that blessed resolution are wrong for a phantom:** there is no
+row to delete and no read to restore, so the only way out is to reflow the paragraph until the guard
+stops complaining, with no idea why. An exemption row would have been the third wrong answer — a
+licence written for correct prose, which is rule 33 exactly. The help text that ships today is one
+reflow away from it (`read AND WRITE under, instead`).
+
+**The fix is structural (rule 40):** collect the block's lines, take the shallowest indent among them
+as the row COLUMN, and consider only lines at that column. Pinned in both polarities, because a
+narrowing that also blinded the guard would be the worse trade — wrapped prose opening `AND`/`A` is
+no longer a row; a genuine phantom row at the same column still reds; deleting the column gate or
+flipping `min` to `max` both red.
+
+**The limit, stated rather than promised (rule 11):** rows indented *deeper* than an intro line in
+the same block take their column from the intro and are read as nothing. That fails CLOSED — with no
+documented names every variable the script reads reports undocumented — and it is a fixture rather
+than a promise. It is where a future widening starts.
+
+### Ec59-7 — two guards under `tools/` still describe their own reach with unchecked artefacts
+
+**DEFERRED. Neither is a hole today; both are prose that no test can contradict.**
+
+1. **The `tools-guards` job NAME is unchecked.** `CheckPathReposTest::CI_JOBS` keys on the job *id*,
+   so the human-readable `name:` is free text. It has been rewritten twice in two rounds — E589
+   named it for the guards it ran, and that enumeration was wrong within one round of being written,
+   so it was changed to state its reach instead. Nothing asserts either version. If a future guard
+   under `tools/tests/` reaches into a third package, the name is wrong again and no test will say
+   so. **Making the name a checked artefact is the durable fix** and was not taken.
+2. **`CheckPathReposTest::ciJobNeeds()` reads only the inline-list `needs: [x]` spelling.** A block
+   list (`needs:\n      - tools-guards`) yields `[]` and reds — correct per rule 14, fail-closed —
+   but the failure text says "restore the edge" while the edge is present in another spelling, which
+   sends the reader to add something that is already there. Low harm, non-zero confusion.
+
+### Ec59-8 — `candy-pty/composer.lock` exists on disk
+
+**DEFERRED, informational.** 113 KB, dated 2026-08-22, gitignored via `candy-pty/.gitignore:1`, so
+not committed and not a policy breach. Recorded only because a per-lib lock makes CI's path-repo
+injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
+resolve from the lock and silently ignore the injected closure.

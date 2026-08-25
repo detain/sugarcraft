@@ -28,9 +28,44 @@ use React\EventLoop\Loop;
  * ORDERING. This asserts a property of the shared loop at the moment it runs,
  * so it is a statement about whatever has executed before it, not a statement
  * about the whole suite. That is a weaker claim than it looks and it is stated
- * rather than dressed up: the leak it was written for is pinned directly, in
- * {@see testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()}, by driving that
- * class's own loop work here.
+ * rather than dressed up.
+ *
+ * WHERE THE LEAK IS ACTUALLY PINNED, AND THIS PARAGRAPH NAMED THE WRONG PLACE.
+ * WHAT IT SAID: "the leak it was written for is pinned directly, in
+ * `testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()`, by driving that
+ * class's own loop work here."
+ *
+ * WHAT IS TRUE NOW, MEASURED with `git log -S` rather than asserted -- AND THE
+ * FIRST REWRITE OF THIS PARAGRAPH GOT IT WRONG TOO, which is why it is spelled
+ * out. That rewrite said "no method of that name has ever existed in this
+ * repo ... which is how a rename leaves a mechanism claim standing". Both
+ * halves are false. The method existed, in THIS FILE, and it was not renamed:
+ *
+ *   f1ffc409f  05:53:05  + public function testThePoolSuiteLeavesNothing...
+ *                        + * {@see testThePoolSuiteLeavesNothing...()}, by
+ *   cd365f8ec  05:54:28  - public function testThePoolSuiteLeavesNothing...
+ *
+ * The citation and the method were committed TOGETHER and correct; 83 seconds
+ * later E490's follow-up DELETED the method and left the prose behind. So the
+ * defect is an orphaned citation, and the way it was orphaned is a removal.
+ *
+ * THE SENTENCE WAS STILL WRONG ABOUT THE MECHANISM, which is the part that
+ * matters. The nearest surviving method,
+ * {@see testTheSharedLoopIsCleanByTheTimeThisFileRuns()}, is not what it
+ * described: that method's own doc-block records that restoring the leak in
+ * `PtyPoolReactLoopTest` left it GREEN, because that file's third test waits
+ * out the orphan cap and a later observer always finds a clean loop. VERIFIED
+ * HERE rather than inferred: `PtyPoolReactLoopTest` declares a `tearDown()`
+ * that runs `SharedLoopResidue::census()` and asserts all five axes --
+ * timers, readStreams, writeStreams, signals, futureTicks -- are zero after
+ * EVERY test in that class. That is the only window the leak is visible from,
+ * and where the regression proper lives.
+ *
+ * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the ordering caveat is the true and
+ * load-bearing half. A reader who takes this file for a suite-wide guarantee
+ * will read its empty verdict as covering leaks it cannot see; what it covers
+ * is whatever ran before it, and the per-class `tearDown()` is what covers the
+ * class the leak came from.
  */
 final class SharedLoopResidueTest extends TestCase
 {

@@ -504,9 +504,46 @@ final class GenDocsTest extends TestCase
         $root = $this->makeFixtureRoot();
         $r = $this->runScript($root, ['--regenerate']);
         $this->assertSame(2, $r['exit']);
-        $this->assertStringContainsString('usage: gen-docs.php [--extract|--check]', $r['output']);
+        $this->assertStringContainsString('usage: gen-docs.php [--extract|--check|--help]', $r['output']);
         // And it did so before writing anything.
         $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
+    }
+
+    /**
+     * `--help` prints the usage to STDOUT and exits 0.
+     *
+     * TWO ASSERTIONS, NOT ONE, and the second is the one that matters. Until
+     * this round the script had no `--help` at all: it printed a one-line usage
+     * to STDERR when handed a mode it did not know, and the environment variable
+     * that redirects everything it reads and WRITES was documented in a source
+     * comment. `ToolsEnvRosterTest` compares that block against a token scan of
+     * the script, so it is the block being REACHABLE — by a flag, on stdout,
+     * at exit 0 — that turns a checked comment into documentation.
+     *
+     * ANSWERED BEFORE THE ROOT IS RESOLVED, which is what the third arm pins:
+     * the text explains SUGARCRAFT_GEN_DOCS_ROOT, so refusing to print it
+     * because that variable is wrong is the least useful possible moment to
+     * fail. An unresolvable override still exits 2 for every other mode —
+     * {@see testAnUnresolvableRootOverrideIsRejectedWithExitTwo()}.
+     */
+    public function testHelpPrintsTheUsageOnStdoutAndExitsZero(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $r = $this->runScript($root, ['--help']);
+
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $this->assertStringContainsString('Environment:', $r['output']);
+        $this->assertStringContainsString('SUGARCRAFT_GEN_DOCS_ROOT', $r['output']);
+        $this->assertFileDoesNotExist("$root/docs/lib/fixture-alpha.html");
+
+        $broken = $this->runScript($this->tmpDir . '/no-such-dir', ['--help']);
+        $this->assertSame(
+            0,
+            $broken['exit'],
+            'gen-docs.php --help refused to print the block documenting '
+            . 'SUGARCRAFT_GEN_DOCS_ROOT because SUGARCRAFT_GEN_DOCS_ROOT was wrong',
+        );
+        $this->assertStringContainsString('SUGARCRAFT_GEN_DOCS_ROOT', $broken['output']);
     }
 
     public function testAnEmptyDataStoreFailsWithTheExtractHintRatherThanWritingNothingQuietly(): void
