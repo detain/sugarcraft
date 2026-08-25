@@ -236,6 +236,15 @@ final class ToolsEnvRosterTest extends TestCase
                 // fixture pin the section BOUNDARY rather than only the row
                 // shape: a reader that never enters the block reports [], and
                 // one that never leaves it reports four names.
+                //
+                // THE FIRST DRAFT OF THIS FIXTURE DID NOT, and it looked like
+                // it did — it wrapped the block in `Options:` and `Exit codes:`
+                // sections whose rows begin `--flag` and `0`, neither of which
+                // this reader's row pattern can match. MEASURED: with that
+                // version in place and `$inBlock = false` deleted from the
+                // section-boundary branch, so the block never ends at all, the
+                // suite is GREEN — 45 tests, 175 assertions. The mutation was
+                // relevant; the fixture's window was wrong (rule 2).
                 "usage: x\n\nOptions:\n  BEFORE_THE_BLOCK  prose in an earlier section\n\n"
                 . "Environment:\n  B_ONE  the first\n  B_TWO\n         the second, wrapped\n\n"
                 . "See also:\n  AFTER_THE_BLOCK  prose in a later section\n",
