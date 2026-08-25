@@ -659,15 +659,6 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
-     * Every `const NAME = <integer literal>;` in one token stream.
-     *
-     * A constant whose value is anything else is recorded as `null` rather than
-     * omitted, so {@see resolveArgument()} can tell "no such constant" from
-     * "a constant this cannot evaluate" and say which (rule 14).
-     *
-     * @return array<string, ?int>
-     */
-    /**
      * Whether an arrow function between $from and $at declares $name.
      *
      * SEPARATE FROM THE WALK ABOVE BECAUSE THE TWO ASK DIFFERENT QUESTIONS.
@@ -711,6 +702,15 @@ final class ChildWallClockBudgetTest extends TestCase
         return false;
     }
 
+    /**
+     * Every `const NAME = <integer literal>;` in one token stream.
+     *
+     * A constant whose value is anything else is recorded as `null` rather than
+     * omitted, so {@see resolveArgument()} can tell "no such constant" from
+     * "a constant this cannot evaluate" and say which (rule 14).
+     *
+     * @return array<string, ?int>
+     */
     private static function integerConstantsIn(array $tokens): array
     {
         $constants = [];
