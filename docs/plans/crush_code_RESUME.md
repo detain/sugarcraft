@@ -55,8 +55,15 @@ Prediction: `.../workflows/scripts/round57-prediction.txt`, written BEFORE launc
    ONE take, not a campaign. Do not let it be quoted as more.
 3. `left_steps.md` (repo root, UNTRACKED) is a 1,208-line inventory of all 515 plan steps with status. It
    was generated at `f9840570` and predates E455-E523, so its counts are stale.
-4. **The worklog has a gap:** rounds 53, 54 and 55 were never written up in `crush_code_worklog.md` and
-   live only in this file's `0-NOW-*` blocks. Round 56 is written up; the gap is not backfilled.
+4. ~~**The worklog has a gap.**~~ **BACKFILLED 2026-08-25** — and the gap was one round wider than this
+   line said: rounds 53, 54 and 55 were missing outright, and round 52 was still sitting there as
+   `IN FLIGHT`, its launch brief never converted into a close. All four are now in
+   `crush_code_worklog.md`, in descending order above round 51. **They are labelled as reconstructed, and
+   you should read them as thinner than a live entry** — they are built from this file's `0-NOW-*` blocks
+   plus `git log`, with every sha re-resolved against the tree, and a handoff block only ever carried what
+   the supervisor chose to hand off. What a round-53 lane measured and did not put in its `0-NOW` block is
+   gone. **The lesson for round 57's close is to write the worklog entry at the close, not to trust that a
+   `0-NOW` block can be promoted into one later.**
 
 ### 🔴 NEVER RUN A SUITE WITHOUT A WATCHDOG — E490 IS STILL LIVE
 

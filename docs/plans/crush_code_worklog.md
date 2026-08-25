@@ -11770,7 +11770,220 @@ offenders in the tree.
 
 ---
 
-## ROUND 52 — IN FLIGHT (base `b9abd2fb`, THREE lanes, run `wf_5f1a8d38-5b8`)
+## ROUND 55 — the prediction was exact on both numbers, and the round's biggest find is in a published library
+
+> **Reconstructed 2026-08-25, not written live.** Rounds 52–55 were closed in
+> `crush_code_RESUME.md`'s `0-NOW-*` blocks and never transcribed here; this entry and the two below it
+> are backfilled from those blocks plus `git log`, with every sha re-resolved against the tree. They are
+> thinner than a live entry because a `0-NOW` block is a handoff, not a record — what a lane measured and
+> did not put in the handoff is gone.
+
+**CLOSED at `b489405ba`, then `d38b644f4` after the E491 fix; from base `a8acfcc9`.** Three lanes, nine
+agents, zero errors.
+
+| package | floor at `d38b644f4` |
+|---|---|
+| **sugar-crush** | **10059 / 148589 / 1 / rc 0** |
+| **candy-core** | **842 / 7587 / 24 / rc 0** |
+| **candy-flip** | **83 / 227 / 2 / rc 0** |
+| **candy-mosaic** | **459 / 7753 / 6 / rc 0** |
+| **candy-pty** | **610 / 1408 / 16 / 1 warning / rc 0** |
+
+**The prediction was EXACT on both numbers** — 10059 tests and 148589 assertions, written before a single
+merge. Tests exact for the **thirteenth** consecutive round, assertions for the fourth. candy-core's skip
+drop 25 → 24 was predicted too. Merge conflicts: the backlog only, three times, exactly as predicted;
+every source set was disjoint.
+
+**Backlog 457 → 491.** Lane ids E458–E489, renumbered longest-id-first from provisional `Ea55-*`.
+Supervisor: E490, E491. Mid-round the user reported E455, E456 and E457 — the three that went on to shape
+round 56's lane a.
+
+### 🔴 E491 — A RETRY THAT HAD NEVER EXECUTED ONCE, IN A PUBLISHED LIBRARY
+
+`candy-pty`'s `PosixMasterPty::retryOnEintr()` carried **two** defects. Its EINTR detection could never be
+true — `Libc::errno()` reads 0 after an interrupted `stream_select()`, because PHP resets errno while
+raising its own warning first — so the retry had **never run**. And when it did run it restarted the
+caller's timeout instead of recomputing the remainder, so an interrupted wait could overrun its deadline.
+
+**It was found by writing the first test that ever CALLED the function.** Its only prior coverage asserted
+`method_exists()`. That is rule 36 stated as a measurement: a dead instrument and a working one produce
+identical green suites, and a test that only asks whether a method exists is indistinguishable from no
+test at all.
+
+**Second published-library find:** E462, a real fd leak — `PosixMasterPty::close()` called `dup()` and
+discarded the result, leaking one `/dev/ptmx` descriptor per pty that had been used. Measured linear over
+five cycles, with a control.
+
+### E453 CLOSED, AND THE LANE THEN FILED AGAINST ITS OWN FIX
+
+The `--unused` CI step exits 1 at `a8acfcc9` and 0 on the merged tree — verified independently, at both
+ends. It was fixed by **RECORDING** the `candy-kit` deferral in `extra.sugarcraft.deferred-wiring`, not by
+pruning the dependency (never remove dormant code — wire it or pin the dormancy). Lane c then filed
+E487/E488 against that fix, which is the behaviour the round wanted: the lane that ships a mechanism is
+the lane best placed to say what is still wrong with it.
+
+## ROUND 54 — a reboot and a session limit both in the fix stage, an exact prediction that argued against itself, and a third of the round reviewed by nobody
+
+**CLOSED at `49ae499e`, from base `606a131c`.** Three lanes. The round survived a host reboot **and** a
+session limit, both landing in the fix stage.
+
+| package | floor at `49ae499e` |
+|---|---|
+| **sugar-crush** | **9994 / 144819 / 1 skipped / rc 0** |
+| **candy-core** | **842 / 7573 / 25 / rc 0** |
+| **candy-flip** | **83 / 227 / 2 / rc 0** |
+| candy-mosaic | 459 / 7753 / 6 / rc 0 (untouched since round 52) |
+| candy-pty | 606 tests / 16 skipped / 1 warning / rc 0 — **assertions are NOT a constant here (E430); do not quote one as a floor** |
+
+Backlog **428 → 452**: lane ids E429–E449, supervisor findings E450–E452. Invariants at the merge: skipped
+exactly 1 · closure 18/18 · 3/3 · 6/6 by `is_link()` + `realpath()` prefix · `check-path-repos
+--no-lib-path-repos` rc 0 · config md5 `05480c743aff302fd6c06c5a4a4c2210` · zero tracked per-lib locks ·
+zero orphaned `php -S` **on a quiet tree** (E451 — the reading is meaningless while a suite runs).
+
+### 🔴 THE PREDICTION WAS EXACT, AND THAT IS PRECISELY WHY THE INSTRUMENT GOT CHECKED
+
+Predicted `9994 / 144819` before the first merge command; measured `9994 / 144819`. Tests exact for the
+**twelfth** consecutive round, assertions for the third.
+
+**But exactly-the-sum was the outcome the prediction argued AGAINST.** Lane b added 312 lines to
+`sugar-crush/src/MCP/StdioMcpServer.php`, a file lane c's widened `DescriptorInheritanceGuard` walks, and
+neither lane's suite had seen the other's half — the loaded rule-32 case. The prediction named three
+outcomes and expected the total to EXCEED the sum, or go red. It did neither.
+
+**A number landing where you predicted is not evidence when you predicted it would not land there.** So
+the guard was checked rather than trusted: it **does** roster `MCP/StdioMcpServer.php::start`, so it is
+alive on the rewritten file. The count did not move because lane b's addition is a stderr **drain**, not a
+new rostered spawn site. Genuine outcome, live instrument. **Do this every time a semantic-conflict
+prediction resolves quietly** — a silent census and a dead census produce identical numbers.
+
+### 🔴 E450 — A REVIEW IS A SNAPSHOT OF A TREE THAT NO LONGER EXISTS
+
+When a fix agent is killed and relaunched it receives the same review it would have got originally — of
+the tree as the *implementer* left it — plus a brief saying "do not redo committed work". Measured at this
+merge: **six of lane c's thirteen commits and nine of lane a's seventeen had been reviewed by nobody.**
+The brief pointed at the findings list, which is the surface that *has* been reviewed. Lane c found this
+itself and said so.
+
+**If you relaunch a killed fix agent, state the review's tree position in its brief** — `written at <sha>,
+N commits over base; HEAD is now M commits over` — **and make reviewing the M−N unreviewed commits its
+first task**, or re-run the review against current HEAD. A stale review is worse than none, because it
+looks authoritative. (Round 56 inherited this directly: its recovery briefs carried a `reviewed: nobody`
+column for exactly this reason.)
+
+### 🔴 E452 — `resumeFromRunId` CANNOT RECOVER A `pipeline()` ROUND
+
+Resume replays the longest unchanged **prefix** of `agent()` calls, and under `pipeline()` the call order
+is set by completion times, so the prefix cannot be reproduced. Measured this round: it replayed the three
+implements from cache and then started three **review** agents, including one for a lane whose fix had
+already landed.
+
+**The recovery that works:** read the round script as text, truncate at its `phase('Implement')` line,
+rewrite `export const meta` → `const meta`, `require()` it, and call the real `fixPrompt` with the cached
+stage results pulled out of `journal.jsonl`. That regenerates each prompt byte-identically (verified at
+53,445 and 51,840 chars). Emit only the missing agents into a fresh script; leave completed lanes alone.
+Preserve uncommitted work with `git stash create` + `git update-ref refs/rescue/<tag>` — into git, without
+committing red and without disturbing the working tree.
+
+**The recipe was dry-run against round 55's own script while that round was healthy and nothing needed
+recovering** — a known-positive control (rules 15/25), because a recovery tool is exactly the instrument
+you cannot test at the moment you need it. Two gotchas: the lane objects key on **`key`**, not `id`, and
+`node --check` on a workflow script fails with "await is only valid in async functions" (expected — the
+body runs in an async context), so wrap it in `async function __w(){ … }` first.
+
+🔴 **`/tmp` DOES NOT SURVIVE A REBOOT.** Everything under `~/.claude` did — lane commits, the round script,
+the journal, per-agent transcripts. `/tmp` took the staged sweep script and every lane scratchpad.
+Anything a round needs across a reboot belongs in git or under `~/.claude`. And a relaunched agent can find
+a **predecessor's** files in its scratchpad namespace (E427 spanning a kill), so a bare `out.txt` read or
+an `until grep -q` wait there can be satisfied by work that is not yours.
+
+## ROUND 53 — the merge went red exactly where the prediction said it would, and the guard that caught it was the thing that was wrong
+
+**CLOSED at `606a131c`, from base `cb0a7c69`.** Merges `3fa60ce7` a, `52e51e62` b, `5a1381bf` c; renumber
+`3074d2ec`; merge-collision fix `b8808d5a`.
+
+| package | floor at `b8808d5a` |
+|---|---|
+| **sugar-crush** | **9946 / 144269 / 1 / rc 0** |
+| **candy-core** | **819 / 7390 / 25 / rc 0** |
+| **candy-flip** | **83 / 227 / 2 / rc 0** |
+| candy-mosaic | 459 / 7753 / 6 (untouched) |
+
+Backlog **394 → 428**: lane ids **E395–E426**, supervisor E427/E428. Skips must stay exactly 1 —
+`MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails` — and **E413 warns that
+`BackgroundSupervisorReapTest` moves that count off 1 on any non-Linux runner.** Orphaned `php -S` servers
+counted the honest way per **E428**: the old `pgrep` spelling answers 1 on a clean host by matching itself.
+
+**Tests predicted EXACTLY for the ELEVENTH consecutive round — 9943 at the merge — and the assertion lower
+bound landed EXACTLY on the bound for the second round running (144262).** The final floor is
+`9946 / 144269` because the merge went red and the fix added three fixtures. **The 9943/144262 figure is
+the prediction's verdict; 9946/144269 is the floor.** Those are two different numbers answering two
+different questions, and collapsing them would have retroactively scored a correct prediction as a miss.
+
+### 🔴 THE RED MERGE WAS PREDICTED, ON THE EXACT PAIR
+
+Written before the first merge: *"c's scanner files merge CLEANLY as text and the merged sugar-crush suite
+may still go RED … RULE 32 IS LIVE HERE."* It did — lane c's `DescriptorInheritanceGuardTest` against lane
+b's `Providers/ClaudeCodeProvider.php`, with **zero textual conflict**.
+
+**And the finding was a FALSE POSITIVE: the scanner was what was wrong.**
+`ChildLifetimeScanner::classifyLocal()` judged conditionality by brace depth alone, so it said of a reaper
+sitting in a generator `finally`: *"runs only inside a nested block, so it does not cover every path out of
+this function."* That is flatly false about `finally` — the one nested block that runs on **every** path
+out, including the case lane b's own comment documents, a consumer that `break`s out of the `foreach` and
+destroys the generator mid-body.
+
+🔴 **This is where RULE 33 comes from: when a guard offers you an exemption row, ask first whether the CODE
+is correct — if it is, the CLASSIFIER is the defect.** The guard's failure text offered two blessed
+resolutions (name the fds, or add an `ACCOUNTED_FOR` row). Both were wrong here. **An exemption row written
+for correct code is where the next real offender hides.** The classifier learned the rule instead, pinned
+in both polarities: closer in `finally` → short; closer in `if` inside `finally` → unclassified; closer in
+`finally` inside a `foreach` → unclassified. Dropping the new arm reds 2 tests.
+
+**And the fixtures were wrong before the scanner was.** The first two both wrote `return $this->pump($h)`,
+which makes the handle an escape and reads `long`. A fixture whose expected value the instrument cannot
+produce is not evidence about the instrument (rules 15/25).
+
+### 🔴 WHAT ROUND 53 PROVED ABOUT THE DELIBERATE b/c OVERLAP
+
+Lane c caught, on its own, a merge instruction **it had written itself** that would have deleted
+`BackgroundSupervisor::spawnSession` from the guard roster, on the grounds that lane b now reaps it
+unconditionally. Re-measured against lane b's actual head: the happy path calls `reapIfExited($proc)` and
+`terminateAndClose` appears only in the throw branch — **the arithmetic was right and the mechanism
+inverted.** Left alone it would have silently deleted E366's own HIGH from the guard built to catch it.
+**Fourth consecutive round in which the deliberate b/c overlap found something neither lane could see
+alone.**
+
+
+## ROUND 52 — CLOSED (`cb0a7c69`, floor `9860 / 143784 / 1 skipped / rc 0`, THREE lanes)
+
+> **The close-out below was backfilled 2026-08-25** from `crush_code_RESUME.md`'s `0-NOW-53` block. The
+> section after it is the LAUNCH brief, left exactly as it was written before the round ran — it is the
+> only surviving record of what the lanes were asked to do, and it is not a record of what they found.
+
+### THE CLOSE
+
+| package | floor at `cb0a7c69` |
+|---|---|
+| **sugar-crush** | **9860 / 143784 / 1 / rc 0** |
+| **candy-core** | **807 / 7288 / 25 / rc 0** |
+| **candy-mosaic** | **459 / 7753 / 6 / rc 0** |
+
+Merges `3e67a995` a, `ddc343f6` b, `dba03fa4` c; renumber `cb0a7c69`. Skips must stay exactly 1 —
+`MCP\McpClientTest::testLoadConfigReturnsEmptyArrayWhenFileGetContentsFails`. 18/18 closure by
+`is_link()` + `realpath()` prefix; `check-path-repos --no-lib-path-repos` rc 0; config md5
+`05480c743aff302fd6c06c5a4a4c2210`; zero tracked per-lib locks; zero orphaned `php -S` servers.
+
+Backlog **364 → 394**: E365–E367 landed on master mid-round, lane ids are **E368–E392**, and E393/E394 are
+the round's process findings.
+
+🔴 **Tests predicted EXACTLY for the TENTH consecutive round — and the assertion LOWER BOUND landed
+EXACTLY on the bound for the first time: 143784 predicted, 143784 measured, looseness ZERO.** Every prior
+round the bound had been loose, because additions that fall inside a census PREDICATE inflate it; E354,
+filed this round, is the mechanism, and quantifying it is what later converted bounded assertion
+predictions into exact ones.
+
+### THE LAUNCH BRIEF (written 2026-08-24, before the round ran)
+
 
 **Launched 2026-08-24.** Base floor `9730 / 143168 / 1 skipped / rc 0` observed at `b9abd2fb`, clean, no
 60s aborts. Lane dirs verified across all three packages this round touches — sugar-crush 18/18,
