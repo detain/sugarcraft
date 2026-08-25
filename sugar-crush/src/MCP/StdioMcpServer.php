@@ -978,9 +978,23 @@ final class StdioMcpServer implements McpServer
     private function absorbStderr(): void
     {
         // `is_resource()` as well as the flag — see {@see readLine()} for the
-        // measurement. This `fread()` is the exact call
+        // measurement. This site is the one E476's own list did not name.
+        //
+        // ON THE E367 CITE, WHICH THIS GOT BACKWARDS IN BOTH HALVES.
+        // WHAT IT SAID: that this `fread()` "is the exact call
         // {@see \SugarCraft\Crush\LSP\LspConnection::drainStderr()}'s doc-block
-        // cites E367 about, and it was the one site E476's own list did not name.
+        // cites E367 about".
+        // WHAT IS TRUE NOW: `drainStderr()`'s DOC-BLOCK does not mention E367 at
+        // all — the reference is a BODY comment on its own `is_resource()` guard;
+        // and that comment does not cite E367 as being about either call. E367
+        // was an `@stream_get_contents()` on an fclose'd pipe ONE FILE OVER,
+        // where the suppression meant the RuntimeException being built was never
+        // constructed. It is cited there as THE SAME MISTAKE, not as that call.
+        // WHY THE CITE STILL EARNS ITS PLACE: E367 is why the guard is
+        // `is_resource()` and not `@` — `@` silences diagnostics and not throws,
+        // so on a closed pipe the TypeError escapes either way. That is the
+        // reason this line exists, and deleting the pointer would leave the next
+        // reader free to "simplify" it back to an `@`.
         if (!$this->stderrOpen || $this->pipes === null || !is_resource($this->pipes[2])) {
             return;
         }

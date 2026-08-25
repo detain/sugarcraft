@@ -397,7 +397,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
      * taking bytes must never be abandoned, however long the message is and
      * however far past the idle bound the whole write runs.
      *
-     * The fixture reads 8 KiB at a time with a pause between reads, so the total
+     * The fixture reads 4 KiB at a time with a pause between reads, so the total
      * write necessarily exceeds {@see TEST_IDLE_SECONDS} several times over
      * while no single gap does.
      */
@@ -743,7 +743,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
         );
     }
 
-    /** Reads 8 KiB at a time with a gap between reads: always progressing, never fast. */
+    /** Reads 4 KiB at a time with a gap between reads: always progressing, never fast. */
     private function slowReaderScript(): string
     {
         return $this->script(

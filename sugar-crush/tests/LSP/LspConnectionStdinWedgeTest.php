@@ -656,12 +656,37 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * Removing the drain from the WRITE loop alone does not red this row, and
      * neither does removing it from `refill()` alone — the request here is
      * small, so either drain on its own frees the child and the exchange
-     * completes. MEASURED: both single removals leave this row green (they red
-     * four OTHER rows in this file between them), and removing BOTH reds it
-     * along with them. That is the right scope rather than a gap: the claim is
-     * "the next EXCHANGE frees it", an exchange is a write and a read, and the
-     * row reds exactly when no drain runs during one — which is exactly when the
-     * stall becomes a deadlock.
+     * completes. Both single removals leave this row green; removing BOTH reds
+     * it. That is the right scope rather than a gap: the claim is "the next
+     * EXCHANGE frees it", an exchange is a write and a read, and the row reds
+     * exactly when no drain runs during one — which is exactly when the stall
+     * becomes a deadlock.
+     *
+     * WHAT THE SINGLE REMOVALS DO RED, NAMED RATHER THAN COUNTED.
+     *
+     * WHAT THIS SAID: that between them the two single removals red "four OTHER
+     * rows in this file".
+     *
+     * WHAT IS TRUE NOW: three, and one of the two reaches outside this file
+     * altogether. Re-measured at this tree, `tests/LSP` (79 rows), PHP 8.3.6 /
+     * Linux 6.8, the actual `+`/`-` lines printed for each patch:
+     *
+     *  - drop the WRITE-loop drain      -> 2 failures, both here:
+     *      {@see testAnOversizedRequestSurvivesAServerAlreadyBlockedOnStderr()}
+     *      {@see testTheChildHadNotFinishedItsFloodWhenTheOversizedWriteBegan()}
+     *  - drop `refill()`'s drain        -> 2 failures, ONE here:
+     *      {@see testTheFloodIsRealAndASmallRequestWasNeverAtRisk()}
+     *      and `LspConnectionShutdownTest::testAServerThatFloodsStderrIsStillAnsweredAndItsStderrIsKept()`
+     *  - drop BOTH                      -> 7 failures, 5 here, this row among them
+     *
+     * WHY THE OLD NUMBER STILL EARNS AN EXPLANATION RATHER THAN A DELETION: four
+     * is a real measurement of the WRONG mutation. It is the double removal's
+     * count of other in-file rows, and it includes
+     * {@see testTheOversizedRequestWasOnlyEverAtRiskBecauseOfTheFlood()}, which
+     * NEITHER single removal reds. Attributing it to the single removals made
+     * the two drains look independently load-bearing for a row that in fact
+     * needs both gone. Rows are named here instead of counted because a count
+     * taken in one worktree is wrong the moment a sibling lane merges.
      */
     public function testTheBetweenExchangeStderrStallSelfHealsOnTheNextExchange(): void
     {
@@ -1083,11 +1108,6 @@ final class LspConnectionStdinWedgeTest extends TestCase
         }
         PHP;
 
-    /**
-     * %d bytes of stderr, written unprompted the moment the handshake is done.
-     * Above the pipe capacity the child parks inside that `fwrite()` and stops
-     * reading stdin, which is the state the oversized write has to meet.
-     */
     /** The E475 fixture body; see {@see idleLoggingServerScript()} for why it polls. */
     private const IDLE_LOGGING_SERVER = <<<'PHP'
         <?php
@@ -1137,6 +1157,20 @@ final class LspConnectionStdinWedgeTest extends TestCase
         }
         PHP;
 
+    /**
+     * %d bytes of stderr, written unprompted rather than in reply — the
+     * difference from {@see ECHO_SERVER_TEMPLATE}. Above the pipe capacity the
+     * child parks inside that `fwrite()` and stops reading stdin, which is the
+     * state the oversized write has to meet.
+     *
+     * ⚠️ "UNPROMPTED" IS NOT "AS EARLY AS POSSIBLE", and the `$seen === 2` in
+     * the body below is the whole fixture. The flood lands after the SECOND
+     * message — the `initialized` NOTIFICATION that ends the handshake, not the
+     * `initialize` REQUEST that opens it. Flooding after message one was
+     * MEASURED vacuous, because the notification's own write-loop drain empties
+     * the pipe on the way past; see {@see blockedServerScript()} for that
+     * measurement and for the other arrangement it rules out.
+     */
     private const BLOCKED_SERVER_TEMPLATE = <<<'PHP'
         <?php
         SC_FRAMING_HELPERS
