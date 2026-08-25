@@ -6,7 +6,50 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 🟢 ROUND 58 IS **RUNNING** — launched 2026-08-25, run id `wf_f58b858b-ec4`
+## 🟢 ROUND 58 IS **RUNNING — AS A RECOVERY** — run id `wf_b25a8f70-334`
+
+🔴 **THE FIRST LAUNCH (`wf_f58b858b-ec4`) DIED.** A session limit killed all three implementers ~9.5
+minutes in, with three `started` records and **zero completions**. `resumeFromRunId` was useless twice
+over: E452 says it cannot recover a `pipeline()` round at all, and with zero completions it caches
+nothing. Implement had reached **2 of 5 items (a), 0 of 4 (b), 3 of 7 (c)** — early — so the recovery is
+`Finish → Review → Fix`, script
+`.../workflows/scripts/crush-round-58-recover.js`, built from the round-58 script by `patch58r.py`.
+
+**What the supervisor did before relaunching, in this order:**
+
+1. **Committed both dirty lane trees verbatim as labelled WIP** (`75edd8399` lane a, `b0a7579a5` lane b) —
+   lane b had **12 files and 246 insertions uncommitted**. A dirty lane root breaks a mutation harness's
+   pre-flight (rule 19), and round 44 destroyed ~250 lines with a `git checkout --` over uncommitted edits.
+2. **Mined the killed agents' transcripts** (round 56's recovery channel). Recovered: lanes a and b each
+   independently OBSERVED `10215 / 156961 / 1 / rc 0` (third and fourth observations); lane c observed
+   candy-pty at floor and grew `tools/tests` 9 → 25 tests; and the two findings below.
+3. **Started the E490 campaign itself** — see below.
+
+🔴 **TWO FINDINGS FROM THE DEAD ROUND, BOTH ABOUT THE BRIEF RATHER THAN THE CODE:**
+
+- **Lane a measured that this round's own brief states E527's rule INVERTED.** The brief says PHP lets an
+  implementation declare fewer parameters than its interface; the lane's 308-line
+  `BackendContractWideningTest.php` records that on PHP 8.3.6 this is **false in both halves and not
+  symmetric** — widening an interface method is a load-time fatal. **The supervisor wrote that sentence.**
+  The recovery brief carries the contradiction explicitly and tells the finisher to re-measure before
+  trusting either version.
+- **Lane c never started the E490 campaign, which was its first instruction**, marked 🔴 and "before you do
+  anything else". Zero campaign calls across 43 tool uses. **Compliance with a 🔴 first instruction: 0 of
+  1** — the same class as E492, and the rate is the part worth keeping.
+
+🔴 **THE E490 CAMPAIGN IS RUNNING, AND THE SUPERVISOR IS RUNNING IT, NOT A LANE.** 240 takes in
+`/home/sites/sugarcraft/candy-pty`, each under a watchdog on its own pid.
+`/tmp/.../scratchpad/r58campaign/{takes.tsv,EVENTS.txt,PROGRESS}`. ⚠️ `/tmp` does not survive a reboot —
+if the box restarts, that campaign is gone and must be restarted, not reported as partial.
+**The rule-15 instrument check fired first and is recorded**: at `CANDY_PTY_HANG_BUDGET=0.6` the watchdog
+SIGKILLed at `rc=137`. It is the known-positive, **not a take** — do not count it as an event.
+
+**Two defects in the recovery script were caught by RENDERING the prompts, and `node --check` saw
+neither**: an undeclared `CAMPAIGN` const (a runtime `ReferenceError` that would have killed all three
+agents at launch) and a doubled backslash that would have shown agents `` \`E549\` ``. **Parsing a
+workflow script is not the same as rendering it. Render one prompt per lane before every launch.**
+
+### (superseded) the first round-58 launch — `wf_f58b858b-ec4`
 
 **Round 57 is CLOSED, merged and recorded. Round 58 launched from base `535d721ff`** — nine agents,
 three lanes, `implement → review → fix` pipelined.
