@@ -50,8 +50,8 @@ final readonly class Workflow
      * Mirrors charmbracelet/whalershark.Crunchy/mutate.
      */
     private function mutate(
-        WorkflowStatus $workflowStatus = null,
-        bool $stopOnFirstFailure = null,
+        ?WorkflowStatus $workflowStatus = null,
+        ?bool $stopOnFirstFailure = null,
     ): self {
         return new self(
             name: $this->name,
