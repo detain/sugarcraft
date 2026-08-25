@@ -538,6 +538,15 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * FRAMINGBROKEN IS ASSERTED TOO, because abandoning a partly-written
      * `Content-Length` message is precisely the case the latch exists for, and
      * this is the only row in the suite that reaches it through the backstop.
+     *
+     * ⚠️ `CHILDALIVE` IS THE ASSERTION THAT DOES THE WORK, and the mutation that
+     * proved it is worth writing down, because the row LOOKS like ELAPSED is the
+     * interesting readout. With the backstop clause deleted, the loop did not
+     * hang: it ran on until the child expired and left through the LIVENESS exit,
+     * reporting `RESULT:false`, `FRAMINGBROKEN:true` and ELAPSED 29.843 — which
+     * satisfies every other assertion here, `ELAPSED > 1.0` included. Only
+     * `CHILDALIVE:false` caught it. A row that asserted "it returned false, and
+     * not too quickly" would have called that mutation a survivor.
      */
     public function testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop(): void
     {
@@ -857,11 +866,37 @@ final class LspConnectionStdinWedgeTest extends TestCase
         file_put_contents($probe, sprintf(
             self::STORM_PROBE_TEMPLATE,
             var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
-            var_export($this->deafServerScript(), true),
+            var_export($this->longLivedDeafServerScript(), true),
             self::STORM_PAYLOAD_BYTES,
         ));
 
         return $this->runBounded([PHP_BINARY, $probe], self::STORM_BOUND_SECONDS);
+    }
+
+    /**
+     * A deaf server for the storm row specifically, and NOT the shared
+     * {@see deafServerScript()}, whose 30s is sized for rows that finish in
+     * milliseconds.
+     *
+     * The backstop walk is a MEASURED 7.1s, so 30s is a margin of only ~4x on a
+     * box that runs three test lanes at once — and if the walk ever stretched
+     * past the child's lifetime the row would go red for the wrong reason
+     * (`CHILDALIVE:false`, the enumeration correctly refusing to credit the
+     * backstop). MEASURED BY MUTATION, and this is not hypothetical: with the
+     * backstop clause deleted, the loop ran on until the 30s child EXPIRED and
+     * then exited through the liveness check at ELAPSED 29.843 with
+     * `RESULT:false` — every other assertion in the row passed. `CHILDALIVE` was
+     * the only one that caught it, which is the enumeration doing exactly its
+     * job, but it also showed how near the shared fixture's clock is. 120s puts
+     * the child well outside {@see STORM_BOUND_SECONDS}, so an unbounded loop
+     * now reds on the probe's own clock instead of racing the fixture's.
+     */
+    private function longLivedDeafServerScript(): string
+    {
+        $path = $this->tempDir . '/deaf-storm.php';
+        file_put_contents($path, "<?php\nsleep(120);\n");
+
+        return $path;
     }
 
     /**
