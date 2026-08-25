@@ -174,6 +174,24 @@ final class ResizeRaceTest extends TestCase
      * two reads as `1` and `20`, with the CR/LF translation a cooked PTY
      * applies, plus one of the non-numeric bash job-control lines the live
      * reader is supposed to ignore.
+     *
+     * ## Why the separators are enumerated rather than assumed
+     *
+     * The reader splits on `\r\n`, `\r` OR `\n`, and the fixture originally
+     * spelled every line ending `\r\n` -- the one shape a cooked Linux PTY
+     * produces, which is to say the shape already known. That is an alphabet
+     * narrower than the code it is checking: MEASURED, narrowing the split to
+     * `\r\n` alone SURVIVED `--filter ResizeRaceTest` (`OK (2 tests, 9
+     * assertions)`), so two of the three separators the reader accepts were
+     * asserted by nobody. The other two endings are not decoration -- `\n` is
+     * what a raw (non-cooked) master gives, and a lone `\r` is what a child
+     * that writes its own CR without LF gives -- and if the reader is ever
+     * narrowed, the live test above cannot notice: it asserts an absence, and a
+     * split that stops matching produces exactly that.
+     *
+     * The whitespace-padded row is here for the same reason: `trim()` is the
+     * only thing making `" 132 "` numeric, and nothing else in this file has
+     * ever handed it a line that needed trimming.
      */
     public function testTheTornReadDetectorSeesATornRead(): void
     {
@@ -186,6 +204,36 @@ final class ResizeRaceTest extends TestCase
 
         $this->assertSame([], $clean['unexpected'], 'the detector invented a torn read');
         $this->assertSame(5, $clean['numeric'], 'the detector lost a clean width line');
+
+        // Bare LF: what a master that is NOT in cooked mode delivers.
+        $lf = self::readWidths("80\n1\n20\n132\n");
+        $this->assertSame(
+            ['1', '20'],
+            $lf['unexpected'],
+            'the reader stopped splitting on a bare \n, so a raw-mode transcript reads as one '
+            . 'unparseable line and every torn read in it becomes invisible',
+        );
+        $this->assertSame(4, $lf['numeric'], 'the reader miscounted a bare-LF transcript');
+
+        // Bare CR: what a child writing its own CR without an LF delivers.
+        $cr = self::readWidths("80\r1\r20\r132\r");
+        $this->assertSame(
+            ['1', '20'],
+            $cr['unexpected'],
+            'the reader stopped splitting on a bare \r, so a CR-only transcript reads as one '
+            . 'unparseable line and every torn read in it becomes invisible',
+        );
+        $this->assertSame(4, $cr['numeric'], 'the reader miscounted a CR-only transcript');
+
+        // trim(): the only thing that makes a padded line numeric at all.
+        $padded = self::readWidths("  80  \r\n\t132\t\r\n 1 \r\n");
+        $this->assertSame(
+            ['1'],
+            $padded['unexpected'],
+            'the reader stopped trimming, so a padded width line is not ctype_digit() and is '
+            . 'silently dropped instead of judged',
+        );
+        $this->assertSame(3, $padded['numeric'], 'the reader lost a padded width line');
 
         $this->assertSame(
             ['numeric' => 0, 'unexpected' => []],

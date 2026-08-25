@@ -14873,11 +14873,24 @@ counting `/proc/self/fd` entries whose readlink is `/dev/ptmx`, five open/write/
 the leak is that branch and not `open()`. Every leaked descriptor still pins the master side of a pty the
 caller believes it has closed, so `tty_hangup()` never fires for it.
 
-The `dup()` is KEPT — the race it names is real — and the missing half added: the reference is released
-after the original is closed. Pinned by
-`PosixMasterPtyTest::testClosingAMasterThatWasWrittenToLeaksNoDescriptor()`, which runs both branches of
-`close()` and holds a witness pty open so a census that answered `[]` unconditionally fails instead of
-passing. MEASURED: reintroducing the leak is KILLED; killing the census is KILLED.
+The `dup()` is KEPT and the missing half added: the reference is released after the original is closed.
+Pinned by `PosixMasterPtyTest::testClosingAMasterThatWasWrittenToLeaksNoDescriptor()`, which runs both
+branches of `close()` and holds a witness pty open so a census that answered `[]` unconditionally fails
+instead of passing. MEASURED: reintroducing the leak is KILLED; killing the census is KILLED.
+
+⚠️ **CORRECTION, same round, after review.** This entry first said the `dup()` was kept "because the race
+it names is real". **It is not.** MEASURED, PHP 8.3.6, reading `/proc/self/fd/*` either side of each call:
+`fopen('php://fd/N')` **allocates a new descriptor** (original fd 4, stream got 5) and `fclose()` closes
+that new one, leaving 4 open. `$this->fd` is therefore open continuously from `posix_openpt()` to
+`close()` and its number is never free during the window the old comment described, so an unrelated
+`open()` cannot take it. The `dup()` is also taken *after* the `fclose()`, so it could neither detect nor
+prevent that substitution even if it could happen. MEASURED further: removing the `dup()` **and** its
+release together is behaviourally inert — `candy-pty` `--filter Posix` gives `165 / 394 / 1 warning /
+2 skipped / rc 0`, identical to keeping them. It is retained as a deliberate dormant seam (two syscalls),
+not as a race fix, and the justification now says so in all three places it appears: the block in
+`PosixMasterPty::close()`, the `::->close($stableFd)` row in candy-core's
+`DescriptorSinkArgumentCensusTest`, and here. What is still NOT established is that no caller pattern
+anywhere would want a stable reference — only that no test notices; see Ea55-9.
 
 ⚠️ **`TtyDetectTest`'s guard was CORRECT and the exemption it looked like it wanted was the wrong
 resolution** (rule 33). Its `descriptorBehind()` refuses to guess when two fds match one dev+inode; the

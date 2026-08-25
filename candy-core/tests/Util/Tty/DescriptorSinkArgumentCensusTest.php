@@ -270,12 +270,18 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
         ],
         'candy-pty/src/Posix/PosixMasterPty.php::->close($stableFd)' => [
             DescriptorSinkScanner::VARIABLE,
-            'CORRECT. The return value of the `dup($this->fd)` two rows up, released again once '
-            . 'the original has been closed. It exists to hold the description alive across that '
-            . 'close; before it was released, close() leaked one /dev/ptmx descriptor per master '
-            . 'that had been read from or written to -- MEASURED linear over five cycles, with a '
-            . 'no-stream control leaking none. Local to close(), guarded by `>= 0`, and never a '
-            . 'cast of a PHP stream.',
+            'CORRECT. The return value of the `dup($this->fd)` taken earlier in the same '
+            . 'close(), released again once the original has been closed. (Cited by what it IS, '
+            . 'not by position: this roster is an insertion-ordered array that several lanes '
+            . 'append to, so "two rows up" rots at the next merge.) Releasing it is the whole '
+            . 'point -- before that, close() leaked one /dev/ptmx descriptor per master that had '
+            . 'been read from or written to, MEASURED linear over five cycles with a no-stream '
+            . 'control leaking none. It does NOT "hold the description alive across the close", '
+            . 'which is what this row used to say: MEASURED, PHP 8.3.6, fopen(php://fd/N) '
+            . 'allocates a new descriptor and fclose() closes that one, so $this->fd is open '
+            . 'continuously and the recycle race it was written for cannot arise. See the '
+            . 'three-part note on the block itself in PosixMasterPty::close(). Local to close(), '
+            . 'guarded by `>= 0`, and never a cast of a PHP stream.',
         ],
 
         // candy-pty/PosixPtySystem. `$masterFd` comes from openPtyMaster(),
