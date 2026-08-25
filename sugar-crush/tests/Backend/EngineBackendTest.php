@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Backend\EngineBackend;
@@ -21,6 +22,8 @@ use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tests\Backend\Support\ScaledClockLoop;
+use SugarCraft\Crush\Tests\Backend\Support\StreamingDouble;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -733,35 +736,127 @@ final class EngineBackendTest extends TestCase
     /**
      * The second half of the §1 E1 defect: COMPLETE_TIMEOUT_SECONDS used to be
      * armed exactly once for the whole forked turn, so real multi-step tool
-     * work got SIGKILLed mid-flight. It is now an IDLE ceiling - re-armed on
-     * every frame - which cannot be exercised in a unit test without waiting
-     * out the real 120s, so pin the wiring instead: the timer must only ever
-     * be created by the reset helper, and that helper must be reachable from
-     * the socket's read handler.
+     * work got SIGKILLed mid-flight. It is now an IDLE ceiling, re-armed on
+     * every frame the child streams.
+     *
+     * WHAT THIS TEST SAID (E496): "which cannot be exercised in a unit test
+     * without waiting out the real 120s, so pin the wiring instead" — and it
+     * then scanned `completeAsync()`'s SOURCE TEXT with a `ReflectionMethod`,
+     * counting `addTimer(self::COMPLETE_TIMEOUT_SECONDS` occurrences and
+     * looking for the string `$resetTimeout()` after `addReadStream(`.
+     *
+     * WHAT IS TRUE NOW: the premise stopped being true in round 56, which built
+     * {@see ScaledClockLoop} — real streams, real fork, a scaled timer clock —
+     * so 120 virtual seconds now cost 240 ms of wall time. And the source scan
+     * was not merely superseded, it was WEAK IN A SPECIFIC WAY: move the
+     * `$resetTimeout()` call from the top of the drain loop down into the
+     * `reasoning` branch and BOTH of its assertions still hold — one arming
+     * site, `$resetTimeout()` still lexically inside the read handler — while a
+     * turn whose progress is assistant TEXT rather than thinking now dies at
+     * the ceiling. A scan for the presence of a string cannot see where the
+     * string is.
+     *
+     * WHY THE CLAIM STILL EARNS A TEST: it is the difference between a ceiling
+     * that bounds SILENCE and one that bounds a turn's total length, and the
+     * latter kills real work. So the claim is now driven rather than read: a
+     * provider that streams nothing but content, in gaps far under the ceiling,
+     * for a total far over it.
+     *
+     * The `reasoning` half of this family, and the known-positive control that
+     * a silent provider still DIES on the same clock, live in
+     * {@see ReasoningProgressTest}. This is the `token`-frame member, and it is
+     * here because it is what replaced the scan.
      */
-    public function testTheCompletionTimeoutIsReArmedOnEveryFrame(): void
+    public function testTheIdleCeilingIsReArmedByATokenFrameAndNotOnlyByAThought(): void
     {
-        $source = $this->methodSource(new \ReflectionMethod(EngineBackend::class, 'completeAsync'));
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            // Both were checked on this host (PHP 8.3.6) and both exist, so
+            // this gate does not fire here and the test really runs. Named
+            // rather than copied from a neighbouring gate.
+            self::markTestSkipped('completeAsync() falls back to a blocking, timer-less path without pcntl');
+        }
 
-        $this->assertSame(
-            1,
-            substr_count($source, 'addTimer(self::COMPLETE_TIMEOUT_SECONDS'),
-            'the completion timeout must be armed in exactly one place (the reset helper)',
+        $tokens = [];
+        $run = $this->runOnScaledClock(new StreamingDouble(40, 20_000, 'content', 'the answer'), $tokens);
+
+        $this->assertFalse(
+            $run['realCeiling'],
+            'the harness ran out of REAL time - nothing below is a verdict about the idle ceiling',
         );
-        [, $readHandler] = explode('addReadStream(', $source, 2);
-        $this->assertStringContainsString(
-            '$resetTimeout()',
-            $readHandler,
-            'the read handler must re-arm the timeout, or the ceiling is per-turn again',
+        if ($run['error'] !== null) {
+            $this->fail('a turn streaming assistant text was killed as hung: ' . $run['error']->getMessage());
+        }
+        // The reply is the whole accumulated stream, not just the final
+        // chunk: content deltas ARE the assistant's words, unlike thoughts.
+        $this->assertStringStartsWith('word 0 ', (string) $run['message']?->content);
+        $this->assertStringEndsWith('the answer', (string) $run['message']?->content);
+        $this->assertGreaterThan(
+            $this->ceilingSeconds(),
+            $run['virtualSeconds'],
+            'the clock never reached the idle ceiling, so surviving it proves nothing',
         );
+        // The frames really were token frames: 40 content chunks plus the
+        // answer, none of it routed through the reasoning channel.
+        $this->assertGreaterThan(40, count($tokens), 'the turn did not actually stream on the token channel');
+        $this->assertSame('word 0 ', $tokens[0]);
     }
 
-    private function methodSource(\ReflectionMethod $method): string
+    private function ceilingSeconds(): float
     {
-        $lines = file((string) $method->getFileName(), FILE_IGNORE_NEW_LINES);
-        $start = (int) $method->getStartLine() - 1;
+        return (float) (new \ReflectionClass(EngineBackend::class))
+            ->getReflectionConstant('COMPLETE_TIMEOUT_SECONDS')
+            ->getValue();
+    }
 
-        return implode("\n", array_slice((array) $lines, $start, (int) $method->getEndLine() - $start));
+    /**
+     * Run one forked completion against {@see ScaledClockLoop}.
+     *
+     * A near-twin of {@see ReasoningProgressTest}'s private helper of the same
+     * name, deliberately not shared: that one collects a reasoning channel this
+     * test has no use for, and folding the two would mean editing a file whose
+     * sixteen passing tests are about a different claim. If a third caller
+     * appears, promote it to `Support/` rather than growing a third copy.
+     *
+     * @param array<int, string> $tokens
+     * @return array{settled: bool, message: ?Message, error: ?\Throwable, virtualSeconds: float, realCeiling: bool}
+     */
+    private function runOnScaledClock(ProviderInterface $provider, array &$tokens): array
+    {
+        $backend = EngineBackend::new($provider, 'scaled');
+        $loop = new ScaledClockLoop();
+        $previous = Loop::get();
+        Loop::set($loop);
+
+        $settled = false;
+        $value = null;
+        $error = null;
+
+        try {
+            $promise = $backend->completeAsync(
+                [Message::user('say something slowly')],
+                static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            );
+            $promise->then(
+                static function ($v) use (&$settled, &$value, $loop): void { $settled = true; $value = $v; $loop->stop(); },
+                static function (\Throwable $e) use (&$settled, &$error, $loop): void { $settled = true; $error = $e; $loop->stop(); },
+            );
+            if (!$settled) {
+                $loop->run();
+            }
+        } finally {
+            // The SUITE's loop object, not a fresh one: tests/bootstrap.php
+            // pins one instance for the whole run and other files registered
+            // on it.
+            Loop::set($previous);
+        }
+
+        return [
+            'settled' => $settled,
+            'message' => $value instanceof Message ? $value : null,
+            'error' => $error,
+            'virtualSeconds' => $loop->highWaterVirtualSeconds(),
+            'realCeiling' => $loop->hitRealCeiling(),
+        ];
     }
 
     /**
