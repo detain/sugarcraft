@@ -47,8 +47,22 @@ use SugarCraft\Crush\Backend;
  * ## Why the scope is the Backend family and not `src/`
  *
  * `src/Workflows/Workflow.php` carries two more of these and is not this lane's
- * file. Widening the scan is a one-line change once that is fixed; widening it
- * now would only make this file red for someone else's code.
+ * file. Widening it now would only make this file red for someone else's code.
+ *
+ * WHAT THIS SAID BEFORE: that widening the scan to all of `src/` was a one-line
+ * change to {@see contractFamily()} once those two were spelled nullable.
+ * WHAT IS TRUE NOW: it was not, and the reason was a defect in this scanner
+ * rather than in the code it would have scanned. Running it over `src/` also
+ * flagged `src/ToolRegistry.php`, whose `#[\SensitiveParameter]` parameter is
+ * correct — so the widened guard would have gone red on correct code and
+ * printed the wrong instruction for it. The classifier was the defect, not the
+ * code; it is fixed, and pinned in both polarities by
+ * {@see testTheScannerSeesPastAnAttributeToTheParameterBehindIt()} and the
+ * attributed rows of {@see nonOffendingSpellings()}.
+ * WHY THE NARROW SCOPE STILL EARNS ITS PLACE: unchanged, and now for the stated
+ * reason alone. `Workflow.php` is the only thing between this guard and `src/`;
+ * re-derive that with the scanner rather than trusting this sentence, because a
+ * cardinality in prose is exactly what rule 18 says not to ship.
  */
 final class BackendSignatureNullabilityTest extends TestCase
 {
@@ -139,7 +153,92 @@ final class BackendSignatureNullabilityTest extends TestCase
             'non-null default'      => ['a non-null default is not this defect', 'string $f = \'x\''],
             'no default at all'     => ['a required parameter is not this defect', 'callable $g'],
             'constant default'      => ['a constant default is not a bare null', 'int $h = \PHP_INT_MAX'],
+            'attributed + explicit' => ['an attribute is not part of the type', '#[\SensitiveParameter] ?callable $i = ' . $null],
+            'attributed, args'      => ['an attribute argument list is not the type either', '#[Foo(1, 2)] ?string $j = ' . $null],
         ];
+    }
+
+    /**
+     * **The offender polarity of the attribute case, which is where this
+     * scanner was wrong in BOTH directions from one missing token.**
+     *
+     * `#[` arrives from `token_get_all()` as T_ATTRIBUTE — an ARRAY token, not
+     * the string `[` — so {@see splitParams()}'s bracket comparison never saw
+     * it open anything, while the group's closing `]` is a bare string and did
+     * close something. Depth fell to 0 at the first attributed parameter and
+     * the walk broke out of the entire parameter list.
+     *
+     * Measured on PHP 8.3.6 before the fix: `#[Foo] ?callable $a = null` came
+     * back as `<unparsed>` (the guard reddening CORRECT code, and telling its
+     * reader to add a question mark that is already there), and
+     * `#[Foo] ?callable $a = null, callable $b = null` never reported `$b` at
+     * all (a real offender invisible). `src/ToolRegistry.php` carries
+     * `#[\SensitiveParameter]` today, so this was not hypothetical: it is what
+     * a widened scan would have hit first.
+     *
+     * @dataProvider attributedSpellings
+     */
+    public function testTheScannerSeesPastAnAttributeToTheParameterBehindIt(string $label, string $params, array $expected): void
+    {
+        $source = "<?php\nfinal class F { public function m({$params}): void {} }\n";
+
+        $this->assertSame($expected, self::implicitlyNullableParams($source), $label);
+    }
+
+    /** @return array<string, array{0: string, 1: string, 2: list<string>}> */
+    public static function attributedSpellings(): array
+    {
+        // Built by concatenation on purpose - see the class docblock.
+        $null = 'null';
+
+        return [
+            'attribute hides an offender' => [
+                'an attribute must not hide the parameter behind it',
+                '#[\SensitiveParameter] callable $a = ' . $null,
+                ['$a (callable)'],
+            ],
+            'attribute with arguments' => [
+                'an attribute argument list must not hide it either',
+                '#[Foo(1, 2)] callable $a = ' . $null,
+                ['$a (callable)'],
+            ],
+            'attribute with a nested array argument' => [
+                'a `[` inside the attribute must not close the attribute',
+                '#[Foo([1, 2])] callable $a = ' . $null,
+                ['$a (callable)'],
+            ],
+            'the walk must continue past the attributed parameter' => [
+                'an offender AFTER an attributed parameter must still be seen',
+                '#[Foo] ?callable $a = ' . $null . ', callable $b = ' . $null,
+                ['$b (callable)'],
+            ],
+            'two attributes, one group' => [
+                'a comma inside the attribute group is not a parameter boundary',
+                '#[Foo, Bar] callable $a = ' . $null,
+                ['$a (callable)'],
+            ],
+        ];
+    }
+
+    /**
+     * Rule 14, at the one place this scanner can genuinely lose its footing: an
+     * attribute group that never closes must be REPORTED, not silently dropped.
+     *
+     * Reachability established rather than assumed — the first version of the
+     * `null` branch in {@see stripAttributes()} could not be reached at all,
+     * because {@see splitParams()} ran off the end of the token list without
+     * ever emitting the parameter it had collected. A hand-built fixture with a
+     * typo in it then looked exactly like a fixture that parses clean, which is
+     * the failure mode this whole file exists to avoid.
+     */
+    public function testAnAttributeGroupThatNeverClosesIsReportedRatherThanSwallowed(): void
+    {
+        $null = 'null';
+        $source = "<?php\nfinal class F { public function m(#[Foo callable \$a = {$null}): void {} }\n";
+
+        $hits = self::implicitlyNullableParams($source);
+        $this->assertCount(1, $hits, 'a parameter list that never closed vanished without a word');
+        $this->assertStringStartsWith('<unparsed>', $hits[0], 'the unreadable parameter was classified as if it were readable');
     }
 
     /**
@@ -205,10 +304,20 @@ final class BackendSignatureNullabilityTest extends TestCase
         $depth = 0;
         $params = [];
         $current = [];
+        $closed = false;
 
         for ($k = $open; $k < $count; $k++) {
             $token = $tokens[$k];
-            if ($token === '(' || $token === '[') {
+            // `#[` is T_ATTRIBUTE - an ARRAY token, not the string '['. Before
+            // this was handled, the opener was invisible to the comparison below
+            // while its bare `]` still DECREMENTED, driving depth to 0 and
+            // breaking out of the whole parameter list at the first attributed
+            // parameter. Measured on PHP 8.3.6: `#[Foo] ?callable $a = null`
+            // came back as an offender (a false positive on correct code) and
+            // `#[Foo] ?callable $a = null, callable $b = null` never saw $b at
+            // all (a false negative on a real one) - wrong in both polarities
+            // from one missing case.
+            if ($token === '(' || $token === '[' || (is_array($token) && $token[0] === T_ATTRIBUTE)) {
                 $depth++;
                 if ($depth === 1) {
                     continue;
@@ -217,6 +326,7 @@ final class BackendSignatureNullabilityTest extends TestCase
                 $depth--;
                 if ($depth === 0) {
                     $params[] = $current;
+                    $closed = true;
                     break;
                 }
             } elseif ($token === ',' && $depth === 1) {
@@ -226,6 +336,18 @@ final class BackendSignatureNullabilityTest extends TestCase
                 continue;
             }
             $current[] = $token;
+        }
+
+        // Rule 14: running off the end means the list never closed - malformed
+        // input, or a hand-built fixture with a typo in it. Emitting what was
+        // collected sends it to {@see classifyParam()}, which reports it as
+        // `<unparsed>`; dropping it here would make a fixture that does not
+        // parse look identical to one that parses clean. Keyed on $closed and
+        // not on `$current !== []`, because a well-formed list leaves its last
+        // parameter in $current after the break and that spelling appended
+        // every final parameter TWICE.
+        if (!$closed) {
+            $params[] = $current;
         }
 
         return $params;
@@ -240,6 +362,17 @@ final class BackendSignatureNullabilityTest extends TestCase
             $param,
             static fn ($t) => !is_array($t) || !in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true),
         ));
+        if ($param === []) {
+            return null;
+        }
+
+        $stripped = self::stripAttributes($param);
+        if ($stripped === null) {
+            // Rule 14: an attribute group that does not close is something this
+            // scanner cannot read, and saying so is the point.
+            return '<unparsed> ' . self::flatten($param);
+        }
+        $param = $stripped;
         if ($param === []) {
             return null;
         }
@@ -284,6 +417,46 @@ final class BackendSignatureNullabilityTest extends TestCase
         }
 
         return (is_array($param[$varIndex]) ? $param[$varIndex][1] : '?') . ' (' . $type . ')';
+    }
+
+    /**
+     * The same parameter with every attribute group (`#[...]`) removed.
+     *
+     * Attributes are not part of a parameter's TYPE, and leaving them in makes
+     * both of {@see classifyParam()}'s decisions answer about the wrong string:
+     * `#[Foo]?callable` does not start with `?`, so a correctly-spelled
+     * parameter reads as an offender. Nesting is tracked rather than assumed,
+     * because an attribute argument may itself contain `[` (`#[Foo([1, 2])]`).
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $param
+     * @return list<array{0:int,1:string,2:int}|string>|null null when a group
+     *         never closes - the caller must report that, not swallow it.
+     */
+    private static function stripAttributes(array $param): ?array
+    {
+        $out = [];
+        $depth = 0;
+
+        foreach ($param as $token) {
+            $isAttribute = is_array($token) && $token[0] === T_ATTRIBUTE;
+            if ($depth === 0) {
+                if ($isAttribute) {
+                    $depth = 1;
+
+                    continue;
+                }
+                $out[] = $token;
+
+                continue;
+            }
+            if ($isAttribute || $token === '[') {
+                $depth++;
+            } elseif ($token === ']') {
+                $depth--;
+            }
+        }
+
+        return $depth === 0 ? $out : null;
     }
 
     /** @param list<array{0:int,1:string,2:int}|string> $tokens */

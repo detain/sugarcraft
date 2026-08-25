@@ -16675,9 +16675,29 @@ E495 fixed the eight in `src/Backend.php` and `src/Backend/`, and
 (`WorkflowStatus $workflowStatus = null` and `bool $stopOnFirstFailure = null`), which was not this lane's
 file. They are the same PHP 8.4 deprecation and the same one-character fix.
 
-Widening the guard's scope from the Backend family to all of `src/` is a one-line change to
-`contractFamily()` once those two are spelled `?WorkflowStatus` / `?bool`; the docblock says so, so the
-scope is not silently permanent.
+**CORRECTED at the round-57 review, and the correction is the more interesting half.** As filed, this
+entry said widening the guard to all of `src/` was a one-line change to `contractFamily()` once those two
+were spelled `?WorkflowStatus` / `?bool`. That was measured false. Re-run over `src/`, the census returned
+**three** rows, not two: the third was `src/ToolRegistry.php`, reported as `<unparsed> #[\SensitiveParameter`
+— and that parameter is **correct**. The widened guard would have gone red on correct code and printed
+"Spell the type nullable (a leading question mark)", which is the wrong instruction for it.
+
+Rule 33's exact shape: the classifier was the defect. `#[` reaches `token_get_all()` as `T_ATTRIBUTE`, an
+ARRAY token, so `splitParams()`'s `$token === '['` comparison never saw it open a group while the group's
+closing `]` — a bare string — did close one. Depth fell to 0 at the first attributed parameter and the walk
+broke out of the whole parameter list. Wrong in **both** polarities from one missing case: a correctly
+spelled `#[Foo] ?callable $a = null` read as an offender, and a real offender sitting after an attributed
+parameter was never seen at all.
+
+Fixed in the review round, with the attribute cases pinned in both polarities and an unterminated-group
+fixture added for rule 14. With the scanner repaired, `src/` really does come back with exactly the two
+`Workflow.php` rows and no `<unparsed>` — so the widening **is** now the one-line change this entry
+originally claimed, but only because the instrument was repaired first. Re-derive it with the scanner
+rather than trusting this paragraph.
+
+**The generator**, so this is a measurement and not a sentence: `implicitlyNullableParams()` invoked by
+reflection out of `tests/Backend/BackendSignatureNullabilityTest.php` over every `*.php` under
+`sugar-crush/src` via `RecursiveDirectoryIterator`, PHP 8.3.6, deterministic (no seed, no sampling).
 
 ---
 
