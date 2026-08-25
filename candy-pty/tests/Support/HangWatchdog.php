@@ -128,10 +128,7 @@ final class HangWatchdog
         // `Tests:` line -- indistinguishable from the hang this exists to
         // diagnose. Clearing it here is the deterministic half of the fix;
         // `armedAt` below is the half that does not depend on this succeeding.
-        @\unlink($dir . '/heartbeat');
-        foreach ((array) @\glob($dir . '/heartbeat.*.tmp') as $stale) {
-            @\unlink((string) $stale);
-        }
+        self::clearInheritedState($dir);
 
         $self = new self($dir . '/heartbeat', $dir);
         if (!$self->spawn($budgetSec)) {
@@ -223,6 +220,24 @@ final class HangWatchdog
     public static function heartbeatPayload(string $testId, float $startedAt): string
     {
         return \sprintf("%.6f\t%s", $startedAt, $testId);
+    }
+
+    /**
+     * Remove any heartbeat left in $dir by a previous occupant of this pid.
+     *
+     * Extracted from {@see install()} rather than left inline so that it can be
+     * killed by a mutation on its own: with the child-side `armedAt` filter in
+     * place, deleting the clearing code changes no test outcome, and an
+     * unpinnable defence is one that gets deleted by the next reader as dead.
+     *
+     * @internal exposed for the test that pins it; not part of the harness API
+     */
+    public static function clearInheritedState(string $dir): void
+    {
+        @\unlink($dir . '/heartbeat');
+        foreach ((array) @\glob($dir . '/heartbeat.*.tmp') as $stale) {
+            @\unlink((string) $stale);
+        }
     }
 
     /** Tear the watchdog down. Idempotent. */

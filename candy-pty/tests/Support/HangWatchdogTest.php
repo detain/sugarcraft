@@ -363,6 +363,56 @@ final class HangWatchdogTest extends TestCase
     }
 
     /**
+     * THE OTHER HALF OF THE F4 FIX, PINNED ON ITS OWN.
+     *
+     * `install()` clears inherited state before spawning, and the child ignores
+     * records that predate its arming. Either alone keeps the end-to-end probe
+     * green -- measured: deleting the clearing code changes no test outcome
+     * while the child-side filter stands, and deleting the filter changes none
+     * while the clearing stands; deleting BOTH reds the probe. That is the
+     * correct behaviour for two independent defences and a bad place to leave
+     * the coverage, because a defence no mutation can kill reads as dead code
+     * to the next person tidying up. So the clearing is asserted directly.
+     *
+     * The negative arm matters as much as the positive: this must remove the
+     * inherited heartbeat and NOT the directory, which install() has just
+     * created and is about to use.
+     */
+    public function testClearingInheritedStateRemovesTheHeartbeatAndKeepsTheDirectory(): void
+    {
+        $heartbeat = $this->tempPath('inherited');
+        $dir = \dirname($heartbeat);
+        $tmp = $heartbeat . '.999999.tmp';
+
+        \file_put_contents(
+            $heartbeat,
+            HangWatchdog::heartbeatPayload('Ghost\\PreviousRun::testFromAnotherProcess', \microtime(true) - 999.0),
+        );
+        \file_put_contents($tmp, 'torn write from a previous run');
+        $this->paths[] = $tmp;
+
+        $this->assertFileExists($heartbeat, 'the fixture must start WITH inherited state');
+
+        HangWatchdog::clearInheritedState($dir);
+
+        $this->assertFileDoesNotExist(
+            $heartbeat,
+            'an inherited heartbeat survived install()\'s clearing, so a run given a recycled '
+                . 'pid starts with a record that fires instantly and SIGKILLs it before any '
+                . 'test executes',
+        );
+        $this->assertFileDoesNotExist(
+            $tmp,
+            'a torn .tmp from a previous run survived the clearing',
+        );
+        $this->assertDirectoryExists(
+            $dir,
+            'the clearing removed the state DIRECTORY, which install() has just created and is '
+                . 'about to write this run\'s own heartbeat into',
+        );
+    }
+
+    /**
      * AND THE FILTER MUST NOT DISARM THE REAL CASE.
      *
      * Rule 15's positive component for the test above: "ignores an old record"
