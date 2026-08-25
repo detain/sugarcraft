@@ -283,12 +283,6 @@ YAML);
     }
 
     /**
-     * A hook file may ADD to the chain and may never replace what is in it:
-     * `name: confirm-rm` would otherwise overwrite the registry entry
-     * {@see ConfirmRemoveHook} occupies — a config file uninstalling a guard by
-     * naming it.
-     */
-    /**
      * The seam {@see \SugarCraft\Crush\Cli\Bootstrap::hookFileEntries()} uses to
      * replay ONE read of a hook file into every hook manager a launch builds —
      * which is what stops a file written mid-session installing itself into the
@@ -316,6 +310,12 @@ YAML);
         );
     }
 
+    /**
+     * A hook file may ADD to the chain and may never replace what is in it:
+     * `name: confirm-rm` would otherwise overwrite the registry entry
+     * {@see ConfirmRemoveHook} occupies — a config file uninstalling a guard by
+     * naming it.
+     */
     public function testLoadFromFileRefusesToDisplaceABuiltInGuard(): void
     {
         $this->manager->registerBuiltIns();

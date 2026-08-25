@@ -204,7 +204,7 @@ final class SlashMenuTabCompletionTest extends TestCase
      * cycling and was already excluded from the shell's claim; Alt/Shift+Tab
      * are claimed by neither half, so they fall through to Chat's default
      * no-op — and in NO case does a Tab put a "\t" in the draft, which
-     * {@see \SugarCraft\Crush\Tests\KeyHelpTest} depends on in both directions.
+     * {@see \SugarCraft\Crush\Tests\Renderer\KeyHelpTest} depends on in both directions.
      */
     public function testModifiedTabsNeitherCompleteNorTypeATabCharacter(): void
     {

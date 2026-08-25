@@ -598,7 +598,7 @@ final class BootstrapLaunchNoticeRoutingTest extends TestCase
         }
 
         exec(sprintf(
-            '%stimeout -s KILL 60 %s %s >%s 2>%s',
+            '%stimeout -s KILL 20 %s %s >%s 2>%s',
             $prefix,
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),

@@ -1060,17 +1060,6 @@ final class McpToolWiringTest extends TestCase
         PHP;
 
     /**
-     * Write the fixture `.mcp.json` AND — unless $trusted is false — the user-side
-     * grant that lets it start anything at all.
-     *
-     * BOTH HALVES, because a project `.mcp.json` on its own is inert: starting the
-     * servers it names is code execution from cloned content, so
-     * {@see Bootstrap::mcpClient()} requires the root to be listed under
-     * `trustedProjectMcp` in the USER's config — a file no repository can write.
-     * Written through {@see Bootstrap::writeUserConfig()} into the sandboxed HOME,
-     * i.e. the path a real user configures, rather than by reaching into a static.
-     */
-    /**
      * A fixture MCP server that OUTLIVES ITS STDIN.
      *
      * `sleep(30)` past EOF, because a server that exits when the pipe closes
@@ -1152,6 +1141,17 @@ final class McpToolWiringTest extends TestCase
         ]));
         PHP;
 
+    /**
+     * Write the fixture `.mcp.json` AND — unless $trusted is false — the user-side
+     * grant that lets it start anything at all.
+     *
+     * BOTH HALVES, because a project `.mcp.json` on its own is inert: starting the
+     * servers it names is code execution from cloned content, so
+     * {@see Bootstrap::mcpClient()} requires the root to be listed under
+     * `trustedProjectMcp` in the USER's config — a file no repository can write.
+     * Written through {@see Bootstrap::writeUserConfig()} into the sandboxed HOME,
+     * i.e. the path a real user configures, rather than by reaching into a static.
+     */
     private function writeMcpConfig(?string $at = null, bool $trusted = true): void
     {
         $config = ['mcpServers' => ['fake' => [
@@ -1470,7 +1470,7 @@ final class McpToolWiringTest extends TestCase
             . 'echo json_encode(["rows" => $rows, "notices" => Bootstrap::launchNotices()]);' . "\n");
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s -d %s %s >%s 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s -d %s %s >%s 2>%s',
             escapeshellarg($this->tempDir . '/home'),
             escapeshellarg(PHP_BINARY),
             // An EMPTY value, not an omitted flag: the box under test is one

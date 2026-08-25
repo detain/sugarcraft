@@ -98,7 +98,7 @@ final class PermissionModeDescriptionTest extends TestCase
      * rules configured. Written down rather than derived, because a table
      * derived from the gate would agree with the gate by construction and
      * assert nothing; this one is the expectation a reader can hold the
-     * sentences up against, and {@see testTheGateAgreesWithTheDecisionMatrix()}
+     * sentences up against, and {@see testTheDescriptionMatchesWhatTheGateActuallyDoes()}
      * is what keeps it honest.
      *
      * @return array<string, array<string, PermissionDecision>>

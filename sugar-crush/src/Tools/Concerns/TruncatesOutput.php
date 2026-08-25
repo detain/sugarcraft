@@ -551,7 +551,7 @@ trait TruncatesOutput
      * marks a file emitted AT LOAD TIME, so a body loaded and then dropped is
      * an instruction file retired for the rest of the session without ever
      * having been shown — the precise failure
-     * `GrepInstructionWiringTest::testTheAnnounceOnceMarkIsSpentOnlyOnWhatTheModelReceived()`
+     * `GrepInstructionWiringTest::testTheAnnounceOnceMarkIsSpentOnlyOnAHitTheModelWasToldAbout()`
      * exists to prevent. A path never EXAMINED is not retired: the next call
      * with room in its reserve surfaces its rules in full. Bounding the count
      * after loading would have been the same defect wearing a bound.

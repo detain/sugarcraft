@@ -888,7 +888,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         );
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >/dev/null 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s %s >/dev/null 2>%s',
             escapeshellarg($this->home),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
@@ -1100,7 +1100,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         );
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >/dev/null 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s %s >/dev/null 2>%s',
             escapeshellarg($this->home),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
@@ -1118,7 +1118,6 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         return $stderr;
     }
 
-    /** @param array<string, mixed> $data */
     // -------------------------------------------------------------------------
     // Provenance: which source the GATE remembers, for `/permissions`
     // -------------------------------------------------------------------------
@@ -1453,7 +1452,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         file_put_contents($script, "<?php\nrequire " . var_export($autoload, true) . ";\n" . $body);
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >%s 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s %s >%s 2>%s',
             escapeshellarg($this->home),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
@@ -1467,6 +1466,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         ];
     }
 
+    /** @param array<string, mixed> $data */
     private function writeUserConfigFile(array $data): void
     {
         file_put_contents($this->configDir . '/config.json', (string) json_encode($data));

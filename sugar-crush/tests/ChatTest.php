@@ -1551,14 +1551,22 @@ final class ChatTest extends TestCase
     }
 
     /**
-     * Benchmark: diff-based view() emits fewer bytes than full re-render
-     * for small changes between consecutive frames.
+     * WHAT THIS BLOCK USED TO SAY, kept because deleting it would delete the
+     * only record of what the method was FOR (rule 7). It read: "Benchmark:
+     * diff-based view() emits fewer bytes than full re-render for small
+     * changes between consecutive frames", and then described three frames —
+     * a full baseline followed by two deltas each smaller than a full 80x24
+     * re-emit. WHAT IS TRUE NOW: view() emits the full frame every time, so
+     * there is no delta to be smaller than anything and no benchmark to run.
+     * WHY IT STILL EARNS ITS PLACE: it says what was traded away, which is the
+     * one thing the paragraph below does not — the bytes on the wire really
+     * did go up, deliberately, and a future reader proposing to "optimise"
+     * view() back into a diff should see that it was tried.
      *
-     * Frame 1: full output (baseline)
-     * Frame 2: delta output (smaller than full 80x24 re-emit)
-     * Frame 3: delta output (smaller than full 80x24 re-emit)
-     */
-    /**
+     * IT WAS ALSO STACKED IMMEDIATELY ON TOP OF THE BLOCK BELOW, which is why
+     * it is merged rather than left where it was: PHP attaches only the LAST
+     * doc-comment of a run, so this text documented nothing at all (E507).
+     *
      * view() used to compute its own cell-level diff and return only the
      * changed bytes for a repeat frame - but Program's own Renderer ALSO
      * diffs whatever a Model's view() returns, so that pre-diffed byte

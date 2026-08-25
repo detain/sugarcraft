@@ -978,22 +978,6 @@ final class ProcessUniqueTempNameTest extends TestCase
     }
 
     /**
-     * The lines at which a FULLY STATIC temp path reaches a filesystem-mutating
-     * call — inline in any argument, or through a binding in the file.
-     *
-     * ONE BINDING AND NOT A DATAFLOW ANALYSIS, stated so nobody mistakes the
-     * bound for an answer. `$x = <static temp path>;` anywhere in the file, and
-     * `$x` as an argument to a mutating call anywhere in the file, is enough:
-     * the site this rule was written against assigned in a constructor and
-     * wrote in a method (E328 has since fixed it, and the walk's real-tree
-     * input is now {@see STATIC_TEMP_PATH_INVENTORY}'s purpose-built fixture),
-     * so a scope-local rule would have missed it. The cost is that a name
-     * rebound between the two is followed anyway — a false positive, which is
-     * loud, rather than a false negative, which is not.
-     *
-     * @return list<int> 1-indexed lines, sorted, unique
-     */
-    /**
      * The namespace this file declares, or '' for the global one.
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
@@ -1043,6 +1027,22 @@ final class ProcessUniqueTempNameTest extends TestCase
         return $found;
     }
 
+    /**
+     * The lines at which a FULLY STATIC temp path reaches a filesystem-mutating
+     * call — inline in any argument, or through a binding in the file.
+     *
+     * ONE BINDING AND NOT A DATAFLOW ANALYSIS, stated so nobody mistakes the
+     * bound for an answer. `$x = <static temp path>;` anywhere in the file, and
+     * `$x` as an argument to a mutating call anywhere in the file, is enough:
+     * the site this rule was written against assigned in a constructor and
+     * wrote in a method (E328 has since fixed it, and the walk's real-tree
+     * input is now {@see STATIC_TEMP_PATH_INVENTORY}'s purpose-built fixture),
+     * so a scope-local rule would have missed it. The cost is that a name
+     * rebound between the two is followed anyway — a false positive, which is
+     * loud, rather than a false negative, which is not.
+     *
+     * @return list<int> 1-indexed lines, sorted, unique
+     */
     private static function staticTempPathWrites(string $source): array
     {
         $tokens = self::significantTokens($source);

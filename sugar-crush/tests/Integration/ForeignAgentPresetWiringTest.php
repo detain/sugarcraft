@@ -650,21 +650,31 @@ final class ForeignAgentPresetWiringTest extends TestCase
         );
 
         // Half two: the surface.
+        // THE `fail()` IS OUTSIDE THE `try` (E510). It used to sit inside it,
+        // under `catch (\Throwable $e)`, and MEASURED on PHP 8.3.6 / PHPUnit
+        // 10.5.64 the `AssertionFailedError` it throws extends
+        // `PHPUnit\Framework\Exception` extends `\RuntimeException` — so the
+        // catch caught this test's own refusal-to-throw report and then
+        // asserted the launch's refusal message against IT. Narrowing the catch
+        // is not the fix either: the gate throws a `\RuntimeException`, which
+        // swallows an assertion failure just as completely.
+        $refusal = null;
         try {
             Bootstrap::agentRoster($this->repo, 'echo', 'echo');
-            $this->fail('a roster built out of an unownable home must be refused, not quietly reduced');
         } catch (\Throwable $e) {
-            $this->assertStringContainsString($exposed, $e->getMessage(), 'the refusal must name the home');
-            // The substring proves this is the ownership gate's refusal and nothing
-            // finer: its message names all three causes it covers in one fixed
-            // sentence, so the 0777 mode above is what makes this the
-            // world-writable case — the assertion cannot tell them apart.
-            $this->assertStringContainsString(
-                'world-writable',
-                $e->getMessage(),
-                'the refusal must be the ownership gate\'s, which names the modes it refuses',
-            );
+            $refusal = $e;
         }
+        $this->assertNotNull($refusal, 'a roster built out of an unownable home must be refused, not quietly reduced');
+        $this->assertStringContainsString($exposed, $refusal->getMessage(), 'the refusal must name the home');
+        // The substring proves this is the ownership gate's refusal and nothing
+        // finer: its message names all three causes it covers in one fixed
+        // sentence, so the 0777 mode above is what makes this the
+        // world-writable case — the assertion cannot tell them apart.
+        $this->assertStringContainsString(
+            'world-writable',
+            $refusal->getMessage(),
+            'the refusal must be the ownership gate\'s, which names the modes it refuses',
+        );
     }
 
     /**

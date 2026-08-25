@@ -17211,3 +17211,190 @@ paragraph whose entire job was to be the control.
 Fixed by writing the paragraph into `readLine()`'s doc-block, which is where the claim said it was. Worth
 keeping as an entry because the failure mode is invisible by construction: a survivor justified by prose
 elsewhere is only as good as someone having read that elsewhere.
+
+
+### Ec57-1 — twenty-two swallowing `catch` clauses whose body asserts, and therefore cannot go silently green
+
+**DEFERRED (round 57, lane c).** `ExpectationFailedException` extends `AssertionFailedError` extends
+`PHPUnit\Framework\Exception` extends `\RuntimeException` (MEASURED, PHPUnit 10.5.64, and now asserted by
+`tests/Support/AssertionSwallowingCatchTest.php`). So `catch (\RuntimeException)` — the type someone
+reaches for when they want to be NARROW — swallows a failed assertion exactly as completely as
+`catch (\Throwable)` does.
+
+**FIGURES RE-MEASURED at the lane's final commit**, after the round-57 fix stage widened the scanner
+twice (the caught type is now RESOLVED and asked whether it is a supertype of a failed assertion, rather
+than string-matched; and the walk now descends into a nested `try` instead of stepping over it). The
+numbers below replace an earlier draft of this entry that said "twenty" in its heading and "~18" in its
+body, both measured against the narrower scanner.
+
+The population is **23** sites in `tests/` with an assertion inside a `try` whose `catch` can swallow it.
+One had an EMPTY catch body and is fixed; two more caught `\Throwable` and are fixed. One —
+`tests/Providers/ToolSchemaEncodingTest.php` — is CORRECT and is classified as such: it records the
+failure into a flag and asserts on the flag after the `try`, which is exactly the fix prescribed below.
+The remaining **22** have a `fail('…')` inside the `try` and a catch body that asserts on
+`$e->getMessage()`. They cannot pass while asserting nothing — the catch's assertions were written for
+the exception the code under test throws and will not hold for an `AssertionFailedError` — but the
+DIAGNOSTIC is wrong: the reader is shown a substring failure against this test's own fail() message
+rather than "the call did not throw".
+
+The fix is mechanical and identical everywhere: record whether it threw, assert AFTER the `try`. It is
+deferred because it touches, MEASURED at this commit, the test root (×4), `tests/Agents/` (×8),
+`tests/Cli/` (×2), `tests/MCP/` (×4), `tests/Providers/` (×3) and `tests/Workflows/` (×1) concurrently
+with three audit lanes. The generator is `AssertionSwallowingCatchTest::swallowingCatches()` — it already
+reports these rows with `catchAsserts => true`; widening the guard is deleting one `continue`. Do not
+copy the counts above into a later round: re-derive them from that method.
+
+---
+
+### Ec57-2 — eight bare `{@see someMethod()}` citations in `tests/` name no method that exists
+
+**DEFERRED (round 57, lane c).** `SymbolCitationDriftTest` now resolves a bare `{@see …()}` in a `tests/`
+file against the classes that file declares, but ONLY for a member spelled as a test method — the
+test-symbol subset the census claims.
+
+RE-MEASURED at the lane's final commit, because the first draft of this entry cited a generator in a
+per-session scratchpad directory (which nobody else can run, and which E427 forbids reading across
+rounds) and listed TEN method names under a heading that said eight. The generator is below and the
+list is now the eight the run actually reports.
+
+**1,111 bare self-citations across 150 files; 11 resolve to nothing.** Three of the eleven are this
+census's own metasyntactic examples inside `SymbolCitationDriftTest.php` and are not citations at all.
+The other **eight** name a PRODUCTION method and are almost certainly meant to point at the class under
+test rather than at the test class:
+
+| file | citation |
+| --- | --- |
+| `tests/Backend/StreamingCommandBackendTest.php` | `{@see pump()}` |
+| `tests/Cli/LaunchFlagsTest.php` | `{@see selectedProviderLabel()}` |
+| `tests/Cli/StderrEmitterCensusTest.php` | `{@see warnPermissionConfigOnce()}` |
+| `tests/Commands/CommandLoaderRefusalReportingTest.php` | `{@see skippedFiles()}` |
+| `tests/Diagnostics/RuntimeNoticeSinkDeliveryTest.php` | `{@see drain()}` |
+| `tests/LSP/LspConnectionShutdownTest.php` | `{@see __destruct()}` |
+| `tests/LSP/LspConnectionShutdownTest.php` | `{@see readResponse()}` |
+| `tests/Tools/BuiltIn/SkillPathScopingTest.php` | `{@see forPaths()}` |
+
+GENERATOR, reproducible from a clean checkout and not from anyone's scratchpad — walk `sugar-crush/tests`
+for `*.php`; flatten doc-comment continuations with `preg_replace('/\R\s*\*\s*/', ' ', $source)`; match
+`/\{@see\s+(\w+)\(\)\s*\}/`; collect every class-like symbol the file declares with
+`/^(?:final\s+|abstract\s+|readonly\s+)*(?:class|trait|interface|enum)\s+(\w+)/m` qualified by the
+file's `namespace`; report a citation for which no declared class answers `method_exists()`. PHP 8.3.6.
+
+That is the near edge of the larger unbuilt instrument: a census of citations of PRODUCTION symbols.
+`{@see self::foo()}`, `{@see $this->bar}` and plain class references are far more numerous and have more
+shapes than the six the test-symbol census handles.
+
+---
+
+### Ec57-3 — `CONTRIBUTING.md` still documents two of the `path-repo-check` commands
+
+**DEFERRED (round 57, lane c) — out of lane, one file.** `tools/check-path-repos.php --help` now prints
+the exact commands the CI job runs, in order, with the `git checkout -- .` that must follow the
+injection — and, since the fix stage, that block is COMPARED to the workflow as a set in both directions
+by `CheckPathReposTest::testTheHelpTextNamesExactlyWhatTheWorkflowRuns()`, so it cannot drift silently.
+(No count of them is written here: it was "five" while the block held five STEPS and seven shell
+commands, which is the sort of number a reader checks against the wrong thing.)
+`CONTRIBUTING.md` documents `--no-lib-path-repos` and `--fix --strict-closure` only, and does
+not mention `--unused` (a hard gate) or `tools/tests/` (now a gate) at all. One paragraph; the content is
+already written in `--help` and can be lifted.
+
+---
+
+### Ec57-4 — `tools/gen-docs.php` has no guard, and it writes files nobody may hand-edit
+
+**DEFERRED (round 57, lane c).** `tools/tests/` exists and is wired into CI now, but it holds exactly one
+test file and it is for `check-path-repos.php`. `tools/gen-docs.php` generates every page under
+`docs/lib/`, which `AGENTS.md` forbids editing by hand, and nothing checks that a regeneration is a no-op
+against the committed pages — the classic drift shape: the generator and its output can disagree and the
+only signal is a reviewer noticing. A `--check` mode plus a CI step is the same wiring
+`path-repo-check` just got.
+
+
+---
+
+### Ec57-5 — E490 did not reproduce in 53 takes, and 53 takes cannot tell a fix from luck
+
+**MEASURED, round 57, lane c. A definite outcome, and it is not "closed".** Configuration, so the number
+means something (rule 3): PHP 8.3.6, this box, `candy-pty` at `1dea13c4f` (unchanged this round — the
+lane touched no `candy-*` file, verified with `git diff --name-only`), every take
+`cd candy-pty && vendor/bin/phpunit --testdox` with a 7/7 in-lane symlink closure.
+
+- **Arm A, candy-pty alone, 49 takes.** All `rc=0`, all `630 / 1494 / 16 skipped / 1 warning`, 48s each.
+- **Arm C — THE EXPERIMENT THAT HAD NEVER BEEN RUN: the full `sugar-crush` suite and then `candy-pty`,
+  back to back in one script, 4 cycles.** That is the only context the single observed hang occurred in.
+  All four clean, and byte-identical: `10137 / 154739 / 1` then `630 / 1494 / 16 / 1w` every time.
+- Arm A ran CONCURRENTLY with the lane's own `sugar-crush` runs for most of its 49 takes, so a
+  contended box is covered too.
+
+**53 takes, 0 events.** One-sided 95% upper bound on the per-take rate: `1 - 0.05^(1/53)` ≈ **5.5%**. The
+prior estimate is 1 in ~76 ≈ 1.3%, which sits comfortably inside that bound — so **this round does NOT
+distinguish "the leaked-timer fix closed it" from "it did not happen to fire".** Bounding at the prior
+rate needs roughly **230** consecutive clean takes (≈3.1 hours at 48s each); halving it needs ~460.
+
+**The instrument was checked before the quiet run was believed** (rule 15): with
+`CANDY_PTY_HANG_BUDGET=0.6` the watchdog fired, SIGKILLed the runner at `rc=137`, and printed the named
+test (`Integration\EOFGraceTest::testVeofDrainsTailBytesBeforeChildExit`), its in-flight time, its
+`ps`/wchan line, its open-fd count and its children. A watchdog that never fires and a dead one produce
+identical green suites; this one is alive.
+
+**Arm B — takes at `a8acfcc9` / `d38b644f4`, to ask whether round 55 caused it — was NOT run.** It needs
+a second checkout with its own resolving `vendor/sugarcraft` closure, and it needs the SAME N again to
+say anything: two arms of 53 with zero events in each distinguish nothing. It is only worth doing after
+one arm has reached ~230.
+
+
+---
+
+### Ec57-6 — `tools/` is outside every doc-drift roster in the tree, and the split-repo boundary is why
+
+**DEFERRED (round 57, lane c) — with the measurement that decides it.** Round 57 shipped a stacked
+doc-comment pair into `tools/tests/CheckPathReposTest.php` in the same round whose subject was the
+stacked-doc-comment guard, and nothing saw it: `RuntimeNoticeSinkDeliveryTest::phpSourceRoster()` walks
+`sugar-crush/{src,tests}` plus `bin/sugarcrush`, and `SymbolCitationDriftTest` walks `sugar-crush/{src,
+tests,docs}`. `tools/` sits at the MONOREPO root, one level above both.
+
+**Why the one-line fix is wrong.** Adding `../../tools` to either roster makes a `sugar-crush` test
+reach outside its own package. Every lib is published standalone as `sugarcraft/<lib>`, and in that split
+clone `tools/` does not exist — so the guard would red (or need a silent `is_dir()` skip, which is a
+guard that scores zero in the environment CI publishes to). The same argument that forbids a
+`repositories[]` entry in a lib manifest forbids this.
+
+**The shape that would work** is a guard living in `tools/tests/`, which round 57 wired into the
+`path-repo-check` job and which is therefore now a real home. It needs the token-stream scanner, and
+copying it there is exactly the shape `DuplicatedTestHelperDriftTest` exists to catch — so the scanner
+has to be lifted somewhere both can reach, or the `tools/` guard has to be written against a deliberately
+different mechanism. That is a round's scope decision, not a fix agent's. MEASURED at this commit:
+`tools/` censuses **zero** stacked pairs, so nothing is outstanding — only unwatched.
+
+---
+
+### Ec57-7 — `setup-php`'s `tools: phpunit` is unpinned, so `path-repo-check` follows PHPUnit's latest major
+
+**DEFERRED (round 57, lane c) — one line.** The `path-repo-check` job installs a PHPUnit PHAR with
+`tools: phpunit`, which resolves to the newest major that supports the requested PHP. The job does no
+`composer install` (it reads manifests rather than resolving them), so there is no per-lib
+`vendor/bin/phpunit` to borrow — that part is deliberate. But `tools/tests/CheckPathReposTest.php` is a
+PHPUnit 10 test file, and its own doc-block says "any PHPUnit 10". The day the PHAR moves to a major that
+drops something the file uses, a job with nothing to do with the change goes red.
+
+`tools: phpunit:10` pins it. NOT TESTABLE ON THIS BOX: there is no `phpunit` on `PATH` here, so the PHAR
+invocation the doc-block documents has never been exercised locally — only the
+`candy-core/vendor/bin/phpunit --no-configuration [--bootstrap …] tools/tests/` form, which round 57
+verified in both its with- and without-`--bootstrap` shapes.
+
+---
+
+### Ec57-8 — the `%d`-parametrised child budgets are REPORTED but never EVALUATED
+
+**DEFERRED (round 57, lane c) — deliberately, and the reason is the finding.**
+`ChildWallClockBudgetTest` reads every literal `timeout -s KILL <n>` in `tests/` and asserts each is under
+`phpunit.xml`'s `defaultTimeLimit` with headroom. A budget passed through `sprintf()` as `%d` is listed
+by the guard and NOT evaluated: resolving it means following an argument list, and a scan that guesses is
+worse than one that says what it cannot see (rule 14).
+
+MEASURED at this commit: **five such sites in four files**, all passing `20` by inspection —
+`tests/Cli/BootstrapSkillSkipsTest.php` (×2), `tests/SuiteChildStdinIsolationTest.php`,
+`tests/SuiteChildStdinPrependResidualTest.php`, `tests/Support/RequirementDirectiveProvenanceTest.php`.
+**That verification is by hand and will rot**; nothing re-checks it. Closing this means either resolving
+a `const`/literal argument through the token stream at the call site, or moving those four files to a
+literal. Re-derive the roster from `ChildWallClockBudgetTest::childBudgets()['parametrised']` rather than
+from the list above.

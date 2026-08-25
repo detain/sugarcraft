@@ -98,15 +98,6 @@ final class ShellContrastTest extends TestCase
     ];
 
     /**
-     * Every ratio in this file is measured against a background the test itself
-     * observes, so an inherited `SUGARCRUSH_BACKGROUND` — which outranks the
-     * observed reply — silently replaces all nine of them with #000000 or
-     * #ffffff. MEASURED: `SUGARCRUSH_BACKGROUND=dark` turns 10 of these 12 tests
-     * red, `=light` another 10, and every message blames a colour. Cleared once
-     * in `tests/bootstrap.php`; asserted here so that line cannot be deleted
-     * silently.
-     */
-    /**
      * The one file under `src/Tui/` allowed to construct a Color, and why: it is
      * the file that RESOLVES the background, so it necessarily builds one from
      * the OSC 11 reply's r/g/b and one from a palette slot for each nominal
@@ -116,6 +107,15 @@ final class ShellContrastTest extends TestCase
      */
     private const COLOUR_CONSTRUCTORS_ALLOWED = ['TerminalBackground.php'];
 
+    /**
+     * Every ratio in this file is measured against a background the test itself
+     * observes, so an inherited `SUGARCRUSH_BACKGROUND` — which outranks the
+     * observed reply — silently replaces all nine of them with #000000 or
+     * #ffffff. MEASURED: `SUGARCRUSH_BACKGROUND=dark` turns 10 of these 12 tests
+     * red, `=light` another 10, and every message blames a colour. Cleared once
+     * in `tests/bootstrap.php`; asserted here so that line cannot be deleted
+     * silently.
+     */
     protected function setUp(): void
     {
         $this->assertFalse(

@@ -204,26 +204,6 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
     }
 
     /**
-     * Holds stdin open forever while IGNORING SIGTERM, and writes its pid to
-     * $argv[1] ONLY ONCE THE HANDLER IS INSTALLED.
-     *
-     * THE ORDER OF THOSE TWO LINES IS THE FIXTURE. It was the other way round
-     * and the mutation table says what that cost: removing the signal-9
-     * escalation from
-     * {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndClose()}
-     * SURVIVED, because `disconnect()` ran before the child had reached
-     * `pcntl_signal()` and SIGTERM killed it at its DEFAULT disposition. The
-     * bound was measuring a well-behaved child while claiming to measure a
-     * stubborn one — the assertion's window, not the mutation's relevance. The
-     * pid file is now the readiness handshake every fixture here waits on, and
-     * the same mutation is killed.
-     *
-     * `pcntl_async_signals()` plus a POLLING loop rather than one long
-     * `usleep()`: a signal interrupts `usleep()`, and the script would then
-     * simply END — which looks exactly like a well-behaved exit and would make
-     * this fixture silently useless in the other direction.
-     */
-    /**
      * A SERVER THAT LOGS MORE THAN ONE PIPE BUFFER IS STILL HEARD.
      *
      * {@see ClaudeCodeMcpClient::connect()} gives the child fd 2 as a
@@ -357,6 +337,26 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
         return $client;
     }
 
+    /**
+     * Holds stdin open forever while IGNORING SIGTERM, and writes its pid to
+     * $argv[1] ONLY ONCE THE HANDLER IS INSTALLED.
+     *
+     * THE ORDER OF THOSE TWO LINES IS THE FIXTURE. It was the other way round
+     * and the mutation table says what that cost: removing the signal-9
+     * escalation from
+     * {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndClose()}
+     * SURVIVED, because `disconnect()` ran before the child had reached
+     * `pcntl_signal()` and SIGTERM killed it at its DEFAULT disposition. The
+     * bound was measuring a well-behaved child while claiming to measure a
+     * stubborn one — the assertion's window, not the mutation's relevance. The
+     * pid file is now the readiness handshake every fixture here waits on, and
+     * the same mutation is killed.
+     *
+     * `pcntl_async_signals()` plus a POLLING loop rather than one long
+     * `usleep()`: a signal interrupts `usleep()`, and the script would then
+     * simply END — which looks exactly like a well-behaved exit and would make
+     * this fixture silently useless in the other direction.
+     */
     private const STUBBORN_SERVER = <<<'PHP'
         <?php
         pcntl_async_signals(true);
@@ -368,10 +368,6 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
         }
         PHP;
 
-    /**
-     * The same, but with SIGTERM left at its DEFAULT disposition — the control
-     * that keeps the bound above from being satisfied by a short budget.
-     */
     /**
      * Speaks the protocol, but writes `$argv[2]` bytes to fd 2 first.
      *
@@ -404,6 +400,17 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
         }
         PHP;
 
+    /**
+     * {@see STUBBORN_SERVER} with SIGTERM left at its DEFAULT disposition — the
+     * control that keeps that fixture's teardown bound from being satisfied by
+     * a short budget rather than by the signal-9 escalation.
+     *
+     * IT SAID "the bound above" AND IT NO LONGER CAN. This block was stacked
+     * two declarations away from the constant it describes, where PHP attached
+     * it to nothing (E507); "above" pointed at whatever the file happened to
+     * hold in between. The reference is to a named symbol now, which a rename
+     * reds on rather than silently re-aims.
+     */
     private const WELL_BEHAVED_SERVER = <<<'PHP'
         <?php
         file_put_contents($argv[1], (string) getmypid());

@@ -80,11 +80,6 @@ final class McpToolBridgeTest extends TestCase
     }
 
     /**
-     * And the SERVER-side name is NOT sanitized: the substitution is a wire-name
-     * concern, and a tool really called `do/thing` has to be addressed by that
-     * name over the protocol or the call cannot land.
-     */
-    /**
      * THE COLLISION THAT NEEDS NO SUBSTITUTION, measured rather than asserted in
      * prose: `__` is the separator AND a legal character in both segments, so two
      * different tools on two different servers have one wire name with nothing
@@ -110,6 +105,11 @@ final class McpToolBridgeTest extends TestCase
         $this->assertSame('b__c', $right->descriptor()->name);
     }
 
+    /**
+     * And the SERVER-side name is NOT sanitized: the substitution is a wire-name
+     * concern, and a tool really called `do/thing` has to be addressed by that
+     * name over the protocol or the call cannot land.
+     */
     public function testTheCallUsesTheUnsanitizedServerSideToolName(): void
     {
         $server = $this->fakeServer();

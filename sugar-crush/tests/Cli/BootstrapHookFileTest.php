@@ -940,7 +940,7 @@ YAML);
         // the project for the relative case — which is the whole point of the
         // notice naming a canonical path instead.
         $command = sprintf(
-            'cd %s && HOME=%s timeout -s KILL 60 %s %s >/dev/null 2>%s',
+            'cd %s && HOME=%s timeout -s KILL 20 %s %s >/dev/null 2>%s',
             escapeshellarg($this->project),
             escapeshellarg($this->home),
             escapeshellarg(PHP_BINARY),
@@ -974,7 +974,7 @@ YAML);
         ));
 
         $command = sprintf(
-            'env -u HOME -u USERPROFILE timeout -s KILL 60 %s %s %s >%s 2>&1',
+            'env -u HOME -u USERPROFILE timeout -s KILL 20 %s %s %s >%s 2>&1',
             escapeshellarg(PHP_BINARY),
             $withPosix ? '' : escapeshellarg('-d') . ' ' . escapeshellarg('disable_functions=posix_getpwuid,posix_geteuid'),
             escapeshellarg($script),

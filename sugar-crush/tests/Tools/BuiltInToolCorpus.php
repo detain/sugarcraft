@@ -87,7 +87,7 @@ final class BuiltInToolCorpus
      * dispatch made it pass `BuiltInToolCorpusTest`, `BinSugarcrushWiringTest`,
      * `BuiltInToolTest` and `ToolSchemaEncodingTest`, all rc=0 — an exemption that
      * granted itself. So each entry is a `class => reachability test method` pair,
-     * and {@see testEveryDynamicToolExemptionNamesAReachabilityTestThatExists()}
+     * and {@see BuiltInToolCorpusTest::testEveryDynamicToolExemptionNamesAReachabilityTestThatExists()}
      * resolves the named method by reflection. A new entry cannot be written
      * without naming the evidence, and naming evidence that does not exist reds.
      * The flat list every other consumer wants is {@see dynamicToolClasses()}.
