@@ -27,8 +27,11 @@ use SugarCraft\Crush\Tests\Backend\Support\ScaledClockLoop;
  * tokens per side — "the whole helper agrees and a single flag, literal or name
  * does not" — and its own docblock lists "TWO TOKENS APART OR MORE" first under
  * WHAT IT DELIBERATELY CANNOT SEE. MEASURED by running that guard's own
- * `driftReport()` at widening bounds on PHP 8.3.6: this pair appears only once
- * the bound is raised past a hundred, at which point the report names most
+ * `driftReport()` at widening bounds on PHP 8.3.6: this pair's per-side
+ * divergence cores are 165 and 128 tokens, so it first appears at a bound of
+ * 165 and is still ABSENT at 128 - "past a hundred" was the first way this was
+ * written, and it invites a reader to try 110, see nothing and conclude the
+ * measurement was wrong. At 165 the report names the large majority of the
  * same-named private helpers in the suite and has stopped being a drift
  * detector. It is a DRIFT detector; these two are not a drifted copy, they are
  * two different helpers that share a name. Nothing failed.
@@ -73,7 +76,7 @@ final class ScaledClockHelperSeamTest extends TestCase
     {
         $found = [];
         foreach (self::everyTestFile() as $relative => $path) {
-            if (self::declaresPrivateHelper((string) file_get_contents($path), self::HELPER)) {
+            if (self::declaresHelper((string) file_get_contents($path), self::HELPER)) {
                 $found[] = $relative;
             }
         }
@@ -104,20 +107,43 @@ final class ScaledClockHelperSeamTest extends TestCase
      * and that is exactly the trap. It is satisfied by a scanner that answers
      * TRUE for those two paths and false elsewhere for the wrong reason, and by
      * one whose recogniser has silently narrowed. So the same recogniser is
-     * pushed a source it MUST accept and four it MUST reject, in this test.
+     * pushed six sources it MUST accept and four it MUST reject, in this test.
+     *
+     * WHAT THIS SAID, AND WHAT IT COST: the recogniser was
+     * `declaresPrivateHelper()` and required `T_PRIVATE`, and this list probed
+     * a call, a string, a comment and a different name — four ways of writing
+     * the name that are not declarations, and NOT ONE non-private declaration.
+     * MEASURED with a matched control: a third `runOnScaledClock()` added to a
+     * file in this directory as `private` is caught, as `protected` is NOT, and
+     * as `public` is NOT. One keyword bought silence from a guard whose stated
+     * purpose is that "a THIRD arrives as a red test". Rule 11 in its textbook
+     * form — the alphabet was written from the two cases already known, and
+     * both of those happen to be private.
+     *
+     * The visibility is now not part of the question at all, which is stronger
+     * than adding two more token ids: a declaration with NO modifier (implicitly
+     * public) and a plain top-level `function` are both declarations of the
+     * name, and an alphabet of three keywords would still have missed them.
      */
     public function testTheDeclarationRecogniserWorksInBothPolarities(): void
     {
         $helper = self::HELPER;
 
-        $this->assertTrue(
-            self::declaresPrivateHelper(
-                "<?php\nfinal class T { private function {$helper}(\$p, array &\$t): array { return []; } }\n",
-                $helper,
-            ),
-            'the recogniser no longer sees a private declaration of the helper, so the census '
-                . 'above is a statement about nothing',
-        );
+        foreach ([
+            'a private declaration' => "<?php\nfinal class T { private function {$helper}(\$p, array &\$t): array { return []; } }\n",
+            'a PROTECTED declaration' => "<?php\nclass T { protected function {$helper}(\$p): void {} }\n",
+            'a PUBLIC declaration' => "<?php\nclass T { public function {$helper}(\$p): void {} }\n",
+            'a declaration with NO visibility modifier at all' => "<?php\nclass T { function {$helper}(\$p): void {} }\n",
+            'a private STATIC declaration' => "<?php\nfinal class T { private static function {$helper}(\$p): void {} }\n",
+            'a plain top-level function' => "<?php\nfunction {$helper}(\$p): void {}\n",
+        ] as $label => $source) {
+            $this->assertTrue(
+                self::declaresHelper($source, $helper),
+                "the recogniser no longer sees {$label} of the helper, so the census above is a "
+                    . 'statement about the spellings it happens to accept rather than about the '
+                    . 'population it names',
+            );
+        }
 
         foreach ([
             'a CALL rather than a declaration' => "<?php\nfinal class T { public function t(): void { \$this->{$helper}(1, \$x); } }\n",
@@ -126,11 +152,35 @@ final class ScaledClockHelperSeamTest extends TestCase
             'a DIFFERENT private helper' => "<?php\nfinal class T { private function somethingElse(): void {} }\n",
         ] as $label => $source) {
             $this->assertFalse(
-                self::declaresPrivateHelper($source, $helper),
+                self::declaresHelper($source, $helper),
                 "the recogniser accepted {$label}, so the census counts appearances rather than "
                     . 'declarations and the population above is not the population it names',
             );
         }
+    }
+
+    /**
+     * A declaration the recogniser must NOT be able to hide behind another one.
+     *
+     * The first draft `return`ed out of the whole function on the first name
+     * match, so a non-matching declaration EARLIER in a file answered for a
+     * matching one later. With the visibility test gone that particular hole
+     * cannot recur, but the shape can — this pins the "keep looking" behaviour
+     * directly rather than trusting that it fell out.
+     */
+    public function testALaterDeclarationIsNotHiddenByAnEarlierOne(): void
+    {
+        $helper = self::HELPER;
+
+        $this->assertTrue(
+            self::declaresHelper(
+                "<?php\nclass T { public function somethingElse(): void {} "
+                    . "private function {$helper}(): void {} }\n",
+                $helper,
+            ),
+            'a declaration of the helper is invisible when another declaration precedes it, so '
+                . 'the census reports whatever happens to come first in each file',
+        );
     }
 
     /**
@@ -178,7 +228,19 @@ final class ScaledClockHelperSeamTest extends TestCase
      * The shared double both copies drive is genuinely shared, which is the
      * half of the consolidation that DID happen and is worth not losing.
      *
-     * Without this, "they share Support/ScaledClockLoop" is another sentence.
+     * WHAT THIS SAID: «Without this, "they share Support/ScaledClockLoop" is
+     * another sentence.» WHAT IS TRUE NOW: the first version of it WAS bought
+     * by a sentence - rule 40 landing two methods after the sibling below cites
+     * rule 40 for avoiding exactly this. It asserted that the string
+     * `Support\ScaledClockLoop` occurred somewhere in the file, and MEASURED by
+     * pointing it at a class whose only occurrence of that string was a comment
+     * DENYING the fact - the words "deliberately not using" followed by the
+     * name - the test was GREEN. WHY THE CLAIM STILL EARNS ITS PLACE: the half
+     * worth keeping is real - the consolidation of the LOOP happened even
+     * though the consolidation of the helper did not - and only the instrument
+     * was prose-keyed. It is now keyed on structure: a `use` statement that
+     * resolves to {@see ScaledClockLoop}, which is a token-stream fact no
+     * comment can forge.
      */
     public function testBothCopiesDriveTheOneSharedScaledClockLoop(): void
     {
@@ -190,25 +252,132 @@ final class ScaledClockHelperSeamTest extends TestCase
         foreach ([EngineBackendTest::class, ReasoningProgressTest::class] as $class) {
             $file = (new \ReflectionClass($class))->getFileName();
             $this->assertIsString($file);
-            $this->assertStringContainsString(
-                'Support\\ScaledClockLoop',
-                (string) file_get_contents($file),
-                $class . ' no longer imports the shared ScaledClockLoop',
+            $this->assertContains(
+                ScaledClockLoop::class,
+                self::importedClassNames((string) file_get_contents($file)),
+                $class . ' no longer IMPORTS the shared ScaledClockLoop. Note what this asks for: '
+                    . 'a use statement, not a mention. An earlier revision matched the name '
+                    . 'anywhere in the file and was satisfied by a comment saying the class was '
+                    . 'NOT used, so do not close this by writing the name into a comment.',
             );
         }
     }
 
     /**
-     * Does `$source` DECLARE a private method called `$name`?
+     * Rule 15's known-positive for the recogniser above, and rule 40's: the
+     * same function is pushed two sources it MUST accept and four it MUST
+     * reject, one of which is the comment that bought the old assertion.
+     */
+    public function testTheImportRecogniserCannotBeBoughtWithASentence(): void
+    {
+        $fqn = ScaledClockLoop::class;
+        $short = 'ScaledClockLoop';
+
+        $this->assertContains(
+            $fqn,
+            self::importedClassNames("<?php\nnamespace X;\nuse {$fqn};\nfinal class T {}\n"),
+            'the recogniser no longer sees a plain import, so the assertion above is a statement '
+                . 'about nothing',
+        );
+        $this->assertContains(
+            $fqn,
+            self::importedClassNames("<?php\nnamespace X;\nuse {$fqn} as Aliased;\nfinal class T {}\n"),
+            'an aliased import is still an import of the same class',
+        );
+
+        foreach ([
+            'a comment DENYING the import' => "<?php\nnamespace X;\n// Deliberately NOT using Support\\{$short} here.\nfinal class T {}\n",
+            'the name in a doc-block cross-reference' => "<?php\nnamespace X;\n/** {@see \\{$fqn}} */\nfinal class T {}\n",
+            'the name inside a string' => "<?php\nnamespace X;\nfinal class T { public function t(): string { return '{$fqn}'; } }\n",
+            'a trait use inside a class body' => "<?php\nnamespace X;\nfinal class T { use \\{$fqn}; }\n",
+        ] as $label => $source) {
+            $this->assertNotContains(
+                $fqn,
+                self::importedClassNames($source),
+                "the recogniser accepted {$label} as an import, so it is keyed on text after all",
+            );
+        }
+    }
+
+    /**
+     * The fully-qualified class names `$source` IMPORTS, aliases resolved back
+     * to the class they name.
+     *
+     * Namespace-level only, so a trait `use` inside a class body and a
+     * closure's `use (...)` are both outside it - the first by brace depth, the
+     * second because a closure lives inside a function body.
+     *
+     * @return list<string>
+     */
+    private static function importedClassNames(string $source): array
+    {
+        $tokens = token_get_all($source);
+        $count = \count($tokens);
+        $imports = [];
+        $depth = 0;
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if ($token === '{') {
+                $depth++;
+
+                continue;
+            }
+            if ($token === '}') {
+                $depth--;
+
+                continue;
+            }
+            if ($depth !== 0 || !\is_array($token) || $token[0] !== T_USE) {
+                continue;
+            }
+
+            $name = '';
+            $afterAs = false;
+            for ($j = $i + 1; $j < $count; $j++) {
+                $next = $tokens[$j];
+                if (\is_array($next) && \in_array($next[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                if ($next === ';' || $next === '(' || $next === '{' || $next === ',') {
+                    break;
+                }
+                if (\is_array($next) && $next[0] === T_AS) {
+                    $afterAs = true;
+
+                    continue;
+                }
+                if ($afterAs) {
+                    continue;
+                }
+                $name .= \is_array($next) ? $next[1] : $next;
+            }
+
+            $name = ltrim($name, '\\');
+            if ($name !== '') {
+                $imports[] = $name;
+            }
+        }
+
+        return $imports;
+    }
+
+    /**
+     * Does `$source` DECLARE a function or method called `$name`?
      *
      * Token-based, not a substring match: a call, a mention in a string and a
      * mention in a comment all contain the name, and counting appearances
      * instead of declarations would make the census above answer a different
      * question than the one it asks. {@see
-     * testTheDeclarationRecogniserWorksInBothPolarities()} pushes all four
-     * through it.
+     * testTheDeclarationRecogniserWorksInBothPolarities()} pushes ten sources
+     * through it, six it must accept and four it must reject.
+     *
+     * VISIBILITY IS DELIBERATELY NOT PART OF THE QUESTION, and that is a
+     * correction rather than a preference — see the docblock of the polarity
+     * test for the measurement. A closure and an arrow function are excluded
+     * for free: neither has a name for the `T_STRING` test to match.
      */
-    private static function declaresPrivateHelper(string $source, string $name): bool
+    private static function declaresHelper(string $source, string $name): bool
     {
         $tokens = token_get_all($source);
         $count = \count($tokens);
@@ -219,8 +388,10 @@ final class ScaledClockHelperSeamTest extends TestCase
                 continue;
             }
 
-            // The name is the next T_STRING; anything else between is a
-            // by-reference marker or whitespace.
+            // The name is the next significant token; anything skipped here is
+            // whitespace, a comment or a by-reference marker. Anything else -
+            // a `(`, for a closure - means this `function` declares no name,
+            // and the scan continues with the next one rather than returning.
             for ($j = $i + 1; $j < $count; $j++) {
                 $next = $tokens[$j];
                 if (\is_array($next) && \in_array($next[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
@@ -230,20 +401,7 @@ final class ScaledClockHelperSeamTest extends TestCase
                     continue;
                 }
                 if (\is_array($next) && $next[0] === T_STRING && $next[1] === $name) {
-                    // Look backwards for the visibility modifier. A closure or
-                    // an arrow function has none and is not a declaration of a
-                    // named helper anyway.
-                    for ($k = $i - 1; $k >= 0; $k--) {
-                        $previous = $tokens[$k];
-                        if (\is_array($previous) && \in_array($previous[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
-                            continue;
-                        }
-                        if (\is_array($previous) && \in_array($previous[0], [T_STATIC, T_FINAL, T_ABSTRACT], true)) {
-                            continue;
-                        }
-
-                        return \is_array($previous) && $previous[0] === T_PRIVATE;
-                    }
+                    return true;
                 }
 
                 break;
