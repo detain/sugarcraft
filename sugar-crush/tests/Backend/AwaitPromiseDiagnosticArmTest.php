@@ -217,6 +217,11 @@ final class AwaitPromiseDiagnosticArmTest extends TestCase
                 0,
                 [],
             ],
+            'a try body containing an INTERPOLATED string, whose closing brace is bare' => [
+                $wrap("try { \$label = \"a{\$p}b\"; {$await} } catch (\\RuntimeException) { }"),
+                1,
+                ['does not rethrow'],
+            ],
             'an unresolvable caught type is reported, never dropped (rule 14)' => [
                 $wrap("try { {$await} } catch (\\No\\Such\\TypeZZ \$e) { \$x = \$e; }"),
                 1,
@@ -517,12 +522,34 @@ final class AwaitPromiseDiagnosticArmTest extends TestCase
     {
         $depth = 0;
         for ($i = $from, $n = \count($tokens); $i < $n; $i++) {
-            if (!\is_string($tokens[$i])) {
+            $token = $tokens[$i];
+
+            // BOTH INTERPOLATION OPENERS COUNT WHEN THE PAIR IS BRACES.
+            // `"{$x}"` opens with T_CURLY_OPEN - an ARRAY token - and closes
+            // with a bare `}`, so a brace walk that reads only one-byte strings
+            // decrements on a level it never incremented and closes the
+            // enclosing block early. Here that would truncate a `try` body at
+            // the first interpolated string in it, hiding both the
+            // awaitPromise() call and every catch clause after it: a guard that
+            // reports "nothing to see" for exactly the files that interpolate.
+            // {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest}
+            // names this defect and did NOT flag this method - its detector
+            // reads this file as "not a brace walker" - so this is its
+            // prescription applied where its census could not reach.
+            if ($open === '{'
+                && \is_array($token)
+                && \in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)
+            ) {
+                $depth++;
+
                 continue;
             }
-            if ($tokens[$i] === $open) {
+            if (!\is_string($token)) {
+                continue;
+            }
+            if ($token === $open) {
                 $depth++;
-            } elseif ($tokens[$i] === $close) {
+            } elseif ($token === $close) {
                 $depth--;
                 if ($depth === 0) {
                     return $i;

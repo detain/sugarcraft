@@ -290,6 +290,10 @@ final class ScaledClockHelperSeamTest extends TestCase
             'the name in a doc-block cross-reference' => "<?php\nnamespace X;\n/** {@see \\{$fqn}} */\nfinal class T {}\n",
             'the name inside a string' => "<?php\nnamespace X;\nfinal class T { public function t(): string { return '{$fqn}'; } }\n",
             'a trait use inside a class body' => "<?php\nnamespace X;\nfinal class T { use \\{$fqn}; }\n",
+            // The interpolation-opener case: without both openers counted, the
+            // brace depth is one too shallow from the interpolated string
+            // onwards and the trait use below reads as a top-level import.
+            'a trait use AFTER an interpolated string' => "<?php\nnamespace X;\nfinal class T { public function t(\$x): string { return \"a{\$x}b\"; } use \\{$fqn}; }\n",
         ] as $label => $source) {
             $this->assertNotContains(
                 $fqn,
@@ -318,7 +322,19 @@ final class ScaledClockHelperSeamTest extends TestCase
 
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
-            if ($token === '{') {
+            // BOTH INTERPOLATION OPENERS COUNT, and this is not defensive
+            // padding - `"{$x}"` opens with T_CURLY_OPEN, an ARRAY token, and
+            // closes with a bare `}`. A walk that counts only the one-byte
+            // brace therefore decrements on a level it never incremented, and
+            // from the first interpolated string onwards it believes it is one
+            // level further out than it is - at which point a trait `use`
+            // inside a class body reads as a namespace-level import.
+            // {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest}
+            // caught this in the first revision of this method; the fix is its
+            // own prescription, and its polarity fixture is below.
+            if ($token === '{'
+                || (\is_array($token) && \in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))
+            ) {
                 $depth++;
 
                 continue;
