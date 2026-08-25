@@ -36,8 +36,10 @@ use SugarCraft\Crush\McpMessage;
  * wire, against a 65536-byte pipe capacity. `start()`'s messages are fixed and
  * tiny; nothing it sends can fill a pipe. So threading the deadline is DEFENSIVE,
  * not a live bug fix, and {@see testTheWholeHandshakeStillFitsInOnePipeBuffer()}
- * derives that claim rather than restating it — it reds on the day someone grows
- * the `capabilities` block, which is the day the finding becomes true.
+ * derives that claim from the bytes a real child actually receives, rather than
+ * restating it — it reds on the day someone grows the `capabilities` block, which
+ * is the day the finding becomes true. That row's doc-block records why the
+ * distinction between deriving and restating is load-bearing here.
  *
  * The second finding is real on the deadline-less path and is pinned below with a
  * signal storm, which is the only way to make `stream_select()` fail on demand:
@@ -206,23 +208,54 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
      * this row reds — in the same change that made it true, which is the only
      * moment anyone can act on it.
      *
-     * Derived from the class's own {@see McpMessage} calls rather than restated,
-     * per the rule that a load-bearing number must come from a generator.
+     * ⚠️ THE COUNT IS TAKEN OFF THE WIRE, BY THE CHILD. An earlier version of this
+     * row is why that is spelled out instead of assumed. WHAT IT SAID: "derived
+     * from the class's own {@see McpMessage} calls rather than restated". WHAT WAS
+     * TRUE: it restated {@see StdioMcpServer::start()}'s three calls as its own
+     * array literal, so it measured a copy of the payload and never read the
+     * payload. MEASURED BY MUTATION — with `start()`'s `capabilities` replaced by
+     * `['bloat' => str_repeat('z', 100000)]`, a 100276-byte handshake and exactly
+     * the day the finding becomes true — that version passed: 1 test, 2
+     * assertions, rc 0. A copy cannot notice the original changing.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the claim it guards is load-bearing, because
+     * it is the reason four other rows in this file drive `writeLine()` through
+     * reflection instead of through `start()`. So the fixture below counts
+     * `strlen()` of every line `start()` actually sends it and reports the total
+     * through `tools/list`, where {@see StdioMcpServer::listTools()} hands it to
+     * the assertion. MEASURED, three takes per polarity on PHP 8.3.6: 266
+     * unmutated, 100276 with the bloat — and the bloated run does NOT hang. The
+     * drain-and-write loop and the fixture's eager `fgets()` both keep making
+     * progress, so the day this matters it reds in 0.04s rather than timing out.
+     *
+     * THE NON-EMPTY ROSTER IS THE INSTRUMENT'S OWN LIVENESS CHECK: a fixture that
+     * never ran, or a handshake that never completed, comes back with no tools
+     * rather than with a wrong number, and this row says so before it says
+     * anything about 266.
      */
     public function testTheWholeHandshakeStillFitsInOnePipeBuffer(): void
     {
-        $onTheWire = 0;
-        foreach ([
-            McpMessage::request('0', 'initialize', [
-                'protocolVersion' => '2024-11-05',
-                'capabilities' => [],
-                'clientInfo' => ['name' => 'sugar-crush', 'version' => '1.0.0'],
-            ]),
-            McpMessage::notification('initialized', null),
-            McpMessage::request('1', 'tools/list', []),
-        ] as $message) {
-            $onTheWire += strlen($message->toJson()) + 1;
-        }
+        $script = $this->tempDir . '/wire-counter.php';
+        file_put_contents($script, self::WIRE_COUNTING_SERVER);
+
+        $server = $this->serverOver($script);
+        $server->start();
+        $tools = $server->listTools();
+        $server->stop();
+
+        $this->assertCount(
+            1,
+            $tools,
+            'the wire-counting fixture reported no tool, so the handshake did not complete and '
+            . 'the byte count below would be measuring nothing at all',
+        );
+        $this->assertMatchesRegularExpression(
+            '/^wire-\d+$/',
+            $tools[0]->name,
+            'the fixture answered tools/list without its byte count — the instrument changed shape',
+        );
+
+        $onTheWire = (int) substr($tools[0]->name, strlen('wire-'));
 
         $this->assertSame(266, $onTheWire, 'the handshake wire size moved — re-read this file');
         $this->assertLessThan(
@@ -233,6 +266,47 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             . 'stopped being defensive and needs an end-to-end guard',
         );
     }
+
+    /**
+     * Handshakes normally, and reports the number of bytes it has read off its
+     * stdin as the name of the single tool it advertises.
+     *
+     * Counting in the CHILD is the whole point: `strlen($line)` here is the wire,
+     * where the same arithmetic performed in the parent is only ever a restatement
+     * of what the parent believes it sent. `fgets()` with no length reads to the
+     * newline however long the line is, and the count includes that newline, so
+     * the total is byte-exact against `writeLine()`'s output.
+     */
+    private const WIRE_COUNTING_SERVER = <<<'PHP'
+        <?php
+        $total = 0;
+        while (($line = fgets(STDIN)) !== false) {
+            $total += strlen($line);
+            $message = json_decode($line, true);
+            if (!is_array($message) || !isset($message['method'])) {
+                continue;
+            }
+            if ($message['method'] === 'initialize') {
+                echo json_encode([
+                    'jsonrpc' => '2.0',
+                    'id' => $message['id'],
+                    'result' => ['protocolVersion' => '2024-11-05'],
+                ]), "\n";
+                flush();
+            } elseif ($message['method'] === 'tools/list') {
+                echo json_encode([
+                    'jsonrpc' => '2.0',
+                    'id' => $message['id'],
+                    'result' => ['tools' => [[
+                        'name' => 'wire-' . $total,
+                        'description' => 'handshake bytes counted on the wire',
+                        'inputSchema' => [],
+                    ]]],
+                ]), "\n";
+                flush();
+            }
+        }
+        PHP;
 
     /** Linux's default pipe capacity on this host — not a PHP constant. */
     private const MEASURED_PIPE_CAPACITY_BYTES = 65536;
