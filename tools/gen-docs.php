@@ -26,6 +26,21 @@ declare(strict_types=1);
  *   php tools/gen-docs.php --check      Generate/patch in-memory and fail (exit 1) if any page or
  *                                       the index.html counts on disk differ — a CI drift guard.
  *
+ * "A CI drift guard" WAS ASPIRATIONAL FOR AS LONG AS THIS FILE HAS EXISTED, and
+ * rewriting the claim rather than deleting it is the point (rule 7). WHAT IT
+ * SAID: --check is a CI drift guard. WHAT WAS TRUE UNTIL ROUND 58: no workflow
+ * ran it — `grep -rn gen-docs .github/` matched nothing — while pages.yml
+ * uploads docs/ verbatim to GitHub Pages on every push to master. A hand-edit
+ * to a generated page therefore PUBLISHED, and survived until the next
+ * unrelated run of this script silently reverted it. WHY IT STILL EARNS ITS
+ * PLACE: the mode was correct, only unwired. `.github/workflows/ci.yml`'s
+ * `docs-generated` job runs it now, and tools/tests/GenDocsTest.php guards the
+ * checker itself in both polarities.
+ *
+ * Set SUGARCRAFT_GEN_DOCS_ROOT to point every path below at a fixture tree
+ * instead of the real monorepo — that is how the guard drives this script
+ * without writing to docs/. Mirrors tools/check-path-repos.php.
+ *
  * Data model per slug:
  *   DERIVED   (never stored) — package, canonical/og:url/og:image, icon, source/packagist/
  *             issues/codecov URLs, type (library|app) + counts. Sourced from the slug and
@@ -50,7 +65,27 @@ declare(strict_types=1);
 
 const SLUG_RE = '[a-z0-9]+(?:-[a-z0-9]+)+';
 
-$root    = dirname(__DIR__);
+// Allow override via env for testing scenarios (e.g. fixture dirs), exactly as
+// tools/check-path-repos.php does. WHY THIS EXISTS RATHER THAN A --root FLAG:
+// this generator WRITES to every path it resolves, and its --check mode is a
+// hard gate. A guard for it has to drive it against a throwaway tree, and with
+// the root hardcoded to dirname(__DIR__) the only way to exercise it was to
+// point it at the real docs/ and hope. {@see tools/tests/GenDocsTest.php}
+$root = getenv('SUGARCRAFT_GEN_DOCS_ROOT');
+if ($root !== false && $root !== '') {
+    $root = realpath($root);
+    if ($root === false) {
+        fwrite(STDERR, "tools/gen-docs.php: SUGARCRAFT_GEN_DOCS_ROOT is not a valid path\n");
+        exit(2);
+    }
+} else {
+    $root = realpath(__DIR__ . '/..');
+    if ($root === false) {
+        fwrite(STDERR, "tools/gen-docs.php: cannot resolve monorepo root\n");
+        exit(2);
+    }
+}
+
 $docs    = $root . '/docs';
 $libDir  = $docs . '/lib';
 $dataDir = $docs . '/_data';
