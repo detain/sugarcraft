@@ -30,3 +30,14 @@ require __DIR__ . '/../vendor/autoload.php';
 // and stays: those tests need loop ISOLATION so a leaked stream or timer is
 // detectable, and they get clock freshness as a side effect.
 \SugarCraft\Testing\LoopPin::pinStableClock();
+
+// E490: bound every test's wall clock so an unbounded loop in this suite can
+// FAIL with a name instead of stalling forever with none. Round 55's merged
+// floor take hung here for nine minutes at ~test 363/608 and had to be killed
+// by pid; several loops this suite drives (PosixPump::pump()'s `while (true)`,
+// MultiPump::run()'s `while (!allDone())`) have no deadline of their own, so a
+// test built on them can only hang, never fail.
+//
+// Installed AFTER LoopPin above because the watchdog spawns a process and
+// LoopPin must be the first thing to touch Loop::get().
+\SugarCraft\Pty\Tests\Support\HangWatchdog::install();

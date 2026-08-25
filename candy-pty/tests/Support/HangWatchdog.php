@@ -1,0 +1,264 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Pty\Tests\Support;
+
+use PHPUnit\Event\Facade;
+use PHPUnit\Event\Test\Prepared;
+use PHPUnit\Event\Test\PreparedSubscriber;
+use PHPUnit\Event\TestRunner\ExecutionFinished;
+use PHPUnit\Event\TestRunner\ExecutionFinishedSubscriber;
+
+/**
+ * Parent-side half of the candy-pty hang watchdog (E490).
+ *
+ * WHY THIS EXISTS. Round 55's merged-floor take had this suite stall
+ * indefinitely at roughly test 363 of 608: `State: S`, `wchan: do_select`,
+ * two `/dev/ptmx` descriptors open, 0.1% CPU for nine minutes, and it had
+ * to be killed by pid. It has not reproduced since (1 hang in ~76 takes).
+ *
+ * The root cause is still open, but the SHAPE of the problem is not, and it
+ * is structural rather than incidental: several of this suite's loops have
+ * no deadline of their own. `PosixPump::pump()` is a `while (true)` whose
+ * only exits are "child exited", "stdin EOF plus grace expired" and "stdout
+ * EPIPE"; `MultiPump::run()` is `while (!allDone())` and, because the parent
+ * holds the slave fd open, a session's master never EOFs -- so a child that
+ * is never observed to exit means that loop never terminates. A test built
+ * on either can only ever HANG; it can never FAIL. And a hang is invisible:
+ * locally it reads as a slow suite, in CI as a job timeout naming nothing.
+ *
+ * So this bounds the wait at the harness level, which is the one place that
+ * covers every such loop at once including the ones nobody has found yet.
+ * It converts "the suite stopped and we do not know where" into a named
+ * test plus the forensic bundle E490 had to be assembled by hand.
+ *
+ * HOW. Registered from `tests/bootstrap.php`, which PHPUnit loads before it
+ * seals the event facade (`TextUI\Application` loads the bootstrap script
+ * well before `EventFacade::instance()->seal()`), so this needs no
+ * `<extensions>` entry in `phpunit.xml`. On every `Test\Prepared` the
+ * current test id and start time are written to a heartbeat file with an
+ * atomic rename; a watchdog PROCESS polls that file and kills the runner if
+ * one test overruns the budget.
+ *
+ * It is an out-of-process design on purpose -- see the header of
+ * `hang-watchdog.php` for the two measured reasons an in-process
+ * `pcntl_alarm()` would not survive this suite.
+ *
+ * Opt out with `CANDY_PTY_HANG_BUDGET=0`; override the per-test budget in
+ * seconds with any other positive value.
+ *
+ * @see hang-watchdog.php                                — the watchdog process
+ * @see \SugarCraft\Pty\Tests\Support\HangWatchdogTest   — known-positive AND
+ *                                                         known-negative fixture
+ */
+final class HangWatchdog
+{
+    /**
+     * Per-test budget in seconds. The slowest legitimate test in this suite
+     * is `ControllingTerminalTest::testCtrlCKillsChildThroughPty`, which
+     * asserts its own elapsed time is under 8.5s; the budget is set well
+     * clear of that so a slow CI box widens the margin rather than eating
+     * it. It is a HANG detector, not a performance budget.
+     */
+    public const DEFAULT_BUDGET_SEC = 90.0;
+
+    private static ?self $instance = null;
+
+    /** @var resource|null */
+    private $process = null;
+
+    private function __construct(
+        private readonly string $heartbeatPath,
+        private readonly string $stateDir,
+    ) {
+    }
+
+    /**
+     * Install the watchdog and register the event subscribers. Idempotent;
+     * a second call is a no-op so a stray bootstrap re-entry cannot leave
+     * two watchdogs racing to kill the same pid.
+     *
+     * Silently does nothing (returns false) when the platform cannot support
+     * it -- non-POSIX, no ext-posix, no `proc_open` -- because a missing
+     * watchdog must never be the reason a suite fails to start.
+     */
+    public static function install(?float $budgetSec = null): bool
+    {
+        if (self::$instance !== null) {
+            return false;
+        }
+        if (\PHP_OS_FAMILY === 'Windows'
+            || !\function_exists('posix_kill')
+            || !\function_exists('proc_open')
+        ) {
+            return false;
+        }
+
+        $budgetSec ??= self::budgetFromEnv();
+        if ($budgetSec <= 0.0) {
+            return false;
+        }
+
+        $dir = \sys_get_temp_dir() . '/candy-pty-hang-watchdog-' . \getmypid();
+        if (!@\mkdir($dir, 0o700, true) && !\is_dir($dir)) {
+            return false;
+        }
+
+        $self = new self($dir . '/heartbeat', $dir);
+        if (!$self->spawn($budgetSec)) {
+            @\rmdir($dir);
+            return false;
+        }
+
+        self::$instance = $self;
+
+        try {
+            $facade = Facade::instance();
+            $facade->registerSubscriber(new HangWatchdogPreparedSubscriber($self));
+            $facade->registerSubscriber(new HangWatchdogFinishedSubscriber($self));
+        } catch (\Throwable) {
+            // Facade already sealed (bootstrap invoked from somewhere
+            // unexpected). The watchdog would then never see a heartbeat and
+            // would never fire, so tear it straight back down rather than
+            // leave a process that can only produce a false positive.
+            $self->stop();
+            self::$instance = null;
+            return false;
+        }
+
+        // Belt and braces: the subscriber teardown covers a normal run, this
+        // covers `exit()` from a fatal or from PHPUnit's own error paths.
+        \register_shutdown_function(static function () use ($self): void {
+            $self->stop();
+        });
+
+        return true;
+    }
+
+    /** The per-test budget, honouring `CANDY_PTY_HANG_BUDGET`. */
+    public static function budgetFromEnv(): float
+    {
+        $raw = \getenv('CANDY_PTY_HANG_BUDGET');
+        if (!\is_string($raw) || !\is_numeric($raw)) {
+            return self::DEFAULT_BUDGET_SEC;
+        }
+        return (float) $raw;
+    }
+
+    /**
+     * Record that $testId is now in flight. Written with an atomic rename so
+     * the watchdog can never observe a half-written record and mistake a
+     * torn timestamp for an overrun.
+     */
+    public function beat(string $testId): void
+    {
+        $tmp = $this->heartbeatPath . '.' . \getmypid() . '.tmp';
+        if (@\file_put_contents($tmp, self::heartbeatPayload($testId, \microtime(true))) === false) {
+            return;
+        }
+        @\rename($tmp, $this->heartbeatPath);
+    }
+
+    /**
+     * The on-disk heartbeat record: start time, a TAB, then the test id.
+     *
+     * Factored out of {@see beat()} so the fixture test can build a record
+     * with THIS producer and hand it to the real watchdog process as its
+     * consumer. A fixture that spells the format out for itself would keep
+     * passing after the producer changed shape, which is the whole class of
+     * defect this file exists to avoid.
+     */
+    public static function heartbeatPayload(string $testId, float $startedAt): string
+    {
+        return \sprintf("%.6f\t%s", $startedAt, $testId);
+    }
+
+    /** Tear the watchdog down. Idempotent. */
+    public function stop(): void
+    {
+        if (\is_resource($this->process)) {
+            $status = @\proc_get_status($this->process);
+            if (\is_array($status) && ($status['running'] ?? false) === true && ($status['pid'] ?? 0) > 0) {
+                @\posix_kill((int) $status['pid'], \SIGKILL);
+            }
+            @\proc_close($this->process);
+        }
+        $this->process = null;
+
+        @\unlink($this->heartbeatPath);
+        foreach ((array) @\glob($this->heartbeatPath . '.*.tmp') as $stale) {
+            @\unlink((string) $stale);
+        }
+        @\rmdir($this->stateDir);
+    }
+
+    /**
+     * Spawn the watchdog process.
+     *
+     * `PHP_BINARY` rather than `php` on `PATH`: a harness that resolves the
+     * interpreter differently from the runner it is watching is a harness
+     * that can silently watch nothing (round 44 lost a child-process census
+     * to exactly that).
+     *
+     * Descriptors: 0 and 1 are given `/dev/null` so the watchdog can never
+     * interleave with PHPUnit's own progress output, while 2 is deliberately
+     * INHERITED -- the forensic dump has to reach whoever is reading the
+     * failing run, and a hang is precisely the case where nobody is going to
+     * go looking for a side-channel file.
+     */
+    private function spawn(float $budgetSec): bool
+    {
+        $script = __DIR__ . '/hang-watchdog.php';
+        if (!\is_file($script)) {
+            return false;
+        }
+
+        $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['file', '/dev/null', 'a'],
+            // 2 intentionally omitted => inherited. See doc-comment.
+        ];
+        $pipes = [];
+        $proc = @\proc_open(
+            [\PHP_BINARY, $script, (string) \getmypid(), $this->heartbeatPath, (string) $budgetSec],
+            $descriptors,
+            $pipes,
+        );
+        if (!\is_resource($proc)) {
+            return false;
+        }
+        $this->process = $proc;
+        return true;
+    }
+}
+
+/**
+ * @internal Bridges `Test\Prepared` to {@see HangWatchdog::beat()}.
+ */
+final class HangWatchdogPreparedSubscriber implements PreparedSubscriber
+{
+    public function __construct(private readonly HangWatchdog $watchdog)
+    {
+    }
+
+    public function notify(Prepared $event): void
+    {
+        $this->watchdog->beat($event->test()->id());
+    }
+}
+
+/**
+ * @internal Bridges the end of the run to {@see HangWatchdog::stop()}.
+ */
+final class HangWatchdogFinishedSubscriber implements ExecutionFinishedSubscriber
+{
+    public function __construct(private readonly HangWatchdog $watchdog)
+    {
+    }
+
+    public function notify(ExecutionFinished $event): void
+    {
+        $this->watchdog->stop();
+    }
+}
