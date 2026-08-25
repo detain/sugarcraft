@@ -40,13 +40,23 @@ use PHPUnit\Framework\TestCase;
  * and so does lowering `defaultTimeLimit` under an existing child budget. No
  * count is asserted (rule 18) — the census re-derives itself.
  *
- * WHAT IT DOES NOT COVER. A budget passed through `sprintf()` as a `%d`
- * placeholder rather than as a digit is not EVALUATED: resolving it means
- * following an argument list, and a scan that guesses is worse than one that
- * says what it cannot see. Those sites are at 20 by inspection, MEASURED at
- * the time of writing, and {@see testTheParametrisedFormIsSeenAndReported()}
- * makes them VISIBLE rather than silently absent — a scan that quietly ignored
- * them would be reporting a clean tree over a roster it had narrowed itself.
+ * THE PARAMETRISED FORM IS EVALUATED NOW, AND FINDING THAT OUT COST THE CLAIM
+ * THAT SAID IT NEED NOT BE. WHAT THIS PARAGRAPH SAID: a budget passed through
+ * `sprintf()` as a placeholder rather than as a digit "is not EVALUATED", and
+ * "those sites are at 20 by inspection, MEASURED at the time of writing".
+ * WHAT IS TRUE NOW: {@see resolvedParametrisedIn()} follows the argument list
+ * through the token stream, and the first thing it reported was that the
+ * inspection had ALREADY ROTTED — the sites resolve to 20, 30, 20, 20 and,
+ * through a parameter whose two callers pass two different constants, 6 and
+ * 30. Not one of them was over the ceiling, so the TREE was fine and the
+ * SENTENCE was not, which is the entire argument for deriving a load-bearing
+ * number instead of remembering it (rule 3). WHY THE PARAGRAPH STILL EARNS ITS
+ * PLACE: the reason the form went unevaluated for as long as it did — "a scan
+ * that guesses is worse than one that says what it cannot see" — is still the
+ * governing rule, and the resolver obeys it rather than escaping it. What it
+ * cannot reduce to a number it REPORTS, with the expression it choked on, and
+ * {@see testBothCensusesSeeTheSameParametrisedSites()} reds on a non-empty
+ * report rather than passing over it.
  *
  * NO COUNT OF THEM IS WRITTEN HERE, and the earlier draft of this paragraph is
  * why. WHAT IT SAID: "which two files use". WHAT IS TRUE NOW: it was five
@@ -55,7 +65,14 @@ use PHPUnit\Framework\TestCase;
  * which the next lane to add a launch helper invalidates anyway (rule 18).
  * WHY THE SENTENCE STILL EARNS ITS PLACE: the SHAPE is the coverage statement,
  * and a reader who does not know this form exists will read the empty verdict
- * below as covering it.
+ * below as covering it. The values recited above are provenance for a
+ * FALSIFICATION, not a figure this guard asserts — the guard asserts the
+ * relation, and re-derives every number in it on every run.
+ *
+ * TWO INSTRUMENTS WALK THE SAME POPULATION, deliberately. The regex census
+ * scrapes raw text and cannot read a value; the token census reads values and
+ * only sees `sprintf()` calls. Either going blind is invisible on its own, and
+ * neither can go blind without disagreeing with the other.
  *
  * AND THIS FILE DOES NOT SPELL EITHER FORM (rule 26, and rule 40 under it).
  * The census walks its own directory, so a wrapper-and-number written out in a
@@ -152,6 +169,466 @@ final class ChildWallClockBudgetTest extends TestCase
         sort($parametrised);
 
         return ['literal' => $literal, 'parametrised' => $parametrised];
+    }
+
+    /**
+     * The needle both censuses look for, assembled rather than spelled.
+     *
+     * RULE 26/40, AND THIS FILE HAS PAID FOR IT ONCE ALREADY. The census walks
+     * `tests/`, which includes this file, so a literal occurrence here is
+     * scraped as a real parametrised site and the liveness arms below start
+     * being satisfied by this file's own text. Every occurrence in this file
+     * goes through here, and {@see testThisFileIsNotItsOwnEvidence()} pins that
+     * BOTH censuses see nothing here at all.
+     *
+     * The regex census spells its own needle as a PATTERN, which is why it does
+     * not match itself: what follows the wrapper there is `(`, not a digit.
+     */
+    private static function needle(): string
+    {
+        return 'timeout -s ' . 'KILL ' . '%d';
+    }
+
+    /**
+     * Every parametrised child budget in one source, EVALUATED.
+     *
+     * This is the half {@see childBudgets()} reports but cannot read. The regex
+     * census sees a placeholder and stops; this walks the token stream from the
+     * `sprintf()` whose format carries it, counts conversions to find WHICH
+     * argument the placeholder consumes, and resolves that argument to a number
+     * through an integer literal, a `self::` constant, or — for the one site
+     * that passes its budget down as a parameter — every argument its callers
+     * pass at that position.
+     *
+     * RULE 14 IS THE WHOLE DESIGN. A shape this cannot resolve is returned in
+     * `unresolved` WITH THE REASON, never dropped: a resolver that quietly
+     * skipped what it could not read would report a clean tree over a roster it
+     * had narrowed itself, which is exactly the hole the regex census left.
+     *
+     * @return array{resolved: list<array{0: string, 1: int, 2: int}>, unresolved: list<string>}
+     */
+    private static function resolvedParametrisedIn(string $label, string $source): array
+    {
+        $tokens = token_get_all($source);
+        $consts = self::integerConstantsIn($tokens);
+        $resolved = [];
+        $unresolved = [];
+
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token)
+                || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED], true)
+                || !\in_array(strtolower($token[1]), ['sprintf', '\\sprintf'], true)) {
+                continue;
+            }
+            // `$x->sprintf(` and `C::sprintf(` are not this function, and
+            // `function sprintf(` is a declaration rather than a call.
+            $before = self::previousSignificant($tokens, $i);
+            if ($before !== null && \is_array($tokens[$before])
+                && \in_array($tokens[$before][0], [T_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION], true)) {
+                continue;
+            }
+            $open = self::nextSignificant($tokens, $i);
+            if ($open === null || $tokens[$open] !== '(') {
+                continue;
+            }
+            $arguments = self::argumentSpans($tokens, $open);
+            if ($arguments === null || $arguments === []) {
+                continue;
+            }
+            $format = self::concatenatedLiteral($tokens, $arguments[0]);
+            if ($format === null || !str_contains($format, self::needle())) {
+                continue;
+            }
+
+            // THE LINE IS THE CALL'S, NOT THE PLACEHOLDER'S, and the two
+            // censuses therefore disagree by a line on a multi-line call. That
+            // is why {@see testBothCensusesSeeTheSameParametrisedSites()}
+            // compares FILES AND COUNTS rather than `file:line` strings.
+            $row = $label . ':' . $token[2];
+            $ordinal = self::conversionOrdinalOf($format);
+            if ($ordinal === null) {
+                $unresolved[] = $row . ' — the placeholder is not among the format\'s conversions';
+
+                continue;
+            }
+            if (!isset($arguments[$ordinal])) {
+                $unresolved[] = $row . ' — the format consumes argument ' . $ordinal
+                    . ' and the call passes ' . (\count($arguments) - 1);
+
+                continue;
+            }
+            [$seconds, $why] = self::resolveArgument($tokens, $arguments[$ordinal], $consts);
+            if ($seconds === null) {
+                $unresolved[] = $row . ' — ' . $why;
+
+                continue;
+            }
+            foreach ($seconds as $value) {
+                $resolved[] = [$label, $token[2], $value];
+            }
+        }
+
+        return ['resolved' => $resolved, 'unresolved' => $unresolved];
+    }
+
+    /**
+     * One argument's value, as every integer it can be, or `null` and a reason.
+     *
+     * @param array{0: int, 1: int}  $span
+     * @param array<string, ?int>    $consts
+     *
+     * @return array{0: ?list<int>, 1: string}
+     */
+    private static function resolveArgument(array $tokens, array $span, array $consts): array
+    {
+        $significant = self::significantIn($tokens, $span);
+
+        if (\count($significant) === 1 && \is_array($tokens[$significant[0]])) {
+            $only = $tokens[$significant[0]];
+            if ($only[0] === T_LNUMBER) {
+                return [[(int) $only[1]], ''];
+            }
+            if ($only[0] === T_VARIABLE) {
+                return self::resolveThroughParameter($tokens, $significant[0], $consts);
+            }
+        }
+
+        if (\count($significant) === 3
+            && \is_array($tokens[$significant[0]]) && $tokens[$significant[0]][0] === T_STRING
+            && strtolower($tokens[$significant[0]][1]) === 'self'
+            && $tokens[$significant[1]] !== ',' && \is_array($tokens[$significant[1]])
+            && $tokens[$significant[1]][0] === T_DOUBLE_COLON
+            && \is_array($tokens[$significant[2]]) && $tokens[$significant[2]][0] === T_STRING) {
+            $name = $tokens[$significant[2]][1];
+            if (!\array_key_exists($name, $consts)) {
+                return [null, 'self::' . $name . ' is not a constant declared in this file'];
+            }
+            if ($consts[$name] === null) {
+                return [null, 'self::' . $name . ' is declared but its value is not an integer literal'];
+            }
+
+            return [[$consts[$name]], ''];
+        }
+
+        return [null, 'the argument is `' . self::textOf($tokens, $significant)
+            . '`, which this resolver cannot reduce to a number — teach it that shape, or '
+            . 'spell the budget as an integer literal at the call site'];
+    }
+
+    /**
+     * A budget handed down as a function parameter, resolved through every call.
+     *
+     * THE ONE SITE THAT NEEDS THIS PASSES ITS BOUND TO A PRIVATE HELPER, and the
+     * two callers hand it two DIFFERENT constants — so a resolver answering a
+     * single number here would have to pick one and would be wrong about the
+     * other. Every call's value is returned and every one of them is checked
+     * against the ceiling.
+     *
+     * @param array<string, ?int> $consts
+     *
+     * @return array{0: ?list<int>, 1: string}
+     */
+    private static function resolveThroughParameter(array $tokens, int $variable, array $consts): array
+    {
+        $name = $tokens[$variable][1];
+
+        $function = null;
+        for ($j = $variable; $j >= 0; $j--) {
+            if (\is_array($tokens[$j]) && $tokens[$j][0] === T_FUNCTION) {
+                $function = $j;
+
+                break;
+            }
+        }
+        if ($function === null) {
+            return [null, $name . ' is not inside a function, so it has no parameter to resolve'];
+        }
+
+        $named = self::nextSignificant($tokens, $function);
+        if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][0] !== T_STRING) {
+            return [null, $name . ' is a parameter of a closure, which has no call sites to read'];
+        }
+        $callee = $tokens[$named][1];
+
+        $open = self::nextSignificant($tokens, $named);
+        if ($open === null || $tokens[$open] !== '(') {
+            return [null, $callee . '() has no parameter list this resolver can read'];
+        }
+        $parameters = self::argumentSpans($tokens, $open);
+        if ($parameters === null) {
+            return [null, $callee . '() has an unterminated parameter list'];
+        }
+
+        $position = null;
+        foreach ($parameters as $index => $span) {
+            foreach (self::significantIn($tokens, $span) as $j) {
+                if (\is_array($tokens[$j]) && $tokens[$j][0] === T_VARIABLE && $tokens[$j][1] === $name) {
+                    $position = $index;
+
+                    break 2;
+                }
+            }
+        }
+        if ($position === null) {
+            return [null, $name . ' is a local of ' . $callee . '(), not one of its parameters'];
+        }
+
+        $values = [];
+        foreach ($tokens as $i => $token) {
+            if ($i === $named || !\is_array($token) || $token[0] !== T_STRING || $token[1] !== $callee) {
+                continue;
+            }
+            $callOpen = self::nextSignificant($tokens, $i);
+            if ($callOpen === null || $tokens[$callOpen] !== '(') {
+                continue;
+            }
+            $arguments = self::argumentSpans($tokens, $callOpen);
+            if ($arguments === null || !isset($arguments[$position])) {
+                return [null, 'a call to ' . $callee . '() passes nothing at position ' . $position];
+            }
+            [$resolved, $why] = self::resolveArgument($tokens, $arguments[$position], $consts);
+            if ($resolved === null) {
+                return [null, 'through ' . $callee . '() parameter ' . $name . ': ' . $why];
+            }
+            foreach ($resolved as $value) {
+                $values[] = $value;
+            }
+        }
+
+        if ($values === []) {
+            return [null, $callee . '() is never called in this file, so ' . $name . ' has no value'];
+        }
+
+        return [$values, ''];
+    }
+
+    /**
+     * Every `const NAME = <integer literal>;` in one token stream.
+     *
+     * A constant whose value is anything else is recorded as `null` rather than
+     * omitted, so {@see resolveArgument()} can tell "no such constant" from
+     * "a constant this cannot evaluate" and say which (rule 14).
+     *
+     * @return array<string, ?int>
+     */
+    private static function integerConstantsIn(array $tokens): array
+    {
+        $constants = [];
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== T_CONST) {
+                continue;
+            }
+            $named = self::nextSignificant($tokens, $i);
+            if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][0] !== T_STRING) {
+                continue;
+            }
+            $equals = self::nextSignificant($tokens, $named);
+            if ($equals === null || $tokens[$equals] !== '=') {
+                continue;
+            }
+            $value = self::nextSignificant($tokens, $equals);
+            $after = $value === null ? null : self::nextSignificant($tokens, $value);
+            $constants[$tokens[$named][1]] = ($value !== null && \is_array($tokens[$value])
+                && $tokens[$value][0] === T_LNUMBER && $after !== null && $tokens[$after] === ';')
+                    ? (int) $tokens[$value][1]
+                    : null;
+        }
+
+        return $constants;
+    }
+
+    /**
+     * Which conversion the needle's placeholder is, 1-indexed, or `null`.
+     *
+     * `%%` IS AN ESCAPE AND NOT A CONVERSION, so a format carrying one before
+     * the placeholder shifts every ordinal after it by one if that is missed —
+     * which resolves the WRONG argument and answers a confident wrong number.
+     */
+    private static function conversionOrdinalOf(string $format): ?int
+    {
+        $placeholder = strpos($format, self::needle());
+        if ($placeholder === false) {
+            return null;
+        }
+        // The offset of the `%` that opens the needle's own conversion.
+        $placeholder += \strlen(self::needle()) - 2;
+
+        $ordinal = 0;
+        for ($i = 0, $length = \strlen($format); $i < $length; $i++) {
+            if ($format[$i] !== '%') {
+                continue;
+            }
+            if (($format[$i + 1] ?? '') === '%') {
+                $i++;
+
+                continue;
+            }
+            $ordinal++;
+            if ($i === $placeholder) {
+                return $ordinal;
+            }
+            $i++;
+        }
+
+        return null;
+    }
+
+    /**
+     * A run of single- or double-quoted literals joined by `.`, decoded, or
+     * `null` for anything else.
+     *
+     * @param array{0: int, 1: int} $span
+     */
+    private static function concatenatedLiteral(array $tokens, array $span): ?string
+    {
+        $significant = self::significantIn($tokens, $span);
+        if ($significant === []) {
+            return null;
+        }
+
+        $out = '';
+        foreach ($significant as $position => $j) {
+            if ($position % 2 === 1) {
+                if ($tokens[$j] !== '.') {
+                    return null;
+                }
+
+                continue;
+            }
+            if (!\is_array($tokens[$j]) || $tokens[$j][0] !== T_CONSTANT_ENCAPSED_STRING) {
+                return null;
+            }
+            $raw = $tokens[$j][1];
+            $body = substr($raw, 1, -1);
+            $out .= $raw[0] === "'"
+                ? str_replace(['\\\\', "\\'"], ['\\', "'"], $body)
+                : stripcslashes($body);
+        }
+
+        return $out;
+    }
+
+    /**
+     * The `[from, to)` token spans of a bracketed argument list, or `null` when
+     * the brackets never close.
+     *
+     * @return list<array{0: int, 1: int}>|null
+     */
+    private static function argumentSpans(array $tokens, int $open): ?array
+    {
+        $depth = 0;
+        $spans = [];
+        $start = $open + 1;
+        for ($i = $open, $count = \count($tokens); $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (\in_array($token, ['(', '[', '{'], true)) {
+                $depth++;
+
+                continue;
+            }
+            if (\in_array($token, [')', ']', '}'], true)) {
+                $depth--;
+                if ($depth === 0) {
+                    $spans[] = [$start, $i];
+
+                    return $spans;
+                }
+
+                continue;
+            }
+            // Only a comma at the list's OWN depth separates arguments; one
+            // inside a nested call or an array literal belongs to that.
+            if ($depth === 1 && $token === ',') {
+                $spans[] = [$start, $i];
+                $start = $i + 1;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{0: int, 1: int} $span
+     *
+     * @return list<int>
+     */
+    private static function significantIn(array $tokens, array $span): array
+    {
+        $out = [];
+        for ($i = $span[0]; $i < $span[1]; $i++) {
+            if (\is_array($tokens[$i])
+                && \in_array($tokens[$i][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $out[] = $i;
+        }
+
+        return $out;
+    }
+
+    private static function nextSignificant(array $tokens, int $i): ?int
+    {
+        for ($j = $i + 1, $count = \count($tokens); $j < $count; $j++) {
+            if (\is_array($tokens[$j])
+                && \in_array($tokens[$j][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            return $j;
+        }
+
+        return null;
+    }
+
+    private static function previousSignificant(array $tokens, int $i): ?int
+    {
+        for ($j = $i - 1; $j >= 0; $j--) {
+            if (\is_array($tokens[$j])
+                && \in_array($tokens[$j][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            return $j;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<int> $significant
+     */
+    private static function textOf(array $tokens, array $significant): string
+    {
+        $out = '';
+        foreach ($significant as $j) {
+            $out .= \is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Every parametrised budget in `tests/`, resolved, and every one that is not.
+     *
+     * @return array{resolved: list<array{0: string, 1: int, 2: int}>, unresolved: list<string>}
+     */
+    private function resolvedParametrisedBudgets(): array
+    {
+        $resolved = [];
+        $unresolved = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $found = self::resolvedParametrisedIn('tests/' . $relative, self::readOrFail($path));
+            foreach ($found['resolved'] as $row) {
+                $resolved[] = $row;
+            }
+            foreach ($found['unresolved'] as $row) {
+                $unresolved[] = $row;
+            }
+        }
+        sort($resolved);
+        sort($unresolved);
+
+        return ['resolved' => $resolved, 'unresolved' => $unresolved];
     }
 
     /**
@@ -324,11 +801,187 @@ final class ChildWallClockBudgetTest extends TestCase
             . 'tree. Assemble the occurrence from pieces instead of spelling it',
         );
 
+        // AND THE TOKEN CENSUS TOO, which walks the same directory and would be
+        // bought by the same sentence. It reads `sprintf()` CALLS rather than
+        // raw text, so a needle written in a comment here cannot reach it — but
+        // one written as a real call in a fixture-shaped helper could, and this
+        // is the arm that would say so.
+        $parametrised = $this->resolvedParametrisedBudgets();
+        $this->assertSame(
+            [],
+            array_values(array_filter(
+                array_map(static fn (array $row): string => $row[0] . ':' . $row[1], $parametrised['resolved']),
+                static fn (string $row): bool => str_starts_with($row, $self . ':'),
+            )),
+            'this file now contains a real parametrised launch the token census resolves, so '
+            . 'the arms below are evidence about this file rather than about the tree',
+        );
+
         // AND THE KNOWN-POSITIVE IN THE SAME TEST (rule 15): an empty list here
         // is also what a dead scanner returns, so the scanner has to be shown
         // finding something somewhere.
         $this->assertNotSame([], $budgets['literal'], 'the census found no literal budget anywhere');
         $this->assertNotSame([], $budgets['parametrised'], 'the census found no parametrised budget anywhere');
+        $this->assertNotSame([], $parametrised['resolved'], 'the token census resolved no parametrised budget anywhere');
+    }
+
+    /**
+     * Every parametrised child budget resolves to a number, and both censuses
+     * see the same sites.
+     *
+     * THIS IS THE ARM E553 EXISTS FOR. The regex census can see that a budget is
+     * passed through a placeholder and cannot see what it is; until now the
+     * answer was "20, by inspection" written into a doc-block, with nothing
+     * re-checking it. MEASURED when this guard was written, that sentence was
+     * ALREADY WRONG: the five sites resolve to 20, 30, 20, 20 and — through a
+     * parameter with two callers — 6 and 30. Nothing was over the ceiling, so
+     * the tree was fine and the CLAIM was not, which is the whole argument for
+     * deriving it rather than remembering it.
+     *
+     * TWO INDEPENDENT INSTRUMENTS OVER ONE POPULATION, and they must agree
+     * (rule 14). The regex census scrapes raw text; the token census walks
+     * `sprintf()` calls. Either one going blind is invisible on its own — an
+     * empty verdict looks identical to a clean tree — and neither can go blind
+     * without the other disagreeing here.
+     *
+     * THEY ARE COMPARED ON FILES AND COUNTS, NOT ON `file:line`, and that is
+     * deliberate rather than a weakening: the regex reports the line of the
+     * PLACEHOLDER and the token census reports the line of the CALL, which
+     * differ by one on every multi-line launch. Comparing the strings would red
+     * on formatting.
+     */
+    public function testBothCensusesSeeTheSameParametrisedSites(): void
+    {
+        $parametrised = $this->resolvedParametrisedBudgets();
+
+        $this->assertSame(
+            [],
+            $parametrised['unresolved'],
+            'a parametrised child budget could not be reduced to a number, and it is REPORTED '
+            . 'rather than dropped because a resolver that silently skipped it would be '
+            . 'certifying a budget nobody has read. Teach the resolver this shape, or spell '
+            . 'the budget as an integer literal at the call site',
+        );
+
+        $countBy = static function (array $rows): array {
+            $out = [];
+            foreach ($rows as $row) {
+                $file = \is_array($row) ? $row[0] : substr($row, 0, (int) strrpos($row, ':'));
+                $out[$file] = ($out[$file] ?? 0) + 1;
+            }
+            ksort($out);
+
+            return $out;
+        };
+
+        // The token census emits one row per RESOLVED VALUE, and the site whose
+        // budget arrives as a parameter has two callers — so it contributes two
+        // rows for one occurrence. Counting distinct call lines is what makes
+        // the two instruments comparable.
+        $seen = [];
+        foreach ($parametrised['resolved'] as $row) {
+            $seen[$row[0] . ':' . $row[1]] = true;
+        }
+
+        $this->assertSame(
+            $countBy($this->childBudgets()['parametrised']),
+            $countBy(array_keys($seen)),
+            'the regex census and the token census disagree about which files carry a '
+            . 'parametrised child budget and how many. One of the two has gone blind, and an '
+            . 'empty verdict from a blind census is indistinguishable from a clean tree',
+        );
+    }
+
+    /**
+     * The resolver answers sources whose answer is already known.
+     *
+     * RULE 15 AND RULE 25 TOGETHER. `assertSame([], $unresolved)` over the real
+     * tree passes just as well when the resolver matches nothing at all, and
+     * `assertSame([], $resolved)` is what a DELETED resolver returns — so every
+     * arm here has a positive component, and the negative ones are paired with
+     * a reason string that a dead resolver could not produce.
+     *
+     * THE ORDINAL ARM IS THE ONE THAT MATTERS. A resolver that counted the
+     * placeholder as conversion 1 regardless of what precedes it resolves the
+     * WRONG argument and answers a confident wrong number — greener and more
+     * dangerous than answering nothing. Two fixtures below put a `%s` and a
+     * `%%` ahead of the placeholder for exactly that reason.
+     *
+     * EVERY FIXTURE ASSEMBLES THE NEEDLE (rule 26). Spelling it here would put
+     * a real occurrence in a file both censuses walk.
+     */
+    public function testTheParametrisedResolverAnswersSourcesWhoseAnswerIsKnown(): void
+    {
+        $of = static function (string $body): array {
+            return self::resolvedParametrisedIn(
+                'fixture.php',
+                str_replace('@BUDGET@', self::needle(), "<?php\nclass F {\n" . $body . "\n}\n"),
+            );
+        };
+
+        // AN INTEGER LITERAL, and the placeholder is the only conversion.
+        $plain = $of("function a() { sprintf('@BUDGET@', 21); }");
+        $this->assertSame([['fixture.php', 3, 21]], $plain['resolved'], 'a literal budget did not resolve');
+        $this->assertSame([], $plain['unresolved']);
+
+        // A `self::` CONSTANT, which is how four of the five real sites spell it.
+        $const = $of("const B = 22;\nfunction a() { sprintf('@BUDGET@', self::B); }");
+        $this->assertSame([['fixture.php', 4, 22]], $const['resolved'], 'a self:: constant budget did not resolve');
+
+        // THE ORDINAL, with a conversion AHEAD of the placeholder. A resolver
+        // that always took argument 1 answers 'first' here and this reds.
+        $shifted = $of("function a() { sprintf('%s @BUDGET@ %s', 'first', 23, 'third'); }");
+        $this->assertSame([['fixture.php', 3, 23]], $shifted['resolved'], 'the placeholder was counted as the wrong conversion');
+
+        // AND `%%` IS AN ESCAPE, NOT A CONVERSION. Counting it shifts every
+        // ordinal after it by one, which resolves 'first' instead of 24.
+        $escaped = $of("function a() { sprintf('100%% %s @BUDGET@', 'first', 24); }");
+        $this->assertSame([['fixture.php', 3, 24]], $escaped['resolved'], '%% was counted as a conversion');
+
+        // A CONCATENATED FORMAT, which is how the longest real site spells it.
+        $joined = $of("function a() { sprintf('@BUDGET@ ' . '%s', 25, 'tail'); }");
+        $this->assertSame([['fixture.php', 3, 25]], $joined['resolved'], 'a concatenated format string was not decoded');
+
+        // THROUGH A PARAMETER, WITH TWO CALLERS AND TWO ANSWERS — the real
+        // shape, and the reason the resolver returns a list rather than a
+        // number. A resolver taking only the first call answers [26] and reds.
+        $viaParameter = $of(
+            "const LOW = 26;\nconst HIGH = 27;\n"
+            . "function a() { \$this->b(self::LOW); \$this->b(self::HIGH); }\n"
+            . "function b(int \$bound) { sprintf('@BUDGET@', \$bound); }"
+        );
+        $this->assertSame(
+            [['fixture.php', 6, 26], ['fixture.php', 6, 27]],
+            $viaParameter['resolved'],
+            'a budget handed down as a parameter did not resolve to every value its callers pass',
+        );
+
+        // AND THE RULE-14 HALF: what it cannot read is REPORTED WITH A REASON,
+        // never dropped. An empty `resolved` here is also what a dead resolver
+        // returns, so the reason string is the half that cannot be faked.
+        $opaque = $of("function a(int \$n) { sprintf('@BUDGET@', getenv('X')); }");
+        $this->assertSame([], $opaque['resolved']);
+        $this->assertCount(1, $opaque['unresolved'], 'an unreadable budget was dropped rather than reported');
+        $this->assertStringContainsString(
+            "getenv('X')",
+            $opaque['unresolved'][0],
+            'the report of an unresolvable budget does not name the expression it could not read',
+        );
+
+        // A CONSTANT THAT IS NOT AN INTEGER LITERAL is a different failure from
+        // a constant that does not exist, and the resolver says which.
+        $computed = $of("const B = 2 * 3;\nfunction a() { sprintf('@BUDGET@', self::B); }");
+        $this->assertSame([], $computed['resolved']);
+        $this->assertStringContainsString('not an integer literal', $computed['unresolved'][0] ?? '');
+
+        $missing = $of("function a() { sprintf('@BUDGET@', self::NOPE); }");
+        $this->assertStringContainsString('not a constant declared in this file', $missing['unresolved'][0] ?? '');
+
+        // AND A FORMAT WITHOUT THE NEEDLE CONTRIBUTES NOTHING, so the resolver
+        // is not simply reporting every sprintf() it meets.
+        $unrelated = $of("function a() { sprintf('nothing to see %d', 99); }");
+        $this->assertSame([], $unrelated['resolved']);
+        $this->assertSame([], $unrelated['unresolved']);
     }
 
     /**
@@ -339,9 +992,16 @@ final class ChildWallClockBudgetTest extends TestCase
         $limit = $this->defaultTimeLimit();
         $ceiling = $this->ceiling();
 
+        // BOTH FORMS GO THROUGH THE SAME COMPARISON NOW. The parametrised half
+        // used to be reported and left unevaluated; it is resolved through the
+        // token stream and checked here exactly like a literal, so a `%d` site
+        // whose constant is raised over the ceiling reds in the same breath as
+        // a digit would. {@see resolvedParametrisedIn()}
+        $rows = array_merge($this->childBudgets()['literal'], $this->resolvedParametrisedBudgets()['resolved']);
+
         $this->assertSame(
             [],
-            $this->tooLooseIn($this->childBudgets()['literal'], $ceiling),
+            $this->tooLooseIn($rows, $ceiling),
             sprintf(
                 "this child's wall-clock budget leaves the parent's own alarm no room to lose. "
                 . 'phpunit.xml declares defaultTimeLimit="%d" with enforceTimeLimit and '
