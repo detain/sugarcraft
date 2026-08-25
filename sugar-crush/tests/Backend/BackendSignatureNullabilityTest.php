@@ -152,6 +152,110 @@ final class BackendSignatureNullabilityTest extends TestCase
     }
 
     /**
+     * **Both keywords of {@see PARAMETER_LIST_KEYWORDS}, in both polarities.**
+     *
+     * WHY THIS TEST EXISTS, and it is not a nice-to-have: the commit that added
+     * `T_FN` cited this method in {@see PARAMETER_LIST_KEYWORDS}'s docblock and
+     * did not write it. MEASURED — with the constant reverted to `[T_FUNCTION]`,
+     * the single change the widening consisted of, the whole file was GREEN.
+     * A prose claim of a pin, inside the fix whose subject is prose claims of
+     * pins. Found by mutating the fix rather than by reading it (rule 43).
+     *
+     * The offending arm is what fails if a keyword leaves the alphabet; the
+     * clean arm is what fails if the scanner starts flagging correct code under
+     * that keyword, which is how the attribute defect presented.
+     *
+     * @dataProvider parameterListKeywordSpellings
+     */
+    public function testEveryParameterListKeywordIsScannedInBothPolarities(
+        string $label,
+        string $offending,
+        string $clean,
+    ): void {
+        $this->assertNotSame(
+            [],
+            self::implicitlyNullableParams($offending),
+            "an implicitly-nullable parameter declared with {$label} was NOT seen. That keyword "
+                . 'is not in PARAMETER_LIST_KEYWORDS, or the walk to its parameter list broke; '
+                . "either way the census is blind to every {$label} in the tree.\n" . $offending,
+        );
+
+        $this->assertSame(
+            [],
+            self::implicitlyNullableParams($clean),
+            "a correctly-spelled parameter declared with {$label} was reported as an offender. "
+                . 'A guard that reds on correct code prints the wrong instruction for it '
+                . "(rule 33).\n" . $clean,
+        );
+    }
+
+    /**
+     * One offending source and one clean source per parameter-list keyword.
+     *
+     * DERIVED AGAINST THE CONSTANT by
+     * {@see testTheKeywordAlphabetAndItsFixturesAgree()}, so a keyword added to
+     * {@see PARAMETER_LIST_KEYWORDS} without a row here reds rather than
+     * arriving unexercised - which is precisely how `T_FN` arrived.
+     *
+     * @return array<string, array{0: string, 1: string, 2: string}>
+     */
+    public static function parameterListKeywordSpellings(): array
+    {
+        // Concatenated, per the class docblock: a textual sweep of this pattern
+        // must not be able to rewrite the fixtures that prove the sweep worked.
+        $null = 'nu' . 'll';
+
+        return [
+            'T_FUNCTION (method)' => [
+                'T_FUNCTION',
+                "<?php\nfinal class F { public function m(callable \$a = {$null}): void {} }\n",
+                "<?php\nfinal class F { public function m(?callable \$a = {$null}): void {} }\n",
+            ],
+            'T_FUNCTION (closure)' => [
+                'T_FUNCTION',
+                "<?php\n\$f = function (callable \$a = {$null}): void {};\n",
+                "<?php\n\$f = function (?callable \$a = {$null}): void {};\n",
+            ],
+            'T_FN (arrow function)' => [
+                'T_FN',
+                "<?php\n\$f = fn (callable \$a = {$null}): int => 1;\n",
+                "<?php\n\$f = fn (?callable \$a = {$null}): int => 1;\n",
+            ],
+        ];
+    }
+
+    /**
+     * The alphabet and its fixtures must name the same keywords.
+     *
+     * Rule 15 applied to a constant rather than to a scanner: without this, a
+     * keyword can join {@see PARAMETER_LIST_KEYWORDS} with nothing exercising
+     * it, and a keyword can leave it while the fixture rows stay behind and
+     * quietly test the remaining one twice.
+     */
+    public function testTheKeywordAlphabetAndItsFixturesAgree(): void
+    {
+        $named = [];
+        foreach (self::parameterListKeywordSpellings() as [$constant]) {
+            $named[$constant] = true;
+        }
+        ksort($named);
+
+        $declared = array_map(
+            static fn (int $token): string => (string) token_name($token),
+            self::PARAMETER_LIST_KEYWORDS,
+        );
+        sort($declared);
+
+        $this->assertSame(
+            $declared,
+            array_keys($named),
+            'PARAMETER_LIST_KEYWORDS and parameterListKeywordSpellings() disagree. A keyword in '
+                . 'the constant with no fixture row is scanned by nobody; a fixture row with no '
+                . 'keyword tests a keyword this scanner no longer accepts.',
+        );
+    }
+
+    /**
      * **E526 — the census outside the contract family, which used to be two.**
      *
      * The class docblock's narrow-scope argument named `src/Workflows/Workflow.php`
