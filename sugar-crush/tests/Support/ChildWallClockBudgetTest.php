@@ -558,6 +558,37 @@ final class ChildWallClockBudgetTest extends TestCase
             return [null, $name . ' is not inside a function, so it has no parameter to resolve'];
         }
 
+        // AN ARROW FUNCTION DECLARES PARAMETERS AND THIS WALK CANNOT SEE ONE
+        // (E566). `T_FN` is its own token, so the backwards walk above steps
+        // straight over `fn (int $budget) => …` and lands on the enclosing
+        // NAMED method. An anonymous `function` does not have this problem —
+        // it carries a `T_FUNCTION` of its own, so the walk stops on it and the
+        // refusal below fires. The arrow is the one callable spelling that got
+        // silently misattributed, which is rule 14's shape exactly.
+        //
+        // MEASURED on PHP 8.3.6, through this class's own
+        // {@see resolvedParametrisedIn()} rather than reasoned about, before
+        // the refusal below existed:
+        //
+        //   `fn (int $b) => sprintf('<wrapper> %d', $b)` inside `a(int $b)`,
+        //   with one caller `a(20)`, resolved to **20** — a number belonging to
+        //   the enclosing method's caller and having nothing whatever to do
+        //   with what the arrow is handed — with an empty `unresolved` list and
+        //   no sign that anything had gone wrong. A budget of any size at all
+        //   would have been certified as 20.
+        //
+        // The condition below is deliberately SUFFICIENT rather than exact: it
+        // does not compute where the arrow's single-expression body ends, only
+        // whether an arrow between the enclosing function and this site
+        // declares this very name. That can over-refuse — an arrow that
+        // shadowed the name and closed again ABOVE the site — and over-refusing
+        // costs an `unresolved` row a reader sees, where the alternative costs
+        // a wrong number nobody sees. Rule 14: red on what it cannot parse.
+        if (self::shadowedByAnArrowFunction($tokens, $function, $variable, $name)) {
+            return [null, $name . ' is a parameter of an arrow function, which has no name and '
+                . 'so no call sites to read'];
+        }
+
         $named = self::nextSignificant($tokens, $function);
         if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][0] !== T_STRING) {
             return [null, $name . ' is a parameter of a closure, which has no call sites to read'];
@@ -636,6 +667,50 @@ final class ChildWallClockBudgetTest extends TestCase
      *
      * @return array<string, ?int>
      */
+    /**
+     * Whether an arrow function between $from and $at declares $name.
+     *
+     * SEPARATE FROM THE WALK ABOVE BECAUSE THE TWO ASK DIFFERENT QUESTIONS.
+     * The walk asks "which named function is this site inside", and for that
+     * question skipping arrow functions is the right answer — an arrow has no
+     * name to attribute anything to ({@see TokenFunctionRanges}, which
+     * documents the same exclusion for the same reason). This asks "does
+     * something nearer than that named function declare this parameter", and
+     * for THAT question an arrow counts, because `fn (int $budget) => …`
+     * declares `$budget` exactly as a `function` does.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function shadowedByAnArrowFunction(array $tokens, int $from, int $at, string $name): bool
+    {
+        for ($j = $from; $j < $at; $j++) {
+            if (!\is_array($tokens[$j]) || $tokens[$j][0] !== T_FN) {
+                continue;
+            }
+            $open = self::nextSignificant($tokens, $j);
+            // `fn &(…)` returns by reference; the paren is one token further.
+            if ($open !== null && $tokens[$open] === '&') {
+                $open = self::nextSignificant($tokens, $open);
+            }
+            if ($open === null || $tokens[$open] !== '(') {
+                continue;
+            }
+            $parameters = self::argumentSpans($tokens, $open);
+            if ($parameters === null) {
+                continue;
+            }
+            foreach ($parameters as $span) {
+                foreach (self::significantIn($tokens, $span) as $k) {
+                    if (\is_array($tokens[$k]) && $tokens[$k][0] === T_VARIABLE && $tokens[$k][1] === $name) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static function integerConstantsIn(array $tokens): array
     {
         $constants = [];
@@ -1494,6 +1569,61 @@ final class ChildWallClockBudgetTest extends TestCase
             'a budget handed down as a parameter did not resolve to every value its callers '
             . 'pass, or resolved without naming the caller the value came from — which is the '
             . 'half that makes a failure at line 6 readable, since line 6 has no number on it',
+        );
+
+        // ── E566: AN ARROW FUNCTION'S PARAMETER IS REFUSED, NOT ATTRIBUTED TO
+        // THE METHOD AROUND IT. `T_FN` is its own token, so the backwards walk
+        // to the enclosing function steps over `fn (…) =>` entirely; an
+        // anonymous `function` carries a `T_FUNCTION` and is caught by the
+        // closure arm, which is why the arrow was the ONE callable spelling
+        // that got misattributed instead of refused.
+        //
+        // THE SHADOWING ROW IS THE DANGEROUS ONE AND IT IS FIRST. Before the
+        // refusal existed this fixture resolved to **28** — the value the
+        // ENCLOSING method's caller passes — with an empty `unresolved` list.
+        // Not a missing answer: a confident wrong one, and a budget of any size
+        // inside that arrow would have been certified as 28.
+        $shadowed = $of(
+            "const LOW = 28;\n"
+            . "function a() { \$this->b(self::LOW); }\n"
+            . "function b(int \$bound) { \$f = fn (int \$bound) => sprintf('@BUDGET@', \$bound); }"
+        );
+        $this->assertSame(
+            [],
+            $shadowed['resolved'],
+            "an arrow function's parameter was resolved through the ENCLOSING method's call "
+            . 'sites. The number that comes back belongs to a different callable and the arrow '
+            . 'could be handed anything at all; this is the shape that certifies an unbounded '
+            . 'budget as compliant (E566)',
+        );
+        $this->assertStringContainsString(
+            'arrow function',
+            $shadowed['unresolved'][0] ?? '',
+            'the arrow-function refusal does not say it was an arrow function, so the reader '
+            . 'cannot tell it from a budget the resolver simply could not read',
+        );
+
+        // AND THE NON-SHADOWING SPELLING, which failed CLOSED before the fix
+        // but said the wrong thing about why — "is a local of a()", when it is
+        // a parameter of something the walk never saw. Both spellings answer
+        // the same way now.
+        $arrow = $of("function a() { \$f = fn (int \$bound) => sprintf('@BUDGET@', \$bound); }");
+        $this->assertSame([], $arrow['resolved']);
+        $this->assertStringContainsString('arrow function', $arrow['unresolved'][0] ?? '');
+
+        // THE OTHER POLARITY, so the refusal above cannot be a blanket one: an
+        // arrow function in the same method that declares a DIFFERENT name
+        // leaves a real parametrised budget resolving exactly as it did.
+        $beside = $of(
+            "const LOW = 29;\n"
+            . "function a() { \$this->b(self::LOW); }\n"
+            . "function b(int \$bound) { \$f = fn (int \$other) => \$other; sprintf('@BUDGET@', \$bound); }"
+        );
+        $this->assertSame(
+            [['fixture.php', 5, 29, '$bound, passed to b() as self::LOW']],
+            $beside['resolved'],
+            'an arrow function declaring an unrelated name stopped a real parametrised budget '
+            . 'from resolving, so the E566 refusal is refusing everything',
         );
 
         // AND A HELPER THAT FEEDS ITSELF IS REFUSED, not recursed into. A PHP
