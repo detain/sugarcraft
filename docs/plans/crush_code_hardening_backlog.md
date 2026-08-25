@@ -19488,3 +19488,173 @@ coupling nobody counted**; if a bound needs slack, the slack has to be argued fo
 **Step.** No fix. Re-measure the table if `MAX_SECTION_BYTES` or `MAX_SOURCE_FILES` moves, and treat
 any red in it as an instruction to rewrite `RepoMapBlock`'s design note, never to loosen the bound
 back toward a ratio.
+### Eb60-1 — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
+
+**DEFERRED, out of lane (`src/Cli/Bootstrap.php`).** Round 60 lane b made
+`AgentManager::executeSubAgent()` resolve `Agent::$tools` into the `CompleteRequest`'s `tools` field
+(§C7). The resolution is driven by a new optional `toolRegistry` constructor parameter, and
+`Bootstrap::agentManager()` does not pass one — so a LAUNCHED sub-agent still reaches its provider
+with `tools: null`, exactly as before. It was not made because `Bootstrap.php` belongs to no lane
+this round. `null` was chosen as the parameter's default precisely so this state is the pre-existing
+behaviour rather than a refusal a launcher cannot act on, and
+`AgentManagerTest::testWithNoRegistryTheRequestKeepsItsPreExistingNullTools` pins it.
+
+🔴 **THIS ENTRY ORIGINALLY CALLED THE FIX "a one-liner (`toolRegistry: self::tools($root, ...)`)".
+THAT SENTENCE IS WITHDRAWN — the one-liner is a BREAKING CHANGE for any operator who has narrowed
+their tool set, and it is the single most likely thing a future agent would act on.**
+
+`resolveGrantedTools()` REFUSES a declaration that matches no tool in the registry, rather than
+intersecting. That is correct only while the registry it is handed is the UNFILTERED ceiling.
+`Bootstrap::tools()` is not that: it returns `self::filterToolSet($tools)`, already narrowed by the
+operator's own `allowedTools`/`disabledTools`. `filterToolSet()`'s own doc-block states the opposite
+policy in as many words — *"NO FLOOR, and there deliberately still is not one … `disabledTools:
+["*"]` … refusing it would break a configuration this class documents as intentional."*
+
+**MEASURED on PHP 8.3.6 at round 60, by reflection against `Bootstrap::tools()`'s eleven-tool
+ceiling** (`Bash, Read, Edit, Glob, Grep, Write, WebFetch, WebSearch, doctor, Skill, Lsp`):
+
+| session config | presets that THROW |
+|---|---|
+| `disabledTools: ["Bash"]` | **5 of 6** — `coder`, `reviewer`, `debugger`, `tester`, `devops`; only `architect` survives |
+| `disabledTools: ["*"]` | **6 of 6** (the registry is empty) |
+
+So a user who disables `Bash` and launches a `coder` sub-agent gets a hard `RuntimeException`, not a
+narrowed agent. Today this is latent only because nothing supplies a registry.
+
+**WHOEVER WIRES THIS MUST FIRST DECIDE WHICH OF THESE IT IS**, and record the decision in
+`resolveGrantedTools()`'s doc-block:
+
+1. **Intersect when the shortfall is the SESSION's own narrowing, refuse when the tool never
+   existed.** The honest fix, and the expensive one: telling those two apart needs the UNFILTERED
+   tool set, which `filterToolSet()` currently discards. It would mean `Bootstrap` passing both sets,
+   or passing the ceiling and letting `AgentManager` apply the narrowing itself.
+2. **Keep the refusal and pass the UNFILTERED ceiling**, letting the per-call denylist and the
+   permission gate carry the narrowing instead. Cheaper, but it means a sub-agent's roster ignores
+   `disabledTools`, which is a widening — the exact shape round 60 was fixing — and would need its
+   own argument.
+3. **Keep the refusal and pass the filtered set**, accepting the crash as the intended signal. Only
+   defensible with a message that names `disabledTools` as the likely cause; the current message says
+   "match no tool this session offers", which sends the reader hunting for a typo.
+
+Pinned by `AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo`, which asserts
+that a policy-narrowed absence and a typo produce the byte-identical refusal. That test is the trap's
+tripwire: it names this entry's decision in its failure message.
+
+### Eb60-7 — `GRANT_PROBES` proves a grant CAN fire, never that it does not OVER-fire
+
+**RECORDED, not fixed — the guard's alphabet limit (rule 11).**
+`AgentDefinitionTest::declarationDefect()` calls a preset's argument-scoped declaration clean once
+ONE probe call matches it. That is a lower bound on the grant and says nothing about its upper bound:
+`Bash(git*)` — no space — satisfies the `git status` probe and ALSO admits `gitfoo bar`, because
+`fnmatch('git*', 'gitfoo bar')` is true. The doc-block is honest about this ("proving the grant
+admits something real"), so this is a coverage note rather than a false claim.
+
+Closing it means a second probe table of calls each declaration must REFUSE, which is a different
+kind of fixture: the "can fire" table is derivable from the declaration, the "must not fire" table is
+a judgement about what the preset meant. Worth doing when a preset ships a grant whose upper bound
+actually matters — today the only argument-scoped declaration in the built-in set is `Bash(git *)`,
+whose trailing space makes the over-fire case not arise.
+
+### Eb60-5 — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
+
+**DEFERRED, out of lane (`src/Workflows/WorkflowEngine.php`, `src/Workflows/WorkflowTask.php`).**
+Found while checking round 60's review MAJOR 4. `WorkflowEngine` builds its stage request as
+
+    $defaultRequest = new CompleteRequest(
+        model: $firstAgent->model,
+        messages: [...],
+        tools: $firstTask->tools,
+        systemPrompt: $firstAgent->systemPrompt(),
+    );
+
+`WorkflowTask::$tools` is an untyped `array $tools = []` carrying whatever the workflow file
+declared — tool-name STRINGS. `CompleteRequest::$tools` is documented `?array<mixed>` but every
+provider that reads it treats the entries as `Tool` OBJECTS: `ClaudeCodeProvider` does
+`array_map(fn($t) => $t->name(), $request->tools)`, and `OpenAIProvider`/`CustomProvider`/
+`SglangProvider` hand them to `formatTools()`. So a workflow stage whose task declares any tool
+should fatal on `->name()` on a string.
+
+This is exactly the type mismatch `AgentManager::resolveGrantedTools()`'s doc-block warns about
+("Passing the strings through would fatal on `->name()` or serialise garbage") — the same defect, on
+a path lane b did not touch. **UNVERIFIED end-to-end: not executed against a live provider**, because
+every workflow test in the tree appears to use tasks with no `tools` (the default `[]` is falsy for
+`!== null` gating only in Vertex, so the other providers would receive `[]` and iterate nothing).
+The reachability question — can a workflow file actually set `WorkflowTask::$tools` non-empty — is
+the first thing to settle before treating this as live.
+
+Note this also makes the `[]`-vs-`null` distinction load-bearing on that path: `$firstTask->tools`
+defaults to `[]`, NOT to `null`, so four of the six providers put a present-but-empty `tools` key on
+the wire for every workflow stage.
+
+### Eb60-6 — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
+
+**PARTIALLY CLOSED in round 60's fix stage.** `AgentDefinitionTest::declarationDefect()` returns
+`null` for any declaration with no argument half, on the grounds that the name half is matched
+against the live registry by `AgentManager` — which, per Eb60-1, no production caller makes it do. A
+typo'd bare `defaultTools: ['Reed']` was therefore caught by nothing.
+`testEveryBarePresetToolNameResolvesAgainstTheShippedToolSet` now closes that for the six built-in
+presets, resolving each bare name against `Bootstrap::tools()` under a sandboxed HOME (the sandbox's
+emptiness is asserted, so the guard cannot silently measure a narrowed set — see Eb60-1).
+
+**STILL OPEN:** the same typo in a USER or FOREIGN preset (`.sugar-crush/agents`, `.claude/agents`,
+`.opencode/agents`) is caught by nothing, since those are not in the fixture table and are not
+validated at load time. Closing it properly means validating at `AgentPresetRegistry` /
+`ForeignAgentPresetRegistry` load time against the session's tool set — which needs Eb60-1's decision
+first, since a user preset naming a tool the operator disabled must warn rather than refuse. Related
+to Eb60-4, which is the argument-scoped half of the same gap.
+
+### Eb60-2 — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
+
+**DEFERRED. The FINDING, not the fix (rule 10).** `executeSubAgent()` applies skills with
+
+    $skill = $this->skillRegistry->get($skillName);
+    if ($skill !== null) { $systemPrompt .= $skill->systemPromptContribution(); }
+
+— a missing skill is SILENTLY SKIPPED. Meanwhile `AgentDefinitionTest::testEveryPresetNamesEverySkillItIsGranted`
+asserts that every preset prompt NAMES each skill it is granted, so `reviewer`'s prompt says "consult
+the php-best-practices and security-audit skills you have been granted". MEASURED on PHP 8.3.6 at
+this commit: a bare `new SkillRegistry()` resolves NONE of `php-best-practices`, `security-audit` or
+`phpunit-master` (they come from disk discovery). So on any launch where those files are absent, the
+prompt tells the model to consult skills whose bodies were never appended — the same "the prompt
+lies and nothing reds" defect §C7 was filed for, one field over.
+
+Not fixed here because refusing loudly would fail every `reviewer`/`tester` sub-agent launched
+without those skill files present, and that trade needs the launch path to be live first. The
+candidate fixes, in preference order: (a) refuse a preset whose granted skill does not resolve, at
+REGISTRATION rather than at execution; (b) strip the skill's name from the prompt when it does not
+resolve; (c) warn on stderr at construction. (b) is wrong on its own — it edits the model-facing
+prompt at runtime, which nothing else here does.
+
+### Eb60-3 — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
+
+**DEFERRED, and the more consequential half of §C7.** `executeSubAgent()` has no production caller;
+`executeAll()` has TWO — `Chat::executeAgents()` and `WorkflowEngine`'s parallel stages. MEASURED at
+this commit: `executeAll()` registers the caller's `SubAgent[]` and forwards ONE caller-supplied
+`CompleteRequest` to `AgentWorkerPool::executeAll()`, calling neither `resolveGrantedTools()` nor
+`refuseCallOutsideGrant()`; the pool then forwards `$request->tools` verbatim
+(`AgentWorkerPool.php`, in `executeAll()`'s per-agent request build). So a sub-agent run in PARALLEL
+gets whatever tools the caller put in the shared request, with no per-agent resolution and no
+per-call grant or denylist enforcement — and `WorkflowEngine` builds that shared request from the
+FIRST task of the stage, so agents 2..n of a mixed stage are governed by agent 1's declaration.
+
+Not fixed in round 60 because the correct shape is a PER-AGENT request built inside the pool, and
+`src/Agents/AgentWorkerPool.php` was lane c's file that round. The seam to use is the one the pool
+already has: it builds a per-agent `CompleteRequest` from each agent's own `task`, so `tools` can be
+resolved there from `$agent->agent->tools` by the same method.
+
+### Eb60-4 — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
+
+**DEFERRED.** Round 60 lane b found `AgentDefinition::reviewer()` shipping `Bash(git:*)` — Claude
+Code's prefix dialect — where this project globs an argument half with `fnmatch()`. MEASURED on PHP
+8.3.6: `(new PermissionRule('Bash(git:*)', Allow))->matches(new ToolCall('Bash', ['command' => 'git
+status']))` is FALSE, and so is every other real git command. The built-in preset was corrected and
+`AgentDefinitionTest` now refuses any argument-scoped preset declaration that its own probe cannot
+satisfy.
+
+**That guard covers the six built-in presets and nothing else.** `ForeignAgentPresetRegistry` imports
+`.claude/agents` frontmatter through `toolList()`, which MEASURED is a pure trim-and-split with no
+dialect translation anywhere in `src/Agents/` or `src/Permissions/`. So a user's own Claude Code
+preset carrying `tools: Bash(git:*)` produces a declaration that is well-formed, passes every check,
+and matches nothing — which after §C7 means the sub-agent is granted the `Bash` tool by the NAME half
+and then has every `Bash` call refused by the argument half. The durable fixes are a translation at
+import (`(x:*)` → `(x *)`) or a stderr warning naming the dialect; neither was taken.

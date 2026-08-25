@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Agents;
 
+use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionGate;
 use SugarCraft\Crush\Permissions\PermissionMode;
+use SugarCraft\Crush\Permissions\PermissionRule;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Providers\TransientFailure;
 use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\Tools\Tool;
 
 final class AgentManager
 {
@@ -47,6 +50,22 @@ final class AgentManager
      * @param \Closure(PermissionMode): PermissionGate $permissionGateFactory Factory to create PermissionGate from PermissionMode
      * @param \Closure(ToolCall, SubAgent): bool $permissionApprover Settles a
      *        {@see PermissionDecision::Ask} into a real allow/deny. @see evaluateToolCalls()
+     * @param ?list<Tool> $toolRegistry The session's model-facing tool set —
+     *        {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}'s return — from
+     *        which {@see resolveGrantedTools()} selects the subset an agent's
+     *        definition names. It is the CEILING and never a source: nothing
+     *        below can hand a sub-agent a tool this array does not already
+     *        contain, which is the same argument
+     *        {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()} rests on.
+     *
+     *        NULL, THE DEFAULT, IS NOT AN EMPTY REGISTRY. It means the caller
+     *        supplied none, and every sub-agent then reaches its provider with
+     *        `tools: null` exactly as it did before this parameter existed —
+     *        the pre-existing behaviour, kept reachable so a caller that has no
+     *        tool set (every test double in `tests/`, and `Bootstrap` until its
+     *        own one-line change lands) is not forced to invent one. An empty
+     *        ARRAY is a different statement: a registry exists and offers
+     *        nothing, so any declaration at all is unresolvable and refused.
      */
     public function __construct(
         private ProviderInterface $provider,
@@ -54,6 +73,7 @@ final class AgentManager
         private ?AgentWorkerPool $workerPool = null,
         private ?\Closure $permissionGateFactory = null,
         private ?\Closure $permissionApprover = null,
+        private ?array $toolRegistry = null,
     ) {}
 
     /**
@@ -420,12 +440,19 @@ final class AgentManager
                 }
             }
 
-            // Run completion
+            // Run completion.
+            //
+            // `tools:` is NOT optional decoration here — omitting it is what
+            // made every sub-agent toolless while its prompt described a
+            // roster. {@see resolveGrantedTools()} carries the whole argument,
+            // including why `null` (no registry, or no declaration) is still a
+            // correct answer rather than a failure.
             $request = new \SugarCraft\Crush\Providers\CompleteRequest(
                 model: $subAgent->agent->model,
                 messages: [
                     new \SugarCraft\Crush\Messages\UserMessage($subAgent->task),
                 ],
+                tools: $this->resolveGrantedTools($subAgent->agent),
                 systemPrompt: $systemPrompt,
             );
 
@@ -487,7 +514,13 @@ final class AgentManager
                             // permanent by TransientFailure's allow-list - which is
                             // the whole reason that classifier is an allow-list and
                             // not a deny-list.
-                            if ($response->toolCalls !== null && $subAgent->permissionGate !== null) {
+                            // NO LONGER GATED ON `permissionGate !== null`: the
+                            // agent's own tool grant is enforced in there too
+                            // ({@see refuseCallOutsideGrant()}), and a
+                            // declaration does not stop being the agent's
+                            // statement about itself because the caller
+                            // attached no gate.
+                            if ($response->toolCalls !== null) {
                                 $this->evaluateToolCalls($response->toolCalls, $subAgent);
                             }
 
@@ -551,8 +584,10 @@ final class AgentManager
                     TransientFailure::backoff($attempt);
                 }
 
-                // Evaluate tool calls through the permission gate if set
-                if ($response->toolCalls !== null && $subAgent->permissionGate !== null) {
+                // Evaluate tool calls through the agent's grant and then the
+                // permission gate if set. See the streaming branch for why the
+                // gate-presence precondition is gone.
+                if ($response->toolCalls !== null) {
                     $this->evaluateToolCalls($response->toolCalls, $subAgent);
                 }
 
@@ -575,8 +610,18 @@ final class AgentManager
     }
 
     /**
-     * Evaluate tool calls through the sub-agent's permission gate.
-     * Denied tool calls cause the sub-agent to fail immediately.
+     * Evaluate tool calls through the agent's own grant and then through the
+     * sub-agent's permission gate. Either refusal fails the sub-agent
+     * immediately.
+     *
+     * TWO CHECKS, IN THIS ORDER, ANSWERING DIFFERENT QUESTIONS.
+     * {@see refuseCallOutsideGrant()} asks whether the AGENT declared this
+     * capability at all; the gate asks whether the SESSION's policy permits it.
+     * Passing the first is not permission and passing the second is not a
+     * grant. THIS METHOD USED TO RETURN EARLY WHEN NO GATE WAS ATTACHED, which
+     * was right while the gate was the only check here and is wrong now: an
+     * agent's declaration is its own statement about itself and does not become
+     * unenforceable because the caller owns no UI.
      *
      * ASK is routed to {@see $permissionApprover}, the seam that makes it a
      * question instead of a dead end. Before it, every Ask was an immediate
@@ -600,16 +645,23 @@ final class AgentManager
      * to decide on its own.
      *
      * @param array<ToolCall> $toolCalls
-     * @throws \RuntimeException When a tool call is denied, or an Ask goes
-     *         unanswered/refused
+     * @throws \RuntimeException When a tool call falls outside the agent's own
+     *         grant, is denied by the gate, or an Ask goes unanswered/refused
      */
     private function evaluateToolCalls(array $toolCalls, SubAgent $subAgent): void
     {
-        if ($subAgent->permissionGate === null) {
-            return;
-        }
-
         foreach ($toolCalls as $toolCall) {
+            // FIRST, AND UNCONDITIONALLY. Two different questions are being
+            // asked and the agent's own is the cheaper one to answer: the grant
+            // needs no gate, no approver and no user, so settling it here keeps
+            // a call the agent never asked for from ever reaching a blocking
+            // approval prompt.
+            $this->refuseCallOutsideGrant($toolCall, $subAgent);
+
+            if ($subAgent->permissionGate === null) {
+                continue;
+            }
+
             $decision = $subAgent->permissionGate->evaluate($toolCall);
 
             if ($decision === \SugarCraft\Crush\Permissions\PermissionDecision::Deny) {
@@ -654,6 +706,425 @@ final class AgentManager
         );
 
         throw new \RuntimeException($subAgent->error);
+    }
+
+    /**
+     * The tool objects an agent's DECLARATION names, or null when this manager
+     * has no registry to resolve them against.
+     *
+     * WHY THIS EXISTS. `AgentDefinition::$defaultTools` reached
+     * {@see Agent::$tools} faithfully — {@see Agent::fromDefinition()} passes it
+     * straight through — and then died here: {@see executeSubAgent()} built its
+     * {@see CompleteRequest} with no `tools` argument, which
+     * {@see CompleteRequest::__construct()} defaults to `null`, and EVERY
+     * provider gates its tool block on `$request->tools !== null`. So a preset
+     * declaring `['Read', 'Grep', 'Bash(git *)']` reached the model with no
+     * tools whatsoever while its system prompt described the ones it had. The
+     * prompt lied to the model and nothing reddened.
+     *
+     * WHY IT IS NOT `tools: $agent->tools`. The two sides speak different types.
+     * A declaration is a STRING in {@see PermissionRule}'s pattern dialect; a
+     * provider wants {@see Tool} OBJECTS and calls `->name()` on each
+     * ({@see \SugarCraft\Crush\Providers\ClaudeCodeProvider::complete()}) or
+     * hands them to its own `formatTools()`. Passing the strings through would
+     * fatal on `->name()` or serialise garbage.
+     *
+     * THE DIALECT IS PermissionRule's, NOT A SECOND ONE, for the reason that
+     * class's doc-block gives at length: two glob dialects for tool names are
+     * two things `mcp__git__*` can mean. The NAME half selects the tool;
+     * {@see PermissionRule::matchesToolName()} is the same static
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()} already filters
+     * the model-facing set with — one hop down, in the `toolSetUnder()`
+     * predicate it delegates to; `filterToolSet()` itself holds no matcher. The ARGUMENT half of `Bash(git *)` cannot be
+     * expressed on the wire at all — a tool schema has no place to say "only
+     * git commands" — so it is NOT dropped here: it is enforced per call by
+     * {@see refuseCallOutsideGrant()}, which is where the arguments exist.
+     *
+     * FAILS LOUD, NEVER OPEN. A declaration that resolves to nothing throws
+     * rather than being skipped. Skipping is the tempting shape and it is this
+     * bug wearing a different hat: a typo'd `Reed` would silently produce a
+     * sub-agent with a smaller roster than its prompt claims, which is exactly
+     * the failure this method was written to end. Same for a malformed pattern
+     * and for a registry entry that is not a {@see Tool} — an instrument that
+     * quietly ignores what it cannot parse has a hole shaped like the next
+     * defect.
+     *
+     * AND THAT REFUSAL IS SOUND ONLY WHILE THE REGISTRY IS THE UNFILTERED
+     * CEILING — a caveat this paragraph did not carry, and the reason wiring
+     * this method up is not the one-liner the backlog first called it.
+     * `$toolRegistry` is compared against as if it were every tool that could
+     * exist, but the obvious thing to pass is
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}, whose return is
+     * `filterToolSet($tools)` — ALREADY narrowed by the operator's own
+     * `allowedTools`/`disabledTools`. That method's own doc-block names
+     * `disabledTools: ["*"]` as the SUPPORTED way to ask for a toolless agent
+     * and says refusing it "would break a configuration this class documents as
+     * intentional". Handed the filtered set, this method refuses exactly that.
+     *
+     * MEASURED on PHP 8.3.6, by reflection against `Bootstrap::tools()`'s
+     * eleven-tool ceiling: with `Bash` removed, FIVE of the six built-in
+     * presets throw (only `architect` survives, being genuinely read-only);
+     * with the registry empty, all six do. The figure is recorded here, not
+     * asserted anywhere — a count over the preset table would rot the next time
+     * a preset changes. What IS pinned is the semantics, by
+     * AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo:
+     * a policy-narrowed absence and a typo produce the identical refusal, so
+     * this method cannot tell an operator's deliberate narrowing from a
+     * mistake.
+     *
+     * LEFT AS A REFUSAL, DELIBERATELY, because fixing it properly needs
+     * something no caller currently has. Distinguishing "the registry never had
+     * this tool" from "the registry had it and policy removed it" requires the
+     * UNFILTERED set, which `filterToolSet()` discards; intersecting instead
+     * would re-open the silent-narrowing hole this whole method exists to
+     * close, for typos as much as for policy. So the decision is deferred to
+     * whoever wires the launch path, with the trade-off written down here and
+     * in the hardening backlog rather than discovered by a user whose
+     * `disabledTools` suddenly crashes five presets.
+     *
+     * ORDER IS THE REGISTRY'S, not the declaration list's: `Bootstrap::tools()`
+     * documents its array as a wire order the model has learned, and a subset
+     * that reshuffles it would hand two agents the same tools in two orders.
+     * Iterating the registry outside also dedupes by construction, so
+     * `['Bash', 'Bash(git *)']` yields one `Bash`, not two — and both
+     * declarations are still marked resolved, which is a separate fact the
+     * loop had to be corrected to get right.
+     *
+     * @return ?list<Tool>
+     * @throws \RuntimeException When a declaration is malformed, resolves to no
+     *         tool in the registry, or the registry holds a non-{@see Tool}.
+     */
+    private function resolveGrantedTools(Agent $agent): ?array
+    {
+        if ($this->toolRegistry === null) {
+            return null;
+        }
+
+        $patterns = $this->namePatterns($agent, $agent->tools, 'tools');
+        if ($patterns === []) {
+            // NO DECLARATION IS NOT AN EMPTY GRANT, and the difference is
+            // visible to the model. `Agent::fromArray()` defaults `tools` to
+            // `[]` and several in-tree Agents are built with it literally, so
+            // `[]` is "this agent says nothing about tools" far more often than
+            // it is "this agent forbids all of them". Sending `tools: []` is
+            // NOT the same request as sending none — see the measurement at
+            // this method's return — so this returns null, the same `?:`
+            // reading {@see \SugarCraft\Crush\Runtime} already applies to
+            // `App::$tools`.
+            return null;
+        }
+
+        // DENY WINS, AND IT IS A CONJUNCTION RATHER THAN A SECOND PASS, for
+        // the reason {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()}
+        // gives about the identical shape: both halves only ever REMOVE, so
+        // there is no "first" and no "then" for a later stage to re-admit
+        // anything in. `Agent::$disallowedTools` reaches this class from
+        // {@see Agent::fromPreset()} (and from opencode's `permission:` block
+        // through {@see ForeignAgentPresetRegistry}) and, until this method
+        // existed, was consumed by NOTHING in `src/` — so a resolver that read
+        // only `$tools` would have handed a preset the very tool its own
+        // denylist refuses. That is a widening committed inside the fix for a
+        // lie, which is the shape this whole item is about.
+        // VALIDATED IN FULL, APPLIED IN PART, and the part is the whole point.
+        //
+        // An ARGUMENT-SCOPED denial cannot remove a tool from the roster. A
+        // roster entry is a DECLARATION, and this project already decided what
+        // an argument-scoped rule may do to one: {@see PermissionGate::refuses()}
+        // states, and {@see PermissionRule::matches()}'s `$argumentsKnown`
+        // branch enforces, that such a rule never settles a declaration in
+        // either direction — it is "left to the call site that has them". Doing
+        // otherwise here is not merely inconsistent, it is a functional bug I
+        // shipped and then caught: `disallowedTools: ['Bash(git push*)']`
+        // stripped the WHOLE `Bash` tool, so a `reviewer` granted `Bash(git *)`
+        // could no longer run `git status` — the denial defeated the grant it
+        // was meant to narrow. The per-call half in
+        // {@see refuseCallOutsideGrant()} applies the full list, arguments and
+        // all, which is where `Bash(git push*)` actually bites.
+        $this->namePatterns($agent, $agent->disallowedTools, 'disallowedTools');
+
+        $denied = [];
+        foreach ($agent->disallowedTools as $denial) {
+            $rule = new PermissionRule((string) $denial, PermissionAction::Deny);
+            if ($rule->argumentPattern() !== null) {
+                continue;
+            }
+
+            $denied[] = $rule->toolNamePattern();
+        }
+
+        $matched = array_fill_keys(array_keys($patterns), false);
+        $granted = [];
+
+        foreach ($this->toolRegistry as $index => $tool) {
+            if (!$tool instanceof Tool) {
+                throw new \RuntimeException(sprintf(
+                    'Tool registry entry %s is a %s, not a %s, so a sub-agent grant cannot be resolved against it.',
+                    var_export($index, true),
+                    get_debug_type($tool),
+                    Tool::class,
+                ));
+            }
+
+            // EVERY matching pattern is marked, not just the first, and this
+            // is not tidiness. `['Bash', 'Bash(git *)']` is a legitimate pair —
+            // the first grants the tool, the second narrows a call — and
+            // breaking out on the first hit left the second marked unresolved,
+            // so a correct grant was refused with a message saying it matched
+            // no tool. Found by the ordering test, not by reading this loop.
+            $hit = false;
+            foreach ($patterns as $i => $namePattern) {
+                if (PermissionRule::matchesToolName($namePattern, $tool->name())) {
+                    $matched[$i] = true;
+                    $hit = true;
+                }
+            }
+
+            if (!$hit) {
+                continue;
+            }
+
+            // MARKED RESOLVED BEFORE THE DENY IS APPLIED, deliberately. A
+            // declaration whose every match is denied DID resolve — policy
+            // then removed it — and reporting it as "matches no tool this
+            // session offers" would send the reader hunting for a typo in a
+            // preset that is merely self-contradictory.
+            foreach ($denied as $denyPattern) {
+                if (PermissionRule::matchesToolName($denyPattern, $tool->name())) {
+                    continue 2;
+                }
+            }
+
+            $granted[] = $tool;
+        }
+
+        $unresolved = [];
+        foreach ($matched as $i => $hit) {
+            if (!$hit) {
+                $unresolved[] = $agent->tools[$i];
+            }
+        }
+
+        if ($unresolved !== []) {
+            throw new \RuntimeException(sprintf(
+                'Agent "%s" grants %s, which match no tool this session offers (%s). '
+                . 'A grant that resolves to nothing is refused rather than dropped: dropping it '
+                . 'would hand the sub-agent a smaller roster than its system prompt describes.',
+                $agent->name,
+                implode(', ', array_map(static fn(string $d): string => '"' . $d . '"', $unresolved)),
+                $this->toolRegistry === []
+                    ? 'the registry is empty'
+                    // THE `array_filter` IS DORMANT, AND IS KEPT DELIBERATELY.
+                    // It can never remove anything: the loop above throws on
+                    // the first non-Tool entry, so reaching this line at all
+                    // means every entry passed that check. It stays because it
+                    // is what makes the `array_map`'s `Tool $t` parameter type
+                    // safe by inspection rather than by an argument about a
+                    // throw thirty lines up — delete it and a later edit that
+                    // softens that throw turns this message into a TypeError
+                    // raised while reporting someone else's error. Written down
+                    // because its SHAPE suggests it is filtering a mixed
+                    // registry, and it is not.
+                    : implode(', ', array_map(
+                        static fn(Tool $t): string => $t->name(),
+                        array_filter($this->toolRegistry, static fn($t): bool => $t instanceof Tool),
+                    )),
+            ));
+        }
+
+        // EMPTY AFTER THE DENY IS `null`, NOT `[]`, on the same argument the
+        // no-declaration branch above makes: an agent whose whole grant its own
+        // denylist removes wants NO tools, not an empty tool block.
+        //
+        // MEASURED at this commit rather than assumed, because a first draft of
+        // this comment said the two spellings were indistinguishable to this
+        // project's providers and that is FALSE for four of the six.
+        // `OpenAIProvider` and `SglangProvider` each gate on
+        // `$request->tools !== null` alone, and `CustomProvider` on that
+        // conjoined with its own `supportsFunctionCalling` flag — so on all
+        // three `[]` puts a present-but-empty `tools` key in the payload where
+        // `null` omits the key. (This paragraph once said all THREE gated on
+        // the null check "ALONE"; the conclusion holds, the word did not.) And
+        // `ClaudeCodeProvider` turns `[]` into `allowedTools: ''`, an empty
+        // allow-list rather than an absent one. Only `VertexProvider` gates on
+        // `!== null && !== []` and cannot tell them apart. `BedrockProvider`
+        // and `EchoProvider` never read the field at all. Re-derive rather
+        // than trust this paragraph — it is a fact about six files this class
+        // does not own, and it rots the day one of them changes:
+        //
+        //     /usr/bin/grep -n 'request->tools' src/Providers/*Provider.php
+        //
+        // The DECISION does not rest on the paragraph. It is pinned by
+        // AgentManagerTest::testAFullyDeniedGrantIsNotReportedAsUnresolvable,
+        // which reds if this returns `[]`.
+        return $granted === [] ? null : $granted;
+    }
+
+    /**
+     * Refuse a call the agent's own declaration does not cover.
+     *
+     * THE ARGUMENT HALF OF A GRANT IS ENFORCED HERE AND NOWHERE ELSE. The
+     * roster {@see resolveGrantedTools()} builds can only carry tool NAMES —
+     * `Bash(git *)` puts the whole `Bash` tool on the wire, because a tool
+     * schema has no field that says "git commands only". Handing a reviewer
+     * preset the unconstrained `Bash` it never asked for would be a widening
+     * committed inside the fix for a lie, so the constraint is applied to the
+     * CALL, where the arguments finally exist.
+     *
+     * {@see PermissionRule} with {@see PermissionAction::Allow} is the matcher,
+     * not a second one, and its `Allow` arm is the reason this is worth doing:
+     * a shell subject is split on `[;&|\r\n]+` and every segment must match, so
+     * `Bash(git *)` admits `git status` and refuses `git log && rm -rf /` —
+     * where a bare `fnmatch('git *', ...)` over the whole command would admit
+     * both.
+     *
+     * NOT THE PERMISSION GATE'S JOB, AND NOT A REPLACEMENT FOR IT. The gate
+     * answers "does this SESSION's policy allow this call"; this answers "did
+     * this AGENT ask for this capability". A sub-agent is subject to both, in
+     * that order, and this one runs even when no gate is attached — a
+     * declaration is the agent's own statement about itself and does not become
+     * unenforceable because the caller owns no UI.
+     *
+     * AN AGENT WITH NO DECLARATION IS NOT POLICED BY THE GRANT. `Agent::$tools
+     * === []` means the agent says nothing about tools
+     * ({@see resolveGrantedTools()} has the argument), and reading silence as
+     * "forbid everything" would refuse every call for every Agent built without
+     * the field — which is most of them. `Agent::$disallowedTools` is the
+     * opposite kind of statement and IS enforced on its own: a preset that
+     * names a tool it refuses has said something, whether or not it also
+     * enumerated what it wants.
+     *
+     * @throws \RuntimeException When the call is refused by the agent's
+     *         denylist, falls outside its grant, or either list cannot be
+     *         parsed.
+     */
+    private function refuseCallOutsideGrant(ToolCall $toolCall, SubAgent $subAgent): void
+    {
+        $agent = $subAgent->agent;
+        $declarations = $agent->tools;
+        $denied = $agent->disallowedTools;
+
+        if ($declarations === [] && $denied === []) {
+            return;
+        }
+
+        // Parsed for its side effect as well as its result: a malformed or
+        // non-string entry in EITHER list throws out of here rather than being
+        // treated as a rule that happens not to match.
+        $this->namePatterns($agent, $declarations, 'tools');
+        $this->namePatterns($agent, $denied, 'disallowedTools');
+
+        // DENY IS CHECKED FIRST AND WITH `PermissionAction::Deny`, both on
+        // purpose. First, because deny wins over the grant — the roster half of
+        // this decision is the same conjunction. And with the Deny ACTION
+        // because {@see PermissionRule::matchesShellSubject()} reads a shell
+        // subject as a UNION for the restrictive actions and an INTERSECTION
+        // for `Allow`: a denial must fire when ANY segment of a chain matches,
+        // where a grant must require EVERY segment to.
+        foreach ($denied as $denial) {
+            if ((new PermissionRule((string) $denial, PermissionAction::Deny))->matches($toolCall)) {
+                $this->refuseToolCall(
+                    $toolCall,
+                    $subAgent,
+                    sprintf(
+                        'is refused by the denylist agent "%s" declares [%s]',
+                        $agent->name,
+                        implode(', ', array_map(static fn($d): string => (string) $d, $denied)),
+                    ),
+                );
+            }
+        }
+
+        if ($declarations === []) {
+            // A denylist WITHOUT a grant narrows nothing else: silence about
+            // `tools` is still silence. See the doc-block.
+            return;
+        }
+
+        foreach ($declarations as $declaration) {
+            if ((new PermissionRule((string) $declaration, PermissionAction::Allow))->matches($toolCall)) {
+                return;
+            }
+        }
+
+        $this->refuseToolCall(
+            $toolCall,
+            $subAgent,
+            sprintf(
+                'is outside the tool grant agent "%s" declares [%s]',
+                $agent->name,
+                implode(', ', array_map(static fn($d): string => (string) $d, $declarations)),
+            ),
+        );
+    }
+
+    /**
+     * One of an agent's pattern lists, validated, reduced to its tool-NAME
+     * halves.
+     *
+     * One place {@see resolveGrantedTools()} and {@see refuseCallOutsideGrant()}
+     * both go through for BOTH lists, so a pattern cannot be well-formed enough
+     * to grant a tool and malformed at the moment a call arrives. Keys are
+     * preserved so a caller can report WHICH entry failed against the original
+     * array.
+     *
+     * "BOTH GO THROUGH IT FOR BOTH LISTS" IS NOT TRUE OF EVERY CALL, and the
+     * sentence above said it flatly until this was measured.
+     * {@see resolveGrantedTools()} returns early on a null registry and again on
+     * an empty grant, BOTH above its `disallowedTools` parse — so an agent that
+     * names a denylist and no grant reaches neither. Measured on PHP 8.3.6:
+     * `tools: []` with `disallowedTools: ['Bash(rm -rf *']` resolves with NO
+     * throw, where `tools: ['Bash']` with the same denylist throws.
+     *
+     * That matters because a malformed rule does not fail closed, it fails
+     * INERT: `new PermissionRule('Bash(rm -rf *', Deny)` constructs, yields a
+     * null argument pattern and a tool-NAME pattern of `Bash(rm -rf *`, and
+     * matches nothing that exists. So on the registry-less path — which is
+     * every production caller today — the two calls in
+     * {@see refuseCallOutsideGrant()} are the ONLY validation a denylist ever
+     * gets. They are pinned there by
+     * AgentManagerTest::testAMalformedDenylistIsRefusedAtCallTimeWithNoRegistryAndNoGrant
+     * and its `tools` sibling, one per call, after deleting either one was
+     * measured green across the whole suite.
+     *
+     * @param array<int|string, mixed> $declarations
+     * @param string $field The property being read, named in the failure text —
+     *        `tools` and `disallowedTools` fail identically and a message that
+     *        cannot say which one was read sends the reader to the wrong half of
+     *        the preset.
+     * @return array<int|string, string>
+     * @throws \RuntimeException On a non-string or malformed pattern.
+     */
+    private function namePatterns(Agent $agent, array $declarations, string $field): array
+    {
+        $patterns = [];
+
+        foreach ($declarations as $i => $declaration) {
+            if (!is_string($declaration)) {
+                throw new \RuntimeException(sprintf(
+                    'Agent "%s" declares a %s entry of type %s at index %s; an entry is a %s pattern string.',
+                    $agent->name,
+                    $field,
+                    get_debug_type($declaration),
+                    var_export($i, true),
+                    PermissionRule::class,
+                ));
+            }
+
+            $reason = PermissionRule::patternRejectionReason($declaration);
+            if ($reason !== null) {
+                throw new \RuntimeException(sprintf(
+                    'Agent "%s" declares the %s pattern "%s", which %s.',
+                    $agent->name,
+                    $field,
+                    $declaration,
+                    $reason,
+                ));
+            }
+
+            $patterns[$i] = (new PermissionRule($declaration, PermissionAction::Allow))->toolNamePattern();
+        }
+
+        return $patterns;
     }
 
     /**
