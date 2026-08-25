@@ -339,14 +339,27 @@ final class ToolsEnvRosterTest extends TestCase
             . 'test — and carries more prose than either test file — is invisible to it',
         );
 
-        // THE PARTITION ITSELF (rule 14): a file in neither population is
-        // scanned by nothing at all, which is the failure this whole guard
-        // exists to make impossible.
+        // THE PARTITION'S LOAD-BEARING HALF, and the first draft of this
+        // assertion was the wrong one. It asserted that
+        // `array_diff($everything, $scripts, $files)` is empty — which is a
+        // TAUTOLOGY of how `$files` is built, and MEASURED: with `$files`
+        // narrowed to `/tests/` paths only, so the partition really does have a
+        // hole, the suite stayed GREEN at 46 tests / 188 assertions, because
+        // `tools/` happens to contain nothing outside those two shapes today.
+        // An assertion of `[]` that a broken instrument also satisfies is not
+        // evidence (rule 25).
+        //
+        // What actually makes the two populations cover `tools/` is that the
+        // scripts are a SUBSET of the recursive walk: a script the walk cannot
+        // see would make the difference below wrong in the other direction,
+        // silently moving a file out of the population that scans it. That is
+        // false today the moment either roster stops agreeing with the other,
+        // and it is what the mutation kills.
         $this->assertSame(
             [],
-            \array_values(\array_diff($everything, $scripts, $files)),
-            'these files under tools/ are in neither population, so no environment scan '
-            . 'reaches them at all',
+            \array_values(\array_diff($scripts, $everything)),
+            'the recursive tools/ walk cannot see a file the script roster can, so the two '
+            . 'populations no longer partition tools/ and a file may be scanned by neither',
         );
 
         $local = [];
