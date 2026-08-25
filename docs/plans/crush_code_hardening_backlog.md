@@ -15803,3 +15803,104 @@ candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608
 
 **STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
 stays open on its own evidence.
+
+## Round 56 — lane a (the bugs the user hit). Ea56-1 … Ea56-4.
+
+*Provisional lane-prefixed ids (rule 20); the supervisor renumbers at merge.*
+
+### Ea56-1 — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
+
+**Recorded 2026-08-25 by lane a.** Severity: medium. This is the defect E456's implementer chose to
+record rather than half-fix, and it needed an id.
+
+E456 gave `EngineBackend`'s forked child a third sink, so every chunk off a STREAMING provider's wire
+writes a frame and the parent's 120 s idle deadline resets on thinking as well as on text. `Runtime::
+runBatch()` got the matching `$onProgress` call for uniformity — a consumer painting live reasoning must
+not need its own `supportsStreaming()` check — but that call happens AFTER
+`$this->provider->complete($request)` has returned. There is exactly one blocking call and no chunks, so
+a batch provider that takes longer than the ceiling to answer still dies with nothing having crossed the
+fork, exactly as before. `Runtime::runBatch()` carries this in-comment; the comment is correct and should
+not be "fixed" by moving the announcement, which cannot help.
+
+**The fix is a heartbeat the child raises on a TIMER rather than on a chunk** — a frame written from
+`runCompleteInChild()` on an interval for as long as the engine call is outstanding. That is a different
+mechanism from E456's and needs its own design: the child is inside a synchronous `complete()` call with
+no event loop of its own, so the timer has to be either an alarm signal or a second forked writer, and
+both interact with the reap bookkeeping in `self::$unreapedChildren`.
+
+**Do not close this by raising `COMPLETE_TIMEOUT_SECONDS`.** Raising it relocates the bug, removing it
+resurrects the hang the constant exists to bound, and a blanket total-request timeout on an LLM call is
+prohibited outright — completions can legitimately run tens of minutes.
+
+### Ea56-2 — E456's channel reaches the parent process and nothing paints it
+
+**Recorded 2026-08-25 by lane a.** Severity: medium, functionality. **OUT OF LANE and therefore not
+done**: closing it needs `src/Chat.php`, which no round-56 lane owned.
+
+The timer half of E456 is complete and does not depend on anyone listening — the frame is written by the
+child and the deadline is reset by the parent whether or not `$onReasoning` is null. The PAINT half is
+not: `Chat::backendCmd()` calls `$backend->completeAsync($history, $onToken, $cancellation, $onEvent)`
+with four arguments, so no live caller passes a fifth and the model's thinking is still invisible until
+the turn settles and `Renderer::renderReasoning()` paints the finished `Message::$reasoning`.
+
+**The shape of the fix, which is the same shape `TokenDelta` already uses** and is written down here so
+it does not have to be re-derived: (1) a `ReasoningDelta` Msg beside `src/TokenDelta.php`; (2) in
+`Chat::backendCmd()`, a fifth argument that pushes `[$generation, new ReasoningDelta($delta)]` onto the
+same `$inbox` `ArrayObject` the token and tool-event sinks share, so ordering with tool events is
+preserved and `pumpLiveToolEvents()` drains it destructively exactly once; (3) a `Chat` field accumulating
+it for the current generation, CLEARED at settle in the `AssistantMsg`/`BackendToolEventsMsg` handlers —
+otherwise a retried stream repaints on top of the previous attempt's think, which is the one cosmetic
+consequence `Runtime::runStreaming()`'s `$emitted` paragraph accepts by design; (4) `Renderer` painting it
+where the "thinking" spinner is today, through `fitToPane()` like every other producer.
+
+**It must NOT be routed through `$onToken`.** Those bytes accumulate into the `$buffer` that becomes the
+`AssistantMessage` fed back to the model and checkpointed into the transcript, so reasoning on that
+channel corrupts the CONVERSATION rather than the display.
+`ReasoningProgressTest::testAThoughtNeverEntersTheAssistantsOwnWords()` is the guard, and the mutation
+that routes reasoning into `$buffer` KILLS it.
+
+### Ea56-3 — `Backend`'s interface uses implicitly-nullable parameters, deprecated on the 8.4 leg CI runs
+
+**Recorded 2026-08-25 by lane a.** Severity: low, rising to high if the 8.4 leg starts failing on
+deprecations. **NOT MEASURED ON 8.4** — this box has only PHP 8.3.6 and rule 5 forbids pretending
+otherwise, so this is a reading of the language change, not an observation of CI.
+
+`src/Backend.php` declares both interface methods with `callable $onToken = null` — an implicitly
+nullable parameter type, which PHP 8.4 deprecates in favour of `?callable $onToken = null`. VERIFIED by
+reading the declarations: eight of them, two in the interface and two each in `EchoBackend`,
+`CommandBackend` and `StreamingCommandBackend`. `EngineBackend` uses the explicit `?callable` form on
+both, so the two spellings sit side by side in one hierarchy today and neither is wrong on 8.3.
+
+**The pattern is almost certainly wider than this hierarchy, and the size of it is deliberately NOT
+recorded here.** A crude substring scan over `src/` returns a figure in the hundreds, but a substring scan
+cannot tell a parameter from a promoted property or from a union that already admits null, and a
+cardinality measured in one lane's worktree is void the moment a sibling merges (rule 18). Whoever takes
+this on wants a TOKEN-stream census that records what it cannot classify rather than dropping it
+(rule 14), not this paragraph's arithmetic.
+
+The Backend fix itself is mechanical, but it is a signature change across a public contract and wants its
+own commit rather than a ride-along.
+
+**This has NOT been observed to fail.** It is a reading of the language change; whether PHPUnit's 8.4 leg
+surfaces it as a deprecation notice or as a failure depends on configuration nobody in this round could
+measure.
+
+### Ea56-4 — the idle-ceiling guard was a source-text scan, and a real clock harness now exists
+
+**Recorded 2026-08-25 by lane a.** Severity: low, coverage.
+
+`EngineBackendTest::testTheCompletionTimeoutIsReArmedOnEveryFrame()` pins the re-arm by reading
+`completeAsync()`'s own source with `ReflectionMethod` and counting `addTimer(self::
+COMPLETE_TIMEOUT_SECONDS` occurrences, under a comment stating the honest reason: the ceiling "cannot be
+exercised in a unit test without waiting out the real 120 s". That reason no longer holds.
+`ReasoningProgressTest::ScaledClockLoop` is a `LoopInterface` whose streams are real — real
+`stream_select()` on the real socket pair, real frames off a real forked child — and whose TIMERS run on a
+clock scaled 500 virtual seconds to the real second, so `addTimer(120)` is armed unchanged and crossed in
+240 ms of wall time. Its known-positive control
+(`testASilentProviderIsStillKilledByTheSameCeilingOnTheSameClock()`) proves the ceiling really fires in
+that harness.
+
+**This is a note, not a licence to delete the source-text guard** (rule 6): it asserts something the
+behavioural test does not, namely that the timer is armed in exactly ONE place. The work is to add the
+behavioural arm for "an ordinary multi-step tool turn outlives the ceiling", which is the original §1 E1
+defect and is still pinned only by prose.
