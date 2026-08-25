@@ -17578,3 +17578,20 @@ That reasoning is written into the method's doc-block but nothing pins the direc
 asserting that the permissive fallback cannot produce a `safe` verdict for a type PHP would have failed to
 load would close it. MEASURED at round 58: zero bare-unimported catch types exist in `sugar-crush/tests`
 (463 files), so this is latent.
+
+### Eb58-11 — a duplicated line in `GlobFigureDriftTest`'s doc-block, present at the floor
+
+`sugar-crush/tests/Config/GlobFigureDriftTest.php`'s class doc-block repeats one line verbatim:
+
+    * derives the TOOL SET the glob leaves. It holds the glob as a class constant
+    * derives the TOOL SET the glob leaves. It holds the glob as a class constant
+
+Confirmed present at `535d721ff`, so it is not round-58 damage. Cosmetic on its own, but this file is the
+tree's designated authority on figures-without-generators and its prose is quoted elsewhere; a duplicated
+clause in it is the kind of thing a later reader "fixes" by deleting the wrong one. One-line change, and
+the file is not in any round-58 lane's list.
+
+Noticed while attributing an assertion delta: this class is a live consumer of `src/**.php` prose, and it
+gained exactly +2 assertions in round 58 (one per `src/` doc-block rewritten in lane b). That is the
+instrument working, and it is worth knowing that editing a `src/` doc-block anywhere moves this test's
+count — a figure someone will otherwise treat as unexplained noise.
