@@ -1263,6 +1263,50 @@ final class LspConnection implements LspConnectionInterface
      * whatever reads {@see $readBuffer} next. It is one method with one meaning
      * rather than a `$this->readBuffer = ''` open-coded beside it.
      */
+    private function drainBuffer(): string
+    {
+        $line = $this->readBuffer;
+        $this->readBuffer = '';
+
+        return trim($line);
+    }
+
+    /**
+     * Refuse a frame that has grown past {@see MAX_FRAME_BYTES} with no
+     * terminator in sight, naming the cap and the PHASE that hit it.
+     *
+     * The buffer is CLEARED and {@see $pendingContentLength} reset before the
+     * throw, so a caller that survives the exception is not left holding 64 MiB
+     * it can never parse, nor half a frame that would be read as the start of
+     * the next one.
+     *
+     * ⚠️ THE TWO CALL SITES ARE NOT THE SAME KIND OF CODE, and saying so is the
+     * point of this block.
+     *
+     *  - THE HEADER PHASE call in {@see readMessage()} is genuinely reachable:
+     *    a peer that writes without ever sending the blank line separating
+     *    headers from body grows `$readBuffer` with no frame completing. It is a
+     *    DECLARED SURVIVOR of the suite rather than a covered line — reaching it
+     *    needs 64 MiB through a pipe, which is minutes of throughput. The CHECK
+     *    itself is pinned by reflection in
+     *    {@see \SugarCraft\Crush\Tests\LSP\LspConnectionFrameCapTest}, in both
+     *    polarities.
+     *  - THE BODY PHASE call is DORMANT BY CONSTRUCTION, not by accident, and it
+     *    is kept deliberately under the standing "wire it or pin it" rule. The
+     *    header guard above rejects any declared length outside
+     *    `1..MAX_FRAME_BYTES`, so `$pendingContentLength <= MAX_FRAME_BYTES`
+     *    always holds; the body loop only runs while
+     *    `strlen($readBuffer) < $pendingContentLength`, hence
+     *    `strlen($readBuffer) < MAX_FRAME_BYTES`, hence this method's own
+     *    `<=` test returns early every time. It earns its place because the loop
+     *    — not the header — is where the memory is actually spent, so if the cap
+     *    is ever raised past what a buffer may hold, or the header guard is
+     *    weakened, this is the line that still holds. That dormancy is itself
+     *    pinned by `testTheBodyPhaseCallIsDormantBecauseTheHeaderGuardBoundsTheDeclaredLength()`,
+     *    so it cannot go quietly reachable without a test saying so.
+     *
+     * @throws LspProtocolException when the cap is passed
+     */
     private function refuseAnOversizedFrame(string $phase): void
     {
         if (strlen($this->readBuffer) <= self::MAX_FRAME_BYTES) {
@@ -1282,14 +1326,6 @@ final class LspConnection implements LspConnectionInterface
             $phase,
             self::MAX_FRAME_BYTES,
         ));
-    }
-
-    private function drainBuffer(): string
-    {
-        $line = $this->readBuffer;
-        $this->readBuffer = '';
-
-        return trim($line);
     }
 
     /** @param array<string, mixed>|null $params */

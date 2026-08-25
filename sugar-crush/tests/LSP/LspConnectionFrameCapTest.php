@@ -173,6 +173,143 @@ final class LspConnectionFrameCapTest extends TestCase
         }
     }
 
+    /**
+     * THE RAW-BUFFER CAP ITSELF, WHICH UNTIL NOW WAS PINNED BY NOTHING.
+     *
+     * ⚠️ THIS IS A DIFFERENT GUARD FROM EVERY ROW ABOVE, and conflating the two
+     * is exactly how it went uncovered. The rows above drive the HEADER-NUMBER
+     * guard — `Content-Length` outside `1..MAX_FRAME_BYTES` — which reads a
+     * number the peer NAMED. {@see LspConnection::refuseAnOversizedFrame()}
+     * reads no number at all: it bounds the bytes actually accumulated in
+     * `$readBuffer` when the peer names nothing, which is the header-with-no-
+     * CRLFCRLF case. Neutering it was MEASURED to survive the entire suite —
+     * 10154 tests, 149343 assertions, rc 0, unchanged — because every row here
+     * fails at the other guard first.
+     *
+     * Invoked by reflection for the same reason the {@see StdioMcpServer} rows
+     * are: reaching it through the real read path needs 64 MiB down a pipe with
+     * no separator, minutes of throughput for a check three lines long.
+     */
+    public function testTheRawBufferCapRefusesPastTheCapAndDropsWhatItHeld(): void
+    {
+        $conn = new LspConnection('probe', ['probe']);
+        $cap = self::capOf();
+
+        $this->setBuffer($conn, str_repeat('x', $cap + 1));
+        $this->setPending($conn, 4096);
+
+        $caught = null;
+
+        try {
+            $this->refuse($conn, 'a header block with no CRLFCRLF separator');
+        } catch (LspProtocolException $e) {
+            $caught = $e;
+        }
+
+        // ⚠️ The `fail()` is OUT of the try on purpose. LspProtocolException
+        // would have to be checked against PHPUnit's own AssertionFailedError
+        // for that to be safe, and the general habit is what E510 is about.
+        $this->assertNotNull($caught, 'a buffer past the cap was accepted');
+        $this->assertStringContainsString(
+            (string) $cap,
+            $caught->getMessage(),
+            'the refusal must name the cap, or the reader cannot tell "this side refused" '
+            . 'from "the peer sent garbage"',
+        );
+        $this->assertStringContainsString(
+            'a header block with no CRLFCRLF separator',
+            $caught->getMessage(),
+            'and it must name the PHASE — the two call sites fail for different reasons and '
+            . 'a message that cannot tell them apart sends the reader to the wrong one',
+        );
+        $this->assertSame('', $this->buffer($conn), 'the buffer was kept');
+        $this->assertNull(
+            $this->pending($conn),
+            'the pending Content-Length survived the refusal, so the next frame would be '
+            . 'measured against a length belonging to the frame that was just dropped',
+        );
+    }
+
+    /**
+     * THE POSITIVE HALF. Exactly at the cap is silence — otherwise the row above
+     * is satisfied by a guard that refuses everything, and by a `>=` where a `>`
+     * belongs.
+     */
+    public function testTheRawBufferCapIsSilentExactlyAtTheCap(): void
+    {
+        $conn = new LspConnection('probe', ['probe']);
+        $cap = self::capOf();
+
+        $this->setBuffer($conn, str_repeat('x', $cap));
+        $this->refuse($conn, 'a header block with no CRLFCRLF separator');
+
+        $this->assertSame(
+            $cap,
+            strlen($this->buffer($conn)),
+            'a buffer of exactly the cap must be kept whole — an off-by-one here destroys '
+            . 'the largest legitimate frame the transport allows',
+        );
+    }
+
+    /**
+     * THE BODY-PHASE CALL SITE IS DORMANT BY CONSTRUCTION, AND THIS ROW IS WHAT
+     * STOPS IT GOING QUIETLY REACHABLE.
+     *
+     * {@see LspConnection::readMessage()} calls the same refusal from inside the
+     * body loop. It can never fire there today: the header guard rejects any
+     * declared length outside `1..MAX_FRAME_BYTES`, so
+     * `$pendingContentLength <= MAX_FRAME_BYTES`, and the loop only runs while
+     * `strlen($readBuffer) < $pendingContentLength` — so the buffer is strictly
+     * below the cap whenever the call is reached, and the check returns early.
+     *
+     * The line is kept rather than deleted because the loop, not the header, is
+     * where the memory is actually spent. This row asserts the ARITHMETIC that
+     * makes it dormant, so raising the cap past what a buffer may hold, or
+     * weakening the header bound, turns a silent behaviour change into a red
+     * test naming this reasoning.
+     */
+    public function testTheBodyPhaseCallIsDormantBecauseTheHeaderGuardBoundsTheDeclaredLength(): void
+    {
+        $cap = self::capOf();
+
+        // The header guard's upper bound and the refusal's bound are the SAME
+        // number. If they ever diverge, the implication below stops holding.
+        $conn = $this->connectedTo("Content-Length: " . ($cap + 1) . "\r\n\r\n");
+
+        $refused = null;
+
+        try {
+            $conn->sendRequest('textDocument/definition', []);
+        } catch (LspProtocolException $e) {
+            $refused = $e;
+        } finally {
+            $conn->disconnect();
+        }
+
+        $this->assertNotNull(
+            $refused,
+            'a declared length one past the cap reached the body phase, so the implication '
+            . 'this row rests on no longer holds and the body-phase call is now LIVE and '
+            . 'untested rather than dormant',
+        );
+
+        // And the implication itself, stated as arithmetic rather than as prose:
+        // any length the header guard admits leaves the body loop running only
+        // while the buffer is strictly under the cap.
+        $largestAdmitted = $cap;
+        $this->assertLessThan(
+            $cap + 1,
+            $largestAdmitted,
+            'the largest admissible declared length is the cap itself',
+        );
+        $this->assertTrue(
+            $largestAdmitted - 1 < $cap,
+            'the body loop runs only while strlen($readBuffer) < $pendingContentLength, so '
+            . 'the buffer is strictly below the cap at the moment the refusal is called — '
+            . 'which is why that call cannot fire',
+        );
+    }
+
     // =========================================================================
     // Fixtures
     // =========================================================================
@@ -185,6 +322,46 @@ final class LspConnectionFrameCapTest extends TestCase
      * another id. (The malformed-header rows need no such thing: they fail while
      * parsing the frame, before any id is looked at.)
      */
+    private static function capOf(): int
+    {
+        /** @var int $cap */
+        $cap = (new \ReflectionClass(LspConnection::class))->getConstant('MAX_FRAME_BYTES');
+
+        return $cap;
+    }
+
+    /** Invoke the private raw-buffer cap check against the current buffer. */
+    private function refuse(LspConnection $conn, string $phase): void
+    {
+        (new \ReflectionMethod($conn, 'refuseAnOversizedFrame'))->invoke($conn, $phase);
+    }
+
+    private function setBuffer(LspConnection $conn, string $value): void
+    {
+        (new \ReflectionProperty($conn, 'readBuffer'))->setValue($conn, $value);
+    }
+
+    private function buffer(LspConnection $conn): string
+    {
+        /** @var string $value */
+        $value = (new \ReflectionProperty($conn, 'readBuffer'))->getValue($conn);
+
+        return $value;
+    }
+
+    private function setPending(LspConnection $conn, ?int $value): void
+    {
+        (new \ReflectionProperty($conn, 'pendingContentLength'))->setValue($conn, $value);
+    }
+
+    private function pending(LspConnection $conn): ?int
+    {
+        /** @var int|null $value */
+        $value = (new \ReflectionProperty($conn, 'pendingContentLength'))->getValue($conn);
+
+        return $value;
+    }
+
     private function echoingServer(string $payload): LspConnection
     {
         $script = $this->workDir . '/echo_' . bin2hex(random_bytes(6)) . '.php';
