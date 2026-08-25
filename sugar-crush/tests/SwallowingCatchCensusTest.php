@@ -172,6 +172,61 @@ final class SwallowingCatchCensusTest extends TestCase
             . 'of the try body',
         );
 
+        // THE TWO RESOLUTION SHAPES THAT MAKE THE CLASSIFIER, NOT THE CODE, THE
+        // DEFECT. Both report a file that named its catch type CORRECTLY, so
+        // the failure they produce is a false alarm, and a false alarm on an
+        // emptiness guard is answered with an exemption row — which is a
+        // licence, and exactly where the next real offender hides.
+        //
+        // MEASURED at this commit: neither shape occurs in sugar-crush/tests,
+        // and `.php-cs-fixer.dist.php` pins no rule that would prevent one. So
+        // these are latent rather than live, and they are pinned on fixtures
+        // rather than on the tree for that reason.
+        $groupPrelude = "namespace Demo;\n"
+            . 'use PHPUnit\\Framework\\' . '{' . 'AssertionFailedError, Exception as WideOne};' . "\n";
+
+        // A group import of the DELIBERATE type. Before the group form was
+        // parsed, neither name in the braces was mapped at all, so this correct
+        // file was reported as [unclassified] and reddened the census.
+        self::assertSame(
+            [],
+            self::scanSource(
+                self::fixture('$this->assertSame(1, 1);', 'AssertionFailedError', $groupPrelude),
+                'FIXTURE_GROUP_USE_SAFE.php',
+            ),
+            'a catch type imported through a group `use` is not being resolved, so a file that '
+            . 'names the assertion-failure type correctly is reported as unclassified',
+        );
+
+        // And the positive half of the same prelude: an aliased WIDE type from
+        // inside the braces must still be caught as an offender, which is what
+        // separates "the group form is parsed" from "the group form is ignored
+        // and both names happen to fall through to something harmless".
+        $grouped = self::scanSource(
+            self::fixture('$this->assertSame(1, 1);', 'WideOne', $groupPrelude),
+            'FIXTURE_GROUP_USE_OFFENDER.php',
+        );
+        self::assertCount(1, $grouped, 'an aliased wide type inside a group import was not reported');
+        self::assertSame('offender', $grouped[0]['verdict']);
+
+        // An unqualified, UNIMPORTED type declared in the file's own namespace.
+        // PHP resolves this against the current namespace and does not fall
+        // back to global; resolving it as global made a real class look like a
+        // class that does not exist.
+        self::assertSame(
+            [],
+            self::scanSource(
+                self::fixture(
+                    '$this->assertSame(1, 1);',
+                    'AssertionFailedError',
+                    "namespace PHPUnit\\Framework;\n",
+                ),
+                'FIXTURE_SAME_NAMESPACE.php',
+            ),
+            'an unqualified catch type declared in the file\'s own namespace is being resolved '
+            . 'as a global name, so correct code is reported as unclassified',
+        );
+
         // THE UNPARSEABLE CASE, which must go red rather than be skipped.
         $unknown = self::scanSource(
             self::fixture('$this->assertSame(1, 1);', '\\No\\Such\\Namespace\\NopeException'),
@@ -191,10 +246,14 @@ final class SwallowingCatchCensusTest extends TestCase
         $sites = 0;
         $files = 0;
 
+        // NO SELF-EXCLUSION. This file used to skip itself as "the file that
+        // documents the pattern", and MEASURED by mutation the skip bought
+        // nothing: deleting it leaves this file green, because the fixtures are
+        // assembled by concatenation and no whole offender is ever spelled here.
+        // An exemption that buys nothing is not free — it is the one path by
+        // which a real offender in this very file would go unreported, and
+        // nothing would have pinned that the file stayed clean.
         foreach (self::testFiles() as $rel => $src) {
-            if ($rel === 'SwallowingCatchCensusTest.php') {
-                continue; // the file that documents the pattern
-            }
             $files++;
             foreach (self::scanSource($src, $rel) as $hit) {
                 $sites++;
@@ -231,8 +290,14 @@ final class SwallowingCatchCensusTest extends TestCase
             . "ExpectationFailedException if your own fail() must still escape — and this census\n"
             . "will accept it on the structure alone.\n\n"
             . "A verdict of [unclassified] means something else: this census could not resolve\n"
-            . "that catch type to a real class and refuses to guess. Add the `use` it is missing\n"
-            . "or spell the type fully qualified.\n\nOffenders:",
+            . "that catch type to a real class and refuses to guess. THAT IS NOT AUTOMATICALLY\n"
+            . "YOUR CODE'S FAULT, and if the catch type is spelled correctly then THIS CENSUS is\n"
+            . "the thing to fix, not your file -- do NOT answer it with an exemption. Check, in\n"
+            . "this order: (1) is the type genuinely misspelled or genuinely missing an import?\n"
+            . "Then fix the file. (2) Is it imported or declared in a way resolve()/useMap()\n"
+            . "cannot follow -- a conditional class_alias, a name built at runtime? Then teach\n"
+            . "the classifier and pin BOTH polarities with a fixture, the way the group-import\n"
+            . "and same-namespace shapes are pinned in the test above.\n\nOffenders:",
         );
     }
 
@@ -240,10 +305,16 @@ final class SwallowingCatchCensusTest extends TestCase
     // the scanner
     // -------------------------------------------------------------------------
 
-    /** Build a fixture source without ever spelling a whole offender literally. */
-    private static function fixture(string $body, string $catchType): string
+    /**
+     * Build a fixture source without ever spelling a whole offender literally.
+     *
+     * `$prelude` carries whatever has to sit between the open tag and the class
+     * — a `namespace` line, an import — so the RESOLUTION cases can be driven
+     * through the same builder as the classification ones.
+     */
+    private static function fixture(string $body, string $catchType, string $prelude = ''): string
     {
-        return "<?php\nclass F {\n  public function t(): void {\n    try {\n      "
+        return "<?php\n" . $prelude . "class F {\n  public function t(): void {\n    try {\n      "
             . $body . "\n    } catch (" . $catchType . " \$e) {\n      \$x = 1;\n    }\n  }\n}\n";
     }
 
@@ -274,6 +345,7 @@ final class SwallowingCatchCensusTest extends TestCase
         $tokens = token_get_all($src);
         $n = \count($tokens);
         $uses = self::useMap($tokens);
+        $namespace = self::namespaceOf($tokens);
         $out = [];
 
         for ($i = 0; $i < $n; $i++) {
@@ -332,7 +404,7 @@ final class SwallowingCatchCensusTest extends TestCase
                         if ($one === '') {
                             continue;
                         }
-                        $verdict = self::classify($one, $uses);
+                        $verdict = self::classify($one, $uses, $namespace);
                         if ($verdict !== 'safe') {
                             $out[] = ['line' => $catchLine, 'type' => $one, 'verdict' => $verdict];
                         }
@@ -447,9 +519,9 @@ final class SwallowingCatchCensusTest extends TestCase
      * @param array<string, string> $uses
      * @return 'safe'|'offender'|'unclassified'
      */
-    private static function classify(string $written, array $uses): string
+    private static function classify(string $written, array $uses, string $namespace = ''): string
     {
-        $fqn = self::resolve($written, $uses);
+        $fqn = self::resolve($written, $uses, $namespace);
 
         if ($fqn === null || !(class_exists($fqn) || interface_exists($fqn))) {
             return 'unclassified';
@@ -469,8 +541,32 @@ final class SwallowingCatchCensusTest extends TestCase
         return 'offender';
     }
 
-    /** @param array<string, string> $uses */
-    private static function resolve(string $written, array $uses): ?string
+    /**
+     * WHAT THIS SAID BEFORE: "every catch type in this tree that is not
+     * imported is a global one, so try global and let `classify()` report
+     * anything else as unclassified rather than guessing."
+     *
+     * WHAT IS TRUE NOW: the first half is still MEASURED true — a walk over
+     * `sugar-crush/tests` at this commit finds no catch type that is neither
+     * fully qualified nor imported — but the conclusion did not follow. PHP
+     * resolves an unqualified class name against the CURRENT namespace and does
+     * NOT fall back to global, so a file that catches a type declared beside it
+     * was resolved to a global name that does not exist, and the census reported
+     * correct code as `[unclassified]` and went red on it. That is the shape
+     * where the classifier, not the code, is the defect.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the ordering below is deliberately more
+     * permissive than PHP. The current namespace is tried FIRST, because that is
+     * what the language does; global is kept as a fallback because this tree's
+     * convention is to spell a global type with a leading `\` and a file that
+     * forgets the slash means the global one. Being permissive here can only
+     * turn an `[unclassified]` into a real verdict — it can never turn an
+     * offender into `safe`, because `classify()` still asks the live hierarchy
+     * about whatever class it ends up with.
+     *
+     * @param array<string, string> $uses
+     */
+    private static function resolve(string $written, array $uses, string $namespace = ''): ?string
     {
         $t = trim($written);
         if ($t === '') {
@@ -487,11 +583,40 @@ final class SwallowingCatchCensusTest extends TestCase
             return $uses[$head] . $rest;
         }
 
-        // No import: PHP resolves an unqualified class name in the current
-        // namespace, but every catch type in this tree that is not imported is
-        // a global one, so try global and let `classify()` report anything else
-        // as unclassified rather than guessing.
+        if ($namespace !== '' && (class_exists($namespace . '\\' . $t) || interface_exists($namespace . '\\' . $t))) {
+            return $namespace . '\\' . $t;
+        }
+
         return $t;
+    }
+
+    /**
+     * The file's own namespace, which is where PHP resolves an unqualified
+     * catch type that carries no import.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function namespaceOf(array $tokens): string
+    {
+        $n = \count($tokens);
+
+        for ($i = 0; $i < $n; $i++) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_NAMESPACE) {
+                continue;
+            }
+            $name = '';
+            for ($k = $i + 1; $k < $n; $k++) {
+                $txt = \is_array($tokens[$k]) ? $tokens[$k][1] : $tokens[$k];
+                if ($txt === ';' || $txt === '{') {
+                    break;
+                }
+                $name .= $txt;
+            }
+
+            return trim($name, " \t\n\\");
+        }
+
+        return '';
     }
 
     /**
@@ -511,10 +636,31 @@ final class SwallowingCatchCensusTest extends TestCase
             // is not an import; both are followed by something other than a
             // plain qualified name at statement level, and the `;` scan below
             // simply yields a name we then fail to resolve rather than a wrong one.
+            // A group import — `use A\\B\\{C, D as E};` — is a `{` at statement
+            // level, and stopping there used to leave every name in the group
+            // unmapped while recording a bogus empty-string alias for the
+            // prefix. It is picked up here by carrying the prefix into the
+            // braces. A closure's `use (...)` still stops at the `(`, and a
+            // trait import inside a class body reaches a `{` with no `\` in the
+            // prefix, which the guard below rejects.
             $stmt = '';
+            $prefix = '';
             for ($k = $i + 1; $k < $n; $k++) {
                 $txt = \is_array($tokens[$k]) ? $tokens[$k][1] : $tokens[$k];
-                if ($txt === ';' || $txt === '{' || $txt === '(') {
+                if ($txt === '(') {
+                    break;
+                }
+                if ($txt === '{') {
+                    $candidate = trim($stmt);
+                    if (!str_contains($candidate, '\\')) {
+                        break; // a trait import, not a group import
+                    }
+                    $prefix = ltrim($candidate, '\\');
+                    $stmt = '';
+
+                    continue;
+                }
+                if ($txt === ';' || $txt === '}') {
                     break;
                 }
                 $stmt .= $txt;
@@ -529,9 +675,9 @@ final class SwallowingCatchCensusTest extends TestCase
                     continue;
                 }
                 if (preg_match('/^(.+?)\s+as\s+(\w+)$/i', $one, $m)) {
-                    $map[$m[2]] = ltrim(trim($m[1]), '\\');
+                    $map[$m[2]] = $prefix . ltrim(trim($m[1]), '\\');
                 } else {
-                    $fq = ltrim($one, '\\');
+                    $fq = $prefix . ltrim($one, '\\');
                     $map[substr($fq, (int) strrpos('\\' . $fq, '\\'))] = $fq;
                 }
             }
