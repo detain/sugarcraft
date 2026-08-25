@@ -1160,8 +1160,11 @@ final class StdioMcpServer implements McpServer
      * WHY THIS STILL EARNS A NOTE HERE: the `is_array($def)` below is NOT
      * redundant with the filter. `tryFromArray()` takes `array $data`, so a
      * scalar entry in the list — `{"tools":["write"]}`, which a peer is equally
-     * free to send — is a `TypeError` at the call rather than a skip. The two
-     * guards answer different questions and both are load-bearing.
+     * free to send — is a `TypeError` at the call rather than a skip. And the
+     * `is_array($toolDefs)` above it is a THIRD question again, about the
+     * CONTAINER: `?? []` covers `tools` being absent, not `tools` being a
+     * string. All three answer different questions and all three are
+     * load-bearing; the note used to say "two" and enumerate two.
      *
      * @param array<mixed> $response
      * @return array<McpTool>
@@ -1170,6 +1173,15 @@ final class StdioMcpServer implements McpServer
     {
         $tools = [];
         $toolDefs = $response['result']['tools'] ?? [];
+
+        // THE CONTAINER, not the entries. `?? []` only covers `tools` being
+        // ABSENT or null; a peer that sends `{"result":{"tools":"nope"}}` gets
+        // past it with a string, and `foreach` over a string is a PHP warning
+        // (measured, PHP 8.3.6) plus zero iterations. Same family as the
+        // `is_array($def)` skip below, one level up.
+        if (!is_array($toolDefs)) {
+            $toolDefs = [];
+        }
 
         foreach ($toolDefs as $def) {
             if (!is_array($def)) {

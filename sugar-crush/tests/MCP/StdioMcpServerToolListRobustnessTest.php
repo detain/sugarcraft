@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\MCP;
 
+use GuzzleHttp\Client;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\MCP\HttpMcpServer;
 use SugarCraft\Crush\MCP\McpTool;
 use SugarCraft\Crush\MCP\StdioMcpServer;
 
@@ -260,6 +262,96 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
      * A guard that quietly ignores the unparseable has a hole shaped exactly like
      * the next defect.
      */
+    /**
+     * THE CONTAINER IS A THIRD SHAPE, AND `?? []` DOES NOT COVER IT.
+     *
+     * Both `parseTools()` implementations read `$response['result']['tools'] ??
+     * []`. That default fires when `tools` is ABSENT or null — not when it is
+     * PRESENT and a scalar. A peer sending `{"result":{"tools":"nope"}}` handed
+     * `foreach` a string, which on this host (PHP 8.3.6) is
+     * `Warning: foreach() argument must be of type array|object, string given`
+     * and zero iterations. Not an escape, because zero iterations is also the
+     * right ANSWER — but a warning on a third party's malformed reply is noise
+     * the operator cannot act on, and `failOnWarning="true"` makes it a red
+     * suite the moment any row drives it.
+     *
+     * ⚠️ THE KNOWN-POSITIVE IS THE WARNING ITSELF (rule 25). Asserting "zero
+     * tools" alone is satisfied by the unguarded code, by the guarded code, and
+     * by a `parseTools()` deleted outright. So the row re-derives what the
+     * UNGUARDED `foreach` does to a string before asserting that the guard stops
+     * it — otherwise the expectation is exactly what a dead instrument returns.
+     *
+     * @dataProvider scalarContainers
+     */
+    public function testAScalarWhereTheToolListBelongsIsEmptyRatherThanAWarning(mixed $container): void
+    {
+        // ---- known-positive: the unguarded arithmetic, in isolation.
+        $raised = null;
+        set_error_handler(static function (int $no, string $msg) use (&$raised): bool {
+            $raised = $msg;
+
+            return true;
+        });
+
+        try {
+            /** @phpstan-ignore-next-line foreach.nonIterable - the warning IS the observation */
+            foreach ($container as $ignored) {
+                // deliberately empty: the WARNING is what this block measures
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        if (is_array($container)) {
+            $this->assertNull($raised, 'an array container is not the shape under test');
+        } else {
+            $this->assertNotNull(
+                $raised,
+                'foreach over a non-array stopped warning on this PHP, so the guard below is '
+                . 'protecting against nothing and this row should be re-derived, not deleted',
+            );
+            $this->assertStringContainsString('foreach()', (string) $raised);
+        }
+
+        // ---- the guard, in both classes that carry it.
+        foreach ([StdioMcpServer::class, HttpMcpServer::class] as $class) {
+            $server = $class === StdioMcpServer::class
+                ? new StdioMcpServer('probe', PHP_BINARY, [], [])
+                : new HttpMcpServer('probe', 'http://127.0.0.1:1/mcp', [], new Client());
+
+            $parse = new \ReflectionMethod($class, 'parseTools');
+
+            $quiet = null;
+            set_error_handler(static function (int $no, string $msg) use (&$quiet): bool {
+                $quiet = $msg;
+
+                return true;
+            });
+
+            try {
+                /** @var array<mixed> $tools */
+                $tools = $parse->invoke($server, ['result' => ['tools' => $container]]);
+            } finally {
+                restore_error_handler();
+            }
+
+            $this->assertSame([], $tools, $class . '::parseTools() invented tools from a scalar');
+            $this->assertNull(
+                $quiet,
+                $class . '::parseTools() still warns on a scalar tool list: ' . (string) $quiet,
+            );
+        }
+    }
+
+    /** @return iterable<string, array{mixed}> */
+    public static function scalarContainers(): iterable
+    {
+        yield 'a string' => ['nope'];
+        yield 'an int' => [7];
+        yield 'a bool' => [true];
+        yield 'an array (the control)' => [[]];
+    }
+
     public function testTheTypeFilterStillMirrorsEveryKeyMcpToolReads(): void
     {
         // ---- The known-answer control, first, because everything after it is a

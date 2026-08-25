@@ -134,6 +134,15 @@ final class HttpMcpServer implements McpServer
         $tools = [];
         $toolDefs = $response['result']['tools'] ?? [];
 
+        // THE CONTAINER, not the entries. `?? []` only covers `tools` being
+        // ABSENT or null; a peer that sends `{"result":{"tools":"nope"}}` gets
+        // past it with a string, and `foreach` over a string is a PHP warning
+        // (measured, PHP 8.3.6) plus zero iterations. Same family as the
+        // `is_array($def)` skip below, one level up.
+        if (!is_array($toolDefs)) {
+            $toolDefs = [];
+        }
+
         foreach ($toolDefs as $def) {
             if (!is_array($def)) {
                 continue;
