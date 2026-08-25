@@ -14766,3 +14766,171 @@ wiring than carrying a stale require.
 `candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
+
+## Round 55 — lane b (finish the stdio family). Eb55-1 … Eb55-8.
+
+### Eb55-1 — E439's reachability claim is FALSE: `start()` cannot fill a pipe
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: finding-instrument defect. **Measured. This
+entry falsifies E439.**
+
+E439 said `writeLine()` "will hold `start()` indefinitely once the message exceeds the stdin pipe
+buffer". The premise never holds. Generator: `McpMessage`'s own factories, byte-exact, PHP 8.3.6 —
+`initialize` 162 bytes, `initialized` 40, `tools/list` 61, plus one newline each = **266 bytes on the
+wire**, against a 65536-byte pipe capacity. `start()`'s three messages are fixed and tiny; nothing it
+sends can fill a pipe, so the only deadline-carrying caller can never reach the state the finding
+describes.
+
+The deadline is threaded anyway (`request()` and `notify()` both pass `start()`'s budget through), but
+it is DEFENSIVE, not a live bug fix, and the file says so rather than repeating the claim.
+`StdioMcpServerWriteBoundsTest::testTheWholeHandshakeStillFitsInOnePipeBuffer()` DERIVES the 266 rather
+than restating it, and reds the day someone grows the `capabilities` block — which is the day the
+finding becomes true.
+
+### Eb55-2 — the EINTR liveness check cannot fire, and it was written as the primary exit
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: dormancy, documented and pinned. **Measured, and
+this falsifies the fix's own first doc-block.**
+
+E444 asked for a liveness check or a retry bound in `writeLine()`'s EINTR branch. Both were shipped, and
+the liveness check was documented as the one that fires. It is not, and it CANNOT BE. A write-set
+`stream_select()` can only be interrupted while it BLOCKS, and it only blocks with a full pipe and a
+live child. Generator: 1s of a 300 µs SIGUSR1 storm per state, three consecutive takes, PHP 8.3.6 /
+Linux 6.8, identical every time:
+
+    pipe   child   select false   select ok
+    empty  live            0        ~695000
+    FULL   LIVE        ~2815              0     <- the only interruptible state
+    empty  dead            0        ~660000
+    full   dead            0        ~692000
+
+So a dead child never reaches the branch: its fd is instantly ready in BOTH pipe states, the loop
+reaches `fwrite()`, and `$written === false` catches it. Mutation confirmed it twice — deleting the
+liveness check leaves the whole file green at its baseline runtime.
+
+Kept rather than deleted (cheap, correct, and live the moment the loop's shape changes — an `except`
+set, a poll on an empty pipe, a child dying between the select and the check). Both classes' doc-blocks
+now say it is dormant instead of claiming it is the exit, and
+`StdioMcpServerWriteBoundsTest::testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()` pins the
+whole table so the dormancy reds if it ever stops being true. The consecutive-failure BACKSTOP is the
+exit that fires, and mutation kills it.
+
+⚠️ Two defects in this lane's own tests were found by that mutation, not by review: the deaf fixture
+slept 30s against a 45s bound, so the backstop row was ended by the FIXTURE'S OWN EXIT; and the
+dead-child row never reached the branch at all.
+
+### Eb55-3 — E441's severity is wrong: the pipe-close ordering is a SIGKILL, not hygiene
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: real. **Measured. This entry falsifies E441.**
+
+E441 called `stop()`'s missing `fclose()` minor, "the child is gone by then in practice". Generator: a
+child that traps SIGTERM to a no-op and exits on stdin EOF, driven through `ProcessReaper`'s own TERM /
+1.0s poll / signal-9 ladder. Three consecutive takes, PHP 8.3.6 / Linux 6.8, identical:
+
+    pipes left open    -> 1.05s, escalated to signal 9, exit status 9
+    pipes closed first -> 0.010s, exited on its own, exit status 0
+
+A hundredfold, and the difference between a clean exit and a SIGKILL. `gopls`, `rust-analyzer` and
+`jdtls` all trap SIGTERM to do real shutdown work, and an MCP server that flushes state is ordinary —
+so this is the normal path for a real server, not a corner.
+
+⚠️ THE ORDER WITHIN `stop()` MATTERS AND THE OBVIOUS PLACEMENT IS WRONG. The first attempt put the
+`fclose()` immediately before `proc_close()`, i.e. AFTER the escalation ladder — by which point the
+grace has already been paid and the child already signal-9'd. The close has to precede
+`proc_terminate()`. Separately measured: `proc_close()` releases the pipe resources and their fds
+either way (fd count returns to baseline, `is_resource()` false on all three, three takes), so an
+fd-leak assertion cannot see this defect at all — only the EOF timing can.
+
+Same defect and same fix in `LspConnection::stopProcess()`, where the close goes after the final
+`drainStderr()` and before `ProcessReaper::terminateAndClose()`.
+
+### Eb55-4 — `ClaudeCodeMcpClient::sendMessage()` is the LAST member of the E443 family, OUT OF LANE
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: minor-but-terminal. Out of lane b's file list
+(`sugar-crush/src/ClaudeCodeMcpClient.php`).
+
+E443 named two remaining sites. `LspConnection` is closed this round; this one is not, and it is
+unchanged from E443's description:
+
+```php
+$written = fwrite($pipes[0], $json);
+if ($written === false || $written !== strlen($json)) {
+    throw new RuntimeException('Failed to write to MCP process stdin');
+}
+```
+
+fd 0 IS non-blocking there, so there is no hang — instead a short write throws with a PARTIAL message
+already in the child's pipe. The framing is NDJSON, so it resynchronises at the next newline rather
+than being terminal the way `LspConnection`'s `Content-Length` framing was, but every reply until that
+newline is parsed against a fragment.
+
+**STEP:** port `StdioMcpServer::writeLine()`'s loop. Read `absorbStderr()`'s doc-block first (E442's
+three differences), and note the THIRD difference this round added, recorded in
+`LspConnection::writeMessage()`'s doc-block: whether stderr goes in the `select()` read set or is
+drained unconditionally once per pass depends on whether the class tracks stderr's EOF. `StdioMcpServer`
+has a `stderrOpen` flag and selects; `LspConnection` has none and drains; `ClaudeCodeMcpClient` has a
+`drainStderr()` with no EOF tracking, so it is shaped like `LspConnection`, not like `StdioMcpServer`.
+
+⚠️ AND THE THRESHOLD DIFFERS WITH THE SHAPE. A drain-before-write loop absorbs up to 16 × 8192 = 131072
+bytes per pass, so a flood UNDER one drain pass cannot wedge it even with a blocking fd 0. Measured
+this round: N=100000 M=200000 completes in 0.00s; N=200000 wedges. A fixture sized against the
+65536-byte pipe capacity — the figure the NDJSON sibling's tests use — is VACUOUS for this shape, and
+was, until mutation caught it.
+
+### Eb55-5 — `LspConnection::isConnected()` still reports true after the framing latch fires
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: minor.
+
+A partially-written `Content-Length` message desynchronises the stream permanently, so
+`writeMessage()` now latches `$framingBroken` and every later send fails fast. `isConnected()` is
+deliberately NOT changed: the process is alive and a caller may still want a polite `disconnect()`. But
+a caller that branches on `isConnected()` to decide whether the session is usable now gets `true` for a
+session that can never send again.
+
+**STEP:** decide whether `isConnected()` should mean "the process is up" or "this session can still be
+used", and say which in its doc-block either way. If the latter, the latch belongs in it.
+
+### Eb55-6 — E440's sibling: `LspConnection` also only drains stderr inside an exchange
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: minor, no longer a deadlock.
+
+`drainStderr()` runs from `refill()` (every read pass), from the write loop (every write pass, added
+this round) and once in `stopProcess()`. Between exchanges — the editor idle, the user typing — nothing
+reads fd 2, so a server that logs continuously can still fill its stderr pipe and park in `write()`. It
+self-heals on the next exchange, so it is a stall rather than a deadlock, exactly as E440 records for
+`StdioMcpServer`.
+
+**STEP:** the honest fix is the same one E440 names — fd 2 on the ReactPHP loop. Recorded rather than
+done, because it is a shape change to a class that is synchronous by design.
+
+### Eb55-7 — `StdioMcpServer` selects on pipes without an `is_resource()` guard; `LspConnection` guards
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: latent. **Measured.**
+
+`LspConnection::drainStderr()` carries a doc-block explaining why it uses `is_resource()` and NOT `@`:
+`fread()` on a `proc_close()`d pipe raises a `TypeError`, which `@` does not suppress because it is an
+exception and not a diagnostic. MEASURED this round, the same is true one level up: `stream_select()`
+on a CLOSED pipe resource raises `TypeError: supplied resource is not a valid stream resource` (PHP
+8.3.6), and `@` does not suppress that either.
+
+`StdioMcpServer::readLine()` and `writeLine()` both call `@stream_select()` on `$this->pipes[N]` behind
+only a `$this->pipes !== null` check. `stop()` nulls the field right after closing, so no current path
+reaches it — but the guard the sibling class documents as necessary is absent here, and this round's
+`closePipes()` puts real `fclose()` calls on that field for the first time.
+
+**STEP:** add the `is_resource()` guard to both, or record why `pipes !== null` is sufficient. Note that
+this is also why the EINTR branch cannot be tested with a closed fd (Eb55-2).
+
+### Eb55-8 — E436 is still open and is the reason E437 mattered
+
+**Recorded 2026-08-25 by round 55 lane b.** Severity: real. Out of lane b's file list
+(`sugar-crush/src/MCP/McpClient.php`).
+
+Unchanged from E436: `startServer()` catches `\RuntimeException` only, under a comment saying "a single
+unreachable/misbehaving server must not abort loading the rest". This round widened what `parse()`
+accepts, which removes one more route to an escaped `TypeError`, but the narrow catch is the general
+defect and any future throw walks through it. `McpToolBridge::execute()` already catches `\Throwable`
+for exactly this reason.
+
+**STEP:** widen to `catch (\Throwable)` and pin with a server fixture that throws something that is not
+a `RuntimeException` during the handshake.

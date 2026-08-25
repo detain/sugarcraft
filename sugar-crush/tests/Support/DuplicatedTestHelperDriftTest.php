@@ -155,6 +155,17 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             . 'from reading each other\'s file. The `-F`/`-f` defect that made the copies '
             . 'differ in BEHAVIOUR was fixed in both, one round apart, which is the event this '
             . 'guard exists to make visible next time.',
+        'maxStderrBytes' =>
+            'The differing token is the CLASS the constant is read off: one copy reflects on '
+            . '`LspConnection::MAX_STDERR_BYTES`, the other on '
+            . '`StdioMcpServer::MAX_STDERR_BYTES`, and each is the class its own file is about. '
+            . 'Making the two agree would be the bug - a stderr-cap assertion in the LSP suite '
+            . 'must be checked against the LSP cap. The reason each file reads the constant '
+            . 'reflectively rather than restating the number is the same in both, and that part '
+            . 'is byte-identical: the cap must not be able to drift from the class it guards. '
+            . 'If a third stdio class grows one, give it the same helper against its own '
+            . 'constant and extend this row rather than consolidating - there is nothing to '
+            . 'share but the shape.',
         'readOrFail' =>
             'The text of the failure message differs; the read and the refusal are identical. '
             . 'Each message names what its own census is void without, which is worth more '
