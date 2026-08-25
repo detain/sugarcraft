@@ -1418,16 +1418,26 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * Every PHP file the stacked-doc-comment guard speaks for: all of `src/`
      * AND all of `tests/`, plus the `bin/sugarcrush` entry point.
      *
-     * `tests/` JOINED IN ROUND 57, AND THE COUNT IS WHY. The guard had been
-     * scoped to `src/` on the argument that the shape costs something there;
-     * a census over `tests/` found EIGHTEEN stacked pairs in SIXTEEN files,
-     * against four the widening to all of `src/` had cleared. The cost is the
-     * same in both trees and the population was four times larger in the half
-     * nobody was looking at. Two of the eighteen were a fixture's `@param` and
-     * a scanner's `@return` — tags off their declarations, exactly the loss
-     * the `src/` half was widened for — and every other one was prose
-     * describing a helper, stranded above an unrelated method's block and
-     * attached to nothing.
+     * `tests/` JOINED IN ROUND 57, AND THE SIZE OF WHAT WAS THERE IS WHY. The
+     * guard had been scoped to `src/` on the argument that the shape costs
+     * something there; a census over `tests/` found the shape SEVERAL TIMES
+     * more common in the half nobody was looking at than everything the
+     * widening to all of `src/` had ever cleared. A pair of them were a
+     * fixture's `@param` and a scanner's `@return` — tags off their
+     * declarations, exactly the loss the `src/` half was widened for — and
+     * every other one was prose describing a helper, stranded above an
+     * unrelated method's block and attached to nothing.
+     *
+     * WHAT THIS PARAGRAPH SAID: "EIGHTEEN stacked pairs in SIXTEEN files".
+     * WHAT IS TRUE NOW: the pair count was right and the file count was not —
+     * re-measured with this file's own scanner over the tree the sentence was
+     * written against, those pairs were spread over FIFTEEN files, and the
+     * commit's own list of edited files says fifteen too. WHY THE SENTENCE
+     * STILL EARNS ITS PLACE without its numbers: the relative size is the
+     * argument for the widening, and the absolute counts were a cardinality
+     * over `tests/` written into prose in the same breath as the paragraph
+     * below forbidding exactly that (rule 18) — one of them wrong in the
+     * commit that shipped it, which is the whole reason the rule exists.
      *
      * NO FIGURE FROM THAT CENSUS IS ASSERTED, and none is written into the
      * guard: a count over `tests/` is stale the moment any lane adds a file

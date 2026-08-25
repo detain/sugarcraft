@@ -367,10 +367,30 @@ final class SymbolCitationDriftTest extends TestCase
      * `RendererTest` cited from the root test namespace mean the root
      * `RendererTest` rather than the one under `Tui`.
      *
-     * `trait_exists()` AND `interface_exists()` AND `enum_exists()` ARE NOT
-     * TIDINESS. `class_exists()` answers false for a trait, and two live
-     * citations name traits under `tests/Support`; both were reported dangling
-     * until this was widened.
+     * THE THREE EXTRA `*_exists()` CALLS ARE THREE DIFFERENT CLAIMS, and the
+     * paragraph they replace made one claim and offered evidence for a third of
+     * it. WHAT IT SAID: that `trait_exists()` AND `interface_exists()` AND
+     * `enum_exists()` "are not tidiness", supported by the trait case alone.
+     * WHAT IS TRUE NOW, all MEASURED on PHP 8.3.6:
+     *
+     * - `trait_exists()` EARNS ITS PLACE AND IS PINNED. `class_exists()`
+     *   answers false for a trait, live citations under `tests/Support` name
+     *   traits, and dropping this call reds
+     *   {@see testTheResolverAgreesWithAnswersAlreadyKnown()};
+     * - `interface_exists()` EARNS ITS PLACE AND IS NOW PINNED AT THE UNIT
+     *   LEVEL. `class_exists()` answers false for an interface too, but no
+     *   citation in this tree resolves to one today, so dropping the call
+     *   SURVIVED every guard in this file. It is not speculative — the first
+     *   interface-shaped test double cited from a doc-block would be reported
+     *   dangling — so the fixture drives a real interface through the same
+     *   `resolve()` rather than the clause being left unwatched;
+     * - `enum_exists()` IS REDUNDANT ON THIS PHP AND STAYS ANYWAY.
+     *   `class_exists()` answers TRUE for an enum on 8.3.6 (measured
+     *   directly), so dropping `enum_exists()` is an EQUIVALENT mutation that
+     *   no test in this suite can kill, and none is written to pretend
+     *   otherwise. It stays because it states the alphabet at the point of
+     *   decision, and because the equivalence is a language fact rather than a
+     *   contract — CI also runs 8.4, which this box cannot test.
      *
      * A BARE token that no base resolves falls back to finding exactly one
      * `tests/**\/<Name>.php`: two matches is an ambiguous citation and is
@@ -503,15 +523,29 @@ final class SymbolCitationDriftTest extends TestCase
      * And the census is not vacuously empty, in any of its six shapes.
      *
      * `assertSame([], $dangling)` also passes in a tree where the citation
-     * scraper has stopped matching anything at all. Two controls sit under it.
-     * The FLOOR — 648 citations at round 57, so a floor well under that — reds
-     * if the scraper breaks wholesale while leaving room for the count to move
-     * with ordinary work; it is a provenance figure and not a contract, which
-     * is why nothing asserts it exactly. The SHAPE CENSUS is the sharper half
-     * and the one that would have caught round 57's two holes: losing the
-     * backticked shape in `src/`, or the `tests/` half of the roster, or the
-     * bare self-citation, leaves the floor comfortably met and empties a key
-     * here.
+     * scraper has stopped matching anything at all. Two controls sit under it,
+     * and THE SHAPE CENSUS IS THE ONE THAT IS ACTUALLY HOLDING — say so plainly,
+     * because the floor reads as though it were.
+     *
+     * WHAT THIS SAID: "the FLOOR — 648 citations at round 57, so a floor well
+     * under that". WHAT IS TRUE NOW: no definition of this census's output has
+     * ever been 648. Measured with {@see citations()} at the commit that wrote
+     * the sentence, it was 1122 rows; unique tokens 729; unique (file, token)
+     * pairs 900; rows excluding the bare self-citation shape 636. The number
+     * was a cardinality over `tests/` shipped in prose with no generator, which
+     * is rules 3 and 18 in one clause — and it made the floor of 300 read as
+     * tight when it is in fact loose enough that losing the whole self-citation
+     * shape AND the whole `tests/` `{@see}` shape would still clear it. WHY THE
+     * FLOOR STILL EARNS ITS PLACE: it is a wholesale-breakage tripwire and
+     * nothing more — a scraper that matches nothing at all reds here — and it
+     * is deliberately far under any plausible population so ordinary work never
+     * has to touch it.
+     *
+     * THE SHAPE CENSUS is the half that would have caught round 57's two holes:
+     * losing the backticked shape in `src/`, or the `tests/` half of the
+     * roster, or the bare self-citation, leaves the floor comfortably met and
+     * empties a key below. No count of any shape is asserted, for the reason
+     * the paragraph above is about.
      */
     public function testTheCitationCensusFindsTheCitationsThatExist(): void
     {
@@ -547,7 +581,10 @@ final class SymbolCitationDriftTest extends TestCase
         $this->assertContains(
             'src/Cli/ArgvParser.php',
             $labels,
-            'the bare-citation shape is no longer being scraped',
+            'a src/ file that cites the suite through {@see} is no longer scraped at all. '
+            . '(This row does NOT control the bare self-citation shape, whatever an earlier '
+            . 'message here said: that shape is only emitted for a tests/ file, so it cannot '
+            . 'occur in this one. The shape-keys assertion above is what controls it.)',
         );
         $this->assertContains(
             'docs/ARCHITECTURE.md',
@@ -675,6 +712,21 @@ final class SymbolCitationDriftTest extends TestCase
             'SugarCraft\\Crush\\Tests\\Support\\HomeSandboxTrait',
             $this->resolve('Support\\HomeSandboxTrait', $here),
             'a citation of a trait is reported dangling, which it was until round 57',
+        );
+
+        // AND THE INTERFACE ARM, WHICH THE REAL CENSUS CANNOT EXERCISE. No
+        // citation in this tree resolves to an interface today, so dropping
+        // `interface_exists()` from the resolver SURVIVED every guard in this
+        // file — MEASURED. `class_exists()` answers false for an interface on
+        // PHP 8.3.6 (measured directly), so the clause is load-bearing the day
+        // a doc-block cites an interface-shaped test double, and this drives it
+        // through the same call rather than leaving it unwatched (rule 41: a
+        // survivor's neighbours are not covered by the survivor's excuse).
+        $this->assertSame(
+            'SugarCraft\\Crush\\Providers\\ProviderInterface',
+            $this->resolve('Providers\\ProviderInterface', 'SugarCraft\\Crush'),
+            'the resolver cannot resolve an interface, so the first interface a doc-block '
+            . 'cites will be reported as a dangling citation',
         );
 
         $this->assertTrue(method_exists(self::class, 'testEveryCitedTestSymbolExists'));
