@@ -31,7 +31,8 @@ changes that feel too small to be worth spawning for.
 1. **`/home/sites/sugarcraft/prompt_plan.md`** — your complete operating manual. Read it in full
    before doing anything else. §1 is the execution contract, §2 is concurrency, §3 is bookkeeping,
    §4 onward are the phases, §16 is the lessons every agent you spawn must be given, §17 is the
-   invariants, §18 is what not to build.
+   invariants, §18 is what not to build. Inside §1, **§1.10 (removal is not an available outcome)**
+   and **§1.11 (what counts as a test)** go to every agent you spawn, alongside §16 and §17.
 2. **`/home/sites/sugarcraft/prompt_worklog.md`** — the record. Currently it holds the conventions,
    the required entry format, and one worked example. Read the format; you will be writing in it
    after every step.
@@ -105,7 +106,7 @@ Full detail in `prompt_plan.md` §1. The short form:
 - One git worktree per step, branched from current `master`:
   `git -C /home/sites/sugarcraft worktree add /home/sites/prompt-step-<STEP_ID> -b prompt/<STEP_ID> master`
 - Spawn the step agent with the step text, its file list, the `prompt_expand.md` sections it names,
-  and `prompt_plan.md` §16 and §17.
+  and `prompt_plan.md` §1.10, §1.11, §16 and §17.
 - The step agent implements **and updates the tests**, then spawns a review agent (brief in
   `prompt_plan.md` §1.4). Findings → fix agent → **a brand-new** review agent → loop. Break only on a
   clean review. Cap five cycles, then the step is blocked.
@@ -129,6 +130,22 @@ Full detail in `prompt_plan.md` §1. The short form:
 - Never run `composer install`/`composer update` without deciding to for a named reason — it
   de-symlinks `vendor/sugarcraft/*` and silently voids every measurement taken after it.
 - Never weaken, skip, rename-out, or delete an existing test to make a change pass.
+- **Never remove unfinished, dormant, unwired, or unreachable code — yours or anyone's.** Removal is
+  not an outcome available to you or to any agent you spawn. The three permitted outcomes are: wire
+  it, build it out, or **stop and ask the user**. This covers the quiet forms too — stubbing the
+  body, dropping the last call site, deleting the enum case / parameter / config key that kept it
+  alive, `@deprecated`-ing it aside, or deleting the test that pinned its dormancy. If an agent's
+  diff removes one of these, reject it and re-spawn. Full rule: `prompt_plan.md` §1.10.
+  **Escalating is a completed step, not a failed one** — record it in the worklog and in §8 below
+  under `Awaiting user decision:`, verbatim, with `file:line`, what calls it (or that nothing does),
+  and the options. Then wait for the user; do not decide it yourself.
+- **Never accept an annotation or an existence check as a test.** `@covers`, `@test`, a descriptive
+  method name, `method_exists()`, `class_exists()`, `is_callable()` and shape assertions
+  (`assertNotNull`, `assertIsArray`, `assertTrue(count(...) > 0)`) all pass on wrong or absent
+  behaviour. A real test calls the thing and asserts the value, asserts exact counts, covers both
+  polarities and the pathological input — and goes **red when the change is reverted**. Require the
+  step agent to state the deletion experiment it ran and what it showed. Full rule:
+  `prompt_plan.md` §1.11 and §16.2.
 - Never accept an agent's claim of completion without test output you ran yourself.
 - Never write a worklog number you did not measure.
 - Use `/usr/bin/grep` for anything that must see the whole tree — the shell's `grep` is `ugrep` and
@@ -143,6 +160,7 @@ Steps done:     0 of 61
 Phases done:    0 of 12
 Last commit:    (none from this plan)
 Blocked on:     nothing
+Awaiting user decision: (none)
 Open follow-ups: (none)
 Sequencing gate: UNCHECKED — see §5
 ```
@@ -190,6 +208,8 @@ Baseline:         Tests: <N>, Assertions: <N>, Skipped: <N>  (from P0.S1, never 
 Latest suite:     Tests: <N>, Assertions: <N>, Skipped: <N>  (from your last verification run)
 Live worktrees:   <paths, or "none">
 Blocked on:       <nothing | STEP_ID and the standing findings, verbatim>
+Awaiting user decision: <nothing | STEP_ID, the file:line, and the question, verbatim — the
+                  dormant-code escalations from prompt_plan.md §1.10 that no agent may resolve>
 Open follow-ups:  <the follow-ups recorded in worklog entries that are not yet scheduled>
 Sequencing gate:  <CHECKED YYYY-MM-DD — decision | UNCHECKED>
 ```
@@ -209,6 +229,9 @@ is measured against, and a moving baseline makes every delta meaningless.
   figure as if it were current.
 - **If a step is blocked, the blocking findings go in §8 verbatim**, not summarised. The next agent
   needs the actual text to act on it.
+- **A dormant-code escalation is never resolved by a rewrite.** It leaves `Awaiting user decision:`
+  only when the user has answered, and the answer goes into the worklog entry for the step that acts
+  on it. Carrying it forward unanswered, every rewrite, is correct.
 - **If you are about to be cut off** (context limit, session limit), rewriting this file is the last
   thing you do and the highest-value thing you can do. Do it before anything else you were planning
   to finish.

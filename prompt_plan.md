@@ -86,8 +86,9 @@ For each step the orchestrator runs:
    One worktree per concurrently-running step. Never two agents in one worktree. Never a step agent
    working directly in `/home/sites/sugarcraft`.
 2. **Spawn the step agent** with: the step's full text from this plan, its file list, the relevant
-   sections of `prompt_expand.md` (by section number — the agent reads them itself), §16 LESSONS,
-   §17 INVARIANTS, and the absolute path of its worktree. The step agent implements the change **and
+   sections of `prompt_expand.md` (by section number — the agent reads them itself), §1.10 (removal
+   is not an available outcome), §1.11 (what counts as a test), §16 LESSONS, §17 INVARIANTS, and the
+   absolute path of its worktree. The step agent implements the change **and
    updates or adds the tests** for it in the same worktree.
 3. **The step agent spawns a review agent** on its own changes when it believes it is done. The
    review brief is §1.4. The reviewer works from the same worktree, reads the diff, and returns
@@ -99,6 +100,11 @@ For each step the orchestrator runs:
 5. **Cycle cap.** Five review cycles. If the sixth review still finds problems, the step is
    **blocked**: the step agent reports the standing findings verbatim and stops. The orchestrator
    records the block in the worklog and does not silently move on.
+   A step may also block for a **third** reason, recorded separately from a review-cycle block and
+   from an agent failure (§1.8): the step ran into dormant, unfinished, or unwired code that it may
+   not remove and cannot wire within its declared scope (§1.10). That block is escalated to the
+   **user** — the orchestrator does not decide it — and it goes into `prompt_resume.md` §8 verbatim,
+   under `Awaiting user decision:`. Every other part of the step is finished first.
 6. **Verify.** The orchestrator (or an agent it spawns for this) runs the affected test suites in the
    worktree and records the actual pass/fail/skip counts. A step is not done on an agent's say-so;
    it is done on a test run whose numbers are written down.
@@ -177,6 +183,20 @@ A review agent is told, verbatim:
 > 14. **The step text itself.** The step's description in `prompt_plan.md` is a brief, and a brief
 >     carries more authority than a review because nothing downstream is asked to falsify it. If you
 >     measure a claim in it to be false, say so. That is the most valuable thing you can return.
+> 15. **Did the diff remove or neuter anything dormant?** Read the diff for **subtraction**: a
+>     deleted method, class, branch, enum case, parameter, config key, or array entry; a body
+>     replaced by a stub, a `return null`, or a `throw`; a `@deprecated`; a call site dropped so the
+>     callee is now unreachable; a test that was pinning a dormancy, deleted or skipped. Removal of
+>     unfinished, dormant, or unwired code is **prohibited** by §1.10 — the permitted outcomes are
+>     wire it, build it out, or escalate to the user. Any such subtraction is a finding unless the
+>     diff is a pure move/de-duplication and says so. Removals are invisible in a diff read for
+>     correctness and obvious in one read for subtraction, so read for subtraction deliberately.
+> 16. **Are the new tests real tests?** Per §1.11: an annotation (`@covers`, `@test`, a descriptive
+>     name) asserts nothing; `method_exists()`/`class_exists()`/`is_callable()` assert that something
+>     was typed, not that it runs; shape assertions pass on the wrong value. For each new or changed
+>     test, name the assertion that would go red if the change were reverted, and say whether you
+>     believe it actually would. A test file that grew only annotations and existence checks added no
+>     coverage — say so as a finding, with the counts.
 >
 > Rules for your report:
 > - **Cite `file:line`.** Quoting prose without a path sends the fix agent to the wrong file, where
@@ -191,7 +211,7 @@ A review agent is told, verbatim:
 >
 > Report findings as a numbered list. For each: the file and line, what is wrong, and what would
 > have to be true for it not to be wrong. If you found nothing, say `NO FINDINGS` on its own line
-> and then say which of the fourteen checks you performed and what you looked at for each — a bare
+> and then say which of the sixteen checks you performed and what you looked at for each — a bare
 > `NO FINDINGS` with no account of the checks is itself a failed review and will be rerun.
 
 ### 1.5 Between batches — sandbox sync
@@ -277,6 +297,82 @@ separately from a review-cycle block, because they mean different things.
 - Never commit a per-lib `composer.lock` or a `repositories[]` entry in `sugar-crush/composer.json`.
 - Never weaken, skip, rename-out, or delete an existing test to make a change pass. If a test is
   genuinely wrong, that is its own step with its own justification in the commit message.
+- **Never remove a function, class, method, seam, config key, branch, or subsystem because it is
+  unfinished, dormant, unwired, unreachable, or "apparently unused".** Removal is not one of the
+  outcomes available to you. See §1.10.
+- **Never let an annotation, a name, or an existence check stand in for a test.** `@covers`,
+  `@test`, a descriptive method name, and `method_exists()` assert nothing about behaviour. See
+  §1.11.
+
+### 1.10 Removal is not an available outcome
+
+This whole plan exists because a subsystem was *built and never wired*. Deleting the next one of
+those is not a cleanup; it is the destruction of the evidence that the wiring is missing, and of the
+design decision the code encodes. This tree has five such subsystems standing right now (§16.4), and
+every one of them is scheduled to be **wired**, not removed.
+
+So when you find code that is unfinished, dormant, unwired, unreachable, half-built, `TODO`-marked,
+constructed by nothing, or reachable only from a test, you have exactly **three** permitted outcomes:
+
+1. **Wire it.** Find the live call path it was written for and connect it. Before you do, check
+   whether a *second* path already exists — the skills seam has two, and naively connecting the
+   second emits every skill body twice. Decide which path is canonical before writing code.
+2. **Build it out.** If it is genuinely unfinished rather than merely unconnected, finish it to the
+   step's scope, with tests that fail if it is reverted.
+3. **Stop and escalate.** If wiring or finishing it is outside your step's declared scope, or you
+   cannot determine which of two designs was intended, or the honest answer is "this looks like it
+   should not exist" — **stop and report it to the orchestrator, who asks the user.** Say what the
+   code is, where it is (`file:line`), what calls it (or that nothing does), what you think it was
+   for, and what the two or three options are. Then wait. Do not decide.
+
+What you may **not** do, in any circumstance, without an explicit user decision recorded in the
+worklog:
+
+- delete it, comment it out, or `@deprecated` it out of the way;
+- replace its body with a stub, a `return null`, a `throw new \LogicException('unused')`, or a
+  `// unreachable` marker;
+- narrow it away — drop the enum case, the branch, the parameter, the config key, or the array entry
+  that was the only thing keeping it alive;
+- delete or skip the test that was pinning its dormancy;
+- describe it in a doc as removed, when what happened is that you stopped calling it.
+
+**Blocking is a success, not a failure.** A step that ends with "I found `X` at `file:line`, nothing
+constructs it, here are the three options, I need a decision" is a completed step that produced the
+most valuable thing this plan can produce. A step that ends with a smaller diff because the awkward
+thing is gone has destroyed information and will be reverted.
+
+The escalation is recorded in two places: the worklog entry for the step (as a follow-up), and
+`prompt_resume.md` §8 under `Blocked on:` / `Open follow-ups:`, **verbatim**, so the next agent can
+act on the actual text.
+
+The narrow exceptions — and they are narrow — are: **moving** code (same behaviour, new home, all
+callers updated), **de-duplicating** two implementations of the same thing into one (the survivor
+keeps every behaviour of both), and removing something **this plan itself added earlier and has not
+yet shipped**. Each of those is a relocation, not a removal, and each must say so in the commit
+message. "It was already dead" is not an exception; it is the case this section is about.
+
+### 1.11 What counts as a test in this plan
+
+A test earns its place only if **it fails when the behaviour is wrong**. §16.2 is the long form and
+every step agent is given it. The short form, because it is the thing most often skipped:
+
+- **An annotation is not a test.** `@covers`, `@coversDefaultClass`, `@group`, `@test`, and a
+  descriptive method name are metadata. They change no verdict. A file whose new coverage consists
+  of annotations has added zero tests.
+- **An existence check is not a test.** `method_exists()`, `class_exists()`, `assertTrue(is_callable(...))`
+  and `new ReflectionMethod(...)` assert that something was *typed*, never that it *runs*. This tree
+  ships that shape today — `sugar-crush/tests/App/AppSkillTest.php:131-147` has three consecutive
+  tests whose only assertion is `method_exists($app, ...)`, under a comment reading
+  *"Verification that App class structure exists"*. Emptying those three method bodies leaves all
+  three green. Do not add a fourth.
+- **A shape assertion is not a test.** `assertNotNull`, `assertIsArray`, `assertIsString`,
+  `assertTrue(count($x) > 0)` on the value the change produces all pass on the wrong value.
+- **Call the thing, assert the value.** Exact values, exact counts (`assertSame`, and
+  `assertSame(1, substr_count(...))` where a double-emit is the risk), both polarities, and the
+  pathological input as well as the nice one.
+- **Do the deletion experiment and write down what it showed.** Revert the change (or delete the
+  guard) and watch your new test go red. If it stays green, it is decorative. "I believe this covers
+  it" is not the same sentence as "I reverted it and the test failed."
 
 ---
 
@@ -1810,6 +1906,24 @@ against the unfixed code, it is not testing the fix. Do the experiment; record t
 what it showed. "I believe this covers it" is not the same sentence.
 
 **These are not tests:**
+- **An annotation.** `@covers`, `@coversDefaultClass`, `@group`, `@test`, `@dataProvider` on an empty
+  provider, or a method name that describes the behaviour. Metadata changes no verdict. Coverage
+  attribution is not coverage: `@covers` tells the coverage report which class to attribute the
+  executed lines to, and a test body that executes nothing meaningful still attributes and still
+  passes. If your diff's new "tests" are annotations, your diff has no tests. (MEASURED 2026-08-25:
+  `/usr/bin/grep -rl '@covers' sugar-crush/tests/` → 0 files. This tree does not use them today.
+  Do not start.)
+- **An existence check.** `method_exists()`, `class_exists()`, `assertTrue(is_callable(...))`,
+  a bare `new ReflectionMethod(...)`. They assert that something was *typed*, not that it *runs*.
+  MEASURED: `sugar-crush/tests/App/AppSkillTest.php:131-147` holds three consecutive tests —
+  `testAppHasApplySkillsToSystemPromptMethod`, `testAppHasFindSkillsForTaskMethod`,
+  `testAppHasWithEnabledSkillsMethod` — whose only assertion is `method_exists($app, '<name>')`,
+  under the comment *"Verification that App class structure exists"*. Empty all three method bodies
+  and all three stay green. A sibling library's retry helper had never once executed in the
+  library's entire history; `method_exists()` was its only coverage. (`ProjectTierRefusalInventoryTest`
+  and `SymbolCitationDriftTest` also call `method_exists()` — there it is a *roster* mechanism with a
+  known-negative control beside it, e.g. `assertFalse(method_exists(self::class, 'testNoSuchMethodWasEverWritten'))`.
+  That is a different thing from using it as the assertion about the behaviour under test.)
 - `assertNotNull($result)` on the thing under test.
 - `assertIsArray()`, `assertIsString()`, `assertTrue(count($x) > 0)` — shape assertions on the value
   the change produces. A shape assertion passes on the wrong value.
@@ -1893,9 +2007,13 @@ reviewer does.
 **Reachability and dead wiring.** Five whole subsystems here are built, tested, documented, and
 constructed by nothing: skill bodies in the main prompt, `SkillRegistry::findForPrompt()`, nine of
 eleven hook events, `ForeignMemoryImporter`, and a sub-agent worker that is still an explicit
-simulation. The house rule is: **wire it, don't delete it.** But wiring a dormant seam naively is its
-own hazard — two skill→prompt paths exist and connecting the second emits every skill body twice.
-Decide which path is canonical *before* writing code.
+simulation. The house rule is: **wire it, don't delete it** — and it is a hard prohibition, not a
+preference (§1.10). Dormant code is a design decision plus a missing connection; deleting it destroys
+the decision and hides the omission, and this plan exists *because* one such subsystem went
+unnoticed. The permitted outcomes are wire it, build it out, or stop and escalate to the user. But
+wiring a dormant seam naively is its own hazard — two skill→prompt paths exist and connecting the
+second emits every skill body twice. Decide which path is canonical *before* writing code, and if you
+cannot, escalate rather than guess.
 
 **Bounds.** Every string that reaches a prompt, a tool result, or a log needs a cap; every collection
 needs a growth bound. Ask: what happens at 10 MB? At 200 items? The existing caps in this tree are
@@ -2178,8 +2296,12 @@ numbering.
 
 **On process**
 
-41. **Never delete dormant code. Wire it, gate it, or document it as an intentional seam — and pin
-    the dormancy with a test.** Delete the reasoning and the next reader deletes the guard.
+41. **Never delete dormant code. Wire it, build it out, or stop and ask the user — and pin the
+    dormancy with a test in the meantime.** Delete the reasoning and the next reader deletes the
+    guard. This is a hard prohibition in this plan (§1.10), and it covers the quiet forms too:
+    stubbing the body, dropping the last call site, narrowing away the enum case or config key that
+    kept it alive, and deleting the test that pinned it. Blocking on a user decision is a completed
+    step; a smaller diff with the awkward thing gone is a reverted one.
 42. **Correct a false claim in place, in three parts: what it used to say, what is true now, why it
     still earns its place.** Never delete the reasoning behind a guard just because its premise moved.
 43. **A prescription — in a review, in this plan, in a brief — is a hypothesis.** Measure it before
@@ -2227,7 +2349,7 @@ numbering.
     what you inherited versus authored, and anything you measured that contradicts what you were
     told. *"Not explicitly forbidden"* is the argument shape that erodes scope over time.
 
-### 16.9 Six sentences to keep in front of you
+### 16.9 Eight sentences to keep in front of you
 
 1. A number or a claim must never travel without its domain.
 2. A test that pins the *presence* of a clause is not a test of that clause — mutate it and watch
@@ -2237,6 +2359,10 @@ numbering.
 5. A brief carries more authority than a review, because nothing downstream is asked to falsify it —
    so measure the step text before you implement it.
 6. Never delete dormant code; wire it, gate it, or pin its dormancy.
+7. Removal is not one of your outcomes: wire it, build it out, or stop and ask the user — and
+   stopping to ask is a completed step, not a failed one.
+8. An annotation is not a test and neither is `method_exists()`; call the thing, assert the value,
+   then revert the change and watch your test go red.
 
 ---
 
