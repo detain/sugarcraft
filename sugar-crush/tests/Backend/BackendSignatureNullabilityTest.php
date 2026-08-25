@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests\Backend;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
 
 /**
  * **E495 — the {@see Backend} contract family must not declare an
@@ -500,18 +501,109 @@ final class BackendSignatureNullabilityTest extends TestCase
     /**
      * Every kind the classifier reaches in `$source`, in order.
      *
-     * Shares {@see splitParams()} and {@see classifyParamKind()} with
-     * {@see implicitlyNullableParams()} rather than re-walking, so the
+     * WHAT THIS SAID: that it "shares `splitParams()` and `classifyParamKind()`
+     * with `implicitlyNullableParams()` RATHER THAN RE-WALKING, so the
      * enumeration cannot drift from the census it is describing — which is this
-     * repository's own recurring defect and not a hypothetical one.
+     * repository's own recurring defect and not a hypothetical one." WHAT WAS
+     * TRUE: only the two LEAF helpers were shared. The walk itself — the
+     * keyword test, the scan forward to `(`, the `{`/`;` bail-out — was a
+     * verbatim second copy, so the sentence described a property the code did
+     * not have, in a paragraph arguing that this exact defect is the tree's
+     * recurring one. MEASURED: drifting this copy's keyword test to
+     * `[T_FUNCTION]` while the census kept `[T_FUNCTION, T_FN]` left the file
+     * GREEN — precisely the state the sentence called impossible. WHY THE CLAIM
+     * STILL EARNS ITS PLACE: it is the right property to want, so the code was
+     * changed to have it rather than the sentence softened. Both now consume
+     * {@see eachParameterList()}, which is the only walk in this file.
      *
      * @return list<string>
      */
     private static function parameterKinds(string $source): array
     {
+        $kinds = [];
+        foreach (self::eachParameterList($source) as $param) {
+            $kinds[] = self::classifyParamKind($param)[0];
+        }
+
+        return $kinds;
+    }
+
+    /**
+     * **THE "ONE WALK" PROPERTY IS ASSERTED, NOT ONLY ARRANGED.**
+     *
+     * Rule 43: extracting {@see eachParameterList()} SATISFIES the prescription
+     * that the enumeration and the census stop being two copies; it does not
+     * PIN it, because the next edit can paste the loop back into either
+     * consumer and the suite will not notice — which is exactly how the two
+     * copies arrived under a docblock claiming they were one.
+     *
+     * So the property is stated structurally, over this file's own token
+     * stream with comments dropped (rule 40: a docblock mentioning the call
+     * must not be able to buy or break it). One tokeniser call means one
+     * alphabet, and an alphabet that drifts drifts for both readers at once.
+     */
+    public function testThisFileWalksTheTokenStreamInExactlyOnePlace(): void
+    {
+        $tokens = token_get_all((string) file_get_contents(__FILE__));
+        $ranges = TokenFunctionRanges::scan($tokens);
+
+        $walkers = [];
+        foreach ($tokens as $i => $token) {
+            if (!is_array($token) || $token[0] !== T_STRING || $token[1] !== 'token_get_all') {
+                continue;
+            }
+            foreach ($ranges as $range) {
+                if ($i > $range['from'] && $i < $range['to']) {
+                    $walkers[$range['name']] = true;
+                }
+            }
+        }
+
+        // This test's OWN read of the file is one of them, and excluding it by
+        // name rather than by counting is the difference between a scope and an
+        // exemption: the assertion below still names every other walker.
+        unset($walkers[__FUNCTION__]);
+        $walkers = array_keys($walkers);
+        sort($walkers);
+
+        $this->assertSame(
+            ['eachParameterList'],
+            $walkers,
+            'this file tokenises source somewhere other than eachParameterList(). It is supposed '
+                . 'to do it in ONE place, so that the keyword alphabet the census scans for and '
+                . 'the alphabet the enumeration describes cannot diverge - they were two copies '
+                . 'of one loop under a docblock claiming they were not, and the drift that '
+                . 'docblock called impossible was demonstrated by mutation. A second reader must '
+                . 'consume eachParameterList(); it must not call token_get_all() again. An EMPTY '
+                . 'list here means the walk is gone and every census in this file reports on '
+                . 'nothing.',
+        );
+    }
+
+    /**
+     * Every parameter of every parameter list in `$source`, in order, as a
+     * token list.
+     *
+     * THE ONE WALK. Two consumers read it — {@see parameterKinds()}, which
+     * enumerates what the classifier can reach, and
+     * {@see implicitlyNullableParams()}, which is the census the enumeration
+     * describes. They were two copies of this loop until the drift the
+     * enumeration's docblock claimed was impossible was demonstrated by
+     * mutation; sharing the leaves was not enough, because the ALPHABET lives
+     * in the walk.
+     *
+     * {@see testEveryParameterListKeywordIsScannedInBothPolarities()} pushes a
+     * fixture per keyword of {@see PARAMETER_LIST_KEYWORDS} through the census,
+     * and {@see testEveryDeclaredParameterKindIsReachable()} pushes one per
+     * kind through the enumeration; because there is now one walk, either
+     * test failing is a statement about both.
+     *
+     * @return \Generator<int, list<array{0:int,1:string,2:int}|string>>
+     */
+    private static function eachParameterList(string $source): \Generator
+    {
         $tokens = token_get_all($source);
         $count = count($tokens);
-        $kinds = [];
 
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
@@ -521,6 +613,9 @@ final class BackendSignatureNullabilityTest extends TestCase
 
             $open = $i + 1;
             while ($open < $count && $tokens[$open] !== '(') {
+                // A `function` keyword whose body starts before any '(' is not
+                // a signature this scanner understands; stop rather than run on
+                // into the next one.
                 if ($tokens[$open] === '{' || $tokens[$open] === ';') {
                     break;
                 }
@@ -530,12 +625,8 @@ final class BackendSignatureNullabilityTest extends TestCase
                 continue;
             }
 
-            foreach (self::splitParams($tokens, $open, $count) as $param) {
-                $kinds[] = self::classifyParamKind($param)[0];
-            }
+            yield from self::splitParams($tokens, $open, $count);
         }
-
-        return $kinds;
     }
 
     /**
@@ -711,35 +802,12 @@ final class BackendSignatureNullabilityTest extends TestCase
      */
     private static function implicitlyNullableParams(string $source): array
     {
-        $tokens = token_get_all($source);
-        $count = count($tokens);
         $hits = [];
 
-        for ($i = 0; $i < $count; $i++) {
-            $token = $tokens[$i];
-            if (!is_array($token) || !in_array($token[0], self::PARAMETER_LIST_KEYWORDS, true)) {
-                continue;
-            }
-
-            $open = $i + 1;
-            while ($open < $count && $tokens[$open] !== '(') {
-                // A `function` keyword whose body starts before any '(' is not
-                // a signature this scanner understands; stop rather than run on
-                // into the next one.
-                if ($tokens[$open] === '{' || $tokens[$open] === ';') {
-                    break;
-                }
-                $open++;
-            }
-            if ($open >= $count || $tokens[$open] !== '(') {
-                continue;
-            }
-
-            foreach (self::splitParams($tokens, $open, $count) as $param) {
-                $hit = self::classifyParam($param);
-                if ($hit !== null) {
-                    $hits[] = $hit;
-                }
+        foreach (self::eachParameterList($source) as $param) {
+            $hit = self::classifyParam($param);
+            if ($hit !== null) {
+                $hits[] = $hit;
             }
         }
 
