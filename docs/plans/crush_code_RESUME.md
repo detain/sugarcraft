@@ -6,106 +6,58 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 🟢 ROUND 56 **RECOVERY IS RUNNING** — relaunched 2026-08-25, run id `wf_e574362d-8e8`
+## 🟢 ROUND 57 IS **RUNNING** — launched 2026-08-25, run id `RUNID_PLACEHOLDER`
 
-### WHAT HAPPENED, IN ONE PARAGRAPH
+**Round 56 is CLOSED, merged and recorded. Round 57 launched from base `BASE_PLACEHOLDER`** — nine
+agents, three lanes, `implement → review → fix` pipelined.
 
-Round 56 launched from `d38b644f4` as nine agents in three lanes. **A client restart killed all three
-implementers mid-flight at ~05:17**, with the workflow journal holding three `started` records and zero
-completions — so nothing was cached, no report survived, and the original run is unrecoverable by
-`resumeFromRunId`. What survived is what was **committed inside each lane root**. A fresh session picked
-it up, committed the two lanes that died mid-edit, and relaunched a recovery whose first stage FINISHES
-each lane from its own surviving commits instead of restarting it.
-
-| | |
+| package | floor at `BASE_PLACEHOLDER` (measured, per E167) |
 |---|---|
-| dead run | `wf_7c73518b-ad8` (3 started, 0 completed) |
-| dead run's transcripts | `/home/my/.claude/projects/-home-sites-sugarcraft/700ebe8e-b48d-4057-bc3b-fb771175565c/subagents/workflows/wf_7c73518b-ad8/` — **note the session id is NOT the one the old RESUME block named** |
-| recovery run | `wf_e574362d-8e8` |
-| recovery script (durable) | `/home/my/.claude/projects/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/workflows/scripts/crush-round-56-recover.js` |
-| original script (durable) | `/home/my/.claude/projects/-home-sites-sugarcraft/18689526-3e9c-4588-b33e-7326941eaed0/workflows/scripts/crush-round-56.js` |
-| prediction + amendment | `.../d6095ec4-.../workflows/scripts/round56-prediction{,-amendment}.txt` |
-| base | `d38b644f4`, unchanged |
+| **sugar-crush** | **10126 / 149182 / 1 skipped / rc 0** |
+| **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** |
+| **candy-core** | **842 / 7587 / 24 / rc 0** |
+| **candy-flip** | **83 / 227 / 2 / rc 0** |
+| **candy-mosaic** | **459 / 7753 / 6 / rc 0** |
 
-**THE PREDICTION IS UNCHANGED AND THAT IS DELIBERATE.** Same base, same three lanes, same thirteen items.
-10167 tests EXACT · assertions ≥ 152,200 · skipped 1 · rc 0 · candy-pty ≥ 614. If a restart costs the
-round tests, the prediction is what makes that visible instead of excusable. Amendment 1 adds three
-recovery-specific side-predictions — **d** the inherited commits are the round's weakest surface,
-**e** the watchdog goes green without firing and that proves nothing, **g** the `PtyPoolReactLoop` time
-gap gets explained without closing E490 — and records **f** as a MEASUREMENT rather than a forecast,
-because it was settled from the transcripts before it could be predicted.
+Script (DURABLE path — never launch from a scratchpad path, `/tmp` does not survive a reboot):
+`/home/my/.claude/projects/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/workflows/scripts/crush-round-57.js`
+Prediction: `.../workflows/scripts/round57-prediction.txt`, written BEFORE launch.
 
-### THE LANE STATE THE RECOVERY INHERITED — verified, clean, closures intact
+### THE ROUND-57 LANES
 
-| lane | HEAD | commits above base | provenance |
-|---|---|---|---|
-| **a** the-bugs-the-user-hit | `7437a9b06` | 2 | `ab233e47d` E455 (implementer's own) · `7437a9b06` **supervisor WIP**, E456 source only |
-| **b** mcp-lsp-remainder | `bd1d55c32` | 2 | both the implementer's own — E474/E480. Died with a clean tree. |
-| **c** harness-integrity | `ba9eb998c` | 1 | **supervisor WIP** — the E490 hang watchdog, green at `--filter`, no suite figure |
+- **a — paint the thinking.** E495 (implicitly-nullable backend params, deprecated on the 8.4 CI leg) →
+  E494 (E456's reasoning channel reaches the parent and **nothing paints it** — the user still cannot see
+  the model think) → E493 (a BATCH provider's turn still dies on the idle ceiling) → E496 + E497.
+  🔴 **E495 must be its own commit and must come first** — it and E494's step 0 are the same edit to four
+  backend signatures, and wiring first means a fifth argument that silently no-ops on three backends.
+- **b — MCP/LSP transport.** E499 (one malformed `.mcp.json` server aborts ALL of them), E506 (uncapped
+  `$readBuffer` in all three framing classes), E508 (`writeAll()` is a 15s synchronous block on the
+  caller's thread), E503, E504, plus the `tests/MCP/` and `tests/LSP/` halves of E510 and E505.
+- **c — guards, citations and CI.** E490 (**answer it or explicitly retire it this round**), E498+E509,
+  E507, the non-MCP/LSP halves of E510 and E505, E487.
 
-Closures re-verified by `is_link()` after the restart: **sugar-crush 18 · candy-pty 7 · candy-core 3 ·
-candy-flip 6, in all three lanes.** Every in-flight file parses. All three lanes are on `master` and
-clean.
+### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
 
-🔴 **THE TWO `WIP` COMMITS ARE NOT THE IMPLEMENTERS' COMMITS.** Lanes a and c died mid-edit; the
-supervisor committed their dirty trees verbatim rather than leaving them dirty, because a dirty lane root
-breaks a mutation harness's pre-flight (rule 19 / E168) and round 44 already destroyed ~250 lines of a
-lane's own work with a `git checkout --` over uncommitted edits.
-
-🔴 **BOTH WIP MESSAGES WERE THEN REWRITTEN FROM THE DEAD AGENTS' TRANSCRIPTS, AND THE FIRST DRAFTS WERE
-WRONG.** The transcripts survived the restart in
-`/home/my/.claude/projects/-home-sites-sugarcraft/700ebe8e-.../subagents/workflows/wf_7c73518b-ad8/`, and
-mining them corrected three things the supervisor had asserted from the tree alone: that no lane had
-observed a baseline (all three observed the floor **exactly**, independently); that lane c's watchdog had
-never been run (it is green at `--filter HangWatchdog` — 6 tests / 26 assertions, rc 0, no strays — and it
-has a real known-positive, having fired on the lane's own first-draft fixture and named the test); and
-that lane a's item 3 was outstanding (it is done, folded into the same edit as E456). **The tree tells you
-what exists. It does not tell you what was measured.** Transcripts are a recovery channel this plan had
-never used, and they carried two mutation tables, five suite figures, an undeclared brief deviation and a
-committed figure-provenance defect that would otherwise have been lost outright.
-
-### WHY NOT `resumeFromRunId`, AND WHY NOT A PURE "SKIP IMPLEMENT" RECOVERY
-
-The old block offered three paths. Both of the obvious ones were wrong here, for reasons worth keeping:
-
-- **`resumeFromRunId` was unavailable and would not have helped.** It is same-session only, and the
-  session is gone. Even in-session, with zero completions journalled it caches nothing — it re-runs all
-  three implementers from the top, in lane roots that are no longer at base.
-- **The precedent path — skip implement, feed the committed diffs into review → fix — would have shipped
-  about a third of the round.** That precedent (`crush-round-54-recover.js`) was built for lanes killed in
-  the FIX stage, where implement was complete. Here implement was 5 commits into 13 items: lane b had
-  four of six items never started, lane c four of five. **A recovery shaped like the last one is a
-  recovery shaped for the wrong failure.** Read the lane state before choosing the recipe.
-
-The recovery therefore runs `Finish → Review → Fix`. The finish prompt hands each lane its own commit
-table with provenance and a "reviewed: nobody" column, points it at rules 30/34/22, and requires a new
-first report heading — **`INHERITED WORK`**, one entry per commit it did not make, saying what it verified
-and how. The reviewer is told the diff is mixed-provenance and that the oldest commits are the least
-examined, not the most.
-
-### 🔴 THREE DEFECTS FOUND IN THE LAUNCHED SCRIPT — ONE IS A LIVE FINDING
-
-At launch, two were already known and fixed (the `COMMON` block carried round 55's floors and omitted
-candy-pty). A third survived into the live run and was found only during this recovery:
-
-- **E492 — the round-56 script shipped ROUND 53's ownership map.** `OWNERSHIP` named lanes
-  "candy-core descriptor census", "sugar-crush runtime bugs" and "close the inheritance", and listed files
-  no round-56 lane touches. All three implementers read it. **This is E416 recurring inside the very block
-  whose own text warns about E416** — the block tells lanes to report exactly this contradiction, and the
-  block was the thing that was wrong. Rewritten for the real lanes in the recovery script.
-- The driver's `log()` line described round 54's items. Cosmetic, but it is the one line a human watching
-  `/workflows` reads.
-- Rule 24's scratchpad path pointed into a dead session. Repointed, with the old path kept as an
-  explicitly forensics-only reference: its files were measured on a tree that no longer exists, which is
-  E427's exact failure mode.
-
-**The rule this leaves behind: a prepped script's PROSE rots the same way its numbers do.** Re-checking
-the floors at launch (which was done) is half the check. The ownership map, the log line and every path in
-the rules block are the other half.
+1. **Plan commits are UNPUSHED.** Everything from `4ecff10d3` onward sits above `origin/master`. Standing
+   correction: **never infer publication state from your own actions** — the user pushes this same working
+   copy from their own terminal, so `git ls-remote origin master` is the only reliable answer, and this
+   line has been wrong in both directions already.
+2. **E490 is open, with a candidate and no reproducer.** Round 56 found a leaked 5s cap timer on the
+   SHARED ReactPHP loop and offered it as a candidate, explicitly not a diagnosis. Steps (a) and (b) — the
+   `--testdox` repro loop, and the same loop at `a8acfcc9` — have now been outstanding for two rounds.
+   Lane c owns it and this round demands a definite outcome; **"did not reproduce in N takes" IS a definite
+   outcome**, a third "still open" with no new measurement is not.
+   ⚠️ One clean data point exists already: at the round-56 merge, **sugar-crush THEN candy-pty in the same
+   script** — the exact context the single hang happened in — ran candy-pty green in 48 seconds. That is
+   ONE take, not a campaign. Do not let it be quoted as more.
+3. `left_steps.md` (repo root, UNTRACKED) is a 1,208-line inventory of all 515 plan steps with status. It
+   was generated at `f9840570` and predates E455-E523, so its counts are stale.
+4. **The worklog has a gap:** rounds 53, 54 and 55 were never written up in `crush_code_worklog.md` and
+   live only in this file's `0-NOW-*` blocks. Round 56 is written up; the gap is not backfilled.
 
 ### 🔴 NEVER RUN A SUITE WITHOUT A WATCHDOG — E490 IS STILL LIVE
 
-candy-pty can hang indefinitely (E490, unexplained, ~1 in 76 takes) and **a hang is not a failure**: it
+candy-pty can hang indefinitely (E490, unexplained, ~1 in 77 takes) and **a hang is not a failure**: it
 looks like a slow suite locally and a job timeout naming nothing in CI. Until E490 is closed, every suite
 run — floors, lane figures, verification — goes through a watchdog that kills the ONE recorded pid:
 
@@ -117,65 +69,78 @@ kill -0 $P 2>/dev/null && { echo "HUNG"; kill -TERM $P; sleep 2; kill -KILL $P; 
 ```
 
 `timeout` does NOT reliably kill a wedged PTY/FFI child, and a global `pkill` is prohibited. Capture
-`--testdox` so the LAST NAMED test is recorded on every take: if it hangs again, that name is the single
-most valuable thing to come out of it, and it is unrecoverable afterwards.
+`--testdox` so the LAST NAMED test is recorded on every take.
 
-Lane c's inherited `ba9eb998c` makes that watchdog structural — a PHPUnit `Test\Prepared` subscriber
-plus an out-of-process killer that dumps E490's forensic bundle by name and SIGKILLs by pid, budget 90s,
-opt-out `CANDY_PTY_HANG_BUDGET=0`. It is green at `--filter` and has a genuine known-positive. **What it
-does not have is a full-suite figure or a single mutation** — no mutation harness was ever built in that
-lane. It is step (c) of the E490 item, bounding the wait; it is not a root cause and must not be presented
-as one.
+**candy-pty now carries its own structural watchdog** (`candy-pty/tests/Support/HangWatchdog.php`, armed
+from `tests/bootstrap.php`, 90s budget, opt-out `CANDY_PTY_HANG_BUDGET=0`). It converts a hang into a
+named test plus a forensic bundle. It has a real known-positive. **It is not a substitute for the shell
+watchdog above** — it bounds a wedged TEST, not a wedged runner.
 
-🔴 **AND IT LEFT A LEAD.** Under `--filter PtyPoolReactLoop` the suite reports 5.02s wall while its three
-tests self-report 0.14s, 0.34s and 0.13s — **~4.4 seconds unaccounted for in a three-test filter**, and
-installing the watchdog did not move it. The dead agent wrote "Confirmed a measured defect" and died
-before saying what it had concluded. Time disappearing outside the tests' own accounting, in the pool that
-owns pty lifetimes, is the right shape for a hang that happens once in seventy-six takes.
+### NEW STANDING RULES FROM ROUND 56
 
-### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
+- **38** — **a reviewer's prescription can describe a state the code cannot reach.** Round 56's lane a was
+  handed a MAJOR whose prescribed test could not be written; it refuted it by measuring that deleting the
+  fallback is green across the entire suite. **Tenth wrong prescription across four rounds, second of this
+  shape.** Refute with a measurement, never an argument.
+- **39** — **`catch (\Throwable)` around a test body swallows PHPUnit's own `ExpectationFailedException`**,
+  so the test passes while asserting nothing. Ten sites in eight files, found by MUTATING a control rather
+  than reading it. Catch the specific class.
+- **40** — **an exemption keyed on PROSE can be bought with a sentence, and the fix's own comment will buy
+  it.** Round 56's HOME census skipped any file whose text mentioned the sandbox helper — so the comment
+  explaining the fix exempted a file that did not apply it. Key exemptions on STRUCTURE: a trait use, a
+  declared type, a token-stream fact. Rule 33's sibling.
+- **41** — **a surviving mutation may be an EQUIVALENT mutant, and that verdict does not transfer to its
+  neighbour.** Lane a correctly excused one survivor, then found the mutation one line away was not
+  equivalent at all. When you excuse a survivor, mutate its neighbours before you move on.
+- **42** — **a prepped script's PROSE rots exactly like its numbers.** Round 56 shipped round 53's
+  ownership map to all three lanes (E492/E416) and **none of them reported the contradiction**, though a
+  standing rule told them to. Re-checking the FLOORS at launch is a check that exists and works; it only
+  covers the numbers.
 
-1. **Two plan commits are UNPUSHED** — `483bd6f5f` and `3c313a8ff` sit above `origin/master`
-   (`4ecff10d3`). Docs only. Note the standing correction: **never infer publication state from your own
-   actions** — the user pushes this same working copy from their own terminal, so `git ls-remote origin
-   master` is the only reliable answer and this line has been wrong in both directions already.
-2. **E490 is open and unexplained** — 1 hang in ~76 takes, 0/60 on `--filter PtyPool`, 0/15 full-suite.
-   The untried experiment is still untried: sugar-crush THEN candy-pty, in the same script, repeatedly.
-   Lane c owns it.
-3. **E492 is filed above** and needs a backlog entry at merge; the backlog's highest id is 491.
-4. `left_steps.md` (repo root, UNTRACKED) is a 1,208-line inventory of all 515 plan steps with status.
-   It was generated at `f9840570` and predates E455-E492, so its counts are stale.
+### ⚠️ A STANDING FACT WAS CORRECTED — E457's HEADLINE WAS WRONG (E516)
 
-### IF THE RECOVERY IS ALSO KILLED
+`grep -qv X` in an agent shell does **not** "always answer no"; it behaves as `! grep -q X`. The
+divergence that actually bites is that the shim passes `--ignore-files`, so **a recursive `grep -r`
+honours `.gitignore`** and cannot see `vendor/` or any ignored file. **Any absence census whose answer is
+load-bearing must call `/usr/bin/grep` by absolute path.** Audited across the tree: zero offenders.
 
-The same rules apply and the same evidence survives: **read the lane git state, not the harness's report**
-(rule 30). `git -C /home/sites/crush-lane-{a,b,c} log --oneline d38b644f4..HEAD` is the ground truth. If a
-lane died mid-edit, commit its dirty tree as labelled WIP before anything else touches that root — that is
-what made this recovery cheap. Do not `git reset --hard` a lane root until you have decided which path you
-are on. And **do not assume the last recovery's shape fits**: check how far implement actually got before
-choosing between "finish the lanes" and "skip to review".
-
-### THE ROUND-56 LANES
-
-- **a — the two bugs the USER hit while daily-driving.** E455 (the chat input box never wraps — the one
-  pane that skips the wrap choke point) and E456 (a long think block is killed as a hung provider,
-  because the idle timer counts only content deltas as progress). Not audit findings: a person typed into
-  the box and watched it go wrong.
-- **b — the MCP/LSP family round 55 opened against its own work and did not close.** E473, E477+E436,
-  E474, E475/E476, E478/E479, E480.
-- **c — harness integrity.** E490 (the unexplained candy-pty hang), E481 + the rule-33 question about
-  round 55's exemption row, E482, E487/E488, E457.
-
-### NEW STANDING RULES FROM ROUND 55
-
-- **36** — a test that only asserts `method_exists()` or pokes a `ReflectionMethod` is a DEAD INSTRUMENT.
-  E491 was exactly that shape and the branch it guarded had never executed in the library's history.
-- **37** — choose skip gates by MEASURING this host, never by copying an existing gate. E491's first test
-  draft was written against `pcntl_setitimer`, which this host lacks; it skipped silently and was worth
-  nothing.
 ---
 
-## 0-NOW-56. ROUND 55 CLOSED (floor 10059) — read this first, then §0 for the standing rules
+## 0-NOW-57. ROUND 56 CLOSED (floor 10126) — the restart, the recovery, and the first prediction miss in thirteen rounds
+
+**Closed 2026-08-25 at `CLOSESHA_PLACEHOLDER`, from base `d38b644f4`.** Backlog **492 → 523**.
+Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 56`.
+
+🔴 **THE PREDICTION MISSED: 10167 predicted EXACT, 10126 measured — −41 tests**, and assertions came in at
+149182 against a ≥152,200 lower bound. **First miss on tests in thirteen rounds, first on assertions in
+four.** A client restart killed all three implementers mid-flight; when the recovery was built the
+prediction was deliberately left unchanged, with an amendment saying in writing that if the restart cost
+the round tests, this is where it would show. It showed. **Both totals came out exactly additive** —
+10059+22+38+7 and 148589+204+320+69 — which is itself notable, because round 44's headline was that
+assertion counts are *not* additive across a merge. They are when the source sets are genuinely disjoint.
+
+**THE TRANSCRIPTS OUTLIVED THE AGENTS, AND THAT IS A RECOVERY CHANNEL THIS PLAN HAD NEVER USED.** The
+three killed agents' JSONL transcripts survived in the dead session's directory
+(`.../700ebe8e-.../subagents/workflows/wf_7c73518b-ad8/`). Mining them corrected three things the
+supervisor had asserted from the lane trees alone: that no lane had observed a baseline (all three had,
+exactly); that lane c's watchdog had never been run (it was green at `--filter` with a real
+known-positive); and that lane a's item 3 was outstanding (it was done). **The tree tells you what exists;
+it does not tell you what was measured.** Also recovered and otherwise lost: two mutation tables, an
+undeclared brief deviation, a deferred defect, and a committed figure-provenance defect.
+
+**E492 — the round shipped ROUND 53's ownership map and not one lane noticed.** `E416` and "ownership
+map" appear on line 1 of each transcript and nowhere else. **The measurement worth keeping is the rate:** a
+standing rule that names its own failure mode, cites its round, and gives the exact reporting action fired
+**zero times out of three**.
+
+**If a round is killed again:** read the lane git state, not the harness's report (rule 30). Commit any
+dirty lane tree as labelled WIP before anything else touches that root. Mine the dead agents' transcripts
+before writing any brief about what they did. And **do not assume the last recovery's shape fits** — check
+how far implement actually got before choosing between "finish the lanes" and "skip to review".
+
+---
+
+## 0-NOW-56 (now superseded). ROUND 55 CLOSED (floor 10059) — read this first, then §0 for the standing rules
 
 **Closed 2026-08-25 at `b489405ba`, from base `a8acfcc9`; then `d38b644f4` after the E491 fix.**
 Three lanes, nine agents, zero errors.
