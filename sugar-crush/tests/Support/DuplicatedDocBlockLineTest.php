@@ -207,6 +207,29 @@ final class DuplicatedDocBlockLineTest extends TestCase
             'a starless continuation line no longer separates the two identical lines around it',
         );
 
+        // (3b) AND THE SHAPE THE REAL POPULATION ACTUALLY HAS. A FULLY EMPTY
+        // line takes arm (3) and not arm (1): `ltrim('')` does not begin with a
+        // star, so it never reaches the empty-body reset. Every doc-block line
+        // in this package that exercises arm (3) is of this shape and none is
+        // starless prose, so without this row the arm's real-population
+        // reachability rests on the paragraph above it rather than on a test.
+        $this->assertSame(
+            [],
+            self::repeatedDocBlockLinesIn("<?php\n/**\n" . $line . "\n\n" . $line . "\n */\nclass A {}\n"),
+            'a fully empty continuation line no longer separates the two identical lines around '
+                . 'it, which is the shape every arm-(3) site in this package really has',
+        );
+        // RULE 25: THE POSITIVE HALF, so the row above is not an emptiness a
+        // dead scanner also produces. Same two lines, same builder, separator
+        // removed — the pair must be REPORTED, which is what makes the `[]`
+        // above a statement about the empty line rather than about the walk.
+        $this->assertCount(
+            1,
+            self::repeatedDocBlockLinesIn("<?php\n/**\n" . $line . "\n" . $line . "\n */\nclass A {}\n"),
+            'with the empty separator removed the same pair is still not reported, so the row '
+                . 'above proves nothing about what an empty line does',
+        );
+
         // AND A `//` RUN IS OUT OF SCOPE BY CONSTRUCTION, not by a text test.
         $slashes = '// $this->assertSame(1, 1);';
         $this->assertSame(
