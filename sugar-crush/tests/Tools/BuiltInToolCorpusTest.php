@@ -803,6 +803,27 @@ final class BuiltInToolCorpusTest extends TestCase
             $prose,
             'ARGUMENT 2 has left RepoMapBlock; the assertion above now pins nothing anyone can read',
         );
+
+        // ARGUMENT 1's two CORRECTIONS, pinned as prose for the same reason the
+        // arguments are: an unpinned corrective sentence rots back into the
+        // claim it corrected. MEASURED before these two lines existed —
+        // inverting the short-name sentence to say the listing was nine times
+        // the cap and could not fit left the FULL SUITE green, so the bounds
+        // above pin the arithmetic while nothing pinned the reading of it.
+        $this->assertStringContainsString(
+            'does not come to several times it',
+            $prose,
+            'the correction to ARGUMENT 1 ("over the cap, but not several times over it") has left '
+            . 'RepoMapBlock, and the upper bound asserted above now pins nothing anyone can read',
+        );
+        $this->assertStringContainsString(
+            'BARE SHORT-NAME width the same listing FITS comfortably inside the cap',
+            $prose,
+            'the WIDTH half of ARGUMENT 1 has left RepoMapBlock. It is the half that makes the '
+            . 'design note true rather than merely plausible — a listing that fits at short-name '
+            . 'width was NOT rejected for not fitting — and the short-name bound asserted above '
+            . 'now pins nothing anyone can read',
+        );
     }
 
     /**
