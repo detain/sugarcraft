@@ -78,6 +78,36 @@ final class StdioMcpServer implements McpServer
     private const MAX_STDERR_BYTES = 65536;
 
     /**
+     * Upper bound on ONE NDJSON line, and on the persistent read buffer that
+     * accumulates towards it.
+     *
+
+     * ⚠️ IT IS THE BUFFER THAT WAS UNBOUNDED, NOT THE PEER. {@see $readBuffer}
+     * is instance state and survives every call, so a peer that emits an endless
+     * stream WITH NO FRAME TERMINATOR grew it without limit for the life of the
+     * process. This class already caps its stderr tail at
+     * {@see MAX_STDERR_BYTES} for exactly this reason, so the asymmetry sat
+     * inside one file.
+     *
+     * SIXTY-FOUR MEBIBYTES, and the number is inherited rather than invented:
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} is the
+     * same bound on the same question — "a frame legitimately carries raw image
+     * bytes, so it has to be generous, but a corrupt header must never make the
+     * parent try to buffer an arbitrary length before it notices the stream is
+     * garbage". An MCP `tools/call` result carrying a file or an image is the
+     * same shape of payload.
+     *
+     * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION, AND THE DISTINCTION
+     * IS THE WHOLE DESIGN. Silently cutting the buffer at the cap would hand
+     * `\SugarCraft\Crush\McpMessage::parse()` half a frame, which parses as malformed — so the diagnostic
+     * would blame the peer for sending garbage when what actually happened is
+     * that THIS side refused to hold any more. The buffer is dropped and a
+     * `\RuntimeException` naming the cap is raised instead.
+     */
+    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+
+
+    /**
      * How long THE HANDSHAKE — `initialize` plus `tools/list`, one shared
      * wall clock across both — may take before {@see start()} gives this server
      * up. It is not, and must not become, a bound on {@see callTool()}: an MCP
@@ -960,6 +990,7 @@ final class StdioMcpServer implements McpServer
                 continue;
             }
             $this->readBuffer .= $chunk;
+            $this->refuseAnOversizedFrame();
         }
 
         $line = substr($this->readBuffer, 0, $newline);
@@ -1060,6 +1091,36 @@ final class StdioMcpServer implements McpServer
         return strlen($this->stderrTail) >= self::MAX_STDERR_BYTES
             ? ' [stderr truncated] ' . $tail
             : ' stderr: ' . $tail;
+    }
+
+    /**
+     * Refuse a frame that has passed {@see MAX_FRAME_BYTES} with no terminator.
+     *
+     * The buffer is CLEARED before the throw, so a caller that survives the
+     * exception — {@see \SugarCraft\Crush\MCP\McpClient::startServer()} drops
+     * the server, {@see \SugarCraft\Crush\Tools\McpToolBridge::execute()}
+     * turns it into a tool result — is not left with a live object still holding
+     * 64 MiB it can never parse.
+     *
+     * @throws \RuntimeException when the cap is passed
+     */
+    private function refuseAnOversizedFrame(): void
+    {
+        if (strlen($this->readBuffer) <= self::MAX_FRAME_BYTES) {
+            return;
+        }
+
+        $held = strlen($this->readBuffer);
+        $this->readBuffer = '';
+
+        throw new \RuntimeException(sprintf(
+            'MCP server %s sent %d bytes with no newline, past this client\'s %d-byte frame '
+            . 'cap; the buffer was dropped rather than truncated, because half a frame parses '
+            . 'as a malformed message and would blame the server for this side\'s refusal',
+            $this->name,
+            $held,
+            self::MAX_FRAME_BYTES,
+        ));
     }
 
     /** Consume and return the entire pending buffer as one trimmed line. */

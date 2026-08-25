@@ -150,6 +150,34 @@ final class ClaudeCodeMcpClient
     private const MAX_STDERR_BYTES = 65536;
 
     /**
+     * Upper bound on ONE NDJSON line, and on the persistent read buffer that
+     * accumulates towards it.
+     *
+     * ⚠️ IT IS THE BUFFER THAT WAS UNBOUNDED, NOT THE PEER. {@see $readBuffer}
+     * became instance state so that a line split across polls survived the call
+     * that read half of it — that fix was right and is measured in the property's
+     * own note — but it JOINED an existing family defect rather than creating
+     * one: {@see \SugarCraft\Crush\MCP\StdioMcpServer} and
+     * {@see \SugarCraft\Crush\LSP\LspConnection} were uncapped before it. A
+     * server that emits an endless stream with no newline grows this without
+     * limit for the life of the process, and {@see callTool()} polls
+     * {@see readMessages()} a hundred times per call.
+     *
+     * SIXTY-FOUR MEBIBYTES, inherited rather than invented: the same bound
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} puts on
+     * the same question, for the same reason — a frame legitimately carries raw
+     * image bytes, and a corrupt stream must never make the parent buffer an
+     * arbitrary length before noticing.
+     *
+     * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. Cutting the buffer at
+     * the cap would hand `McpMessage::parse()` half a line, which comes back as
+     * a malformed message and blames the SERVER for what is in fact this side
+     * refusing to hold more. The buffer is dropped and a `RuntimeException`
+     * naming the cap is raised instead.
+     */
+    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+
+    /**
      * The TAIL of whatever the MCP server has written to stderr, bounded.
      *
      * The tail rather than the head because this text answers "why did it stop
@@ -599,6 +627,24 @@ final class ClaudeCodeMcpClient
                 break;
             }
             $this->readBuffer .= $chunk;
+
+            // INSIDE the loop, not after it. A peer that never stops writing
+            // never lets this loop end on its own, so a check placed after it
+            // would be a cap that is only consulted once the stream is already
+            // finished — which is the one case it is not needed in.
+            if (strlen($this->readBuffer) > self::MAX_FRAME_BYTES) {
+                $held = strlen($this->readBuffer);
+                $this->readBuffer = '';
+
+                throw new RuntimeException(sprintf(
+                    'the MCP server sent %d bytes with no newline, past this client\'s '
+                    . '%d-byte frame cap; the buffer was dropped rather than truncated, '
+                    . 'because half a line parses as a malformed message and would blame '
+                    . 'the server for this side\'s refusal',
+                    $held,
+                    self::MAX_FRAME_BYTES,
+                ));
+            }
         }
 
         // SPLIT ONCE, AFTER THE READS, rather than inside the loop. The old shape

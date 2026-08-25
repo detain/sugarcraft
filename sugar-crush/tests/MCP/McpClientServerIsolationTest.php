@@ -77,6 +77,9 @@ final class McpClientServerIsolationTest extends TestCase
              $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
+        // No report: a mistyped ENTRY is filtered inside parseTools(), so the
+        // server it came from starts cleanly with one fewer tool. Only a config
+        // this class cannot BUILD is reported — see McpClient::startServer().
         $client->startServers();
 
         $this->assertSame(
@@ -101,6 +104,9 @@ final class McpClientServerIsolationTest extends TestCase
             )],
         );
 
+        // The mistyped entry is filtered inside parseTools(), so the server
+        // starts cleanly — a launch failure here would mean the filter had been
+        // replaced by a refusal.
         $client->startServers();
 
         $this->assertSame(
@@ -123,7 +129,7 @@ final class McpClientServerIsolationTest extends TestCase
             [$this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
-        $client->startServers();
+        $this->assertStartFailed($client);
 
         $this->assertSame(
             ['ok'],
@@ -141,7 +147,7 @@ final class McpClientServerIsolationTest extends TestCase
             [],
         );
 
-        $client->startServers();
+        $this->assertStartFailed($client);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Unknown MCP server: bad');
@@ -165,6 +171,9 @@ final class McpClientServerIsolationTest extends TestCase
              $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
         );
 
+        // NO failure here, and that is the row's second half: a scalar where a
+        // tool object belongs is SKIPPED by parseTools(), so the server itself
+        // starts fine. It is not a launch failure at all.
         $client->startServers();
 
         $this->assertSame(
@@ -201,6 +210,42 @@ final class McpClientServerIsolationTest extends TestCase
     // =========================================================================
     // Fixtures
     // =========================================================================
+
+    /**
+     * Drive `startServers()` and require it to REPORT — every row here builds a
+     * config with an entry that cannot start, and the report is what reaches the
+     * operator's `error_log()` and the transcript through
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()}.
+     *
+     * ⚠️ THE ASSERTION THAT MATTERS IS THE ONE AFTER THIS CALL, NOT THIS CALL.
+     * Reporting was never the defect; the defect was that reporting ABORTED the
+     * loop, so the servers that could have started did not. A row that only
+     * checked for the exception would pass against the original code.
+     *
+     * Only a config this class cannot BUILD is reported here. A server whose
+     * `start()` fails is skipped in silence, and a mistyped tool inside an
+     * otherwise fine `tools/list` is not a start failure at all.
+     */
+    private function assertStartFailed(McpClient $client): void
+    {
+        try {
+            $client->startServers();
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString(
+                'could not be built',
+                $e->getMessage(),
+                'startServers() threw something other than its own aggregate report',
+            );
+
+            return;
+        }
+
+        $this->fail(
+            'startServers() reported nothing for a config containing an entry that cannot '
+            . 'start. Bootstrap::mcpClient() drives its error_log() and transcript diagnostic '
+            . 'off this throw — swallowing the failure trades one defect for another.',
+        );
+    }
 
     /** @return array<string, string> */
     private function httpEntry(): array

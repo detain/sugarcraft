@@ -74,13 +74,46 @@ final class McpClient
 
     /**
      * Load and start MCP servers from config.
+     *
+     * EVERY ENTRY IS ATTEMPTED, and every one that comes up is registered, even
+     * when an earlier or later entry fails — see {@see startServer()} for the
+     * three measured routes by which one bad entry used to disable the whole
+     * file, and for why the failures are still reported rather than swallowed.
+     *
+     * @throws \RuntimeException naming every entry whose CONFIG could not be
+     *         built — an unrecognised `type` — AFTER all of them have been
+     *         attempted, so the throw no longer decides which servers get to
+     *         exist. A server whose `start()` merely fails is skipped silently,
+     *         as it always was; see {@see startServer()} for why those two are
+     *         not the same event. A caller that wants the working servers
+     *         regardless catches this and carries on — which is what
+     *         {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()} does, and
+     *         why that seam is the one place in this package writing both
+     *         `error_log()` and the transcript.
      */
     public function startServers(): void
     {
         $config = $this->loadConfig();
+        $failures = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
-            $this->startServer($name, $serverConfig);
+            $failure = $this->startServer($name, $serverConfig);
+            if ($failure !== null) {
+                $failures[] = $failure;
+            }
+        }
+
+        // AFTER the loop, deliberately: this is the whole fix. The throw used to
+        // happen ON the offending entry, so entries after it were never even
+        // constructed and the same broken file lost a different set of servers
+        // depending purely on key order.
+        if ($failures !== []) {
+            throw new \RuntimeException(sprintf(
+                '%d MCP server %s in this config could not be built: %s',
+                count($failures),
+                count($failures) === 1 ? 'entry' : 'entries',
+                implode('; ', $failures),
+            ));
         }
     }
 
@@ -128,25 +161,49 @@ final class McpClient
      * started and stayed started. The same broken `.mcp.json` therefore lost
      * everything, something, or nothing depending purely on key order.
      *
-     * WHY A BARE `catch` STILL EARNS ITS PLACE, AND WHAT IT COSTS: this is the
-     * one place a user's cloned `.mcp.json` meets the process, and the failure
-     * this method exists to prevent is "one bad entry disables MCP". The cost is
-     * real and is not paid down here — nothing records WHY a server was dropped,
-     * because this class has no sink to record it to. That is a live finding,
-     * not an accepted trade; see the round-57 lane b report.
+     * ⚠️ TWO CATCHES, NOT ONE, AND FLATTENING THEM INTO ONE WAS THIS FIX'S FIRST
+     * CUT AND ITS FIRST MISTAKE. The original code distinguished the two classes
+     * by WHERE the throw came from, and the distinction is principled:
+     *
+     *   CONFIG ERROR (the `match`): the file is wrong and only a human can fix
+     *       it. Reported. `Bootstrap::mcpClient()` catches the report and writes
+     *       it to `error_log()` AND the transcript — the one site in that class
+     *       that uses both channels — then carries on with fewer tools.
+     *   RUNTIME FAILURE (`start()`): the binary is missing, the host is down,
+     *       the handshake timed out. Routine, expected, and SKIPPED SILENTLY, as
+     *       it always has been.
+     *
+     * Collapsing both into one aggregate report was green across the MCP suites
+     * and red across four rows that pin those two contracts. What was actually
+     * wrong was never the reporting — it was that reporting ABORTED THE LOOP.
+     * So both catches stay, both keep their old meaning, and the only change is
+     * that the config-error report is deferred to {@see startServers()} until
+     * every entry has been attempted. The runtime catch also widens from
+     * `\RuntimeException` to `\Throwable`, which is route 3.
+     *
+     * @return string|null a description of a CONFIG error, to be reported after
+     *         every entry has been attempted; null for a clean start and for a
+     *         runtime failure alike
      */
-    private function startServer(string $name, array $config): void
+    private function startServer(string $name, array $config): ?string
     {
         $type = $config['type'] ?? 'stdio';
 
         try {
             $server = $this->buildServer($name, $type, $config);
+        } catch (\Throwable $e) {
+            return sprintf('%s (%s)', $name, $e->getMessage());
+        }
+
+        try {
             $server->start();
         } catch (\Throwable) {
-            return;
+            return null;
         }
 
         $this->servers[$name] = $server;
+
+        return null;
     }
 
     /**
