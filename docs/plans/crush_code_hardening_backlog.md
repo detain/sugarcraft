@@ -19170,3 +19170,76 @@ than a promise. It is where a future widening starts.
 not committed and not a policy breach. Recorded only because a per-lib lock makes CI's path-repo
 injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
 resolve from the lock and silently ignore the injected closure.
+
+### Ec60-1 — the live worker cannot heartbeat through a non-streaming provider call
+
+**DEFERRED FINDING, not a hole today.** `ProcessExecutor::createLiveWorkerScript()` emits one
+heartbeat before the provider call and then one every 5s *between relayed chunks*. On the
+`supportsStreaming() === false` arm there are no chunks: the child is blocked inside
+`$provider->complete($request)` and cannot emit anything. The parent's
+`HEARTBEAT_TIMEOUT_SECS` is 15, so a non-streaming provider taking longer than that is
+SIGTERM/SIGKILLed and reported as "Worker heartbeat timeout — process unresponsive" while it was
+working correctly.
+
+Not reachable today: nothing in `src/` configures a `workerProvider` at all, and the only spec the
+worker accepts offline (`['type' => 'echo']`) streams. It becomes live the moment a real
+non-streaming provider is wired. The fix is not a longer timeout — it is a heartbeat the child can
+emit while blocked, e.g. an alarm signal, a `pcntl_fork()`ed heartbeat emitter, or preferring
+`completeStream()` unconditionally and adapting the non-streaming providers.
+
+Standing user rule: LLM calls may legitimately run for tens of minutes, so this must not be
+"solved" by capping the request.
+
+### Ec60-2 — a sub-agent worker runs with NO TOOLS, and nothing says so at runtime
+
+**DEFERRED FINDING.** `ProcessExecutor::encodeTools()` sends the request's tool NAMES across the
+startup line and `createLiveWorkerScript()` builds its `CompleteRequest` with `tools: null`. The
+reason is mechanical rather than an omission: a `Message` is data and round-trips through
+`toArray()`, but a `Tool` is data plus an `execute()` implementation, and rehydrating one in the
+child needs the registry that built it, which needs the session it belongs to.
+
+Consequence: a fork-context skill or a workflow agent dispatched through `ProcessExecutor` can
+reason but cannot act. The names are on the wire so a transcript shows what the parent BELIEVED it
+was granting, which is why they are sent rather than dropped — but nothing surfaces the gap to a
+user, and the model is simply told about no tools.
+
+This intersects lane b's round-60 work on `AgentManager::executeSubAgent()`'s tool grant: whatever
+grant that path computes cannot reach a `ProcessExecutor` worker until this is answered. The
+options are a name-plus-schema wire format the child rehydrates against a registry it rebuilds, or
+an RPC back to the parent for `execute()`.
+
+### Ec60-3 — `ProcessExecutor`'s live worker `require`s an autoloader path taken off the wire
+
+**DEFERRED FINDING, currently contained.** The child `require`s `$msg['autoload']`, which arrives in
+the startup JSON line. Classified `PROCESS_DERIVED` in `ReadPathCensusTest::READ_PATHS` because the
+value is computed in the parent (`ProcessExecutor::autoloadPath()`, two climbs from `__DIR__`) and
+reaches the child only down the stdin pipe `proc_open()` just created, so no party outside this
+process can name it; the child additionally refuses a value that is not `is_file()`.
+
+Recorded because the containment is a property of the TRANSPORT, not of the check. If the worker
+protocol ever gains a second writer — a supervisor multiplexing several children, a resumed worker
+reading a spooled startup line off disk — the `require` becomes attacker-influenced and the
+`is_file()` test does not bound it. `Sessions/BackgroundSupervisor.php|require` carries the same
+shape and the same exposure.
+
+### Ec60-4 — `Chat::executeAgents()` cannot give its sub-agents a provider
+
+**DEFERRED FINDING, and it is the reason the production sub-agent path is unexercised.**
+`Chat::executeAgents()` builds its executor from `AgentPoolConfig`, which carries `maxConcurrent`,
+`defaultTimeoutSeconds` and `stopOnFirstFailure` — and no provider identity. `Chat` HAS a provider;
+`AgentPoolConfig` has nowhere to put one, and `Agent::$provider` is a NAME, not a configuration.
+
+With the worker now real, that gap is visible instead of hidden: a config-built pool dispatches a
+sub-agent, the worker refuses for want of a provider, and the agent comes back Failed. Before, the
+same call returned a fabricated success. Closing it needs a provider CONFIG (the
+`ProviderFactory`-shaped array `ProcessExecutor::$workerProvider` takes) to reach the pool —
+`AgentWorkerPool::__construct()`'s `workerProvider` parameter and `AgentWorkerPool::workerProvider()`
+are the seam; what is missing is a source for it on `AgentPoolConfig` or on `Chat`.
+
+### Ec60-5 — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
+
+**DEFERRED, trivial.** A doc-block in `Renderer.php` reasons about the executor by LINE NUMBER. Both
+numbers were already approximate and this round moved everything below the constructor, so they now
+name unrelated statements. Rule 4: cite symbols, not line numbers. Not fixed here because
+`src/Tui/Renderer.php` is outside this lane's file list and the citation is explanatory rather than
+load-bearing.
