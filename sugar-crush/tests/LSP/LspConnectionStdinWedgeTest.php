@@ -651,6 +651,17 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * THE STDERR ASSERTIONS ARE THE POSITIVE COMPONENT. Without them a fixture
      * that quietly stopped logging would satisfy "the request was answered"
      * while exercising nothing at all.
+     *
+     * ⚠️ ITS MUTATION SCOPE, STATED BECAUSE IT IS NARROWER THAN IT LOOKS.
+     * Removing the drain from the WRITE loop alone does not red this row, and
+     * neither does removing it from `refill()` alone — the request here is
+     * small, so either drain on its own frees the child and the exchange
+     * completes. MEASURED: both single removals leave this row green (they red
+     * four OTHER rows in this file between them), and removing BOTH reds it
+     * along with them. That is the right scope rather than a gap: the claim is
+     * "the next EXCHANGE frees it", an exchange is a write and a read, and the
+     * row reds exactly when no drain runs during one — which is exactly when the
+     * stall becomes a deadlock.
      */
     public function testTheBetweenExchangeStderrStallSelfHealsOnTheNextExchange(): void
     {
