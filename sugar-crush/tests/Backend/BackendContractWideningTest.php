@@ -37,8 +37,18 @@ use SugarCraft\Crush\Backend\ObservesReasoning;
  * belongs to the CALL and not to the declaration: PHP drops surplus positional
  * arguments handed to a userland method without a murmur, which is why
  * {@see ObservesReasoning} redeclares `completeAsync()` instead of being a bare
- * marker. Both halves are pinned below, because a guard that only showed the
+ * marker. All three are pinned below, because a guard that only showed the
  * fatal would leave the reader free to keep the wrong model of the other side.
+ *
+ * WHAT THIS SAID: "Both halves are pinned below." WHAT IS TRUE NOW: only the
+ * two DECLARATION halves were. The CALL half — the one the inverted claim
+ * actually describes, and the only one that explains why a bare marker
+ * interface would not do — was a sentence with nothing behind it, in the very
+ * file whose subject is prose that claims a mechanism (rule 46). WHY THE
+ * PARAGRAPH STILL EARNS ITS PLACE: its three-way distinction is the thing a
+ * reader gets wrong, and it is now carried by
+ * {@see testASurplusPositionalArgumentToAUserlandMethodIsDroppedSilently()}
+ * rather than asserted.
  *
  * ## Why a subprocess
  *
@@ -195,6 +205,91 @@ final class BackendContractWideningTest extends TestCase
 
         $this->assertSame(0, $rc, "the four-parameter control did not load against Backend:\n{$output}");
         $this->assertStringContainsString(self::LOADED, $output);
+    }
+
+    /**
+     * THE THIRD HALF, and the one the inverted claim was really describing.
+     *
+     * A declaration cannot be narrower than its interface (above), so the
+     * "silently absent" behaviour has to live somewhere else — and it does, at
+     * the CALL. PHP hands a userland method as many positional arguments as the
+     * caller likes and drops the ones it did not declare, with no warning, no
+     * deprecation and no `ArgumentCountError` (that one is raised for too FEW).
+     *
+     * This is the whole reason {@see ObservesReasoning} redeclares
+     * `completeAsync()` rather than being a bare marker interface. A marker
+     * would make the capability a PROMISE: {@see \SugarCraft\Crush\Chat} would
+     * pass a fifth argument, a backend that declared only four would swallow it
+     * here, and the reasoning sink would be dropped on the floor with the suite
+     * entirely green. The redeclaration converts that into the load-time fatal
+     * {@see testAFourParameterBackendCLAIMINGToObserveReasoningCannotLoad()}
+     * measures.
+     *
+     * Same process, no probe: this one is not a compile error, so it is
+     * observable directly — and an `\ArgumentCountError` arm is included so the
+     * test cannot pass by PHP having become strict in BOTH directions, which
+     * would make the silent-drop assertion vacuously safe for the wrong reason.
+     */
+    public function testASurplusPositionalArgumentToAUserlandMethodIsDroppedSilently(): void
+    {
+        $marker = new class {
+            /** @var list<int> */
+            public array $seen = [];
+
+            public function fourParameterForm(int $a, int $b = 0, int $c = 0, int $d = 0): string
+            {
+                $this->seen = [$a, $b, $c, $d];
+
+                return 'four';
+            }
+        };
+
+        $raised = null;
+        set_error_handler(static function (int $severity, string $message) use (&$raised): bool {
+            $raised = $severity . ': ' . $message;
+
+            return true;
+        });
+
+        try {
+            // Deliberately called through a variadic spread rather than as a
+            // literal five-argument call: the literal form is a COMPILE-time
+            // error for a known signature in some static analysers, and this
+            // test is about what the runtime does.
+            $arguments = [1, 2, 3, 4, 5];
+            $answer = $marker->fourParameterForm(...$arguments);
+        } finally {
+            restore_error_handler();
+        }
+
+        // THE SURPLUS IS DERIVED, NOT ASSUMED. Without this the whole test
+        // passes when $arguments is trimmed to the declared arity — at which
+        // point it measures an ordinary call and pins nothing (rule 43).
+        $this->assertGreaterThan(
+            (new \ReflectionMethod($marker, 'fourParameterForm'))->getNumberOfParameters(),
+            \count($arguments),
+            'the call below is no longer passing MORE arguments than the method declares, so '
+                . 'nothing here is about a surplus any more',
+        );
+
+        $this->assertSame('four', $answer, 'the surplus argument prevented the call outright');
+        $this->assertSame(
+            [1, 2, 3, 4],
+            $marker->seen,
+            'the method saw something other than its own four declared parameters',
+        );
+        $this->assertNull(
+            $raised,
+            'PHP ' . PHP_VERSION . ' DIAGNOSED the surplus positional argument. If that is '
+                . 'really so on this interpreter, a bare marker interface would be safe after '
+                . 'all and ObservesReasoning\'s redeclaration could be reconsidered - but read '
+                . "this test first. Diagnostic:\n" . (string) $raised,
+        );
+
+        // The other direction, so "PHP is silent here" cannot be satisfied by
+        // an interpreter that is silent everywhere: too FEW is still an error.
+        $this->expectException(\ArgumentCountError::class);
+        $marker->fourParameterForm(...[]);
     }
 
     /**
