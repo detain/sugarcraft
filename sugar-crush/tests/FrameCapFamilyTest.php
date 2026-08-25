@@ -199,9 +199,51 @@ final class FrameCapFamilyTest extends TestCase
         $class = '';
         $out = [];
 
+        // WHERE THE CURRENT CLASS BODY ENDS. Without this the walk never let a
+        // class name GO: a namespace-level `const MAX_FRAME_BYTES` written
+        // after a class in the same file was attributed to that class, and the
+        // fixture for the unattributable case used a source with no preceding
+        // class -- written, without anyone deciding to, to the one polarity
+        // that works.
+        $depth = 0;
+        $classDepth = null;
+        $awaitingClassBody = false;
+
         for ($i = 0; $i < $n; $i++) {
             $token = $tokens[$i];
-            if (!\is_array($token)) {
+
+            if (\is_string($token)) {
+                if ($token === '{') {
+                    $depth++;
+                    if ($awaitingClassBody) {
+                        $classDepth = $depth;
+                        $awaitingClassBody = false;
+                    }
+                } elseif ($token === '}') {
+                    if ($classDepth !== null && $depth === $classDepth) {
+                        $class = '';
+                        $classDepth = null;
+                    }
+                    $depth--;
+                }
+
+                continue;
+            }
+
+            // ⚠️ TWO ARRAY TOKENS THAT MUST COUNT AS AN OPENING BRACE, because
+            // their CLOSING partner is bare. MEASURED on PHP 8.3.6:
+            // `"{$a}"` opens with T_CURLY_OPEN and `"${a}"` with
+            // T_DOLLAR_OPEN_CURLY_BRACES -- both array tokens -- while the `}`
+            // that ends each is a BARE `}`. A counter that saw only bare braces
+            // would go NEGATIVE inside any interpolated string and could then
+            // release a class name in the middle of its own body. This is the
+            // mirror of the rule that keeps a `}` INSIDE a string from counting
+            // at all: that one arrives as T_ENCAPSED_AND_WHITESPACE whose text
+            // is exactly `}`, and is correctly ignored by the is_string() gate
+            // above.
+            if ($token[0] === T_CURLY_OPEN || $token[0] === T_DOLLAR_OPEN_CURLY_BRACES) {
+                $depth++;
+
                 continue;
             }
 
@@ -229,6 +271,7 @@ final class FrameCapFamilyTest extends TestCase
                     // than adopting a wrong one.
                     if (\is_array($tokens[$k]) && $tokens[$k][0] === T_STRING) {
                         $class = $tokens[$k][1];
+                        $awaitingClassBody = true;
                     }
 
                     break;
@@ -697,6 +740,56 @@ final class FrameCapFamilyTest extends TestCase
             ),
             'a `use const` IMPORT is being counted as a declaration, so a file that merely '
             . 'names the constant joins the family',
+        );
+
+        // A CLASS NAME HAS TO BE RELEASED AT THE END OF ITS BODY. WHAT THE
+        // FIXTURE FOR THE UNATTRIBUTABLE CASE USED TO PROVE: that a
+        // namespace-level declaration comes back with an empty name — over a
+        // source with NO class in it at all, which is the one arrangement that
+        // works whether or not the walk ever lets a name go. Put a class in
+        // front of the same declaration and it was attributed to that class,
+        // and the row then reds in a sibling test with a message naming the
+        // wrong file.
+        $this->assertSame(
+            [['class' => '', 'init' => '1']],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class Framer { private const OTHER = 1; }\nconst "
+                . $const . " = 1;\n",
+            ),
+            'a declaration written AFTER a class body, at namespace level, is being attributed '
+            . 'to that class, so the roster reports a claimant whose constant reflection cannot '
+            . 'find and the failure names the wrong file',
+        );
+
+        // AND THE SAME SOURCE WITH AN INTERPOLATED STRING IN THE WAY, which is
+        // what breaks the obvious implementation of the release. MEASURED on
+        // PHP 8.3.6: `"{$a}"` OPENS with T_CURLY_OPEN — an array token — and
+        // CLOSES with a bare `}`. A depth counter that saw only bare braces
+        // would go negative here and release the class name early or late.
+        $this->assertSame(
+            [['class' => '', 'init' => '2']],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class Framer { public function m(\$a) { return \"{\$a}\"; } }\n"
+                . "const " . $const . " = 2;\n",
+            ),
+            'an interpolated string in a method body is unbalancing the brace depth, because '
+            . 'its opening brace is an ARRAY token and its closing brace is a bare one -- so '
+            . 'the class name is released at the wrong place',
+        );
+
+        // AND THE POSITIVE HALF OF THE RELEASE: a declaration in the SECOND
+        // class of a file still gets that class, not the first and not the
+        // empty string. A release that fired too eagerly would pass both rows
+        // above and empty the roster entirely.
+        $this->assertSame(
+            [['class' => 'Demo\\Second', 'init' => '3']],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class First { public function m(): int { return 1; } }\n"
+                . "final class Second { private const " . $const . " = 3; }\n",
+            ),
+            'the class name is being released too eagerly, so a real declaration in a later '
+            . 'class of the same file comes back unattributable and the roster loses a member '
+            . 'it can see perfectly well',
         );
     }
 
