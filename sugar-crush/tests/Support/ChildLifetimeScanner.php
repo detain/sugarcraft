@@ -846,9 +846,28 @@ final class ChildLifetimeScanner
      * `??` CANNOT BE MISTAKEN FOR A `?` HERE, measured on PHP 8.3.6 rather
      * than assumed: the null-coalescing operator lexes as the single token
      * T_COALESCE, and `?->` as T_NULLSAFE_OBJECT_OPERATOR, so neither ever
-     * appears as the bare `?` string token this counts. A `:` from a named
-     * argument or a return type is always inside parentheses and so is never
-     * at depth 0 of an expression.
+     * appears as the bare `?` string token this counts.
+     *
+     * A RETURN TYPE'S `:` IS AT DEPTH 0, AND THE SENTENCE THAT SAID OTHERWISE
+     * WAS INVERTED. WHAT IT SAID: "a `:` from a named argument or a return
+     * type is always inside parentheses and so is never at depth 0 of an
+     * expression." WHAT IS TRUE, measured on PHP 8.3.6 with the same depth
+     * accounting this method uses: the named-argument half holds - `foo(a: 1)`
+     * produces no depth-0 `?` or `:` at all - and the return-type half is
+     * backwards. `fn(): array => [0 => 1]` puts the `:` at depth 0, and
+     * `fn(): ?array => [0 => 1]` puts a bare `?` there too. WHY THE
+     * BEHAVIOUR IS STILL CORRECT, which is a different claim from the one that
+     * sentence made: a return type's `:` always arrives BEFORE any conditional
+     * `?`, so it meets `$question === null` and refuses; the nullable type's
+     * `?` sits after that `:` and is never reached. The refusal is real, it is
+     * just performed by the ordering rule rather than by parenthesis depth.
+     * WHY THIS EARNS ITS PLACE RATHER THAN BEING DELETED: it names the two
+     * shapes a reader will otherwise re-derive, and it marks the ordering rule
+     * as load-bearing - loosening `$question === null` to accept a leading `:`
+     * would silently start reading arrow-function bodies as ternary arms.
+     * Pinned by the 'arrow fn with a return type' and 'arrow fn with a
+     * nullable return type' cases in
+     * {@see \SugarCraft\Crush\Tests\Support\ChildLifetimeScannerFixtureTest::descriptorSpecs()}.
      *
      * @return array{0:string,1:string}|null
      */
@@ -880,13 +899,29 @@ final class ChildLifetimeScanner
                 // DORMANT AS A DIFFERENCE, KEPT AS THE CONTRACT, and both
                 // halves are measured rather than argued. A differential
                 // oracle - this method against a copy with these three lines
-                // deleted, over 14 adversarial top-level spellings on PHP
-                // 8.3.6 (nested ternary with and without parentheses, `?:`
-                // chained, `??`, `?->`, a ternary inside a call argument, an
-                // array-union tail) - found ZERO differing answers. The
-                // clause below refuses every multi-`?` shape those spellings
-                // can produce, because a second `?` at depth 0 always arrives
-                // with a second `:` behind it.
+                // deleted - found ZERO differing answers over an adversarial
+                // corpus of top-level spellings. The clause below refuses
+                // every multi-`?` shape that corpus can produce, because a
+                // second `?` at depth 0 always arrives with a second `:`
+                // behind it.
+                //
+                // THE CORPUS IS IN THE TREE, WHICH IT WAS NOT. What this
+                // comment used to cite was a count - "14 adversarial top-level
+                // spellings on PHP 8.3.6" - measured by a script in a
+                // scratchpad that no longer exists, so the one argument for
+                // keeping two clauses a mutation records as individually
+                // surviving could not be re-run by the next reader. Rule 3
+                // applies to a sentence as much as to a figure: a measurement
+                // whose generator is gone is a claim. The spellings now live
+                // as named cases in
+                // {@see \SugarCraft\Crush\Tests\Support\ChildLifetimeScannerFixtureTest::descriptorSpecs()}
+                // - nested ternary with and without parentheses, `?:`, `??`,
+                // an array-union tail, a match expression, an array
+                // dereference, a spread, named arguments, and both arrow-
+                // function return-type shapes - so deleting these three lines
+                // and running that provider IS the differential, on any tree,
+                // by anybody. No count is written here on purpose (rule 18):
+                // the provider is the list.
                 //
                 // THE REDUNDANCY IS SYMMETRIC, WHICH THE FIRST READING OF THIS
                 // MISSED. Deleting the `:` clause instead leaves the suite

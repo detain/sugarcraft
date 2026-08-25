@@ -514,6 +514,81 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             null,
         ];
 
+        // A RETURN TYPE'S `:` IS AT DEPTH 0, WHICH ternaryArms()' DOC-BLOCK
+        // USED TO DENY. Measured on PHP 8.3.6: `fn(): array => ...` puts the
+        // `:` at depth 0 and `fn(): ?array => ...` puts a bare `?` there too,
+        // so the parenthesis-depth argument that comment made was inverted.
+        // The refusal is real and comes from the ORDERING rule instead - a
+        // return type's `:` arrives before any conditional `?` and meets
+        // `$question === null`. Pinned here so the real reason is a test
+        // rather than a sentence, and so loosening that rule reds.
+        yield 'arrow fn with a return type' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = (fn(): array => [0 => ['pipe','r']])();\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'arrow fn with a nullable return type' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = (fn(): ?array => [0 => ['pipe','r']])();\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // NAMED ARGUMENTS. The spec is a perfectly readable literal and this
+        // scanner reads the SECOND POSITIONAL argument, so it must refuse
+        // rather than read whatever happens to sit in position two. Rule 14:
+        // the site is still reported - a refused spec is a finding, and a
+        // dropped call site is not.
+        yield 'named arguments' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$this->h = @proc_open(command: 'x', "
+            . "descriptor_spec: [0 => ['pipe','r'], 1 => ['pipe','w']], pipes: \$pipes);\n"
+            . "    }\n}\n",
+            null,
+        ];
+
+        // Two more shapes the ternary reader is one character away from, and
+        // one it is not: a `match` is not a conditional expression this parses,
+        // and an array literal that is immediately dereferenced is the same
+        // trailing-content defect the array-union case above records.
+        yield 'match expression' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = match(\$c) { true => [0 => 1], default => [0 => 1] };\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array dereference tail' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [[0 => 1]][0];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'array() long-form union' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = array(0 => 1) + array(1 => 2);\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'spread' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = [...\$base, 2 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
+        // THE REFUSALS ABOVE NEED A COMPANION THAT IS NOT ONE (rule 25). A
+        // provider made entirely of `null` expectations is satisfied by a
+        // keysOf() that returns null unconditionally, and these two are the
+        // nearest neighbours of shapes it must refuse: a trailing comma is one
+        // token from the union case, and a comment between ternary arms is one
+        // token from the nested-ternary case. Both must still be READ.
+        yield 'trailing comma in a keyed spec' => [
+            $wrap("[0 => ['pipe','r'], 1 => ['pipe','w'],]"),
+            [0, 1],
+        ];
+        yield 'comment between ternary arms' => [$ternary('[0 => 1] /* pick */', '[0 => 1]'), [0]];
+
         // The scope floor: a spec assigned in an EARLIER method is not this
         // call's spec, and borrowing it would be an answer from another
         // function's body.
