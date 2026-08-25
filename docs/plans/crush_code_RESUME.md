@@ -6,117 +6,136 @@ Nothing here depends on a prior conversation's context.
 
 ---
 
-## 🟢 ROUND 57 IS **RUNNING** — launched 2026-08-25, run id `wf_074924a0-898`
+## 🟢 ROUND 58 IS **RUNNING** — launched 2026-08-25, run id `wf_f58b858b-ec4`
 
-**Round 56 is CLOSED, merged and recorded. Round 57 launched from base `1dea13c4f`** — nine
-agents, three lanes, `implement → review → fix` pipelined.
+**Round 57 is CLOSED, merged and recorded. Round 58 launched from base `535d721ff`** — nine agents,
+three lanes, `implement → review → fix` pipelined.
 
-| package | floor at `1dea13c4f` (measured, per E167) |
+| package | floor at `535d721ff` (per E167) |
 |---|---|
-| **sugar-crush** | **10126 / 149182 / 1 skipped / rc 0** |
-| **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** |
-| **candy-core** | **842 / 7587 / 24 / rc 0** |
-| **candy-flip** | **83 / 227 / 2 / rc 0** |
-| **candy-mosaic** | **459 / 7753 / 6 / rc 0** |
+| **sugar-crush** | **10215 / 156961 / 1 skipped / rc 0** — MEASURED, twice |
+| **candy-pty** | **630 / 1494 / 16 skipped / 1 warning / rc 0** — MEASURED |
+| candy-core | 842 / 7587 / 24 / rc 0 — **CARRIED, not re-measured** |
+| candy-flip | 83 / 227 / 2 / rc 0 — **CARRIED, not re-measured** |
+| candy-mosaic | 459 / 7753 / 6 / rc 0 — **CARRIED, not re-measured** |
+
+⚠️ The three carried lines are an **inference** (no round-57 lane touched those trees), not a fourth
+observation. Round 57's worklog entry says the same. If a round reds in one of them, that is where the
+mistake was made.
 
 Script (DURABLE path — never launch from a scratchpad path, `/tmp` does not survive a reboot):
-`/home/my/.claude/projects/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/workflows/scripts/crush-round-57.js`
-Prediction: `.../workflows/scripts/round57-prediction.txt`, written BEFORE launch.
+`/home/my/.claude/projects/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/workflows/scripts/crush-round-58.js`
+Prediction: `.../workflows/scripts/round58-prediction.txt`, written BEFORE launch.
 
-### THE ROUND-57 LANES
+### THE ROUND-58 LANES
 
-- **a — paint the thinking.** E495 (implicitly-nullable backend params, deprecated on the 8.4 CI leg) →
-  E494 (E456's reasoning channel reaches the parent and **nothing paints it** — the user still cannot see
-  the model think) → E493 (a BATCH provider's turn still dies on the idle ceiling) → E496 + E497.
-  🔴 **E495 must be its own commit and must come first** — it and E494's step 0 are the same edit to four
-  backend signatures, and wiring first means a fifth argument that silently no-ops on three backends.
-- **b — MCP/LSP transport.** E499 (one malformed `.mcp.json` server aborts ALL of them), E506 (uncapped
-  `$readBuffer` in all three framing classes), E508 (`writeAll()` is a 15s synchronous block on the
-  caller's thread), E503, E504, plus the `tests/MCP/` and `tests/LSP/` halves of E510 and E505.
-- **c — guards, citations and CI.** E490 (**answer it or explicitly retire it this round**), E498+E509,
-  E507, the non-MCP/LSP halves of E510 and E505, E487.
+- **a — contracts and cardinalities.** E529 (`RepoMapBlock.php` carries two `src/` cardinalities that
+  NOTHING verifies — round 57 found it, could not touch it, and said it needed an owner; **lane a owns it
+  now**) · E526 + E531 (the implicitly-nullable census is unfinished and the scanner cannot enumerate its
+  own alphabet) · E528 (`runOnScaledClock` exists twice and the two differ — **find out why
+  `DuplicatedTestHelperDriftTest` missed it before fixing the duplication**) · E530 · E527.
+- **b — the swallowing-catch family, tree-wide.** E546's 22 sites across seven `tests/` directories, plus
+  E544's four more in `tests/MCP/`, plus the tree-wide guard that does not exist, plus the
+  `MAX_FRAME_BYTES` derivation (three classes claim to inherit a constant none of them reads) and E541.
+- **c — tooling, CI, and the long E490 campaign.** Start the campaign in the BACKGROUND first · E549
+  (`tools/gen-docs.php` has no guard and writes files nobody may hand-edit) · E551 · E552 · E553 · E548 ·
+  E547.
+
+🔴 **THE ONE DELIBERATE OVERLAP:** E546 was deferred by round 57 *specifically because three lanes owned
+those files concurrently*. Round 58 exists to make it doable — **lane b gets essentially all of `tests/`,
+and lanes a and c are fenced out of it** (lane a keeps `tests/Backend/` + `tests/Context/`, lane c keeps
+exactly four named test-root files).
 
 ### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
 
-1. **Publication state, and DO NOT TRUST THIS LINE — re-measure it.** At the round-57 launch,
-   `git ls-remote origin master` answered **`8e8af356a`**: all three round-56 lane merges and the id
-   renumber are PUBLIC, and only the two closing plan commits (`1dea13c4f`, `0df7a0a34`) were above it.
-   **The user pushed this working copy from their own terminal while the supervisor was mid-merge** —
-   which is the third time this file has recorded a publication state that changed under it.
-   **Never infer publication state from your own actions**; `git ls-remote origin master` is the only
-   reliable answer, and this line has now been wrong in both directions.
-2. **E490 is open, with a candidate and no reproducer.** Round 56 found a leaked 5s cap timer on the
-   SHARED ReactPHP loop and offered it as a candidate, explicitly not a diagnosis. Steps (a) and (b) — the
-   `--testdox` repro loop, and the same loop at `a8acfcc9` — have now been outstanding for two rounds.
-   Lane c owns it and this round demands a definite outcome; **"did not reproduce in N takes" IS a definite
-   outcome**, a third "still open" with no new measurement is not.
-   ⚠️ One clean data point exists already: at the round-56 merge, **sugar-crush THEN candy-pty in the same
-   script** — the exact context the single hang happened in — ran candy-pty green in 48 seconds. That is
-   ONE take, not a campaign. Do not let it be quoted as more.
-3. `left_steps.md` (repo root, UNTRACKED) is a 1,208-line inventory of all 515 plan steps with status. It
-   was generated at `f9840570` and predates E455-E523, so its counts are stale.
-4. ~~**The worklog has a gap.**~~ **BACKFILLED 2026-08-25** — and the gap was one round wider than this
-   line said: rounds 53, 54 and 55 were missing outright, and round 52 was still sitting there as
-   `IN FLIGHT`, its launch brief never converted into a close. All four are now in
-   `crush_code_worklog.md`, in descending order above round 51. **They are labelled as reconstructed, and
-   you should read them as thinner than a live entry** — they are built from this file's `0-NOW-*` blocks
-   plus `git log`, with every sha re-resolved against the tree, and a handoff block only ever carried what
-   the supervisor chose to hand off. What a round-53 lane measured and did not put in its `0-NOW` block is
-   gone. **The lesson for round 57's close is to write the worklog entry at the close, not to trust that a
-   `0-NOW` block can be promoted into one later.**
+1. **Publication state — RE-MEASURE IT, DO NOT TRUST THIS LINE.** `git ls-remote origin master` is the
+   only reliable answer. The user pushes this same working copy from their own terminal, and this line has
+   now been wrong in **both** directions across three rounds. At the round-58 launch the remote was
+   `8e8af356a`, with everything from `1dea13c4f` onward local.
+2. **E490 is open with a number, not a candidate.** Round 57 ran **53 takes, 0 events** — including Arm C,
+   the sugar-crush-then-candy-pty back-to-back experiment that had never been run, four clean cycles. The
+   95% upper bound on the per-take rate is **≈5.5%** against a prior of **≈1.3%**, so it **distinguishes
+   nothing**. ≈230 consecutive clean takes are needed. Arm B (takes at `a8acfcc9` vs `d38b644f4`) is still
+   not worth running until one arm reaches ~230. Lane c owns the campaign this round.
+3. `left_steps.md` (repo root, UNTRACKED) is a 1,208-line inventory generated at `f9840570`. It predates
+   E455–E555 and its counts are stale. **It has no generator** — it was a read-only agent sweep — so
+   regenerating it is a real task, best done at a close where it can absorb a whole round's ids at once.
+4. ~~The worklog gap.~~ **CLOSED.** Rounds 52–55 are written up (52 had been sitting as `IN FLIGHT` with
+   its launch brief never converted into a close). They are labelled as **reconstructed** from `0-NOW`
+   blocks plus `git log` and are thinner than a live entry. **Round 57's entry was written AT the close,
+   which is the standing consequence: do not assume a `0-NOW` block can be promoted into a worklog entry
+   later — a handoff only ever carried what the supervisor chose to hand off.**
 
 ### 🔴 NEVER RUN A SUITE WITHOUT A WATCHDOG — E490 IS STILL LIVE
 
-candy-pty can hang indefinitely (E490, unexplained, ~1 in 77 takes) and **a hang is not a failure**: it
-looks like a slow suite locally and a job timeout naming nothing in CI. Until E490 is closed, every suite
-run — floors, lane figures, verification — goes through a watchdog that kills the ONE recorded pid:
+A hang is not a failure: it looks like a slow suite locally and a job timeout naming nothing in CI. Every
+suite run — floors, lane figures, verification — goes through a watchdog that kills the ONE recorded pid:
 
 ```sh
-vendor/bin/phpunit > out.log 2>&1 &
+vendor/bin/phpunit --testdox > out.log 2>&1 &
 P=$!
 for t in $(seq 1 300); do kill -0 $P 2>/dev/null || break; sleep 1; done
 kill -0 $P 2>/dev/null && { echo "HUNG"; kill -TERM $P; sleep 2; kill -KILL $P; }
 ```
 
-`timeout` does NOT reliably kill a wedged PTY/FFI child, and a global `pkill` is prohibited. Capture
-`--testdox` so the LAST NAMED test is recorded on every take.
+`timeout` does NOT reliably kill a wedged PTY/FFI child, and a global `pkill` is prohibited.
 
-**candy-pty now carries its own structural watchdog** (`candy-pty/tests/Support/HangWatchdog.php`, armed
-from `tests/bootstrap.php`, 90s budget, opt-out `CANDY_PTY_HANG_BUDGET=0`). It converts a hang into a
-named test plus a forensic bundle. It has a real known-positive. **It is not a substitute for the shell
-watchdog above** — it bounds a wedged TEST, not a wedged runner.
+**candy-pty also carries its own structural watchdog** (`candy-pty/tests/Support/HangWatchdog.php`, 90s
+budget, opt-out `CANDY_PTY_HANG_BUDGET=0`). Round 57 re-confirmed it is ALIVE by firing it deliberately at
+`CANDY_PTY_HANG_BUDGET=0.6`: SIGKILL at `rc=137`, with the test named. **It bounds a wedged TEST, not a
+wedged runner** — the shell watchdog above is still mandatory.
 
-### NEW STANDING RULES FROM ROUND 56
+### NEW STANDING RULES FROM ROUND 57
 
-- **38** — **a reviewer's prescription can describe a state the code cannot reach.** Round 56's lane a was
-  handed a MAJOR whose prescribed test could not be written; it refuted it by measuring that deleting the
-  fallback is green across the entire suite. **Tenth wrong prescription across four rounds, second of this
-  shape.** Refute with a measurement, never an argument.
-- **39** — **`catch (\Throwable)` around a test body swallows PHPUnit's own `ExpectationFailedException`**,
-  so the test passes while asserting nothing. Ten sites in eight files, found by MUTATING a control rather
-  than reading it. Catch the specific class.
-- **40** — **an exemption keyed on PROSE can be bought with a sentence, and the fix's own comment will buy
-  it.** Round 56's HOME census skipped any file whose text mentioned the sandbox helper — so the comment
-  explaining the fix exempted a file that did not apply it. Key exemptions on STRUCTURE: a trait use, a
-  declared type, a token-stream fact. Rule 33's sibling.
-- **41** — **a surviving mutation may be an EQUIVALENT mutant, and that verdict does not transfer to its
-  neighbour.** Lane a correctly excused one survivor, then found the mutation one line away was not
-  equivalent at all. When you excuse a survivor, mutate its neighbours before you move on.
-- **42** — **a prepped script's PROSE rots exactly like its numbers.** Round 56 shipped round 53's
-  ownership map to all three lanes (E492/E416) and **none of them reported the contradiction**, though a
-  standing rule told them to. Re-checking the FLOORS at launch is a check that exists and works; it only
-  covers the numbers.
-
-### ⚠️ A STANDING FACT WAS CORRECTED — E457's HEADLINE WAS WRONG (E516)
-
-`grep -qv X` in an agent shell does **not** "always answer no"; it behaves as `! grep -q X`. The
-divergence that actually bites is that the shim passes `--ignore-files`, so **a recursive `grep -r`
-honours `.gitignore`** and cannot see `vendor/` or any ignored file. **Any absence census whose answer is
-load-bearing must call `/usr/bin/grep` by absolute path.** Audited across the tree: zero offenders.
+- **43** — **a prescription can be honestly satisfied and still pin nothing.** Lane b was told to pin a
+  dormancy and did, with `assertLessThan($cap + 1, $cap)` — true whatever the code does. Measured: with the
+  header guard's bound mutated to `cap/2` the suite stayed green. **Satisfy a prescription, then MUTATE the
+  thing it was supposed to pin.** Rule 38's mirror image — 38 is a prescription you cannot carry out, 43 is
+  one you can carry out without doing its job.
+- **44** — **a review that quotes prose but names no file sends the fix agent to the wrong one.** The fix
+  agent checked the obvious candidate first, where the finding does not reproduce; a less careful one would
+  have called the finding false. Cite by file AND symbol.
+- **45** — **N quiet takes bound a rate; they do not prove a fix.** One-sided 95% bound is
+  `1 - 0.05^(1/N)`. State N, state the bound, state the N you would need.
+- **46** — **prose claiming derivation is not derivation.** Three framing classes each spell
+  `64 * 1024 * 1024` as their own literal under doc-blocks calling it "inherited rather than invented".
 
 ---
 
-## 0-NOW-57. ROUND 56 CLOSED (floor 10126) — the restart, the recovery, and the first prediction miss in thirteen rounds
+## 0-NOW-58. ROUND 57 CLOSED (floor 10215) — a red merge worth having, and E490 got a number at last
+
+**Closed 2026-08-25 at `535d721ff`, from base `1dea13c4f`.** Backlog **523 → 555**.
+Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 57`.
+
+**Tests predicted EXACT for the fourteenth consecutive round** — 10214 predicted, 10214 measured at the
+merge. **The floor is 10215** because the merge went red and the fix added a test: two numbers answering
+two different questions, as in round 53. Assertions 156961 against a deliberately weak ≥150,000 bound.
+
+🔴 **THE MERGE WENT RED, AND BOTH FAILURES WERE LANE C's NEWLY-WIDENED GUARDS FIRING ON LANES A AND B's
+NEW FILES.** Zero textual conflict. **One guard found a real defect (E554** — a 31-line doc-block stacked
+above another, documenting nothing, while the method it describes 120 lines below had none). **The other
+guard WAS the defect (E555** — it called a namespace a dangling class; both files were correct, so the
+classifier was wrong; **rule 33, third occurrence in four rounds**). The E555 fix's third mutation survived
+— and that was a fact about the tree, not the guard, since no empty directory existed for the clause to
+trip over — so the clause was made pinnable rather than excused. **Then the E555 fix tripped E554's guard**
+by stacking its own doc-block, one commit after the pair caught the lanes.
+
+**Round 57's prediction was right about git and wrong about the suite.** It argued source-set disjointness
+by FILE and predicted no second conflict. There was none — and the suite still went red. **The sets were
+disjoint by file and overlapping by GUARD**, which a file-level disjointness argument cannot see. Round
+53's prediction had named this hazard in writing; round 57's did not. **Round 58's does.**
+
+**E490 got a number instead of a candidate:** 53 takes, 0 events, ≈5.5% upper bound against a ≈1.3% prior
+— and a lane that declined to call that a fix, because it distinguishes nothing.
+
+**The ownership-map rate moved 0/3 → 1/3** after rule 42, and the one lane that checked found a real
+map-vs-brief disagreement (its map granted all of `src/MCP/`, its file list enumerated three files). One
+observation is all that is. Round 58's map and file lists were reconciled before launch so a disagreement
+found next round is news.
+
+---
+
+## 0-NOW-57 (now superseded). ROUND 56 CLOSED (floor 10126) — the restart, the recovery, and the first prediction miss in thirteen rounds
 
 **Closed 2026-08-25 at `1dea13c4f`, from base `d38b644f4`.** Backlog **492 → 523**.
 Full write-up in `docs/plans/crush_code_worklog.md` under `## ROUND 56`.
