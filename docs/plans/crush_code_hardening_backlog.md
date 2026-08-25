@@ -15007,9 +15007,9 @@ if printf 'a\nb\n' | grep -qv a && ! printf 'a\na\n' | grep -qv a; then echo san
 That is rule 15/25 aimed one level further in than usual: it is not enough to instrument the measurement,
 the instrument's own self-test has to be capable of failing for the right reason and passing for the right
 reason. Both times today the wrong answer arrived as silence rather than as an error — see [[E451]].
-## Round 55 — lane a (the instruments). Ea55-1 … Ea55-6.
+## Round 55 — lane a (the instruments). E458 … E463.
 
-### Ea55-1 — E438 CLOSED: the "exactly 1 skipped" invariant is now asserted, by NAME, and it fails the run
+### E458 — E438 CLOSED: the "exactly 1 skipped" invariant is now asserted, by NAME, and it fails the run
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: plan-instrument. **Fixed, mutation-checked.**
 
@@ -15040,7 +15040,7 @@ returns null; the shutdown `exit(1)` removed; `unexpectedSkips()` returns `[]`;
 `rosterWasFullyReached()` returns true) were all killed, and the harness was run against a known no-op
 and a known kill first.
 
-### Ea55-2 — E434/E435 CLOSED: candy-pty's assertion count is a function of its source again
+### E459 — E434/E435 CLOSED: candy-pty's assertion count is a function of its source again
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: measurement hygiene. **Fixed, mutation-checked.**
 
@@ -15061,7 +15061,7 @@ decoration: MEASURED, neutralising the reader's reporting arm SURVIVES the live 
 plus 8 JUnit-logged takes here, all rc 0, taking the running tally to **one red in 46**. All 9 takes were
 JUnit-logged precisely so a red would have named itself.
 
-### Ea55-3 — E432 CLOSED: the stty-fallback pin runs, and it found two real defects on its first execution
+### E460 — E432 CLOSED: the stty-fallback pin runs, and it found two real defects on its first execution
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: real. **Fixed, mutation-checked.**
 
@@ -15081,9 +15081,9 @@ The body now reads the device with `stty -a` through `SttyReading`'s whole-word 
 test, and asserts `TermiosFactory::which()` first so the test cannot become an FFI test under an stty
 name. 20 consecutive takes, all green, all `9 assertions`.
 
-### Ea55-4 — `PosixBackend::restore()` was a NO-OP under the stty backend
+### E461 — `PosixBackend::restore()` was a NO-OP under the stty backend
 
-**Recorded 2026-08-25 by round-55 lane a.** Severity: real, user-visible. **Fixed.** Found by Ea55-3 on
+**Recorded 2026-08-25 by round-55 lane a.** Severity: real, user-visible. **Fixed.** Found by E460 on
 the pin's first-ever execution.
 
 `restore()` called `apply()` on the `current()` snapshot. For `PosixTermios` that is the right syscall;
@@ -15101,9 +15101,9 @@ i.e. a program running without ext-ffi exits leaving the user's terminal raw and
 implement it correctly on a `current()` snapshot, so `$this->saved->restore()` is identical for the FFI
 path and correct for the fallback. `PosixBackendInjectedTermiosTest` followed the verb.
 
-### Ea55-5 — `PosixMasterPty::close()` leaked one `/dev/ptmx` descriptor per pty that had been used
+### E462 — `PosixMasterPty::close()` leaked one `/dev/ptmx` descriptor per pty that had been used
 
-**Recorded 2026-08-25 by round-55 lane a.** Severity: real. **Fixed.** Found by Ea55-3 as a cross-test
+**Recorded 2026-08-25 by round-55 lane a.** Severity: real. **Fixed.** Found by E460 as a cross-test
 failure: the newly-running pin drove one open/write/close cycle and the NEXT candy-core test's
 `/proc/self/fd` walk found two descriptors on a device where it requires exactly one.
 
@@ -15130,13 +15130,13 @@ release together is behaviourally inert — `candy-pty` `--filter Posix` gives `
 not as a race fix, and the justification now says so in all three places it appears: the block in
 `PosixMasterPty::close()`, the `::->close($stableFd)` row in candy-core's
 `DescriptorSinkArgumentCensusTest`, and here. What is still NOT established is that no caller pattern
-anywhere would want a stable reference — only that no test notices; see Ea55-9.
+anywhere would want a stable reference — only that no test notices; see E466.
 
 ⚠️ **`TtyDetectTest`'s guard was CORRECT and the exemption it looked like it wanted was the wrong
 resolution** (rule 33). Its `descriptorBehind()` refuses to guess when two fds match one dev+inode; the
 right answer was to stop leaking, not to loosen the walk.
 
-### Ea55-6 — the round-55 lane map and the round-55 lane-a brief disagree about who owns what
+### E463 — the round-55 lane map and the round-55 lane-a brief disagree about who owns what
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: process. **Stated, not fixable by a lane.**
 
@@ -15146,7 +15146,7 @@ gives `sugar-crush/tests/` to lanes b and c; the brief's YOUR FILES section give
 E416 recurring in the round that rewrote the map to fix it. Work was done against YOUR FILES, widened
 where a guard or a real defect forced it, and every such edit is named at the top of the lane report.
 
-### Ea55-7 — the skip roster was blind to a skipped CLASS, the larger of the two silent re-bases
+### E464 — the skip roster was blind to a skipped CLASS, the larger of the two silent re-bases
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: real, in the instrument. **Fixed.**
 
@@ -15181,7 +15181,7 @@ MEASURED: neutralising `recordSuiteSkip()` KILLED (2); removing the subscriber r
 runs ABOVE `$emitter->testPrepared()` in `TestCase::runBare()`, so a `--filter` selecting only a
 `#[Requires…]` test lands there, and a skipped class lands there by definition.
 
-### Ea55-8 — the roster's "a plain child arms nothing" safety property is false; the load-bearing one is the other
+### E465 — the roster's "a plain child arms nothing" safety property is false; the load-bearing one is the other
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: false justification. **Fixed.**
 
@@ -15202,11 +15202,11 @@ stop happening, the doc-blocks are told rather than quietly vindicated. The `try
 registration still earns its place (a sealed facade, or a moved class, would otherwise be a fatal in every
 such child); it is simply not what makes them quiet.
 
-### Ea55-9 — the `PosixMasterPty::close()` dup is retained dormant, and its reachability is still unmeasured
+### E466 — the `PosixMasterPty::close()` dup is retained dormant, and its reachability is still unmeasured
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: open question, deliberately deferred. **Not done.**
 
-Ea55-5's correction establishes that the dup does not prevent the race it was written for and that
+E462's correction establishes that the dup does not prevent the race it was written for and that
 removing it together with its release is inert across `candy-pty --filter Posix`
 (`165 / 394 / 1 warning / 2 skipped / rc 0`, identical). It is KEPT under rule 6 and now documented as a
 deliberate dormant seam.
@@ -15218,7 +15218,7 @@ a generator: a census of `PosixMasterPty::close()` callers across the monorepo (
 `candy-flip`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the
 descriptor number across the call. Until then the block stays and the comment says what it does not know.
 
-### Ea55-10 — the stty gate's probe resolved a stranger's descriptor under the stdin shape CI uses
+### E467 — the stty gate's probe resolved a stranger's descriptor under the stdin shape CI uses
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: right answer, wrong reason. **Fixed.**
 
@@ -15244,7 +15244,7 @@ wrong, not the mutation. The shipped assertion counts descriptors sharing the pr
 requires exactly one, which KILLS the revert (`[0]` vs `[0, 5]`). **Do not relax it back to a path
 compare.**
 
-### Ea55-11 — the torn-read fixture's alphabet could not express two of the three separators its reader accepts
+### E468 — the torn-read fixture's alphabet could not express two of the three separators its reader accepts
 
 **Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: coverage hole in a new instrument.
 **Fixed.**
@@ -15260,7 +15260,7 @@ match the cases already known. Bare-LF (raw, non-cooked master) and bare-CR (a c
 LF) rows added, plus a whitespace-padded row — the `trim()` arm had the identical hole and no row had ever
 needed trimming. MEASURED after: narrowing the split KILLED; removing `trim()` KILLED.
 
-### Ea55-12 — two roster arms are argued and neither is exercised end to end
+### E469 — two roster arms are argued and neither is exercised end to end
 
 **Recorded 2026-08-25 by round-55 lane a.** Severity: unpinned reasoning. **Not done.**
 
@@ -15277,9 +15277,9 @@ needed trimming. MEASURED after: narrowing the split KILLED; removing `trim()` K
    the current roster shape; the honest fix is for check 3 to notice a rostered entry that neither
    prepared nor skipped across a FULL run, which needs a "was this a full run" signal the roster does not
    currently have.
-## Round 55 — lane b (finish the stdio family). Eb55-1 … Eb55-8.
+## Round 55 — lane b (finish the stdio family). E470 … E477.
 
-### Eb55-1 — E439's reachability claim is FALSE: `start()` cannot fill a pipe
+### E470 — E439's reachability claim is FALSE: `start()` cannot fill a pipe
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: finding-instrument defect. **Measured. This
 entry falsifies E439.**
@@ -15297,7 +15297,7 @@ it is DEFENSIVE, not a live bug fix, and the file says so rather than repeating 
 than restating it, and reds the day someone grows the `capabilities` block — which is the day the
 finding becomes true.
 
-### Eb55-2 — the EINTR liveness check cannot fire, and it was written as the primary exit
+### E471 — the EINTR liveness check cannot fire, and it was written as the primary exit
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: dormancy, documented and pinned. **Measured, and
 this falsifies the fix's own first doc-block.**
@@ -15329,7 +15329,7 @@ exit that fires, and mutation kills it.
 slept 30s against a 45s bound, so the backstop row was ended by the FIXTURE'S OWN EXIT; and the
 dead-child row never reached the branch at all.
 
-### Eb55-3 — E441's severity is wrong: the pipe-close ordering is a SIGKILL, not hygiene
+### E472 — E441's severity is wrong: the pipe-close ordering is a SIGKILL, not hygiene
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: real. **Measured. This entry falsifies E441.**
 
@@ -15354,7 +15354,7 @@ fd-leak assertion cannot see this defect at all — only the EOF timing can.
 Same defect and same fix in `LspConnection::stopProcess()`, where the close goes after the final
 `drainStderr()` and before `ProcessReaper::terminateAndClose()`.
 
-### Eb55-4 — `ClaudeCodeMcpClient::sendMessage()` is the LAST member of the E443 family, OUT OF LANE
+### E473 — `ClaudeCodeMcpClient::sendMessage()` is the LAST member of the E443 family, OUT OF LANE
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor-but-terminal. Out of lane b's file list
 (`sugar-crush/src/ClaudeCodeMcpClient.php`).
@@ -15387,7 +15387,7 @@ this round: N=100000 M=200000 completes in 0.00s; N=200000 wedges. A fixture siz
 65536-byte pipe capacity — the figure the NDJSON sibling's tests use — is VACUOUS for this shape, and
 was, until mutation caught it.
 
-### Eb55-5 — `LspConnection::isConnected()` still reports true after the framing latch fires
+### E474 — `LspConnection::isConnected()` still reports true after the framing latch fires
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor.
 
@@ -15400,7 +15400,7 @@ session that can never send again.
 **STEP:** decide whether `isConnected()` should mean "the process is up" or "this session can still be
 used", and say which in its doc-block either way. If the latter, the latch belongs in it.
 
-### Eb55-6 — E440's sibling: `LspConnection` also only drains stderr inside an exchange
+### E475 — E440's sibling: `LspConnection` also only drains stderr inside an exchange
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: minor, no longer a deadlock.
 
@@ -15413,7 +15413,7 @@ self-heals on the next exchange, so it is a stall rather than a deadlock, exactl
 **STEP:** the honest fix is the same one E440 names — fd 2 on the ReactPHP loop. Recorded rather than
 done, because it is a shape change to a class that is synchronous by design.
 
-### Eb55-7 — `StdioMcpServer` selects on pipes without an `is_resource()` guard; `LspConnection` guards
+### E476 — `StdioMcpServer` selects on pipes without an `is_resource()` guard; `LspConnection` guards
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: latent. **Measured.**
 
@@ -15436,9 +15436,9 @@ reaches it — but the guard the sibling class documents as necessary is absent 
 `closePipes()` puts real `fclose()` calls on that field for the first time.
 
 **STEP:** add the `is_resource()` guard to both, or record why `pipes !== null` is sufficient. Note that
-this is also why the EINTR branch cannot be tested with a closed fd (Eb55-2).
+this is also why the EINTR branch cannot be tested with a closed fd (E471).
 
-### Eb55-8 — E436 is still open and is the reason E437 mattered
+### E477 — E436 is still open and is the reason E437 mattered
 
 **Recorded 2026-08-25 by round 55 lane b.** Severity: real. Out of lane b's file list
 (`sugar-crush/src/MCP/McpClient.php`).
@@ -15452,12 +15452,12 @@ for exactly this reason.
 **STEP:** widen to `catch (\Throwable)` and pin with a server fixture that throws something that is not
 a `RuntimeException` during the handshake.
 
-### Eb55-9 — the `parse()` widening reaches a SECOND consumer nobody discussed
+### E478 — the `parse()` widening reaches a SECOND consumer nobody discussed
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent, currently benign. **Measured.**
 
 `McpMessage::parse()` has TWO callers, not one: `StdioMcpServer::readResponse()` and
-`ClaudeCodeMcpClient::readMessages()`. Every artefact of this round — the commit messages, Eb55-1..8,
+`ClaudeCodeMcpClient::readMessages()`. Every artefact of this round — the commit messages, E470..8,
 and the round's report — discusses the `resultSet` change as though `StdioMcpServer` were the only
 consumer. A line such as `{"jsonrpc":"2.0","id":"1","result":null}` that `parse()` previously DROPPED now
 becomes a message in the array `readMessages()` returns, so that method's output grew a shape it has
@@ -15470,7 +15470,7 @@ reads `->result` on a parsed message at all, so an extra null-result element cha
 result-reading path knows the null-result element already arrives, and does not re-derive the invariant
 from `StdioMcpServer` alone.
 
-### Eb55-10 — `McpMessage::toArray()` now emits a key that is not JSON-RPC
+### E479 — `McpMessage::toArray()` now emits a key that is not JSON-RPC
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent.
 
@@ -15484,7 +15484,7 @@ frames outgoing messages and it does NOT emit the key, so the two have diverged 
 a wire serialiser (then drop `resultSet` from it and pin the absence). Do not "fix" it by copying
 `toJson()`'s shape without checking `parseTools()` still gets `result`.
 
-### Eb55-11 — `LspConnection::writeMessage()`'s null-deadline path is bounded only by the child's lifetime
+### E480 — `LspConnection::writeMessage()`'s null-deadline path is bounded only by the child's lifetime
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent. **Measured.**
 
@@ -15503,7 +15503,7 @@ counts consecutive FAILURES and a timeout is not a failure.
 the unboundedness at the parameter rather than only in the pinning test. The dormancy itself is now
 pinned by `LspConnectionStdinWedgeTest::testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop()`.
 
-### Eb55-12 — `DuplicatedTestHelperDriftTest`'s alphabet cannot see duplicated TESTS or duplicated CONSTS
+### E481 — `DuplicatedTestHelperDriftTest`'s alphabet cannot see duplicated TESTS or duplicated CONSTS
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: real, instrument gap.
 
@@ -15519,7 +15519,7 @@ that its scope is deliberately private helpers and that duplicated fixtures/cons
 the first; the second at minimum, because the guard currently reads as though it covers duplication in
 general.
 
-### Eb55-13 — `Agents/TeamTest` asserts on the REAL `~/.sugar-crush`, so a concurrent lane reds it
+### E482 — `Agents/TeamTest` asserts on the REAL `~/.sugar-crush`, so a concurrent lane reds it
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: real (CI/multi-lane flake). **Measured.**
 
@@ -15538,7 +15538,7 @@ test is one this test could have produced (name prefix / recorded ids), instead 
 listing is byte-identical. Do NOT resolve this by deleting the shared directory: three lanes run at once
 and a glob-delete there is the `/tmp` prohibition one directory over.
 
-### Eb55-14 — deriving the deadline roster needs a TOKEN stream; a substring scan false-positives on prose
+### E483 — deriving the deadline roster needs a TOKEN stream; a substring scan false-positives on prose
 
 **Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: instrument gap. **Measured.**
 
@@ -15560,7 +15560,7 @@ that legitimately has no deadline (a bounded drain), so the check also needs an 
 `ACCOUNTED_FOR` row for `absorbStderr` carrying the reason, and — per rule 15 — push a known-positive
 fixture method through the SAME scanner in the same test, since the assertion is "nothing unrostered"
 and that is what a dead scanner also returns.
-### Ec55-1 — the descriptor guard's own horizon: `autoload` was never the right reachability question
+### E484 — the descriptor guard's own horizon: `autoload` was never the right reachability question
 
 **Round 55, lane c.** RESOLVED in-lane; recorded because the SHAPE recurs.
 
@@ -15584,7 +15584,7 @@ the TEST does, while `libSourceFiles()` is a different walk. Any instrument with
 own scope has this hole. **Assert the generator's output against the roster, not the roster against the
 tree.**
 
-### Ec55-2 — E447's diagnosis was wrong: `runExec`'s spec is readable, and no arm was asking about siblings
+### E485 — E447's diagnosis was wrong: `runExec`'s spec is readable, and no arm was asking about siblings
 
 **Round 55, lane c.** RESOLVED in-lane.
 
@@ -15606,7 +15606,7 @@ clause — and one corpus row disagreeing with what the spec plainly said. Measu
 was reported as complete** — a wrong answer, not a refusal, which then passes the readability arm as an
 ordinary two-fd spec. `[0=>1] ?: [1=>2]` had it too. Both now refuse.
 
-### Ec55-3 — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
+### E486 — E448: promoting the child-lifetime guard into `candy-testing` buys no coverage on its own
 
 **Round 55, lane c.** NOT DONE. Costed, and the cost is the finding.
 
@@ -15631,7 +15631,7 @@ three spec 0,1,2 only, and no guard anywhere sees them.
 live, it reaches 58/58 immediately, and it changes no package's dependencies. Cost: one script, one CI
 step. Out of lane c's file list, hence not done here.
 
-### Ec55-4 — E453: `--unused` is candidate-grade output wired in as a hard gate
+### E487 — E453: `--unused` is candidate-grade output wired in as a hard gate
 
 **Round 55, lane c.** RESOLVED, with a forced out-of-lane edit to `tools/check-path-repos.php`.
 
@@ -15657,7 +15657,7 @@ was filed. Rewritten, not deleted.
 counterpart. `ManifestDependencyReachTest` closes the `--unused` one for `sugar-crush` only. Every other
 lib, and the closure and injection passes, remain checks the merge checklist cannot see.
 
-### Ec55-5 — the tool's `deferred-wiring` lookup never expires a row, for any of the other 57 libs
+### E488 — the tool's `deferred-wiring` lookup never expires a row, for any of the other 57 libs
 
 Round 55's review found this in `sugar-crush`'s copy and it is fixed there; the same never-expires
 property is still live in `tools/check-path-repos.php`. Its `$deferredWiring` closure is consulted only
@@ -15679,7 +15679,7 @@ suppress a finding this run. `idleDeferrals()` is the reference implementation a
 distinguishes are the ones worth printing — a count cannot tell a wired dep from a package nobody
 requires. `tools/` was assigned to no lane in round 55, which is why this is filed rather than done.
 
-### Ec55-6 — `LIB_HORIZON`'s unwalked rows were unfalsifiable, and the roster's own promise was false
+### E489 — `LIB_HORIZON`'s unwalked rows were unfalsifiable, and the roster's own promise was false
 
 Recorded because the DEMONSTRATION is reusable, not because the defect is still open — it is fixed at
 round 55 lane c. `walked => true` rows were pinned in both polarities by a `mechanism` citation.
