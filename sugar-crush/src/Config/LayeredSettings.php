@@ -427,9 +427,16 @@ final class LayeredSettings
      * CARDINALITY instead, because a list of filenames is exactly what went
      * stale in round 43; the number of sites still carrying the figure is ZERO,
      * `Bootstrap` having been rewritten in round 44; and no test method
-     * answering that description has ever existed — the assertion is
-     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()},
-     * renamed by the same commit that emptied the census. All three sentences
+     * answering that description exists TODAY — one was declared at
+     * `4ba28fe3f` and removed at `579a6bf15`, the commit that emptied the
+     * census and wrote a differently-named successor, which `1f10b6224` then
+     * renamed to today's
+     * {@see \SugarCraft\Crush\Tests\Config\GlobFigureDriftTest::testNothingInScopeStillCarriesTheStaleFigureAndTheSettingsPageAgrees()}.
+     * (The earlier claim here read "has ever existed", which is false in the
+     * direction that matters: the symbol WAS real, which is exactly why a
+     * reader would try to restore it. The shas above are the record, and
+     * they are shas rather than a name for the reason the parenthesis above
+     * gives.) All three sentences
      * were falsified by the commit that wrote them. WHY THIS STILL EARNS ITS
      * PLACE: the cross-reference is the only thing telling a reader that the
      * claim above is checked rather than proof-read, and a DANGLING one is

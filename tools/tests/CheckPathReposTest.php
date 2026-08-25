@@ -286,12 +286,6 @@ final class CheckPathReposTest extends TestCase
     }
 
     /**
-     * --no-lib-path-repos is the check that guards the COMMITTED tree, so it has
-     * to fail on the state --fix produces. Driving both directions in one test
-     * pins them as inverses rather than as two independent assertions: --fix
-     * writes the entry, --no-lib-path-repos must then refuse it.
-     */
-    /**
      * A fixture monorepo of two libs, with `lib-a` requiring `lib-b`.
      *
      * `$aSource` is what `lib-a/src/A.php` contains, which is the ONLY thing
@@ -424,6 +418,12 @@ final class CheckPathReposTest extends TestCase
         $this->assertStringContainsString('delete the row', $result['output']);
     }
 
+    /**
+     * --no-lib-path-repos is the check that guards the COMMITTED tree, so it has
+     * to fail on the state --fix produces. Driving both directions in one test
+     * pins them as inverses rather than as two independent assertions: --fix
+     * writes the entry, --no-lib-path-repos must then refuse it.
+     */
     public function testNoLibPathReposIsTheInverseOfFix(): void
     {
         $this->writeComposerJson($this->tmpDir . '/lib-b', [
