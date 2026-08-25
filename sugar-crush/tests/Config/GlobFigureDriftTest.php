@@ -24,7 +24,6 @@ use SugarCraft\Crush\Tests\Config\Support\DocumentParagraphs;
  * IT DID NOT. The test both pages named,
  * {@see ReadmeSettingsTierClaimTest::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem()},
  * derives the TOOL SET the glob leaves. It holds the glob as a class constant
- * derives the TOOL SET the glob leaves. It holds the glob as a class constant
  * and never measures its length. VERIFIED at `8416d98e`, and stated with the
  * command that produces it, because the loose version of it is wrong and the
  * precise version was itself a figure without a generator: `grep -rl 'strlen('
