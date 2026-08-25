@@ -335,9 +335,48 @@ final class McpMessageResultTypeTest extends TestCase
      * SILENCE IS A DIFFERENT EVENT and still fails loudly. That polarity is the
      * second half of this test, without which the first is satisfied by a
      * `start()` that has stopped failing at all.
+     *
+     * ⚠️ AND A THIRD PART, WHICH IS THE ROSTER'S OWN KNOWN-POSITIVE. Those two
+     * polarities are both about `start()`; NEITHER of them says anything about
+     * `listTools()`. `assertSame([], $server->listTools())` is exactly what a
+     * {@see StdioMcpServer::parseTools()} that had stopped working AT ALL would
+     * return, so on its own the empty roster is not evidence — it is the reading
+     * a dead instrument gives. The well-behaved fixture is therefore driven
+     * through the SAME `start()` -> `parseTools()` -> `listTools()` path first
+     * and must come back with its one tool. Only against that does the `[]`
+     * below mean "this server has no tools" rather than "this code returns no
+     * tools".
      */
     public function testANullHandshakeResultComesUpEmptyWhileSilenceStillFails(): void
     {
+        // The known-positive control, first: the same path must be able to
+        // produce a NON-empty roster, or the emptiness asserted below proves
+        // nothing about the null-answering server.
+        $control = new StdioMcpServer(
+            name: 'wellbehaved',
+            command: PHP_BINARY,
+            args: [$this->tempDir . '/scalar.php'],
+            env: [],
+            startTimeoutSeconds: 5.0,
+        );
+
+        try {
+            $control->start();
+            $names = array_map(
+                static fn (\SugarCraft\Crush\MCP\McpTool $tool): string => $tool->name,
+                $control->listTools(),
+            );
+            $this->assertSame(
+                ['ping'],
+                $names,
+                'the roster came back empty for a server that DOES advertise a tool, so '
+                . 'parseTools() is not working and the empty roster asserted below would be '
+                . 'meaningless',
+            );
+        } finally {
+            $control->stop();
+        }
+
         $script = $this->tempDir . '/nullinit.php';
         file_put_contents($script, self::NULL_HANDSHAKE_SERVER);
 
