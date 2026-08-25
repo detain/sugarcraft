@@ -136,6 +136,7 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
             . '{"name":"grep","description":"search","inputSchema":{"type":"object"}},'
             . '{"name":"edit","description":false},'
             . '{"name":"read"},'
+            . '{"name":"write","description":null,"inputSchema":null},'
             . '"not even an object"]',
         );
 
@@ -145,11 +146,12 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
             sort($names);
 
             $this->assertSame(
-                ['grep', 'read'],
+                ['grep', 'read', 'write'],
                 $names,
-                'the filter kept the wrong set. `grep` is fully specified and `read` omits the '
-                . 'optional keys, which fromArray() supplies typed defaults for; the other three '
-                . 'each break a different one of the three checks',
+                'the filter kept the wrong set. `grep` is fully specified, `read` OMITS the '
+                . 'optional keys and `write` sends them as explicit nulls — all three of which '
+                . 'fromArray() supplies typed defaults for; the other three each break a '
+                . 'different one of the three checks',
             );
         } finally {
             $server->stop();

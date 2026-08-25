@@ -1103,10 +1103,17 @@ final class StdioMcpServer implements McpServer
      * and widening them to `mixed` to survive a bad server would push the same
      * `TypeError` out to whichever of those consumers touched it first.
      *
-     * Each key is checked only when PRESENT, because {@see McpTool::fromArray()}
-     * supplies a typed default for each absent one — so an entry that merely
-     * omits `description` is well-typed, and an entry that spells it `false` is
-     * not.
+     * ⚠️ `isset()` AND NOT `array_key_exists()`, AND THE DIFFERENCE IS A TOOL.
+     * {@see McpTool::fromArray()} reads every field with `??`, which supplies the
+     * typed default for an ABSENT key and for an explicit `null` alike — so
+     * `{"name":"write","description":null}` is perfectly well-typed as far as the
+     * constructor is concerned. `array_key_exists()` would call that key present,
+     * find `null` failing `is_string()`, and drop a legitimate tool on the floor
+     * without saying so. `isset()` is false for both shapes, which is exactly the
+     * question this method is asking. Pinned by the `write` entry in
+     * {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerToolListRobustnessTest::testAMalformedEntryIsSkippedAndItsWellFormedNeighboursAreNot()},
+     * which is there because the `array_key_exists()` mutation SURVIVED a fixture
+     * whose alphabet had no explicit null in it.
      *
      * @param array<mixed> $def
      */
