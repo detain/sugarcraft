@@ -14766,3 +14766,129 @@ wiring than carrying a stale require.
 `candy-kit` for and wire it, or (b) establish that the dependency is genuinely spent, record WHY in the
 manifest's vicinity so the next reader does not re-litigate it, and prune. Do not silence the job.
 Whichever way it goes, reconcile the two checks so the local merge checklist and CI agree.
+
+## Round 55 — lane a (the instruments). Ea55-1 … Ea55-6.
+
+### Ea55-1 — E438 CLOSED: the "exactly 1 skipped" invariant is now asserted, by NAME, and it fails the run
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: plan-instrument. **Fixed, mutation-checked.**
+
+`tests/Support/SuiteSkipRoster.php` + `tests/SuiteSkipRosterTest.php`, installed from `tests/bootstrap.php`.
+The roster is a SET keyed `Class::method`, not a count, and it reports in three directions: a skip not on
+the roster; more skip EVENTS than roster entries (which is how a second data-provider row of an
+already-rostered method would slip past the first check); and a rostered test that RAN without skipping.
+The third only fires when that test was actually prepared, so a `--filter`ed run is silent.
+
+**Why it is not a test method.** Skips happen throughout the run in discovery order, so a test can only
+see the ones that ran before it — roughly half the tree runs after any given file. The verdict is taken
+from a shutdown handler armed by `install()`; `exit()` inside one does change the process status
+(MEASURED, PHP 8.3.6: body `exit(0)`, shutdown handler `exit(7)`, process exits 7). The handler is armed
+only if the subscribers registered (so the several test files that `require tests/bootstrap.php` in a
+plain child PHP process arm nothing), returns immediately when nothing was prepared, and returns
+immediately in a `pcntl_fork()`ed child (owning pid captured at arm time).
+
+**Non-Linux, stated rather than discovered:** off Linux it REPORTS and does not fail, with a header
+naming the platform. That is safe because round 54's `testThisSuiteIsNotOptedIntoAnyNonLinuxCiRunner()`
+reds the day `sugar-crush` enters `WINDOWS_LIBS`/`MACOS_LIBS`. The two together are the pair E438 asked
+for.
+
+**THE ACCEPTANCE TEST IS THE ONE THAT MATTERS.** A second skip was injected into a real, unrelated test
+(`Support/EnumSpellingTest`) and the FULL suite run: PHPUnit printed `OK, but some tests were skipped!`
+/ `Tests: 10004, Assertions: 144869, Skipped: 2` — the silent re-base E438 describes, green — and the
+roster turned it into rc 1 naming the offender. Five further mutations (install removed; `report()`
+returns null; the shutdown `exit(1)` removed; `unexpectedSkips()` returns `[]`;
+`rosterWasFullyReached()` returns true) were all killed, and the harness was run against a known no-op
+and a known kill first.
+
+### Ea55-2 — E434/E435 CLOSED: candy-pty's assertion count is a function of its source again
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: measurement hygiene. **Fixed, mutation-checked.**
+
+E435 identified `Integration/ResizeRaceTest::testResizeRaceProducesUntornWidths` as the single test whose
+assertion count moved, because it asserted once per captured line and the number of lines a child emits
+in a ~1 s window is host scheduling. Its per-line checks are now folded into one aggregate assertion over
+a static `readWidths()` reader. MEASURED after the change, PHP 8.3.6, **8 consecutive full-suite takes
+with `--log-junit`**: `607 / 1391 / 16 skipped / 1 warning / rc 0` every time, and a per-`<testcase>`
+comparison across all 8 takes over all 607 tests found **zero** varying entries. E435's "exactly one" is
+confirmed and closed.
+
+An aggregate `assertSame([], …)` is an absence, so `testTheTornReadDetectorSeesATornRead()` pushes a
+KNOWN-TORN transcript (`80 / 1 / 20 / [1]+ Done / 132`) through the same reader. That control is not
+decoration: MEASURED, neutralising the reader's reporting arm SURVIVES the live test run alone
+(`OK (1 test, 4 assertions)`) and is killed only with the fixture in scope.
+
+**The unresolved half of E435 stays unresolved.** The "one red in 37 takes" did not reproduce: 1 baseline
+plus 8 JUnit-logged takes here, all rc 0, taking the running tally to **one red in 46**. All 9 takes were
+JUnit-logged precisely so a red would have named itself.
+
+### Ea55-3 — E432 CLOSED: the stty-fallback pin runs, and it found two real defects on its first execution
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: real. **Fixed, mutation-checked.**
+
+`PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()` skipped for its entire life on a gate with
+two independent defects, exactly as E432's amendment predicted: the probe cast a stream to `int`
+(resource id 15 against a real lowest-free descriptor of 4, MEASURED on this box, PHP 8.3.6) and it
+`fclose()`d the handle on the line before stat()ing the path. Both are fixed; the probe now resolves a
+genuine descriptor with `descriptorForStream()` and holds the handle open across it.
+
+**A broken probe now REDS rather than re-skipping.** On Linux with procfs mounted and `/dev/fd` present
+the probe cannot legitimately answer no (`readlink('/dev/fd')` is `/proc/self/fd`), so that combination
+`fail()`s with the two mistakes named. MEASURED: reverting the probe to the resource-id cast is KILLED;
+reverting it to a genuinely-closed descriptor is KILLED. Without that arm both are silent skips.
+
+The body now reads the device with `stty -a` through `SttyReading`'s whole-word matcher at three points
+— cooked, raw, restored — with `SttyReading::cookedFixture()` pushed through the same matcher in the same
+test, and asserts `TermiosFactory::which()` first so the test cannot become an FFI test under an stty
+name. 20 consecutive takes, all green, all `9 assertions`.
+
+### Ea55-4 — `PosixBackend::restore()` was a NO-OP under the stty backend
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: real, user-visible. **Fixed.** Found by Ea55-3 on
+the pin's first-ever execution.
+
+`restore()` called `apply()` on the `current()` snapshot. For `PosixTermios` that is the right syscall;
+for `SttyTermios` `apply()` opens `if (!$this->raw) { return; }` and a snapshot is never raw, so the
+terminal was never taken back out of raw mode. MEASURED, PHP 8.3.6, GNU coreutils `stty`, a real pty
+slave, reading the device at each step:
+
+| backend | before | after `enableRawMode()` | after `restore()` |
+|---|---|---|---|
+| PosixTermios | cooked | raw | cooked |
+| SttyTermios | cooked | raw | **RAW** |
+
+i.e. a program running without ext-ffi exits leaving the user's terminal raw and echo-less — the
+`reset(1)` bug. `Termios::restore()` is on the contract for exactly this and both implementations
+implement it correctly on a `current()` snapshot, so `$this->saved->restore()` is identical for the FFI
+path and correct for the fallback. `PosixBackendInjectedTermiosTest` followed the verb.
+
+### Ea55-5 — `PosixMasterPty::close()` leaked one `/dev/ptmx` descriptor per pty that had been used
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: real. **Fixed.** Found by Ea55-3 as a cross-test
+failure: the newly-running pin drove one open/write/close cycle and the NEXT candy-core test's
+`/proc/self/fd` walk found two descriptors on a device where it requires exactly one.
+
+`close()` called `self::libc()->dup($this->fd)` and **discarded the return value**. MEASURED, PHP 8.3.6,
+counting `/proc/self/fd` entries whose readlink is `/dev/ptmx`, five open/write/close cycles: 1, 2, 3, 4,
+5 leaked — linear. Five further cycles that never materialise the stream leak none, which is the control:
+the leak is that branch and not `open()`. Every leaked descriptor still pins the master side of a pty the
+caller believes it has closed, so `tty_hangup()` never fires for it.
+
+The `dup()` is KEPT — the race it names is real — and the missing half added: the reference is released
+after the original is closed. Pinned by
+`PosixMasterPtyTest::testClosingAMasterThatWasWrittenToLeaksNoDescriptor()`, which runs both branches of
+`close()` and holds a witness pty open so a census that answered `[]` unconditionally fails instead of
+passing. MEASURED: reintroducing the leak is KILLED; killing the census is KILLED.
+
+⚠️ **`TtyDetectTest`'s guard was CORRECT and the exemption it looked like it wanted was the wrong
+resolution** (rule 33). Its `descriptorBehind()` refuses to guess when two fds match one dev+inode; the
+right answer was to stop leaking, not to loosen the walk.
+
+### Ea55-6 — the round-55 lane map and the round-55 lane-a brief disagree about who owns what
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: process. **Stated, not fixable by a lane.**
+
+The brief's own lane map says lane a owns `candy-core/src/Util/Tty/` and `candy-core/tests/Util/Tty/` and
+gives `sugar-crush/tests/` to lanes b and c; the brief's YOUR FILES section gives lane a
+`sugar-crush/tests/`, `candy-pty/tests/` and exactly one file under `candy-core/tests/Util/Tty/`. This is
+E416 recurring in the round that rewrote the map to fix it. Work was done against YOUR FILES, widened
+where a guard or a real defect forced it, and every such edit is named at the top of the lane report.
