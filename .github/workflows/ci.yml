@@ -168,8 +168,21 @@ jobs:
   # misdescribes it is read as flaky infrastructure — and this job's name is
   # the fix. The failure text names the file to port the change into; the job
   # name now names the family the failure belongs to.
+  #
+  # AND THE NAME HAD TO MOVE AGAIN, ONE ROUND LATER, FOR THE SAME REASON.
+  # WHAT IT SAID: "tools/ guards (classifiers, docs generator, scanner-copy
+  # drift)". WHAT IS TRUE NOW: `tools/tests/BareCitationDriftTest.php` reads
+  # every `.php` file under `candy-pty/` as well — `src/`, `bin/` and `tests/`
+  # — so editing a doc-block in a PUBLISHED package can now red this job, and
+  # that name told a contributor working in `candy-pty` nothing whatsoever.
+  # WHY THE PARAGRAPH ABOVE STILL EARNS ITS PLACE: it is the argument, and the
+  # argument generalises past the case that produced it. A job under `tools/`
+  # that reaches into other packages will keep acquiring reasons to red that
+  # its own directory name cannot express, so the name states the REACH rather
+  # than trying to enumerate the guards. The enumeration is what rotted in one
+  # round; `tools/tests/` is what a reader should go and list.
   tools-guards:
-    name: 'tools/ guards (classifiers, docs generator, scanner-copy drift)'
+    name: 'tools/ guards (+ drift pins that read candy-pty/ and sugar-crush/)'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
