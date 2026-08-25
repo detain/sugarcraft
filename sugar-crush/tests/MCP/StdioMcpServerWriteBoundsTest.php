@@ -188,7 +188,13 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             );
         }
 
-        $source = (string) file_get_contents((new \ReflectionClass(StdioMcpServer::class))->getFileName());
+        // FLATTENED, not raw: both needles below are single lines today, and a
+        // reformat that wrapped either argument list would have reddened this row
+        // without anything having broken. Collapsing runs of whitespace keeps the
+        // match sensitive to the ARGUMENTS and blind to the layout.
+        $source = self::flattened(
+            (string) file_get_contents((new \ReflectionClass(StdioMcpServer::class))->getFileName()),
+        );
 
         $this->assertStringContainsString(
             '$this->writeLine(McpMessage::request($id, $method, $params)->toJson(), $deadline)',
@@ -785,12 +791,11 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         );
 
         $file = (array) file((string) $start->getFileName());
-        $body = implode('', array_slice(
+        $flat = self::flattened(implode('', array_slice(
             $file,
             $start->getStartLine() - 1,
             $start->getEndLine() - $start->getStartLine() + 1,
-        ));
-        $flat = (string) preg_replace('/\s+/', ' ', $body);
+        )));
 
         $this->assertStringContainsString(
             "0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],",
@@ -1096,4 +1101,23 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         foreach ($pipes as $q) { if (is_resource($q)) fclose($q); }
         proc_close($process);
         PHP;
+
+    /**
+     * Collapse every run of whitespace to a single space, so a source match is
+     * sensitive to what a line SAYS and blind to how it is wrapped.
+     *
+     * ⚠️ THIS IS NOT A CODE/COMMENT DISTINCTION, and callers must not treat it as
+     * one. It flattens prose exactly as happily as it flattens statements, so a
+     * needle that could plausibly appear in a doc-block will match one. MEASURED
+     * while considering a wider check here: a naive substring scan for
+     * `stream_select(` over each method's flattened body reports
+     * {@see StdioMcpServer::start()} as a select site, because start()'s COMMENTS
+     * discuss `stream_select()` at length while its code never calls it. The
+     * needles below are argument lists carrying `$deadline`, which do not occur
+     * in prose; anything less distinctive needs a token stream, not this.
+     */
+    private static function flattened(string $source): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $source);
+    }
 }
