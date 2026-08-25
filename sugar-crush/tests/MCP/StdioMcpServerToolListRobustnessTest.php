@@ -35,13 +35,25 @@ use SugarCraft\Crush\MCP\StdioMcpServer;
  * cloned content, which is why starting a server from it is gated behind a
  * per-user trust grant at all. The reply is somebody else's bytes.
  *
- * ⚠️ WHAT THIS FILE DOES NOT CLOSE, said plainly because the finding is bigger
- * than the fix. E436 is the NARROW CATCH itself. This closes the route through
- * this server type; {@see \SugarCraft\Crush\MCP\HttpMcpServer} carries a
- * character-identical `parseTools()` with the same gap, and any future throw
- * from a third party's output still walks through `catch (\RuntimeException)`.
- * Both of those files are outside this lane and are reported rather than
- * reached for.
+ * ⚠️ WHAT THIS FILE DOES NOT CLOSE — REWRITTEN, BECAUSE IT NOW CLOSES LESS AND
+ * MORE OF IT IS CLOSED ELSEWHERE.
+ * WHAT THIS SAID: "This closes the route through this server type;
+ * {@see \SugarCraft\Crush\MCP\HttpMcpServer} carries a character-identical
+ * `parseTools()` with the same gap, and any future throw from a third party's
+ * output still walks through `catch (\RuntimeException)`. Both of those files
+ * are outside this lane."
+ * WHAT IS TRUE NOW: both halves are closed, and neither is closed HERE. The type
+ * filter moved onto {@see McpTool::tryFromArray()} so that the stdio and HTTP
+ * servers share ONE mirror of `fromArray()`'s subscripts rather than two, and
+ * {@see \SugarCraft\Crush\MCP\McpClient::startServer()} now catches
+ * `\Throwable` with the `match` inside the guard. The whole-family behaviour —
+ * including a third route nobody had named, an unknown `type` throwing from
+ * OUTSIDE the old try — is pinned in
+ * {@see \SugarCraft\Crush\Tests\MCP\McpClientServerIsolationTest}.
+ * WHY THIS FILE STILL EARNS ITS PLACE: it is the only place that drives a REAL
+ * child process through the stdio handshake with a hand-built `tools/list`
+ * reply. The isolation file uses a MockHandler-backed HTTP client, so it proves
+ * the client's behaviour and not the framing's.
  */
 final class StdioMcpServerToolListRobustnessTest extends TestCase
 {
@@ -221,7 +233,7 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
      * THE FILTER IS A HAND MIRROR OF A CLASS IT DOES NOT OWN, AND DRIFT REOPENS
      * THE DEFECT SILENTLY.
      *
-     * {@see StdioMcpServer::TOOL_DEFINITION_TYPES} lists three keys with three
+     * {@see McpTool::TOOL_DEFINITION_TYPES} lists three keys with three
      * checks. Those three are exactly what {@see McpTool::fromArray()} subscripts
      * out of `$data` today, and the checks match the constructor parameters they
      * land in. Nothing enforced that. A fourth `$data['newField'] ?? ...` reading
@@ -333,7 +345,7 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
     private function toolDefinitionTypes(): array
     {
         /** @var array<string, string> $types */
-        $types = (new \ReflectionClass(StdioMcpServer::class))->getConstant('TOOL_DEFINITION_TYPES');
+        $types = (new \ReflectionClass(McpTool::class))->getConstant('TOOL_DEFINITION_TYPES');
 
         return $types;
     }

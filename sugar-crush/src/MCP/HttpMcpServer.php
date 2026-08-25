@@ -105,6 +105,27 @@ final class HttpMcpServer implements McpServer
     }
 
     /**
+     * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries the
+     * remote got wrong instead of failing the server over them.
+     *
+     * ⚠️ `is_array($def)` ALONE WAS NOT ENOUGH HERE EITHER, AND THIS HALF STAYED
+     * OPEN A ROUND LONGER THAN ITS TWIN. {@see StdioMcpServer::parseTools()} was
+     * given a type filter for the measured `{"tools":[{"name":5}]}` kill; this
+     * method was character-identical to the version that had the gap, and the
+     * gap is WORSE over HTTP than over stdio in one specific way: {@see start()}
+     * wraps its whole handshake in `catch (\Exception)`, and a `TypeError` is an
+     * `\Error`, so it walked straight past the one guard this class has.
+     * MEASURED at this tree (PHP 8.3.6, Linux 6.8), a two-server `.mcp.json` with
+     * a MockHandler-backed client, bad server first:
+     *
+     *     startServers() ESCAPED: TypeError ... Argument #1 ($name) must be of
+     *     type string, int given
+     *     -> tools visible: 0, the well-formed second server never started
+     *
+     * The filter itself lives on {@see McpTool::tryFromArray()} rather than being
+     * copied from the stdio class, so the mirror of `fromArray()`'s subscripts
+     * exists once. See that method for the reasoning and the `isset()` note.
+     *
      * @param array<mixed> $response
      * @return array<McpTool>
      */
@@ -114,8 +135,13 @@ final class HttpMcpServer implements McpServer
         $toolDefs = $response['result']['tools'] ?? [];
 
         foreach ($toolDefs as $def) {
-            if (is_array($def)) {
-                $tools[] = McpTool::fromArray($def, $this->name);
+            if (!is_array($def)) {
+                continue;
+            }
+
+            $tool = McpTool::tryFromArray($def, $this->name);
+            if ($tool !== null) {
+                $tools[] = $tool;
             }
         }
 

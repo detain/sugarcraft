@@ -1,0 +1,245 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tests\MCP;
+
+use GuzzleHttp\Client;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Response;
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\MCP\McpClient;
+
+/**
+ * ONE BAD ENTRY IN `.mcp.json` DISABLED EVERY OTHER SERVER IN THE FILE, BY THREE
+ * ROUTES, AND THE CODE CARRIED A COMMENT PROMISING IT COULD NOT.
+ *
+ * {@see McpClient::startServer()} wrapped `$server->start()` in
+ * `catch (\RuntimeException)` under "a single unreachable/misbehaving server
+ * must not abort loading the rest". Three things walked past that:
+ *
+ *   1. A `TypeError` out of `McpTool::fromArray()`, raised by a well-formed
+ *      JSON-RPC reply of `{"tools":[{"name":5}]}`. Not a `RuntimeException`.
+ *   2. `"type": "sse"` — the `default` arm's `throw` sat OUTSIDE the try, under
+ *      a comment saying so as though it were the desired behaviour. `sse` is a
+ *      transport the MCP specification defines and this port has not
+ *      implemented, so it is what a real config carries, not a typo.
+ *   3. Anything else non-`RuntimeException` a constructor or a handshake raises.
+ *
+ * MEASURED at `1dea13c4f` on this host (PHP 8.3.6, Linux 6.8) before the fix,
+ * driving `startServers()` over the two-server configs these rows build, the
+ * offender listed FIRST:
+ *
+ *     route 1 -> ESCAPED: TypeError ... Argument #1 ($name) must be of type
+ *                string, int given          | tools visible: 0
+ *     route 2 -> ESCAPED: RuntimeException: Unknown MCP server type: sse
+ *                                           | tools visible: 0
+ *
+ * ⚠️ KEY ORDER IS PART OF THE FIXTURE, NOT AN INCIDENTAL. `startServers()` walks
+ * the config map in order, so every server BEFORE the offender had already
+ * started and stayed started. The same broken file therefore lost everything,
+ * something or nothing depending purely on where the bad key sat — which is why
+ * every row here puts the offender first, and why the LAST row puts it second
+ * and requires the same answer.
+ *
+ * TRANSPORT: `http`, with a `MockHandler`-backed Guzzle client. That is
+ * deliberate — these rows are about {@see McpClient}'s guard and about
+ * {@see \SugarCraft\Crush\MCP\HttpMcpServer::parseTools()}, and a real child
+ * process would put the stdio framing between the assertion and its subject.
+ * The stdio half of the same filter is driven against a real child in
+ * {@see StdioMcpServerToolListRobustnessTest}.
+ */
+final class McpClientServerIsolationTest extends TestCase
+{
+    /** @var list<string> */
+    private array $configs = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->configs as $path) {
+            @unlink($path);
+        }
+        $this->configs = [];
+
+        parent::tearDown();
+    }
+
+    /**
+     * ROUTE 1: a mistyped `name` in one server's `tools/list` reply. The
+     * well-formed neighbour must still be reachable.
+     */
+    public function testAMistypedToolFromOneHttpServerDoesNotAbortTheOthers(): void
+    {
+        $client = $this->clientFor(
+            ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
+            [$this->handshake(), $this->toolsList('[{"name":5,"description":"mistyped"}]'),
+             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+        );
+
+        $client->startServers();
+
+        $this->assertSame(
+            ['ok'],
+            array_map(static fn ($t) => $t->name, $client->listTools()),
+            'the well-formed server\'s tool is missing, so the mistyped entry from the OTHER '
+            . 'server aborted the whole startServers() loop — the defect this file exists for',
+        );
+    }
+
+    /**
+     * The mistyped entry is SKIPPED rather than taking its own server down with
+     * it: without this row a `parseTools()` that returned `[]` for any list
+     * containing a bad entry would satisfy everything above.
+     */
+    public function testTheMistypedEntryIsSkippedAndItsWellFormedNeighbourIsNot(): void
+    {
+        $client = $this->clientFor(
+            ['mixed' => $this->httpEntry()],
+            [$this->handshake(), $this->toolsList(
+                '[{"name":5},{"name":"kept","description":"fine","inputSchema":{}},{"name":"nulls","description":null}]'
+            )],
+        );
+
+        $client->startServers();
+
+        $this->assertSame(
+            ['kept', 'nulls'],
+            array_map(static fn ($t) => $t->name, $client->listTools()),
+            'the mistyped entry must be dropped, the well-formed one kept, and an explicit '
+            . 'null — which `??` turns into the typed default — kept as well: `isset()` and '
+            . 'not `array_key_exists()`, see McpTool::toolDefinitionIsWellTyped()',
+        );
+    }
+
+    /**
+     * ROUTE 2: an unknown transport. `sse` is in the MCP specification and is
+     * not implemented here, so this is the ordinary shape of the failure.
+     */
+    public function testAnUnknownServerTypeDoesNotAbortTheOthers(): void
+    {
+        $client = $this->clientFor(
+            ['bad' => ['type' => 'sse', 'url' => 'http://bad.invalid/rpc'], 'good' => $this->httpEntry()],
+            [$this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+        );
+
+        $client->startServers();
+
+        $this->assertSame(
+            ['ok'],
+            array_map(static fn ($t) => $t->name, $client->listTools()),
+            'an unrecognised `type` still aborts the loop — the `default` arm\'s throw has to '
+            . 'sit INSIDE startServer()\'s guard, not beside it',
+        );
+    }
+
+    /** The unknown-type server is dropped, not silently substituted with something. */
+    public function testAnUnknownServerTypeIsNotReachable(): void
+    {
+        $client = $this->clientFor(
+            ['bad' => ['type' => 'sse', 'url' => 'http://bad.invalid/rpc']],
+            [],
+        );
+
+        $client->startServers();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Unknown MCP server: bad');
+        $client->callTool('bad', 'anything', []);
+    }
+
+    /**
+     * ROUTE 3: a handshake that fails with something that is not a
+     * `RuntimeException` at all. `HttpMcpServer::start()` converts `\Exception`s
+     * itself, so the shape that reaches {@see McpClient} is an `\Error` — here a
+     * `tools/list` body that is valid JSON but whose `tools` member is a list of
+     * scalars, which `parseTools()` skips, plus a SECOND server proving the loop
+     * survived. Kept as a distinct row from route 1 because it exercises the
+     * `is_array($def)` guard rather than the type filter.
+     */
+    public function testAScalarToolEntryIsSkippedAndTheLoopSurvives(): void
+    {
+        $client = $this->clientFor(
+            ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
+            [$this->handshake(), $this->toolsList('["write","read"]'),
+             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+        );
+
+        $client->startServers();
+
+        $this->assertSame(
+            ['ok'],
+            array_map(static fn ($t) => $t->name, $client->listTools()),
+            'a scalar where a tool object belongs must be skipped, not fatal',
+        );
+    }
+
+    /**
+     * THE ORDER CONTROL. The offender is listed SECOND here, so the server that
+     * must survive is one the old code ALSO started — the row would pass against
+     * the defect. It is here to make the ordering claim in the file's doc-block
+     * checkable rather than prose, and it is explicitly NOT evidence on its own.
+     */
+    public function testTheSurvivorIsFoundWhicheverSideOfTheOffenderItSitsOn(): void
+    {
+        $client = $this->clientFor(
+            ['good' => $this->httpEntry(), 'bad' => $this->httpEntry()],
+            [$this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]'),
+             $this->handshake(), $this->toolsList('[{"name":5}]')],
+        );
+
+        $client->startServers();
+
+        $this->assertSame(
+            ['ok'],
+            array_map(static fn ($t) => $t->name, $client->listTools()),
+            'a server listed BEFORE the offender was started even by the broken code, so this '
+            . 'failing means something worse than the original defect',
+        );
+    }
+
+    // =========================================================================
+    // Fixtures
+    // =========================================================================
+
+    /** @return array<string, string> */
+    private function httpEntry(): array
+    {
+        return ['type' => 'http', 'url' => 'http://mock.invalid/rpc'];
+    }
+
+    private function handshake(): Response
+    {
+        return new Response(200, [], (string) json_encode(['jsonrpc' => '2.0', 'id' => 0, 'result' => []]));
+    }
+
+    /**
+     * A `tools/list` reply carrying whatever literal the caller supplies, so a
+     * row can produce replies no factory in this tree would build.
+     */
+    private function toolsList(string $toolsJson): Response
+    {
+        return new Response(200, [], '{"jsonrpc":"2.0","id":1,"result":{"tools":' . $toolsJson . '}}');
+    }
+
+    /**
+     * @param array<string, array<string, string>> $servers
+     * @param list<Response> $responses
+     */
+    private function clientFor(array $servers, array $responses): McpClient
+    {
+        $path = sys_get_temp_dir() . '/r57b_mcp_isolation_' . getmypid() . '_' . bin2hex(random_bytes(8)) . '.json';
+        file_put_contents($path, (string) json_encode(['mcpServers' => $servers]));
+        $this->configs[] = $path;
+
+        // `unrestricted: true` because these rows are about startServers(), not
+        // about McpRouter: with no agent preset attached listTools() fails CLOSED
+        // and would answer `[]` for every row here, defect or no defect.
+        return new McpClient(
+            $path,
+            new Client(['handler' => HandlerStack::create(new MockHandler($responses))]),
+            null,
+            true,
+        );
+    }
+}

@@ -96,13 +96,70 @@ final class McpClient
     }
 
     /**
-     * Start a single server.
+     * Start a single server, and NEVER let one entry's failure reach the loop
+     * that is starting the others.
+     *
+     * ⚠️ THIS GUARD PROMISED SOMETHING IT DID NOT DELIVER, BY THREE SEPARATE
+     * ROUTES, AND ALL THREE WERE MEASURED.
+     * WHAT THIS SAID: "A single unreachable/misbehaving server must not abort
+     * loading the rest. An unknown type is a config error and is thrown above,
+     * before we get here." Both sentences were wrong in effect.
+     * WHAT IS TRUE NOW: the `match` is INSIDE the guard and the guard catches
+     * `\Throwable`. The three routes, each measured at this tree (PHP 8.3.6,
+     * Linux 6.8) by driving `startServers()` over a two-server `.mcp.json` with
+     * the offender FIRST and a well-formed server second:
+     *
+     *   1. `{"tools":[{"name":5}]}` from a `stdio` or `http` peer raised a
+     *      `TypeError` out of `McpTool::fromArray()`. Not a `RuntimeException`,
+     *      so it escaped: "tools visible: 0". Closed at source too, by
+     *      {@see McpTool::tryFromArray()}.
+     *   2. `"type": "sse"` threw `RuntimeException: Unknown MCP server type: sse`
+     *      from the `default` arm, which sat OUTSIDE the try. "tools visible: 0".
+     *      `sse` is not a typo hazard invented for the test — it is a transport
+     *      the MCP specification defines and this port has not implemented, so
+     *      the first `.mcp.json` carrying one silently disabled every OTHER
+     *      server in the file.
+     *   3. Anything else a constructor or a `start()` can raise that is not a
+     *      `RuntimeException` — an `\Error` from a third party's output, a
+     *      `JsonException`, a `ValueError` off a closed pipe.
+     *
+     * ⚠️ THE ORDER-DEPENDENCE IS WHY THIS READS AS INTERMITTENT. `startServers()`
+     * iterates the config map, so servers listed BEFORE the offender had already
+     * started and stayed started. The same broken `.mcp.json` therefore lost
+     * everything, something, or nothing depending purely on key order.
+     *
+     * WHY A BARE `catch` STILL EARNS ITS PLACE, AND WHAT IT COSTS: this is the
+     * one place a user's cloned `.mcp.json` meets the process, and the failure
+     * this method exists to prevent is "one bad entry disables MCP". The cost is
+     * real and is not paid down here — nothing records WHY a server was dropped,
+     * because this class has no sink to record it to. That is a live finding,
+     * not an accepted trade; see the round-57 lane b report.
      */
     private function startServer(string $name, array $config): void
     {
         $type = $config['type'] ?? 'stdio';
 
-        $server = match ($type) {
+        try {
+            $server = $this->buildServer($name, $type, $config);
+            $server->start();
+        } catch (\Throwable) {
+            return;
+        }
+
+        $this->servers[$name] = $server;
+    }
+
+    /**
+     * Construct the {@see McpServer} one `.mcp.json` entry asks for.
+     *
+     * Split out of {@see startServer()} so that the `default` arm's throw is
+     * inside that method's guard rather than beside it — see route 2 there.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function buildServer(string $name, string $type, array $config): McpServer
+    {
+        return match ($type) {
             // `startTimeout` (seconds) is OPTIONAL and per-server: a locally
             // installed binary answers the handshake in milliseconds, while a
             // cold `npx -y @modelcontextprotocol/server-…` first has to fetch a
@@ -135,16 +192,6 @@ final class McpClient
             ),
             default => throw new \RuntimeException("Unknown MCP server type: $type"),
         };
-
-        // A single unreachable/misbehaving server must not abort loading the rest.
-        // An unknown type is a config error and is thrown above, before we get here.
-        try {
-            $server->start();
-        } catch (\RuntimeException) {
-            return;
-        }
-
-        $this->servers[$name] = $server;
     }
 
     /**

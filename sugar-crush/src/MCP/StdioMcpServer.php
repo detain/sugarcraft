@@ -1072,69 +1072,23 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * The keys {@see \SugarCraft\Crush\MCP\McpTool::fromArray()} reads out of a
-     * tool definition, each with the check that says whether the value would
-     * satisfy the constructor parameter it lands in.
-     *
-     * ⚠️ THIS IS A HAND MIRROR OF ANOTHER CLASS, AND THAT IS THE HAZARD. A
-     * fourth `$data[...]` in `fromArray()` reopens exactly the `TypeError` this
-     * filter exists to close, and nothing about adding one would red a test that
-     * merely exercised the three keys below. It is a CONST rather than a literal
-     * inside the method so that
-     * `StdioMcpServerToolListRobustnessTest::testTheTypeFilterStillMirrorsEveryKeyMcpToolReads()`
-     * can read it and compare it against `fromArray()`'s actual subscripts and
-     * `McpTool`'s actual parameter types.
-     *
-     * `serverName` is absent deliberately: `fromArray()` takes it from its own
-     * second parameter, not from the definition, so it is not a key a peer's
-     * reply can put a wrong type into.
-     *
-     * @var array<string, callable-string>
-     */
-    private const TOOL_DEFINITION_TYPES = [
-        'name' => 'is_string',
-        'description' => 'is_string',
-        'inputSchema' => 'is_array',
-    ];
-
-    /**
      * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries a
      * third party got wrong instead of failing the server over them.
      *
-     * ⚠️ `is_array($def)` ALONE WAS NOT ENOUGH, AND THE GAP IS A MEASURED ONE-HOP
-     * KILL OF THE WHOLE MCP SUBSYSTEM. {@see McpTool::fromArray()} reads
-     * `$data['name'] ?? ''` into a `string` parameter, so a well-formed JSON-RPC
-     * reply of `{"tools":[{"name":5}]}` raises a `TypeError` — and a `TypeError`
-     * is not a `RuntimeException`, which is the only thing
-     * {@see McpClient::startServer()} catches under a comment promising that "a
-     * single unreachable/misbehaving server must not abort loading the rest".
-     *
-     * MEASURED end to end on this host (PHP 8.3.6, Linux 6.8), three consecutive
-     * takes, driving `McpClient::startServers()` over a two-server config the way
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()} does — one server
-     * answering `{"tools":[{"name":5}]}` and one answering correctly:
-     *
-     *     startServers() THREW TypeError ... Argument #1 ($name) must be of type
-     *     string, int given
-     *
-     * The well-formed server was never started. The same shape falls out of a
-     * `name` that is an object or a bool, and of an `inputSchema` that is a
-     * string; `name: null` alone is safe, because `??` catches it.
-     *
-     * WHAT THIS METHOD CAN AND CANNOT CLOSE. It closes the route through THIS
-     * server type, which is the one the trust grant exists for — `.mcp.json` is
-     * cloned content and starting a server from it is code execution. It does
-     * NOT close E436, which is the narrow catch itself: the identical
-     * `parseTools()` in {@see HttpMcpServer} still has the gap, and any future
-     * throw from a third party's output still walks through
-     * `catch (\RuntimeException)`. Both are out of this lane's file list and are
-     * reported rather than reached for. {@see \SugarCraft\Crush\Tools\McpToolBridge::execute()}
-     * already catches `\Throwable` for exactly this reason.
-     *
-     * SKIPPING RATHER THAN THROWING is the right shape here for the same reason
-     * `is_array($def)` was: one malformed tool in a list of forty is a defect in
-     * that tool, and taking the other thirty-nine down with it is the behaviour
-     * this whole path exists to avoid.
+     * ⚠️ THE TYPE FILTER MOVED, AND THE MOVE IS THE POINT.
+     * WHAT THIS SAID: a `TOOL_DEFINITION_TYPES` const and a
+     * `toolDefinitionIsWellTyped()` lived HERE, with a doc-block calling itself
+     * "a hand mirror of another class" and naming that as the hazard.
+     * WHAT IS TRUE NOW: both live on {@see McpTool} itself, reached through
+     * {@see McpTool::tryFromArray()}, because {@see HttpMcpServer::parseTools()}
+     * needed the identical filter and a copy would have made one mirror into
+     * two. The measurement, the `isset()`-not-`array_key_exists()` reasoning and
+     * the reason the table is a const are all carried over verbatim there.
+     * WHY THIS STILL EARNS A NOTE HERE: the `is_array($def)` below is NOT
+     * redundant with the filter. `tryFromArray()` takes `array $data`, so a
+     * scalar entry in the list — `{"tools":["write"]}`, which a peer is equally
+     * free to send — is a `TypeError` at the call rather than a skip. The two
+     * guards answer different questions and both are load-bearing.
      *
      * @param array<mixed> $response
      * @return array<McpTool>
@@ -1145,46 +1099,16 @@ final class StdioMcpServer implements McpServer
         $toolDefs = $response['result']['tools'] ?? [];
 
         foreach ($toolDefs as $def) {
-            if (!is_array($def) || !self::toolDefinitionIsWellTyped($def)) {
+            if (!is_array($def)) {
                 continue;
             }
 
-            $tools[] = McpTool::fromArray($def, $this->name);
-        }
-
-        return $tools;
-    }
-
-    /**
-     * Does `$def` carry the types {@see McpTool}'s constructor declares?
-     *
-     * Checked HERE rather than made lenient THERE on purpose: `McpTool`'s
-     * promoted properties are the contract every consumer of a tool list reads,
-     * and widening them to `mixed` to survive a bad server would push the same
-     * `TypeError` out to whichever of those consumers touched it first.
-     *
-     * ⚠️ `isset()` AND NOT `array_key_exists()`, AND THE DIFFERENCE IS A TOOL.
-     * {@see McpTool::fromArray()} reads every field with `??`, which supplies the
-     * typed default for an ABSENT key and for an explicit `null` alike — so
-     * `{"name":"write","description":null}` is perfectly well-typed as far as the
-     * constructor is concerned. `array_key_exists()` would call that key present,
-     * find `null` failing `is_string()`, and drop a legitimate tool on the floor
-     * without saying so. `isset()` is false for both shapes, which is exactly the
-     * question this method is asking. Pinned by the `write` entry in
-     * {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerToolListRobustnessTest::testAMalformedEntryIsSkippedAndItsWellFormedNeighboursAreNot()},
-     * which is there because the `array_key_exists()` mutation SURVIVED a fixture
-     * whose alphabet had no explicit null in it.
-     *
-     * @param array<mixed> $def
-     */
-    private static function toolDefinitionIsWellTyped(array $def): bool
-    {
-        foreach (self::TOOL_DEFINITION_TYPES as $key => $check) {
-            if (isset($def[$key]) && !$check($def[$key])) {
-                return false;
+            $tool = McpTool::tryFromArray($def, $this->name);
+            if ($tool !== null) {
+                $tools[] = $tool;
             }
         }
 
-        return true;
+        return $tools;
     }
 }
