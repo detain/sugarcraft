@@ -20,8 +20,10 @@ use RecursiveIteratorIterator;
  * nothing local asked CI's. **A green local invariant that does not imply a
  * green CI one is worse than no local invariant**, because it is trusted.
  * This test is the missing half: it re-derives the same property CI's
- * `--unused` pass checks for this package, from the same two inputs, so the
- * suite every lane already runs reds at the same moment the build does.
+ * `--unused` pass checks for this package, from the same inputs and in the
+ * same order, so the suite every lane already runs reds at the same moment the
+ * build does. "In the same order" is load-bearing and was not true at first -
+ * see {@see unrecordedDeadRequires()} on `AMBIGUOUS_NO_PSR4`.
  *
  * WHY NOT SHELL OUT TO THE TOOL. It would be one line and it would be a
  * different test: a subprocess spawned from a suite that guards spawns, whose
@@ -43,6 +45,20 @@ use RecursiveIteratorIterator;
  * lands, never to quiet a check - and `tools/check-path-repos.php --unused`
  * reads the same rows, so the two checks cannot drift again without one of
  * them going red.
+ *
+ * WHAT THAT PARAGRAPH LEFT OUT, and an attack found it rather than a reading.
+ * WHAT IT SAID, and still says above: the row "goes when the wiring lands".
+ * WHAT WAS TRUE: nothing enforced the going. The record was consulted only for
+ * a package already decided dead, so a row for a dependency `src/` reaches on
+ * every page, and a row for a package nobody requires at all, both sat in the
+ * manifest with this file GREEN and `--unused` silent. WHY THE PARAGRAPH STILL
+ * EARNS ITS PLACE: it states the contract correctly, and
+ * {@see idleDeferrals()} is now the thing that holds anybody to it.
+ *
+ * ONE SHAPE STILL DIVERGES FROM CI AND IT IS NOT THIS TEST'S. The tool's own
+ * `deferred-wiring` lookup has the same never-expires property for the other
+ * 57 libs; only `sugar-crush`'s rows are pinned here. Recorded rather than
+ * fixed: `tools/` belongs to no lane this round.
  */
 final class ManifestDependencyReachTest extends TestCase
 {
@@ -56,11 +72,22 @@ final class ManifestDependencyReachTest extends TestCase
      * set is EMPTY, and an empty set is what a version of this that always
      * returned `[]` would produce just as convincingly.
      *
-     * @param array<string, mixed> $manifest a decoded composer.json
-     * @param array<string, bool>  $reached  package name => src/ references it
+     * A DEP WITH NO `autoload.psr-4` IS REPORTED WHATEVER THE MANIFEST SAYS,
+     * and the order is copied from the tool rather than chosen. E453's whole
+     * complaint is a local check that is greener than CI's, and this test
+     * shipped with one shape of exactly that left in it: `--unused` classifies
+     * a dep whose namespace it cannot resolve as `AMBIGUOUS_NO_PSR4` and counts
+     * it as a finding BEFORE it ever looks at `deferred-wiring`, so a psr-4-less
+     * dep with a deferral row was CI-red and locally green. Every sibling
+     * declares psr-4 today (measured, this tree), so the divergence was latent -
+     * which is the only reason it is a correction rather than a failure.
+     *
+     * @param array<string, mixed> $manifest  a decoded composer.json
+     * @param array<string, bool>  $reached   package name => src/ references it
+     * @param array<string, bool>  $ambiguous package name => declares no autoload.psr-4
      * @return list<string>
      */
-    private static function unrecordedDeadRequires(array $manifest, array $reached): array
+    private static function unrecordedDeadRequires(array $manifest, array $reached, array $ambiguous = []): array
     {
         $recorded = $manifest['extra']['sugarcraft']['deferred-wiring'] ?? [];
         $dead = [];
@@ -68,6 +95,14 @@ final class ManifestDependencyReachTest extends TestCase
         /** @var mixed $constraint */
         foreach ((array) ($manifest['require'] ?? []) as $package => $constraint) {
             if (!\is_string($package) || !\str_starts_with($package, 'sugarcraft/')) {
+                continue;
+            }
+            if (($ambiguous[$package] ?? false) === true) {
+                // Deliberately ahead of both the reach test and the record: a
+                // namespace the tool cannot resolve is a finding it cannot
+                // clear, so neither can this.
+                $dead[] = $package;
+
                 continue;
             }
             if (($reached[$package] ?? false) === true) {
@@ -89,6 +124,150 @@ final class ManifestDependencyReachTest extends TestCase
         \sort($dead);
 
         return $dead;
+    }
+
+    /**
+     * `deferred-wiring` rows that are not suppressing anything.
+     *
+     * MAJOR, AND AN ATTACK FOUND IT RATHER THAN A READING. The record was
+     * consulted only for a package this test had already decided was dead, and
+     * `tools/check-path-repos.php`'s own lookup does the same - so neither ever
+     * asked whether a row still had work to do. Adding rows for
+     * `sugarcraft/candy-core` (reached from `src/` on every page) and for
+     * `sugarcraft/package-that-does-not-exist` (not even a require) left this
+     * file GREEN at 2 tests / 26 assertions, and `--unused` said nothing about
+     * either.
+     *
+     * That is the shape the doc-block above already rejects in words - "a
+     * `deferred-wiring` ROW IS A RECORD, NOT AN EXEMPTION ... It goes when the
+     * wiring lands" - with nothing enforcing the going. A row for a dependency
+     * that is already wired, or for a package nobody requires, is an exemption
+     * with no defect behind it, and that is exactly where the next real one
+     * hides.
+     *
+     * A ROW IS DOING WORK when it names a production `sugarcraft/*` require of
+     * THIS manifest that `src/` does not reach and whose namespace resolves.
+     * Anything else is idle and is reported with which of the three it failed.
+     *
+     * @param array<string, mixed> $manifest  a decoded composer.json
+     * @param array<string, bool>  $reached   package name => src/ references it
+     * @param array<string, bool>  $ambiguous package name => declares no autoload.psr-4
+     * @return list<string> `<package>: <why the row is idle>`
+     */
+    private static function idleDeferrals(array $manifest, array $reached, array $ambiguous = []): array
+    {
+        $rows = $manifest['extra']['sugarcraft']['deferred-wiring'] ?? null;
+        if (!\is_array($rows)) {
+            return [];
+        }
+
+        $requires = [];
+        /** @var mixed $constraint */
+        foreach ((array) ($manifest['require'] ?? []) as $package => $constraint) {
+            if (\is_string($package)) {
+                $requires[$package] = true;
+            }
+        }
+
+        $idle = [];
+        /** @var mixed $reason */
+        foreach ($rows as $package => $reason) {
+            if (!\is_string($package)) {
+                continue;
+            }
+
+            if (!isset($requires[$package])) {
+                $idle[] = $package . ': not a production require of this manifest at all';
+
+                continue;
+            }
+            if (!\str_starts_with($package, 'sugarcraft/')) {
+                $idle[] = $package . ': not a sugarcraft/* package, so no reach check ever reads it';
+
+                continue;
+            }
+            if (($ambiguous[$package] ?? false) === true) {
+                $idle[] = $package . ': declares no autoload.psr-4, so CI reports it as '
+                    . 'AMBIGUOUS_NO_PSR4 before it reads this row and the row suppresses nothing';
+
+                continue;
+            }
+            if (($reached[$package] ?? false) === true) {
+                $idle[] = $package . ': src/ reaches it, so the wiring has landed';
+            }
+        }
+
+        \sort($idle);
+
+        return $idle;
+    }
+
+    /**
+     * The idle-row classifier, pinned against literals in both directions.
+     *
+     * Half the cases demand a row back and half demand none, so no constant
+     * return passes - and the second half is the one that matters: a version
+     * that reported every row would red a manifest whose deferral is doing
+     * exactly the job it was written for.
+     */
+    public function testTheIdleRowClassifierReadsBothDirections(): void
+    {
+        $manifest = [
+            'require' => [
+                'php' => '^8.3',
+                'sugarcraft/wired' => '@dev',
+                'sugarcraft/deferred' => '@dev',
+                'sugarcraft/opaque' => '@dev',
+                'vendor/other' => '^1.0',
+            ],
+            'extra' => ['sugarcraft' => ['deferred-wiring' => [
+                'sugarcraft/wired' => 'a reason for a dep src/ already reaches',
+                'sugarcraft/deferred' => 'a measured reason the wiring has not landed',
+                'sugarcraft/opaque' => 'a reason for a dep whose namespace does not resolve',
+                'sugarcraft/never-required' => 'a reason for a package nobody requires',
+                'vendor/other' => 'a reason for a package no reach check looks at',
+            ]]],
+        ];
+
+        self::assertSame(
+            [
+                'sugarcraft/never-required: not a production require of this manifest at all',
+                'sugarcraft/opaque: declares no autoload.psr-4, so CI reports it as '
+                    . 'AMBIGUOUS_NO_PSR4 before it reads this row and the row suppresses nothing',
+                'sugarcraft/wired: src/ reaches it, so the wiring has landed',
+                'vendor/other: not a sugarcraft/* package, so no reach check ever reads it',
+            ],
+            self::idleDeferrals(
+                $manifest,
+                ['sugarcraft/wired' => true],
+                ['sugarcraft/opaque' => true],
+            ),
+            'every row that is not suppressing a real finding must be reported, and each of the '
+                . 'four ways a row goes idle must be reported for its own reason - a row that '
+                . 'names a package nobody requires cannot be told from a wired one by the count.',
+        );
+
+        self::assertSame(
+            [],
+            self::idleDeferrals([
+                'require' => ['php' => '^8.3', 'sugarcraft/deferred' => '@dev'],
+                'extra' => ['sugarcraft' => ['deferred-wiring' => [
+                    'sugarcraft/deferred' => 'a measured reason the wiring has not landed',
+                ]]],
+            ], [], []),
+            'and the other polarity, which is the one that keeps this usable: a row that IS '
+                . 'suppressing a real finding is reported by nothing. Without it the assertion '
+                . 'in the live arm is satisfied by a classifier that reports everything, which '
+                . 'would red the moment anybody records a deferral at all.',
+        );
+
+        self::assertSame(
+            [],
+            self::idleDeferrals(['require' => ['sugarcraft/x' => '@dev']], ['sugarcraft/x' => true]),
+            'a manifest with no deferred-wiring block has no idle rows - not "every require is '
+                . 'idle", which is what reading a missing block as an empty-ish something would '
+                . 'produce.',
+        );
     }
 
     /**
@@ -130,6 +309,30 @@ final class ManifestDependencyReachTest extends TestCase
             'and the other polarity: a manifest with nothing wrong in it must report nothing, '
                 . 'or the assertion below is satisfied by reporting everything.',
         );
+
+        // THE ORDERING CI USES, pinned so it cannot drift back. A dep with no
+        // psr-4 is a finding the tool cannot clear, so a deferral row must not
+        // clear it here either - and the reached flag must not either, since
+        // "reached" was decided by matching a prefix that does not exist.
+        self::assertSame(
+            ['sugarcraft/deferred', 'sugarcraft/used'],
+            self::unrecordedDeadRequires(
+                [
+                    'require' => [
+                        'sugarcraft/used' => '@dev',
+                        'sugarcraft/deferred' => '@dev',
+                    ],
+                    'extra' => ['sugarcraft' => ['deferred-wiring' => [
+                        'sugarcraft/deferred' => 'a measured reason',
+                    ]]],
+                ],
+                ['sugarcraft/used' => true],
+                ['sugarcraft/used' => true, 'sugarcraft/deferred' => true],
+            ),
+            'a dep declaring no autoload.psr-4 is AMBIGUOUS_NO_PSR4 to the tool, counted before '
+                . 'it reads either the source or the record. A local check that clears it is '
+                . 'greener than CI, which is the entire defect E453 is about.',
+        );
     }
 
     /** Every sibling require of THIS package, against THIS package's src/. */
@@ -155,6 +358,7 @@ final class ManifestDependencyReachTest extends TestCase
         self::assertNotSame('', $sources, 'no PHP was read from src/, so nothing can be reached.');
 
         $reached = [];
+        $ambiguous = [];
         /** @var mixed $constraint */
         foreach ((array) ($manifest['require'] ?? []) as $package => $constraint) {
             if (!\is_string($package) || !\str_starts_with($package, 'sugarcraft/')) {
@@ -171,8 +375,16 @@ final class ManifestDependencyReachTest extends TestCase
             $decoded = \json_decode((string) \file_get_contents($dep), true);
             self::assertIsArray($decoded, $package . '/composer.json did not decode to an array.');
 
-            foreach (\array_keys((array) ($decoded['autoload']['psr-4'] ?? [])) as $prefix) {
-                if (\is_string($prefix) && $prefix !== '' && \str_contains($sources, $prefix)) {
+            $prefixes = \array_keys((array) ($decoded['autoload']['psr-4'] ?? []));
+            $usable = \array_filter($prefixes, static fn ($p): bool => \is_string($p) && $p !== '');
+            if ($usable === []) {
+                // Exactly what `--unused` calls AMBIGUOUS_NO_PSR4: there is no
+                // namespace to grep for, so "not reached" is not a conclusion.
+                $ambiguous[$package] = true;
+            }
+
+            foreach ($usable as $prefix) {
+                if (\str_contains($sources, $prefix)) {
                     $reached[$package] = true;
                 }
             }
@@ -189,7 +401,26 @@ final class ManifestDependencyReachTest extends TestCase
                 . '- the prefix matching is dead and the absence below is worthless.',
         );
 
-        self::assertSame([], self::unrecordedDeadRequires($manifest, $reached), <<<'TEXT'
+        // A ROW THAT IS SUPPRESSING NOTHING IS AN EXEMPTION, NOT A RECORD, and
+        // it is checked BEFORE the finding below so that the reader who added
+        // a row to quiet this test is told so directly rather than watching it
+        // go green. Asserted here rather than only in the fixture because the
+        // fixture cannot see this manifest.
+        self::assertSame([], self::idleDeferrals($manifest, $reached, $ambiguous), <<<'TEXT'
+            An extra.sugarcraft.deferred-wiring row is not suppressing anything.
+
+            The row records that somebody looked at a require src/ does not reach
+            and kept it ON PURPOSE. It stops being that the moment the require is
+            wired, renamed or dropped, and what is left is a standing exemption for
+            a defect that no longer exists - which is where the next real one hides.
+
+            THE RESOLUTION IS TO DELETE THE ROW. If the wiring landed, that is the
+            row's whole job done. If the package is no longer required, the row
+            outlived its require. Neither is a reason to keep it: with the row gone,
+            a future regression reds the arm below and gets argued again.
+            TEXT);
+
+        self::assertSame([], self::unrecordedDeadRequires($manifest, $reached, $ambiguous), <<<'TEXT'
             A production `sugarcraft/*` require is not reached from src/ and the
             manifest does not say why.
 
