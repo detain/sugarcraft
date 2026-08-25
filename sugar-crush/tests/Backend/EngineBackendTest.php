@@ -282,6 +282,20 @@ final class EngineBackendTest extends TestCase
         $error = null;
         try {
             $this->awaitPromise($backend->completeAsync([Message::user('go')], null, $cancellation));
+        } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+            // RULE 39, NARROWED DELIBERATELY. awaitPromise() ends in
+            // `$this->fail('Promise did not settle within the test
+            // timeout')`, and that raises an AssertionFailedError - which a
+            // bare `catch (\Throwable)` here captures into $caught and then
+            // re-reports through the assertions below. MEASURED: the test
+            // still goes RED either way (an AssertionFailedError is not a
+            // RuntimeException), so this was never E546's silent-pass
+            // shape; what it cost was the DIAGNOSTIC. A ten-second hang
+            // came out as "failed asserting that ... is an instance of
+            // RuntimeException", which names the wrong problem and sends
+            // the reader to the wrong place. Rethrown so it arrives as
+            // itself.
+            throw $e;
         } catch (\Throwable $e) {
             $error = $e;
         }
