@@ -43,8 +43,8 @@ use RecursiveIteratorIterator;
  * A `deferred-wiring` ROW IS A RECORD, NOT AN EXEMPTION. It says a person
  * looked at this require and kept it on purpose. It goes when the wiring
  * lands, never to quiet a check - and `tools/check-path-repos.php --unused`
- * reads the same rows, so the two checks cannot drift again without one of
- * them going red.
+ * reads the same rows AND applies the same idleness test to them, in every
+ * lib, so the two checks cannot drift again without one of them going red.
  *
  * WHAT THAT PARAGRAPH LEFT OUT, and an attack found it rather than a reading.
  * WHAT IT SAID, and still says above: the row "goes when the wiring lands".
@@ -53,12 +53,26 @@ use RecursiveIteratorIterator;
  * every page, and a row for a package nobody requires at all, both sat in the
  * manifest with this file GREEN and `--unused` silent. WHY THE PARAGRAPH STILL
  * EARNS ITS PLACE: it states the contract correctly, and
- * {@see idleDeferrals()} is now the thing that holds anybody to it.
+ * {@see idleDeferrals()} - joined since by the tool's own IDLE_DEFERRAL pass,
+ * which covers the other 57 libs this file cannot see - is the thing that
+ * holds anybody to it.
  *
- * ONE SHAPE STILL DIVERGES FROM CI AND IT IS NOT THIS TEST'S. The tool's own
+ * THE DIVERGENCE THIS PARAGRAPH RECORDED HAS BEEN CLOSED. WHAT IT SAID: "ONE
+ * SHAPE STILL DIVERGES FROM CI AND IT IS NOT THIS TEST'S. The tool's own
  * `deferred-wiring` lookup has the same never-expires property for the other
  * 57 libs; only `sugar-crush`'s rows are pinned here. Recorded rather than
- * fixed: `tools/` belongs to no lane this round.
+ * fixed: `tools/` belongs to no lane this round." WHAT IS TRUE NOW: it was
+ * right, it was measured - two rows added to `candy-shine`, one for a package
+ * its `src/` references on every page and one for a package it does not
+ * require at all, produced no output and exit 0 - and `tools/` DID belong to a
+ * lane the round after. `check-path-repos.php --unused` now validates every
+ * `deferred-wiring` row in every lib before honouring any of it, and reports
+ * an idle one as `IDLE_DEFERRAL` naming which condition it failed. WHY THIS
+ * TEST STILL EARNS ITS PLACE: the tool is a CI gate and this is a unit suite,
+ * so they fail at different moments and for different readers - and this file
+ * pins the PREDICATE with fixtures, in both polarities, which a repo-wide pass
+ * over real manifests cannot do. Two checks of one contract that cannot drift
+ * is the arrangement the paragraph above already asked for.
  */
 final class ManifestDependencyReachTest extends TestCase
 {
