@@ -219,11 +219,28 @@ final class ClaudeCodeMcpClient
      * framer that copies this doc-block and spells the arithmetic is the one
      * way the family can still come apart, and it is reported.
      *
-     * ⚠️ AND THE DERIVATION IS WHAT MAKES THIS CLASS'S DORMANCY SAFE TO IGNORE.
-     * Nothing calls this client (see the class doc-block), so no test exercises
-     * its cap end to end. Copying a number into a dormant file is exactly how a
-     * value goes stale unobserved; naming the engine's constant means this one
-     * cannot, whether or not anybody ever wires the class up.
+     * ⚠️ AND A WORD ABOUT DORMANCY, BECAUSE THE OBVIOUS INFERENCE IS BACKWARDS.
+     * WHAT AN EARLIER DRAFT OF THIS PARAGRAPH SAID: that nothing calls this
+     * client, so no test exercises its cap end to end, and the derivation is
+     * what keeps a number in a dormant file from going stale unobserved.
+     *
+     * WHAT IS TRUE: the first half is right and the second is inverted. This
+     * class has no call site in `src/` — the class doc-block explains why — but
+     * its framing path is the BEST covered of the three.
+     * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest} drives the real
+     * {@see readMessages()} against a real child process at `cap` and at
+     * `cap + 1`, so those rows cover the CALL SITE as well as the check; that
+     * file's own scope note says so, and contrasts it with
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer}, whose equivalent rows
+     * reach a private method by reflection and deliberately do not kill a
+     * mutation of the line that calls it.
+     *
+     * WHY THE POINT SURVIVES THE CORRECTION: product dormancy and test coverage
+     * are separate facts, and it is the FIRST that makes copying a number here
+     * dangerous. Nobody editing a caller will ever be led to this file, so a
+     * literal that drifted would be found by whoever next read the class for
+     * unrelated reasons. Naming the engine's constant removes the possibility
+     * rather than relying on somebody looking.
      *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. Cutting the buffer at
      * the cap would hand `McpMessage::parse()` half a line, which comes back as
