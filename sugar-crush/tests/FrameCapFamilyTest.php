@@ -15,38 +15,80 @@ use SugarCraft\Crush\Backend\EngineBackend;
  * `const` from it and the three framing classes each spelled
  * `64 * 1024 * 1024` under a doc-block calling the number "inherited rather than
  * invented". The inheritance was PROSE. This file's whole job was to stand in
- * for a derivation the language would not let anyone write: read the engine's
- * private constant by reflection and refuse any divergence.
+ * for a derivation nobody could write while that constant stayed private: read
+ * it by reflection and refuse any divergence.
  *
- * WHAT IS TRUE NOW: the engine's constant is `public`, and each of the three
+ * ⚠️ AND THE REASON IT STAYED PRIVATE WAS NOT THE LANGUAGE. An earlier draft of
+ * this paragraph said this file stood in for "a derivation the language would
+ * not let anyone write", which misnames the constraint, and the paragraph that
+ * recorded the real one was deleted rather than rewritten. It said:
+ *
+ *     WHY A TEST AND NOT A LANGUAGE-LEVEL DERIVATION. The honest fix would be
+ *     for each class to name the engine's constant directly. It cannot: PHP
+ *     8.3.6 refuses to read a `private` constant from another class at compile
+ *     time, and `ReflectionClass::getConstant()` — which DOES read private
+ *     constants, verified on this host — is a runtime call and cannot
+ *     initialise a `const`. Promoting the engine's constant to `public` is the
+ *     alternative, and it is a change to a file this lane does not own.
+ *
+ * WHAT IS TRUE NOW: the blocker was the round-58 lane's FILE LIST, not PHP. The
+ * constant is `public`, promoting it took one word, and each of the three
  * framers writes `private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;`.
  * A constant expression naming another class's constant is resolved by PHP, so
- * the three members that exist today CANNOT disagree with the engine. The
- * old headline assertion — that four literals happen to be equal — has become a
+ * the three members that exist today CANNOT disagree with the engine. The old
+ * headline assertion — that four literals happen to be equal — has become a
  * formality for them.
+ *
+ * WHY THE DELETED PARAGRAPH STILL EARNS ITS PLACE: both of its measurements are
+ * load-bearing and neither is recorded anywhere else. That
+ * `getConstant()` reads a PRIVATE constant is why
+ * {@see self::testTheConstantReaderIsAliveInBothPolarities()} can assert the
+ * visibility rather than merely observing that the read worked (re-measured on
+ * PHP 8.3.6: it answers `int(7)` for a private constant); and that a `const`
+ * cannot be initialised from a runtime call is why the visibility, and not a
+ * static factory, is the thing this family depends on.
  *
  * WHY THIS FILE STILL EARNS ITS PLACE, WHICH IS THE ONLY QUESTION THAT MATTERS
  * AFTER A FIX TURNS A GUARD INTO A TAUTOLOGY. The family can still come apart,
- * in exactly one way: a FOURTH framer that copies one of those doc-blocks along
- * with the arithmetic. Nothing about promoting the engine's constant prevents
- * somebody writing `private const MAX_FRAME_BYTES = 64 * 1024 * 1024;` in a new
- * file tomorrow, and the prose it would copy claims membership of a family it
- * would not actually be in. So the assertion this file leads with changed from
- * "the values agree" to "every member DERIVES", and the two are complementary
- * rather than redundant:
+ * and the ways it can are worth naming exactly, because an earlier draft of
+ * this paragraph claimed there was only one and shipped that claim into three
+ * `src/` doc-blocks:
+ *
+ *   1. A FOURTH framer that copies one of those doc-blocks along with the
+ *      arithmetic. Nothing about promoting the engine's constant prevents
+ *      somebody writing `private const MAX_FRAME_BYTES = 64 * 1024 * 1024;` in
+ *      a new file tomorrow, and the prose it would copy claims membership of a
+ *      family it would not actually be in.
+ *   2. A member that derives from the WRONG `::MAX_FRAME_BYTES`.
+ *   3. 🔴 A member whose declaration THE ROSTER SCANNER CANNOT READ — which was
+ *      not a hypothetical. Until round 59 the walk took the name to be the
+ *      first token after `const`, so `private const int MAX_FRAME_BYTES = …`,
+ *      the grouped spelling, the nullable and qualified typed spellings, and a
+ *      comment between keyword and name were all reported as NO DECLARATION AT
+ *      ALL. MEASURED: with one of the three real framers rewritten to the typed
+ *      spelling and a copied literal, `vendor/bin/phpunit` came out rc 0 over
+ *      10 270 tests. "Exactly one way" was the claim; it was wrong, and it was
+ *      wrong in the direction that costs the most.
+ *
+ * The three assertions are complementary rather than redundant:
  *
  *   - {@see self::testEveryClaimantDerivesTheCapRatherThanSpellingIt()} is what
- *     catches the new literal. It is a fact about the SOURCE, and reflection
- *     cannot see it: `64 * 1024 * 1024` and `EngineBackend::MAX_FRAME_BYTES`
- *     produce an identical `int` at runtime.
- *   - {@see self::testEveryClaimantAgreesWithTheEngine()} is what catches a
- *     member deriving from the WRONG constant — a `::MAX_FRAME_BYTES` belonging
- *     to some other class. It is a fact about the VALUE, and the token scan
- *     cannot see it.
+ *     catches (1). It is a fact about the SOURCE, and reflection cannot see it:
+ *     `64 * 1024 * 1024` and `EngineBackend::MAX_FRAME_BYTES` produce an
+ *     identical `int` at runtime.
+ *   - {@see self::testEveryClaimantAgreesWithTheEngine()} is what catches (2) —
+ *     a `::MAX_FRAME_BYTES` belonging to some other class. It is a fact about
+ *     the VALUE, and the token scan cannot see it.
+ *   - {@see self::testEveryFileDeclaringTheCapReachesTheRoster()} is what
+ *     catches (3), and it is the only one of the three that covers a defect in
+ *     the INSTRUMENT rather than in `src/`. It requires the parser to agree,
+ *     file by file, with a second scanner that decides the same question
+ *     without parsing anything — so the next unreadable spelling reds instead
+ *     of vanishing.
  *
- * Neither subsumes the other, and a derivation chain that passes through a
- * second framer is caught anyway: that intermediate is itself a claimant, so if
- * IT spells a literal it is reported in its own right.
+ * A derivation chain that passes through a second framer is caught anyway: that
+ * intermediate is itself a claimant, so if IT spells a literal it is reported in
+ * its own right.
  *
  * AND MEMBERSHIP IS DERIVED TOO. The first version of this file listed the
  * family by hand, which left the same defect one level up: a fourth framer that
@@ -198,18 +240,190 @@ final class FrameCapFamilyTest extends TestCase
             if ($token[0] !== T_CONST) {
                 continue;
             }
-            for ($k = $i + 1; $k < $n; $k++) {
-                if (\is_array($tokens[$k]) && $tokens[$k][0] === T_WHITESPACE) {
+            if (self::isImportRatherThanDeclaration($tokens, $i)) {
+                continue;
+            }
+            foreach (self::constDeclarationsAt($tokens, $i, $n) as $declaration) {
+                if ($declaration['name'] !== self::CONSTANT) {
                     continue;
                 }
-                if (\is_array($tokens[$k]) && $tokens[$k][0] === T_STRING
-                    && $tokens[$k][1] === self::CONSTANT) {
-                    $out[] = [
-                        'class' => $class === '' ? '' : ($namespace === '' ? $class : $namespace . '\\' . $class),
-                        'init' => self::initialiserAfter($tokens, $k, $n),
-                    ];
+                $out[] = [
+                    'class' => $class === '' ? '' : ($namespace === '' ? $class : $namespace . '\\' . $class),
+                    'init' => $declaration['init'],
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether the `const` at `$constIndex` is an IMPORT (`use const A\B;`)
+     * rather than a declaration.
+     *
+     * An import names a constant it does not define, so counting one as a
+     * declarer would put a class on the roster that frames against somebody
+     * else's number — correct code answered with a red naming the wrong file,
+     * which is the shape a guard should never have.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function isImportRatherThanDeclaration(array $tokens, int $constIndex): bool
+    {
+        for ($k = $constIndex - 1; $k >= 0; $k--) {
+            $token = $tokens[$k];
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+
+            return \is_array($token) && $token[0] === T_USE;
+        }
+
+        return false;
+    }
+
+    /**
+     * Every constant declared by the one `const` STATEMENT that begins at
+     * `$constIndex`, each as a name paired with THE TEXT OF ITS INITIALISER.
+     *
+     * WHAT THIS REPLACED, AND WHY THE OLD SHAPE WAS NOT ENOUGH. Until round 59
+     * this walk read the name as the first non-whitespace token after `const`
+     * and then took everything between the following `=` and the terminating
+     * `;`. That is one of the five spellings PHP 8.3 accepts, and MEASURED on
+     * PHP 8.3.6 by driving the method itself, the other four were reported as
+     * NO DECLARATION AT ALL — silently, which is the one outcome
+     * {@see self::declarersIn()}'s own doc-block forbids:
+     *
+     *   - `const int X = …` — a typed class constant, PHP 8.3's own feature.
+     *   - `const ?int X = …` and `const \Foo\Bar X = …` — the nullable and
+     *     qualified spellings of the same thing.
+     *   - `const A = 1, X = …` — a grouped declaration.
+     *   - `const /* c *\/ X = …` — a comment between keyword and name.
+     *
+     * The first of those is not hypothetical style in this tree: `Compactor`
+     * and `Agents\AgentManager` already write `private const array …`. A member
+     * of this family spelled that way left the roster with the WHOLE SUITE
+     * GREEN — measured, rc 0 over 10 270 tests — so the guard this file leads
+     * with was reporting on a population it could not see all of.
+     *
+     * THE RULE THAT COVERS ALL FIVE, and does not have to be extended again for
+     * the next one: whatever sits between `const` and the `=` is a type or
+     * nothing, so THE NAME IS THE LAST NON-TRIVIA TOKEN BEFORE THE BARE `=`.
+     * The initialiser then runs to the bare `,` or `;` AT DEPTH ZERO.
+     *
+     * ⚠️ DEPTH ZERO IS NOT DECORATION. A grouped declaration separates its
+     * members with a bare `,`, and so does `[1, 2]` — MEASURED on PHP 8.3.6,
+     * `token_get_all()` emits both as the same bare `,` string token. Splitting
+     * on the first one would read `private const array A = [1, 2], X = …` as a
+     * constant `A` initialised to `[1` followed by a member named `2`. The
+     * reviewer's prescription for this fix said to resume after the terminating
+     * bare `,`; that is the hole, and it is why the walk counts brackets.
+     *
+     * ⚠️ AND EVERY COMPARISON IS GATED ON `is_string()`, SEPARATELY. A `;`, a
+     * `,`, a `{` or a `}` inside a string literal arrives as part of an ARRAY
+     * token whose TEXT reads that way, and treating the two alike is how a walk
+     * over `token_get_all()` stops early on source it can otherwise read
+     * perfectly well. (This is the justification the superseded
+     * `initialiserAfter()` carried, and it did not stop being true.)
+     *
+     * ⚠️ COMMENTS ARE DROPPED FROM THE INITIALISER TEXT, and that is a guard
+     * and not tidiness. The reader used to append the text of every token,
+     * comments included, so
+     * `= /* EngineBackend::MAX_FRAME_BYTES *\/ 64 * 1024 * 1024` READ as a
+     * derivation and passed {@see
+     * self::testEveryClaimantDerivesTheCapRatherThanSpellingIt()} while
+     * spelling the arithmetic. An exemption a sentence can buy is no exemption,
+     * and in a tree whose house style explains every constant in a comment the
+     * author re-literalising the value is the one most likely to write it.
+     *
+     * A declaration with no `=` before its terminator is NOT dropped: it comes
+     * back with an empty initialiser, so the derivation guard reds on a shape
+     * this walk could not read rather than passing over it.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     *
+     * @return list<array{name:string, init:string}>
+     */
+    private static function constDeclarationsAt(array $tokens, int $constIndex, int $n): array
+    {
+        $out = [];
+        $k = $constIndex + 1;
+
+        while ($k < $n) {
+            // THE NAME: the last non-trivia token before the bare `=`, so a
+            // type of any spelling in front of it is skipped without this walk
+            // having to enumerate the spellings.
+            $name = '';
+            $sawEquals = false;
+
+            for (; $k < $n; $k++) {
+                $token = $tokens[$k];
+                if (\is_string($token)) {
+                    if ($token === '=') {
+                        $sawEquals = true;
+                        $k++;
+
+                        break;
+                    }
+                    if ($token === ';') {
+                        break;
+                    }
+
+                    // A nullable type's `?`, which is the only bare token PHP
+                    // accepts between `const` and the name.
+                    continue;
+                }
+                if (\in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                $name = $token[1];
+            }
+
+            if (!$sawEquals) {
+                if ($name !== '') {
+                    $out[] = ['name' => $name, 'init' => ''];
                 }
 
+                break;
+            }
+
+            // THE INITIALISER: to the bare `,` or `;` at bracket depth zero.
+            $text = '';
+            $depth = 0;
+            $more = false;
+
+            for (; $k < $n; $k++) {
+                $token = $tokens[$k];
+                if (\is_string($token)) {
+                    if ($depth === 0 && $token === ';') {
+                        $k++;
+
+                        break;
+                    }
+                    if ($depth === 0 && $token === ',') {
+                        $more = true;
+                        $k++;
+
+                        break;
+                    }
+                    if ($token === '(' || $token === '[' || $token === '{') {
+                        $depth++;
+                    } elseif ($token === ')' || $token === ']' || $token === '}') {
+                        $depth--;
+                    }
+                    $text .= $token;
+
+                    continue;
+                }
+                if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                    continue;
+                }
+                $text .= $token[1];
+            }
+
+            $out[] = ['name' => $name, 'init' => trim((string) preg_replace('/\s+/', '', $text))];
+
+            if (!$more) {
                 break;
             }
         }
@@ -218,41 +432,72 @@ final class FrameCapFamilyTest extends TestCase
     }
 
     /**
-     * The text between the `=` that follows a constant's name and the bare `;`
-     * that ends the declaration, whitespace collapsed.
+     * Whether `$src` declares a constant of this name, DECIDED BY A
+     * DELIBERATELY DIFFERENT RULE from the one {@see self::declarersIn()} uses.
      *
-     * Returns the empty string when there is no `=` before the terminator,
-     * which is not a shape PHP accepts for a `const` — surfacing it as empty
-     * rather than as something plausible keeps
-     * {@see self::testEveryClaimantDerivesTheCapRatherThanSpellingIt()} red on
-     * a declaration this walk could not read, per the same rule the empty class
-     * name follows.
+     * THIS IS THE COMPLETENESS CROSS-CHECK, AND IT IS THE THING THAT WOULD HAVE
+     * CAUGHT ROUND 59'S DEFECT. `declarersIn()` parses; this does not. It asks
+     * only whether a token spelling this name appears inside a `const`
+     * STATEMENT without a `::` in front of it — a question no type, no
+     * grouping, no comment and no future declaration syntax can change the
+     * answer to, because it never looks at the shape of the declaration at all.
      *
-     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     * Two instruments that answer the same question by different means can be
+     * required to AGREE, per file, with no cardinality asserted anywhere
+     * (a count taken over `src/` is void the moment anything merges into it).
+     * When the parser meets a spelling it cannot read, the two disagree and
+     * {@see self::testEveryFileDeclaringTheCapReachesTheRoster()} names the
+     * file. That is the difference between a hole reporting itself and a hole
+     * that comes out green.
+     *
+     * ⚠️ IT IS DELIBERATELY BLIND TO PROSE. A doc-block naming the constant is
+     * a `T_COMMENT`, never a `T_STRING`, so the four files in `src/` that
+     * discuss the family at length cannot trip it — an exemption keyed on
+     * STRUCTURE rather than text, which is the only kind worth having.
      */
-    private static function initialiserAfter(array $tokens, int $nameIndex, int $n): string
+    private static function declaresTheConstantLoosely(string $src): bool
     {
-        $text = '';
-        $started = false;
+        $tokens = token_get_all($src);
+        $n = \count($tokens);
 
-        for ($k = $nameIndex + 1; $k < $n; $k++) {
-            $token = $tokens[$k];
-            // A `;` or `=` that IS punctuation, as opposed to an array token
-            // whose text merely reads that way inside a string literal.
-            if (\is_string($token) && $token === ';') {
-                break;
-            }
-            if (!$started) {
-                if (\is_string($token) && $token === '=') {
-                    $started = true;
-                }
-
+        for ($i = 0; $i < $n; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_CONST) {
                 continue;
             }
-            $text .= \is_array($token) ? $token[1] : $token;
+            if (self::isImportRatherThanDeclaration($tokens, $i)) {
+                continue;
+            }
+
+            $depth = 0;
+            $afterDoubleColon = false;
+
+            for ($k = $i + 1; $k < $n; $k++) {
+                $inner = $tokens[$k];
+                if (\is_string($inner)) {
+                    if ($depth === 0 && $inner === ';') {
+                        break;
+                    }
+                    if ($inner === '(' || $inner === '[' || $inner === '{') {
+                        $depth++;
+                    } elseif ($inner === ')' || $inner === ']' || $inner === '}') {
+                        $depth--;
+                    }
+                    $afterDoubleColon = false;
+
+                    continue;
+                }
+                if (\in_array($inner[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                if ($inner[0] === T_STRING && $inner[1] === self::CONSTANT && !$afterDoubleColon) {
+                    return true;
+                }
+                $afterDoubleColon = $inner[0] === T_DOUBLE_COLON;
+            }
         }
 
-        return $started ? trim((string) preg_replace('/\s+/', '', $text)) : '';
+        return false;
     }
 
     /**
@@ -351,6 +596,248 @@ final class FrameCapFamilyTest extends TestCase
             'a semicolon inside a string literal is ending the initialiser walk, so any '
             . 'declaration carrying one is read short and judged on a fragment',
         );
+
+        // THE FOUR SPELLINGS PHP 8.3 ACCEPTS THAT THIS WALK USED TO REPORT AS
+        // NO DECLARATION AT ALL. Each of these is a real family member hiding
+        // from the roster, and the whole suite was green with one of them in
+        // `src/` — measured, rc 0 over 10 270 tests. `const int` is not a
+        // hypothetical style in this tree either: `Compactor` and
+        // `Agents\AgentManager` already write `private const array`.
+        $shapes = [
+            'a TYPED class constant, which is PHP 8.3\'s own feature and the spelling this '
+                . 'tree already uses elsewhere' => 'private const int ' . $const . ' = 64 * 1024 * 1024;',
+            'a NULLABLE typed constant' => 'private const ?int ' . $const . ' = 64 * 1024 * 1024;',
+            'a constant typed by a QUALIFIED name' => 'private const \\Demo\\Cap ' . $const
+                . ' = 64 * 1024 * 1024;',
+            'a GROUPED declaration, where the member is not the first name after the keyword'
+                => 'private const OTHER = 1, ' . $const . ' = 64 * 1024 * 1024;',
+            'a COMMENT between the keyword and the name' => 'private const /* the cap */ '
+                . $const . ' = 64 * 1024 * 1024;',
+        ];
+
+        foreach ($shapes as $why => $declaration) {
+            $this->assertSame(
+                [['class' => 'Demo\\Framer', 'init' => '64*1024*1024']],
+                self::declarersIn("<?php\nnamespace Demo;\nfinal class Framer { " . $declaration . " }\n"),
+                'the roster scanner cannot express ' . $why . ', so a framer written that way '
+                . 'leaves the family SILENTLY and every guard in this file stays green while '
+                . 'the cap it frames at is a copy',
+            );
+        }
+
+        // A GROUPED DECLARATION WHOSE EARLIER MEMBER IS AN ARRAY. MEASURED on
+        // PHP 8.3.6: `token_get_all()` emits the `,` separating `[1, 2]`'s
+        // elements as the same BARE `,` token that separates the members, so a
+        // walk that splits on the first one reads a constant named `2`. This is
+        // the hole in the prescription that commissioned the fix, and it is
+        // pinned rather than argued.
+        $this->assertSame(
+            [['class' => 'Demo\\Framer', 'init' => '64*1024*1024']],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class Framer { private const array SIZES = [1, 2], "
+                . $const . " = 64 * 1024 * 1024; }\n",
+            ),
+            'a bare `,` INSIDE an array initialiser is ending a member of a grouped declaration, '
+            . 'so the walk splits in the wrong place and the member it then reports is not a '
+            . 'constant that exists',
+        );
+
+        // AND A COMMENT INSIDE THE INITIALISER, which is the exemption a
+        // sentence used to buy. The reader appended the text of every token,
+        // so `= /* <the engine's constant> *\/ 64 * 1024 * 1024` READ as a
+        // derivation and satisfied the guard below while spelling the
+        // arithmetic. Both polarities, because a reader that dropped the whole
+        // initialiser would pass this row and fail the family.
+        $this->assertSame(
+            [['class' => 'Demo\\Framer', 'init' => '64*1024*1024']],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class Framer { private const " . $const
+                . " = /* EngineBackend::" . $const . " */ 64 * 1024 * 1024; }\n",
+            ),
+            'a COMMENT naming the engine is being read as part of the initialiser, so the '
+            . 'derivation guard can be satisfied by a sentence while the value is a copied '
+            . 'literal -- an exemption keyed on prose, in a tree whose house style is to '
+            . 'explain every constant in a comment',
+        );
+
+        $this->assertSame(
+            [['class' => 'Demo\\Framer', 'init' => 'EngineBackend::' . $const]],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class Framer { private const " . $const
+                . " = /* the engine's bound */ EngineBackend::" . $const . "; }\n",
+            ),
+            'dropping comments from the initialiser has taken the real derivation with them, '
+            . 'so a correctly derived member now reds',
+        );
+
+        // A `,`, A `}` AND A `{` INSIDE A STRING LITERAL, which are tokens
+        // whose TEXT would end or nest a declaration while the tokens
+        // themselves do neither. Every comparison in the walk is gated on
+        // is_string() separately, and this is the row that proves it.
+        $this->assertSame(
+            [['class' => 'Demo\\Framer', 'init' => '"a}b,c{"']],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class Framer { private const " . $const
+                . " = \"a}b,c{\"; }\n",
+            ),
+            'a brace or comma inside a string literal is being counted as bracket depth or as '
+            . 'a member separator, so a declaration carrying one is read short and judged on '
+            . 'a fragment',
+        );
+
+        // AN IMPORT IS NOT A DECLARATION. `use const A\MAX_FRAME_BYTES;` names
+        // a constant it does not define; counting it would put a class on the
+        // roster that frames against somebody else's number and red with a
+        // message naming the wrong file.
+        $this->assertSame(
+            [],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nuse const Other\\" . $const
+                . ";\nfinal class Framer { private const OTHER = 1; }\n",
+            ),
+            'a `use const` IMPORT is being counted as a declaration, so a file that merely '
+            . 'names the constant joins the family',
+        );
+    }
+
+    /**
+     * TWO INSTRUMENTS, DIFFERENT RULES, REQUIRED TO AGREE FILE BY FILE — which
+     * is what catches the NEXT spelling the parser cannot read.
+     *
+     * WHY THIS EXISTS. Round 58 built {@see self::declarersIn()} and round 59
+     * promoted it to this file's headline assertion, writing a guarantee about
+     * it into three `src/` doc-blocks. Both rounds missed that the walk read
+     * the name as the first token after `const`, so four of PHP 8.3's five
+     * declaration spellings came back as NO DECLARATION — and a family member
+     * written in one of them left the roster with the WHOLE SUITE GREEN.
+     * Teaching the parser those four shapes fixes the four; it does nothing
+     * about the fifth, whatever it turns out to be.
+     *
+     * So the parser is not asked to be complete. It is asked to AGREE with
+     * {@see self::declaresTheConstantLoosely()}, which decides the same
+     * question without parsing anything: is there a token spelling this name
+     * inside a `const` statement, with no `::` in front of it. No type, no
+     * grouping, no comment and no syntax PHP has not shipped yet can change
+     * that answer, because it never looks at the declaration's shape.
+     *
+     * NO CARDINALITY IS ASSERTED. Not the number of files, not the number of
+     * declarations — a count taken over `src/` is void the moment anything
+     * merges into it, which is exactly how a figure like that ends up wrong in
+     * prose an hour later. The assertion is agreement, per file, plus the
+     * requirement that the loose scanner found SOMETHING, because two
+     * instruments that both answer "no" agree perfectly and mean nothing.
+     */
+    public function testEveryFileDeclaringTheCapReachesTheRoster(): void
+    {
+        $root = \dirname(__DIR__) . '/src';
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+        );
+
+        $looseOnly = [];
+        $parsedOnly = [];
+        $seen = 0;
+
+        foreach ($it as $f) {
+            if (!$f instanceof \SplFileInfo || !$f->isFile() || $f->getExtension() !== 'php') {
+                continue;
+            }
+            $text = (string) file_get_contents($f->getPathname());
+            $loose = self::declaresTheConstantLoosely($text);
+            $parsed = self::declarersIn($text) !== [];
+            if ($loose) {
+                $seen++;
+            }
+            if ($loose && !$parsed) {
+                $looseOnly[] = substr($f->getPathname(), \strlen(\dirname(__DIR__)) + 1);
+            }
+            if ($parsed && !$loose) {
+                $parsedOnly[] = substr($f->getPathname(), \strlen(\dirname(__DIR__)) + 1);
+            }
+        }
+
+        sort($looseOnly);
+        sort($parsedOnly);
+
+        $this->assertSame(
+            [],
+            $looseOnly,
+            'these files declare the frame cap and the roster parser cannot see the '
+            . 'declaration, so they are framing against a number nothing in this file checks. '
+            . 'THE FIX IS IN constDeclarationsAt(), NOT HERE: teach it the spelling and pin '
+            . 'that spelling as its own fixture in '
+            . 'testTheRosterScannerAgreesWithASourceWhoseAnswerIsKnown(). Do NOT exempt the '
+            . 'file -- an exemption written for correct code is a licence, and this is exactly '
+            . 'where the next member of the family would hide',
+        );
+
+        $this->assertSame(
+            [],
+            $parsedOnly,
+            'the roster parser reports a declaration in these files that the loose scanner '
+            . 'cannot find at all. One of the two is wrong about the same source, so neither '
+            . 'verdict in this file is worth anything until they agree',
+        );
+
+        $this->assertGreaterThan(
+            0,
+            $seen,
+            'the loose scanner found no declaration anywhere in src/, so its agreement with '
+            . 'the parser is the agreement of two instruments that both answer "no" -- which '
+            . 'is what a dead scanner looks like from here',
+        );
+    }
+
+    /**
+     * The loose scanner answers sources whose answers are known, in both
+     * polarities.
+     *
+     * It is the control on the control, and it needs one for the same reason
+     * the parser does: a scanner that always answers `false` agrees with the
+     * parser on every file that parses and never reports the one that does not,
+     * which is precisely the failure it was built to catch. The negatives
+     * matter as much — a scanner that always answers `true` would demand a
+     * roster row from every file in `src/`.
+     */
+    public function testTheLooseScannerAgreesWithSourcesWhoseAnswersAreKnown(): void
+    {
+        $const = self::CONSTANT;
+
+        $positives = [
+            'the plain declaration' => 'final class F { private const ' . $const . ' = 1; }',
+            'a typed declaration' => 'final class F { private const int ' . $const . ' = 1; }',
+            'a grouped declaration' => 'final class F { private const A = 1, ' . $const . ' = 2; }',
+            'a declaration whose value derives' => 'final class F { private const ' . $const
+                . ' = Engine::' . $const . '; }',
+            'a namespace-level declaration' => 'const ' . $const . ' = 1;',
+        ];
+
+        foreach ($positives as $why => $body) {
+            $this->assertTrue(
+                self::declaresTheConstantLoosely("<?php\nnamespace Demo;\n" . $body . "\n"),
+                'the loose scanner cannot see ' . $why . ', so it agrees with the parser by '
+                . 'being blind in the same place -- and the cross-check it exists to provide '
+                . 'is worth nothing',
+            );
+        }
+
+        $negatives = [
+            'a mere READ of somebody else\'s constant' => 'final class F { public function f(): int '
+                . '{ return Engine::' . $const . '; } }',
+            'an IMPORT of the name' => 'use const Other\\' . $const . ';',
+            'a class declaring some other constant' => 'final class F { private const OTHER = 1; }',
+            'a DOC-BLOCK discussing the constant at length, which every file in this family does'
+                => "/**\n * The cap is " . $const . ", see Engine::" . $const
+                . ".\n */\nfinal class F { private const OTHER = 1; }",
+        ];
+
+        foreach ($negatives as $why => $body) {
+            $this->assertFalse(
+                self::declaresTheConstantLoosely("<?php\nnamespace Demo;\n" . $body . "\n"),
+                'the loose scanner reports a declaration for ' . $why . ', so it would demand a '
+                . 'roster row from a file that declares nothing and red on correct code',
+            );
+        }
     }
 
     /**
@@ -376,11 +863,20 @@ final class FrameCapFamilyTest extends TestCase
         );
 
         foreach (array_keys($claimants) as $class) {
+            // ALL FOUR KINDS declarersIn() TRACKS, not just the one word in its
+            // name. MEASURED on PHP 8.3.6: class_exists() answers false for an
+            // interface and for a trait (true for an enum), so a family member
+            // legitimately declared in either would red HERE, with a message
+            // blaming the scanner for source it read perfectly well. An
+            // exemption written for correct code is a licence; the classifier
+            // was the defect.
             $this->assertTrue(
-                class_exists($class),
-                'the family derivation produced "' . $class . '", which is not a class. Either the '
-                . 'namespace/class assembly in declarersIn() is wrong, or a MAX_FRAME_BYTES was '
-                . 'declared somewhere this scanner cannot attribute it to a class',
+                class_exists($class) || interface_exists($class)
+                    || trait_exists($class) || enum_exists($class),
+                'the family derivation produced "' . $class . '", which names no class, '
+                . 'interface, trait or enum. Either the namespace/class assembly in '
+                . 'declarersIn() is wrong, or a MAX_FRAME_BYTES was declared somewhere this '
+                . 'scanner cannot attribute it to a class-like',
             );
         }
 
@@ -470,8 +966,13 @@ final class FrameCapFamilyTest extends TestCase
         $this->assertNotSame([], $claimants, 'the roster walk is dead; see testTheDerivedRosterIsRealClasses()');
 
         foreach ($claimants as $class => $init) {
+            // NO `\\s*` AFTER THE `::`. constDeclarationsAt() returns the
+            // initialiser with every whitespace byte already stripped, so a
+            // tolerance for spacing here would be matching against something
+            // that cannot occur -- a metacharacter that reads as leniency the
+            // guard does not actually have.
             $this->assertMatchesRegularExpression(
-                '/::\s*' . self::CONSTANT . '\b/',
+                '/::' . self::CONSTANT . '\b/',
                 $init,
                 $class . '::MAX_FRAME_BYTES is written as its own value (`' . $init . '`) rather '
                 . 'than derived from another class\'s constant. THE FIX IS TO NAME THE ENGINE, '
