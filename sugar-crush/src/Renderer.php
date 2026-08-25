@@ -1065,8 +1065,8 @@ final class Renderer
             // this app watched a static "assistant is thinking..." while the
             // thinking was arriving and being discarded.
             //
-            // Through {@see renderReasoning()}, the SAME collapsed, dimmed,
-            // 120-char treatment a settled Message's own `reasoning` gets in
+            // Through {@see renderReasoning()}, the SAME collapsed and dimmed
+            // treatment a settled Message's own `reasoning` gets in
             // {@see renderAssistantTurn()}, rather than a second style: a
             // MiniMax-M2.7 trace runs to thousands of tokens and painting it in
             // full would push the answer off-screen turn after turn, and having

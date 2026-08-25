@@ -16591,3 +16591,123 @@ for the classifier rather than weakening it.
 tokens** — not reported at `DRIFT_BOUND` 1, nor at 2, 3, 4, 5, 8 or 12. Both now use
 `TestFileWalkTrait`. Filed because the lesson outlives the fix: a census that walks the tree is exactly
 the kind of helper that gets copied, and this guard's bound is tuned for one-token drift.
+
+---
+
+### Ea57-1 — E493's heartbeat cannot be raised by a signal, and the measurement says what can
+
+**MEASURED, NOT BUILT.** Round 56 recorded a doubt beside E493's design — a heartbeat the child raises on
+a timer rather than on a chunk — that it "may not be reachable at all from inside `runCompleteInChild()`'s
+synchronous provider call". The doubt is correct. On PHP 8.3.6 (this host; CI also runs 8.4 and none of
+this was observed there):
+
+- `pcntl_setitimer` **does not exist on this host at all**, so any gate naming it would skip silently.
+  `pcntl_alarm`, `pcntl_signal`, `pcntl_async_signals`, `pcntl_fork` and `posix_kill` all do exist.
+- `pcntl_alarm(1)` with `pcntl_async_signals(true)` and a handler that re-arms itself, across a **3-second
+  blocking `curl_exec()`** — curl being Guzzle's default handler and the transport every real provider in
+  this package uses for a batch request — fired the handler **exactly once, at t=3.001s: the moment
+  `curl_exec()` returned.** Zero heartbeats inside the blocking window. Three trials, identical to the
+  millisecond.
+- The same shape against a blocking `fread()` on a silent unix socket: handler at t=3.002s, when `fread()`
+  returned. Three trials.
+- Mechanism, and it is the reason rather than a restatement: PHP dispatches async signals at VM tick
+  points. A blocking C call does not return to the VM, and PHP retries the interrupted syscall itself —
+  `fread()` returned the byte, not `false`.
+
+**What WOULD work, measured on the same rig:** `CURLOPT_PROGRESSFUNCTION`, which Guzzle exposes as the
+`progress` request option, runs **during** the blocking transfer — on the same 3-second request it fired
+18 times including ticks at t=1.001 and t=2.002. That is a genuine in-PHP callback inside the window, on
+roughly the one-per-second cadence a heartbeat wants, and it needs no second process and no signal.
+
+**Two caveats that belong with it.** (1) Guzzle routes a request carrying `stream => true` to
+`StreamHandler` instead whenever `allow_url_fopen` is on — it is `1` here — and `StreamHandler`'s own
+`add_progress` is driven by body reads, so it would NOT tick during a silent wait. That does not affect
+E493, whose whole subject is the NON-streaming provider (`stream => true` is never set on that path), but
+anyone reusing the seam for the streaming path would be reusing a callback that cannot fire when nothing
+is arriving. This is the same two-transports trap `Providers\Concerns\HttpClientDefaults` already
+documents at length for `connect_timeout`. (2) `CurlFactory` in the vendored Guzzle asserts a conflict if
+`CURLOPT_PROGRESSFUNCTION` is also set through `curl` options directly.
+
+**Why it is filed rather than fixed:** the seam is in `src/Providers/` — `CompleteRequest`,
+`Concerns\HttpClientDefaults`, and each provider's `complete()` — which was not this lane's. The one file
+on the path that IS (`src/Runtime.php`) calls `$provider->complete($request)` and has nowhere to thread a
+per-second callback without changing the request DTO.
+
+**The alternative, recorded as the inferior option so nobody re-derives it as the good one:** a heartbeat
+process forked *inside* the completion child could write frames on `$childSocket` on a timer, and that is
+reachable. But two writers would share one `SOCK_STREAM`, which guarantees nothing about write atomicity,
+while `EngineBackend::writeFrame()` is a length-prefixed multi-`fwrite` loop — an interleave corrupts the
+framing, and `drainFrames()`'s documented response to an impossible declared length is to discard the
+whole buffer, i.e. lose the turn. Trading a rare timeout for a rare silent turn-loss is not a trade.
+
+`COMPLETE_TIMEOUT_SECONDS` was **not** raised and the idle timer was **not** removed, per the standing
+constraint on both.
+
+---
+
+### Ea57-2 — the retired idle-ceiling source scan survived a real mutation, and so did every other test
+
+**Context for E496, filed because the general lesson outlives the fix.**
+`EngineBackendTest::testTheCompletionTimeoutIsReArmedOnEveryFrame()` asserted two things about
+`completeAsync()`'s SOURCE TEXT: that `addTimer(self::COMPLETE_TIMEOUT_SECONDS` appears exactly once, and
+that the literal `$resetTimeout()` appears somewhere after `addReadStream(`.
+
+Move the `$resetTimeout()` call from the top of the frame-drain loop down into the `reasoning` branch and
+**both assertions still pass** — one arming site, and the string is still lexically inside the read
+handler — while a turn whose progress arrives as assistant TEXT rather than as thinking now dies at the
+ceiling. Measured, not argued: the retired scan's own predicate was evaluated against the mutated source
+and reported `STILL PASSES` on both halves.
+
+`ReasoningProgressTest`'s sixteen tests — the file whose entire subject is this ceiling — **also survive
+that mutation**, because every double in it announces itself through the reasoning channel. The
+replacement test kills it.
+
+The general shape: *a scan for the presence of a string cannot see where the string is*, and a test file
+whose fixtures all take one branch cannot notice a guard that moved into that branch.
+
+---
+
+### Ea57-3 — two more implicitly-nullable parameters live outside the Backend family
+
+E495 fixed the eight in `src/Backend.php` and `src/Backend/`, and
+`tests/Backend/BackendSignatureNullabilityTest.php` pins that family. A token-level census of the whole of
+`sugar-crush/src` (295 files at the time) found **two more**, both in `src/Workflows/Workflow.php`
+(`WorkflowStatus $workflowStatus = null` and `bool $stopOnFirstFailure = null`), which was not this lane's
+file. They are the same PHP 8.4 deprecation and the same one-character fix.
+
+Widening the guard's scope from the Backend family to all of `src/` is a one-line change to
+`contractFamily()` once those two are spelled `?WorkflowStatus` / `?bool`; the docblock says so, so the
+scope is not silently permanent.
+
+---
+
+### Ea57-4 — `Backend` cannot grow a parameter, and the reason should be written down once
+
+Filed as a fact about this package that will otherwise be re-derived by whoever next wants to thread
+something new through a completion.
+
+PHP treats an implementation declaring **fewer** parameters than its interface as a **load-time fatal**,
+even when the interface's extra parameter is optional (`Declaration of X::m(...) must be compatible with
+I::m(...)`) — measured on 8.3.6. A token-stream census of `completeAsync()` declarations found **19 with
+four parameters, across eight test files** in this package alone (`tests/ChatTest.php`,
+`tests/Cli/NonInteractiveTest.php`, `tests/Cli/NonInteractiveProviderFailureTest.php`,
+`tests/Cli/NonInteractiveRefusalDocumentTest.php`, `tests/Chat/CompactModelSummaryTest.php`,
+`tests/Context/ContextWindowTest.php`, `tests/Integration/StreamingWiringTest.php`,
+`tests/Sessions/BackgroundSessionRunnerTest.php`), plus every third-party backend — `Backend`'s own
+docblock advertises it as an extension point.
+
+So the answer is an opt-in capability interface, which is what `Backend\ReportsContextWindow` already is
+and what `Backend\ObservesReasoning` now is too. **Not a bare marker interface**: PHP drops a surplus
+positional argument to a userland method in silence, so a marker would let a backend claim the capability
+while declaring a signature that cannot receive it, and nothing would say so.
+
+---
+
+### Ea57-5 — `runOnScaledClock` now exists twice
+
+`tests/Backend/EngineBackendTest.php` and `tests/Backend/ReasoningProgressTest.php` each carry a private
+helper of that name. They differ (one collects a reasoning channel the other has no use for) and merging
+them would mean restructuring a file whose sixteen passing tests are about a different claim, so the
+duplication was taken deliberately and is noted in both. If a third caller appears, promote it to
+`tests/Backend/Support/` rather than growing a third copy — the duplicated-test-helper drift guard is
+exactly the instrument that will otherwise find this later and at more cost.

@@ -52,7 +52,7 @@ use SugarCraft\Crush\Tools\ToolCall as EngineToolCall;
  *
  * `src/Renderer.php` and `src/Tui/Renderer.php` both exist and neither name
  * says which paints a transcript. Established rather than assumed: the only
- * reader of `Chat::streamingText()` in the whole package is
+ * reader of `Chat::streamingText()` anywhere under `src/` is
  * `SugarCraft\Crush\Renderer::renderView()`, and `Tui\Renderer` imports that
  * same class as `LiveRenderer` and delegates its chat pane to it
  * ({@see \SugarCraft\Crush\Tui\Components\ChatPane}), rendering only the shell
@@ -516,8 +516,9 @@ final class ReasoningRecorderBackend implements ObservesReasoning
 
 /**
  * A four-parameter backend — the shape of every third-party implementation and
- * of nineteen doubles already in this package. It must still work, and it must
- * NOT be handed a fifth argument.
+ * of most doubles already in this package. It must still work, and it must NOT
+ * be handed a fifth argument. (No count here on purpose: it changes whenever
+ * anyone adds a double, and a stale number in a doc-block is worse than none.)
  */
 final class PlainArityBackend implements Backend
 {

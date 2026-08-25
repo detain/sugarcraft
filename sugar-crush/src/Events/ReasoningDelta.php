@@ -31,11 +31,18 @@ namespace SugarCraft\Crush\Events;
  * {@see \SugarCraft\Crush\Tests\Backend\ReasoningPaintTest} for the pin.
  *
  * A DELTA, never a running total, on the same contract {@see TokenDelta}
- * states: consumers append. The EMPTY string never reaches here — it is
- * meaningful one layer down (a chunk with nothing to show is still a sign of
- * life for `EngineBackend`'s idle ceiling) and meaningless as a paint
- * instruction, so `EngineBackend`'s reasoning-frame branch drops it before the
- * caller's sink is ever called.
+ * states: consumers append.
+ *
+ * The EMPTY string never reaches here, and the reason is worth stating per PATH
+ * rather than in general, because it is NOT a property of the whole channel.
+ * An empty fragment is meaningful one layer down — a chunk with nothing to show
+ * is still a sign of life for {@see \SugarCraft\Crush\Backend\EngineBackend}'s
+ * idle ceiling — so `EngineBackend::complete()` threads it through untouched and
+ * a direct caller of the SYNC method does see it. Both of `completeAsync()`'s
+ * paths drop it first: the forked path in the parent's `reasoning`-frame branch,
+ * the pcntl-less fallback in its own `$paintable` wrapper. `Chat` uses
+ * `completeAsync()` and additionally refuses an empty delta at its own sink, so
+ * a `ReasoningDelta` carrying '' cannot be constructed on the live path.
  *
  * Rides {@see \SugarCraft\Crush\Chat}'s ONE shared live inbox alongside
  * {@see TokenDelta}/{@see ToolStarted}/{@see ToolFinished}, for the reason

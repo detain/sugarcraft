@@ -22,12 +22,14 @@ use SugarCraft\Crush\Backend;
  *
  * ## Why this cannot be a behavioural test
  *
- * The two spellings compile to the same signature. `ReflectionParameter` cannot
- * tell them apart either — for `callable $x = null` the reported type is
- * already `?callable`, `allowsNull()` is already true, and the default is
- * already null. There is no runtime observation that separates the two on any
- * PHP version, so the only honest instrument is the token stream, and the only
- * honest pin for the fix is a scanner over it.
+ * The two spellings compile to the same signature, and `ReflectionParameter`
+ * cannot tell them apart either. MEASURED on PHP 8.3.6 rather than asserted:
+ * for BOTH spellings `getType()` stringifies to `?callable`, both report
+ * `allowsNull() === true` on the type AND on the parameter, and both have a
+ * default of null. There is no runtime observation that separates them, so the
+ * only honest instrument is the token stream and the only honest pin for the fix
+ * is a scanner over it. {@see testTheTwoSpellingsAreIndistinguishableToReflection()}
+ * keeps that claim from becoming folklore.
  *
  * ## Why the scanner has its own tests
  *
@@ -311,6 +313,48 @@ final class BackendSignatureNullabilityTest extends TestCase
         }
 
         return trim($out);
+    }
+
+    /**
+     * The premise of this whole file, measured rather than asserted: reflection
+     * genuinely cannot separate the two spellings, so a reflection-based guard
+     * would be a dead instrument no matter how it was written.
+     *
+     * The two declarations are built by CONCATENATION and evaluated, so neither
+     * spelling appears literally in this file — a future textual sweep of the
+     * deprecated form would otherwise rewrite the fixture that proves why the
+     * sweep is needed.
+     */
+    public function testTheTwoSpellingsAreIndistinguishableToReflection(): void
+    {
+        $class = 'NullabilityProbe' . bin2hex(random_bytes(6));
+        $implicit = 'callable $a = ' . 'null';
+        $explicit = '?' . 'callable $b = ' . 'null';
+        eval("final class {$class} { public function implicit({$implicit}): void {} "
+            . "public function explicit({$explicit}): void {} }");
+
+        $seen = [];
+        foreach (['implicit', 'explicit'] as $method) {
+            $parameter = (new \ReflectionMethod($class, $method))->getParameters()[0];
+            $type = $parameter->getType();
+            $seen[$method] = [
+                'type' => (string) $type,
+                'typeAllowsNull' => $type?->allowsNull(),
+                'paramAllowsNull' => $parameter->allowsNull(),
+                'defaultIsNull' => $parameter->isDefaultValueAvailable() && $parameter->getDefaultValue() === null,
+            ];
+        }
+
+        $this->assertSame(
+            $seen['explicit'],
+            $seen['implicit'],
+            'reflection CAN separate the two spellings on this PHP - if so, prefer it over the token scan',
+        );
+        // Positive component (rule 25): an all-null reading would also compare
+        // equal, and would prove nothing.
+        $this->assertSame('?callable', $seen['implicit']['type']);
+        $this->assertTrue($seen['implicit']['typeAllowsNull']);
+        $this->assertTrue($seen['implicit']['defaultIsNull']);
     }
 
     /**

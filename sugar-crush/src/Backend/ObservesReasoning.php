@@ -25,12 +25,14 @@ use SugarCraft\Crush\Message;
  * an implementation with FEWER parameters than its interface as a load-time
  * fatal — `Declaration of X::completeAsync(…) must be compatible with
  * Backend::completeAsync(…)` — even when the interface's extra parameter is
- * optional. A token-stream census of this package at the time of writing found
- * four-parameter `completeAsync()` declarations spread across eight test files
- * and, by the same rule, in every third-party backend outside this repo;
- * `Backend`'s own docblock advertises it as an extension point ("anything that
- * returns text"). Widening it would break all of them at once, and would do so
- * at `require` time rather than at the call.
+ * optional. Four-parameter `completeAsync()` declarations are the NORM in this
+ * package's own test doubles and, by the same rule, in every third-party backend
+ * outside this repo; `Backend`'s own docblock advertises it as an extension
+ * point ("anything that returns text"). Widening it would break all of them at
+ * once, and would do so at `require` time rather than at the call. (How many
+ * there are is deliberately not written here — it moves whenever anyone adds a
+ * double. The count as it stood, and the generator that produced it, are in the
+ * hardening backlog; what this paragraph needs is that the number is not zero.)
  *
  * This is exactly the reasoning {@see ReportsContextWindow} already gives for
  * the same choice, and the shape is deliberately identical, down to the
