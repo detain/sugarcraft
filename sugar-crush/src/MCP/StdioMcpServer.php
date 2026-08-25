@@ -81,7 +81,6 @@ final class StdioMcpServer implements McpServer
      * Upper bound on ONE NDJSON line, and on the persistent read buffer that
      * accumulates towards it.
      *
-
      * ⚠️ IT IS THE BUFFER THAT WAS UNBOUNDED, NOT THE PEER. {@see $readBuffer}
      * is instance state and survives every call, so a peer that emits an endless
      * stream WITH NO FRAME TERMINATOR grew it without limit for the life of the
@@ -105,7 +104,6 @@ final class StdioMcpServer implements McpServer
      * `\RuntimeException` naming the cap is raised instead.
      */
     private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
-
 
     /**
      * How long THE HANDSHAKE — `initialize` plus `tools/list`, one shared

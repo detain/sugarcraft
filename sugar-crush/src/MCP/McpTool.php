@@ -35,7 +35,7 @@ final readonly class McpTool
      *
      * @var array<string, callable-string>
      */
-    public const TOOL_DEFINITION_TYPES = [
+    private const TOOL_DEFINITION_TYPES = [
         'name' => 'is_string',
         'description' => 'is_string',
         'inputSchema' => 'is_array',

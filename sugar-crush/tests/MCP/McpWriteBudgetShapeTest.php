@@ -53,10 +53,22 @@ final class McpWriteBudgetShapeTest extends TestCase
 
     /**
      * A healthy write must finish inside this FRACTION of
-     * `ClaudeCodeMcpClient::WRITE_IDLE_SECONDS`. A fraction rather than a
-     * constant so that moving the bound cannot silently make this row vacuous,
-     * and a generous one because the measured spread on an idle box is already
-     * 15x.
+     * `ClaudeCodeMcpClient::WRITE_IDLE_SECONDS`, rather than inside a constant
+     * of its own, so that the row tracks the bound it is about.
+     *
+     * ⚠️ THE FRACTION PROTECTS ONE DIRECTION ONLY, and the doc-block used to
+     * claim both. WHAT IT SAID: "moving the bound cannot silently make this row
+     * vacuous". WHAT IS TRUE NOW: SHRINKING the bound tightens this row, but
+     * RAISING it loosens it in exact proportion — at `WRITE_IDLE_SECONDS = 150.0`
+     * the budget becomes 30s and a healthy write measured at 0.4s would pass
+     * whatever it did. WHY THIS STILL EARNS ITS PLACE: the direction it does
+     * cover is the one that matters here, because the finding this row pins is
+     * that the write bound is far LONGER than the read loop under it, so the
+     * pressure on that constant is downward. A raise past a few seconds is a
+     * deliberate act that should bring its own measurement.
+     *
+     * Generous at 0.2 because the measured spread on an idle box is already 15x
+     * (0.026s to 0.401s, three takes, PHP 8.3.6).
      */
     private const HEALTHY_WRITE_BUDGET_FRACTION = 0.2;
 

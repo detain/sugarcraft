@@ -155,13 +155,20 @@ final class McpClientServerIsolationTest extends TestCase
     }
 
     /**
-     * ROUTE 3: a handshake that fails with something that is not a
-     * `RuntimeException` at all. `HttpMcpServer::start()` converts `\Exception`s
-     * itself, so the shape that reaches {@see McpClient} is an `\Error` — here a
-     * `tools/list` body that is valid JSON but whose `tools` member is a list of
-     * scalars, which `parseTools()` skips, plus a SECOND server proving the loop
-     * survived. Kept as a distinct row from route 1 because it exercises the
-     * `is_array($def)` guard rather than the type filter.
+     * ROUTE 1'S SIBLING, AND NOT A FAILURE ROUTE AT ALL — the label on this row
+     * used to say "ROUTE 3" and that was wrong.
+     *
+     * WHAT IT SAID: that this exercised a handshake failing with something which
+     * is not a `RuntimeException`, reaching {@see McpClient} as an `\Error`.
+     * WHAT IS TRUE NOW: nothing raises here. A `tools/list` body whose `tools`
+     * member is a list of SCALARS is skipped by `parseTools()`'s `is_array($def)`
+     * guard, so the server starts cleanly — as the in-body comment below says
+     * outright. The genuine route 3 landed later as
+     * {@see testAStartThatRaisesANonExceptionThrowableDoesNotAbortTheOthers()},
+     * and this header went stale the moment it did.
+     * WHY THIS STILL EARNS ITS PLACE: it is the only row covering the
+     * `is_array($def)` container guard rather than the per-key type filter, and
+     * the SECOND server proves the skip is a skip rather than a silent abort.
      */
     public function testAScalarToolEntryIsSkippedAndTheLoopSurvives(): void
     {
