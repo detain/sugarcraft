@@ -880,6 +880,20 @@ final class StdioMcpServer implements McpServer
      * server did not come up" and {@see callTool()} passes no deadline at all.
      * Anything finer would be a distinction with no reader.
      *
+     * ⚠️ THIS METHOD OWNS THE FRAME CAP'S ONLY CALL SITE, AND THAT CALL IS A
+     * DECLARED SURVIVOR OF THE SUITE. The refill loop below calls
+     * {@see refuseAnOversizedFrame()} on every pass, which is what stops a peer
+     * that streams without ever sending a newline growing `$readBuffer` for the
+     * life of the process — the same unbounded-state defect
+     * {@see MAX_STDERR_BYTES} exists to close one field over.
+     * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest} pins the CHECK by
+     * reflection, in both polarities, but deliberately does NOT cover this line:
+     * deleting the call is a mutation those rows do not kill. Reaching it needs
+     * a child that writes 64 MiB into a pipe with no newline, minutes of
+     * throughput for a property {@see \SugarCraft\Crush\ClaudeCodeMcpClient}
+     * already pins end to end against a real child. If that trade stops looking
+     * right the row to add is a fixture child, not another reflection call.
+     *
      * @param float|null $deadline see {@see request()}
      */
     private function readLine(?float $deadline = null): ?string

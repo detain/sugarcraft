@@ -34,9 +34,20 @@ use SugarCraft\Crush\MCP\StdioMcpServer;
  * rows do not kill. It survives on purpose rather than by oversight — reaching
  * it needs a child that writes 64 MiB into a pipe with no newline, which is
  * minutes of throughput for a property the sibling class already pins end to
- * end. The call site is instead held by the `readLine()` doc-block and by this
- * sentence; if that trade stops looking right, the row to add is a fixture
- * child, not another reflection call.
+ * end. The call site is instead held by the `readLine()` doc-block, which names
+ * this file and this trade explicitly; if that trade stops looking right, the
+ * row to add is a fixture child, not another reflection call.
+ *
+ * ⚠️ AND THE CATCHES HERE ARE NARROW ON PURPOSE — the `fail()` sits OUTSIDE the
+ * `try`, not inside it. `$this->fail()` raises `AssertionFailedError`, which
+ * extends `PHPUnit\Framework\Exception`, which extends `RuntimeException`
+ * (verified on this tree, PHP 8.3.6 / PHPUnit 10). A
+ * `try { …; $this->fail(…); } catch (\RuntimeException $e)` therefore CATCHES ITS
+ * OWN `fail()` and runs the assertions below against the fail message. Both rows
+ * here were written that shape and both still went red — but on
+ * "'a frame past the cap was accepted' does not contain 67108864", which blames
+ * the message rather than the cap. That is one string coincidence away from
+ * vacuous, so the shape is gone rather than annotated.
  *
  * ⚠️ AND THE FAILURE IS A NAMED THROW, NOT A TRUNCATION, WHICH IS THE PART
  * WORTH ASSERTING ON. Cutting the buffer at the cap would hand
@@ -81,18 +92,22 @@ final class McpFrameCapTest extends TestCase
 
         $this->setBuffer($server, str_repeat('x', $cap + 1));
 
+        $caught = null;
+
         try {
             $this->refuse($server);
-            $this->fail('a frame past the cap was accepted');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString(
-                (string) $cap,
-                $e->getMessage(),
-                'the refusal must name the cap, or the reader cannot tell "this side refused" '
-                . 'from "the server sent garbage"',
-            );
-            $this->assertStringContainsString('capped', $e->getMessage(), 'and it must name the server');
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'a frame past the cap was accepted');
+        $this->assertStringContainsString(
+            (string) $cap,
+            $caught->getMessage(),
+            'the refusal must name the cap, or the reader cannot tell "this side refused" '
+            . 'from "the server sent garbage"',
+        );
+        $this->assertStringContainsString('capped', $caught->getMessage(), 'and it must name the server');
 
         $this->assertSame(
             '',
@@ -134,23 +149,26 @@ final class McpFrameCapTest extends TestCase
             // readMessages()'s read loop rather than the size of the fixture.
             $this->setBuffer($client, str_repeat('x', $cap));
 
+            $caught = null;
+
             try {
                 $client->readMessages();
-                $this->fail('a frame past the cap was accepted');
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString(
-                    (string) $cap,
-                    $e->getMessage(),
-                    'the refusal must name the cap',
-                );
-                $this->assertStringContainsString(
-                    'no newline',
-                    $e->getMessage(),
-                    'and it must say what the server failed to send, not merely that something '
-                    . 'was too big',
-                );
+                $caught = $e;
             }
 
+            $this->assertNotNull($caught, 'a frame past the cap was accepted');
+            $this->assertStringContainsString(
+                (string) $cap,
+                $caught->getMessage(),
+                'the refusal must name the cap',
+            );
+            $this->assertStringContainsString(
+                'no newline',
+                $caught->getMessage(),
+                'and it must say what the server failed to send, not merely that something '
+                . 'was too big',
+            );
             $this->assertSame('', $this->buffer($client), 'the buffer was kept');
         } finally {
             $client->disconnect();
