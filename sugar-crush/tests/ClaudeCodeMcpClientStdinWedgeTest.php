@@ -103,6 +103,28 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
      */
     private const TEST_IDLE_SECONDS = 0.5;
 
+    /**
+     * How long the idle-bound fixtures stay alive.
+     *
+     * ABOVE {@see TEST_IDLE_SECONDS} WITH ROOM, AND FAR BELOW `phpunit.xml`'s
+     * 60-second `defaultTimeLimit`. Both halves are load-bearing. If it were at
+     * or under the idle bound, a row would be ended by the FIXTURE and would
+     * score a broken loop as a pass — the exact defect round 55 records against
+     * the sibling's 30s deaf server. If it were at 60s, a mutation that makes
+     * the write unbounded is ended by the suite's alarm instead of by an
+     * assertion, which is a red that does not say what broke.
+     */
+    private const FIXTURE_LIFETIME_SECONDS = 8.0;
+
+    /**
+     * The window an idle-bounded write must return inside.
+     *
+     * Between {@see TEST_IDLE_SECONDS} and {@see FIXTURE_LIFETIME_SECONDS}, so
+     * "gave up on the clock" and "ran until the child died" are DIFFERENT
+     * outcomes here rather than the same assertion.
+     */
+    private const IDLE_RETURN_BOUND_SECONDS = 3.5;
+
     private string $tempDir = '';
 
     protected function setUp(): void
@@ -313,9 +335,15 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
                 'the write gave up before the idle bound, so something other than the clock ended it',
             );
             $this->assertLessThan(
-                self::TEST_IDLE_SECONDS + 5.0,
+                self::IDLE_RETURN_BOUND_SECONDS,
                 $elapsed,
-                sprintf('the write ran %.2fs past a %.2fs idle bound', $elapsed, self::TEST_IDLE_SECONDS),
+                sprintf(
+                    'the write ran %.2fs against a %.2fs idle bound; the fixture lives %.1fs, so a '
+                    . 'figure near that is a loop ended by the child dying rather than by the clock',
+                    $elapsed,
+                    self::TEST_IDLE_SECONDS,
+                    self::FIXTURE_LIFETIME_SECONDS,
+                ),
             );
         } finally {
             $client->disconnect();
@@ -349,7 +377,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
             $this->assertTrue($this->childIsAlive($client), 'the chatty fixture expired, so this row measured its lifetime');
             $this->assertNotSame('', $client->stderrTail(), 'the fixture wrote no stderr, so the drain was never exercised and this row is vacuous');
             $this->assertLessThan(
-                self::TEST_IDLE_SECONDS + 5.0,
+                self::IDLE_RETURN_BOUND_SECONDS,
                 $elapsed,
                 sprintf(
                     'the write ran %.2fs against a %.2fs idle bound while the child did nothing but '
@@ -499,16 +527,22 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
     /**
      * AND THE FLAG IS SET BY A SHORT WRITE, not only honoured once set.
      *
-     * Driven with an idle bound of zero against a deaf child, which abandons the
-     * write after the kernel has taken one pipe buffer and before it can take
-     * any more — the partial case, deterministically. The exception's text is
-     * asserted too, because "0 of N bytes" and "65536 of N bytes" are different
-     * events with different repairs and the message is where a caller learns
-     * which one happened.
+     * Driven against a SHORT-LIVED deaf child rather than against the idle
+     * clock. The kernel takes one pipe buffer immediately and then nothing more,
+     * so the write is partial the moment it starts; the child then exits and
+     * `fwrite()` returns `false`, which ends the loop in about a second instead
+     * of at {@see ClaudeCodeMcpClient::WRITE_IDLE_SECONDS}. This row is about
+     * what a PARTIAL write records, not about which of the loop's exits took it,
+     * and paying fifteen seconds to reach the same state through the clock would
+     * have made it the slowest test in the suite by half.
+     *
+     * The exception's text is asserted too, because "0 of N bytes" and
+     * "65536 of N bytes" are different events with different repairs, and the
+     * message is where a caller learns which one happened.
      */
     public function testAShortWriteReportsItselfAsPartialAndArmsTheResynchronisation(): void
     {
-        $client = $this->connectedClientOver($this->deafServerScript());
+        $client = $this->connectedClientOver($this->deafServerScript(1.0));
         $flag = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'stdinFragmentPending');
 
         try {
@@ -680,10 +714,23 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
         return $path;
     }
 
-    /** Answers nothing and reads nothing. Alive for 60s, far past any bound here. */
-    private function deafServerScript(): string
+    /**
+     * Answers nothing and reads nothing, for {@see $seconds} and then no more.
+     *
+     * ⚠️ THE LIFETIME IS THE INSTRUMENT AND {@see FIXTURE_LIFETIME_SECONDS} SAYS
+     * WHY. It was 60s, and 60s is also `phpunit.xml`'s `defaultTimeLimit`: under
+     * a mutation that makes the write unbounded, the row did not fail its own
+     * assertion — it hung and the suite's alarm aborted it as RISKY. `failOnRisky`
+     * makes that a red, so the mutation was still killed, but by the harness
+     * rather than by the test, and the reader of that red learns "aborted after
+     * 60 seconds" instead of which property broke.
+     */
+    private function deafServerScript(float $seconds = self::FIXTURE_LIFETIME_SECONDS): string
     {
-        return $this->script('deaf', '<?php $e = microtime(true) + 60; while (microtime(true) < $e) { usleep(50000); }');
+        return $this->script(
+            'deaf_' . str_replace('.', '_', (string) $seconds),
+            '<?php $e = microtime(true) + ' . $seconds . '; while (microtime(true) < $e) { usleep(20000); }',
+        );
     }
 
     /** Reads nothing, writes stderr continuously. The only thing that could reset an idle clock is the drain. */
@@ -691,7 +738,8 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
     {
         return $this->script(
             'chattydeaf',
-            '<?php $e = microtime(true) + 60; while (microtime(true) < $e) { fwrite(STDERR, str_repeat("e", 4096)); usleep(5000); }',
+            '<?php $e = microtime(true) + ' . self::FIXTURE_LIFETIME_SECONDS
+            . '; while (microtime(true) < $e) { fwrite(STDERR, str_repeat("e", 4096)); usleep(5000); }',
         );
     }
 
@@ -701,7 +749,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
         return $this->script(
             'slowreader',
             '<?php $in = fopen("php://stdin", "rb"); stream_set_blocking($in, false);'
-            . ' $e = microtime(true) + 60;'
+            . ' $e = microtime(true) + ' . self::FIXTURE_LIFETIME_SECONDS . ';'
             . ' while (microtime(true) < $e) { $c = fread($in, 4096); if ($c === "" || $c === false) { usleep(5000); continue; } usleep(40000); }',
         );
     }
