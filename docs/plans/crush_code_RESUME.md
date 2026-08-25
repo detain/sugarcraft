@@ -8,6 +8,62 @@ Nothing here depends on a prior conversation's context.
 
 ## 🟢 ROUND 56 IS **RUNNING** — launched 2026-08-25, run id `wf_7c73518b-ad8`
 
+### 🔴 IF YOU ARE READING THIS AFTER A CLIENT RESTART — READ THIS BLOCK FIRST
+
+**Status captured 2026-08-25 05:16, mid-round, immediately before a planned client restart.**
+All three IMPLEMENTERS were still running. The workflow journal
+(`<transcript>/journal.jsonl`) held **three `started` records and ZERO completions**, which is the fact
+that decides everything below.
+
+| | |
+|---|---|
+| run id | `wf_7c73518b-ad8` |
+| script (durable) | `.../workflows/scripts/crush-round-56.js` |
+| transcript dir | `.../subagents/workflows/wf_7c73518b-ad8` |
+| prediction (durable copy) | `.../workflows/scripts/round56-prediction.txt` |
+| closure checker (durable copy) | `.../workflows/scripts/closure56.php` |
+| base | `d38b644f4` |
+
+**Workflow agents cannot be messaged.** `ListAgents` shows peer sessions only; in-workflow subagents have
+no inbox, so there is no way to ask a running lane for a status report. Do not try — read the lane git
+state instead, which is what the table below is.
+
+**LANE STATE AT CAPTURE — this is the work that survives, because it is committed to disk:**
+
+| lane | HEAD | ahead of base | uncommitted |
+|---|---|---|---|
+| **a** the-bugs-the-user-hit | `ab233e47d` | 1 | `sugar-crush/src/Runtime.php` (E456 in progress) |
+| **b** mcp-lsp-remainder | `d4f9811dd` | 1 | clean |
+| **c** harness-integrity | `d38b644f4` | 0 | `candy-pty/tests/bootstrap.php`, new `candy-pty/tests/Support/` |
+
+- lane a `ab233e47d` — *E455: the chat input box never wrapped* — `Renderer.php` +61,
+  new `tests/Renderer/InputWrapTest.php` +280, `ChatInputCursorTest.php` touched. **E455 side-prediction
+  (b) is holding so far: the fix is inside the renderer, not the shared wrap choke point.**
+- lane b `d4f9811dd` — *E474/E480: `isConnected()` consults the framing latch, `writeMessage()` loses its
+  null default* — `LSP/LspConnection.php` +84, new `LspConnectionStdinWedgeTest.php` +131.
+- lane c — no commit yet; building a candy-pty test-support harness for E490, which is consistent with
+  side-prediction (a) that E490 gets an instrument this round rather than a root cause.
+
+**HOW TO PICK IT UP — pick ONE, do not improvise:**
+
+1. **If the workflow is somehow still running** (`/workflows`, or new files appearing under the transcript
+   dir): leave it alone. It finishes on its own.
+2. **If it died and the session RESUMED** (`--continue` / `--resume`, same session):
+   `Workflow({scriptPath: '<durable path>', resumeFromRunId: 'wf_7c73518b-ad8'})`.
+   ⚠️ **With zero completions journalled, resume caches NOTHING — it re-runs all three implementers from
+   the top.** They will start in lane roots that already contain their own earlier commits, so they are
+   NOT at base. That is survivable (they can read their own diff) but it is not clean.
+3. **If the session is gone, or you want the clean path: DO NOT relaunch `crush-round-56.js` as-is.**
+   The lane commits are real, reviewed by nobody, and re-running the implementers would duplicate them.
+   Instead write a recovery script that SKIPS the implement phase and feeds each lane's committed diff
+   straight into review -> fix. **Precedent exists and worked:** `crush-round-54-recover.js` and
+   `crush-round-54-recover2.js` in the same durable dir were built for exactly this after E452.
+   Reconstruct each lane's "implement report" from `git log -p d38b644f4..HEAD` in its lane root.
+
+**DO NOT reset the lane roots to base** until you have decided which of the three paths you are on.
+`git reset --hard` in a lane root at this moment destroys the only copy of lanes a and b's work.
+
+
 **Round 55 is CLOSED, merged and PUSHED. Round 56 launched from base `d38b644f4`** — nine agents,
 three lanes, `implement -> review -> fix` pipelined. Prediction written BEFORE the first merge to
 `round56-prediction.txt` in the session scratchpad: **10167 tests EXACT**, assertions **>= 152,200** as a
