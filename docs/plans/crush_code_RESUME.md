@@ -62,9 +62,11 @@ closure restored and verified → round 55 launched. **Nothing from that instruc
 
 ### AT THE MERGE
 
-Merge a→b→c. **Renumber from E429.** Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
+Merge a→b→c. **Renumber from E455** (the backlog closed round 54 at exactly 454 entries, highest id
+E454 — re-derive both yourself with `grep -cE '^#{2,3} E'` and a `sort -n | tail -1` before you trust that
+number). Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
 Measure the merged floor for **sugar-crush, candy-core, candy-flip** and **candy-pty if lane a touched
-it**. Verify skips stay exactly 1, closure 18/18 · 3/3 · 6/6, `check-path-repos` rc 0, config md5
+it**. Verify skips stay exactly 1, closure 18/18 · 3/3 · 6/6 · 7/7, `check-path-repos` rc 0, config md5
 `05480c743aff302fd6c06c5a4a4c2210`, zero tracked per-lib locks, and zero orphaned `php -S` servers
 **counted with the `ps` form, not `pgrep` (E428)**. **Write the prediction — figures AND conflicts — to a
 file BEFORE merging;** `round53-prediction.txt` is the template and it called last round's red merge.
