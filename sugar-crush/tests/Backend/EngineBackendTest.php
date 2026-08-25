@@ -288,12 +288,17 @@ final class EngineBackendTest extends TestCase
             // timeout')`, and that raises an AssertionFailedError - which a
             // bare `catch (\Throwable)` here captures into $caught and then
             // re-reports through the assertions below. MEASURED: the test
-            // still goes RED either way (an AssertionFailedError is not a
-            // RuntimeException), so this was never E546's silent-pass
-            // shape; what it cost was the DIAGNOSTIC. A ten-second hang
-            // came out as "failed asserting that ... is an instance of
-            // RuntimeException", which names the wrong problem and sends
-            // the reader to the wrong place. Rethrown so it arrives as
+            // still goes RED either way, so this was never E546's
+            // silent-pass shape; what it cost was the DIAGNOSTIC. MEASURED
+            // here, by shrinking awaitPromise()'s safety timer so the
+            // promise cannot settle: with the bare catch a hang arrives as
+            //   Failed asserting that 'Promise did not settle within the
+            //   test timeout' contains "cancelled"
+            // - an assertion about the cancellation path failing on a
+            // message about the timeout path - and with this arm it
+            // arrives as the fail() itself. The two sibling copies of this
+            // block assert instanceof RuntimeException instead, where the
+            // real message is not quoted at all. Rethrown so it arrives as
             // itself.
             throw $e;
         } catch (\Throwable $e) {
