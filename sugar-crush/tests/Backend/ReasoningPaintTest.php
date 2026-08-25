@@ -373,16 +373,28 @@ final class ReasoningPaintTest extends TestCase
      * The seam is kept (rule 6): it is how an embedder or a test puts a thought
      * in front of the renderer with no backend in play, and it is the shape
      * {@see Chat::enqueueToken()} already has. What is pinned here is that the
-     * two agree, because a dormant parallel implementation that has silently
-     * diverged is worse than none: if the live path stopped dropping the empty
-     * delta, every test in this file would keep passing while the frame the
-     * user sees gained a bare `💭` on every heartbeat.
+     * two agree on the two things that DO have observable consequences, both
+     * mutation-checked on each path: the CHANNEL (a fragment routed onto
+     * `TokenDelta` lands in `$streamingText`, and one layer down in the message
+     * the model is re-sent) and the GENERATION (a thought stamped with a stale
+     * one is discarded at drain time rather than painted under a cancellation
+     * notice).
+     *
+     * **What this test does NOT pin, stated because the obvious reading is
+     * wrong.** Both paths ALSO drop the empty delta, and that half is
+     * unobservable here — measured, removing either drop leaves this file
+     * entirely green, because the empty fragment is appended to a string
+     * accumulator and `$s . ''` is the identity. It never reaches
+     * {@see \SugarCraft\Crush\Renderer}, which tests `$liveThought !== ''`, so
+     * no bare `💭` appears either. The drops are a cost guard on inbox churn,
+     * not a correctness one, and no assertion on painted text can see them go.
+     * Do not read the green here as covering them.
      *
      * The double announces `''` deliberately, even though
-     * {@see ObservesReasoning::completeAsync()} promises never to. The closure's
-     * own drop is defence in depth against exactly that contract being broken
-     * by a third-party backend, and a guard for defence in depth has to feed it
-     * the thing it defends against.
+     * {@see ObservesReasoning::completeAsync()} promises never to: it makes the
+     * empty fragment travel the whole live path, so the two accumulators are
+     * compared on the same input a contract-breaking third-party backend would
+     * produce.
      */
     public function testTheDormantEntryPointAndTheLiveSinkAgree(): void
     {

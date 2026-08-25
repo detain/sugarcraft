@@ -3020,7 +3020,8 @@ final class Chat implements Model
      * paint without a backend — puts a thought in front of the renderer. The
      * risk a dormant parallel implementation carries is DRIFT, so the two are
      * pinned as equivalent rather than merely both present; see
-     * `ReasoningPaintTest`'s agreement test.
+     * `ReasoningPaintTest`'s agreement test, which also records the one half of
+     * the duplication no assertion on painted text can cover.
      *
      * Mutating for the reason {@see enqueueToken()} is: the callback fires
      * inside the backend — for {@see Backend\EngineBackend} on the ReactPHP
