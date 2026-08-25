@@ -127,6 +127,21 @@ final class SwallowingCatchCensusTest extends TestCase
             . 'subject; reporting it would make the guard unusable and invite a prose exemption',
         );
 
+        // AND AN INTERPOLATED BRACE OPENER IN THE TRY BODY, which is a token
+        // whose TEXT is not `{`. Before every opener was named, the `${`
+        // spelling decremented a level it never incremented, the body walk
+        // ended early and the catch clause after it was never reached — so a
+        // real offender read as a clean file. The row after this one is the
+        // control: the SAME body with no interpolation must give the same
+        // answer, or this fixture is pinning the wrong thing.
+        $interpolated = self::fixture('$this->assertSame(1, "$' . '{y}");', $wide);
+        self::assertCount(
+            1,
+            self::scanSource($interpolated, 'FIXTURE_INTERPOLATED.php'),
+            'an interpolated brace opener ends the try-body walk early, so every catch clause '
+            . 'after the first such string in a file is invisible to this census',
+        );
+
         // THE UNPARSEABLE CASE, which must go red rather than be skipped.
         $unknown = self::scanSource(
             self::fixture('$this->assertSame(1, 1);', '\\No\\Such\\Namespace\\NopeException'),
@@ -308,6 +323,22 @@ final class SwallowingCatchCensusTest extends TestCase
     }
 
     /**
+     * EVERY TOKEN THE RUNNING PHP USES TO OPEN A BRACE, NOT JUST THE CHARACTER.
+     * An interpolated string opens a brace through a token whose TEXT is not
+     * `{`: `"${y}"` arrives as `T_DOLLAR_OPEN_CURLY_BRACES` spelled `${`, while
+     * its closing `}` is an ordinary character token. Counting only the
+     * character therefore decrements a level that was never incremented, the
+     * walk leaves this method early, and the scan silently stops matching after
+     * the first such string — a clean bill of health for a file the scanner
+     * stopped reading. `"{$x}"` arrives as `T_CURLY_OPEN`, whose text IS `{`, so
+     * it happened to work; it is named here anyway, because relying on a token's
+     * text matching its role is what produced the other bug.
+     *
+     * MEASURED on PHP 8.3.6: `tests/` contains ZERO
+     * `T_DOLLAR_OPEN_CURLY_BRACES` tokens today, so this fixed no wrong answer
+     * in the census's current result — it removes a hole that opens the first
+     * time somebody writes `"${x}"` inside a try body.
+     *
      * @param  list<array{0:int,1:string,2:int}|string> $tokens
      * @return array{0:string,1:int} the brace-balanced text, and the index of its closing brace
      */
@@ -316,8 +347,11 @@ final class SwallowingCatchCensusTest extends TestCase
         $depth = 0;
         $text = '';
         for ($k = $open; $k < $n; $k++) {
-            $txt = \is_array($tokens[$k]) ? $tokens[$k][1] : $tokens[$k];
-            if ($txt === '{') {
+            $token = $tokens[$k];
+            $txt = \is_array($token) ? $token[1] : $token;
+            $opensABrace = $txt === '{'
+                || (\is_array($token) && \in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true));
+            if ($opensABrace) {
                 $depth++;
             }
             if ($depth > 0) {
