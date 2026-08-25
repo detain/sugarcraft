@@ -17537,3 +17537,44 @@ Symfony's `ParseException` first, and that escapes `load()` uncaught (`getPrevio
 is reachable only for frontmatter that parses to a scalar, e.g. `---\nfoo\n---`. A round-58 draft assumed
 the wrong branch and asserted the filename appears in the message, which was red. Worth a test naming the
 scalar case, or a note saying which input reaches it.
+
+### Eb58-8 — `src/ClaudeCodeMcpClient.php`'s frame-cap prose was not corrected with the other two
+
+Round 58's fix stage narrowed an over-broad scope claim in `src/LSP/LspConnection.php` and
+`src/MCP/StdioMcpServer.php` — both said raising the engine's cap desynchronises the family "while every
+test stayed green", which was measured over two files rather than the suite, and which at HEAD is simply
+false because `FrameCapFamilyTest` now catches it. The third member of the family,
+`src/ClaudeCodeMcpClient.php`, carries the same "inherited rather than invented" doc-block and was left
+alone because it is outside the lane's `src/` file list.
+
+Nothing is unpinned: the constant's VALUE and the class's MEMBERSHIP of the family are both asserted, the
+latter now derived from the declaration rather than a hand list. Only the prose is stale, and it also still
+tells the reader to edit a roster that no longer exists. One paragraph, mechanical, no measurement needed
+beyond re-reading the other two.
+
+### Eb58-9 — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
+
+`AssertionSwallowingCatchTest::swallowingCatchesIn()` resolves each caught type through the import map and
+the file's namespace in order to DECIDE whether the catch swallows, then records the type in the row as the
+author wrote it. The two are silently different, and round 58 found one assertion that had been keyed on
+the wrong one for a full round: a filter for rows whose type starts `PHPUnit\` matched only catches already
+spelled fully qualified — which need no resolution at all — while claiming in its own failure message to
+prove that the scan "resolves the caught name". MEASURED: with the import arm of `resolveCaughtType()`
+deleted, that assertion stayed GREEN in isolation; the fixture that replaced it goes red.
+
+The remaining consumer of `types` is a failure-message renderer, which is the correct use. The finding is
+that the key is DISPLAY-ONLY and nothing says so at its definition: any future decision keyed on it repeats
+the defect exactly. Either add the resolved FQN as a second key, or name the existing one for what it is.
+
+### Eb58-10 — the census's resolver is deliberately more permissive than PHP, and that is unpinned
+
+`SwallowingCatchCensusTest::resolve()` tries the file's own namespace and then falls back to the global
+name. PHP does neither: an unqualified class name in a namespaced file resolves to the current namespace
+with NO global fallback. The fallback is kept because this tree's convention is to spell a global type with
+a leading `\`, so a file that forgets the slash means the global one — and being permissive here can only
+turn an `[unclassified]` into a real verdict, never an offender into `safe`.
+
+That reasoning is written into the method's doc-block but nothing pins the direction it claims. A fixture
+asserting that the permissive fallback cannot produce a `safe` verdict for a type PHP would have failed to
+load would close it. MEASURED at round 58: zero bare-unimported catch types exist in `sugar-crush/tests`
+(463 files), so this is latent.
