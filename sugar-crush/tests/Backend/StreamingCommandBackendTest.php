@@ -981,8 +981,25 @@ printf 'ok\n'
 
                 try {
                     $this->awaitPromise($promise);
+                } catch (\PHPUnit\Framework\AssertionFailedError $e) {
+                    // RULE 39, AND THE ONE SITE IN THIS FAMILY THAT REALLY WAS
+                    // THE SILENT-PASS SHAPE. awaitPromise() ends in
+                    // `$this->fail('Promise did not settle within the test
+                    // timeout')`, which raises an AssertionFailedError -
+                    // and that class extends PHPUnit\Framework\Exception
+                    // extends \RuntimeException, so the bare
+                    // `catch (\RuntimeException)` that stood here caught the
+                    // harness's own timeout and discarded it as "expected".
+                    // The loop then finished and the zombie census below - a
+                    // count that has nothing to do with whether the promise
+                    // ever settled - decided the verdict. Unlike this file's
+                    // sibling sites, which still went RED through their
+                    // instanceof assertions, a hang here could come out GREEN.
+                    // Found by {@see AwaitPromiseDiagnosticArmTest}, which is
+                    // what now keeps this arm here.
+                    throw $e;
                 } catch (\RuntimeException) {
-                    // expected
+                    // The cancellation rejection this loop is provoking.
                 }
                 $loop->cancelTimer($flip);
             }
