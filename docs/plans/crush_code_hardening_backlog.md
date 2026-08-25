@@ -16757,8 +16757,10 @@ including multi-catch, matched against whether the TRY BODY contains an assertio
     catches wide enough to swallow ExpectationFailedException   23
     ... of which the TRY BODY asserts                            2
 
-Both are in `tests/Integration/`: `ForeignAgentPresetWiringTest.php` (try@653) and
-`ForeignSkillWiringTest.php` (try@236). **Neither is in lane b's or lane c's stated list, and
+Both are in `tests/Integration/`, cited by symbol because a line number rots inside a round:
+`ForeignAgentPresetWiringTest::testAWorldWritableHomeYieldsNoForeignUserAgentsAndRefusesTheLaunchOutLoud()`
+and `ForeignSkillWiringTest::testAWorldWritableHomeYieldsNoForeignUserSkillsAndRefusesTheLaunchOutLoud()`.
+**Neither is in lane b's or lane c's stated list, and
 `tests/MCP/` has zero.** Round 56's one site was fixed at that round and the two remaining `tests/MCP/`
 catches are correctly shaped — one wraps only the call under test, the other is an `assertThrows()`
 helper whose catch asserts on `$e`.
