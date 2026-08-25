@@ -245,6 +245,63 @@ final class McpClientServerIsolationTest extends TestCase
     }
 
     /**
+     * ROUTE 3 ON THE CONFIG SIDE: a `.mcp.json` value of the wrong JSON TYPE
+     * makes a CONSTRUCTOR raise, and a constructor raises `TypeError`.
+     *
+     * ⚠️ THIS ROW EXISTS BECAUSE A SURVIVING MUTATION WAS NEARLY EXCUSED AS
+     * EQUIVALENT. Narrowing `startServer()`'s CONFIG catch to
+     * `\RuntimeException` survives — the `match`'s `default` arm throws exactly
+     * that, so the narrowing looks harmless. It is not. `buildServer()` also
+     * CONSTRUCTS, and every constructor it reaches declares typed parameters
+     * that a hand-written `.mcp.json` can violate. MEASURED at this tree, five
+     * shapes, each with a well-formed `git` server listed second:
+     *
+     *     {"args": "not-an-array"}       {"env": "nope"}      {"command": 7}
+     *     {"headers": "nope"} (http)     {"path": 7} (git)
+     *
+     * All five are reported and all five leave the good server's 29 tools
+     * reachable. Under the narrowed catch every one of them aborts the loop.
+     *
+     * AND THESE ARE NOT EXOTIC. `"args": "-y @modelcontextprotocol/server-git"`
+     * written as a string instead of a list is the single likeliest mistake a
+     * human makes editing this file, and it used to disable every OTHER server
+     * in it depending on key order.
+     *
+     * @dataProvider mistypedConfigValues
+     * @param array<string, mixed> $entry
+     */
+    public function testAMistypedConfigValueIsReportedWithoutAbortingTheOthers(array $entry): void
+    {
+        $client = $this->clientFor(
+            ['bad' => $entry, 'good' => ['type' => 'git']],
+            [],
+        );
+
+        $this->assertStartFailed($client);
+
+        $this->assertNotSame(
+            [],
+            $client->listTools(),
+            'the well-formed git server is unreachable, so a wrong JSON type in ANOTHER '
+            . 'entry aborted the loop. startServer()\'s config catch has to be \Throwable: '
+            . 'buildServer() constructs, and a constructor answers a bad type with a '
+            . 'TypeError, which is not a RuntimeException.',
+        );
+    }
+
+    /** @return array<string, array{0: array<string, mixed>}> */
+    public static function mistypedConfigValues(): array
+    {
+        return [
+            'stdio args as a string' => [['type' => 'stdio', 'command' => 'echo', 'args' => 'not-an-array']],
+            'stdio env as a string' => [['type' => 'stdio', 'command' => 'echo', 'env' => 'nope']],
+            'stdio command as an int' => [['type' => 'stdio', 'command' => 7]],
+            'http headers as a string' => [['type' => 'http', 'url' => 'http://mock.invalid/rpc', 'headers' => 'nope']],
+            'git path as an int' => [['type' => 'git', 'path' => 7]],
+        ];
+    }
+
+    /**
      * THE ORDER CONTROL. The offender is listed SECOND here, so the server that
      * must survive is one the old code ALSO started — the row would pass against
      * the defect. It is here to make the ordering claim in the file's doc-block
@@ -329,7 +386,7 @@ final class McpClientServerIsolationTest extends TestCase
     }
 
     /**
-     * @param array<string, array<string, string>> $servers
+     * @param array<string, array<string, mixed>> $servers
      * @param list<Response|\Throwable> $responses
      */
     private function clientFor(array $servers, array $responses): McpClient
