@@ -167,8 +167,10 @@ final class BuiltInToolCorpus
      * one symbol per file, which is the census's stated domain and NOT the same as
      * the 286 top-level types those 267 files declared: 220 concrete classes, 25
      * enums, 16 interfaces, 6 traits, **0 abstract classes**. The live figures
-     * move with the tree and are pinned in
-     * {@see BuiltInToolCorpusTest::testTheSymbolKindCensusTheDocBlockQuotes()};
+     * move with the tree and are no longer pinned anywhere, deliberately: a
+     * literal per symbol kind is a count of the tree asserted against the tree.
+     * {@see BuiltInToolCorpusTest::testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
+     * keeps the part of that census that was never arithmetic —
      * what this paragraph is about is the ZERO, which is the whole argument and
      * has held at every size since. So the
      * one shape the old `class_exists()`-only guard classified correctly is the
@@ -177,9 +179,11 @@ final class BuiltInToolCorpus
      * is 16 + 6 = 22 in the historical figures above and it MOVES WITH THE TREE
      * exactly as they do — it read 22 as a live count for one round after the
      * interface count had gone to 17, which is this project's standing defect in
-     * miniature, so the live number is deliberately not written here;
-     * {@see BuiltInToolCorpusTest::testTheSymbolKindCensusTheDocBlockQuotes()}
-     * prints today's. `src/LSP/` alone ships `LspCacheInterface` and
+     * miniature, so the live number is deliberately not written here or
+     * anywhere else;
+     * {@see BuiltInToolCorpusTest::testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()}
+     * asserts only that the count is NON-ZERO, which is the claim that keeps
+     * the zero beside it honest without being a figure that rots. `src/LSP/` alone ships `LspCacheInterface` and
      * `LspConnectionInterface`. Widening the scan without fixing the guard would
      * have aborted suite construction on this very checkout.
      *

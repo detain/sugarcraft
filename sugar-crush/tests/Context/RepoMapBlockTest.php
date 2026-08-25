@@ -1189,12 +1189,17 @@ final class RepoMapBlockTest extends TestCase
      *
      * {@see RepoMapBlock}'s design note used to close with "Measured on this
      * checkout it finds 58 packages and their namespaces without reading either
-     * markdown file". Two of that file's three restated cardinalities are
-     * asserted against their derivation by
-     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()};
-     * this one was asserted by nothing, and it wrapped across a doc-block line,
-     * so it was invisible to a line-oriented search for the digits beside the
-     * noun.
+     * markdown file". Two of that file's three restated cardinalities WERE
+     * asserted against their derivation, by a census test that has since been
+     * retired along with both restatements — a figure derived from `src/`'s
+     * file count reds on any honest addition and moves for nothing else, so
+     * what is checked now is the ARGUMENT each figure was supporting, by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold()},
+     * with their continued ABSENCE from the file asserted by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()}.
+     * This third one was asserted by nothing, and it wrapped across a doc-block
+     * line, so it was invisible to a line-oriented search for the digits beside
+     * the noun.
      *
      * The number is not what the paragraph is arguing. The argument is that the
      * monorepo half is derived from `composer.json` manifests and NOT from

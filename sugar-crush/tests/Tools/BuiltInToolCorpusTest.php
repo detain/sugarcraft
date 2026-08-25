@@ -1297,7 +1297,7 @@ final class BuiltInToolCorpusTest extends TestCase
     /**
      * The one shape the OLD guard already handled, kept handled: an abstract base
      * reaches the filter and is rejected there. There are none in `src/` today —
-     * see {@see testTheSymbolKindCensusTheDocBlockQuotes()} — which is exactly why
+     * see {@see testEverySourceFileResolvesToASymbolAndNoneOfThemIsAbstract()} — which is exactly why
      * the two shapes above went unnoticed.
      */
     public function testAnAbstractToolBaseIsSkipped(): void
