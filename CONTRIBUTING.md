@@ -80,9 +80,10 @@ a throwaway checkout and would eat your uncommitted work here. MEASURED on this
 tree: `--fix --strict-closure` dirties `*/composer.json` and NOTHING else — no
 root manifest, no lock, no file outside that glob — so the glob reverts all of
 it. (A count of the dirtied files used to stand here. It said 52; re-measured
-one round later it was 53, because the number is the lib count and every new
-lib moves it. `git status --porcelain` after the `--fix` is the answer that
-cannot go stale.)
+about an hour later, in the same round and with no lib added in between, it was
+53 — so the first figure was simply wrong. It is dropped rather than corrected,
+because a number no test derives rots whether or not anyone mis-typed it.
+`git status --porcelain` after the `--fix` is the answer that cannot go stale.)
 
 The first line wants a PHPUnit 10 PHAR on `PATH` (CI installs one via
 `setup-php`'s `tools: phpunit:10`). Without one, borrow any lib's — that form

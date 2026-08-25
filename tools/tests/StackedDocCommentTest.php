@@ -40,8 +40,23 @@ use PHPUnit\Framework\TestCase;
  * canonical implementation as TEXT — which needs no autoloader — and compares
  * the two token streams. Improve one and the other reds, naming the file to
  * port the change into. That is the difference between a copy and a fork, and
- * `DuplicatedTestHelperDriftTest` cannot make it: MEASURED, its roster is
- * `sugar-crush/src` alone, so it would never have seen this file.
+ * `DuplicatedTestHelperDriftTest` cannot make it — but not for the reason
+ * first written here, and the reason is the half a reader checks.
+ *
+ * WHAT THIS SAID: "MEASURED, its roster is `sugar-crush/src` alone, so it would
+ * never have seen this file." WHAT IS TRUE NOW: that named the wrong roster.
+ * That guard walks `sugar-crush/tests/`. Its population comes from
+ * `TestFileWalkTrait::everyTestFile()`, which it `use`s and which roots at
+ * `\dirname(__DIR__)` from `tests/Support/`; every one of its censuses
+ * iterates that, and its own failure text says so — "no private test helper was
+ * found anywhere under tests/ — the walk is dead". The one direct
+ * `RecursiveDirectoryIterator` over `src/` inside it belongs to
+ * `declaredTypeNames()`, an auxiliary lookup answering "is this name a class in
+ * this package", not the population it compares. WHY THIS STILL EARNS ITS
+ * PLACE: the conclusion is unchanged and now rests on a fact that holds.
+ * `tools/` is outside `sugar-crush/tests/` exactly as it is outside
+ * `sugar-crush/src/`, so under either roster that guard never sees this file,
+ * and the drift between this scanner and its canonical has to be pinned here.
  *
  * @internal
  */

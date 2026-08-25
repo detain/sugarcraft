@@ -17498,8 +17498,15 @@ neither half survives contact:**
    than borrowing a lib's `vendor/bin`). There is no autoloader for `SugarCraft\Crush\Tests\*` there, and
    `require`-ing the canonical guard to reflect its scanner fatals before PHPUnit reports anything:
    VERIFIED, PHP 8.3.6, `Trait "SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait" not found`.
-2. **`DuplicatedTestHelperDriftTest` would never have seen the copy.** MEASURED: its roster is
-   `sugar-crush/src` alone. The copy would have been unwatched drift, which is worse than a pinned copy.
+2. **`DuplicatedTestHelperDriftTest` would never have seen the copy.** The conclusion holds; the reason
+   first filed here did not. **WHAT THIS SAID:** "MEASURED: its roster is `sugar-crush/src` alone."
+   **WHAT IS TRUE NOW:** that guard's roster is `sugar-crush/tests/`, via
+   `TestFileWalkTrait::everyTestFile()` rooted at `\dirname(__DIR__)`; its one direct walk of `src/` is
+   `declaredTypeNames()`, an auxiliary "is this name a class here" lookup, not the population it compares.
+   **WHY THE ENTRY STANDS:** `tools/` is outside `sugar-crush/tests/` exactly as it is outside
+   `sugar-crush/src/`, so the copy would have been unwatched drift under either roster — which is worse
+   than a pinned copy. Caught in review; the same wrong reason had also been written into
+   `tools/tests/StackedDocCommentTest.php`'s class doc-block and is corrected there.
 
 So the scanner IS copied, and the copy is **pinned** rather than wished away: the new guard reads the
 canonical implementation as TEXT — needing no autoloader — and compares token streams, so reformatting is
@@ -17520,6 +17527,14 @@ the hour**, one of them invalidated by this same round's other work:
 Neither was corrected to today's number, which would only rot again. The verifiable half of each is kept
 as a property instead: the run prints its own totals, and `--fix` dirties `*/composer.json` and nothing
 outside that glob — re-measured, 53 entries, every one a `*/composer.json`, no root manifest, no lock.
+
+**A correction to this entry's own explanation, caught in review.** The replacement prose in
+`CONTRIBUTING.md` attributed 52→53 to lib growth — "the number is the lib count and every new lib moves
+it". That is a hypothesis, and it is false here: both figures were taken in round 58 about an hour apart
+by the same lane, and `git diff --name-only 535d721ff..HEAD` touches no `composer.json` at all, so no lib
+was added. **52 was a mis-measurement, not staleness.** The causal clause is removed. The point the entry
+is making survives it: a figure no test derives rots whether or not anyone also mis-typed it, and the
+reason it is dropped rather than corrected is unchanged.
 
 ## Ec58-4 — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
 

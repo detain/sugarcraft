@@ -18,7 +18,11 @@ declare(strict_types=1);
  * verbatim to GitHub Pages on every push to master, so a hand-edit to a
  * generated page publishes to the public site and survives until the next
  * unrelated `gen-docs.php` run silently reverts it. This file is half the fix;
- * the `docs-links` job now runs `--check` for the other half.
+ * the `docs-generated` job (`name: 'Generated docs pages'`) now runs `--check`
+ * for the other half. NOT `docs-links`, which this said first and which is a
+ * pre-existing, unrelated job guarding `blob/main` URLs and never invoking
+ * this generator at all — a reader who followed that citation would have
+ * landed on the wrong job and concluded the wiring was never done.
  *
  * HOW IT DRIVES THE SCRIPT. As a subprocess against a throwaway fixture root,
  * via `SUGARCRAFT_GEN_DOCS_ROOT` — the same env override
@@ -28,8 +32,13 @@ declare(strict_types=1);
  * `exit()`, so `require`-ing it to unit-test `parse_matchups()` would run the
  * whole generator against the real `docs/` and then kill the test runner.
  *
- * THE FIXTURE COUNTS ARE DELIBERATELY NOT THE REAL ONES. The real split is
- * 39/19; the fixture is 23 libraries / 4 apps. A guard whose expectations
+ * THE FIXTURE COUNTS ARE DELIBERATELY NOT THE REAL ONES. The fixture is 23
+ * libraries / 4 apps, and those are numbers this file CONSTRUCTS rather than
+ * measures. The tree's own split used to be written down beside them; it is
+ * gone, because a count over `docs/_data/` is invalidated by the next lib that
+ * lands and would then be believed precisely because it had been correct
+ * (rule 18). That the two differ is what matters, and the fixture proves it
+ * without naming the other side. A guard whose expectations
  * happen to equal the production values passes just as well when the counts are
  * hardcoded, which is the defect class `patch_index_counts()` exists to close.
  * 23 and 27 are also both hyphenated when spelled out, so `number_to_words()`
