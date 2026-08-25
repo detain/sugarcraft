@@ -114,7 +114,7 @@ use SugarCraft\Crush\Support\ContainedPath;
  *     wrong about three times, and "several times" was not arithmetic anyone
  *     had run — MEASURED on PHP 8.3.6, a fully-qualified listing OVERRUNS
  *     {@see MAX_SECTION_BYTES} but does not come to several times it, while at
- *     BARE SHORT-NAME width the same listing FITS comfortably inside the cap.
+ *     BARE SHORT-NAME width the same listing FITS inside the cap.
  *     The WIDTH the claim is made at was load-bearing and the sentence never
  *     stated it; it does now. NEITHER MULTIPLE IS WRITTEN HERE, and the
  *     revision that first stated them wrote one of them as a bare ratio with
