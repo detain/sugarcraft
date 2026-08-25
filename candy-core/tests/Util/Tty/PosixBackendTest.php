@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\Posix\PosixTermios;
+use SugarCraft\Pty\TermiosFactory;
 use PHPUnit\Framework\TestCase;
 
 final class PosixBackendTest extends TestCase
@@ -132,6 +133,58 @@ final class PosixBackendTest extends TestCase
         $this->assertTrue(\is_int($result) || $result === false);
     }
 
+    /**
+     * `enableRawMode()` driven through candy-pty's `stty` TERMIOS backend on a
+     * real pty, end to end: cooked, then raw, then cooked again.
+     *
+     * ## This test did not run for the whole of its life, and the gate that
+     * stopped it was an instance of the defect family it sits inside
+     *
+     * WHAT THE GATE SAID: open a `php://memory` stream, cast it to `int`,
+     * `fclose()` it, and skip unless `/dev/fd/<that int>` is readable or a
+     * symlink. TWO independent reasons it could never answer yes, and a round
+     * that fixes only the first will watch the test go on skipping:
+     *
+     *   1. `(int) $stream` is PHP's RESOURCE ID, not a file descriptor. MEASURED
+     *      on this box, PHP 8.3.6: the cast answered 15 while the process's
+     *      lowest free descriptor was 4, and `/dev/fd/15` was neither readable
+     *      nor a link. This is the same cast `size()` and `enableRawMode()` were
+     *      both fixed for, which is what makes the gate a member of the family.
+     *   2. the handle was `fclose()`d on the line BEFORE the path was probed, so
+     *      even a correct descriptor would have named a closed one.
+     *
+     * WHAT IS TRUE NOW: the probe resolves a GENUINE descriptor with
+     * {@see PosixBackend::descriptorForStream()} and holds the handle open
+     * across the `is_readable()`/`is_link()` call. MEASURED, same box and
+     * version, same run as the numbers above: real fd 4, `/dev/fd/4` readable
+     * and a link, gate open.
+     *
+     * WHY THERE IS STILL A GATE AT ALL: `SttyTermios` addresses the terminal as
+     * `stty -F /dev/fd/<n>` (`-f` on Darwin), so a host whose `/dev/fd` is not a
+     * live view of the calling process's descriptor table cannot run this at
+     * all. That is a real portability condition, unlike the one it replaces.
+     *
+     * ## What it asserts, and why the `stty -a` reading rather than the echo
+     *
+     * The original body asserted only that `/bin/cat` echoed `hello` back with
+     * no CR in it. That is evidence, but it is indirect: it cannot tell "raw
+     * mode was applied" from "the flags happened to suit". The device is read
+     * directly instead, with {@see SttyReading}'s whole-word matcher, at three
+     * points -- before, raw, restored -- so both transitions are asserted and
+     * the reading is taken through a path (`stty -a` on the slave PATH) that
+     * shares no code with the mechanism under test (`stty` on `/dev/fd/<n>`).
+     * `SttyReading::cookedFixture()` goes through the same matcher in the same
+     * test, because a matcher mutated to match nothing reports "not raw"
+     * forever and every absence-shaped assertion here would stay green.
+     *
+     * The third reading is the one that mattered: it is what caught
+     * `PosixBackend::restore()` calling `apply()` on the snapshot, which is a
+     * no-op under this backend and left the terminal raw. See that method's
+     * doc-block for the measurement.
+     *
+     * `TermiosFactory::which()` is asserted first so the test cannot silently
+     * become an FFI test with an `stty` name if the env var is ever ignored.
+     */
     public function testRawModeWithSttyFallbackOnRealPty(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {
@@ -143,21 +196,34 @@ final class PosixBackendTest extends TestCase
         if (!function_exists('posix_isatty')) {
             $this->markTestSkipped('posix_isatty is not available.');
         }
-
-        // Check that stty can actually use /dev/fd/ for a real fd
-        $testFd = fopen('php://memory', 'r+');
-        if ($testFd === false) {
-            $this->markTestSkipped('Could not open test stream');
+        if (!is_executable('/bin/cat')) {
+            $this->markTestSkipped('/bin/cat is not available to echo through the slave.');
         }
-        $fd = (int) $testFd;
-        fclose($testFd);
-        $sttyTestPath = '/dev/fd/' . $fd;
-        if (!is_readable($sttyTestPath) && !is_link($sttyTestPath)) {
-            $this->markTestSkipped('/dev/fd/<n> is not accessible in this environment.');
+
+        // Can `stty` address a descriptor of THIS process as /dev/fd/<n>?
+        // A genuine descriptor, and the handle stays open until after the
+        // probe - see the doc-block for the two ways the old gate got this
+        // wrong and why fixing either one alone changes nothing.
+        $probe = fopen('/dev/null', 'r');
+        $this->assertIsResource($probe);
+
+        try {
+            $probeFd = PosixBackend::descriptorForStream($probe);
+            $probePath = '/dev/fd/' . $probeFd;
+            clearstatcache(true, $probePath);
+            $fdDirectoryIsLive = $probeFd !== null
+                && (is_readable($probePath) || is_link($probePath));
+        } finally {
+            fclose($probe);
+        }
+
+        if (!$fdDirectoryIsLive) {
+            $this->markTestSkipped('/dev/fd/<n> is not a live view of this process on this host.');
         }
 
         $prevTermios = getenv('SUGARCRAFT_TERMIOS');
         putenv('SUGARCRAFT_TERMIOS=stty');
+
         try {
             $system = new PosixPtySystem();
             $pair = $system->open();
@@ -169,14 +235,49 @@ final class PosixBackendTest extends TestCase
                 $this->markTestSkipped('Could not open PTY slave path: ' . $slavePath);
             }
 
+            $backend = null;
+
             try {
+                $slaveFd = PosixBackend::descriptorForStream($slave);
+                $this->assertNotNull($slaveFd, 'no descriptor resolved for the pty slave');
+                $this->assertSame(
+                    'SttyTermios',
+                    TermiosFactory::which($slaveFd),
+                    'SUGARCRAFT_TERMIOS=stty did not select the stty backend - this test would be '
+                    . 'exercising the FFI path under an stty name',
+                );
+
+                // Known-positive control for the matcher every assertion below
+                // depends on: a synthetic COOKED reading carrying the negated
+                // ECHONL/ECHOPRT lookalikes. A matcher that matches nothing
+                // calls this raw; a substring matcher calls it raw too.
+                $this->assertFalse(
+                    SttyReading::isRaw(SttyReading::cookedFixture()),
+                    'the raw-mode matcher reported a cooked reading as raw - every other assertion '
+                    . 'in this test is worthless until that is fixed',
+                );
+
+                $this->assertFalse(
+                    SttyReading::isRaw(SttyReading::of($slavePath)),
+                    'a freshly opened pty slave was already in raw mode',
+                );
+
                 $backend = new PosixBackend($slave);
                 $backend->enableRawMode();
+
+                $this->assertTrue(
+                    SttyReading::isRaw(SttyReading::of($slavePath)),
+                    'enableRawMode() through the stty backend did not clear ICANON and ECHO',
+                );
 
                 $child = $pair->slave()->spawn(['/bin/cat']);
                 $master->write("hello\n");
                 $captured = '';
-                $deadline = \microtime(true) + 2.0;
+                // Generous rather than tight: this is a liveness bound on a
+                // forked child on a box that runs several suites at once, not
+                // a performance budget. The loop exits as soon as the line
+                // arrives, which is ~10 ms in practice.
+                $deadline = \microtime(true) + 5.0;
                 while (\microtime(true) < $deadline) {
                     $chunk = $master->read(4096, 0.1);
                     if ($chunk === null || $chunk === '') {
@@ -193,8 +294,18 @@ final class PosixBackendTest extends TestCase
 
                 $this->assertStringContainsString('hello', $captured, 'cat should have received input');
                 $this->assertStringNotContainsString("\r", $captured, 'raw mode should have no CR from echo');
-            } finally {
+
                 $backend->restore();
+
+                $this->assertFalse(
+                    SttyReading::isRaw(SttyReading::of($slavePath)),
+                    'restore() left the terminal in raw mode. Under the stty backend, apply() on a '
+                    . 'current() snapshot is a no-op - PosixBackend::restore() must call restore().',
+                );
+            } finally {
+                // Idempotent: restore() returns immediately once $saved is null,
+                // so the in-test restore above is not undone or repeated.
+                $backend?->restore();
                 fclose($slave);
                 $master->close();
             }

@@ -28,7 +28,26 @@ final class PosixBackendInjectedTermiosTest extends TestCase
         $this->assertSame(1, $stub->raw->applyCalls, 'apply() should fire on the raw copy');
     }
 
-    public function testRestoreReappliesSavedSnapshot(): void
+    /**
+     * WHAT THIS ASSERTED: `$stub->saved->applyCalls === 1` -- that
+     * `PosixBackend::restore()` calls `apply()` on the snapshot.
+     *
+     * WHAT IS TRUE NOW: it calls `restore()` on it, and the difference is not
+     * cosmetic. `apply()` and `restore()` are the same syscall for
+     * `PosixTermios` and are NOT the same operation for `SttyTermios`, whose
+     * `apply()` opens with `if (!$this->raw) { return; }` -- and a `current()`
+     * snapshot is never raw. So the old spelling put the terminal back on the
+     * FFI backend and did nothing at all on the `stty` fallback. MEASURED on a
+     * real pty; the table is in `PosixBackend::restore()`'s doc-block, and
+     * `PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()` is the pin
+     * that reads the device rather than a spy.
+     *
+     * WHY THIS TEST STILL EARNS ITS PLACE: the seam it guards is WHICH
+     * INSTANCE is acted on at teardown -- the snapshot, never the raw copy --
+     * and that is a `PosixBackend` decision no pty test can isolate. Both
+     * halves are still asserted; only the verb moved.
+     */
+    public function testRestoreReplaysTheSavedSnapshot(): void
     {
         $stub = new SpyTermios();
         $backend = new PosixBackend(\STDIN, $stub);
@@ -40,13 +59,24 @@ final class PosixBackendInjectedTermiosTest extends TestCase
 
         $this->assertSame(
             1,
+            $stub->saved->restoreCalls,
+            'restore() must restore() the snapshot taken at enableRawMode() - apply() on a snapshot '
+            . 'is a no-op under the stty backend',
+        );
+        $this->assertSame(
+            0,
             $stub->saved->applyCalls,
-            'restore() must apply() the snapshot taken at enableRawMode()',
+            'restore() must not fall back to apply() on the snapshot',
         );
         $this->assertSame(
             $appliedAfterRaw,
             $stub->raw->applyCalls,
             'restore() must NOT re-call apply() on the raw copy',
+        );
+        $this->assertSame(
+            0,
+            $stub->raw->restoreCalls,
+            'restore() must not reach the raw copy at all',
         );
     }
 
@@ -71,6 +101,7 @@ final class PosixBackendInjectedTermiosTest extends TestCase
 
         $this->assertSame(0, $stub->currentCalls);
         $this->assertSame(0, $stub->saved->applyCalls);
+        $this->assertSame(0, $stub->saved->restoreCalls);
     }
 
     public function testInjectedTermiosWorksEvenWhenStreamIsNotATty(): void
@@ -88,7 +119,7 @@ final class PosixBackendInjectedTermiosTest extends TestCase
 
         $this->assertSame(1, $stub->makeRawCalls);
         $this->assertSame(1, $stub->raw->applyCalls);
-        $this->assertSame(1, $stub->saved->applyCalls);
+        $this->assertSame(1, $stub->saved->restoreCalls);
     }
 }
 

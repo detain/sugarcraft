@@ -252,12 +252,41 @@ final class PosixMasterPty implements MasterPty
 
         // Dup the fd before closing to prevent FD reuse race. When we
         // went through the stream path, our libc fd may have been
-        // recycled by an unrelated open() between our fopen() and
-        // this close(). Duping first gives us a stable reference.
+        // recycled by an unrelated open() between our fopen() and this
+        // close(). Duping first gives us a stable reference.
+        //
+        // WHAT THIS BLOCK USED TO BE: `self::libc()->dup($this->fd);`,
+        // discarding the return value. WHAT IS TRUE: `dup(2)` returns a NEW
+        // descriptor, and one that nothing ever closes is a leak of exactly
+        // one descriptor per master that was read from or written to --
+        // every one of them still pinning the master side of a pty the
+        // caller believes it has closed.
+        //
+        // MEASURED on this box, PHP 8.3.6, counting entries of
+        // `/proc/self/fd` whose readlink is `/dev/ptmx`, five
+        // open/write/close cycles: 1, 2, 3, 4, 5 leaked -- linear in the
+        // number of closes. Five further cycles that never materialise the
+        // stream leak none, which is the control: the leak is this branch
+        // and not `open()`.
+        //
+        // The dup is KEPT rather than deleted, because the race it names is
+        // real: `fopen('php://fd/N')` dup()s, `fclose()` closed that
+        // duplicate, and between those two moments an unrelated `open()` in
+        // this process could have taken the number back if our own fd had
+        // gone. Holding a second reference across the `close()` below means
+        // the description cannot be torn down and re-created under us. What
+        // was missing is the other half: the reference has to be RELEASED,
+        // or the kernel's master-side refcount never reaches 0 and
+        // `tty_hangup()` never fires -- the very failure the comment above
+        // the stream branch exists to prevent.
+        $stableFd = -1;
         if ($usedStream) {
-            self::libc()->dup($this->fd);
+            $stableFd = self::libc()->dup($this->fd);
         }
         $rc = self::libc()->close($this->fd);
+        if ($stableFd >= 0) {
+            self::libc()->close($stableFd);
+        }
         // Surface only failures from the pure-libc path where rc != 0
         // means the master fd never closed.
         if ($rc !== 0 && !$usedStream) {

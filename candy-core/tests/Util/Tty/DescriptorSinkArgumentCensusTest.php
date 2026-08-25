@@ -268,6 +268,15 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             DescriptorSinkScanner::VARIABLE,
             'CORRECT. Same field, released on close().',
         ],
+        'candy-pty/src/Posix/PosixMasterPty.php::->close($stableFd)' => [
+            DescriptorSinkScanner::VARIABLE,
+            'CORRECT. The return value of the `dup($this->fd)` two rows up, released again once '
+            . 'the original has been closed. It exists to hold the description alive across that '
+            . 'close; before it was released, close() leaked one /dev/ptmx descriptor per master '
+            . 'that had been read from or written to -- MEASURED linear over five cycles, with a '
+            . 'no-stream control leaking none. Local to close(), guarded by `>= 0`, and never a '
+            . 'cast of a PHP stream.',
+        ],
 
         // candy-pty/PosixPtySystem. `$masterFd` comes from openPtyMaster(),
         // i.e. posix_openpt(); `$slaveFd` from `$libc->open($slavePath, ...)`;
