@@ -77,12 +77,16 @@ php tools/check-path-repos.php --fix --strict-closure \
 The last one is the only entry that writes to your tree, and the revert is
 narrowed on purpose: CI spells that line `git checkout -- .`, which is safe in
 a throwaway checkout and would eat your uncommitted work here. MEASURED on this
-tree: `--fix --strict-closure` dirties `*/composer.json` and nothing else — 52
-files, no root manifest, no lock — so the glob reverts all of it.
+tree: `--fix --strict-closure` dirties `*/composer.json` and NOTHING else — no
+root manifest, no lock, no file outside that glob — so the glob reverts all of
+it. (A count of the dirtied files used to stand here. It said 52; re-measured
+one round later it was 53, because the number is the lib count and every new
+lib moves it. `git status --porcelain` after the `--fix` is the answer that
+cannot go stale.)
 
 The first line wants a PHPUnit 10 PHAR on `PATH` (CI installs one via
-`setup-php`'s `tools: phpunit:10`). Without one, borrow any lib's — MEASURED
-green here on PHP 8.3.6, 10 tests / 45 assertions:
+`setup-php`'s `tools: phpunit:10`). Without one, borrow any lib's — that form
+was measured green on PHP 8.3.6, and the run prints its own totals:
 
 ```sh
 candy-core/vendor/bin/phpunit --no-configuration tools/tests/
