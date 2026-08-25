@@ -60,6 +60,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class OneSidedHomeSandboxTest extends TestCase
 {
+    use TestFileWalkTrait;
+
     /**
      * Test files that still redirect exactly one spelling of `HOME`.
      *
@@ -477,27 +479,5 @@ final class OneSidedHomeSandboxTest extends TestCase
         }
 
         return false;
-    }
-
-    /**
-     * Every `.php` file under `tests/`, keyed by its path relative to `tests/`.
-     *
-     * @return array<string,string>
-     */
-    private static function everyTestFile(): array
-    {
-        $root = \dirname(__DIR__);
-        $found = [];
-
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root)) as $file) {
-            /** @var \SplFileInfo $file */
-            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
-                continue;
-            }
-            $found[substr($file->getPathname(), \strlen($root) + 1)] = $file->getPathname();
-        }
-        ksort($found);
-
-        return $found;
     }
 }

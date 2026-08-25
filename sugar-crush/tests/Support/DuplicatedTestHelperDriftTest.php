@@ -108,6 +108,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class DuplicatedTestHelperDriftTest extends TestCase
 {
+    use TestFileWalkTrait;
+
     /**
      * The largest per-side divergence, in tokens, that still reads as "the
      * same helper, one edit apart" rather than as two unrelated helpers that
@@ -2074,29 +2076,5 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         }
 
         return null;
-    }
-
-    /**
-     * Every `.php` file under `tests/`, keyed by its path relative to `tests/`.
-     *
-     * @return array<string,string> relative path => absolute path
-     */
-    private static function everyTestFile(): array
-    {
-        $root = \dirname(__DIR__);
-        $found = [];
-
-        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
-        foreach ($files as $file) {
-            /** @var \SplFileInfo $file */
-            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
-                continue;
-            }
-            $found[substr($file->getPathname(), \strlen($root) + 1)] = $file->getPathname();
-        }
-
-        ksort($found);
-
-        return $found;
     }
 }

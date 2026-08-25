@@ -173,9 +173,42 @@ final class HangWatchdogTest extends TestCase
         $this->assertSame(
             'ARMED',
             $this->armedUnder('3600'),
-            'bootstrap armed NO watchdog under a positive budget, so this suite has been '
-                . 'running with the E490 bound switched off and every green take since says '
-                . 'nothing about whether a hang would be caught',
+            'bootstrap armed NO watchdog under a positive budget, so bootstrap does not arm '
+                . 'one in a plain child process',
+        );
+    }
+
+    /**
+     * AND THIS RUN, SPECIFICALLY, IS WATCHED.
+     *
+     * The end-to-end arm above spawns a plain `php -r` child, where PHPUnit's
+     * event facade is NOT sealed. Facade-seal timing is precisely the thing
+     * that decides whether `install()` gets to register its subscribers -- it
+     * catches a seal and tears the watchdog straight back down -- so a probe
+     * running outside PHPUnit cannot speak for the process it is a claim about.
+     * The old failure text said "this suite has been running with the E490
+     * bound switched off", which is a statement about THIS process that no
+     * assertion in the file made.
+     *
+     * One line closes it: the instance the real bootstrap installed is either
+     * here or it is not.
+     */
+    public function testThisRunIsItselfBeingWatched(): void
+    {
+        if (\getenv('CANDY_PTY_HANG_BUDGET') === '0') {
+            self::markTestSkipped('the watchdog is switched off for this run by CANDY_PTY_HANG_BUDGET=0');
+        }
+
+        $property = new \ReflectionProperty(HangWatchdog::class, 'instance');
+        $property->setAccessible(true);
+
+        $this->assertNotNull(
+            $property->getValue(),
+            'no watchdog is installed in THIS process, so this suite is running with the E490 '
+                . 'bound switched off and every green take says nothing about whether a hang '
+                . 'would be caught. The child-process probe above cannot see this: it runs '
+                . 'outside PHPUnit, where the event facade is not sealed and install() takes a '
+                . 'different path.',
         );
     }
 

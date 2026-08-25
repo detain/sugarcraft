@@ -574,6 +574,20 @@ if ($unused) {
         // behind it, which is where the next real one hides -- so it is a
         // FINDING and it says which of the three it failed.
         $rows = $data['manifest']['extra']['sugarcraft']['deferred-wiring'] ?? null;
+        // A GUARD MUST GO RED ON WHAT IT CANNOT PARSE. Every other malformed
+        // shape below -- an int key, an empty reason, a foreign vendor -- is
+        // reported; a `deferred-wiring` that is a string, a number or a bool
+        // used to drop straight through this `is_array()` with no output and no
+        // finding, which is a hole shaped exactly like the next bad row.
+        if ($rows !== null && !\is_array($rows)) {
+            $lines[] = \sprintf(
+                '  - %-23s extra.sugarcraft.deferred-wiring is a %s, not a map of '
+                    . 'package => reason, so no row in it can be read',
+                'IDLE_DEFERRAL',
+                \get_debug_type($rows)
+            );
+            $unusedFindings++;
+        }
         if (\is_array($rows)) {
             foreach ($rows as $package => $reason) {
                 if (!\is_string($package)) {
@@ -711,11 +725,19 @@ if ($unused) {
     \fwrite(\STDOUT, $report);
     \fprintf(
         \STDOUT,
-        "\n%d finding(s). Read-only report — prune by hand: remove the require AND its\n"
-        . "repositories[] entry (PRUNE_REQUIRE_AND_REPO), just the require (KEEP_REPO), or\n"
-        . "just the repo entry (PRUNE_REPO_ONLY). A `tests_uses: yes` means move the\n"
-        . "require to require-dev rather than delete it. Re-run without --unused to\n"
-        . "re-verify closure afterwards.\n",
+        "\n%d finding(s). Read-only report. THE REMEDY DEPENDS ON THE FINDING CLASS:\n"
+        . "\n"
+        . "  PRUNE_REQUIRE_AND_REPO / KEEP_REPO / PRUNE_REPO_ONLY — a dead dependency.\n"
+        . "    Remove the require AND its repositories[] entry, just the require, or just\n"
+        . "    the repo entry, as named. A `tests_uses: yes` means move the require to\n"
+        . "    require-dev rather than delete it.\n"
+        . "\n"
+        . "  IDLE_DEFERRAL — a deferred-wiring ROW that suppresses nothing. Delete the\n"
+        . "    ROW, not the require: the require it names is either live, absent, or not\n"
+        . "    a sugarcraft package, and each row above says which. Pruning the require\n"
+        . "    on this advice would remove a dependency the lib is still using.\n"
+        . "\n"
+        . "Re-run without --unused to re-verify closure afterwards.\n",
         $unusedFindings
     );
     exit(1);
