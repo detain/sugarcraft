@@ -1145,17 +1145,15 @@ final class DescriptorInheritanceGuardTest extends TestCase
             }
         }
 
-        // What libSourceFiles() ACTUALLY yields, keyed by horizon segment. Its
-        // horizon keys keep their segment (`candy-pty/bin/pty-shim.php`) while
-        // an autoload root is stripped from its own, so the second path
-        // component is the segment for exactly the files this is counting.
-        $emitted = [];
-        foreach ($this->libSourceFiles() as $key => $_source) {
-            $parts = \explode('/', $key);
-            if (isset($parts[2]) && (self::LIB_HORIZON[$parts[1]]['walked'] ?? false) === true) {
-                $emitted[$parts[1]] = ($emitted[$parts[1]] ?? 0) + 1;
-            }
+        // What libSourceFiles() ACTUALLY yields, keyed by horizon segment,
+        // taken from {@see $horizonEmissions} - which the generator fills at
+        // the yield site rather than being re-derived from the key here. The
+        // key cannot answer this honestly: see that property's doc-block.
+        // The generator has to be drained before the tally means anything.
+        foreach ($this->libSourceFiles() as $_key => $_source) {
+            // Drained for its side effect on $horizonEmissions.
         }
+        $emitted = $this->horizonEmissions;
 
         // A closure of empty directories classifies perfectly.
         self::assertGreaterThan(
@@ -2355,6 +2353,29 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * Horizon files {@see libSourceFiles()} actually yielded, segment => count.
+     *
+     * RECORDED AT THE YIELD SITE, WHICH IS THE ONLY PLACE THAT KNOWS. The
+     * count it replaces was derived from the key: `explode('/', $key)[1]`,
+     * read as the horizon segment. That is true for a horizon key and a guess
+     * for an autoload-root key, where the second component is whatever
+     * directory happens to sit inside the root - so a sibling adding
+     * `src/lang/Foo.php` or `src/bin/Foo.php` would inflate this tally while
+     * the filesystem partition it is compared against did not move, and the
+     * resulting failure text would accuse E449's widening of a narrowing that
+     * a different lane's new directory had caused. Measured on this tree,
+     * PHP 8.3.6: zero such files today, so this is a misdirection waiting
+     * rather than a live one - which is the point of fixing it while the
+     * generator is being read anyway.
+     *
+     * Only meaningful once the generator has been drained; it is reset when
+     * the generator's body first runs, not when the method is called.
+     *
+     * @var array<string, int>
+     */
+    private array $horizonEmissions = [];
+
+    /**
      * Every reachable sibling library's loadable sources, keyed `<lib>/<path>`.
      *
      * THE ROOTS ARE READ, NOT ASSUMED. This walk used to go to `<lib>/src`
@@ -2373,6 +2394,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
     private function libSourceFiles(): iterable
     {
         $base = \dirname(__DIR__, 2) . '/' . self::LIB_SCOPE;
+        $this->horizonEmissions = [];
 
         // Loud rather than skipped: this suite cannot have loaded without it,
         // so its absence means the walk is being pointed somewhere new - and a
@@ -2451,6 +2473,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
                     $key = $name . '/' . $segment . ($relative === '' ? '' : '/' . $relative);
                     self::assertArrayNotHasKey($key, $emitted, self::DUPLICATE_KEY);
                     $emitted[$key] = true;
+                    $this->horizonEmissions[$segment] = ($this->horizonEmissions[$segment] ?? 0) + 1;
 
                     yield $key => $source;
                 }
