@@ -98,10 +98,39 @@ use SugarCraft\Crush\Support\ContainedPath;
  * WHAT WAS DELIBERATELY NOT BUILT
  * -------------------------------
  *   - A per-CLASS listing. The declaration-line regex the item offers as an
- *     alternative is cheap to run, but `src/` here declares 316 top-level
- *     types; at one line each that is several times this whole block's budget,
- *     emitted on every step, to tell the model things `Glob 'src/&#42;&#42;/&#42;.php'`
- *     tells it on demand. The map stops at the directory.
+ *     alternative is cheap to run, but at one FULLY-QUALIFIED name per line a
+ *     listing of this package's own top-level types overruns this block's
+ *     whole byte budget — emitted on every step, to tell the model things
+ *     `Glob 'src/&#42;&#42;/&#42;.php'` tells it on demand. The map stops at the
+ *     directory.
+ *
+ *     WHAT THIS SAID: "`src/` here declares <N> top-level types; at one line
+ *     each that is several times this whole block's budget." The figure is
+ *     elided rather than quoted, and that is not squeamishness: restating it
+ *     even inside a historical quotation is still a copy of the census sitting
+ *     in this file, and the guard named below cannot tell a quotation from a
+ *     claim — nor should it, since the next reader cannot either. WHAT IS TRUE NOW:
+ *     the figure was a fourth copy of a census this file has restated and been
+ *     wrong about three times, and "several times" was not arithmetic anyone
+ *     had run — MEASURED on PHP 8.3.6, a fully-qualified listing OVERRUNS
+ *     {@see MAX_SECTION_BYTES} but does not come to several times it, while at
+ *     BARE SHORT-NAME width the same listing FITS inside the cap.
+ *     The WIDTH the claim is made at was load-bearing and the sentence never
+ *     stated it; it does now. NEITHER MULTIPLE IS WRITTEN HERE, and the
+ *     revision that first stated them wrote one of them as a bare ratio with
+ *     nothing asserting it — MEASURED on the shipped tree: inverting that
+ *     sentence to say the short-name listing was NINE TIMES the cap and could
+ *     not fit left the whole suite green. A multiple in this prose is a
+ *     cardinality with no generator, which is the defect the paragraph below
+ *     is about; both halves are BOUNDS asserted by the test named next, not
+ *     ratios recorded here. WHY THIS STILL EARNS ITS
+ *     PLACE: the reason the listing was not built is that it does not fit, and
+ *     that is the part worth keeping. It is DERIVED from this tree and from
+ *     {@see MAX_SECTION_BYTES} by
+ *     {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold()},
+ *     which is why no byte figure is written here: a count of `src/` restated
+ *     in prose is a second place to be wrong, and this paragraph is the third
+ *     proof of that in its own file.
  *   - A fallback for a repository with no `composer.json` anywhere. Such a
  *     root renders nothing. A bare directory listing would be something the
  *     model can get from one `ls`, whereas the directory-to-NAMESPACE binding
@@ -270,30 +299,62 @@ final readonly class RepoMapBlock
      * entry mapping a prefix to `""` or `"."` is legal and points the walk at
      * the whole repository, so this is the bound that keeps a malformed
      * manifest from turning prompt assembly into a full-tree crawl. Generous
-     * because it is a backstop and not a policy: `src/` here is 297 files, so
-     * a normal package is about SEVENTY times under it — not the "two orders
-     * of magnitude" an earlier revision of this sentence claimed, which was
-     * the arithmetic being rounded in the direction that flattered the bound.
+     * because it is a backstop and not a policy: a package the size of this one
+     * sits more than an order of magnitude under it.
      *
-     * BOTH FIGURES IN THIS FILE THAT RESTATE `src/`'s CENSUS — the file count
-     * in the sentence just above and the top-level-type count in the
-     * WHAT WAS DELIBERATELY NOT BUILT list — are asserted against the
-     * derivation by
-     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()}.
+     * THE EXACT MULTIPLE IS DELIBERATELY NOT WRITTEN HERE. It moves with every
+     * file added, and that is precisely how this paragraph went stale three
+     * times over. What is asserted instead — from the live tree and from this
+     * constant, by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheTwoDesignArgumentsRepoMapBlockMakesAboutThisTreeStillHold()}
+     * — is the order-of-magnitude claim this sentence actually makes, together
+     * with a deliberate factor of slack on top of it, so the claim survives the
+     * tree growing several times over while the multiple does not survive one
+     * commit.
      *
-     * WHAT THIS PARAGRAPH SAID: "286 files here and 305 top-level types
-     * above". WHAT IS TRUE NOW: neither number was ever either of those at the
-     * same time as the assertion, and by the time it was read they were three
-     * bumps stale — this sentence restated the census a THIRD time, in prose no
-     * test looks at, which is the very defect the rest of it names. WHY THIS
-     * STILL EARNS ITS PLACE: the two restatements above are load-bearing (an
-     * argument about a per-class listing's size, and an argument about how far
-     * under {@see MAX_SOURCE_FILES} a normal package sits) and they shipped
-     * STALE once already — written as 284/303 in the same commit that moved the
-     * census to 285/304 thirty lines away in its own message. The pointer to
-     * the test that pins them is what stops that recurring; a third copy of the
-     * digits is what caused it, so this paragraph now names WHERE they are
-     * instead of repeating them.
+     * TWO REVISIONS OF THIS SENTENCE HAVE NOW OVERSTATED THE SLACK, both in
+     * the direction that flattered the bound. The first claimed "two orders of
+     * magnitude". The second, written in the commit that removed the digits,
+     * claimed the order of magnitude "survives the tree SEPTUPLING" — it does
+     * not: the assertion holds only while the tree stays under a tenth of this
+     * constant, and seven times today's size is over that, so the sentence
+     * written to replace a stale multiple stated a multiple that was already
+     * false. That is why the surviving multiple is not written down but
+     * ASSERTED: a ratio in prose has no generator and rots into exactly this,
+     * twice in one file in one round.
+     *
+     * NO FIGURE IN THIS FILE RESTATES `src/`'s CENSUS ANY MORE, and that
+     * absence is itself asserted, by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()}.
+     *
+     * WHAT THIS PARAGRAPH SAID: first a file count and a top-level-type count,
+     * spelled out; then a correction naming WHERE the two live figures were and
+     * which test asserted them. WHAT IS TRUE NOW: there are no live figures
+     * left to name. Both restatements were removed in the same commit as the
+     * assertions that pinned them, because removing either one alone leaves the
+     * other an unpinned claim that rots with nothing going red — and prose
+     * rotting quietly, not a red suite, is this file's actual failure mode.
+     * WHY THIS STILL EARNS ITS PLACE: the two arguments the figures were
+     * SUPPORTING are load-bearing and are still made — one about a per-class
+     * listing's size in the class doc-block above, one about how far under this
+     * constant a normal package sits, immediately above. Both are now checked
+     * as arguments. The history stays because a reader who finds no numbers
+     * here and adds "helpful" ones back would be the fourth; the record of the
+     * first three is the only thing that stops them. They shipped STALE once,
+     * written into this file by the very commit whose own message, thirty lines
+     * away, moved the census past them.
+     *
+     * THE HISTORICAL FIGURES ARE ELIDED RATHER THAN QUOTED, and the second
+     * reason is the one nobody had. The first is the argument in WHAT WAS
+     * DELIBERATELY NOT BUILT above: the guard cannot tell a quotation from a
+     * claim, and nor can the next reader. The second is arithmetic — a STALE
+     * census figure is a number the tree GROWS INTO. The declaration counts
+     * this paragraph used to quote sat just above the live file count, so a
+     * handful of honest additions to `src/` would have made the guard report a
+     * historical quotation as a restatement. MEASURED before the elision, on
+     * PHP 8.3.6: green at one and at five added source files, RED at six. The
+     * distance that replaced them is no longer prose either; it is asserted by
+     * {@see \SugarCraft\Crush\Tests\Tools\BuiltInToolCorpusTest::testTheRestatementGuardHasRoomBeforeItsNextFalsePositive()}.
      */
     public const MAX_SOURCE_FILES = 20000;
 
