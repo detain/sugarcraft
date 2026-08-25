@@ -1201,8 +1201,13 @@ final class ChildWallClockBudgetTest extends TestCase
     {
         $of = static function (string $body): array {
             $rows = [];
-            foreach (self::wallClockWrappersIn("<?php\n" . $body . "\n") as [, $kind, $seconds, $why]) {
-                $rows[] = $kind === 'literal' ? 'literal:' . $seconds . ':' . $why : $kind . ':' . $why;
+            foreach (self::wallClockWrappersIn("<?php\n" . $body . "\n") as [$line, $kind, $seconds, $why]) {
+                // THE LINE IS IN EVERY ROW, and it was not in the first draft.
+                // A row's line is the whole value of the report — it is what
+                // the reader is sent to — and a fixture rendering only the
+                // classification pins nothing about it. `$body` starts at
+                // line 2, so every expectation below is 1-based from there.
+                $rows[] = $line . ':' . $kind . ':' . $seconds . ':' . $why;
             }
 
             return $rows;
@@ -1212,7 +1217,7 @@ final class ChildWallClockBudgetTest extends TestCase
         // THE PLAIN FORM, WITH NO SIGNAL FLAG. Two live sites spell it this way
         // and the old alphabet — which required `-s KILL` — reported neither.
         $this->assertSame(
-            ['literal:10:' . $w],
+            ['2:literal:10:' . $w],
             $of("shell_exec('" . $w . " 10 ' . PHP_BINARY);"),
             'the plain wrapper form is not seen, which is the exact hole two live sites sat in — '
             . 'or it is seen and reported with flags it does not have',
@@ -1223,10 +1228,10 @@ final class ChildWallClockBudgetTest extends TestCase
         // budget and each of these becomes an unresolved row.
         $this->assertSame(
             [
-                'literal:20:' . $w . ' -s KILL',
-                'literal:21:' . $w . ' -k 5 -s KILL',
-                'literal:22:' . $w . ' --signal=KILL',
-                'literal:23:' . $w . ' --foreground',
+                '2:literal:20:' . $w . ' -s KILL',
+                '3:literal:21:' . $w . ' -k 5 -s KILL',
+                '4:literal:22:' . $w . ' --signal=KILL',
+                '5:literal:23:' . $w . ' --foreground',
             ],
             $of(
                 "exec('" . $w . " -s KILL 20 x');\n"
@@ -1241,7 +1246,7 @@ final class ChildWallClockBudgetTest extends TestCase
         // prefix that way, and `\b` does not fire between `s` and `t` — a left
         // boundary spelled `\b<wrapper>` misses it silently.
         $this->assertSame(
-            ['literal:24:' . $w . ' -s KILL'],
+            ['2:literal:24:' . $w . ' -s KILL'],
             $of("exec(sprintf('%s" . $w . " -s KILL 24 %s', \$p, \$c));"),
             'a wrapper preceded by a printf conversion is invisible, so a `%s`-prefixed launch '
             . 'is certified as carrying no budget',
@@ -1249,7 +1254,7 @@ final class ChildWallClockBudgetTest extends TestCase
 
         // THE PLACEHOLDER, which is the token census's half.
         $this->assertSame(
-            ['parametrised:' . $w . ' -s KILL'],
+            ['2:parametrised:0:' . $w . ' -s KILL'],
             $of("exec(sprintf('" . $w . " -s KILL %d x', \$n));"),
             'the parametrised form is no longer routed to the resolver',
         );
@@ -1259,7 +1264,7 @@ final class ChildWallClockBudgetTest extends TestCase
         // token census, so it produced no row and no disagreement either.
         $interpolated = $of("exec(\"" . $w . " -s KILL {\$bound} x\");");
         $this->assertCount(1, $interpolated, 'an interpolated budget produced no row at all');
-        $this->assertStringStartsWith('unresolved:', $interpolated[0]);
+        $this->assertStringStartsWith('2:unresolved:0:', $interpolated[0]);
         $this->assertStringContainsString(
             'END of a string literal',
             $interpolated[0],
@@ -1271,9 +1276,22 @@ final class ChildWallClockBudgetTest extends TestCase
         foreach (['$BUDGET' => 'a shell variable', '10s' => 'a suffixed duration', '%s' => 'a string conversion'] as $token => $what) {
             $row = $of("exec('" . $w . " -s KILL " . $token . " x');");
             $this->assertCount(1, $row, $what . ' produced no row at all');
-            $this->assertStringStartsWith('unresolved:', $row[0], $what . ' was classified as a budget');
+            $this->assertStringStartsWith('2:unresolved:0:', $row[0], $what . ' was classified as a budget');
             $this->assertStringContainsString('`' . $token . '`', $row[0], $what . ' was reported without naming the token');
         }
+
+        // A HEREDOC AND A NOWDOC, which tokenise as encapsed strings and are
+        // therefore in scope — MEASURED rather than assumed, because "reads
+        // string literals" is a claim about the tokeniser and not about the
+        // language. The line numbers matter as much as the classification: a
+        // heredoc's body starts a line BELOW the token PHP reports, so a scan
+        // that used the token's own line would send the reader one line short.
+        $this->assertSame(
+            ['3:literal:44:' . $w . ' -s KILL', '6:literal:45:' . $w],
+            $of("\$a = <<<SH\n" . $w . " -s KILL 44 x\nSH;\n\$b = <<<'SH'\n" . $w . " 45 y\nSH;"),
+            'a heredoc- or nowdoc-built launch is invisible, or is reported at the line the '
+            . 'tokeniser names rather than the line the command is written on',
+        );
 
         // THE NEGATIVE HALF, and it is the reason this scan reads the TOKEN
         // STREAM rather than raw text (rule 40). Prose that happens to use the
