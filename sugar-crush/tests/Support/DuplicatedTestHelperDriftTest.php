@@ -890,6 +890,98 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     }
 
     /**
+     * A HELPER WITH NO MODIFIER AT ALL IS PUBLIC, AND A THREE-KEYWORD ALPHABET
+     * CANNOT SAY SO (E565).
+     *
+     * `carriesVisibility()` asks whether one of a list of keyword tokens sits
+     * before the declaration. The one spelling it structurally cannot express
+     * is the ABSENCE of a keyword — `function testFoo()`, which PHP means as
+     * `public function testFoo()` — so a test method copied between two suites
+     * and fixed in only one of them was invisible to T_PRIVATE, T_PROTECTED and
+     * T_PUBLIC alike. That copied-and-half-fixed test method is this class's
+     * own subject (E481), so the hole was in the arm added to close E481.
+     *
+     * IT IS UNTRIGGERED RATHER THAN LIVE, AND THAT IS WHY THIS TEST IS
+     * SYNTHETIC. MEASURED on PHP 8.3.6 at the commit that added the arm: ZERO
+     * named declarations anywhere under `tests/` carry no modifier. E363's
+     * distinction applies exactly — a false-negative an empty population cannot
+     * trigger is untriggered, not dead, and the honest answer to an unpinnable
+     * clause is to make it pinnable rather than to write a paragraph excusing
+     * it. The number is not asserted anywhere; it moves the day someone writes
+     * one, and this test keeps answering.
+     *
+     * BOTH POLARITIES, because an arm that answers PUBLIC to everything is a
+     * different defect from one that answers PUBLIC to nothing: the same pair
+     * must be FOUND under a public alphabet and ABSENT under a private one.
+     *
+     * AND THE CLOSURE CONTROL, which is the mistake this fix made on its first
+     * attempt and is worth a permanent reader. An anonymous function carries no
+     * modifier either. With the visibility question asked before the name is
+     * read, "absence means public" files every closure in the suite as a
+     * declaration whose name cannot be read — MEASURED, 334 of them. The name
+     * is read first now, and the anonymous-function discriminator asks
+     * `carriesVisibility()` about EXPLICIT keywords only.
+     */
+    public function testAnImplicitlyPublicHelperIsScannedAsPublic(): void
+    {
+        $bodyA = "{ \$x = 1; return \$x; }";
+        $bodyB = "{ \$x = 2; return \$x; }";
+
+        $sources = [
+            'a/A.php' => "<?php\nclass A { public function testCopied() " . $bodyA . " }\n",
+            'b/B.php' => "<?php\nclass B { function testCopied() " . $bodyB . " }\n",
+        ];
+
+        [$drifted, $unparseable] = self::driftReport($sources, [\T_PUBLIC]);
+        $this->assertSame(
+            [],
+            $unparseable,
+            'the implicitly-public declaration was reported as unreadable rather than scanned',
+        );
+        $this->assertArrayHasKey(
+            'testCopied',
+            $drifted,
+            'a test method written WITHOUT a visibility modifier - which PHP means as public - '
+                . 'was invisible to a public alphabet. The spelling of this one is the ABSENCE '
+                . 'of a keyword, so no list of keywords can express it (E565)',
+        );
+
+        // THE OTHER POLARITY. Absence means PUBLIC, not "whatever was asked
+        // for": under a private alphabet the same pair must not appear.
+        [$privateDrifted] = self::driftReport($sources, [\T_PRIVATE]);
+        $this->assertSame(
+            [],
+            array_keys($privateDrifted),
+            'an implicitly-public declaration answered a PRIVATE alphabet, so the arm is '
+                . 'answering yes to every question rather than naming one visibility',
+        );
+
+        // AND ONE MORE: an EXPLICIT modifier still decides. A private helper is
+        // not dragged in by the public alphabet.
+        [$explicit] = self::driftReport(
+            [
+                'a/A.php' => "<?php\nclass A { private function copied() " . $bodyA . " }\n",
+                'b/B.php' => "<?php\nclass B { private function copied() " . $bodyB . " }\n",
+            ],
+            [\T_PUBLIC],
+        );
+        $this->assertSame([], array_keys($explicit), 'an explicitly private helper answered the public alphabet');
+
+        // THE CLOSURE CONTROL. Anonymous functions carry no modifier and are
+        // not declarations; asking about visibility before reading the name
+        // files all of them as unreadable.
+        $closures = "<?php\nclass C { public function testA() { \$f = function () { return 1; }; \$g = fn () => 2; return [\$f, \$g]; } }\n";
+        [, $closureUnparseable] = self::driftReport(['c/C.php' => $closures], [\T_PUBLIC]);
+        $this->assertSame(
+            [],
+            $closureUnparseable,
+            'a closure was filed as a declaration whose name could not be read. An anonymous '
+                . 'function has no modifier for the same reason a bare `function foo()` has '
+                . 'none, and the two are told apart by reading the NAME first',
+        );
+    }
+
+    /**
      * WIDENING THE VISIBILITY ALPHABET TO `protected` ADDS NO HELPER AT ALL,
      * ONLY PHPUnit'S OWN LIFECYCLE HOOKS - and that is the argument for the
      * restriction, standing where a sentence asserting it used to.
@@ -1845,10 +1937,14 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 continue;
             }
 
-            if (!self::carriesVisibility($tokens, $i, $visibility)) {
-                continue;
-            }
-
+            // THE NAME IS READ BEFORE THE VISIBILITY, AND THE ORDER IS
+            // LOAD-BEARING (E565). `carriesVisibility()` answers PUBLIC for a
+            // declaration carrying no modifier at all, which is what PHP means
+            // by one — but an anonymous `function () {}` and an arrow function
+            // also carry no modifier, and asking about visibility first files
+            // every closure in the suite as an unreadable public declaration.
+            // MEASURED: with these two blocks in the other order, this file
+            // reports 334 unparseable rows, every one of them a closure.
             $name = null;
             for ($j = $i + 1; $j < $count; $j++) {
                 $candidate = $tokens[$j];
@@ -1860,6 +1956,18 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 }
 
                 break;
+            }
+
+            // A `function` with no name is a closure, not a declaration this
+            // guard has any business comparing — and it is excluded here rather
+            // than reported, because `&` after `function` is a by-reference
+            // NAMED declaration and reaches the arm below with its name read.
+            if ($name === null && !self::carriesVisibility($tokens, $i, [\T_PRIVATE, \T_PROTECTED, \T_PUBLIC], false)) {
+                continue;
+            }
+
+            if (!self::carriesVisibility($tokens, $i, $visibility)) {
+                continue;
             }
 
             if ($name === null) {
@@ -1896,9 +2004,20 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      *
      * @param list<array{int,string,int}|string> $tokens
      * @param list<int>                          $visibility
+     * @param bool                               $anAbsentModifierIsPublic pass
+     *        `false` to ask only about an EXPLICIT keyword. The one caller that
+     *        does is the anonymous-function discriminator in
+     *        {@see declarationsIn()}: a closure carries no modifier either, so
+     *        a question that treats absence as `public` cannot tell it from a
+     *        bare `function foo()` and files all 334 of this suite's closures
+     *        as unreadable declarations.
      */
-    private static function carriesVisibility(array $tokens, int $at, array $visibility): bool
-    {
+    private static function carriesVisibility(
+        array $tokens,
+        int $at,
+        array $visibility,
+        bool $anAbsentModifierIsPublic = true,
+    ): bool {
         $skippable = [
             \T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT,
             \T_STATIC, \T_FINAL, \T_ABSTRACT, \T_READONLY,
@@ -1907,7 +2026,32 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         for ($j = $at - 1; $j >= 0; $j--) {
             $token = $tokens[$j];
             if (!\is_array($token)) {
-                return false;
+                // NO MODIFIER AT ALL, AND IN PHP THAT MEANS PUBLIC (E565).
+                // The backwards walk has reached `{`, `}` or `;` — the end of
+                // whatever came before the declaration — without meeting a
+                // keyword, so this is `function foo()` written bare. It is
+                // PUBLIC, and a three-keyword alphabet cannot express it,
+                // because the spelling of this one is the ABSENCE of a keyword
+                // (rule 11: an alphabet is coverage, and this one is made of
+                // keywords).
+                //
+                // WHY IT MATTERS HERE RATHER THAN AS A CURIOSITY. This class's
+                // public arm scans `test`-prefixed methods across the suite,
+                // and a test method copied between two suites and fixed in only
+                // one of them is precisely its subject (E481). Written
+                // `function testFoo()` instead of `public function testFoo()`,
+                // that copy was invisible to every alphabet the class passes —
+                // T_PRIVATE, T_PROTECTED and T_PUBLIC alike — and nothing
+                // reddened the day one arrived.
+                //
+                // MEASURED on PHP 8.3.6 at the commit that added this arm:
+                // ZERO named declarations in `tests/` carry no modifier, so
+                // this is an untriggered hole and not a live miss (E363's
+                // shape — untriggered is not dead). The fixtures in
+                // {@see testAnImplicitlyPublicHelperIsScannedAsPublic()} are
+                // synthetic for exactly that reason, and they are what makes
+                // the arm pinnable rather than argued.
+                return $anAbsentModifierIsPublic && \in_array(\T_PUBLIC, $visibility, true);
             }
             if (\in_array($token[0], $skippable, true)) {
                 continue;
