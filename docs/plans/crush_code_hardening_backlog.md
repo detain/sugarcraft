@@ -17610,3 +17610,122 @@ silently overridden; `grep -c` reporting nothing on control bytes) with a fourth
 The harness now refuses a run whose output contains `No tests executed`, and that refusal has its own
 known-answer control. **Rule 14 applies to the mutation harness itself: a verdict it cannot compute must
 be a DISCARD, never a survival — and "survival" is the direction that silently retires a finding.**
+
+### Ea58-8 — the fourth `awaitPromise()` swallow, and it was the one that could go GREEN
+
+**Round 58, lane a, fix stage. FIXED.** The review asked for a guard pinning the three narrowed
+`catch` arms Ea58-5 describes. Building it — over the whole of `tests/` rather than over the three
+commissioned files — found a fourth site nobody had named:
+`StreamingCommandBackendTest::testACancelledCompletionReapsItsChild()` wrapped `awaitPromise()` in
+
+```php
+} catch (\RuntimeException) {
+    // expected
+}
+```
+
+`AssertionFailedError` extends `PHPUnit\Framework\Exception` extends `\RuntimeException`, so that arm
+caught the harness's own timeout and discarded it as the rejection it was expecting. The loop then
+finished and a **zombie count** — a figure with no relationship to whether the promise ever settled —
+decided the verdict. Unlike its three siblings, which still went red through their `instanceof`
+assertions, **a hang there could come out green.** That is E546's actual shape, three sites away from
+the three that were reported as having it and did not.
+
+**The lesson is rule 11's, exactly:** Ea58-5's population was written from the shape of the first
+example (`catch (\Throwable)`), and the alphabet that mattered was "every supertype of
+`AssertionFailedError`". `AssertionSwallowingCatchTest` had already learned this a round earlier and
+its lesson had not travelled.
+
+### Ea58-9 — `RepoMapBlock`'s remaining unpinned figures, with the generator
+
+**Round 58, lane a. RECORDED, deliberately not hand-corrected.** `src/Context/RepoMapBlock.php`'s
+`MAX_SECTION_BYTES` and `MAX_ENTRY_BYTES` doc-blocks restate this repository's package count, its
+rendered byte totals, its description-length median and mean, and how many of its lines clip. **All were
+re-derived at the lane's HEAD and are correct**; none is asserted by anything, and the median in
+particular moves on a `description` edit in ANY sub-package's manifest.
+
+Generator (PHP 8.3.6, run from `sugar-crush/`, `<root>` = the monorepo root):
+
+```php
+php -r 'require "vendor/autoload.php";
+$b = \SugarCraft\Crush\Context\RepoMapBlock::capture("<root>");
+$p = []; foreach (explode("\n", $b->render()) as $l)
+    if (str_starts_with($l, "- ") && str_contains($l, "->")) $p[] = $l;
+$d = array_map(fn($x) => strlen($x["description"]), $b->packages()); sort($d); $n = count($d);
+printf("packages=%d bytes=%d clipped=%d medianpair=%d/%d mean=%.1f\n",
+    count($b->packages()), array_sum(array_map("strlen", $p)),
+    count(array_filter($p, fn($l) => str_contains($l, "..."))),
+    $d[intdiv($n,2)-1], $d[intdiv($n,2)], array_sum($d)/$n);'
+```
+
+**Two resolutions, and a hand-edit is neither.** Either they follow
+`Tests\Tools\BuiltInToolCorpusTest`'s pattern of asserting this file's prose against a derivation, or
+they become `WHAT THIS SAID` records. Note the obstacle: `RepoMapBlockTest`'s own opening note forbids
+measuring against the real checkout, so the derivation cannot simply be moved into that file as it
+stands.
+
+The sentence claiming "the digits are gone rather than corrected" has been rewritten in rule-7 form —
+it was true of the census it retired and false read as a statement about the file.
+
+### Ea58-10 — `DuplicatedTestHelperDriftTest` carries the visibility hole lane a's guard just lost
+
+**Round 58, lane a. REPORTED, out of lane — `tests/Support/` is not lane a's this round.**
+`ScaledClockHelperSeamTest::declaresPrivateHelper()` required `T_PRIVATE`, so a third
+`runOnScaledClock()` declared `protected` or `public` was invisible to a guard whose whole purpose is
+that a third copy "arrives as a red test". Measured with a matched control: `private` KILLED,
+`protected` SURVIVED, `public` SURVIVED. It is fixed there — visibility is no longer part of the
+question at all, which also covers the implicit-public and plain-function spellings that a
+three-keyword alphabet would still have missed.
+
+**`DuplicatedTestHelperDriftTest::driftReport()` is called with `[\T_PRIVATE]` as its visibility
+alphabet and has the same blind spot.** Its own doc-block argues the alphabet is a parameter precisely
+so a test can vary it, and one test does (`protected` adds no pairs *today*). The question for its owner
+is whether "no pairs today" is the same claim as "the alphabet is right". Lane a's guard inherited its
+neighbour's blindness rather than a bug of its own, which is where rule 11 says alphabets come from.
+
+### Ea58-11 — nineteen files in `tests/` key a token walk on `T_FUNCTION` with no `T_FN`
+
+**Round 58, lane a. CENSUS ONLY — not audited, and mostly out of lane.** `BackendSignatureNullability
+Test` had `T_FN` missing from a guard whose entire subject is parameter spellings. Generator:
+
+```sh
+cd sugar-crush && for f in $(/usr/bin/grep -rl "T_FUNCTION" tests/ --include=*.php | sort); do
+  printf "%s T_FUNCTION=%s T_FN=%s\n" "$f" \
+    "$(/usr/bin/grep -c T_FUNCTION "$f")" "$(/usr/bin/grep -c 'T_FN\b' "$f")"
+done
+```
+
+At the lane's HEAD that is 21 files, of which 19 name `T_FUNCTION` and never `T_FN`. **Most are
+correct and must not be swept:** a scanner asking "which named function is this site inside" is right to
+ignore arrow functions, and `Support/TokenFunctionRanges` documents that exclusion deliberately and with
+a reason. The ones worth reading are those asking about **parameter lists** or **declarations of
+callables**, where an arrow function declares parameters exactly like a `function` does. Do NOT resolve
+this with a blanket edit; rule 26 applies, and the file that documents the pattern is one of the hits.
+
+### Ea58-12 — `compileInFreshInterpreter()` deadlocked, and the proof is a hang rather than a red
+
+**Round 58, lane a. FIXED, with a residual worth knowing.** The helper read stdout to EOF and only then
+stderr. Every probe in the file emits a few hundred bytes, so nothing there could reach it. Measured
+with a probe writing 256 KiB to stderr before the wrapper's sentinel is echoed on stdout: the sequential
+form **hangs** — killed at 60 s, rc 137 — rather than failing. Both pipes are now drained together
+through a bounded `stream_select`, and the oversized-stderr probe ships as the known-positive, because
+every other probe in the file passes under either form.
+
+**The residual:** if the drain is ever reverted, that known-positive HANGS rather than reddening, and a
+hanging test in CI is worse than a failing one. Its doc-block says so in as many words. Bounding it
+properly needs a wall-clock budget around the child, which is `HangWatchdog`'s territory in `candy-pty`
+and does not exist in this package.
+
+### Ea58-13 — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
+
+**Round 58, lane a. REPORTED, deliberately NOT fixed.** `src/Workflows/Workflow.php::mutate()` spells
+the field as `$stopOnFirstFailure ?? $this->stopOnFirstFailure`, so passing `false` is
+indistinguishable from passing nothing. Every other nullable field in this tree pairs with a
+`bool $XSet` sentinel for exactly this reason (see `candy-sprinkles/src/Style.php`, the canonical
+`mutate()`).
+
+It is currently **unreachable** — no wither passes the parameter — so this is dormant, not broken, and
+rule 6 says it gets wired or documented rather than deleted. It is recorded rather than fixed because
+`src/Workflows/` is in no lane's file list this round and lane a already made one forced out-of-lane
+edit to this exact file (Ea58-3's two characters). Whoever adds the first `withStopOnFirstFailure()`
+inherits the bug.
