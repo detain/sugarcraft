@@ -96,6 +96,17 @@ final class StdioMcpServer implements McpServer
      * garbage". An MCP `tools/call` result carrying a file or an image is the
      * same shape of payload.
      *
+     * WHAT THIS SAID: "inherited rather than invented". WHAT IS TRUE NOW: it is
+     * inherited, but nothing DERIVED it — the engine's constant is `private`, so
+     * PHP cannot name it here and this line spells `64 * 1024 * 1024` as its own
+     * literal, exactly as the other two members of the family do. Raising the
+     * engine's cap would have desynchronised all four while every test stayed
+     * green. WHY THIS STILL EARNS ITS PLACE: the claim is now CHECKED rather than
+     * asserted — {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} reads the
+     * engine's private constant by reflection and refuses any divergence. Move
+     * both, or drop the claim from this doc-block and from that test's roster in
+     * the same commit.
+     *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION, AND THE DISTINCTION
      * IS THE WHOLE DESIGN. Silently cutting the buffer at the cap would hand
      * `\SugarCraft\Crush\McpMessage::parse()` half a frame, which parses as malformed — so the diagnostic
