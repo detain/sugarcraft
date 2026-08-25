@@ -16594,7 +16594,7 @@ the kind of helper that gets copied, and this guard's bound is tuned for one-tok
 
 ---
 
-## Round 57 — lane b (MCP/LSP transport). Eb57-1 … Eb57-8.
+## Round 57 — lane b (MCP/LSP transport). Eb57-1 … Eb57-14.
 
 ### Eb57-1 — E499 had a THIRD route, and it was the one the code called correct
 
@@ -16744,10 +16744,54 @@ happen while no forked call is in flight — e.g. in the parent between turns �
 `Chat`/`Runtime` and should be filed against them. Do not reopen this against `StdioMcpServer` or
 `LspConnection`.
 
-### Eb57-7 — E510 has 2 offenders in the whole tree, not 10 in 8 files, and lane b has none
+### Eb57-7 — 🔴 RETRACTED AND RE-MEASURED: E510 has 28 asserting sites, not 2, and 6 of them are in `tests/MCP/`
 
-**Recorded 2026-08-25 by round 57 lane b.** Severity: census correction. **Measured, with a live
-instrument.**
+**Recorded 2026-08-25 by round 57 lane b. RETRACTED AND CORRECTED the same round, at the fix stage,
+after the reviewer refuted it and an independent census reproduced the refutation exactly.** Severity:
+census correction, and a worked example of rule 11 biting the person who wrote rule 11 down.
+
+⚠️ **WHAT THIS ENTRY SAID:** "2 offenders in the whole tree, `tests/MCP/` has zero, and the two remaining
+`tests/MCP/` catches are correctly shaped."
+⚠️ **WHAT IS TRUE:** **28** wide catches whose try body asserts, of **52** wide catches in 453 files —
+`tests/Agents/` 9, `tests/MCP/` **6**, `tests/` root 4, `tests/Providers/` 4, `tests/Cli/` 2,
+`tests/Integration/` 2, `tests/Workflows/` 1.
+⚠️ **WHY IT WAS WRONG — the alphabet, again.** The census below widened from
+`{Throwable, Exception, Error}` to add `AssertionFailedError`, `ExpectationFailedException` and
+`PHPUnit\Framework\Exception`, and stopped there. It never added **`RuntimeException`**, which is the
+rung BETWEEN `PHPUnit\Framework\Exception` and `Exception`:
+
+    ExpectationFailedException < AssertionFailedError < PHPUnit\Framework\Exception
+                              < RuntimeException < Exception
+
+`RuntimeException` is the most-caught class in this tree's tests, so omitting it did not shave the
+census — it removed almost all of it. The original entry then reported a confident **zero** for the very
+directory that holds six sites, two of which **this lane created this round**, in the exact
+`fail()`-inside-`try` shape the entry names as the offender.
+
+⚠️ **AND IT WAS DEMONSTRATED, not merely argued.** A mutation of `StdioMcpServer::refuseAnOversizedFrame()`
+run at the review stage killed through the swallow: `$this->fail('a frame past the cap was accepted')`
+was caught by this file's own `catch (\RuntimeException $e)` and the assertions ran against the FAIL
+message. It still went red — but on *"'a frame past the cap was accepted' does not contain 67108864"*,
+naming the wrong cause, and only because that prose happens not to contain the number.
+
+**FIXED THIS ROUND, in `tests/MCP/McpFrameCapTest.php` only:** both catches narrowed by moving `fail()`
+out of the `try` into an `assertNotNull($caught, …)` after it, so the try body no longer asserts at all.
+The remaining four `tests/MCP/` sites are pre-existing, outside this lane's diff, and listed under
+Eb57-13 for whoever owns them.
+
+**The `tests/Cli/`, `tests/Providers/` and `VhsTapeContractTest` sites remain deliberate** — a test whose
+subject IS an assertion failing has to catch one. That half of the original entry survives.
+
+Corrected generator, carrying one known-positive and TWO known-negative fixtures through the same
+`scan()` (rule 15/25):
+`/tmp/claude-1000/-home-sites-sugarcraft/d6095ec4-f4f0-4d7e-b493-d41e7b7bbefc/scratchpad/r57b-fix/census_swallow.php`.
+One of its negatives caught a defect in the scanner before the scan ran: `str_ends_with($t, 'exception')`
+matched `InvalidArgumentException`.
+
+---
+
+**THE ORIGINAL ENTRY FOLLOWS, UNEDITED, because the reasoning is what went wrong and deleting it would
+delete the lesson.**
 
 Round 57's brief splits E510 as "10 sites in 8 files", assigning `tests/Cli/` ×3, `tests/Providers/`,
 `tests/Config/`, `tests/VhsTapeContractTest.php` ×2 and `tests/Agents/` to lane c and the `tests/MCP/`
@@ -16896,3 +16940,70 @@ spelled in the file's prose, so a future sweep over the pattern cannot eat the r
 walkers in `tests/`, one of them failing OPEN, all three invisible to this guard for as long as its
 alphabet was the set of files that already agreed with it". This round's scanner was the fourth. A
 brace-walking token scanner is apparently a shape this tree grows regularly and gets wrong by default.
+
+### Eb57-12 — 🔴 `LspConnection`'s frame cap was pinned by NOTHING, and the class calls itself the sharpest of the three
+
+**Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: real gap in this round's own
+work. **Measured full-suite. Fixed this round.**
+
+`LspConnection::refuseAnOversizedFrame()` was added this round to close E506. Neutering it — replacing
+its guard with `if (true) { return; }` — was measured against the **entire** suite and **SURVIVED**:
+10154 tests, 149343 assertions, 1 skipped, rc 0, identical assertion-for-assertion to the unmutated run.
+
+The reason is a conflation worth writing down. `LspConnectionFrameCapTest` had four rows that all look
+like frame-cap rows, and **every one of them fails at a different guard**: the header-number check
+`$contentLength < 1 || $contentLength > MAX_FRAME_BYTES`, which reads a number the peer NAMED.
+`refuseAnOversizedFrame()` reads no number at all — it bounds the bytes actually accumulated in
+`$readBuffer` when the peer names nothing, i.e. the header-with-no-CRLFCRLF case. The only other test
+reference to the class touched the CONSTANT (`getConstant('MAX_FRAME_BYTES')`), never the method.
+
+Not symmetrical with the stdio twin: the same mutation of `StdioMcpServer::refuseAnOversizedFrame()`
+KILLED, because `McpFrameCapTest` invokes it directly by reflection. **The class with no coverage was the
+one whose own doc-block calls it "the sharpest of the three framing classes", and unlike the stdio
+survivor nothing anywhere declared it.**
+
+Fixed with three rows mirroring the stdio shape — refusal at `cap + 1` (names the cap, names the phase,
+buffer dropped, `$pendingContentLength` reset), silence at exactly `cap`, and a third pinning the
+body-phase call site's DORMANCY, below.
+
+### Eb57-13 — the body-phase cap call is dormant by construction, and four pre-existing `tests/MCP/` swallowers
+
+**Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: two handoffs. **Measured.**
+
+**(a) Dormancy, recorded rather than removed** (standing "never remove dormant code" rule).
+`readMessage()`'s BODY phase calls `refuseAnOversizedFrame()` too, and that call can never fire: the
+header guard admits only `1..MAX_FRAME_BYTES`, so `$pendingContentLength <= MAX_FRAME_BYTES`, and the body
+loop runs only while `strlen($readBuffer) < $pendingContentLength` — so the buffer is strictly below the
+cap whenever the call is reached and the `<=` test returns early. It is kept because the loop, not the
+header, is where the memory is actually spent. The dormancy is now pinned by
+`LspConnectionFrameCapTest::testTheBodyPhaseCallIsDormantBecauseTheHeaderGuardBoundsTheDeclaredLength()`,
+so it cannot go quietly reachable.
+
+**(b) Four pre-existing `tests/MCP/` swallowers, NOT fixed** — outside this lane's diff, cited by symbol:
+
+  - `McpMessageResultTypeTest` — the `silent.php` row, `try { $mute->start(); $this->fail(…); } catch (\RuntimeException)`
+  - `StdioMcpServerHandshakeTest::timeStartOf()` — same shape, in a helper, so every caller inherits it
+  - `StdioMcpServerStderrDrainTest` — the `dying.php` row, same shape
+  - `StdioMcpServerTest::testFullLifecycleWithCatCommand()` — no `fail()`, but `assertIsArray($tools)`
+    sits inside the `try` and the `catch (\RuntimeException)` swallows its failure
+
+All four still go red today, but on the fail/expectation message rather than on the cause. The fix is
+mechanical: move the `fail()` out of the `try` into an `assertNotNull($caught, …)` after it.
+
+### Eb57-14 — a compensating control was cited that did not exist
+
+**Recorded 2026-08-25 by round 57 lane b, at the fix stage.** Severity: process finding. **Measured.
+Fixed this round.**
+
+`McpFrameCapTest` documents a knowingly-surviving mutation — deleting `refuseAnOversizedFrame()`'s call
+site in `StdioMcpServer::readLine()` — and justified leaving it uncovered with: *"The call site is
+instead held by the `readLine()` doc-block and by this sentence."*
+
+`readLine()`'s doc-block mentioned no cap, no `MAX_FRAME_BYTES`, no oversized frame and no refusal. The
+call `$this->refuseAnOversizedFrame();` had been added with **no comment at all**. So the sole stated
+control for a deliberate survivor was written without checking whether it was there — rule 8, inside a
+paragraph whose entire job was to be the control.
+
+Fixed by writing the paragraph into `readLine()`'s doc-block, which is where the claim said it was. Worth
+keeping as an entry because the failure mode is invisible by construction: a survivor justified by prose
+elsewhere is only as good as someone having read that elsewhere.
