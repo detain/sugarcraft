@@ -558,6 +558,37 @@ final class ChildWallClockBudgetTest extends TestCase
             return [null, $name . ' is not inside a function, so it has no parameter to resolve'];
         }
 
+        // AN ARROW FUNCTION DECLARES PARAMETERS AND THIS WALK CANNOT SEE ONE
+        // (E566). `T_FN` is its own token, so the backwards walk above steps
+        // straight over `fn (int $budget) => …` and lands on the enclosing
+        // NAMED method. An anonymous `function` does not have this problem —
+        // it carries a `T_FUNCTION` of its own, so the walk stops on it and the
+        // refusal below fires. The arrow is the one callable spelling that got
+        // silently misattributed, which is rule 14's shape exactly.
+        //
+        // MEASURED on PHP 8.3.6, through this class's own
+        // {@see resolvedParametrisedIn()} rather than reasoned about, before
+        // the refusal below existed:
+        //
+        //   `fn (int $b) => sprintf('<wrapper> %d', $b)` inside `a(int $b)`,
+        //   with one caller `a(20)`, resolved to **20** — a number belonging to
+        //   the enclosing method's caller and having nothing whatever to do
+        //   with what the arrow is handed — with an empty `unresolved` list and
+        //   no sign that anything had gone wrong. A budget of any size at all
+        //   would have been certified as 20.
+        //
+        // The condition below is deliberately SUFFICIENT rather than exact: it
+        // does not compute where the arrow's single-expression body ends, only
+        // whether an arrow between the enclosing function and this site
+        // declares this very name. That can over-refuse — an arrow that
+        // shadowed the name and closed again ABOVE the site — and over-refusing
+        // costs an `unresolved` row a reader sees, where the alternative costs
+        // a wrong number nobody sees. Rule 14: red on what it cannot parse.
+        if (self::shadowedByAnArrowFunction($tokens, $function, $variable, $name)) {
+            return [null, $name . ' is a parameter of an arrow function, which has no name and '
+                . 'so no call sites to read'];
+        }
+
         $named = self::nextSignificant($tokens, $function);
         if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][0] !== T_STRING) {
             return [null, $name . ' is a parameter of a closure, which has no call sites to read'];
@@ -625,6 +656,67 @@ final class ChildWallClockBudgetTest extends TestCase
         }
 
         return [$values, ''];
+    }
+
+    /**
+     * Whether an arrow function between $from and $at declares $name.
+     *
+     * SEPARATE FROM THE WALK ABOVE BECAUSE THE TWO ASK DIFFERENT QUESTIONS.
+     * The walk asks "which named function is this site inside", and for that
+     * question skipping arrow functions is the right answer — an arrow has no
+     * name to attribute anything to ({@see TokenFunctionRanges}, which
+     * documents the same exclusion for the same reason). This asks "does
+     * something nearer than that named function declare this parameter", and
+     * for THAT question an arrow counts, because `fn (int $budget) => …`
+     * declares `$budget` exactly as a `function` does.
+     *
+     * AN ARROW THIS CANNOT READ IS REFUSED, NOT WALKED PAST. Both arms below
+     * used to `continue`, which falls through to the enclosing method's call
+     * sites — the confident wrong number this helper exists to prevent, and the
+     * opposite of what the call site's own comment promises ("over-refusing
+     * costs an `unresolved` row a reader sees, where the alternative costs a
+     * wrong number nobody sees"). Returning `true` refuses instead, which is
+     * that policy applied to the helper as well as to the condition.
+     *
+     * NEITHER ARM IS REACHABLE ON A SOURCE THAT PARSES, and that is measured
+     * rather than assumed: after `fn` the grammar allows only `&` and then `(`,
+     * so `nextSignificant()` returning null or a non-paren, and
+     * {@see argumentSpans()} failing to find the closing bracket, both require
+     * a TRUNCATED file. That is E363's shape — untriggered is not dead — and a
+     * file on disk really can be truncated, which is why the arms are pinned by
+     * {@see testAnArrowWhoseParameterListCannotBeReadIsRefusedRatherThanIgnored()}
+     * rather than argued away.
+     *
+     * @param list<array{0:int,1:string,2:int}|string> $tokens
+     */
+    private static function shadowedByAnArrowFunction(array $tokens, int $from, int $at, string $name): bool
+    {
+        for ($j = $from; $j < $at; $j++) {
+            if (!\is_array($tokens[$j]) || $tokens[$j][0] !== T_FN) {
+                continue;
+            }
+            $open = self::nextSignificant($tokens, $j);
+            // `fn &(…)` returns by reference; the paren is one token further.
+            if ($open !== null && $tokens[$open] === '&') {
+                $open = self::nextSignificant($tokens, $open);
+            }
+            if ($open === null || $tokens[$open] !== '(') {
+                return true;
+            }
+            $parameters = self::argumentSpans($tokens, $open);
+            if ($parameters === null) {
+                return true;
+            }
+            foreach ($parameters as $span) {
+                foreach (self::significantIn($tokens, $span) as $k) {
+                    if (\is_array($tokens[$k]) && $tokens[$k][0] === T_VARIABLE && $tokens[$k][1] === $name) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -748,8 +840,182 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
+     * AN ARROW WHOSE PARAMETER LIST THIS CANNOT READ IS REFUSED, NOT IGNORED.
+     *
+     * {@see shadowedByAnArrowFunction()} answers "does something nearer than
+     * the enclosing named function declare this parameter", and a `false` from
+     * it means "carry on and read the enclosing method's call sites". So a
+     * `false` returned because the helper could not READ an arrow is not a
+     * neutral outcome: it is the misattribution the helper was added to stop.
+     * Both fixtures below are truncated, because on a source that parses the
+     * grammar after `fn` admits only `&` and then `(` — the arms are
+     * untriggered, not dead, and untriggered code with no test is how a
+     * silent fall-through survives.
+     *
+     * RULE 25: THE NEGATIVE HALF IS IN THIS TEST. A helper mutated to return
+     * `true` unconditionally would satisfy both rows above it, so the last row
+     * asserts a well-formed arrow that declares a DIFFERENT name still answers
+     * `false`.
+     */
+    public function testAnArrowWhoseParameterListCannotBeReadIsRefusedRatherThanIgnored(): void
+    {
+        $span = static function (string $source): array {
+            $tokens = \token_get_all($source);
+            $variable = \count($tokens) - 1;
+            foreach ($tokens as $index => $token) {
+                if (\is_array($token) && $token[0] === \T_FUNCTION) {
+                    $function = $index;
+                }
+            }
+
+            return [$tokens, $function ?? 0, $variable];
+        };
+
+        // (1) THE ARROW'S PARAMETER LIST NEVER OPENS.
+        [$tokens, $from, $at] = $span('<?php function a(int $budget) { $f = fn ');
+        $this->assertTrue(
+            self::shadowedByAnArrowFunction($tokens, $from, $at, '$budget'),
+            'an arrow whose parameter list this resolver could not even find was walked past, so '
+                . 'the site falls through to the ENCLOSING method\'s call sites and resolves to a '
+                . 'number that has nothing to do with what the arrow is handed',
+        );
+
+        // (2) THE ARROW'S PARAMETER LIST OPENS AND NEVER CLOSES.
+        [$tokens, $from, $at] = $span('<?php function a(int $budget) { $f = fn (int $budget');
+        $this->assertTrue(
+            self::shadowedByAnArrowFunction($tokens, $from, $at, '$budget'),
+            'an arrow whose parameter list never closes was walked past rather than refused',
+        );
+
+        // (3) AND A READABLE ARROW DECLARING A DIFFERENT NAME STILL ANSWERS
+        // `false`, so the two rows above are not satisfied by a helper stuck
+        // at "yes".
+        [$tokens, $from, $at] = $span('<?php function a(int $budget) { $f = fn (int $other) => $other; return $budget; }');
+        $this->assertFalse(
+            self::shadowedByAnArrowFunction($tokens, $from, $at, '$budget'),
+            'a readable arrow declaring a DIFFERENT parameter was reported as shadowing, which '
+                . 'refuses every site with an arrow anywhere above it',
+        );
+    }
+
+    /**
+     * THE ARGUMENT WALK AGAINST A STRING INTERPOLATION, IN BOTH DIRECTIONS.
+     *
+     * An interpolation opens with an ARRAY token and closes with a bare `}`,
+     * so a walk comparing whole tokens takes the closer and never took the
+     * opener. Measured on PHP 8.3.6 before the fix, `foo("{$a}", $b)` came
+     * back as ONE span holding `"{$a` — depth reached zero at the
+     * interpolation's brace and the walk returned there, losing the second
+     * argument entirely. That is a wrong answer wearing the shape of a right
+     * one, which is worse than the `null` this function returns when it is
+     * honestly lost.
+     *
+     * AND THE NEGATIVE HALF, WHICH IS RULE 49 AND IS WHY THE FIX IS A ROSTER
+     * OF TOKEN IDS RATHER THAN A TEST ON TOKEN TEXT. Measured on this PHP,
+     * `"$a{"` produces a `T_ENCAPSED_AND_WHITESPACE` whose text is EXACTLY `{`
+     * and `"$a}"` one whose text is exactly `}`. A walk keying on text would
+     * count those, which is the same defect in the other polarity: braces
+     * invented inside string data. Both rows below run, so neither direction
+     * can be satisfied by an instrument that has stopped answering.
+     */
+    public function testTheArgumentWalkCountsAnInterpolationsBraceInNeitherDirection(): void
+    {
+        $call = static function (string $source): ?array {
+            $tokens = \token_get_all($source);
+            foreach ($tokens as $index => $token) {
+                if ($token === '(') {
+                    return self::argumentSpans($tokens, $index);
+                }
+            }
+
+            return null;
+        };
+        $render = static function (array $tokens, array $spans): array {
+            $out = [];
+            foreach ($spans as [$from, $to]) {
+                $text = '';
+                for ($k = $from; $k < $to; $k++) {
+                    $text .= \is_array($tokens[$k]) ? $tokens[$k][1] : $tokens[$k];
+                }
+                $out[] = trim($text);
+            }
+
+            return $out;
+        };
+
+        // THE CONTROL, so a walk that has stopped splitting at all cannot pass
+        // the rows beneath it by returning the same shape for everything.
+        $plain = '<?php f($a, $b);';
+        $this->assertSame(
+            ['$a', '$b'],
+            $render(\token_get_all($plain), (array) $call($plain)),
+            'the argument walk no longer splits an ordinary two-argument call, so nothing below '
+                . 'this line is a statement about interpolations',
+        );
+
+        // (1) THE OPENER IS TAKEN. Built by concatenation so the shape is
+        // never literal in a file this suite's own censuses walk (rule 26).
+        $open = '{' . '$a' . '}';
+        foreach (['"' . $open . '"', '"$' . '{a}"'] as $interpolated) {
+            $source = '<?php f(' . $interpolated . ', $b);';
+            $spans = $call($source);
+            $this->assertNotNull($spans, 'the argument walk lost the closing bracket of ' . $interpolated);
+            $this->assertCount(
+                2,
+                $spans,
+                'an argument list holding ' . $interpolated . ' was truncated at the '
+                    . "interpolation's closing brace, so the arguments after it are invisible. "
+                    . 'The brace that OPENS an interpolation is an array token and the one that '
+                    . 'closes it is a bare string; a walk that compares whole tokens takes the '
+                    . 'second and misses the first',
+            );
+            $this->assertSame(
+                '$b',
+                $render(\token_get_all($source), $spans)[1],
+                'the argument after ' . $interpolated . ' is not the one the walk reported',
+            );
+        }
+
+        // (2) AND A BRACE THAT IS STRING DATA IS NOT AN OPENER. Rule 49: on
+        // this PHP each of these is a T_ENCAPSED_AND_WHITESPACE whose text is
+        // one brace, and counting either would invent depth inside a literal.
+        foreach (['"$a' . '{"', '"$a' . '}"'] as $literal) {
+            $source = '<?php f(' . $literal . ', $b);';
+            $spans = $call($source);
+            $this->assertNotNull($spans, 'the argument walk lost the closing bracket of ' . $literal);
+            $this->assertCount(
+                2,
+                $spans,
+                'a brace sitting inside string DATA (' . $literal . ') changed the walk\'s depth. '
+                    . 'It is a T_ENCAPSED_AND_WHITESPACE whose text is that one byte, which is '
+                    . 'exactly why the openers are named by token id here and not by text',
+            );
+        }
+    }
+
+    /**
      * The `[from, to)` token spans of a bracketed argument list, or `null` when
      * the brackets never close.
+     *
+     * THE BRACE WALK NAMES THE ARRAY-TOKEN OPENERS, AND IT DID NOT USED TO.
+     * Every comparison here is `in_array($token, …, true)` against the WHOLE
+     * token, so an array token can never match one — while the `}` that CLOSES
+     * a string interpolation is a bare one-byte string and matches perfectly.
+     * The walk therefore took a closer it had never taken an opener for, and
+     * the effect is not an off-by-one in a diagnostic: measured on PHP 8.3.6,
+     * `foo("{$a}", $b)` returned ONE span holding `"{$a` and lost `$b`
+     * altogether, because depth hit zero at the interpolation's brace and the
+     * function returned there. A truncated list is a WRONG answer that looks
+     * like a right one — the shape rule 14 exists for, and the reason this is
+     * a defect rather than an inaccuracy. `"$a"` without braces was always
+     * fine: it opens no brace at all.
+     *
+     * THE OPENERS ARE A ROSTER AND NOT A TEXT TEST, deliberately.
+     * `T_CURLY_OPEN`'s text IS `{`, so keying on text would work for it and
+     * would ALSO count a `T_ENCAPSED_AND_WHITESPACE` whose text is exactly `{`
+     * or `}` — which `"$a{"` really does produce on this PHP. Naming the two
+     * tokens that genuinely open a brace answers both questions at once, and
+     * it is the same roster {@see InterpolationOpenerTokenTest} keeps.
      *
      * @return list<array{0: int, 1: int}>|null
      */
@@ -760,6 +1026,16 @@ final class ChildWallClockBudgetTest extends TestCase
         $start = $open + 1;
         for ($i = $open, $count = \count($tokens); $i < $count; $i++) {
             $token = $tokens[$i];
+            if (\is_array($token)) {
+                if (\in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                    $depth++;
+                }
+
+                // Every other array token is inert here, INCLUDING one whose
+                // text is a lone brace: inside a quoted string that byte is
+                // data, and the bare-string arms below never see it.
+                continue;
+            }
             if (\in_array($token, ['(', '[', '{'], true)) {
                 $depth++;
 
@@ -1494,6 +1770,61 @@ final class ChildWallClockBudgetTest extends TestCase
             'a budget handed down as a parameter did not resolve to every value its callers '
             . 'pass, or resolved without naming the caller the value came from — which is the '
             . 'half that makes a failure at line 6 readable, since line 6 has no number on it',
+        );
+
+        // ── E566: AN ARROW FUNCTION'S PARAMETER IS REFUSED, NOT ATTRIBUTED TO
+        // THE METHOD AROUND IT. `T_FN` is its own token, so the backwards walk
+        // to the enclosing function steps over `fn (…) =>` entirely; an
+        // anonymous `function` carries a `T_FUNCTION` and is caught by the
+        // closure arm, which is why the arrow was the ONE callable spelling
+        // that got misattributed instead of refused.
+        //
+        // THE SHADOWING ROW IS THE DANGEROUS ONE AND IT IS FIRST. Before the
+        // refusal existed this fixture resolved to **28** — the value the
+        // ENCLOSING method's caller passes — with an empty `unresolved` list.
+        // Not a missing answer: a confident wrong one, and a budget of any size
+        // inside that arrow would have been certified as 28.
+        $shadowed = $of(
+            "const LOW = 28;\n"
+            . "function a() { \$this->b(self::LOW); }\n"
+            . "function b(int \$bound) { \$f = fn (int \$bound) => sprintf('@BUDGET@', \$bound); }"
+        );
+        $this->assertSame(
+            [],
+            $shadowed['resolved'],
+            "an arrow function's parameter was resolved through the ENCLOSING method's call "
+            . 'sites. The number that comes back belongs to a different callable and the arrow '
+            . 'could be handed anything at all; this is the shape that certifies an unbounded '
+            . 'budget as compliant (E566)',
+        );
+        $this->assertStringContainsString(
+            'arrow function',
+            $shadowed['unresolved'][0] ?? '',
+            'the arrow-function refusal does not say it was an arrow function, so the reader '
+            . 'cannot tell it from a budget the resolver simply could not read',
+        );
+
+        // AND THE NON-SHADOWING SPELLING, which failed CLOSED before the fix
+        // but said the wrong thing about why — "is a local of a()", when it is
+        // a parameter of something the walk never saw. Both spellings answer
+        // the same way now.
+        $arrow = $of("function a() { \$f = fn (int \$bound) => sprintf('@BUDGET@', \$bound); }");
+        $this->assertSame([], $arrow['resolved']);
+        $this->assertStringContainsString('arrow function', $arrow['unresolved'][0] ?? '');
+
+        // THE OTHER POLARITY, so the refusal above cannot be a blanket one: an
+        // arrow function in the same method that declares a DIFFERENT name
+        // leaves a real parametrised budget resolving exactly as it did.
+        $beside = $of(
+            "const LOW = 29;\n"
+            . "function a() { \$this->b(self::LOW); }\n"
+            . "function b(int \$bound) { \$f = fn (int \$other) => \$other; sprintf('@BUDGET@', \$bound); }"
+        );
+        $this->assertSame(
+            [['fixture.php', 5, 29, '$bound, passed to b() as self::LOW']],
+            $beside['resolved'],
+            'an arrow function declaring an unrelated name stopped a real parametrised budget '
+            . 'from resolving, so the E566 refusal is refusing everything',
         );
 
         // AND A HELPER THAT FEEDS ITSELF IS REFUSED, not recursed into. A PHP

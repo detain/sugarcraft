@@ -18208,3 +18208,424 @@ to a lane as its first instruction, marked 🔴 and "before you do anything else
 1 (E584). The supervisor ran it instead and it completed while nine agents worked. **A three-hour
 background measurement does not belong to an agent with a context limit and thirteen competing items.**
 
+### Ea59-1 — the E562 audit: every standing SURVIVAL in this file, and what settles it
+
+**Round 59, lane a (finisher). THE AUDIT E562 ASKED FOR.** E562 records a harness that scored
+`No tests executed!` (rc 0) as a SURVIVAL, and asks for every backlog SURVIVED verdict that could have
+been produced that way to be re-run or marked unverified.
+
+**THE POPULATION, AND ITS ALPHABET IS THE FIRST FINDING (rule 11).** `SURVIVED` in capitals appears on
+**37 lines** of this file as it stood at `e4c69b04e` — 39 occurrences, in 32 entries. (The entry as first
+written said "appears **37** times", which is the LINE count the shipped `awk` generator honestly
+produces, mislabelled as an occurrence count; corrected by the round's reviewer and re-measured here.
+🔴 And the figure is doubly unshippable, because THIS ENTRY is in the file it counts: measured again
+after it landed, the same census answers 45 lines and 48 occurrences. A census of a pattern must exclude
+the text describing the pattern — rule 26 — and a backlog entry quoting its own subject cannot.) That is
+not the population either. Widening to the prose spellings of the same verdict —
+`stayed green`, `still green`, `was not killed`, `unkillable` — adds **12 more lines in 12 further
+entries** (E74, E76, E230, E244, E264, E270, E381, E384, E445, E513, E576, E577). A census of mutation
+verdicts keyed on the word `SURVIVED` cannot see a third of them. Generator, PHP-free, run from the repo
+root:
+
+```sh
+awk '/^### /{h=$0} /SURVIVED/ || tolower($0) ~ /stayed green|still green|was not killed|unkillable/ \
+  { printf "%s | %s\n   %s\n", NR, substr(h,1,58), $0 }' docs/plans/crush_code_hardening_backlog.md
+```
+
+**RE-RUNNING THE RECORDED FILTER SETTLES NOTHING, AND THAT IS WHY THE AUDIT IS SHAPED THIS WAY.** E562's
+defect was a TYPO in the harness invocation. This file records the filter as INTENDED, never as INVOKED,
+so a filter string that selects tests today is no evidence about the bytes that reached PHPUnit that day.
+That question is unfalsifiable from the record. What IS decidable is whether each verdict carries
+independent proof that tests executed at all.
+
+**E562's mechanism produces only false SURVIVALS, never false kills** — an empty selection exits 0. So
+three properties settle a row, and every row in the population has at least one:
+
+| how a row is settled | rows |
+|---|---|
+| the mutated run's own `OK (N tests, M assertions)` / `Tests: …` / full-suite figures are quoted | E255 (`3 tests / 22 assertions`), E388 (`OK (1 test, 6 assertions)`), E389 (`OK (17 tests, …`), E401 R2/R9/R3 (`818 / 7384 / 25 / rc 0`), E402 (`OK (1 test, 2 assertions)`), E468 (`OK (2 tests, 9 assertions)`), E543 (entire suite), E305 (`10 tests, 67 assertions`) |
+| a matched control at the SAME recorded scope was KILLED in the same run | E265 (bare-form control), E385 (3 of 5), E445 (M11/M12 beside M13), E530 (M12/M14/M15 beside M10/M13), E555 (M1/M2 beside M3), E565 (`private` beside `protected`/`public`), E580 (M5a beside M5b), E585 and E590 (both before/after tables), E408 (the `terminateAndClose()` swap) |
+| the same mutation was subsequently KILLED by the entry's own fix | E214, E248, E254, E282, E309, E327, E363, E373, E431, E467, E504, E513, E577 |
+
+**NOTHING IS LEFT UNVERIFIED, and that is a stronger result than the audit expected.** No standing
+survival in this file rests on a verdict E562's mechanism could have manufactured. The rows that would
+have been unreadable in isolation — E265's `| identical offender, fully-qualified form | SURVIVED rc 0 |`
+is the clearest — are readable only because a KILLED control sits beside them in the same table. **That
+is the transferable rule: a survival row with no killed neighbour and no test count is not evidence, and
+this file has none only by the habit of writing the control down.**
+
+Rule 15 on the audit itself: the classifier is not vacuous, because E265's row read alone lands in no
+column, and it is the neighbour that moves it. A method that could put every row in a column would be
+the method to distrust.
+
+**Two further checks, both mechanical and both clean.** (1) Every `--filter` argument this file records —
+`ChatTest`, `StderrEmitterCensusTest`, `NonInteractive(RefusalDocumentTest)`, `DenialPrefixRoster`,
+`DescriptorSinkArgumentCensusTest` (candy-core), `ForkedChildExitConventionTest`, `ResizeRaceTest`,
+`MultiAgentRefactor`, `HangWatchdog`, `Posix`, and the two `Class::method` forms in E248 — resolves to a
+class or method that exists in the tree today. (2) One does not: `testAZeroBudgetDeclinesToInstall`
+(E513) is now `HangWatchdogTest::testANonPositiveBudgetDeclinesToArm`. That is a rename, not a
+manufactured verdict — recorded so the next reader does not spend the same ten minutes on it.
+
+### Ea59-2 — 🔴 E562's TRIGGER IS NOT "A FILTER NAMING A METHOD THAT DOES NOT EXIST"
+
+**Round 59, lane a. MEASURED, and it corrects E562's own mechanism statement.** E562 says a `--filter`
+naming a method that does not exist makes PHPUnit print `No tests executed!` and exit 0. **PHPUnit's
+`--filter` is a SUBSTRING/regex match over the test's name, not an exact one**, so a large class of typo
+still selects the test and produces a perfectly real verdict.
+
+MEASURED on PHPUnit 10.5.64 / PHP 8.3.6, with the scanner's comparison in
+`Tests\Support\DuplicatedDocBlockLineTest::repeatedDocBlockLinesIn()` mutated to `if (false)`:
+
+| filter | what PHPUnit did | verdict the harness must give |
+|---|---|---|
+| `DuplicatedDocBlockLineTest` (correct) | ran 4 tests, 3 failed | KILLED |
+| `testNoDocBlockInThisPackageRepeatsALineUnderItsel` — **final `l` dropped** | **ran 1 test, 1 failed** | KILLED |
+| `testNoDocBlockInThisPackageRepetsALineUnderItself` — an interior letter dropped | `No tests executed!`, **rc 0** | DISCARD |
+
+The truncation typo — the one a reader assumes E562 means — is harmless, because the shortened string is
+still a substring of the real name. Only a typo that breaks the substring relation empties the selection.
+**Why it matters for the audit and not only for the wording:** anyone re-checking a recorded verdict by
+asking "does this method exist" is asking a question that does not decide the case in either direction.
+The only sound check is a harness that refuses `No tests executed`, which is what E562's fix did and what
+this round's harness carries.
+
+### Ea59-3 — E586 pinned in three polarities, including the anchor that appears nowhere
+
+**Round 59, lane a.** E586 records that the mutation harness counted anchor uniqueness with
+`/usr/bin/grep -cF -- "$OLD" "$FILE"`, and that GNU `grep -F` treats a newline in the pattern as a pattern
+SEPARATOR — so a multi-line anchor was counted as *"any of these lines"*. The count is taken in Python
+now. **The pin has to include the case E586 is actually about: an anchor that matches NOWHERE as a whole
+but whose lines match somewhere.** A two-row table proving "1 is accepted, 2 is refused" would be
+honestly satisfied and would not touch it (rule 43).
+
+MEASURED, GNU grep 3.11 / Python 3.12 / this host, over a four-line fixture containing `alpha line one`
+twice, `beta line two` once and `gamma` once:
+
+| anchor | GNU `grep -cF` says | whole-anchor count | harness |
+|---|---|---|---|
+| `gamma\ndelta` — **appears zero times as a whole**; `gamma` appears once, `delta` never | **1 — "unique, proceed"** | 0 | REFUSED |
+| `alpha line one` | 2 | 2 | REFUSED |
+| `beta line two` | 1 | 1 | applied (the known-positive: the checker is not refusing everything) |
+
+Row 1 is the finding, row 3 is rule 15. The generator is `f59a_apply.py`, invoked by the harness rather
+than copied into it, so what the table pins is the code that runs.
+
+### Ea59-4 — E408's SURVIVAL re-measured at full-suite scope, and the entry records no scope at all
+
+**Round 59, lane a. RE-RUN — this is the audit's one live measurement.** E408 records
+`M9-no-explicit-reap` — deleting `ProcessReaper::reapIfExited($proc)` from
+`BackgroundSupervisor::spawnSession()` — as a deliberate surviving mutation, "written down so nobody
+re-derives it as a hole". **The entry does not say at what scope it was measured**, which is exactly rule
+21's gap: a filtered SURVIVED and a whole-suite SURVIVED are different claims.
+
+MEASURED this round at WHOLE-SUITE scope, sugar-crush, PHP 8.3.6: **SURVIVED**, `Tests: 10274, Assertions: 159290, Skipped: 1`, rc 0 — the same
+assertion total as the unmutated tree at that commit, so the deletion removes no assertion from any
+run. **The entry is CONFIRMED and now carries its scope.** The harness that produced it exercised all
+three of its verdict classes this round — a KILL, this SURVIVAL, and a `No tests executed` DISCARD —
+so the survival is not a harness that had stopped answering (rule 13).
+
+**THE GENERAL SHAPE, which is why this is filed rather than folded into Ea59-1.** A KILLED verdict does
+not decay: code that kills a mutation goes on killing it until someone deletes the killer, and deleting
+the killer reds something. **A SURVIVED verdict decays silently** — it asserts that NOTHING in the suite
+covers a line, and every test anyone adds anywhere can falsify it without anyone looking. Every standing
+survival in this file is a claim with an expiry date and no expiry check, and the ones that read as
+settled decisions ("written down so nobody re-derives it") are the ones most likely to be believed
+unre-measured.
+
+### Ea59-5 — E566 audited: the census is 22/20, the idioms are three, and exactly one file was wrong
+
+**Round 59, lane a. FIXED for the one file; the other nineteen deliberately untouched (rule 26).**
+Re-run at `e4c69b04e` with E566's own generator: **22 files under `tests/` name `T_FUNCTION`, of which
+20 never name `T_FN`** — not the 21 and 19 E566 filed. The classification below is derived by reading
+every one of the twenty, not inherited.
+
+**IDIOM A — "the PREVIOUS significant token is `T_FUNCTION`, so this name is a declaration and not a
+call".** Eight files. Adding `T_FN` to these lists would be an arm that selects nothing, and that is
+measured rather than argued: over `sugar-crush/tests` on PHP 8.3.6 the next SIGNIFICANT token after
+every single `T_FN` is `(`. `fn` cannot be followed by a name, so it can never be the token this idiom
+tests for. Generator: `token_get_all()` over every `.php` under `tests/`, tallying the next
+non-whitespace, non-comment token after each `T_FN`.
+
+🔴 **WHAT THAT SENTENCE SAID, AND WHY BOTH HALVES OF ITS ARITHMETIC WERE WRONG — corrected by the
+round's reviewer, then re-measured rather than copied (rule 12).** It said "**542 `T_FN` tokens in 467
+files** and every single one is **followed immediately by `(`**".
+
+  * **467 was the wrong population.** It is the number of `.php` files under `tests/`, not the number
+    CONTAINING a `T_FN`. Re-measured with the same generator: 157 files contain one.
+  * **"followed immediately" was false, and dangerously so.** Splitting on the RAW next token rather
+    than the next significant one: 267 are followed by `(` with no gap and **276 have whitespace in
+    between**. A reader trusting the word "immediately" would write `$tokens[$j + 1] === '('` and break
+    the majority of the sites. The lane's own `shadowedByAnArrowFunction()` was always correct here —
+    it goes through `nextSignificant()` — so the prose was wrong about code that was right.
+  * 🔴 **AND THE FIGURES ARE NOT SHIPPABLE AT ALL, which is the transferable half (rule 18).** The
+    reviewer measured 542 and 156; this correction measures **543 and 157** — the count moved INSIDE
+    the same lane, in the same session, because the fix for MAJOR 1 added one arrow function to a file
+    under `tests/`. A cardinality over `tests/` written into prose is stale before the round that
+    writes it ends. What is durable is the CLAIM — the next significant token after `fn` is always `(`
+    — and its generator, both of which are above.
+
+**COMMENT-ONLY — four files name `T_FUNCTION` in prose and nowhere else.** Nothing to widen.
+
+**IDIOM B — walk FORWARD from `T_FUNCTION` to a NAMED declaration.** Seven files. An arrow function has
+no name, so it is outside the question by construction; `Support/TokenFunctionRanges` documents that
+exclusion with its reason and its consumers inherit it.
+
+🔴 **THE TWENTIETH FILE ASKED THE OTHER QUESTION — "which callable ENCLOSES this variable" — AND AN ARROW
+FUNCTION CAN BE THE ANSWER.** That is `ChildWallClockBudgetTest::resolveThroughParameter()`, and it is
+the only backwards walk to an enclosing callable in the twenty. Fixed and pinned in both polarities;
+detail in the round's E566 commit. **The transferable half: the idiom that is safe to ignore an arrow in
+is the one that needs a NAME, and the idiom that is not is the one that needs a SCOPE.**
+
+### Ea59-6 — E565 does not reproduce as filed, and the real hole is one level down
+
+**Round 59, lane a. MEASURED.** E565 asks whether `DuplicatedTestHelperDriftTest`'s `[\T_PRIVATE]`
+alphabet carries `ScaledClockHelperSeamTest`'s visibility hole. **It does not, and both halves are
+defended by live tests:** `protected` by `testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()`,
+which reds the day a non-hook protected helper drifts and whose failure text says to widen the alphabet
+rather than exempt the name; `public` by E481's `test*` arm.
+
+**The real transfer is the spelling no alphabet of KEYWORDS can express: the ABSENCE of one.**
+`carriesVisibility()` asks whether one of a list of keyword tokens precedes the declaration, so
+`function testFoo()` — which PHP means as `public function testFoo()` — answered NO to `T_PRIVATE`,
+`T_PROTECTED` and `T_PUBLIC` alike. A test method copied between two suites and half-fixed is this
+class's own subject (E481), so the hole was in the arm added to close E481. MEASURED on PHP 8.3.6: ZERO
+named declarations under `tests/` carry no modifier, so it is untriggered rather than live (E363's
+distinction) and the fix is pinned synthetically, in both polarities.
+
+**AND THE FIX'S FIRST ATTEMPT WAS WRONG IN A WAY WORTH KEEPING.** An anonymous function carries no
+modifier either. Asking the visibility question BEFORE reading the name files every closure in the suite
+as an unreadable declaration — **measured, 334 of them.** The name is read first now, and the
+anonymous-function discriminator asks about EXPLICIT keywords only. That control ships as a test, and
+mutating the discriminator's `false` argument to `true` reds three tests.
+
+### Ea59-7 — E579 fixed, and the instrument's clean state is a true empty
+
+**Round 59, lane a. FIXED.** `Tests\Config\GlobFigureDriftTest` repeated one line of its own argument
+verbatim directly under itself — in the tree's designated authority on figures without generators, and a
+class whose prose is quoted elsewhere. `Tests\Support\DuplicatedDocBlockLineTest` is the instrument:
+MEASURED on PHP 8.3.6 over `tests/` + `src/` + `bin/`, with NO minimum length and NO exemption of any
+kind, it reports exactly ONE site in the package — the one now fixed. **A census whose clean state is a
+true empty needs no allow-list, and an instrument with no exemption row cannot be bought with one
+(rule 33).**
+
+**The walk is structural, not textual (rule 40).** The obvious spelling — a line filter for `^\s*\*` —
+reports every doc-block this suite carries as DATA inside a heredoc, of which it has many, because half
+its fixtures are PHP source about PHP source. Reading `T_DOC_COMMENT` out of the lexer is the difference,
+and the nowdoc fixture reds on the line-filter spelling. Verified over the real population, not only
+synthetically: re-introducing the exact deleted line into `GlobFigureDriftTest` reds the census.
+
+### Ea59-8 — 🔴 the restart brief's inherited figure was a MUTATED, FAILING run's figure
+
+**Round 59, lane a (finisher), reporting on its own predecessor's handoff. MEASURED.**
+
+The round-59 restart brief recorded, as OBSERVED by the killed agent, "its own last measurement
+`10274 / 159286`". **Re-measured at the same commit (`7086f19fd`), the tree is `10274 / 159290 / 1
+skipped / rc 0`.** `159286` is, to the assertion, the figure printed by that agent's `M9reap` mutation
+run — `Tests: 10274, Assertions: 159286, Failures: 1` — a run with `src/Sessions/BackgroundSupervisor.php`
+mutated and one test failing, which stops four assertions short. A failing run's assertion total is not a
+tree measurement, and it travelled into a brief as one.
+
+**Three further handoff facts, recorded because the next restart will have the same shape.** (1) The
+brief said the E562 audit "has not been begun"; the predecessor had in fact drafted a complete audit
+into its scratchpad, uncommitted, and it was recoverable. **The tree tells you what was COMMITTED, not
+what was DONE** — E393's family, fourth occurrence. (2) That draft was internally contradictory: one
+entry declared E408's recorded survival FALSE on the strength of a verdict that the NEXT entry in the
+same file identified as a false KILL off an unrelated red. Committing it would have retired a correct
+entry. (3) It also filed E408 under the number E520, which is a different entry entirely — rule 44,
+inside a document written to be read by the next agent.
+
+
+### Ea59-9 — two inherited prose claims in this round's own lane-a commits, one inverted and one a cardinality
+
+**Round 59, lane a (finisher), reviewing its predecessor's six unreviewed commits. FIXED.** Rule 34: a
+commit above the review's sha is unreviewed code, and it is the finisher's first job. Both of these were
+found by MEASURING what the sentence claimed, not by reading it.
+
+1. 🔴 **AN INVERTED MECHANISM, in a comment written to justify a fixture.**
+   `Tests\Support\DuplicatedDocBlockLineTest`'s reset-arm (3) said *"A CONTINUATION LINE WITH NO STAR
+   breaks adjacency. Doc-blocks in this package really do carry them — MEASURED on PHP 8.3.6, five lines
+   in five files"*, offered as the proof that the arm is reached by the real census. Re-measured with a
+   known-positive control in both polarities: **the COUNT is right and the DESCRIPTION is inverted.**
+   All five are FULLY EMPTY lines; there is **no un-starred prose continuation anywhere** in `tests/`,
+   `src/` or `bin/`. The arm is still exercised — an empty line takes it, because `ltrim('')` does not
+   begin with a star and so never reaches the empty-body reset in arm (1) — but by a different shape from
+   the one the sentence named. Rewritten in rule-7 form. **This is rule 8's third consecutive round.**
+
+2. **A CARDINALITY OVER `tests/`, three times in one file, and wrong in KIND as well as fragile.**
+   `Tests\Support\DuplicatedTestHelperDriftTest` carried "334" in a doc-block, an inline comment and a
+   `@param` tag, describing the closures a mis-ordered visibility question would file as unreadable. It
+   is a count over `tests/` in prose, which moves the day any lane adds a closure (rule 18) — and it said
+   **"every closure"**, which is false: an ARROW function is not in that population at all, because `fn`
+   lexes as `T_FN` and the walk selects `T_FUNCTION`. The claim and the derivation stay; the digits go.
+
+**AND THE FIX WAS MUTATED, NOT ASSUMED (rule 16 / rule 43).** Correcting (1) leaves the arm's
+real-population shape pinned by nothing but the corrected paragraph, so a fixture for a FULLY EMPTY
+continuation line ships with it, with rule 25's positive half beside it (the same pair with the separator
+removed must still be reported). MEASURED that it is not redundant: narrowing the arm to reset only on a
+NON-empty starless line — `if ($trimmed !== '') { $previous = null; }`, a plausible tidy-up — **SURVIVES**
+the file as its predecessor left it and is **KILLED** with the new rows. One mutation, both polarities,
+`--filter DuplicatedDocBlockLineTest` (scope: these guards, not the suite).
+
+### Ea59-10 — 🔴 a population floor that sat BELOW one of the two halves it was guarding
+
+**Round 59, lane a (fix stage). FIXED.** `DuplicatedDocBlockLineTest`'s rule-15 population control was a
+single `assertGreaterThan(400, count($sources))` over `tests/` + `src/` + `bin/` at once. Measured on PHP
+8.3.6: `everyTestFile()` alone returns 467, so the floor sat below the `tests/` half and the entire
+source side could vanish without reddening it. Mutation-checked at `87fd31a79`: replacing the walk's root
+list with an empty one left the census **green at 19 assertions**, scope `--filter
+DuplicatedDocBlockLineTest`.
+
+**THE TRANSFERABLE SHAPE, and it is not scoped to this file.** Any guard that pairs a broad multi-root
+walk with ONE scalar population floor has this hole whenever the floor sits below the largest single
+contributing root — and the floor is normally chosen by looking at the total, which is exactly how it
+ends up there. The fix is not a bigger number (that is a cardinality over `tests/` in an assertion,
+rule 18); it is a per-root contribution assertion, which is structural and cannot rot.
+
+🔴 **AND THE FIRST VERSION OF THAT FIX PINNED NOTHING — rule 43, caught by mutating my own fix rather
+than reading it.** The per-root loop iterated `self::SOURCE_ROOTS`, the same constant the WALK reads, so
+emptying the constant emptied the check with it and the mutation SURVIVED again, green at 19 assertions.
+A guard that derives its expectation from the thing it guards has no expectation. The roots are now
+spelled as a literal in the assertion. Both mutations KILL against the corrected form (18 and 19
+assertions, reddening at the first root that stops contributing).
+
+**NEXT CANDIDATE, not done:** `tests/Backend/BackendSignatureNullabilityTest` carries its own private
+`everySourceFile()` and its own population guard.
+
+### Ea59-11 — 🔴 a walk over `bin/` that had never read a file, under prose naming `bin/` as covered
+
+**Round 59, lane a. FIXED.** The same census walked `['src', 'bin']` and selected files by
+`str_ends_with($path, '.php')`. `sugar-crush/bin/` holds exactly one entry — `bin/sugarcrush`, 431 lines
+of PHP behind `#!/usr/bin/env php`, no extension — so the `bin/` root contributed **zero files** while the
+class doc-block stated the census was "MEASURED … over `tests/`, `src/` and `bin/`" and reported "exactly
+ONE site in the whole package". Rule 11 with the file extension as the alphabet: the one file it could
+not express was the package's own executable.
+
+🔴 **THIS IS ALSO THE ELEVENTH WRONG REVIEWER PRESCRIPTION.** The round-59 review's MAJOR 1 prescribed
+asserting "one key beginning `tests/`, one beginning `src/`, and one beginning `bin/`". Implemented
+literally against the tree as it stood, that reds immediately — there is no `bin/` key to find. The
+prescription was right about the SHAPE and wrong about the tree, and measuring it first (rule 16) is what
+turned a red into a second finding. The fix asks the FILE: `.php`, or a shebang line naming php.
+
+**Same pass:** the prose claimed "the whole package" while never reading `examples/` (4 `.php`) or
+`workflows/` (1). Both are now walked. Both were measured clean BEFORE being added, so the widening
+changed no answer — the only kind of widening worth doing into files no lane owns.
+
+### Ea59-12 — 🔴 a name walk that could read one spelling of a method name, where PHP has three
+
+**Round 59, lane a. FIXED.** `DuplicatedTestHelperDriftTest::declarationsIn()` read a declaration's name
+as "the first non-whitespace token after `function`, if it is a `T_STRING`". Two real spellings fall
+outside that, measured through the method itself on PHP 8.3.6:
+
+  * **BY REFERENCE.** `public function &byRef()` returned an EMPTY name and was filed as a declaration
+    whose name cannot be read; the implicitly-public `function &byRef()` produced **no row at all** —
+    silently dropped. That second one is E565's own defect surviving inside E565's own fix: an absent
+    modifier made invisible a second time by an ampersand. The private alphabet is hit too —
+    `private function &byRef()` files as unparseable.
+  * 🔴 **A RESERVED WORD AS THE METHOD NAME**, legal since PHP 7.0 and lexed as the KEYWORD token, never
+    as `T_STRING`. Censused over `tests/`, `src/` and `bin/sugarcrush`: **30 declarations**, of which 22
+    are `::new()` — the default root factory this repo's own conventions mandate for every class — plus
+    `list()`, `match()`, `echo()`, `default()`, `use()`, `empty()`. Two are PRIVATE (`Glob::match()`,
+    `EchoProvider::echo()`), which is this guard's own population. All 30 are in `src/`, which this
+    census does not walk, so it is an untriggered hole rather than a live miss (E363's shape) — but the
+    convention pushing on it is the repo's own, so it will not stay untriggered by luck.
+
+**THE REVIEW'S STATED MECHANISM FOR THE FIRST ONE WAS ALSO WRONG, and the wrong fix would have been a
+silent no-op.** It said `&` "is a bare string token, so the loop breaks". Measured: on PHP 8.1+ `&` in
+this position is an ARRAY token, `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`. Skipping the bare-string
+spelling alone — the literal reading of the review — changes nothing on 8.3/8.4. Mutation-checked in
+both polarities: removing the array-token comparison KILLS, removing the bare-string one SURVIVES (it is
+the dormant half on this host, kept for PHP ≤ 8.0 and now pinned by a probe that reads the running
+lexer, per rule 6).
+
+**How it was found: rule 48.** The review commissioned a fix for ONE spelling. Building the census over
+the whole population — every `T_FUNCTION` in the package, tallied by what follows it — is what surfaced
+the reserved-word family, which is 30 sites against the ampersand's zero.
+
+### Ea59-13 — the unreadable-name branch had no pin in the silence direction
+
+**Round 59, lane a. FIXED.** The review reported two survivals in `declarationsIn()`: collapsing the
+anonymous-function discriminator to a bare `if ($name === null) { continue; }`, and deleting the
+`$name === null` report body outright. Both left the class green at 10 tests / 95 assertions. The
+`$anAbsentModifierIsPublic` parameter and its 7-line `@param` block were pinned only in the direction
+that makes NOISE (turning it on reds), never in the direction that makes SILENCE. Rule 43's shape again.
+
+Post-fix the only source that still reaches that branch is a TRUNCATED declaration — every legal spelling
+after `function` is now `&`, an identifier, or `(` — and a truncated file is a real thing on disk, so it
+is the honest fixture. Both mutations now KILL against it.
+
+**DEFERRED, measured, not done:** a COMMENT between `function` and the name (`function /* x */ foo()`)
+is legal and still unread — the loop skips only `T_WHITESPACE`. Census on PHP 8.3.6: **zero sites** in
+`tests/`, `src/` or `bin/`, and the failure mode is asymmetric — with an explicit modifier it reds as
+unparseable (rule 14, safe), and implicitly-public it is silently dropped (unsafe, same as the by-ref
+case). One line in the skip list plus a fixture; left out to keep this diff to the population that
+exists.
+
+### Ea59-14 — 🔴 an argument walk that took an interpolation's closing brace and never took its opener
+
+**Round 59, lane a. FIXED.** `ChildWallClockBudgetTest::argumentSpans()` compared whole tokens —
+`in_array($token, ['(', '[', '{'], true)` — so an ARRAY token could never match an opener, while the `}`
+that CLOSES a string interpolation is a bare one-byte string and matched every time.
+
+**THE EFFECT IS NOT AN OFF-BY-ONE, WHICH IS WHY IT IS FILED.** The review described it as "depth goes one
+low". Measured on PHP 8.3.6 through the real method: `foo("{$a}", $b)` returned **ONE span holding
+`"{$a`** and lost `$b` entirely — depth reached zero at the interpolation's brace and the walk RETURNED
+there. A truncated argument list is a wrong answer wearing the shape of a right one, which is strictly
+worse than the `null` this function returns when it is honestly lost (rule 14). `${a}` and heredoc
+interpolation behave identically; `"$a"` with no braces was always fine.
+
+**THE FIX IS A ROSTER OF TOKEN IDS AND NOT A TEST ON TOKEN TEXT, and that is rule 49 being load-bearing
+rather than cited.** `T_CURLY_OPEN`'s text IS `{`, so a text test would fix the positive case — and would
+then count a `T_ENCAPSED_AND_WHITESPACE` whose text is exactly `{`, which `"$a{"` really does produce on
+this PHP. Mutation-checked: replacing the roster with the text test KILLS on the negative rows.
+
+**REACHABILITY, STATED HONESTLY.** 1493 interpolation openers sit inside an open `(` region across 224
+files under `tests/` + `src/`, so the population is large — but this guard's own assertions did not move
+when the walk was corrected. **This is a latent silent-wrong-answer closed, not a wrong answer
+corrected**, and the distinction is the whole reason the sentence is here rather than a claim that a bug
+was fixed.
+
+### Ea59-15 — a helper that failed OPEN under a call-site comment promising it failed closed
+
+**Round 59, lane a. FIXED.** `ChildWallClockBudgetTest::shadowedByAnArrowFunction()` had two silent
+`continue`s: an arrow whose parameter list it could not find, and one whose list never closes. A `false`
+from that helper is not a neutral outcome — it means "carry on and read the ENCLOSING named function's
+call sites", which is precisely the confident misattribution the helper was added to prevent (E566). The
+call site's own comment states the opposite policy in as many words: *"over-refusing costs an
+`unresolved` row a reader sees, where the alternative costs a wrong number nobody sees."*
+
+Both arms now refuse. Neither is reachable on a source that parses — after `fn` the grammar admits only
+`&` and then `(` — so they are untriggered rather than dead, and are pinned with truncated fixtures plus
+a rule-25 negative half so that a helper stuck at "yes" cannot satisfy them.
+
+**THE TRANSFERABLE HALF: a comment describing a POLICY does not bind the helpers the policy's decision
+depends on.** The rule-14 sentence sat on the `if`, and the `if`'s own argument was computed by a
+function that broke the rule three lines away.
+
+### Ea59-16 — DEFERRED: two private source walkers, in the package that extracted a trait to stop exactly this
+
+**Round 59, lane a. NOT DONE — out of lane, and recorded so it does not need re-investigating.**
+`DuplicatedDocBlockLineTest::everySourceFile()` (added this round) and
+`tests/Backend/BackendSignatureNullabilityTest::everySourceFile()` are two private copies of a source
+walker, in the package whose `TestFileWalkTrait` was extracted with the doc-block *"ONE COPY, because the
+guards that use it are the guards that hunt copies."*
+
+They diverge far past `DRIFT_BOUND`, so `DuplicatedTestHelperDriftTest` legitimately cannot see them —
+and this round widened the divergence further by giving one of them a shebang-aware file test. **That is
+the argument FOR extracting a `SourceFileWalkTrait`, not for tightening the drift bound:** the bound is
+correct and the duplication is real, and no instrument in the tree can hold both facts at once.
+
+Blocked only by ownership — `tests/Backend/` was not in this lane's file list, and rule 23 permits a
+forced out-of-lane edit only where a guard demands one. No guard demands this one.
+
+### Ea59-17 — DEFERRED: a comment between `function` and a method name is still unread
+
+**Round 59, lane a. MEASURED, NOT FIXED.** After Ea59-12 the name walk in
+`DuplicatedTestHelperDriftTest::declarationsIn()` skips whitespace, steps over `&` and accepts any
+identifier-shaped token. It does NOT skip comments, so `function /* x */ foo()` — legal PHP — still comes
+back unnamed.
+
+**Census on PHP 8.3.6 over `tests/`, `src/` and `bin/sugarcrush`: zero sites.** The failure mode is
+asymmetric and worth recording: with an explicit visibility keyword it reds as unparseable (rule 14,
+safe), and written implicitly-public it is **silently dropped** — the same unsafe half as the
+by-reference case in Ea59-12. One line in the skip list plus a fixture. Left out deliberately to keep
+that diff to the population that exists rather than to the population that could.

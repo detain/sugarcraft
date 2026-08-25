@@ -890,6 +890,270 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     }
 
     /**
+     * A HELPER WITH NO MODIFIER AT ALL IS PUBLIC, AND A THREE-KEYWORD ALPHABET
+     * CANNOT SAY SO (E565).
+     *
+     * `carriesVisibility()` asks whether one of a list of keyword tokens sits
+     * before the declaration. The one spelling it structurally cannot express
+     * is the ABSENCE of a keyword — `function testFoo()`, which PHP means as
+     * `public function testFoo()` — so a test method copied between two suites
+     * and fixed in only one of them was invisible to T_PRIVATE, T_PROTECTED and
+     * T_PUBLIC alike. That copied-and-half-fixed test method is this class's
+     * own subject (E481), so the hole was in the arm added to close E481.
+     *
+     * IT IS UNTRIGGERED RATHER THAN LIVE, AND THAT IS WHY THIS TEST IS
+     * SYNTHETIC. MEASURED on PHP 8.3.6 at the commit that added the arm: ZERO
+     * named declarations anywhere under `tests/` carry no modifier. E363's
+     * distinction applies exactly — a false-negative an empty population cannot
+     * trigger is untriggered, not dead, and the honest answer to an unpinnable
+     * clause is to make it pinnable rather than to write a paragraph excusing
+     * it. The number is not asserted anywhere; it moves the day someone writes
+     * one, and this test keeps answering.
+     *
+     * BOTH POLARITIES, because an arm that answers PUBLIC to everything is a
+     * different defect from one that answers PUBLIC to nothing: the same pair
+     * must be FOUND under a public alphabet and ABSENT under a private one.
+     *
+     * AND THE CLOSURE CONTROL, which is the mistake this fix made on its first
+     * attempt and is worth a permanent reader. An anonymous function carries no
+     * modifier either. With the visibility question asked before the name is
+     * read, "absence means public" files every ANONYMOUS `function` in the
+     * suite as a declaration whose name cannot be read — hundreds of rows, all
+     * of them noise. The name is read first now, and the anonymous-function
+     * discriminator asks `carriesVisibility()` about EXPLICIT keywords only.
+     *
+     * TWO CORRECTIONS TO HOW THAT USED TO BE WRITTEN, both measured. It said
+     * "every closure", and an ARROW function is not in this population at all:
+     * `fn` lexes as `T_FN`, and the walk below selects `T_FUNCTION`, so an
+     * arrow never reaches it in either token order. And it carried the count as
+     * a digit, which is a cardinality over `tests/` in prose and moves the day
+     * any lane adds a closure (rule 18). Derive it instead: swap the two blocks
+     * in {@see declarationsIn()} and read the `unparseable` list the public
+     * alphabet returns.
+     */
+    public function testAnImplicitlyPublicHelperIsScannedAsPublic(): void
+    {
+        $bodyA = "{ \$x = 1; return \$x; }";
+        $bodyB = "{ \$x = 2; return \$x; }";
+
+        $sources = [
+            'a/A.php' => "<?php\nclass A { public function testCopied() " . $bodyA . " }\n",
+            'b/B.php' => "<?php\nclass B { function testCopied() " . $bodyB . " }\n",
+        ];
+
+        [$drifted, $unparseable] = self::driftReport($sources, [\T_PUBLIC]);
+        $this->assertSame(
+            [],
+            $unparseable,
+            'the implicitly-public declaration was reported as unreadable rather than scanned',
+        );
+        $this->assertArrayHasKey(
+            'testCopied',
+            $drifted,
+            'a test method written WITHOUT a visibility modifier - which PHP means as public - '
+                . 'was invisible to a public alphabet. The spelling of this one is the ABSENCE '
+                . 'of a keyword, so no list of keywords can express it (E565)',
+        );
+
+        // THE OTHER POLARITY, AND BOTH SIDES OF THE PAIR MUST BE IMPLICIT FOR
+        // IT TO SEE ANYTHING. The first version of this row reused $sources
+        // above, whose A.php is EXPLICITLY public — so an arm answering yes to
+        // every alphabet still matched only B.php, one declaration is not a
+        // pair, and the report came back empty for the wrong reason. Measured:
+        // the mutation making absence answer every alphabet SURVIVED that row
+        // and is KILLED by this one (rule 2 — the window, not the mutation).
+        $bothImplicit = [
+            'a/A.php' => "<?php\nclass A { function testCopied() " . $bodyA . " }\n",
+            'b/B.php' => "<?php\nclass B { function testCopied() " . $bodyB . " }\n",
+        ];
+        [$publicPair] = self::driftReport($bothImplicit, [\T_PUBLIC]);
+        $this->assertArrayHasKey(
+            'testCopied',
+            $publicPair,
+            'two implicitly-public copies of one test method are not a pair, so the row below '
+                . 'asserts an emptiness that has nothing to do with the alphabet',
+        );
+
+        [$privateDrifted] = self::driftReport($bothImplicit, [\T_PRIVATE]);
+        $this->assertSame(
+            [],
+            array_keys($privateDrifted),
+            'an implicitly-public declaration answered a PRIVATE alphabet, so the arm is '
+                . 'answering yes to every question rather than naming one visibility',
+        );
+
+        // AND ONE MORE: an EXPLICIT modifier still decides. A private helper is
+        // not dragged in by the public alphabet.
+        [$explicit] = self::driftReport(
+            [
+                'a/A.php' => "<?php\nclass A { private function copied() " . $bodyA . " }\n",
+                'b/B.php' => "<?php\nclass B { private function copied() " . $bodyB . " }\n",
+            ],
+            [\T_PUBLIC],
+        );
+        $this->assertSame([], array_keys($explicit), 'an explicitly private helper answered the public alphabet');
+
+        // THE CLOSURE CONTROL. Anonymous functions carry no modifier and are
+        // not declarations; asking about visibility before reading the name
+        // files all of them as unreadable.
+        $closures = "<?php\nclass C { public function testA() { \$f = function () { return 1; }; \$g = fn () => 2; return [\$f, \$g]; } }\n";
+        [, $closureUnparseable] = self::driftReport(['c/C.php' => $closures], [\T_PUBLIC]);
+        $this->assertSame(
+            [],
+            $closureUnparseable,
+            'a closure was filed as a declaration whose name could not be read. An anonymous '
+                . 'function has no modifier for the same reason a bare `function foo()` has '
+                . 'none, and the two are told apart by reading the NAME first',
+        );
+    }
+
+    /**
+     * EVERY SPELLING OF A DECLARATION NAME, AND THE ONE SHAPE THAT MUST STILL
+     * BE REFUSED.
+     *
+     * The name walk in {@see declarationsIn()} used to accept exactly one
+     * spelling — a `T_STRING` immediately after `function` — and two real
+     * spellings fell outside it, in opposite and both bad ways:
+     *
+     *   * A BY-REFERENCE declaration. Measured through that method on PHP
+     *     8.3.6 before the fix: `public function &byRef()` was filed as a
+     *     declaration whose name could not be read, and the implicitly-public
+     *     `function &byRef()` produced NO ROW AT ALL. The second is E565's own
+     *     defect surviving inside E565's own fix — an absent modifier, made
+     *     invisible again by an ampersand.
+     *   * A RESERVED WORD used as a method name, legal since PHP 7.0 and
+     *     lexed as the keyword rather than as `T_STRING`. THIRTY in this
+     *     package, twenty-two of them `::new()`, which this repo's conventions
+     *     mandate as the default root factory for every class — so the
+     *     population is not an accident and is not going to shrink.
+     *
+     * RULE 15 / RULE 25: EVERY ROW BELOW THAT EXPECTS AN EMPTY `unparseable`
+     * HAS A POSITIVE HALF IN THE SAME TEST. The truncated source at the end
+     * must still be REPORTED, so "nothing was unreadable" is a statement about
+     * the sources rather than about a branch that has stopped reporting. That
+     * row is also the only pin on the unreadable-name branch itself: with it
+     * absent, collapsing the anonymous-function discriminator to a bare
+     * `if ($name === null) { continue; }` — which silently drops every
+     * declaration this scanner cannot name — left the whole class green.
+     */
+    public function testTheNameWalkReadsEverySpellingOfADeclarationName(): void
+    {
+        $bodyA = '{ $x = 1; return $x; }';
+        $bodyB = '{ $x = 2; return $x; }';
+
+        // (1) BY REFERENCE, EXPLICITLY PUBLIC.
+        [$byRef, $byRefUnparseable] = self::driftReport(
+            [
+                'a/A.php' => "<?php\nclass A { public function &copied(): array " . $bodyA . " }\n",
+                'b/B.php' => "<?php\nclass B { public function &copied(): array " . $bodyB . " }\n",
+            ],
+            [\T_PUBLIC],
+        );
+        $this->assertSame(
+            [],
+            $byRefUnparseable,
+            'a by-reference declaration was filed as one whose name cannot be read. The `&` sits '
+                . 'between `function` and the name and is not the end of it',
+        );
+        $this->assertArrayHasKey(
+            'copied',
+            $byRef,
+            'a by-reference helper copied into two files and drifted was not compared at all',
+        );
+
+        // (2) BY REFERENCE AND IMPLICITLY PUBLIC — E565's spelling wearing an
+        // ampersand, which is the combination that was silently dropped.
+        [$bare, $bareUnparseable] = self::driftReport(
+            [
+                'a/A.php' => "<?php\nclass A { function &copied(): array " . $bodyA . " }\n",
+                'b/B.php' => "<?php\nclass B { function &copied(): array " . $bodyB . " }\n",
+            ],
+            [\T_PUBLIC],
+        );
+        $this->assertSame([], $bareUnparseable, 'an implicitly-public by-reference declaration was unreadable');
+        $this->assertArrayHasKey(
+            'copied',
+            $bare,
+            'a helper written with NEITHER a visibility keyword NOR a `T_STRING` name was '
+                . 'invisible to this scanner. Both halves of that spelling are absences, and an '
+                . 'alphabet made of keywords and token ids cannot express either',
+        );
+
+        // (3) A RESERVED WORD AS THE NAME, in the private alphabet this
+        // guard's main census runs. `match` lexes as `T_MATCH`.
+        [$reserved, $reservedUnparseable] = self::driftReport([
+            'a/A.php' => "<?php\nclass A { private function match(): int " . $bodyA . " }\n",
+            'b/B.php' => "<?php\nclass B { private function match(): int " . $bodyB . " }\n",
+        ]);
+        $this->assertSame(
+            [],
+            $reservedUnparseable,
+            'a method named with a reserved word was filed as unreadable. PHP has allowed that '
+                . 'since 7.0 and hands the name back as the KEYWORD token, so a check on '
+                . '`T_STRING` selects only the names that happen not to collide with one',
+        );
+        $this->assertArrayHasKey('match', $reserved, 'a drifted helper named `match` was not compared');
+
+        // (4) AND THE CLOSURES ARE STILL CLOSURES. Stepping over `&` must not
+        // turn an anonymous by-reference function into a declaration.
+        [, $closureUnparseable] = self::driftReport(
+            ['c/C.php' => "<?php\nclass C { public function testA() { \$f = function &() { \$x = 1; return \$x; }; return \$f; } }\n"],
+            [\T_PUBLIC],
+        );
+        $this->assertSame(
+            [],
+            $closureUnparseable,
+            'an anonymous BY-REFERENCE function was filed as a declaration whose name cannot be '
+                . 'read. `function &()` is a closure exactly as `function ()` is',
+        );
+
+        // (5) RULE 14, AND THE POSITIVE HALF OF ALL FOUR ROWS ABOVE. A source
+        // this scanner genuinely cannot name must be REPORTED. Post-fix the
+        // only shape that reaches it is a truncated declaration, which is a
+        // real thing a file on disk can be.
+        [, $truncatedUnparseable] = self::driftReport(['d/D.php' => "<?php\nclass D {\n    private function "]);
+        $this->assertNotSame(
+            [],
+            $truncatedUnparseable,
+            'a declaration carrying an explicit visibility keyword whose name this scanner '
+                . 'cannot read was silently skipped instead of reported. That is the branch the '
+                . 'anonymous-function discriminator exists to protect: without it every '
+                . 'unnameable declaration is dropped, and a helper dropped is indistinguishable '
+                . 'from a helper cleared',
+        );
+
+        // (6) WHICH OF THE TWO AMPERSAND SPELLINGS IS DOING THE WORK, DERIVED
+        // FROM THE RUNNING INTERPRETER RATHER THAN ASSERTED IN PROSE. On this
+        // PHP the `&` after `function` is an ARRAY token, so the text arm is
+        // the live one and the bare-string disjunct beside it is dormant —
+        // mutation-checked, removing the string spelling alone leaves this
+        // class green and removing the array spelling alone reds it. The
+        // dormant half stays for the reason the same shape stays in
+        // {@see bodyOf()}: it costs one comparison and it is what makes this
+        // walk correct on the PHP versions where the lexer answered the other
+        // way. This row is what stops that being a belief — the day the
+        // interpreter changes its mind, it reds and names the disjunct to
+        // swap.
+        $ampersand = null;
+        $probe = \token_get_all('<?php class A { public function &b() {} }');
+        foreach ($probe as $index => $token) {
+            if (\is_array($token) && $token[0] === \T_FUNCTION) {
+                $ampersand = $probe[$index + 2];
+
+                break;
+            }
+        }
+        $this->assertIsArray(
+            $ampersand,
+            'the `&` between `function` and a by-reference name is no longer an array token on '
+                . 'this PHP, so the LIVE disjunct in the name walk is now the bare-string one '
+                . 'and the array-token comparison beside it has become the dormant half. Swap '
+                . 'which of the two this test calls dormant; do not delete either',
+        );
+        $this->assertSame('&', $ampersand[1], 'the token after `function` in a by-reference declaration is not the ampersand at all');
+    }
+
+    /**
      * WIDENING THE VISIBILITY ALPHABET TO `protected` ADDS NO HELPER AT ALL,
      * ONLY PHPUnit'S OWN LIFECYCLE HOOKS - and that is the argument for the
      * restriction, standing where a sentence asserting it used to.
@@ -1845,21 +2109,84 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 continue;
             }
 
-            if (!self::carriesVisibility($tokens, $i, $visibility)) {
-                continue;
-            }
-
+            // THE NAME IS READ BEFORE THE VISIBILITY, AND THE ORDER IS
+            // LOAD-BEARING (E565). `carriesVisibility()` answers PUBLIC for a
+            // declaration carrying no modifier at all, which is what PHP means
+            // by one — but an anonymous `function () {}` and an arrow function
+            // also carry no modifier, and asking about visibility first files
+            // every ANONYMOUS `function` in the suite as an unreadable public
+            // declaration — hundreds of rows. An ARROW function is not among
+            // them: `fn` is `T_FN` and this walk selects `T_FUNCTION`, so it
+            // never reaches here in either order. The count is deliberately not
+            // written down (rule 18); swap these two blocks and read the
+            // `unparseable` list under a `[\T_PUBLIC]` alphabet.
             $name = null;
             for ($j = $i + 1; $j < $count; $j++) {
                 $candidate = $tokens[$j];
                 if (\is_array($candidate) && $candidate[0] === \T_WHITESPACE) {
                     continue;
                 }
-                if (\is_array($candidate) && $candidate[0] === \T_STRING) {
+                // A BY-REFERENCE `&` SITS BETWEEN `function` AND THE NAME and
+                // is stepped over, not read as the end of the search. It is
+                // matched on the token's TEXT because its ID is not stable
+                // across the versions this package supports: on PHP 8.1+ (this
+                // host is 8.3.6) it is an ARRAY token,
+                // `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`, and before that
+                // it was the bare one-byte string. Rule 49's trap — an array
+                // token whose text is one punctuation byte — does not reach
+                // here: this walk is positioned immediately after a
+                // `T_FUNCTION`, where no interpolated string can begin.
+                if ($candidate === '&' || (\is_array($candidate) && $candidate[1] === '&')) {
+                    continue;
+                }
+                // THE NAME IS AN IDENTIFIER, NOT NECESSARILY A `T_STRING`.
+                // PHP has allowed a reserved word as a METHOD name since 7.0,
+                // and the lexer hands that name back as the KEYWORD token:
+                // `function new()` yields `T_NEW`, `function match()` yields
+                // `T_MATCH`, `function default()` yields `T_DEFAULT`. Asking
+                // the token ID therefore answers "anonymous" for a declaration
+                // that is plainly named. Measured on PHP 8.3.6 over `tests/`,
+                // `src/` and `bin/sugarcrush`: THIRTY declarations are of this
+                // shape, twenty-two of them the `::new()` root factory this
+                // repo's own conventions mandate for every class, and two of
+                // them PRIVATE — which is this guard's own population. All
+                // thirty are in `src/`, so like the absent-modifier arm below
+                // this is an untriggered hole rather than a live miss (E363's
+                // shape), and the convention pushing on it is the repo's.
+                if (\is_array($candidate) && self::isIdentifier($candidate[1])) {
                     $name = $candidate[1];
                 }
 
                 break;
+            }
+
+            // A `function` with no name is a closure, not a declaration this
+            // guard has any business comparing — and it is excluded here
+            // rather than reported.
+            //
+            // WHAT THIS SAID: "`&` after `function` is a by-reference NAMED
+            // declaration and reaches the arm below with its name read".
+            // WHAT IS TRUE NOW: it did not, and the mechanism offered for it
+            // was wrong as well. Measured through this very method on PHP
+            // 8.3.6 before the name loop learned to step over `&`:
+            // `public function &byRef()` came back with an EMPTY name and was
+            // filed as a declaration whose name cannot be read, and the
+            // implicitly-public `function &byRef()` produced no row at all —
+            // silently dropped, which is exactly the spelling E565 exists to
+            // catch, still open in the by-reference form. WHY THIS EXCLUSION
+            // STILL EARNS ITS PLACE: the loop above now steps over `&`, so a
+            // by-reference declaration really does arrive here with its name
+            // read and this arm sees only genuine closures. The sentence
+            // describes the code for the first time rather than the other way
+            // round, and
+            // {@see testTheNameWalkReadsEverySpellingOfADeclarationName()}
+            // is what keeps it that way.
+            if ($name === null && !self::carriesVisibility($tokens, $i, [\T_PRIVATE, \T_PROTECTED, \T_PUBLIC], false)) {
+                continue;
+            }
+
+            if (!self::carriesVisibility($tokens, $i, $visibility)) {
+                continue;
             }
 
             if ($name === null) {
@@ -1892,13 +2219,39 @@ final class DuplicatedTestHelperDriftTest extends TestCase
     }
 
     /**
+     * Whether $text has the shape of a PHP label — what a method NAME looks
+     * like, asked of the text rather than of the token ID.
+     *
+     * The token ID cannot answer it. A method named with a reserved word
+     * lexes as that keyword, so `T_STRING` selects only the names that
+     * happen not to collide with one — see the census in
+     * {@see declarationsIn()}. The label grammar is the real question, and
+     * it is the same one PHP itself applies.
+     */
+    private static function isIdentifier(string $text): bool
+    {
+        return \preg_match('/^[A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*$/', $text) === 1;
+    }
+
+    /**
      * Whether the `function` token at $at carries one of $visibility.
      *
      * @param list<array{int,string,int}|string> $tokens
      * @param list<int>                          $visibility
+     * @param bool                               $anAbsentModifierIsPublic pass
+     *        `false` to ask only about an EXPLICIT keyword. The one caller that
+     *        does is the anonymous-function discriminator in
+     *        {@see declarationsIn()}: an anonymous `function` carries no
+     *        modifier either, so a question that treats absence as `public`
+     *        cannot tell it from a bare `function foo()` and files every one of
+     *        them as an unreadable declaration.
      */
-    private static function carriesVisibility(array $tokens, int $at, array $visibility): bool
-    {
+    private static function carriesVisibility(
+        array $tokens,
+        int $at,
+        array $visibility,
+        bool $anAbsentModifierIsPublic = true,
+    ): bool {
         $skippable = [
             \T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT,
             \T_STATIC, \T_FINAL, \T_ABSTRACT, \T_READONLY,
@@ -1907,7 +2260,32 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         for ($j = $at - 1; $j >= 0; $j--) {
             $token = $tokens[$j];
             if (!\is_array($token)) {
-                return false;
+                // NO MODIFIER AT ALL, AND IN PHP THAT MEANS PUBLIC (E565).
+                // The backwards walk has reached `{`, `}` or `;` — the end of
+                // whatever came before the declaration — without meeting a
+                // keyword, so this is `function foo()` written bare. It is
+                // PUBLIC, and a three-keyword alphabet cannot express it,
+                // because the spelling of this one is the ABSENCE of a keyword
+                // (rule 11: an alphabet is coverage, and this one is made of
+                // keywords).
+                //
+                // WHY IT MATTERS HERE RATHER THAN AS A CURIOSITY. This class's
+                // public arm scans `test`-prefixed methods across the suite,
+                // and a test method copied between two suites and fixed in only
+                // one of them is precisely its subject (E481). Written
+                // `function testFoo()` instead of `public function testFoo()`,
+                // that copy was invisible to every alphabet the class passes —
+                // T_PRIVATE, T_PROTECTED and T_PUBLIC alike — and nothing
+                // reddened the day one arrived.
+                //
+                // MEASURED on PHP 8.3.6 at the commit that added this arm:
+                // ZERO named declarations in `tests/` carry no modifier, so
+                // this is an untriggered hole and not a live miss (E363's
+                // shape — untriggered is not dead). The fixtures in
+                // {@see testAnImplicitlyPublicHelperIsScannedAsPublic()} are
+                // synthetic for exactly that reason, and they are what makes
+                // the arm pinnable rather than argued.
+                return $anAbsentModifierIsPublic && \in_array(\T_PUBLIC, $visibility, true);
             }
             if (\in_array($token[0], $skippable, true)) {
                 continue;
