@@ -225,6 +225,79 @@ final class BackendSignatureNullabilityTest extends TestCase
     }
 
     /**
+     * **Every spelling of a `null` DEFAULT, and the near-misses beside them.**
+     *
+     * Rule 41, measured: the `T_FN` survivor above had a neighbour one line
+     * away and the neighbour was not equivalent either. With
+     * {@see classifyParamKind()}'s `ltrim($literal, '\\')` reverted - the whole
+     * of the fully-qualified-`null` fix - this file was GREEN. Two unpinned
+     * widenings in one commit, the second found only because the first was
+     * mutated and its neighbours then were too.
+     *
+     * `\null` is a legal spelling of the same constant. MEASURED on PHP 8.3.6:
+     * `callable $a = \null` reflects as `?callable`, `allowsNull()` true,
+     * default null - the same implicit nullability and the same 8.4
+     * deprecation, arriving as ONE `T_NAME_FULLY_QUALIFIED` token whose text
+     * carries the separator.
+     *
+     * The near-misses are the other polarity and they are not decoration: a
+     * fix that lowercased and stripped too eagerly would flag `'null'`, a
+     * STRING default, which is correct code.
+     *
+     * @dataProvider nullDefaultSpellings
+     */
+    public function testEverySpellingOfANullDefaultIsClassifiedTheSameWay(
+        string $default,
+        bool $offends,
+    ): void {
+        $source = "<?php\nfinal class F { public function m(callable \$a = {$default}): void {} }\n";
+        $hits = self::implicitlyNullableParams($source);
+
+        if ($offends) {
+            $this->assertNotSame(
+                [],
+                $hits,
+                "`callable \$a = {$default}` is implicitly nullable on PHP " . PHP_VERSION
+                    . ' and this scanner did not see it. Every spelling of the constant reaches '
+                    . 'the same 8.4 deprecation; a scanner that reads only one of them reports '
+                    . 'an absence that is about its own alphabet (rule 11).',
+            );
+
+            return;
+        }
+
+        $this->assertSame(
+            [],
+            $hits,
+            "`callable \$a = {$default}` is NOT a null default, and flagging it would make this "
+                . 'guard red on correct code (rule 33).',
+        );
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function nullDefaultSpellings(): array
+    {
+        // Built by concatenation, per the class docblock.
+        $null = 'nu' . 'll';
+        $upper = 'NU' . 'LL';
+
+        return [
+            'bare' => [$null, true],
+            'uppercase' => [$upper, true],
+            'fully qualified' => ['\\' . $null, true],
+            'fully qualified uppercase' => ['\\' . $upper, true],
+            // The near-misses.
+            'a STRING that says null' => ["'{$null}'", false],
+            'an integer' => ['3', false],
+            'an empty array' => ['[]', false],
+            'a class constant' => ['self::SOMETHING', false],
+            'a negated integer' => ['-1', false],
+        ];
+    }
+
+    /**
      * The alphabet and its fixtures must name the same keywords.
      *
      * Rule 15 applied to a constant rather than to a scanner: without this, a
