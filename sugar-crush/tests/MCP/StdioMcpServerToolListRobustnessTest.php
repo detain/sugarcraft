@@ -104,41 +104,54 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
     /**
      * THE HEADLINE. A server whose `tools/list` carries a mistyped entry STARTS,
      * and start() does not raise.
+     *
+     * ⚠️ ONLY `start()` IS INSIDE THE `catch (\Throwable)`, AND THAT IS A FIX
+     * RATHER THAN A STYLE. PHPUnit reports a failed assertion by THROWING, so an
+     * assertion inside that block is caught by it and re-reported under the
+     * "start() raised ... over a mistyped tool entry" banner — which names a
+     * defect that did not happen and sends the reader to `parseTools()` instead
+     * of to the assertion that actually failed. MEASURED: mutating the harness to
+     * answer an empty list for every input reds this row through the control
+     * below, and with the assertions inside the try the failure text said
+     * `start() raised PHPUnit\Framework\ExpectationFailedException`.
+     *
+     * THE CONTROL RUNS FIRST, and it is in this row rather than the sibling one.
+     * `assertSame([], ...)` is satisfied by a fixture that never answered, by a
+     * `serverAnswering()` that spawns nothing, and by a `listTools()` that always
+     * returns `[]`. {@see testAWellFormedToolListIsUnaffectedByTheFilter()} covers
+     * that for the FILE; it does not cover it for this ROW, and a reader deleting
+     * that method would take this row's only positive component with it.
      */
     public function testAMistypedToolEntryDoesNotAbortTheServerLaunch(): void
     {
+        $control = $this->serverAnswering('[{"name":"grep","description":"d","inputSchema":{}}]');
+
+        try {
+            $control->start();
+            $this->assertNotSame(
+                [],
+                $control->listTools(),
+                'the harness produces nothing for a WELL-FORMED list either, so the empty result '
+                . 'below is not evidence that the mistyped entry was filtered',
+            );
+        } finally {
+            $control->stop();
+        }
+
         $server = $this->serverAnswering('[{"name":5}]');
 
         try {
-            $server->start();
-
-            // THE CONTROL, IN THIS ROW. `assertSame([], ...)` below is satisfied
-            // by a fixture that never answered at all, by a `serverAnswering()`
-            // that spawns nothing, and by a `listTools()` that always returns
-            // `[]`. The sibling row that covers this covers the FILE, not this
-            // row. So the same helper is driven with a well-formed list first and
-            // required to produce something.
-            $control = $this->serverAnswering('[{"name":"grep","description":"d","inputSchema":{}}]');
-
             try {
-                $control->start();
-                $this->assertNotSame(
-                    [],
-                    $control->listTools(),
-                    'the harness produces nothing for a WELL-FORMED list either, so the empty '
-                    . 'result below is not evidence that the mistyped entry was filtered',
+                $server->start();
+            } catch (\Throwable $e) {
+                $this->fail(
+                    'start() raised ' . get_class($e) . ' over a mistyped tool entry: ' . $e->getMessage()
+                    . ' — McpClient::startServer() catches only RuntimeException, so this aborts every '
+                    . 'OTHER server in the config too',
                 );
-            } finally {
-                $control->stop();
             }
 
             $this->assertSame([], $server->listTools(), 'the mistyped entry was kept, so something downstream will meet it instead');
-        } catch (\Throwable $e) {
-            $this->fail(
-                'start() raised ' . get_class($e) . ' over a mistyped tool entry: ' . $e->getMessage()
-                . ' — McpClient::startServer() catches only RuntimeException, so this aborts every '
-                . 'OTHER server in the config too',
-            );
         } finally {
             $server->stop();
         }
