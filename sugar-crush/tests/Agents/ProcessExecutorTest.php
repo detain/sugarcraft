@@ -1078,6 +1078,60 @@ final class ProcessExecutorTest extends TestCase
         );
         $this->assertIsString($this->reflectAutoloadPath());
         $this->assertFileExists((string) $this->reflectAutoloadPath());
+
+        // ⚠️ AND THE ASSERTION ABOVE CANNOT CATCH THE REGRESSION, which is why
+        // this one exists. In THIS checkout the two strategies return the same
+        // string, so reverting the delegation to the two-climb arithmetic keeps
+        // assertSame() green — MEASURED, the mutation survived the whole file.
+        // The difference only appears in a layout the suite cannot be run in.
+        //
+        // So the delegation is pinned as a token-stream fact about the method's
+        // own body: it calls BackgroundSupervisor::autoloadPath(), and it does
+        // no path arithmetic of its own. Structural, not textual — a comment
+        // naming either symbol cannot satisfy or trip it, because comments are
+        // T_COMMENT/T_DOC_COMMENT and are dropped below.
+        $delegates = static function (string $body): bool {
+            $significant = [];
+            foreach (token_get_all("<?php\n" . $body) as $token) {
+                if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                $significant[] = \is_array($token) ? $token[1] : $token;
+            }
+
+            $text = implode(' ', $significant);
+
+            return str_contains($text, 'BackgroundSupervisor :: autoloadPath')
+                && !str_contains($text, 'dirname');
+        };
+
+        $this->assertTrue(
+            $delegates('return BackgroundSupervisor::autoloadPath();'),
+            'the delegation detector is dead',
+        );
+        $this->assertFalse(
+            $delegates("return \dirname(__DIR__, 2) . '/vendor/autoload.php';"),
+            'the detector accepts the arithmetic it exists to reject',
+        );
+        $this->assertFalse(
+            $delegates('/* BackgroundSupervisor::autoloadPath() */ return X;'),
+            'a comment naming the delegate satisfied the detector',
+        );
+
+        $method = new \ReflectionMethod(ProcessExecutor::class, 'autoloadPath');
+        $lines = file((string) $method->getFileName());
+        $this->assertIsArray($lines);
+        $body = implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        $this->assertTrue(
+            $delegates($body),
+            'ProcessExecutor::autoloadPath() computes the path itself again. It resolves '
+            . 'in this checkout and nowhere else — see the measurement above.',
+        );
     }
 
     /**
