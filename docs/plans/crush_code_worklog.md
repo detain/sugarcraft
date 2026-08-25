@@ -11597,6 +11597,114 @@ the how-to-renumber prose from the renumber.
 flight. In `Chat.php` two of the three were the expensive kind — a method silently undocumented while its
 prose sat above an unrelated declaration.
 
+## ROUND 59 — 🔴 IN FLIGHT (base `e4c69b04e`, THREE lanes, recovery run `wf_146e1913-ca2`)
+
+> 🔴 **THIS ENTRY IS NOT A CLOSE. IT MUST BE CONVERTED WHEN THE ROUND CLOSES, AND THERE IS A PRECEDENT FOR
+> FORGETTING.** Round 52's launch entry sat here reading `IN FLIGHT` for **four rounds** until the
+> rounds-52-55 backfill found it, and by then what its lanes had measured was gone. Everything below the
+> line `### WHAT MUST BE FILLED IN AT CLOSE` is missing on purpose. **Fill it in from the merge, not from
+> this entry.**
+
+**Launched from `e4c69b04e`.** Floor measured there, tree clean:
+
+| package | floor at `e4c69b04e` |
+|---|---|
+| **sugar-crush** | **10269 / 159236 / 1 skipped / rc 0** |
+| **tools/tests** | **28 / 136 / rc 0** |
+| **candy-pty** | **630 / 1494 / 16 / 1 warning / rc 0** — measured **240 times**, see E593 |
+| candy-core · candy-flip · candy-mosaic | CARRIED, not re-measured |
+
+### 🔴 THE ROUND'S REAL EXPERIMENT: OWNERSHIP STOPPED BEING PROSE
+
+E591 measured that ownership-as-prose does not work — 0/3, then 2/3, over three rounds — and found the
+defect underneath: **`fixPrompt` carried no file list, no ownership map and no work description at all**,
+and the fix stage is the one under most pressure to edit out of lane, because it acts on reviewer
+prescriptions that routinely name files the lane does not own. Round 59 changed four things:
+
+1. a **`scopeRegex` per lane**, with the exact command to diff against it;
+2. **`laneScopeCommand` and `laneScopeOutput` as REQUIRED fields of the structured output** — the schema is
+   enforced at the tool-call layer and prose is not;
+3. **scope in all three stages**, fix included;
+4. **every path in the ownership BLOCK verified with `git ls-tree`**, not only the per-lane lists — the gap
+   E573 found.
+
+🔴 **THE CHECK CAUGHT TWO BAD PATHS IN THE SUPERVISOR'S OWN MAP BEFORE LAUNCH** —
+`tests/DuplicatedTestHelperDriftTest.php` and `tests/GlobFigureDriftTest.php`, both really one directory
+deeper. In each of the two previous rounds a defect of exactly this kind shipped and a lane filed it
+afterwards. The scope regexes were also **tested in both polarities** before launch, and all nine prompts
+were rendered — rule 15 applied to the harness itself.
+
+🔴 **AND IT PAID FOR ITSELF IN ONE STAGE.** Lane b's first finding is that **items 1 and 2 of its own brief
+commission edits to files it does not own**: `tests/SwallowingCatchCensusTest.php` (tests root, owned by
+**nobody** this round) and `tests/Support/AssertionSwallowingCatchTest.php` (**lane a's**). Both were
+rejected by its scope regex, so the lane **measured instead of editing** and filed the finding. **The
+supervisor wrote a brief that sent a lane out of its own lane, and the machine check caught it in the first
+stage.** Three rounds of prose asking never did that.
+
+⚠️ **A THIRD SUPERVISOR-AUTHORED BRIEF DEFECT IN TWO ROUNDS:** E571's premise is false —
+`EngineBackend::MAX_FRAME_BYTES` is **`public`**, not `private`, so both the claim and the reflection it
+prescribed were wrong. With E592's two (E527 inverted, E529 false as filed), **rule 47 is not decoration.**
+
+### THE SECOND KILL IN TWO ROUNDS, AND WHY IT NEEDED A DIFFERENT SHAPE
+
+A session limit hit again — but **the damage was uneven, and a round-58-shaped recovery would have been
+wrong**:
+
+| lane | state at the kill | recovery stage |
+|---|---|---|
+| **a** | 6 commits, tree clean; **the headline item (E562's audit) never started** | `Finish → Review → Fix` |
+| **b** | 🔴 **implement COMPLETE, and its report survived in the journal** | **`Review → Fix`, stage 1 bypassed** |
+| **c** | 8 commits, tree clean; E585/E583 never started | `Finish → Review → Fix` |
+
+**No lane tree was dirty**, so unlike round 58 nothing had to be rescued out of a working copy.
+**Lane b is E452's recipe used as intended rather than approximated**: the cached stage result is fed to the
+*real* `reviewPrompt`, so the prompt is regenerated exactly.
+
+⚠️ **A DEFECT IN THE RECOVERY SCRIPT WAS CAUGHT BY RENDERING, FOR THE SECOND ROUND RUNNING.** Because lane b
+skips `finishPrompt`, its `PROVENANCE` block — carrying "do not undo the scope finding" and the E571
+correction — **would never have been delivered.** Provenance now goes into the review stage too.
+`node --check` shows nothing of this, and neither round's defect was a syntax error.
+
+### ✅ E593 — E490 IS ANSWERED, AND THE ANSWER IS NARROW
+
+**The campaign completed: 240 takes, every one `rc=0` and byte-identical** (`630 / 1494 / 16 / 1 warning`).
+`EVENTS.txt` is two lines and both are the deliberate instrument check. No lane touched a `candy-*` file in
+either round, so all 240 takes measure the same code.
+
+| N clean takes | 95% one-sided upper bound |
+|---|---|
+| 53 (round 57) | 5.50% |
+| 165 (round 58 close) | 1.80% |
+| **240 (final)** | **1.2405%** |
+
+**Prior estimate 1 in 76 = 1.3158%, so the prior rate is EXCLUDED at 95% — by 0.075 percentage points.**
+First thing this campaign has said in five rounds that the earlier ones could not, and a narrow result
+rather than a comfortable one.
+
+🔴 **IT DOES NOT SAY E490 IS FIXED.** 1.2405% is not zero, and a hang at 1 in 500 is entirely consistent
+with 240 clean takes. Either round 56's leaked-timer fix closed it, or a single observation gave a high
+rate estimate — **240 takes cannot distinguish those.** The instrument was proven alive first (rule 15):
+take zero at `CANDY_PTY_HANG_BUDGET=0.6` fired, SIGKILLed at `rc=137` and named the test. Without it, 240
+green runs and a dead watchdog are the same log.
+
+**Rule 50 earned its place on its first outing.** Round 58 handed this campaign to a lane as a 🔴 "before
+anything else" instruction and it was never started — 0 of 1 (E584). Run by the supervisor it completed
+while nine agents worked alongside it.
+
+### WHAT MUST BE FILLED IN AT CLOSE
+
+- [ ] merged floor (sugar-crush, tools/tests), and whether the merge went red — **the prediction says
+      GREEN and names E566's `T_FUNCTION`→`T_FN` widening as the one thing that could falsify it**
+- [ ] the prediction scorecard against `.../workflows/scripts/round59-prediction.txt` — tests **10329
+      EXACT**, assertions **≥161,000**, conflicts **2×**, backlog **610–628**, plus s1/s2/s3 and (a)–(d)
+- [ ] **s2 is already CONFIRMED** (lane b's out-of-lane brief items) — record it
+- [ ] whether **E562's audit** found a mutation verdict in the backlog that cannot be reproduced —
+      side-prediction (b), and the highest-value question in the round
+- [ ] lane c's **recommended disposition for E490**, with the arithmetic beside it
+- [ ] id renumber from **E594** (E593 is the campaign), and the backlog total
+- [ ] new standing rules, and whether **rule 47's rate** (brief defects) is worth tracking as a figure
+
+
 ## ROUND 58 — killed by a session limit and recovered, the merge stayed green when it was predicted red, and the ownership mechanism was finally measured to death
 
 **CLOSED at `CLOSESHA`, from base `535d721ff`.** Killed once, recovered once; twelve agents in total across

@@ -107,18 +107,39 @@ out-of-scope files rejected) — rule 15 applied to the harness itself.
 
 ### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
 
-1. **Publication state — RE-MEASURE IT.** `git ls-remote origin master` is the only reliable answer; this
-   line has been wrong in both directions and went stale *while being written* in round 58.
-   ⚠️ **The user commits into this working copy directly.** Round 58 saw `9b32796b8 prompt expantion` and
-   `37779685b update` appear mid-round — a 4,063-line research dossier, `prompt_expand.md`, authored as
-   `Test User`. It is legitimately in the tree; the lanes never saw it (they branched earlier).
-2. **E490 has 175+ clean takes and is NOT closed.** The supervisor ran the campaign (see rule 50).
-   Files: `/tmp/.../scratchpad/r58campaign/{takes.tsv,EVENTS.txt,PROGRESS}`. ⚠️ **`/tmp` does not survive a
-   reboot** — if they are gone, the campaign is gone; restart it, do not report a partial as a total.
-   **At N=240 the 95% bound is 1.240% against a 1.316% prior — the first N that excludes the prior rate,
-   and it excludes it barely.** 1.24% is not zero.
-3. `left_steps.md` (repo root, UNTRACKED) predates E455–E592 and has no generator. Best regenerated at a
-   close, where it can absorb a whole round's ids at once.
+**Status as of the round-59 recovery launch. The recovery `wf_146e1913-ca2` was RUNNING when this was
+written — 5 of 8 agents had reported and 3 were still working. Nothing below assumes it finished.**
+
+1. 🔴 **ROUND 59 IS NOT CLOSED, AND ITS WORKLOG ENTRY SAYS `IN FLIGHT`.** `crush_code_worklog.md`'s
+   `## ROUND 59` entry records everything measured BEFORE the merge and ends with a checklist headed
+   **`WHAT MUST BE FILLED IN AT CLOSE`**. **Convert it at the close — do not leave it.** Round 52's launch
+   entry sat there reading `IN FLIGHT` for four rounds until the rounds-52-55 backfill found it, and by
+   then what its lanes had measured was gone.
+   **The close-out cycle is:** merge a → b → c (`--no-ff`, backlog conflicts expected, keep BOTH sides) →
+   verify invariants → measure the merged floor under a watchdog → renumber provisional ids **from E594**
+   → convert the worklog entry → update this file → launch round 60.
+2. **Publication state — RE-MEASURE IT, never infer it.** At this writing `git ls-remote origin master`
+   answered **`37779685b`** with **68 commits local**. ⚠️ **The user commits into this working copy
+   directly and pushes it themselves.** Round 58 saw `9b32796b8 prompt expantion` and `37779685b update`
+   appear mid-round — `prompt_expand.md`, a 4,063-line research dossier authored as `Test User`. It is
+   legitimately in the tree; the lanes never saw it, having branched earlier.
+3. ✅ **E490 IS ANSWERED — see E593. It is NOT closed, and the distinction is the point.** The campaign
+   completed at **240 takes, zero events**; the 95% upper bound is **1.2405%** against a **1.3158%** prior,
+   so the prior rate is excluded — **by 0.075 percentage points.** 1.2405% is not zero, and a hang at
+   1 in 500 is entirely consistent with 240 clean takes. **Lane c owes a recommended disposition with the
+   arithmetic beside it.** Until that is agreed, the watchdog requirement below stays.
+   ⚠️ Raw data is under `/tmp/.../scratchpad/r58campaign/`, and **`/tmp` does not survive a reboot.**
+4. 🔴 **E562's AUDIT IS THE HIGHEST-VALUE OPEN QUESTION IN THE PLAN.** A mutation harness scored
+   `No tests executed!` as a **SURVIVAL** (a `--filter` naming a missing method exits 0), and **two verdicts
+   were produced that way.** A survival verdict is what this plan uses to justify leaving code unpinned.
+   The audit — going back through the backlog's mutation tables for every `SURVIVED` a filter-based run
+   could have produced — **had not been started when the round was killed.** Lane a owns it and was told to
+   do it first.
+5. **Three supervisor-authored brief defects in two rounds** (E592: E527 inverted, E529 false as filed;
+   round 59: E571's `private` is actually `public`). **Rule 47 exists because of this.** A brief item that
+   asserts a mechanism must cite the measurement or say it is unverified.
+6. `left_steps.md` (repo root, UNTRACKED) predates E455–E593 and **has no generator** — it was a read-only
+   agent sweep. Best regenerated at a close, where it can absorb a whole round's ids at once.
 
 ### 🔴 NEVER RUN A SUITE WITHOUT A WATCHDOG — E490 IS STILL LIVE
 
