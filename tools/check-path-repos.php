@@ -144,6 +144,15 @@ manifest under `extra.sugarcraft.deferred-wiring.<package>`, prints with its
 reason and does not count as a finding. Pruning a dependency somebody
 deliberately kept, or deleting the CI step, were the only two exits before it.
 
+EVERY SUCH ROW IS ITSELF CHECKED, in every lib, and a row that is not
+suppressing anything is an `IDLE_DEFERRAL` finding. A row does work only when
+it names a production `sugarcraft/*` require of that manifest, that `src/` does
+not reach, whose namespace resolves, and that carries a reason. The commonest
+way a row goes idle is the happy one: the wiring landed and `src/` now
+references the dep, at which point the row must be deleted. This check is here
+rather than in a per-lib test suite because the hatch is honoured in all 58 libs
+and only one of them had a test guarding it.
+
 Each flagged require is annotated with `tests_uses: yes|no` (whether the lib's
 tests/ still reference the dep — a "yes" means the prune is a
 move-to-require-dev, not a delete). Findings are CANDIDATES:
@@ -540,6 +549,80 @@ if ($unused) {
             return \is_string($reason) && \trim($reason) !== '' ? \trim($reason) : null;
         };
 
+        // (0) EVERY deferred-wiring row is validated, in EVERY lib, before any
+        // of it is honoured.
+        //
+        // E488. THE HATCH APPLIES REPO-WIDE AND ITS VALIDATION DID NOT. The
+        // lookup above is consulted only for a dep this pass has ALREADY
+        // decided is dead, so a row naming something else is never looked at:
+        // measured, two rows added to `candy-shine` -- one for
+        // `sugarcraft/candy-core`, which its `src/` references on every page,
+        // and one for `sugarcraft/package-that-does-not-exist`, which is not
+        // even a require -- produced no output at all and exit 0.
+        //
+        // `sugar-crush` has a PHPUnit guard that catches exactly this
+        // (`tests/Support/ManifestDependencyReachTest`, which an attack rather
+        // than a reading found the hole in). No other lib has one, and there
+        // are 58. So the guarantee lived in one lib's test suite while the
+        // escape hatch it guards was honoured in all of them. It belongs here
+        // instead, because this is the thing CI actually gates on and it is
+        // the thing that reads the rows.
+        //
+        // A ROW IS DOING WORK when it names a production `sugarcraft/*`
+        // require of THIS manifest, that `src/` does not reach, and whose
+        // namespace resolves. Anything else is an exemption with no defect
+        // behind it, which is where the next real one hides -- so it is a
+        // FINDING and it says which of the three it failed.
+        $rows = $data['manifest']['extra']['sugarcraft']['deferred-wiring'] ?? null;
+        // A GUARD MUST GO RED ON WHAT IT CANNOT PARSE. Every other malformed
+        // shape below -- an int key, an empty reason, a foreign vendor -- is
+        // reported; a `deferred-wiring` that is a string, a number or a bool
+        // used to drop straight through this `is_array()` with no output and no
+        // finding, which is a hole shaped exactly like the next bad row.
+        if ($rows !== null && !\is_array($rows)) {
+            $lines[] = \sprintf(
+                '  - %-23s extra.sugarcraft.deferred-wiring is a %s, not a map of '
+                    . 'package => reason, so no row in it can be read',
+                'IDLE_DEFERRAL',
+                \get_debug_type($rows)
+            );
+            $unusedFindings++;
+        }
+        if (\is_array($rows)) {
+            foreach ($rows as $package => $reason) {
+                if (!\is_string($package)) {
+                    $lines[] = \sprintf(
+                        '  - %-23s a deferred-wiring key is not a string, so it names no package',
+                        'IDLE_DEFERRAL'
+                    );
+                    $unusedFindings++;
+                    continue;
+                }
+                $why = null;
+                if (!\is_string($reason) || \trim($reason) === '') {
+                    $why = 'the row carries no reason, so it records nothing';
+                } elseif (!\str_starts_with($package, 'sugarcraft/')) {
+                    $why = 'not a sugarcraft/* package, so this pass never looks at it';
+                } elseif (!\in_array(\substr($package, \strlen('sugarcraft/')), $directDeps, true)) {
+                    $why = 'not a production require of this manifest';
+                } else {
+                    $depSlug = \substr($package, \strlen('sugarcraft/'));
+                    $prefixes = $psr4PrefixesOf($depSlug);
+                    if ($prefixes === []) {
+                        $why = 'the dep declares no autoload.psr-4, so "unused" was never decided '
+                            . 'for it and the row suppresses nothing';
+                    } elseif ($namespaceHits($srcDir, $prefixes) !== []) {
+                        $why = 'src/ already references it - THE WIRING HAS LANDED, so delete '
+                            . 'the row; a deferral is a record, not an exemption';
+                    }
+                }
+                if ($why !== null) {
+                    $lines[] = \sprintf('  - %-23s %s  (%s)', 'IDLE_DEFERRAL', $package, $why);
+                    $unusedFindings++;
+                }
+            }
+        }
+
         // (1) Unused DIRECT (production) requires.
         foreach ($directDeps as $depSlug) {
             $prefixes = $psr4PrefixesOf($depSlug);
@@ -642,11 +725,19 @@ if ($unused) {
     \fwrite(\STDOUT, $report);
     \fprintf(
         \STDOUT,
-        "\n%d finding(s). Read-only report — prune by hand: remove the require AND its\n"
-        . "repositories[] entry (PRUNE_REQUIRE_AND_REPO), just the require (KEEP_REPO), or\n"
-        . "just the repo entry (PRUNE_REPO_ONLY). A `tests_uses: yes` means move the\n"
-        . "require to require-dev rather than delete it. Re-run without --unused to\n"
-        . "re-verify closure afterwards.\n",
+        "\n%d finding(s). Read-only report. THE REMEDY DEPENDS ON THE FINDING CLASS:\n"
+        . "\n"
+        . "  PRUNE_REQUIRE_AND_REPO / KEEP_REPO / PRUNE_REPO_ONLY — a dead dependency.\n"
+        . "    Remove the require AND its repositories[] entry, just the require, or just\n"
+        . "    the repo entry, as named. A `tests_uses: yes` means move the require to\n"
+        . "    require-dev rather than delete it.\n"
+        . "\n"
+        . "  IDLE_DEFERRAL — a deferred-wiring ROW that suppresses nothing. Delete the\n"
+        . "    ROW, not the require: the require it names is either live, absent, or not\n"
+        . "    a sugarcraft package, and each row above says which. Pruning the require\n"
+        . "    on this advice would remove a dependency the lib is still using.\n"
+        . "\n"
+        . "Re-run without --unused to re-verify closure afterwards.\n",
         $unusedFindings
     );
     exit(1);

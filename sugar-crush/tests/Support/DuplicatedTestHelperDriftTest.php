@@ -60,21 +60,31 @@ use PHPUnit\Framework\TestCase;
  *     one private name twice; the generator is the same
  *     {@see declarationsIn()} this guard runs, so a reader re-derives
  *     it rather than trusting the sentence.
- *   * PROTECTED AND PUBLIC HELPERS. WHAT THIS SAID: "a protected helper is
- *     usually inherited rather than copied, which is a different failure;
- *     public ones are the subject of tests rather than their machinery". WHAT
- *     IS TRUE NOW: the conclusion holds and that argument was a feeling, in a
- *     list whose other bullets carry generators - so it was measured, through
- *     the same {@see driftReport()} with the alphabet widened. `protected`
- *     adds NO helper name at all: every pair it brings in belongs to a PHPUnit
+ *   * PROTECTED HELPERS. WHAT THIS SAID: "a protected helper is usually
+ *     inherited rather than copied, which is a different failure; public ones
+ *     are the subject of tests rather than their machinery". WHAT IS TRUE NOW:
+ *     the protected half holds and was measured rather than felt, through the
+ *     same {@see driftReport()} with the alphabet widened - `protected` adds NO
+ *     helper name at all, every pair it brings in belonging to a PHPUnit
  *     lifecycle hook, which the framework declares protected and which no two
- *     classes come to share by copying - and it brings them in many times
- *     over, so the widening would be answered by exempting them, which is
- *     where the next real drift hides. WHY THE RESTRICTION STILL EARNS ITS
- *     PLACE: it is no longer defended by prose but by
+ *     classes come to share by copying. THE PUBLIC HALF OF THAT SENTENCE WAS
+ *     WRONG, and E481 is what it cost: "the subject of tests rather than their
+ *     machinery" describes a test METHOD exactly, and a test method copied
+ *     between two suites and fixed in only one of them is this file's own
+ *     subject with no reader at all to notice. It is now scanned, by
+ *     {@see testNoCopiedTestMethodHasDriftedUnrecorded()}. WHY THE RESTRICTION
+ *     ON `protected` STILL EARNS ITS PLACE: it is defended not by prose but by
  *     {@see testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()},
  *     which reds on the day a protected helper really does drift and says so -
  *     the restriction deletes itself rather than being argued again.
+ *   * PUBLIC METHODS THAT ARE NOT TESTS. Still out of reach, and this one is a
+ *     limit of the SCANNER rather than a judgement about the population: the
+ *     report keeps one body per file per name, and two anonymous test doubles
+ *     in one file routinely declare the same interface method. Measured on PHP
+ *     8.3.6 over `tests/`, the unrestricted `public` alphabet reports 520
+ *     declarations it cannot place for that reason alone. The generator is
+ *     {@see testNoCopiedTestMethodHasDriftedUnrecorded()}'s own doc-block,
+ *     which states what the scanner would have to grow first.
  *   * A COPY THAT WAS RENAMED. Nothing here matches bodies across different
  *     names, so a helper copied and renamed is out of reach by construction.
  *   * THE SIGNATURE, IN THE BODY REPORT. WHAT THIS SAID: "{@see bodyOf()}
@@ -98,6 +108,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class DuplicatedTestHelperDriftTest extends TestCase
 {
+    use TestFileWalkTrait;
+
     /**
      * The largest per-side divergence, in tokens, that still reads as "the
      * same helper, one edit apart" rather than as two unrelated helpers that
@@ -155,17 +167,6 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             . 'from reading each other\'s file. The `-F`/`-f` defect that made the copies '
             . 'differ in BEHAVIOUR was fixed in both, one round apart, which is the event this '
             . 'guard exists to make visible next time.',
-        'maxStderrBytes' =>
-            'The differing token is the CLASS the constant is read off: one copy reflects on '
-            . '`LspConnection::MAX_STDERR_BYTES`, the other on '
-            . '`StdioMcpServer::MAX_STDERR_BYTES`, and each is the class its own file is about. '
-            . 'Making the two agree would be the bug - a stderr-cap assertion in the LSP suite '
-            . 'must be checked against the LSP cap. The reason each file reads the constant '
-            . 'reflectively rather than restating the number is the same in both, and that part '
-            . 'is byte-identical: the cap must not be able to drift from the class it guards. '
-            . 'If a third stdio class grows one, give it the same helper against its own '
-            . 'constant and extend this row rather than consolidating - there is nothing to '
-            . 'share but the shape.',
         'readOrFail' =>
             'The text of the failure message differs; the read and the refusal are identical. '
             . 'Each message names what its own census is void without, which is worth more '
@@ -379,7 +380,31 @@ final class DuplicatedTestHelperDriftTest extends TestCase
 
         $this->assertNotSame([], $sources, 'no test file was read at all, so nothing was compared');
 
-        [$drifted, $unparseable, $declarations] = self::driftReport($sources);
+        [$drifted, $unparseable, $declarations, $cores] = self::driftReport($sources);
+        [$drifted, , $unreadable] = self::partitionBySubject($drifted, $cores);
+
+        $this->assertSame(
+            [],
+            $unreadable,
+            'a reported pair could not be classified at all - its description could not be '
+                . 'split back into two files, or it arrived without a divergence core. Such a '
+                . 'pair is neither cleared nor reported, which is the one outcome this guard '
+                . 'must never produce.',
+        );
+
+        // Rule 15: an assertion of `[]` below is worth nothing unless something
+        // in the same test fails when the instrument stops producing. The
+        // classifier is the newest moving part here and it SUBTRACTS, so a
+        // classifier stuck at "everything is a subject spelling" would empty
+        // the report and pass. This is the count that notices.
+        $this->assertGreaterThan(
+            0,
+            \array_sum(\array_map('count', $drifted)),
+            'not one private helper pair survived the subject-spelling classifier. Either every '
+                . 'copied helper in the tree was consolidated at once, or the classifier is '
+                . 'answering yes to everything - and an emptied report satisfies the '
+                . '"nothing is unrecorded" assertion below perfectly.',
+        );
 
         // RULE: A GUARD MUST GO RED ON WHAT IT CANNOT PARSE. A private
         // declaration whose name or whose closing brace this scanner cannot
@@ -444,16 +469,65 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             $sources[$relative] = (string) file_get_contents($path);
         }
 
-        [$drifted] = self::driftReport($sources);
+        // BOTH WALKS, because a row may be written for either population.
+        // WHAT THIS DID BEFORE: it read the `private` walk alone. WHAT IS TRUE
+        // NOW: the public `test*` guard's own failure text offers a row in
+        // ACCEPTED_DIVERGENCE as one of its two remedies, and with only the
+        // private walk read here that advice could not be followed -- a row for
+        // a public test method matched nothing, landed in $overtaken, and this
+        // test then demanded its deletion. Two guards prescribing opposite
+        // actions for one edit is worse than either rule on its own. WHY THIS
+        // STILL EARNS ITS PLACE: a row must still die when its divergence does;
+        // widening the population it is checked against is what makes that
+        // true for every row rather than for the private ones only.
+        [$drifted, , , $cores] = self::driftReport($sources);
+        [$drifted, $subjectSpellings] = self::partitionBySubject($drifted, $cores);
+
+        [$publicDrifted, , , $publicCores] = self::driftReport(
+            $sources,
+            [\T_PUBLIC],
+            null,
+            static fn (string $name): bool => \str_starts_with($name, 'test'),
+        );
+        [$publicDrifted, $publicSubjects] = self::partitionBySubject($publicDrifted, $publicCores);
+
+        // Union. `+` keeps the left-hand entry on a name present in both, which
+        // is all this needs: each map is only ever asked whether a name is IN
+        // it.
+        $drifted += $publicDrifted;
+        $subjectSpellings += $publicSubjects;
 
         $overtaken = [];
+        $classified = [];
         foreach (self::ACCEPTED_DIVERGENCE as $name => $reason) {
             $this->assertNotSame('', trim($reason), $name . ' is accepted without a reason');
 
-            if (!isset($drifted[$name])) {
-                $overtaken[] = $name;
+            if (isset($drifted[$name])) {
+                continue;
             }
+            // A row whose every pair {@see isSubjectSpelling()} now explains is
+            // not overtaken by a consolidation - it is overtaken by the
+            // classifier, and it must go for a different reason and with
+            // different advice. Kept apart so the message can say which.
+            if (isset($subjectSpellings[$name])) {
+                $classified[] = $name;
+
+                continue;
+            }
+            $overtaken[] = $name;
         }
+
+        $this->assertSame(
+            [],
+            $classified,
+            'this name is recorded in ACCEPTED_DIVERGENCE, and every pair it names is now '
+                . 'explained by isSubjectSpelling() instead - each copy differs only in naming '
+                . 'the class its own file is about. The row is a licence keyed by name and the '
+                . 'classifier is a property keyed by shape, so keeping both means the next '
+                . 'helper of this shape still needs a row argued for it. DELETE THE ROW, and '
+                . 'move anything its reason says that the classifier does not into the '
+                . 'classifier\'s doc-block rather than dropping it.',
+        );
 
         $this->assertSame(
             [],
@@ -472,6 +546,347 @@ final class DuplicatedTestHelperDriftTest extends TestCase
                 . 'not a change to either helper. That the red arrives at all is the whole point '
                 . 'of the map.',
         );
+    }
+
+    /**
+     * NO COPIED TEST METHOD HAS DRIFTED UNRECORDED — the `public` half of this
+     * file's subject, which until now it could not see at all.
+     *
+     * E481: THE ALPHABET WAS THE COVERAGE. Every check above runs the
+     * `private` alphabet, and a test METHOD is public. A `testTryFromInvalid-
+     * ReturnsNull()` copied from one enum's suite into another's and then
+     * fixed in only one of them is the same defect as a copied private helper
+     * and was invisible to every guard in this tree — more invisible, in fact,
+     * because a private helper at least has one reader and a duplicated test
+     * method has none.
+     *
+     * WHY `test*` AND NOT THE WHOLE `public` ALPHABET, measured rather than
+     * argued — and measured by a TEST rather than by this sentence, in
+     * {@see testTheWidePublicAlphabetIsUnreadableAndTheTestStarOneIsNot()}. The
+     * whole alphabet cannot place a large number of the declarations it reads,
+     * every one of them a name declared twice in one file by two anonymous test
+     * doubles — so the wide run is a pile of reds about this scanner's
+     * bookkeeping and nothing about drift, while the `test*` restriction places
+     * everything it reads. Both halves of that are asserted there, and no count
+     * is repeated here: the declaration total moves with every public method
+     * added anywhere under `tests/`. It also brings in names that are not
+     * helpers at all
+     * ({@see complete}, {@see execute}, `name`, `description` and their
+     * neighbours): interface methods that two test doubles both implement,
+     * which is the same thing `setUp()` is in
+     * {@see testWideningTheVisibilityAlphabetToProtectedAddsNoHelperAtAll()}
+     * — a contract obligation, not a copy. Restricted to `test*` the scanner
+     * reports ZERO unplaceable declarations, which is why that is the
+     * population this guard runs and the wider one is recorded as a finding
+     * rather than shipped.
+     *
+     * THE DAY THIS FILE SHOULD WIDEN FURTHER is the day the report keeps one
+     * body per file per name AND anonymous-class declarations are attributed
+     * to their enclosing anon class. Until then the wide alphabet cannot be
+     * asked, and this test says so by measuring it rather than by asserting
+     * it.
+     */
+    public function testNoCopiedTestMethodHasDriftedUnrecorded(): void
+    {
+        $this->assertTheScannerIsAlive();
+        $this->assertTheSubjectClassifierIsAlive();
+
+        $sources = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $sources[$relative] = (string) file_get_contents($path);
+        }
+
+        $isTestMethod = static fn (string $name): bool => \str_starts_with($name, 'test');
+
+        [$drifted, $unparseable, $declarations, $cores] = self::driftReport(
+            $sources,
+            [\T_PUBLIC],
+            null,
+            $isTestMethod,
+        );
+
+        $this->assertSame(
+            [],
+            $unparseable,
+            'this scanner could not read or place a public method declaration. NOTE THE '
+                . 'POPULATION: the name filter is applied AFTER readability, deliberately - a '
+                . 'declaration this scanner could not read has no name to filter ON, and '
+                . 'dropping it because it MIGHT have been out of scope is how a real hole gets '
+                . 'called out of scope. So a public method that is NOT a test can be reported '
+                . 'here, and the offender named below may well not begin with "test". It is '
+                . 'reported rather than skipped for the same reason as in the private walk: a '
+                . 'declaration silently dropped is a method this guard has stopped comparing, '
+                . 'which is indistinguishable from one it has cleared.',
+        );
+
+        $this->assertGreaterThan(
+            0,
+            $declarations,
+            'no public test method was found anywhere under tests/ - the walk is dead, and '
+                . '"nothing drifted" is then a statement about the walk and not about the tree',
+        );
+
+        [$real, $subject, $unreadable] = self::partitionBySubject($drifted, $cores);
+
+        $this->assertSame(
+            [],
+            $unreadable,
+            'a reported pair could not be classified at all - neither cleared nor reported',
+        );
+
+        // RULE 15, AND THE REASON THIS ARM IS NOT DECORATION. The assertion
+        // below is an absence, and the classifier SUBTRACTS from what it is an
+        // absence over: a classifier stuck at yes empties the report and the
+        // absence passes. Measured at the commit that added this test, the
+        // tree carries pairs of exactly the shape the classifier exists for,
+        // so if it stops finding any of them something has broken.
+        $this->assertGreaterThan(
+            0,
+            \array_sum(\array_map('count', $subject)),
+            'not one copied test method differing only in the class its own file tests was '
+                . 'found. Those pairs are what this walk is mostly made of, so an empty '
+                . 'classification means the walk or the classifier has stopped working - and '
+                . 'either way the assertion below is measuring nothing.',
+        );
+
+        $unrecorded = [];
+        foreach ($real as $name => $pairs) {
+            if (isset(self::ACCEPTED_DIVERGENCE[$name])) {
+                continue;
+            }
+            $unrecorded[] = $name . ': ' . implode('; ', $pairs);
+        }
+
+        $this->assertSame(
+            [],
+            $unrecorded,
+            'two files declare a public test method of the same name whose bodies agree except '
+                . 'for one token, and that token is NOT each file\'s own subject. That is a '
+                . 'test copied from one suite into another and then fixed in only one of them: '
+                . 'both files stay green, because a test method has no reader at all to notice '
+                . 'the two have diverged. Either make the copies agree - or extract the shared '
+                . 'assertion - or add the name to ACCEPTED_DIVERGENCE with the reason. Do not '
+                . 'reach for a row before checking whether the differing token names the class '
+                . 'under test; if it does, isSubjectSpelling() should already have cleared it '
+                . 'and the classifier is what needs the fix.',
+        );
+    }
+
+    /**
+     * THE `test*` RESTRICTION IS A MEASUREMENT, NOT A SENTENCE.
+     *
+     * WHAT THIS SAID BEFORE, and it said it in prose only: that the
+     * unrestricted `public` alphabet "reads 8,556 declarations and reports 520
+     * it cannot place". WHAT IS TRUE NOW: nothing re-derived either number, and
+     * the declaration count is a moving target — every commit adding a public
+     * method anywhere under `tests/` changes it, and it had already moved twice
+     * within the round that wrote it down. A justification nobody can check is
+     * a justification nobody will check. WHY THIS STILL EARNS ITS PLACE: the
+     * claim is load-bearing, since it is the entire reason this guard runs
+     * `test*` instead of `public`, so it is asserted against the tree here and
+     * the counts appear only in failure text, where they are generated at the
+     * moment they are read.
+     *
+     * The SHAPE of the unplaceable declarations is asserted too, not merely
+     * their number. "The wide run is noisy" would be satisfied by noise of any
+     * kind; the specific claim is that every one of them is a name declared
+     * twice in one file by two anonymous test doubles, which is a statement
+     * about this scanner's bookkeeping rather than about drift — and that is
+     * what makes widening a task for the scanner rather than a judgement call.
+     */
+    public function testTheWidePublicAlphabetIsUnreadableAndTheTestStarOneIsNot(): void
+    {
+        $sources = [];
+        foreach (self::everyTestFile() as $relative => $path) {
+            $sources[$relative] = (string) file_get_contents($path);
+        }
+
+        [, $wideUnparseable, $wideDeclarations] = self::driftReport($sources, [\T_PUBLIC]);
+        [, $narrowUnparseable, $narrowDeclarations] = self::driftReport(
+            $sources,
+            [\T_PUBLIC],
+            null,
+            static fn (string $name): bool => \str_starts_with($name, 'test'),
+        );
+
+        // Liveness first: every assertion below is about counts, and a walk
+        // that read nothing produces the most reassuring counts of all.
+        $this->assertGreaterThan(
+            0,
+            $narrowDeclarations,
+            'the test* walk read no declarations at all, so nothing below is a statement '
+                . 'about this tree',
+        );
+        $this->assertGreaterThan(
+            $narrowDeclarations,
+            $wideDeclarations,
+            'the unrestricted public alphabet read no more declarations than the test*-only '
+                . 'one, which cannot be true while any test file has a public non-test method - '
+                . 'the visibility argument is not reaching the scan',
+        );
+
+        $this->assertNotSame(
+            [],
+            $wideUnparseable,
+            'the unrestricted public alphabet now places every declaration it reads. That is '
+                . 'the day this guard should widen to it - see the doc-block on '
+                . 'testNoCopiedTestMethodHasDriftedUnrecorded() - but confirm the scanner is '
+                . 'still reporting before believing it, because a dead one reports exactly this',
+        );
+
+        $notDuplicates = [];
+        foreach ($wideUnparseable as $problem) {
+            if (!str_contains($problem, 'is declared twice in this file')) {
+                $notDuplicates[] = $problem;
+            }
+        }
+        $this->assertSame(
+            [],
+            $notDuplicates,
+            'the wide public alphabet is unplaceable for a reason OTHER than a name declared '
+                . 'twice in one file. The restriction to test* is justified by the unplaceable '
+                . 'declarations all being this scanner\'s own bookkeeping; a different cause is '
+                . 'a different argument and may well be a real defect. The wide run read '
+                . $wideDeclarations . ' declarations and could not place '
+                . \count($wideUnparseable) . '.',
+        );
+
+        $this->assertSame(
+            [],
+            $narrowUnparseable,
+            'restricting the public alphabet to test* no longer produces a clean report - it '
+                . 'read ' . $narrowDeclarations . ' declarations and could not place '
+                . \count($narrowUnparseable) . '. That restriction is the only reason this '
+                . 'guard can run the public half at all, so this is a change to what the guard '
+                . 'covers and not a cosmetic failure.',
+        );
+    }
+
+    /**
+     * THE SUBJECT CLASSIFIER, PINNED IN BOTH POLARITIES.
+     *
+     * {@see isSubjectSpelling()} SUBTRACTS from every report it touches, and a
+     * subtractor is the one kind of instrument a green suite cannot vouch for:
+     * stuck at yes it empties three assertions of `[]` and they all pass. So it
+     * is exercised here on cases whose answers are known before it is trusted
+     * on the tree — a positive it must clear, and three negatives it must not,
+     * each a different way the predicate could rot.
+     */
+    private function assertTheSubjectClassifierIsAlive(): void
+    {
+        $token = static fn (string $text): array => [\T_STRING . ':' . $text];
+
+        // POSITIVE: each side names its own file's subject.
+        $this->assertTrue(
+            self::isSubjectSpelling(
+                $token('Effort'),
+                $token('TaskStatus'),
+                'Agents/EffortTest.php',
+                'Agents/TaskStatusTest.php',
+            ),
+            'the shape the classifier exists for was not recognised, so it is subtracting '
+                . 'nothing and every report it filters is unfiltered',
+        );
+
+        // NEGATIVE, AND THE ONE THAT MATTERS: a helper naming the OTHER file's
+        // subject is the copied-and-not-updated defect itself.
+        $this->assertFalse(
+            self::isSubjectSpelling(
+                $token('TaskStatus'),
+                $token('TaskStatus'),
+                'Agents/EffortTest.php',
+                'Agents/TaskStatusTest.php',
+            ),
+            'a copy that reflects the class the OTHER file is about was classified as naming '
+                . 'its own subject. That is precisely a test copied and not updated, and the '
+                . 'classifier would be hiding it',
+        );
+
+        // NEGATIVE: a differing token that is not a T_STRING at all.
+        $this->assertFalse(
+            self::isSubjectSpelling(
+                [\T_LNUMBER . ':10'],
+                [\T_LNUMBER . ':15'],
+                'Agents/EffortTest.php',
+                'Agents/TaskStatusTest.php',
+            ),
+            'a differing NUMBER was classified as a subject spelling - a changed bound, cap or '
+                . 'timeout is a behaviour difference and must never be subtracted',
+        );
+
+        // NEGATIVE: more than one token on a side is not "the same helper
+        // pointed elsewhere", whatever those tokens say.
+        $this->assertFalse(
+            self::isSubjectSpelling(
+                [\T_STRING . ':Effort', \T_STRING . ':Effort'],
+                $token('TaskStatus'),
+                'Agents/EffortTest.php',
+                'Agents/TaskStatusTest.php',
+            ),
+            'a two-token divergence was classified as a subject spelling',
+        );
+
+        // NEGATIVE, and the reason the predicate is not a substring test: a
+        // single letter appears in almost every filename.
+        $this->assertFalse(
+            self::isSubjectSpelling(
+                $token('t'),
+                $token('t'),
+                'Agents/EffortTest.php',
+                'Agents/TaskStatusTest.php',
+            ),
+            'a one-letter token that merely occurs somewhere inside both filenames was '
+                . 'classified as naming their subjects',
+        );
+
+        // NEGATIVE, AND THE ONE A PREFIX TEST GOT WRONG. `Task` is a real class
+        // AND a prefix of `TaskStatus`, so a copy in TaskStatusTest reflecting
+        // Task reads as "names its own subject" under any prefix rule -- while
+        // being exactly the copied-and-not-updated defect. The families where
+        // this bites are the specialised variants a test is copied FROM:
+        // Agent/AgentManager, Team/TeamConfig, Task/TaskStatus.
+        $this->assertFalse(
+            self::isSubjectSpelling(
+                $token('Effort'),
+                $token('Task'),
+                'Agents/EffortTest.php',
+                'Agents/TaskStatusTest.php',
+            ),
+            'a copy in TaskStatusTest reflecting Task - the WRONG class, whose name merely '
+                . 'begins the right one - was classified as naming its own subject. That is '
+                . 'the defect this whole file exists to catch, cleared by its own classifier',
+        );
+
+        // POSITIVE, and the reason the rule is not simply `===`: a scenario-
+        // suffixed file name has no type of its own, and the class it is about
+        // is a proper prefix of it. This is the `maxStderrBytes` pair, which
+        // used to need a prose row in ACCEPTED_DIVERGENCE.
+        $this->assertTrue(
+            self::isSubjectSpelling(
+                $token('LspConnection'),
+                $token('StdioMcpServer'),
+                'LSP/LspConnectionStdinWedgeTest.php',
+                'MCP/StdioMcpServerStderrDrainTest.php',
+            ),
+            'a scenario-suffixed test file naming the class it is actually about was NOT '
+                . 'cleared, so retiring the maxStderrBytes row left a real pair reported as '
+                . 'drift',
+        );
+
+        // THE TYPE SCAN IS ALIVE. Everything above rests on knowing which
+        // subjects are declared types; a scan returning nothing would silently
+        // relax the rule back to the prefix form that the negative above
+        // exists to reject, and every assertion here would still pass except
+        // that one. No count is asserted - a cardinality over src/ is wrong in
+        // the next lane - only that it found something and can answer both ways.
+        $types = self::declaredTypeNames();
+        $this->assertNotSame([], $types, 'the src/ type scan found nothing, so every subject '
+            . 'looks like a scenario description and the classifier has quietly relaxed to a '
+            . 'prefix test');
+        $this->assertArrayHasKey('TaskStatus', $types, 'the src/ type scan cannot see a class '
+            . 'it must see for the negative above to mean anything');
+        $this->assertArrayNotHasKey('LspConnectionStdinWedge', $types, 'a scenario description '
+            . 'is being reported as a declared type, which would refuse the positive above');
     }
 
     /**
@@ -724,6 +1139,249 @@ final class DuplicatedTestHelperDriftTest extends TestCase
             ['static', '::'],
             ['parent', '::'],
         ], true);
+    }
+
+    /**
+     * THE SUBJECT OF A TEST FILE: its basename with a trailing `Test` removed.
+     *
+     * Derived from the path rather than from a roster, so it moves when a file
+     * is renamed and cannot go stale in the way a written-down list of pairs
+     * would.
+     */
+    private static function subjectOf(string $relative): string
+    {
+        return (string) \preg_replace('/Test$/', '', \basename($relative, '.php'));
+    }
+
+    /**
+     * TWO COPIES OF ONE HELPER THAT DIFFER ONLY IN NAMING THEIR OWN FILE'S
+     * SUBJECT ARE NOT DRIFT — they are the same helper pointed at the class
+     * each file is about.
+     *
+     * WHAT THE TREE SAID BEFORE THIS PREDICATE EXISTED, kept because deleting
+     * the reasoning is how the next reader deletes the guard. An
+     * `ACCEPTED_DIVERGENCE` row for `maxStderrBytes` stood here and read, in
+     * part: *"the differing token is the CLASS the constant is read off: one
+     * copy reflects on `LspConnection::MAX_STDERR_BYTES`, the other on
+     * `StdioMcpServer::MAX_STDERR_BYTES`, and each is the class its own file is
+     * about. Making the two agree would be the bug."* WHAT IS TRUE NOW: that
+     * sentence was correct about the code and wrong about where the fix
+     * belonged. A row is a licence keyed by NAME, so it excuses that helper
+     * for ever and excuses nothing else; the property it was really describing
+     * — *each copy names its own subject* — is checkable, and once checked it
+     * covers every helper of that shape without anybody arguing a row. WHY
+     * THIS STILL EARNS ITS PLACE: the row's closing advice ("if a third stdio
+     * class grows one, give it the same helper against its own constant")
+     * needed a human to follow it. This predicate simply answers yes for the
+     * third one.
+     *
+     * AND IT IS WHAT MAKES THE `public` ALPHABET AFFORDABLE, which is the
+     * second half of the argument. Measured on PHP 8.3.6 over `tests/` at the
+     * commit that added this: with the `test*` population scanned and this
+     * predicate NOT applied, 12 names and 54 pairs are reported, each differing
+     * in a single token naming the class its own file tests. MOST are
+     * `tryFrom`/`from` enum tests — but NOT all of them, and the sentence here
+     * used to say otherwise. Seven of the 54 are ordinary behavioural tests
+     * duplicated across two suites ({@see testEvent} across two hook suites,
+     * two `completeAsync` tests across two backend suites, two timeout-bound
+     * tests across two config suites, and a constructor test across two parser
+     * suites), which strengthens the case for the predicate rather than
+     * weakening it: the shape is not peculiar to enums. Answering these with 12
+     * prose rows would have been 12 licences bought to close one hole — and the
+     * next test copied into the tree would have needed a thirteenth.
+     *
+     * EACH SIDE'S TOKEN MUST NAME ITS OWN FILE'S SUBJECT, and how strictly that
+     * is enforced is {@see namesItsOwnSubject()}'s problem rather than this
+     * one's -- see there for why an exact match is required of a subject that
+     * is itself a declared type and a prefix is allowed of one that is not.
+     * Reflecting the WRONG class is precisely the copied-and-not-updated defect
+     * this file exists for, so the asymmetry is the point; an earlier prefix-
+     * only form claimed that asymmetry and did not deliver it.
+     *
+     * @param list<string> $leftCore  normalised `id:text` tokens
+     * @param list<string> $rightCore normalised `id:text` tokens
+     */
+    private static function isSubjectSpelling(
+        array $leftCore,
+        array $rightCore,
+        string $leftFile,
+        string $rightFile,
+    ): bool {
+        $names = static function (array $core): ?string {
+            if (\count($core) !== 1) {
+                return null;
+            }
+            $at = \strpos($core[0], ':');
+            if ($at === false || (int) \substr($core[0], 0, $at) !== \T_STRING) {
+                return null;
+            }
+            $text = \substr($core[0], $at + 1);
+
+            return $text === '' ? null : $text;
+        };
+
+        $left = $names($leftCore);
+        $right = $names($rightCore);
+        if ($left === null || $right === null) {
+            return false;
+        }
+
+        return self::namesItsOwnSubject(self::subjectOf($leftFile), $left)
+            && self::namesItsOwnSubject(self::subjectOf($rightFile), $right);
+    }
+
+    /**
+     * Does $token name the class $subject's file is ABOUT?
+     *
+     * EXACT, EXCEPT FOR SCENARIO-SUFFIXED FILE NAMES, and the exception is the
+     * whole difficulty. `TaskStatusTest` is about `TaskStatus`, so its token
+     * must be `TaskStatus`. But `LspConnectionStdinWedgeTest` is about
+     * `LspConnection` -- the rest of the name says which scenario, not which
+     * class -- so demanding an exact match there would report a pair that is
+     * not drift.
+     *
+     * WHAT THIS SAID BEFORE, kept because deleting the reasoning is how the
+     * next reader deletes the guard: a plain `str_starts_with`, defended as
+     * "deliberately narrow in one direction -- a helper in `FooTest` that
+     * reflects `Bar` is not excused, and that asymmetry is the point". WHAT IS
+     * TRUE NOW: it was not narrow in that direction at all. A prefix test
+     * excuses a copy that names the WRONG class whenever the wrong class's
+     * name is a prefix of the right one's, and those are exactly the
+     * specialised-variant families a test gets copied FROM -- `Task` against
+     * `TaskStatus`, `Agent` against `AgentManager`, `Team` against
+     * `TeamConfig`. Measured: a `test*` method in `Agents/TaskStatusTest`
+     * changed to reflect `Task` -- the canonical copied-and-not-updated defect,
+     * and the one this file exists for -- was cleared by the predicate and the
+     * guard stayed green.
+     *
+     * WHY THIS STILL EARNS ITS PLACE, and why the answer is not simply `===`:
+     * the latitude is only ever needed where the subject is NOT itself a type.
+     * So it is granted only there. Measured on PHP 8.3.6 over `tests/`, this
+     * rule clears every pair the prefix form cleared -- all 54 in the `test*`
+     * population and the one `maxStderrBytes` pair in the `private` one -- while
+     * rejecting the `Task`/`TaskStatus` shape that the prefix form let through.
+     * Tightening to `===` would also have closed the hole, but at the price of
+     * putting `maxStderrBytes` back into {@see ACCEPTED_DIVERGENCE} as a prose
+     * row; this keeps the row retired.
+     *
+     * A DEAD TYPE SCAN FAILS SAFE. If {@see declaredTypeNames()} returned
+     * nothing, every subject would look like a non-type and the rule would
+     * relax to the prefix form -- so the scan being alive is asserted in
+     * {@see assertTheSubjectClassifierIsAlive()} rather than assumed.
+     */
+    private static function namesItsOwnSubject(string $subject, string $token): bool
+    {
+        if ($subject === $token) {
+            return true;
+        }
+
+        if (isset(self::declaredTypeNames()[$subject])) {
+            return false;
+        }
+
+        return \str_starts_with($subject, $token);
+    }
+
+    /**
+     * The short names of every type declared under `src/`, as a set.
+     *
+     * Read from FILE NAMES rather than by parsing or autoloading: this package
+     * is PSR-4, so a type's short name is its file's basename, and the question
+     * being asked -- "is `LspConnectionStdinWedge` a class in this package, or
+     * a scenario description?" -- does not need the class to be loadable. No
+     * count is written down anywhere; a cardinality over `src/` taken in one
+     * lane is wrong in another.
+     *
+     * @return array<string,true>
+     */
+    private static function declaredTypeNames(): array
+    {
+        static $names = null;
+
+        if ($names !== null) {
+            return $names;
+        }
+
+        $names = [];
+        $root = \dirname(__DIR__, 2) . '/src';
+
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root)) as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+            $names[\basename($file->getFilename(), '.php')] = true;
+        }
+
+        return $names;
+    }
+
+    /**
+     * Split a {@see driftReport()} report into the pairs that still count as
+     * drift and the pairs {@see isSubjectSpelling()} explains.
+     *
+     * A description this cannot split goes to `unreadable` rather than to
+     * either bucket. Rule: a guard must go red on what it cannot parse — a
+     * pair quietly filed as "explained" because the classifier could not see
+     * its files is a hole shaped exactly like the next copied helper.
+     *
+     * @param array<string,list<string>>                              $drifted
+     * @param array<string,list<array{list<string>,list<string>}>>    $cores
+     *
+     * @return array{array<string,list<string>>, array<string,list<string>>, list<string>}
+     *         name => still-drifted pairs, name => subject-spelling pairs,
+     *         descriptions that could not be split
+     */
+    private static function partitionBySubject(array $drifted, array $cores): array
+    {
+        $real = [];
+        $subject = [];
+        $unreadable = [];
+
+        foreach ($drifted as $name => $pairs) {
+            foreach ($pairs as $index => $description) {
+                $files = self::filesOf($description);
+                if ($files === null) {
+                    $unreadable[] = $name . ': ' . $description;
+
+                    continue;
+                }
+                [$leftCore, $rightCore] = $cores[$name][$index] ?? [null, null];
+                if (!\is_array($leftCore) || !\is_array($rightCore)) {
+                    $unreadable[] = $name . ': no divergence core for ' . $description;
+
+                    continue;
+                }
+                if (self::isSubjectSpelling($leftCore, $rightCore, $files[0], $files[1])) {
+                    $subject[$name][] = $description;
+
+                    continue;
+                }
+                $real[$name][] = $description;
+            }
+        }
+
+        return [$real, $subject, $unreadable];
+    }
+
+    /**
+     * The two files a {@see driftReport()} pair description names.
+     *
+     * Reading them back out of the description is a second reading of the
+     * walk's answer, which this file argues against everywhere else — so the
+     * pairing is asserted rather than assumed by every caller, and a
+     * description this cannot split reaches the caller as `null` instead of as
+     * a silently unclassified pair.
+     *
+     * @return array{string,string}|null
+     */
+    private static function filesOf(string $description): ?array
+    {
+        if (\preg_match('/^(\S+) \[.*\] vs (\S+) \[/', $description, $matched) !== 1) {
+            return null;
+        }
+
+        return [$matched[1], $matched[2]];
     }
 
     /**
@@ -989,9 +1647,19 @@ final class DuplicatedTestHelperDriftTest extends TestCase
      * through this same report by
      * {@see testRelaxingTheBoundToTwoTokensBringsInOnlyAReceiverSpelling()}.
      *
+     * THE NAME FILTER IS A PARAMETER FOR THE THIRD TIME THE SAME REASON. The
+     * `public` alphabet cannot be run whole -- measured on PHP 8.3.6 over
+     * `tests/`, it reports 520 declarations it cannot place, every one of them
+     * a method name declared twice in one file by two anonymous test doubles,
+     * which this name => file => body report has nowhere to put. Restricting
+     * the population is therefore part of asking the question, not a way of
+     * dodging it, and it belongs where the alphabet and the bound already are:
+     * in the parameter list, where a test can vary it and show what it costs.
+     *
      * @param array<string,string> $sources
      * @param list<int>            $visibility token ids one of which must carry the declaration
      * @param int|null             $bound      per-side divergence bound; null means {@see DRIFT_BOUND}
+     * @param \Closure|null         $accepts    name => bool; null accepts every readable declaration
      *
      * @return array{array<string,list<string>>, list<string>, int, array<string,list<array{list<string>,list<string>}>>, array<string,list<string>>}
      *         name => pair descriptions, unparseable declarations, declarations
@@ -1008,6 +1676,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         array $sources,
         array $visibility = [\T_PRIVATE],
         ?int $bound = null,
+        ?\Closure $accepts = null,
     ): array {
         $bound ??= self::DRIFT_BOUND;
 
@@ -1020,8 +1689,16 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         foreach ($sources as $relative => $source) {
             foreach (self::declarationsIn($source, $visibility) as $declaration) {
                 if ($declaration['body'] === null || $declaration['signature'] === null) {
+                    // The name filter is deliberately NOT consulted here. A
+                    // declaration this scanner could not read has no name to
+                    // filter ON, and dropping it because it MIGHT have been out
+                    // of scope is exactly the silent narrowing rule 14 is
+                    // about: it would be indistinguishable from a clean read.
                     $unparseable[] = $relative . ': ' . $declaration['problem'];
 
+                    continue;
+                }
+                if ($accepts !== null && !$accepts($declaration['name'])) {
                     continue;
                 }
                 if (isset($declarations[$declaration['name']][$relative])) {
@@ -1399,29 +2076,5 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         }
 
         return null;
-    }
-
-    /**
-     * Every `.php` file under `tests/`, keyed by its path relative to `tests/`.
-     *
-     * @return array<string,string> relative path => absolute path
-     */
-    private static function everyTestFile(): array
-    {
-        $root = \dirname(__DIR__);
-        $found = [];
-
-        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
-        foreach ($files as $file) {
-            /** @var \SplFileInfo $file */
-            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
-                continue;
-            }
-            $found[substr($file->getPathname(), \strlen($root) + 1)] = $file->getPathname();
-        }
-
-        ksort($found);
-
-        return $found;
     }
 }
