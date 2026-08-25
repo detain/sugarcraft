@@ -124,7 +124,20 @@ final class DuplicatedDocBlockLineTest extends TestCase
         // IT IS ALSO WHAT PINS {@see isPhp()}. `bin/` holds exactly one file
         // and that file has no `.php` extension, so the shebang arm dying is
         // indistinguishable from `bin/` being empty — and both red here.
-        foreach (['tests', ...self::SOURCE_ROOTS] as $root) {
+        //
+        // THE ROOTS ARE SPELLED HERE AND NOT READ FROM {@see SOURCE_ROOTS},
+        // and that is the whole difference between this assertion and a
+        // decoration. The first version of it iterated the constant the WALK
+        // uses, so emptying that constant emptied the check with it: mutation
+        // -checked, `SOURCE_ROOTS = []` left this test green at 19 assertions
+        // — the identical survival, one level up, that this test was being
+        // rewritten to close (rule 43: a prescription honestly satisfied that
+        // pins nothing). A guard that derives its expectation from the thing
+        // it guards has no expectation. This list is the CONTRACT — the roots
+        // this file's argument claims to cover — and a root deliberately
+        // dropped from the walk is meant to red here and be argued, not to
+        // disappear quietly.
+        foreach (['tests', 'src', 'bin', 'examples', 'workflows'] as $root) {
             $contributed = array_filter(
                 array_keys($sources),
                 static fn (string $where): bool => str_starts_with($where, $root . '/'),
