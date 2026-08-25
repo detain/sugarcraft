@@ -219,7 +219,7 @@ final class ChildWallClockBudgetTest extends TestCase
      * every spelling seen in this tree.
      *
      * @return array{
-     *     literal: list<array{0: string, 1: int, 2: int}>,
+     *     literal: list<array{0: string, 1: int, 2: int, 3: string}>,
      *     parametrised: list<string>,
      *     unresolved: list<string>,
      * }
@@ -235,7 +235,7 @@ final class ChildWallClockBudgetTest extends TestCase
 
             foreach (self::wallClockWrappersIn(self::readOrFail($path)) as [$line, $kind, $seconds, $why]) {
                 if ($kind === 'literal') {
-                    $literal[] = [$label, $line, $seconds];
+                    $literal[] = [$label, $line, $seconds, $why];
 
                     continue;
                 }
@@ -296,13 +296,19 @@ final class ChildWallClockBudgetTest extends TestCase
             if (preg_match_all($whole, $text, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) > 0) {
                 foreach ($matches as $hit) {
                     [$word, $offset] = $hit[2];
+                    // THE COMMAND AS MATCHED, never a spelling assembled from
+                    // the shape the scan was first written against. The row for
+                    // an unflagged site used to be rendered with `-s KILL` in
+                    // it because the renderer hard-coded the flags — a failure
+                    // message quoting a command that is not in the file.
+                    $as = rtrim(self::WRAPPER . preg_replace('/[ \t]+/', ' ', $hit[1][0]));
                     if (preg_match('/^\d+$/', $word) === 1) {
-                        $rows[] = [$at($offset), 'literal', (int) $word, ''];
+                        $rows[] = [$at($offset), 'literal', (int) $word, $as];
 
                         continue;
                     }
                     if ($word === '%d') {
-                        $rows[] = [$at($offset), 'parametrised', 0, ''];
+                        $rows[] = [$at($offset), 'parametrised', 0, $as];
 
                         continue;
                     }
@@ -887,14 +893,16 @@ final class ChildWallClockBudgetTest extends TestCase
      * nothing. {@see testTheComparisonRejectsBudgetsWhoseAnswerIsKnown()} drives
      * this with rows either side of the boundary.
      *
-     * A ROW WHOSE VALUE IS NOT WRITTEN AT ITS OWN LINE SAYS SO, and that is the
-     * second reason this method exists rather than the first. The rows folded
-     * in from the token census carry a `file:line` that is the `sprintf()`
-     * CALL, while the number itself lives in a constant or in a caller's
-     * argument list — so a reader sent to `SuiteChildStdinIsolationTest.php:421`
-     * finds `-s KILL %d` there and no number at all. Element 3, when a row has
-     * one, is {@see resolveArgument()}'s provenance for that value, and it is
-     * printed rather than dropped.
+     * ELEMENT 3 IS WHERE THE NUMBER ACTUALLY LIVES, and it is the second reason
+     * this method exists rather than the first. Rows folded in from the token
+     * census carry a `file:line` that is the `sprintf()` CALL, while the value
+     * is in a constant or in a caller's argument list — so a reader sent to a
+     * parametrised site finds a placeholder there and no number at all. For a
+     * literal row it is instead the command AS MATCHED. Both are printed;
+     * neither is reconstructed. The first draft rendered every row with
+     * `-s KILL` spliced in, so the two unflagged sites the widened alphabet
+     * had just brought into scope were reported with a command that is not
+     * written anywhere in the file the reader is being sent to.
      *
      * @param list<array{0: string, 1: int, 2: int, 3?: string}> $rows
      *
@@ -910,10 +918,10 @@ final class ChildWallClockBudgetTest extends TestCase
             }
             // ASSEMBLED for the same reason the fixture's expectations are: a
             // literal here is a match for this census's own scan of this file.
-            $report = $label . ':' . $line . ' — ' . self::WRAPPER . ' -s ' . 'KILL ' . $seconds;
+            $report = $label . ':' . $line . ' — ' . $seconds . 's';
             $via = $row[3] ?? '';
             if ($via !== '') {
-                $report .= ' (parametrised; the value is not at that line — it comes from ' . $via . ')';
+                $report .= ' — ' . $via;
             }
             $tooLoose[] = $report;
         }
@@ -930,22 +938,30 @@ final class ChildWallClockBudgetTest extends TestCase
      */
     public function testTheComparisonRejectsBudgetsWhoseAnswerIsKnown(): void
     {
-        $rows = [
-            ['fixture/Far.php', 1, 5],
-            ['fixture/At.php', 2, 50],
-            ['fixture/OneOver.php', 3, 51],
-            ['fixture/AtTheLimit.php', 4, 60],
-        ];
-
         // THE EXPECTED STRINGS ARE ASSEMBLED, NEVER SPELLED (rule 26). This file
         // is inside its own roster: a literal command-and-number written here
         // is scraped by the census as a real child budget, and the first draft
         // of this fixture reported ITSELF as two offenders.
-        $shape = self::WRAPPER . ' -s ' . 'KILL ';
+        $shape = self::WRAPPER . ' -s ' . 'KILL';
+
+        // AND THE DETAIL COLUMN IS PINNED IN BOTH ITS FLAVOURS. A literal row
+        // carries the command AS MATCHED — the unflagged site below is the
+        // shape a hard-coded `-s KILL` in the renderer got WRONG — and a
+        // parametrised row carries the provenance of a value that is not
+        // written at its own line.
+        $rows = [
+            ['fixture/Far.php', 1, 5, $shape],
+            ['fixture/At.php', 2, 50, $shape],
+            ['fixture/OneOver.php', 3, 51, $shape],
+            ['fixture/AtTheLimit.php', 4, 60, self::WRAPPER],
+            ['fixture/ViaConstant.php', 7, 52, 'self::TREATMENT_BOUND'],
+        ];
+
         $this->assertSame(
             [
-                'fixture/OneOver.php:3 — ' . $shape . '51',
-                'fixture/AtTheLimit.php:4 — ' . $shape . '60',
+                'fixture/OneOver.php:3 — 51s — ' . $shape,
+                'fixture/AtTheLimit.php:4 — 60s — ' . self::WRAPPER,
+                'fixture/ViaConstant.php:7 — 52s — self::TREATMENT_BOUND',
             ],
             $this->tooLooseIn($rows, 50),
             'the comparison does not separate a budget over the ceiling from one at or under '
@@ -959,6 +975,16 @@ final class ChildWallClockBudgetTest extends TestCase
             . 'rows for reasons of its own',
         );
 
+        // AND A ROW WITH NO DETAIL AT ALL STILL RENDERS, because the literal
+        // half of the census predates the column and a missing element 3 must
+        // not become a notice or an empty trailing separator.
+        $this->assertSame(
+            ['fixture/Bare.php:8 — 61s'],
+            $this->tooLooseIn([['fixture/Bare.php', 8, 61]], 60),
+            'a three-element row no longer renders, so the detail column is required rather '
+            . 'than optional',
+        );
+
         // AND THE SAME TWO ROWS AGAIN, DERIVED FROM THE CEILING THE GUARD
         // ACTUALLY USES. The four rows above are literals, so they cannot tell
         // a correct `ceiling()` from one widened by a hundred seconds — the
@@ -967,11 +993,11 @@ final class ChildWallClockBudgetTest extends TestCase
         // is what stops it moving anywhere it likes.
         $ceiling = $this->ceiling();
         $this->assertSame(
-            ['fixture/OverTheDerivedCeiling.php:6 — ' . $shape . ($ceiling + 1)],
+            ['fixture/OverTheDerivedCeiling.php:6 — ' . ($ceiling + 1) . 's — ' . $shape],
             $this->tooLooseIn(
                 [
-                    ['fixture/AtTheDerivedCeiling.php', 5, $ceiling],
-                    ['fixture/OverTheDerivedCeiling.php', 6, $ceiling + 1],
+                    ['fixture/AtTheDerivedCeiling.php', 5, $ceiling, $shape],
+                    ['fixture/OverTheDerivedCeiling.php', 6, $ceiling + 1, $shape],
                 ],
                 $ceiling,
             ),
@@ -1176,7 +1202,7 @@ final class ChildWallClockBudgetTest extends TestCase
         $of = static function (string $body): array {
             $rows = [];
             foreach (self::wallClockWrappersIn("<?php\n" . $body . "\n") as [, $kind, $seconds, $why]) {
-                $rows[] = $kind === 'literal' ? 'literal:' . $seconds : $kind . ':' . $why;
+                $rows[] = $kind === 'literal' ? 'literal:' . $seconds . ':' . $why : $kind . ':' . $why;
             }
 
             return $rows;
@@ -1186,16 +1212,22 @@ final class ChildWallClockBudgetTest extends TestCase
         // THE PLAIN FORM, WITH NO SIGNAL FLAG. Two live sites spell it this way
         // and the old alphabet — which required `-s KILL` — reported neither.
         $this->assertSame(
-            ['literal:10'],
+            ['literal:10:' . $w],
             $of("shell_exec('" . $w . " 10 ' . PHP_BINARY);"),
-            'the plain wrapper form is not seen, which is the exact hole two live sites sat in',
+            'the plain wrapper form is not seen, which is the exact hole two live sites sat in — '
+            . 'or it is seen and reported with flags it does not have',
         );
 
         // THE FLAGGED FORM, in every spelling timeout(1) takes ahead of the
         // duration. If the flag run is not consumed, the FLAG is read as the
         // budget and each of these becomes an unresolved row.
         $this->assertSame(
-            ['literal:20', 'literal:21', 'literal:22', 'literal:23'],
+            [
+                'literal:20:' . $w . ' -s KILL',
+                'literal:21:' . $w . ' -k 5 -s KILL',
+                'literal:22:' . $w . ' --signal=KILL',
+                'literal:23:' . $w . ' --foreground',
+            ],
             $of(
                 "exec('" . $w . " -s KILL 20 x');\n"
                 . "exec('" . $w . " -k 5 -s KILL 21 x');\n"
@@ -1209,7 +1241,7 @@ final class ChildWallClockBudgetTest extends TestCase
         // prefix that way, and `\b` does not fire between `s` and `t` — a left
         // boundary spelled `\b<wrapper>` misses it silently.
         $this->assertSame(
-            ['literal:24'],
+            ['literal:24:' . $w . ' -s KILL'],
             $of("exec(sprintf('%s" . $w . " -s KILL 24 %s', \$p, \$c));"),
             'a wrapper preceded by a printf conversion is invisible, so a `%s`-prefixed launch '
             . 'is certified as carrying no budget',
@@ -1217,7 +1249,7 @@ final class ChildWallClockBudgetTest extends TestCase
 
         // THE PLACEHOLDER, which is the token census's half.
         $this->assertSame(
-            ['parametrised:'],
+            ['parametrised:' . $w . ' -s KILL'],
             $of("exec(sprintf('" . $w . " -s KILL %d x', \$n));"),
             'the parametrised form is no longer routed to the resolver',
         );
