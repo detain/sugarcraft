@@ -369,14 +369,16 @@ YAML;
 
         $registry = new AgentPresetRegistry([$this->tempDir]);
 
-        // MEASURED, and the reason this shape is now forbidden tree-wide: with
-        // `$registry->load('bad-yaml')` DELETED OUTRIGHT this test still passed,
-        // 1 test / 2 assertions / rc 0. `fail()` throws AssertionFailedError,
-        // which extends PHPUnit\Framework\Exception, which extends
-        // \RuntimeException — so the catch below caught the fail() standing one
-        // line above it, and `assertNotEmpty()` was satisfied by the fail()
-        // message itself. The test asserted that load() throws and could not
-        // tell whether load() was called at all.
+        // The reason this shape is forbidden tree-wide, and the reason the
+        // `fail()` that used to sit inside this try now sits after it: `fail()`
+        // throws PHPUnit\Framework\AssertionFailedError, and MEASURED on
+        // PHPUnit 10.5.64 its parents are PHPUnit\Framework\Exception ->
+        // \RuntimeException -> \Exception. The catch below therefore caught the
+        // fail() standing one line above it, and `assertNotEmpty()` was then
+        // satisfied by the fail() message itself. In the old shape this test
+        // asserted that load() throws while being unable to tell whether load()
+        // was called at all. {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}
+        // for the guard that now refuses the shape tree-wide.
         $caught = null;
 
         try {
@@ -386,12 +388,30 @@ YAML;
         }
 
         $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
-        // The RuntimeException wraps Symfony's ParseException; the actual
-        // message is the ParseException message since that is what was
-        // re-thrown. `assertNotEmpty()` alone is satisfiable by ANY message, so
-        // it is paired with a substring the parse failure genuinely carries.
+
+        // WHAT THIS SAID: "The RuntimeException wraps Symfony's ParseException".
+        // WHAT IS TRUE NOW: nothing wraps it. MEASURED on PHP 8.3.6 against this
+        // exact fixture, load() lets Symfony's own
+        // Symfony\Component\Yaml\Exception\ParseException escape uncaught --
+        // getPrevious() is null and get_class() is ParseException, which reaches
+        // the catch above only because ParseException is itself a
+        // \RuntimeException. AgentPresetRegistry::parsePresetFile() does own a
+        // message that WOULD name the file, "Invalid YAML frontmatter in:
+        // {$filePath}", but that is the OTHER branch -- the one for frontmatter
+        // that parses to a non-array -- and malformed YAML never reaches it
+        // because Frontmatter::parse() throws first. An earlier draft of this
+        // test asserted the message contained 'bad-yaml.md' for exactly that
+        // reason and was red.
+        // WHY THIS STILL EARNS ITS PLACE: assertNotEmpty() alone is satisfied by
+        // ANY message, including the one a swallowed fail() would have carried,
+        // so it is paired with text this parse failure genuinely emits.
         $this->assertNotEmpty($caught->getMessage());
-        $this->assertStringContainsString('bad-yaml.md', $caught->getMessage());
+        $this->assertStringContainsString(
+            'Malformed inline YAML',
+            $caught->getMessage(),
+            'load() threw, but not for the YAML parse failure this fixture writes -- so the '
+            . 'test is pinning some other refusal and the parse path could be gone',
+        );
     }
 
     // -------------------------------------------------------------------------
