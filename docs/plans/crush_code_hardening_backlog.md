@@ -15847,11 +15847,11 @@ numbers.** A prepped script's PROSE rots the same way: the ownership map, the lo
 the rules block are written against the round they were drafted for, and the base moves after they are
 written. Re-read them at launch, not just the figures.
 
-## Round 56 — lane a (the bugs the user hit). Ea56-1 … Ea56-5.
+## Round 56 — lane a (the bugs the user hit). E493 … E497.
 
 *Provisional lane-prefixed ids (rule 20); the supervisor renumbers at merge.*
 
-### Ea56-1 — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
+### E493 — 🔴 E456 does NOT make a BATCH provider's turn idle-timeout-proof, and cannot
 
 **Recorded 2026-08-25 by lane a.** Severity: medium. This is the defect E456's implementer chose to
 record rather than half-fix, and it needed an id.
@@ -15875,7 +15875,7 @@ both interact with the reap bookkeeping in `self::$unreapedChildren`.
 resurrects the hang the constant exists to bound, and a blanket total-request timeout on an LLM call is
 prohibited outright — completions can legitimately run tens of minutes.
 
-### Ea56-2 — E456's channel reaches the parent process and nothing paints it
+### E494 — E456's channel reaches the parent process and nothing paints it
 
 **Recorded 2026-08-25 by lane a.** Severity: medium, functionality. **OUT OF LANE and therefore not
 done**: closing it needs `src/Chat.php`, which no round-56 lane owned.
@@ -15912,7 +15912,7 @@ channel corrupts the CONVERSATION rather than the display.
 `ReasoningProgressTest::testAThoughtNeverEntersTheAssistantsOwnWords()` is the guard, and the mutation
 that routes reasoning into `$buffer` KILLS it.
 
-### Ea56-3 — `Backend`'s interface uses implicitly-nullable parameters, deprecated on the 8.4 leg CI runs
+### E495 — `Backend`'s interface uses implicitly-nullable parameters, deprecated on the 8.4 leg CI runs
 
 **Recorded 2026-08-25 by lane a.** Severity: low, rising to high if the 8.4 leg starts failing on
 deprecations. **NOT MEASURED ON 8.4** — this box has only PHP 8.3.6 and rule 5 forbids pretending
@@ -15938,7 +15938,7 @@ own commit rather than a ride-along.
 surfaces it as a deprecation notice or as a failure depends on configuration nobody in this round could
 measure.
 
-### Ea56-4 — the idle-ceiling guard was a source-text scan, and a real clock harness now exists
+### E496 — the idle-ceiling guard was a source-text scan, and a real clock harness now exists
 
 **Recorded 2026-08-25 by lane a.** Severity: low, coverage.
 
@@ -15959,7 +15959,7 @@ behavioural test does not, namely that the timer is armed in exactly ONE place. 
 behavioural arm for "an ordinary multi-step tool turn outlives the ceiling", which is the original §1 E1
 defect and is still pinned only by prose.
 
-### Ea56-5 — three test doubles hold generic names at the top level of a SHARED test namespace
+### E497 — three test doubles hold generic names at the top level of a SHARED test namespace
 
 **Recorded 2026-08-25 by lane a, from its own review.** Severity: low, merge hygiene.
 
@@ -15973,12 +15973,12 @@ Cheap fix, whenever anyone is in that file for another reason: nest each double 
 test, or prefix them (`E456StreamingDouble`). Not done in-round because it is a rename across a file
 another lane may hold, and a rename conflict is worse than the risk it removes.
 
-## Round 56 — lane b (mcp-lsp remainder). Eb56-1 … Eb56-13.
+## Round 56 — lane b (mcp-lsp remainder). E498 … E510.
 
 **Provisional lane-prefixed ids per the brief; the supervisor renumbers at merge. None of them is cited
 from a source file.**
 
-### Eb56-1 — `SymbolCitationDriftTest`'s alphabet cannot see a backticked cite, or anything in `tests/`
+### E498 — `SymbolCitationDriftTest`'s alphabet cannot see a backticked cite, or anything in `tests/`
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real, instrument gap. **Measured.** Out of lane
 (`sugar-crush/tests/SymbolCitationDriftTest.php`, plus two `src/` files it would newly flag).
@@ -16020,7 +16020,7 @@ and write it so the pattern never appears literally.
 guard's own file by path. Then fix the two `src/` cites above. The population figures here are provenance
 for this entry and must NOT be written into the test (rule 18) — the guard already asserts a floor.
 
-### Eb56-2 — E436's narrow catch has a live one-hop route, and the stdio half is closed
+### E499 — E436's narrow catch has a live one-hop route, and the stdio half is closed
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real. **Measured end to end.** The remaining half
 is out of lane (`sugar-crush/src/MCP/McpClient.php`, `sugar-crush/src/MCP/HttpMcpServer.php`).
@@ -16062,7 +16062,7 @@ move E412's `TypeError` into `parseTools()`. (b) `HttpMcpServer::start()` wraps 
 `catch (\Exception)`, so a Guzzle `InvalidArgumentException` there is already converted to a
 `RuntimeException`; only `\Error` escapes it.
 
-### Eb56-3 — `readMessages()` dropped any reply that did not arrive whole in one call
+### E500 — `readMessages()` dropped any reply that did not arrive whole in one call
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: real. **Measured. Fixed this round.** In lane
 (`sugar-crush/src/ClaudeCodeMcpClient.php`).
@@ -16085,7 +16085,7 @@ It was written by editing the split offset to the end of the line, which left th
 write — so both arms crossed a boundary and the pair proved nothing. Caught only by running a
 known-answer case through it. Rule 13, in a probe built to check rule 13's subject.
 
-### Eb56-4 — E479's premise is false: `toArray()` was never a wire serialiser
+### E501 — E479's premise is false: `toArray()` was never a wire serialiser
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: finding-instrument correction. **Measured.
 Resolved this round.** In lane (`sugar-crush/src/McpMessage.php`).
@@ -16105,7 +16105,7 @@ message shapes rather than from a hand-written key list.
 ClaudeCodeMcpClient suite in the tree — 394 tests, 1276 assertions, rc 0. Nothing pinned it anywhere. It
 now has a row, in both polarities, because an always-true sentinel resolves nothing.
 
-### Eb56-5 — E476's site list was short, and the exception's discriminator is "selectable", not "valid"
+### E502 — E476's site list was short, and the exception's discriminator is "selectable", not "valid"
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: latent. **Measured. Fixed this round.** In lane
 (`sugar-crush/src/MCP/StdioMcpServer.php`).
@@ -16133,7 +16133,7 @@ companion and silently got the wrong polarity. Both doc-blocks corrected.
 `StdioMcpServer` is behind; on the between-exchange stderr drain (E440 / E475) the two are identical and
 BOTH still open. A change that made them merely agree would have closed one and not the other.
 
-### Eb56-6 — E475's severity claim holds, measured, and is now pinned
+### E503 — E475's severity claim holds, measured, and is now pinned
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: unchanged (minor, a stall). **Measured.** In lane.
 
@@ -16154,7 +16154,7 @@ the write loop alone leaves it green, and so does removing it from `refill()` al
 the child for a small request. Both removals together red it. That is the right scope, because the claim
 is about an EXCHANGE and an exchange is a write and a read.
 
-### Eb56-7 — `LspClient` carries pairs of character-identical method bodies
+### E504 — `LspClient` carries pairs of character-identical method bodies
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: hygiene, with a measured cost to instruments. Out
 of lane (`sugar-crush/src/LSP/LspClient.php`).
@@ -16172,7 +16172,7 @@ verdict would have recorded a sound test as vacuous.
 **STEP:** either collapse the pairs onto one implementation, or leave them and note in the file that any
 mutation of one branch must be anchored, because the harness cannot tell them apart. Prefer the first.
 
-### Eb56-8 — a 60s fixture lifetime under a 60s `defaultTimeLimit` turns an assertion into an abort
+### E505 — a 60s fixture lifetime under a 60s `defaultTimeLimit` turns an assertion into an abort
 
 **Recorded 2026-08-25 by round 56 lane b.** Severity: test-shape, general. **Measured.** Fixed in this
 lane's own new file; the pattern is worth checking elsewhere.
@@ -16193,7 +16193,7 @@ row pins. `StdioMcpServerWriteBoundsTest`'s `DEAF_SERVER_LIFETIME_SECONDS = 90` 
 `LspConnectionStdinWedgeTest`'s `DEAF_SERVER` `sleep(30)` are both deliberate and both documented; the
 question is whether their rows fail by assertion or by abort under the mutation each names.
 
-### Eb56-9 — `$readBuffer` is persistent and uncapped in all three framing classes
+### E506 — `$readBuffer` is persistent and uncapped in all three framing classes
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer's NOTE 12.** Severity: resource,
 family-wide, pre-existing. **Not this lane's defect** — the fix that made `ClaudeCodeMcpClient`'s
@@ -16217,7 +16217,7 @@ is a worse outcome than a refused one. Pin with a fixture emitting more than the
 and give the row a positive control (a frame just under the cap that still parses), or "the buffer stayed
 small" is satisfied by a reader that stopped reading.
 
-### Eb56-10 — the stacked-doc-comment guard scans `src/` only, and `tests/` has three instances
+### E507 — the stacked-doc-comment guard scans `src/` only, and `tests/` has three instances
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage).** Severity: guard coverage. **Measured.** Out of
 lane; reported, not reached for.
@@ -16240,7 +16240,7 @@ pushed through the SAME scanner in the SAME test, expecting exactly 1 — the "n
 assertion is otherwise satisfied by a scanner that has stopped matching. Expect the two pre-existing
 `ClaudeCodeMcpClientShutdownTest` instances to red on the first run; they are real.
 
-### Eb56-11 — `writeAll()` is a synchronous up-to-15-second block on the caller's thread
+### E508 — `writeAll()` is a synchronous up-to-15-second block on the caller's thread
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer.** Severity: latency shape, new
 this round. **Deliberate and better than what it replaced** — recorded because nothing measures or
@@ -16257,12 +16257,12 @@ whether the caller wants the bound threaded (as `LspConnection::writeMessage()` 
 inheriting the constant. Note the standing instruction against blanket total-request timeouts on LLM
 work — this is a PIPE write to a local child, not a completion, so the two are not the same question.
 
-### Eb56-12 — Eb56-1's widening needs a rule-15 fixture, and its own file must not spell the pattern
+### E509 — E498's widening needs a rule-15 fixture, and its own file must not spell the pattern
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer.** Severity: instrument. A rider
-on Eb56-1, filed separately because it is the half most likely to be skipped.
+on E498, filed separately because it is the half most likely to be skipped.
 
-Eb56-1 proposes widening `SymbolCitationDriftTest` to scrape `tests/**.php` and backticked PHP cites. An
+E498 proposes widening `SymbolCitationDriftTest` to scrape `tests/**.php` and backticked PHP cites. An
 "every citation resolves" assertion passes exactly as well with a dead scraper. The widened guard needs a
 known-positive inside the same test: a fabricated dangling cite pushed through the same `resolve()`,
 required to be reported.
@@ -16272,7 +16272,7 @@ PATH, and written so the backtick-cite pattern never appears literally in it —
 concatenation, never spell it in prose. Two separate incidents have had a sweep eat the file that
 documented the pattern it was sweeping.
 
-### Eb56-13 — `catch (\Throwable)` around a test body swallows PHPUnit's own assertion failures
+### E510 — `catch (\Throwable)` around a test body swallows PHPUnit's own assertion failures
 
 **Recorded 2026-08-25 by round 56 lane b (fix stage).** Severity: test-shape, general. **Measured**, and
 fixed in this lane's own file.
@@ -16297,7 +16297,7 @@ here because the shape is syntactic; it needs a known-positive fixture like anyt
 
 ---
 
-### Ec56-1 — 🔴 a test wrote 3 directories into the developer's REAL `~/.sugar-crush` on every suite run, and that is the cross-lane flake
+### E511 — 🔴 a test wrote 3 directories into the developer's REAL `~/.sugar-crush` on every suite run, and that is the cross-lane flake
 
 **FIXED this round.** E482's premise was inverted. `Agents/TeamTest` does not "assert on the real
 `~/.sugar-crush`" in the sense meant: it sandboxes BOTH spellings of `HOME` and reads the real config dir
@@ -16326,7 +16326,7 @@ is the user's home directory and deleting from it was not asked for. Someone sho
 
 ---
 
-### Ec56-2 — 🔴 a test leaked a 5s timer onto the SHARED ReactPHP loop, and the next test's `Loop::run()` was ending on it
+### E512 — 🔴 a test leaked a 5s timer onto the SHARED ReactPHP loop, and the next test's `Loop::run()` was ending on it
 
 **FIXED this round; a candidate mechanism for [[E490]] and offered as a candidate only.**
 
@@ -16357,7 +16357,7 @@ is gone — so any later observer truthfully finds a clean loop. The guard now l
 
 ---
 
-### Ec56-3 — the E490 watchdog inherited from a killed agent had two dead arms and one inverted mechanism claim
+### E513 — the E490 watchdog inherited from a killed agent had two dead arms and one inverted mechanism claim
 
 **FIXED this round.** `ba9eb998c` was committed by the supervisor from a killed implementer's untracked
 files and reviewed by nobody. Two mutations of it SURVIVED `--filter HangWatchdog`:
@@ -16379,7 +16379,7 @@ with no summary line. Measured via a mutation that fired the watchdog unconditio
 
 ---
 
-### Ec56-4 — the drift guard's alphabet could not see a copied TEST, and one prose row was really a classifier
+### E514 — the drift guard's alphabet could not see a copied TEST, and one prose row was really a classifier
 
 **FIXED this round (E481).** `DuplicatedTestHelperDriftTest` ran the `private` alphabet only; a test METHOD
 is public. Measured on PHP 8.3.6 over `tests/`, driving the real `driftReport()` by reflection:
@@ -16404,7 +16404,7 @@ reasoning rewritten into the classifier's doc-block, not deleted.
 
 ---
 
-### Ec56-5 — `deferred-wiring` was honoured in 58 libs and validated in one
+### E515 — `deferred-wiring` was honoured in 58 libs and validated in one
 
 **FIXED this round (E488).** The brief's claim that the hatch "never expires a row" is **not true** —
 round 55's `ManifestDependencyReachTest` already retires one three ways, and its own doc-block records
@@ -16426,7 +16426,7 @@ for every lib, and reports `IDLE_DEFERRAL` naming which condition failed.
 
 ---
 
-### Ec56-6 — `grep` in an agent shell is ugrep: E457's headline is wrong, and the real divergence is `.gitignore`
+### E516 — `grep` in an agent shell is ugrep: E457's headline is wrong, and the real divergence is `.gitignore`
 
 **MEASURED, not fixed — there is nothing in the tree to fix.** Three claims, checked on this host
 (ugrep 7.8.4 via the Claude Code shell function; GNU grep 3.11; bash; PHP-irrelevant):
@@ -16456,7 +16456,7 @@ ignored files".** Use `/usr/bin/grep` for any census whose answer is load-bearin
 
 ---
 
-### Ec56-7 — 🔴 the HOME census's exemption could be bought with a sentence, and the fix's own comment bought it
+### E517 — 🔴 the HOME census's exemption could be bought with a sentence, and the fix's own comment bought it
 
 **FIXED this round (review finding F1).** `OneSidedHomeSandboxTest` skipped any file whose source
 *contained* the string `HomeSandboxTrait`. `Integration/MultiAgentRefactorTest` — the file the guard was
@@ -16485,7 +16485,7 @@ moving only that has sandboxed nothing while appearing to try.
 
 ---
 
-### Ec56-8 — 🔴 the subject classifier excused the exact defect it claimed it could not
+### E518 — 🔴 the subject classifier excused the exact defect it claimed it could not
 
 **FIXED this round (review finding F2).** `isSubjectSpelling()` cleared a pair when each side's differing
 token was a **prefix** of its own file's subject, and the doc-block asserted the opposite in so many
@@ -16508,7 +16508,7 @@ its liveness is asserted rather than assumed.
 
 ---
 
-### Ec56-9 — two guards in one file prescribed opposite actions for one edit
+### E519 — two guards in one file prescribed opposite actions for one edit
 
 **FIXED this round (review finding F3).** `testNoCopiedTestMethodHasDriftedUnrecorded()` offers *"add the
 name to `ACCEPTED_DIVERGENCE`"* as a remedy, but `testEveryAcceptedDivergenceStillDescribesADriftedPair()`
@@ -16521,7 +16521,7 @@ with the union, **rc 1 — "Delete the row" — without it.**
 
 ---
 
-### Ec56-10 — 🔴 the E490 hang watchdog could SIGKILL a healthy run at bootstrap
+### E520 — 🔴 the E490 hang watchdog could SIGKILL a healthy run at bootstrap
 
 **FIXED this round (review finding F4).** The state directory is
 `sys_get_temp_dir()/candy-pty-hang-watchdog-<pid>` — a pid and nothing else — and `install()` tolerated it
@@ -16546,7 +16546,7 @@ the next person tidying up.
 
 ---
 
-### Ec56-11 — the residue census gave a comfortable zero for the residue with the worst consequence
+### E521 — the residue census gave a comfortable zero for the residue with the worst consequence
 
 **FIXED this round (review finding F6).** `SharedLoopResidue`'s doc-block says a guard must go red on what
 it cannot read, and applied that to an unknown loop **class** while leaving a known loop's unread
@@ -16567,7 +16567,7 @@ it for. The test now drains the queue's own `tick()` and touches nothing else.
 
 ---
 
-### Ec56-12 — a load-bearing justification was a number in prose with no generator
+### E522 — a load-bearing justification was a number in prose with no generator
 
 **FIXED this round (review finding F7, rule 18).** The entire argument for running the drift guard over
 `test*` rather than the whole `public` alphabet was a doc-block sentence: *"the whole alphabet reads 8,556
@@ -16584,7 +16584,7 @@ for the classifier rather than weakening it.
 
 ---
 
-### Ec56-13 — the round that widened the duplicated-helper guard added a duplicate it cannot see
+### E523 — the round that widened the duplicated-helper guard added a duplicate it cannot see
 
 **FIXED this round (review finding F13).** `OneSidedHomeSandboxTest::everyTestFile()` was a near-copy of
 `DuplicatedTestHelperDriftTest::everyTestFile()`, restructured just enough that the divergence is **20
