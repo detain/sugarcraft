@@ -493,6 +493,95 @@ final class LspConnectionStdinWedgeTest extends TestCase
         return $path;
     }
 
+    // =========================================================================
+    // The EINTR backstop, on the one path that has no deadline
+    // =========================================================================
+
+    /**
+     * A WRITE WITH NO DEADLINE STILL ENDS, BECAUSE THE CONSECUTIVE-FAILURE COUNT
+     * ENDS IT — and this row exists because the count shipped unpinned.
+     *
+     * MEASURED BY MUTATION before this row was written: deleting
+     * `|| $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES`
+     * from {@see LspConnection::writeMessage()}'s EINTR branch left the ENTIRE
+     * `tests/LSP/` directory green — 72 tests, 170 assertions, rc 0. The sibling
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} added the identical guard in
+     * the same change and pinned it; this copy had nothing.
+     *
+     * WHY THERE IS NO NO-STORM CONTROL, which the sibling's equivalent does have:
+     * it would HANG. MEASURED, and it is not a quirk of the fixture — with no
+     * deadline, no signals and a LIVE child that has stopped reading,
+     * `stream_select()` simply times out every {@see LspConnection::WRITE_POLL_MICROS}
+     * and the loop continues forever. `timeout 12 php probe.php` -> rc 124. The
+     * backstop only counts CONSECUTIVE FAILURES, and a timeout is not a failure.
+     * So the storm is not one arm of a comparison here; it is the only way to
+     * reach the branch at all.
+     *
+     * WHAT MAKES THIS ROW ATTRIBUTE THE EXIT TO THE BACKSTOP rather than to
+     * something else is an ENUMERATION, not a comparison. The loop has exactly
+     * four ways out, and the probe closes three of them:
+     *
+     *  1. the loop-top deadline — the probe passes `null`, so there is none;
+     *  2. `!childIsRunning()` in the same branch — `CHILDALIVE:true` is read
+     *     AFTER the call returns, so the child was up the whole time;
+     *  3. `$written === false` — a broken pipe, which needs a dead child; ruled
+     *     out by the same reading. A full pipe with a live child returns 0 or a
+     *     short count from `fwrite()`, never `false`;
+     *  4. the backstop. Nothing else is left.
+     *
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive takes,
+     * identical to 10 ms: ELAPSED 7.097 / 7.099 / 7.100, RESULT false,
+     * CHILDALIVE true, FRAMINGBROKEN true. That is 10000 failures in 7.1s, i.e.
+     * ~1408 per second — see {@see LspConnection::MAX_CONSECUTIVE_SELECT_FAILURES},
+     * whose own estimate this measurement corrected.
+     *
+     * FRAMINGBROKEN IS ASSERTED TOO, because abandoning a partly-written
+     * `Content-Length` message is precisely the case the latch exists for, and
+     * this is the only row in the suite that reaches it through the backstop.
+     */
+    public function testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop(): void
+    {
+        [$rc, $out, $elapsed] = $this->runStormProbe();
+
+        $this->assertSame(
+            0,
+            $rc,
+            sprintf(
+                'the storm probe did not finish (rc=%d) after %.2fs — a persistently failing '
+                . 'stream_select() spins in writeMessage() with nothing to stop it. Output: %s',
+                $rc,
+                $elapsed,
+                trim($out) === '' ? '(none)' : trim($out),
+            ),
+        );
+        $this->assertStringContainsString(
+            'RESULT:false',
+            $out,
+            'writeMessage() did not report the write as abandoned. Output: ' . trim($out),
+        );
+        $this->assertStringContainsString(
+            'CHILDALIVE:true',
+            $out,
+            'the child died during the probe, so this row cannot attribute the exit to the '
+            . 'backstop — the liveness check and a failed fwrite() both become reachable. '
+            . 'Output: ' . trim($out),
+        );
+        $this->assertStringContainsString(
+            'FRAMINGBROKEN:true',
+            $out,
+            'a partially written Content-Length message was abandoned without latching the '
+            . 'framing as broken, which leaves the stream unrecoverable and unmarked. '
+            . 'Output: ' . trim($out),
+        );
+        $this->assertGreaterThan(
+            1.0,
+            $this->reportedFloat($out, 'ELAPSED'),
+            'writeMessage() returned too fast to have walked 10000 consecutive failures, so it '
+            . 'exited some other way and this row is not measuring the backstop. Output: '
+            . trim($out),
+        );
+    }
+
     /**
      * Splice {@see FRAMING_HELPERS} into a fixture template.
      *
@@ -745,5 +834,103 @@ final class LspConnectionStdinWedgeTest extends TestCase
         }
         echo 'ECHOED:', $r->result['length'] ?? -1, "\n";
         $c->disconnect();
+        PHP;
+
+    /**
+     * The storm row's external clock. Far above the measured 7.1s, because the
+     * failure this bounds is an unbounded loop and the bound is the only thing
+     * that can observe it. Deliberately NOT {@see BOUND_SECONDS}, which is 8.0
+     * and would sit inside the measurement's own noise.
+     */
+    private const STORM_BOUND_SECONDS = 45.0;
+
+    /**
+     * The payload the storm row writes. Over the 65536-byte pipe capacity, so the
+     * write cannot complete against a child that never reads and the loop is
+     * still going when the signals start landing.
+     */
+    private const STORM_PAYLOAD_BYTES = 200000;
+
+    private function runStormProbe(): array
+    {
+        $probe = $this->tempDir . '/storm.php';
+        file_put_contents($probe, sprintf(
+            self::STORM_PROBE_TEMPLATE,
+            var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true),
+            var_export($this->deafServerScript(), true),
+            self::STORM_PAYLOAD_BYTES,
+        ));
+
+        return $this->runBounded([PHP_BINARY, $probe], self::STORM_BOUND_SECONDS);
+    }
+
+    /**
+     * Pull one `LABEL:<float>` line out of a probe's stdout. Fails rather than
+     * returning a sentinel, for the reason {@see reportedInt()} gives.
+     */
+    private function reportedFloat(string $out, string $label): float
+    {
+        $this->assertSame(
+            1,
+            preg_match('/^' . preg_quote($label, '/') . ':([0-9.]+)$/m', $out, $m),
+            "the probe did not report a $label:<float> line, so its timing cannot be read at "
+            . 'all. Output: ' . trim($out),
+        );
+
+        return (float) $m[1];
+    }
+
+    /**
+     * Drives {@see LspConnection::writeMessage()} through reflection, with NO
+     * deadline, against a deaf child, under a SIGUSR1 storm.
+     *
+     * Reflection rather than `sendRequest()` because both public send paths pass
+     * `microtime(true) + $this->requestTimeout` — the null-deadline shape this
+     * probe needs is unreachable from outside the class. That asymmetry is
+     * recorded on {@see LspConnection::writeMessage()} itself.
+     *
+     * The signal handler is a NO-OP and `pcntl_async_signals(false)` is
+     * deliberate: the storm's job is to make `stream_select()` return `false` for
+     * EINTR, not to run PHP code. 300 µs is the densest interval this box
+     * sustains.
+     */
+    private const STORM_PROBE_TEMPLATE = <<<'PHP'
+        <?php
+        require %s;
+        $script = %s;
+
+        $c = new SugarCraft\Crush\LSP\LspConnection('unused', [$script]);
+        $r = new ReflectionClass($c);
+        $process = proc_open([PHP_BINARY, $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        foreach ([0, 1, 2] as $fd) { stream_set_blocking($pipes[$fd], false); }
+        foreach (['process' => $process, 'pipes' => $pipes, 'initialized' => true] as $n => $v) {
+            $prop = $r->getProperty($n); $prop->setAccessible(true); $prop->setValue($c, $v);
+        }
+        usleep(200000);
+
+        pcntl_async_signals(false);
+        pcntl_signal(SIGUSR1, static function (): void {});
+        $parent = getmypid();
+        $storm = pcntl_fork();
+        if ($storm === 0) {
+            $t = microtime(true);
+            while (microtime(true) - $t < 120.0) { posix_kill($parent, SIGUSR1); usleep(300); }
+            exit(0);
+        }
+
+        $write = $r->getMethod('writeMessage'); $write->setAccessible(true);
+        $t0 = microtime(true);
+        $result = $write->invoke($c, ['payload' => str_repeat('x', %d)], null);
+        printf("ELAPSED:%%.3f\n", microtime(true) - $t0);
+        echo 'RESULT:', var_export($result, true), "\n";
+        echo 'CHILDALIVE:', var_export(proc_get_status($process)['running'], true), "\n";
+        $f = $r->getProperty('framingBroken'); $f->setAccessible(true);
+        echo 'FRAMINGBROKEN:', var_export($f->getValue($c), true), "\n";
+
+        if ($storm > 0) { posix_kill($storm, 9); pcntl_waitpid($storm, $st); }
+        if (proc_get_status($process)['running']) { proc_terminate($process, 9); }
+        foreach ($pipes as $q) { if (is_resource($q)) fclose($q); }
+        proc_close($process);
         PHP;
 }

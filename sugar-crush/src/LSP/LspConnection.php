@@ -97,9 +97,9 @@ final class LspConnection implements LspConnectionInterface
      * tolerates before abandoning the write.
      *
      * `stream_select()` returns `false` for EINTR — a signal arrived — which is
-     * a retry and not an error. THIS COUNT IS THE EXIT THAT FIRES; the
-     * {@see childIsRunning()} check beside it in that branch is DORMANT BY
-     * CONSTRUCTION, for the reason measured against
+     * a retry and not an error. OF THE TWO EXITS IN THAT BRANCH, THIS COUNT IS
+     * THE ONE THAT FIRES; the {@see childIsRunning()} check beside it is DORMANT
+     * BY CONSTRUCTION, for the reason measured against
      * {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s copy of the same loop: a
      * write-set select can only be INTERRUPTED while it BLOCKS, and it only
      * blocks with a full pipe and a LIVE child, so a dead child never reaches the
@@ -108,15 +108,27 @@ final class LspConnection implements LspConnectionInterface
      * changes; its dormancy is pinned by that class's
      * `testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()`.
      *
-     * It is deliberately generous. MEASURED on this host
-     * (PHP 8.3.6, Linux 6.8), the densest signal storm this box can produce —
-     * a forked child sending SIGUSR1 every 300 µs — makes `stream_select()`
-     * fail about 2800 times per second with ZERO successes interleaved; three
-     * consecutive takes gave 1407, 1406 and 1407 failures in 0.5 s. With this
-     * loop's 1 ms yield on the failure path that is roughly 500–900 per second,
-     * so 10000 is on the order of ten seconds of unbroken interruption. Nothing
-     * short of a pathological storm reaches it, and the CHILD-LIVENESS check
-     * beside it — not this count — is what ends the ordinary dead-server case.
+     * ⚠️ "IN THAT BRANCH" IS THE WHOLE QUALIFIER, and an earlier revision of this
+     * doc-block left it off and then contradicted itself two paragraphs down by
+     * awarding the dead-server case to the liveness check. Neither claim was
+     * right unqualified. The dead-server case is ended by `$written === false`,
+     * and the LOOP-TOP DEADLINE beats this count whenever the caller's budget is
+     * shorter than the walk: both public send paths pass
+     * `microtime(true) + $this->requestTimeout`, so at the 30.0s default the
+     * backstop gets there first and at the 0.2s and 1.0s timeouts this class's
+     * own tests use, the deadline does. The count is the LAST resort, not the
+     * usual one.
+     *
+     * It is deliberately generous, and the figure below is now MEASURED end to
+     * end rather than estimated. WHAT THIS SAID: "roughly 500–900 per second, so
+     * 10000 is on the order of ten seconds". WHAT IS TRUE: driving
+     * {@see writeMessage()} with no deadline under a 300 µs SIGUSR1 storm returns
+     * in 7.097 / 7.099 / 7.100 s over three consecutive takes (PHP 8.3.6, Linux
+     * 6.8) — 10000 failures in 7.1 s, so ~1408 per second, not 500–900. The old
+     * range came from halving a raw select-failure rate by hand to account for
+     * the 1 ms yield; the yield is not the only cost per pass. Pinned by
+     * `LspConnectionStdinWedgeTest::testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop()`,
+     * which is also where the enumeration proving the exit is this one lives.
      */
     private const MAX_CONSECUTIVE_SELECT_FAILURES = 10000;
 
@@ -554,15 +566,17 @@ final class LspConnection implements LspConnectionInterface
         // `stream_select()` on a CLOSED pipe resource THROWS, and `@` does not
         // suppress a throw because it is an exception and not a diagnostic.
         //
-        // WHICH throw depends on what else is in the arrays, and this method can
-        // produce either. MEASURED, PHP 8.3.6: with an open fd elsewhere in the
-        // call — the `stderrOpen` arm below, which adds fd 2 to the read set —
-        // it is `TypeError: stream_select(): supplied resource is not a valid
-        // stream resource`. With the closed fd 0 as the ONLY entry across all
-        // three arrays — the arm where stderr has already hit EOF — PHP drops the
-        // invalid resource first and then reports `ValueError: No stream arrays
-        // were passed`. The guard is the same either way; the class name is only
-        // recorded so nobody "corrects" one of them into the other.
+        // IN THIS CLASS THE THROW IS A `ValueError`, not the `TypeError` the
+        // sibling meets, and the difference is worth a line because it is easy to
+        // "correct" one into the other. MEASURED, PHP 8.3.6: the select below
+        // passes fd 0 as the ONLY entry across all three arrays — point (a) of
+        // the loop's doc-block is that fd 2 is drained rather than selected on —
+        // so PHP drops the invalid resource and then finds every array empty:
+        // `ValueError: No stream arrays were passed`.
+        // {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()} keeps an open
+        // fd 2 in its read set, so the same closed fd 0 there raises
+        // `TypeError: stream_select(): supplied resource is not a valid stream
+        // resource` instead. Same guard, same reason; different class name.
         if (!is_resource($this->pipes[0])) {
             return false;
         }
