@@ -203,7 +203,12 @@ final class GenDocsTest extends TestCase
     private function runScript(string $root, array $args = []): array
     {
         $cmd = 'SUGARCRAFT_GEN_DOCS_ROOT=' . \escapeshellarg($root)
-            . ' ' . \escapeshellcmd(\PHP_BINARY)
+            // escapeshellARG, not escapeshellCMD. PHP_BINARY is a PATH being
+            // passed as one argument, and escapeshellcmd() escapes shell
+            // metacharacters without quoting — so an interpreter installed
+            // under a directory with a space in it splits into two argv
+            // entries and the run dies somewhere unrelated.
+            . ' ' . \escapeshellarg(\PHP_BINARY)
             . ' ' . \escapeshellarg(__DIR__ . '/../gen-docs.php');
         foreach ($args as $arg) {
             $cmd .= ' ' . \escapeshellarg($arg);
@@ -411,7 +416,18 @@ final class GenDocsTest extends TestCase
         $edited = \str_replace('A fixture tagline.', 'HAND EDITED', (string) \file_get_contents($path));
         \file_put_contents($path, $edited);
 
-        $this->runScript($root, ['--check']);
+        $result = $this->runScript($root, ['--check']);
+
+        // THE EXIT CODE FIRST, because "the tree is untouched" is also what a
+        // `--check` that did NOTHING leaves behind — an unknown-mode fallthrough
+        // satisfies the assertion below perfectly (rule 25). This says the
+        // instrument ran and disagreed with the tree it was pointed at.
+        $this->assertSame(
+            1,
+            $result['exit'],
+            '--check exited 0 over a page that had been hand-edited, so it either did not run '
+            . 'or did not compare: ' . $result['output'],
+        );
         $this->assertSame($edited, (string) \file_get_contents($path), '--check must leave the tree untouched');
     }
 

@@ -78,12 +78,28 @@ if (!\class_exists(\PHPUnit\Framework\TestCase::class, false)) {
  */
 trait TmpTree
 {
+    /**
+     * The fixture root, shared with the classes that use this trait.
+     *
+     * IT IS DECLARED HERE AND ASSIGNED THERE, WHICH LOOKS DEAD AND IS NOT. Both
+     * consumers set it in `setUp()` and both read it back in `tearDown()`
+     * through {@see removeDir()}. The `''` default is the load-bearing part:
+     * PHPUnit runs `tearDown()` even when `setUp()` threw before the assignment,
+     * and the `!== ''` check at each call site is what stops that path handing
+     * `removeDir()` an uninitialised property.
+     */
     private string $tmpDir = '';
 
     private function makeTmpTree(string $prefix): string
     {
         $dir = \sys_get_temp_dir() . '/' . $prefix . \uniqid('', true);
-        \mkdir($dir, 0777, true);
+        // A GUARD MUST GO RED ON WHAT IT CANNOT DO, not carry on (rule 14). An
+        // ignored return here hands every caller a path that does not exist,
+        // and the failure then surfaces as a confusing assertion about page
+        // content in whichever test happened to run first.
+        if (!\mkdir($dir, 0777, true) && !\is_dir($dir)) {
+            throw new \RuntimeException('could not create the fixture root ' . $dir);
+        }
         return $dir;
     }
 
