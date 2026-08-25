@@ -1177,10 +1177,12 @@ final class ProcessExecutorTest extends TestCase
             model: 'm',
             messages: [new UserMessage('fine')],
         ));
-        $deadline = microtime(true) + 5.0;
+        $spawnStartedAt = microtime(true);
+        $deadline = $spawnStartedAt + 5.0;
         while (!file_exists($marker) && microtime(true) < $deadline) {
-            usleep(20_000);
+            usleep(1_000);
         }
+        $observedSpawnSeconds = microtime(true) - $spawnStartedAt;
         $executor->cancelAll();
         if (is_resource($descriptor['stdin'] ?? null)) {
             fclose($descriptor['stdin']);
@@ -1198,10 +1200,22 @@ final class ProcessExecutorTest extends TestCase
             $this->assertStringContainsString('Cannot send message of type stdClass', $e->getMessage());
         }
 
-        $this->assertFileDoesNotExist(
-            $marker,
-            'the refusal spawned a worker first, and nothing recorded it for cancel() to reap',
-        );
+        // ⚠️ THE WINDOW, not just the fact. A bare assertFileDoesNotExist() here
+        // SURVIVED the mutation this test exists to kill: the leaked child is a
+        // freshly forked /bin/sh, and it had not reached its `touch` yet by the
+        // time the assertion ran a microsecond after the throw. The control
+        // above measures how long the spawn actually takes to show itself, and
+        // this waits at least that long before believing an absence.
+        $childBecameVisibleIn = $observedSpawnSeconds;
+        $wait = max(1.0, $childBecameVisibleIn * 20);
+        $deadline = microtime(true) + $wait;
+        while (microtime(true) < $deadline) {
+            $this->assertFileDoesNotExist(
+                $marker,
+                'the refusal spawned a worker first, and nothing recorded it for cancel() to reap',
+            );
+            usleep(20_000);
+        }
 
         @unlink($binary);
         @rmdir($dir);
