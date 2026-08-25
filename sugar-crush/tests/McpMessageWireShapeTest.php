@@ -104,6 +104,24 @@ final class McpMessageWireShapeTest extends TestCase
         $this->assertContains('result', $wire, 'no shape in the corpus produced a result');
         $this->assertContains('error', $wire, 'no shape in the corpus produced an error');
         $this->assertContains('id', $wire, 'no shape in the corpus produced an id');
+        $this->assertContains(
+            'params',
+            $wire,
+            'no shape in the corpus produced params. This assertion was missing, and its absence '
+            . 'was a hole rather than an omission: `params` is the only wire key whose loss is '
+            . 'silent everywhere else in this file — the absence rows below get SMALLER when a '
+            . 'key vanishes, and the superset row stays true — so a toJson() that stopped '
+            . 'emitting params would send every request with its arguments stripped and leave '
+            . 'this file green',
+        );
+
+        // AND ON ONE SHAPE, so "the key appears somewhere in the corpus" cannot
+        // be satisfied by a different message than the one that needs it.
+        $this->assertSame(
+            ['name' => 'x'],
+            (json_decode(McpMessage::request('1', 'tools/call', ['name' => 'x'])->toJson(), true) ?? [])['params'] ?? null,
+            'a request built WITH params did not put them on the wire',
+        );
     }
 
     /**
@@ -113,9 +131,20 @@ final class McpMessageWireShapeTest extends TestCase
      */
     public function testNothingThatIsNotJsonRpcReachesTheWire(): void
     {
+        $wire = $this->wireKeys();
+
+        // THE CONTROL, IN THIS ROW RATHER THAN THE SIBLING ONE. `array_diff()`
+        // against an empty derived set is `[]`, so the assertion below is
+        // satisfied by a `wireKeys()` that has stopped finding anything at all.
+        // {@see testTheDerivedWireKeySetIsARealOne()} covers that for the FILE;
+        // it does not cover it for this ROW, and a reader deleting that method
+        // would take this row's only positive component with it.
+        $this->assertContains('jsonrpc', $wire, 'the derived wire set is not a real one, so the absence below means nothing');
+        $this->assertGreaterThan(3, count($wire), 'the derived wire set collapsed; nothing absent from it is evidence');
+
         $this->assertSame(
             [],
-            array_values(array_diff($this->wireKeys(), ['jsonrpc', 'id', 'method', 'params', 'result', 'error'])),
+            array_values(array_diff($wire, ['jsonrpc', 'id', 'method', 'params', 'result', 'error'])),
             'toJson() put a key on the wire that JSON-RPC 2.0 does not define; toJson() is what '
             . 'frames outgoing messages, so anything extra here is sent to a real peer',
         );

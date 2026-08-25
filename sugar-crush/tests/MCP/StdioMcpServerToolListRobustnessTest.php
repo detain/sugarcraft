@@ -111,6 +111,27 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
 
         try {
             $server->start();
+
+            // THE CONTROL, IN THIS ROW. `assertSame([], ...)` below is satisfied
+            // by a fixture that never answered at all, by a `serverAnswering()`
+            // that spawns nothing, and by a `listTools()` that always returns
+            // `[]`. The sibling row that covers this covers the FILE, not this
+            // row. So the same helper is driven with a well-formed list first and
+            // required to produce something.
+            $control = $this->serverAnswering('[{"name":"grep","description":"d","inputSchema":{}}]');
+
+            try {
+                $control->start();
+                $this->assertNotSame(
+                    [],
+                    $control->listTools(),
+                    'the harness produces nothing for a WELL-FORMED list either, so the empty '
+                    . 'result below is not evidence that the mistyped entry was filtered',
+                );
+            } finally {
+                $control->stop();
+            }
+
             $this->assertSame([], $server->listTools(), 'the mistyped entry was kept, so something downstream will meet it instead');
         } catch (\Throwable $e) {
             $this->fail(
