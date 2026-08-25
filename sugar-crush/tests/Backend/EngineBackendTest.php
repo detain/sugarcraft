@@ -813,9 +813,9 @@ final class EngineBackendTest extends TestCase
      *
      * A near-twin of {@see ReasoningProgressTest}'s private helper of the same
      * name, deliberately not shared: that one collects a reasoning channel this
-     * test has no use for, and folding the two would mean editing a file whose
-     * sixteen passing tests are about a different claim. If a third caller
-     * appears, promote it to `Support/` rather than growing a third copy.
+     * test has no use for, and folding the two would mean restructuring a file
+     * whose whole suite is about a different claim. If a third caller appears,
+     * promote it to `Support/` rather than growing a third copy.
      *
      * @param array<int, string> $tokens
      * @return array{settled: bool, message: ?Message, error: ?\Throwable, virtualSeconds: float, realCeiling: bool}
