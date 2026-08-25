@@ -168,28 +168,49 @@ final class BareCitationDriftTest extends TestCase
      * NOT COSMETIC, AND IT WAS WRONG. This guard's only output is a list of
      * `file:line — name()` rows a human is expected to go and read, so a line
      * number that drifts under exactly the condition rule 17 exists for makes
-     * the report actively misleading rather than merely terse. Both arms run:
-     * the unwrapped one would still pass with the offset arithmetic deleted
-     * entirely, so it is the wrapped one that carries the claim.
+     * the report actively misleading rather than merely terse.
+     *
+     * ONE COMPARISON, NOT TWO, AND THE REASON IS A CLAIM THIS DOC-BLOCK GOT
+     * WRONG. WHAT IT SAID: "both arms run: the unwrapped one would still pass
+     * with the offset arithmetic deleted entirely, so it is the wrapped one
+     * that carries the claim." WHAT IS TRUE, MEASURED BY MUTATING THIS FILE
+     * RATHER THAN BY READING IT: the unwrapped fixture carries a continuation
+     * marker of its own — its padding line — so it catches BOTH the arithmetic
+     * being deleted and the marker being replaced by a space, and because
+     * PHPUnit stops at the first failed assertion the wrapped arm did not run
+     * in either mutation. A sentence about which arm carries a claim is
+     * unfalsifiable while the arms are separate assertions.
+     *
+     * WHY IT IS STATED AT ALL RATHER THAN QUIETLY FIXED: the two shapes are
+     * compared in ONE `assertSame` now, so neither can short-circuit the other
+     * and the question the sentence was guessing at no longer has to be
+     * answered. That is the fix for the class of defect, not just for the
+     * sentence — rule 43's shape, where a claim can be honestly written and
+     * still pin nothing.
      */
     public function testTheReportedLineSurvivesAContinuationWrap(): void
     {
         $tag = '{@' . 'see ';
 
+        // Both blocks open on line 3 and both citations sit on line 5, so a
+        // reader can check the expectation against the fixture by counting.
         $unwrapped = "<?php\n\n/**\n * padding\n * " . $tag . "testAbsentOne()}\n */\nclass A {}";
-        $this->assertSame(
-            [['name' => 'testAbsentOne', 'line' => 5]],
-            self::citationsNamingNothing($unwrapped),
-            'the reported line is wrong for a citation that does not wrap at all',
-        );
-
         $wrapped = "<?php\n\n/**\n * padding\n * " . $tag . "\n * testAbsentTwo()}\n */\nclass B {}";
+
         $this->assertSame(
-            [['name' => 'testAbsentTwo', 'line' => 5]],
-            self::citationsNamingNothing($wrapped),
-            'the reported line drifts once the citation wraps across a continuation marker — '
-            . 'which is the one case rule 17 exists for, so it is the case the number has to '
-            . 'be right in. Flattening the marker must not consume the newline with it',
+            [
+                'unwrapped' => [['name' => 'testAbsentOne', 'line' => 5]],
+                'wrapped' => [['name' => 'testAbsentTwo', 'line' => 5]],
+            ],
+            [
+                'unwrapped' => self::citationsNamingNothing($unwrapped),
+                'wrapped' => self::citationsNamingNothing($wrapped),
+            ],
+            'a reported line is wrong. Both citations sit on line 5 of a doc-block that opens '
+            . 'on line 3. If only the `wrapped` row is off, the continuation flattening is '
+            . 'consuming the newline along with the ` * ` marker; if both are off, the offset '
+            . 'arithmetic is gone. Either way the rows this guard prints point at the wrong '
+            . 'line, which is the whole of what it is for',
         );
     }
 
