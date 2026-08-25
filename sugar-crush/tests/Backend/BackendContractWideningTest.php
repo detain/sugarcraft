@@ -432,6 +432,50 @@ final class BackendContractWideningTest extends TestCase
     }
 
     /**
+     * Rule 15's known-positive for {@see compileInFreshInterpreter()}'s pipe
+     * drain, and it is the only thing that tells a working drain from a drain
+     * that is never exercised.
+     *
+     * Every other probe in this file emits a few hundred bytes, so all of them
+     * pass under the sequential `stream_get_contents(stdout)` then
+     * `stream_get_contents(stderr)` form that stood here — the deadlock needs a
+     * child that fills one pipe while the parent waits on the other. This probe
+     * writes well past a typical 64 KiB pipe buffer to stderr BEFORE the
+     * wrapper's sentinel is echoed on stdout, which is exactly that shape: the
+     * child blocks writing stderr, the parent blocks reading stdout, and the
+     * only process that could unblock either is the other one.
+     *
+     * MEASURED at 256 KiB rather than assumed: this box's pipe buffer is not
+     * asserted here because the test does not need its value, only that the
+     * figure is comfortably past it. If this test ever HANGS rather than fails,
+     * that is the finding — the drain has gone back to being sequential.
+     */
+    public function testTheProbeDrainSurvivesAChildThatFillsStderrBeforeWritingStdout(): void
+    {
+        $bytes = 256 * 1024;
+
+        [$rc, $output] = $this->compileInFreshInterpreter(
+            "fwrite(STDERR, str_repeat('E', {$bytes}));",
+        );
+
+        $this->assertSame(0, $rc, 'the oversized-stderr probe did not exit cleanly');
+        $this->assertStringContainsString(
+            self::LOADED,
+            $output,
+            'the probe never reached its final echo, so the child was still blocked writing '
+                . 'stderr when the parent gave up on stdout - the two pipes are being drained '
+                . 'one after the other again',
+        );
+        $this->assertSame(
+            $bytes,
+            substr_count($output, 'E') - substr_count(self::LOADED, 'E'),
+            'the drain lost part of stderr, so a probe that fatals with a long diagnostic would '
+                . 'have its diagnostic truncated and the assertions above would measure a '
+                . 'fragment',
+        );
+    }
+
+    /**
      * Compile `$body` in a fresh interpreter and report `[exitStatus, output]`.
      *
      * The probe file is written under the system temp dir with a name unique to
@@ -457,9 +501,46 @@ final class BackendContractWideningTest extends TestCase
             );
             $this->assertIsResource($process, 'proc_open refused to start the probe interpreter');
 
-            $output = (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
+            // BOTH PIPES DRAINED TOGETHER, never stdout to EOF and then
+            // stderr. A probe whose stderr outgrows the pipe buffer while
+            // stdout is still open deadlocks the sequential form: the child
+            // blocks writing a full stderr pipe, and the only process that
+            // could drain it is blocked reading stdout. Today's probes emit a
+            // few hundred bytes and would not reach it - which is exactly why
+            // it would have been found by a future probe rather than by this
+            // one, and it is the same shape as this package's existing
+            // child-stderr findings. One test here already asks PHP to print a
+            // fatal, so the channel that can grow without warning is stderr.
+            foreach ($pipes as $pipe) {
+                stream_set_blocking($pipe, false);
+            }
+
+            $output = '';
+            while ($pipes !== []) {
+                $read = $pipes;
+                $write = null;
+                $except = null;
+                if (@stream_select($read, $write, $except, 10) === false) {
+                    break;
+                }
+                foreach ($read as $ready) {
+                    $chunk = fread($ready, 8192);
+                    if ($chunk === false || ($chunk === '' && feof($ready))) {
+                        foreach ($pipes as $key => $pipe) {
+                            if ($pipe === $ready) {
+                                fclose($pipe);
+                                unset($pipes[$key]);
+                            }
+                        }
+
+                        continue;
+                    }
+                    $output .= $chunk;
+                }
+            }
+            foreach ($pipes as $pipe) {
+                fclose($pipe);
+            }
 
             return [proc_close($process), $output];
         } finally {
