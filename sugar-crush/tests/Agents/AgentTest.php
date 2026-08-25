@@ -371,7 +371,7 @@ final class AgentTest extends TestCase
         $this->assertSame('reviewer', $agent->name);
         $this->assertSame('Code review specialist', $agent->description);
         $this->assertStringContainsString('code review specialist', $agent->prompt);
-        $this->assertSame(['Read', 'Grep', 'Bash(git:*)'], $agent->tools);
+        $this->assertSame(['Read', 'Grep', 'Bash(git *)'], $agent->tools);
         $this->assertSame(['php-best-practices', 'security-audit'], $agent->skillNames);
         // The definition carries no provider/model of its own - it is a library
         // template, not a session's configuration.

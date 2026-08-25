@@ -6,7 +6,10 @@ namespace SugarCraft\Crush\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\AgentDefinition;
+use SugarCraft\Crush\Permissions\PermissionAction;
+use SugarCraft\Crush\Permissions\PermissionRule;
 use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\ToolCall;
 
 /**
  * Tests for AgentDefinition - factory for pre-configured agent types.
@@ -51,7 +54,7 @@ final class AgentDefinitionTest extends TestCase
         $this->assertSame('reviewer', $reviewer->name);
         $this->assertSame('Code review specialist', $reviewer->description);
         $this->assertStringStartsWith('You are a code review specialist', $reviewer->prompt);
-        $this->assertSame(['Read', 'Grep', 'Bash(git:*)'], $reviewer->defaultTools);
+        $this->assertSame(['Read', 'Grep', 'Bash(git *)'], $reviewer->defaultTools);
         $this->assertSame(['php-best-practices', 'security-audit'], $reviewer->defaultSkills);
     }
 
@@ -351,5 +354,163 @@ final class AgentDefinitionTest extends TestCase
             $prompts,
             'two presets share a prompt: ' . implode(', ', array_keys($prompts)),
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // Tool GRANTS. A preset's defaultTools are not decoration any more: they
+    // are resolved into the roster a sub-agent's provider receives, and
+    // enforced per call, by AgentManager. A declaration that matches nothing is
+    // therefore a live defect rather than dead prose.
+    // -------------------------------------------------------------------------
+
+    /**
+     * One call per argument-scoped declaration any preset spells, proving the
+     * grant admits something real.
+     *
+     * KEYED BY THE WHOLE DECLARATION, and a declaration with no entry here is a
+     * FAILURE rather than a skip — see {@see declarationDefect()}. That is the
+     * only shape in which this guard covers a grant added after it was written:
+     * a silent skip would let the next `Bash(git:*)` through exactly as the
+     * first one got through.
+     *
+     * @var array<string, array{string, array<string, mixed>}>
+     */
+    private const GRANT_PROBES = [
+        'Bash(git *)' => ['Bash', ['command' => 'git status']],
+    ];
+
+    /**
+     * Why this declaration is unusable, or null when it is fine.
+     *
+     * Extracted so the presets and the KNOWN-POSITIVE fixtures below go through
+     * the SAME code. An assertion that every preset is clean is worth nothing
+     * on its own: a scanner mutated to always answer "clean" would pass it, and
+     * this project has measured exactly that outcome. The fixtures are what
+     * prove the instrument is alive.
+     *
+     * @param array<string, array{string, array<string, mixed>}> $probes
+     */
+    private static function declarationDefect(string $declaration, array $probes): ?string
+    {
+        $reason = PermissionRule::patternRejectionReason($declaration);
+        if ($reason !== null) {
+            return "is malformed: it {$reason}";
+        }
+
+        $rule = new PermissionRule($declaration, PermissionAction::Allow);
+        if ($rule->argumentPattern() === null) {
+            // A bare name. Nothing to probe: the name half is matched against
+            // the live registry by AgentManager, not against a fixture here.
+            return null;
+        }
+
+        if (!array_key_exists($declaration, $probes)) {
+            return 'is argument-scoped but has no probe in GRANT_PROBES, so nothing here '
+                . 'knows whether it can match any real call at all';
+        }
+
+        [$toolName, $arguments] = $probes[$declaration];
+        if (!$rule->matches(new ToolCall($toolName, $arguments))) {
+            return sprintf(
+                'matches nothing: its own probe %s(%s) is refused by it. A well-formed grant '
+                . 'that can never fire is the defect PermissionRule was rewritten to make '
+                . 'impossible — check the dialect (this project globs with fnmatch(), so '
+                . 'Claude Code\'s `git:*` prefix form is matched literally and never fires)',
+                $toolName,
+                json_encode($arguments),
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @dataProvider everyPreset
+     */
+    public function testEveryPresetToolGrantCanActuallyFire(AgentDefinition $definition): void
+    {
+        $defects = [];
+        foreach ($definition->defaultTools as $declaration) {
+            $defect = self::declarationDefect((string) $declaration, self::GRANT_PROBES);
+            if ($defect !== null) {
+                $defects[] = "\"{$declaration}\" {$defect}";
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $defects,
+            sprintf(
+                "preset \"%s\" declares a tool grant that cannot work:\n  %s",
+                $definition->type,
+                implode("\n  ", $defects),
+            ),
+        );
+    }
+
+    /**
+     * The instrument above, run against declarations whose answers are already
+     * known — including the exact one this guard was written for.
+     *
+     * `Bash(git:*)` is what `reviewer()` shipped before this round. It is
+     * WELL-FORMED, so a well-formedness check alone would have blessed it, and
+     * it matches no git command on this project's fnmatch dialect. It is spelled
+     * by concatenation so a future sweep over the literal cannot eat the one
+     * fixture that documents it.
+     */
+    public function testDeclarationDefectDetectsTheDefectsItClaimsTo(): void
+    {
+        $foreignDialect = 'Bash(git' . ':*)';
+        $probe = ['Bash', ['command' => 'git status']];
+
+        $this->assertTrue(
+            PermissionRule::isWellFormedPattern($foreignDialect),
+            'the fixture is only interesting because well-formedness does NOT catch it',
+        );
+
+        $defect = self::declarationDefect($foreignDialect, [$foreignDialect => $probe]);
+        $this->assertNotNull($defect, 'the unmatchable-grant check is dead');
+        $this->assertStringContainsString('matches nothing', $defect);
+
+        $this->assertSame(
+            'is argument-scoped but has no probe in GRANT_PROBES, so nothing here '
+                . 'knows whether it can match any real call at all',
+            self::declarationDefect('Bash(git *)', []),
+            'a declaration with no probe must FAIL, never be skipped',
+        );
+
+        $missingClose = self::declarationDefect('Bash(git *', []);
+        $this->assertNotNull($missingClose);
+        $this->assertStringStartsWith('is malformed', $missingClose);
+
+        // And the negative half: the spelling the preset now ships is clean
+        // through the same call, so the instrument is not simply pessimistic.
+        $this->assertNull(self::declarationDefect('Bash(git *)', self::GRANT_PROBES));
+        $this->assertNull(self::declarationDefect('Read', self::GRANT_PROBES));
+    }
+
+    /**
+     * The grant's ARGUMENT half is a real restriction, not a label.
+     *
+     * Pinned here rather than only in AgentManagerTest because it is the
+     * PRESET's claim: `reviewer` says it wants git, and `Allow`'s intersection
+     * over `[;&|\r\n]+` segments is what makes that mean something when a model
+     * chains a second command onto the first.
+     */
+    public function testReviewerGitGrantAdmitsGitAndRefusesTheChainedEscape(): void
+    {
+        $rule = new PermissionRule('Bash(git *)', PermissionAction::Allow);
+
+        $this->assertTrue($rule->matches(new ToolCall('Bash', ['command' => 'git diff --stat'])));
+        $this->assertFalse($rule->matches(new ToolCall('Bash', ['command' => 'rm -rf /'])));
+        $this->assertFalse(
+            $rule->matches(new ToolCall('Bash', ['command' => 'git log && rm -rf /'])),
+            'a chained escape must not ride in on the first segment',
+        );
+        $this->assertFalse(
+            $rule->matches(new ToolCall('Bash', ['command' => "git log\nrm -rf /"])),
+            'a newline separates two commands exactly as && does',
+        );
+        $this->assertContains('Bash(git *)', AgentDefinition::reviewer()->defaultTools);
     }
 }

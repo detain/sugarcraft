@@ -1922,6 +1922,472 @@ final class AgentManagerTest extends TestCase
         };
     }
 
+
+    // -------------------------------------------------------------------------
+    // The sub-agent TOOL GRANT (C7).
+    //
+    // AgentDefinition::$defaultTools reached Agent::$tools faithfully and then
+    // died: executeSubAgent() built its CompleteRequest with no `tools`
+    // argument, CompleteRequest defaults that to null, and every provider gates
+    // its tool block on `$request->tools !== null`. A preset reached the model
+    // with NO tools while its system prompt described the roster it thought it
+    // had. These pin the behaviour, not the structure — the RESTRICTION as much
+    // as the grant, because a test that only proves tools arrive would pass an
+    // implementation that ships the whole registry.
+    // -------------------------------------------------------------------------
+
+    /** @return list<\SugarCraft\Crush\Tools\Tool> */
+    private function fakeRegistry(string ...$names): array
+    {
+        return array_map(
+            static fn(string $name): \SugarCraft\Crush\Tools\Tool => new class ($name) implements \SugarCraft\Crush\Tools\Tool {
+                public function __construct(private readonly string $name) {}
+
+                public function name(): string
+                {
+                    return $this->name;
+                }
+
+                public function description(): string
+                {
+                    return "fake {$this->name}";
+                }
+
+                public function inputSchema(): array
+                {
+                    return ['type' => 'object'];
+                }
+
+                public function execute(array $args): \SugarCraft\Crush\Tools\ToolResult
+                {
+                    return new \SugarCraft\Crush\Tools\ToolResult('id', 'ok');
+                }
+            },
+            $names,
+        );
+    }
+
+    /**
+     * Run one sub-agent to completion and hand back the request the provider
+     * actually received.
+     *
+     * The captured request is the ONLY honest observation point for this item:
+     * every assertion about "the sub-agent got tools" that stops short of the
+     * provider is an assertion about a field being copied.
+     *
+     * @param list<string> $grant
+     * @param ?list<\SugarCraft\Crush\Tools\Tool> $registry
+     */
+    private function captureSubAgentRequest(array $grant, ?array $registry): CompleteRequest
+    {
+        $captured = null;
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')
+            ->willReturnCallback(function (CompleteRequest $request) use (&$captured): CompleteResponse {
+                $captured = $request;
+
+                return new CompleteResponse(content: 'done');
+            });
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            toolRegistry: $registry,
+        );
+        $manager->register(new Agent(
+            name: 'granted',
+            description: 'granted description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $grant,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        ));
+
+        $subAgent = $manager->createSubAgent('granted', 'do the thing');
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertInstanceOf(CompleteRequest::class, $captured, 'the provider was never called');
+
+        return $captured;
+    }
+
+    /** @param ?list<\SugarCraft\Crush\Tools\Tool> $tools */
+    private static function toolNames(?array $tools): ?array
+    {
+        return $tools === null
+            ? null
+            : array_map(static fn(\SugarCraft\Crush\Tools\Tool $t): string => $t->name(), $tools);
+    }
+
+    /**
+     * THE HEADLINE. The grant reaches the provider as a non-null array of Tool
+     * objects — not strings, which is what `tools: $agent->tools` would have
+     * sent and what would have fatalled on `->name()` inside the provider.
+     */
+    public function testDeclaredToolsReachTheProviderAsResolvedToolObjects(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['Read', 'Grep'],
+            $this->fakeRegistry('Bash', 'Read', 'Edit', 'Grep', 'Write'),
+        );
+
+        $this->assertNotNull($request->tools, 'a declared grant must not reach the provider as null');
+        $this->assertSame(['Read', 'Grep'], self::toolNames($request->tools));
+
+        foreach ($request->tools as $tool) {
+            $this->assertInstanceOf(\SugarCraft\Crush\Tools\Tool::class, $tool);
+        }
+    }
+
+    /**
+     * THE RESTRICTION, which is the half a "tools arrive" test cannot see: an
+     * implementation that shipped the whole registry would pass the test above
+     * and fail this one.
+     */
+    public function testAGrantOfReadDoesNotYieldEdit(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['Read'],
+            $this->fakeRegistry('Bash', 'Read', 'Edit', 'Grep', 'Write'),
+        );
+
+        $this->assertSame(['Read'], self::toolNames($request->tools));
+        $this->assertNotContains('Edit', self::toolNames($request->tools));
+        $this->assertNotContains('Bash', self::toolNames($request->tools));
+        $this->assertNotContains('Write', self::toolNames($request->tools));
+    }
+
+    /**
+     * `Bash(git *)`'s NAME half selects the tool. The argument half cannot ride
+     * on a tool schema, so the roster carries the whole `Bash` — which is why
+     * the per-call enforcement below is not optional.
+     */
+    public function testAnArgumentScopedGrantResolvesOnItsNameHalf(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['Read', 'Grep', 'Bash(git *)'],
+            $this->fakeRegistry('Bash', 'Read', 'Edit', 'Grep'),
+        );
+
+        $this->assertSame(['Bash', 'Read', 'Grep'], self::toolNames($request->tools));
+    }
+
+    /**
+     * Registry order, not declaration order, and deduped: `Bootstrap::tools()`
+     * documents its array as a wire order the model has learned, and two agents
+     * with the same tools must not receive them in two orders.
+     */
+    public function testResolvedRosterKeepsRegistryOrderAndDeduplicates(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['Grep', 'Bash', 'Bash(git *)', 'Read'],
+            $this->fakeRegistry('Bash', 'Read', 'Edit', 'Grep'),
+        );
+
+        $this->assertSame(['Bash', 'Read', 'Grep'], self::toolNames($request->tools));
+    }
+
+    /**
+     * An `fnmatch()` name pattern is admitted, because the dialect is
+     * PermissionRule's and `mcp__git__*` has to mean there what it means in
+     * `disabledTools`.
+     */
+    public function testAWildcardGrantResolvesEveryMatchingTool(): void
+    {
+        $request = $this->captureSubAgentRequest(
+            ['mcp__git__*'],
+            $this->fakeRegistry('Bash', 'mcp__git__status', 'mcp__git__push', 'mcp__jira__issue'),
+        );
+
+        $this->assertSame(['mcp__git__status', 'mcp__git__push'], self::toolNames($request->tools));
+    }
+
+    /**
+     * NO REGISTRY IS NOT AN EMPTY REGISTRY, and this pins the pre-existing
+     * behaviour deliberately kept reachable: a caller that supplies none — every
+     * test double in this file, and Bootstrap until its own change lands — gets
+     * `tools: null` exactly as before, rather than a refusal it cannot act on.
+     */
+    public function testWithNoRegistryTheRequestKeepsItsPreExistingNullTools(): void
+    {
+        $request = $this->captureSubAgentRequest(['Read', 'Grep'], null);
+
+        $this->assertNull($request->tools);
+    }
+
+    /**
+     * An agent that declares nothing says nothing, and `tools: []` on the wire
+     * is a real (empty) tool block to an OpenAI-shaped provider rather than
+     * absence. Same `?:` reading Runtime already applies to App::$tools.
+     */
+    public function testAnAgentThatDeclaresNoToolsStillSendsNull(): void
+    {
+        $request = $this->captureSubAgentRequest([], $this->fakeRegistry('Bash', 'Read'));
+
+        $this->assertNull($request->tools);
+    }
+
+    /**
+     * FAILS LOUD, NEVER OPEN. Dropping an unresolvable name is this very bug
+     * wearing a different hat: a typo'd `Reed` would hand the sub-agent a
+     * smaller roster than its prompt describes, silently.
+     */
+    public function testAnUnresolvableGrantIsRefusedRatherThanDropped(): void
+    {
+        $caught = null;
+
+        try {
+            $this->captureSubAgentRequest(['Read', 'Reed'], $this->fakeRegistry('Bash', 'Read'));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'an unresolvable grant must not be silently dropped');
+        $this->assertStringContainsString('"Reed"', $caught->getMessage());
+        $this->assertStringContainsString('match no tool this session offers', $caught->getMessage());
+        $this->assertStringNotContainsString('"Read"', $caught->getMessage());
+    }
+
+    /**
+     * An EMPTY registry is a statement — a registry exists and offers nothing —
+     * so any declaration at all is unresolvable. The distinction from `null` is
+     * the whole reason the parameter is nullable.
+     */
+    public function testAnEmptyRegistryRefusesEveryDeclaration(): void
+    {
+        $caught = null;
+
+        try {
+            $this->captureSubAgentRequest(['Read'], []);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('the registry is empty', $caught->getMessage());
+    }
+
+    /**
+     * A guard must go red on what it cannot parse, not silently skip it.
+     */
+    public function testAMalformedDeclarationIsRefused(): void
+    {
+        $caught = null;
+
+        try {
+            $this->captureSubAgentRequest(['Bash(git *'], $this->fakeRegistry('Bash'));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('unterminated', $caught->getMessage());
+    }
+
+    /** @see testAMalformedDeclarationIsRefused — the same rule, one type down. */
+    public function testANonStringDeclarationIsRefused(): void
+    {
+        $caught = null;
+
+        try {
+            $this->captureSubAgentRequest([42], $this->fakeRegistry('Bash'));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('declares a tool of type int', $caught->getMessage());
+    }
+
+    /** A registry holding something that is not a Tool is refused, not skipped. */
+    public function testANonToolRegistryEntryIsRefused(): void
+    {
+        $caught = null;
+
+        try {
+            $this->captureSubAgentRequest(['Read'], ['Read']);
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('is a string, not a', $caught->getMessage());
+    }
+
+    // -------------------------------------------------------------------------
+    // Per-call enforcement of the grant's ARGUMENT half.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param list<string> $grant
+     * @return array{AgentManager, SubAgent}
+     */
+    private function grantedSubAgentEmitting(array $grant, ToolCall $call, ?PermissionGate $gate): array
+    {
+        $provider = $this->createMock(ProviderInterface::class);
+        $provider->method('supportsStreaming')->willReturn(false);
+        $provider->method('complete')->willReturn(new CompleteResponse(
+            content: 'Result',
+            toolCalls: [$call],
+        ));
+
+        $manager = new AgentManager(
+            provider: $provider,
+            skillRegistry: $this->skillRegistry,
+            permissionGateFactory: $gate === null ? null : static fn(): PermissionGate => $gate,
+            toolRegistry: $this->fakeRegistry('Bash', 'Read', 'Edit', 'Grep'),
+        );
+        $manager->register(new Agent(
+            name: 'reviewer',
+            description: 'reviewer description',
+            prompt: 'Test prompt',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: $grant,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+        ));
+
+        return [$manager, $manager->createSubAgent('reviewer', 'review it')];
+    }
+
+    /**
+     * The `Bash(git *)` decision, in the direction that makes it worth having:
+     * the roster hands the sub-agent the WHOLE `Bash` tool, and the call is
+     * still refused because the agent only ever asked for git.
+     */
+    public function testACallOutsideTheGrantsArgumentHalfIsRefused(): void
+    {
+        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
+            ['Read', 'Grep', 'Bash(git *)'],
+            new ToolCall(name: 'Bash', arguments: ['command' => 'rm -rf /']),
+            new PermissionGate(PermissionMode::BypassPermissions),
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'BypassPermissions settles the GATE, never the grant');
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertStringContainsString('Bash(git *)', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+    }
+
+    /** The same grant admits the call it was written for. */
+    public function testACallInsideTheGrantsArgumentHalfIsAllowedThrough(): void
+    {
+        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
+            ['Read', 'Grep', 'Bash(git *)'],
+            new ToolCall(name: 'Bash', arguments: ['command' => 'git status']),
+            new PermissionGate(PermissionMode::BypassPermissions),
+        );
+
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+        $this->assertNull($subAgent->error);
+    }
+
+    /**
+     * `Allow` is an INTERSECTION over `[;&|\r\n]+` segments, so a chained
+     * escape cannot ride in on a first segment that matches.
+     */
+    public function testAChainedEscapeCannotRideInOnAMatchingFirstSegment(): void
+    {
+        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
+            ['Bash(git *)'],
+            new ToolCall(name: 'Bash', arguments: ['command' => 'git log && rm -rf /']),
+            new PermissionGate(PermissionMode::BypassPermissions),
+        );
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught);
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+    }
+
+    /**
+     * A tool the agent never named at all is refused on the NAME half, and this
+     * one runs with NO gate attached — the precondition evaluateToolCalls() used
+     * to return early on. An agent's declaration is its own statement about
+     * itself; it does not become unenforceable because the caller owns no UI.
+     *
+     * HOW A GATELESS SUB-AGENT REACHES executeSubAgent(), because the obvious
+     * route does not: `createSubAgent()` always attaches one, and
+     * `SubAgent::$permissionGate` is readonly, so it cannot be cleared
+     * afterwards. The reachable path is `executeAll()`, which registers
+     * CALLER-BUILT SubAgents into the very same `$subAgents` map that
+     * `getSubAgent()` and `executeSubAgent()` read — and `SubAgent`'s
+     * constructor defaults that parameter to null. Registering through
+     * reflection reproduces that state without also running `executeAll()`'s
+     * pool and its `finally`, which would settle the sub-agent before this test
+     * could observe it.
+     */
+    public function testAToolTheAgentNeverDeclaredIsRefusedEvenWithNoGate(): void
+    {
+        [$manager, $registered] = $this->grantedSubAgentEmitting(
+            ['Read'],
+            new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
+            null,
+        );
+
+        $subAgent = new SubAgent(
+            id: 'gateless_' . bin2hex(random_bytes(6)),
+            agent: $registered->agent,
+            task: 'review it',
+        );
+        $this->assertNull($subAgent->permissionGate, 'the premise of this test');
+
+        $map = new \ReflectionProperty(AgentManager::class, 'subAgents');
+        $map->setValue($manager, [$subAgent->id => $subAgent] + $map->getValue($manager));
+
+        $caught = null;
+
+        try {
+            iterator_to_array($manager->executeSubAgent($subAgent->id));
+        } catch (\RuntimeException $e) {
+            $caught = $e;
+        }
+
+        $this->assertNotNull($caught, 'the grant must be enforced with no gate attached');
+        $this->assertStringContainsString('is outside the tool grant', $caught->getMessage());
+        $this->assertStringContainsString('(mode: unknown)', $caught->getMessage());
+    }
+
+    /**
+     * An agent that declares nothing is NOT policed. Reading silence as "forbid
+     * everything" would refuse every call for every Agent built without the
+     * field — which is most of them, this file's own helper included.
+     */
+    public function testAnAgentWithNoDeclarationIsNotPolicedByTheGrant(): void
+    {
+        [$manager, $subAgent] = $this->grantedSubAgentEmitting(
+            [],
+            new ToolCall(name: 'Edit', arguments: ['file_path' => '/etc/passwd']),
+            new PermissionGate(PermissionMode::BypassPermissions),
+        );
+
+        iterator_to_array($manager->executeSubAgent($subAgent->id));
+
+        $this->assertSame(SubAgent::STATUS_COMPLETE, $subAgent->status);
+    }
+
     private function createAgent(
         string $name = 'test-agent',
         string $prompt = 'Test prompt',

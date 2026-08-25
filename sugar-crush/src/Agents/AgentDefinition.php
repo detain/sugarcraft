@@ -63,7 +63,27 @@ final readonly class AgentDefinition
                 . 'been granted rather than relying on general knowledge alone. Report findings '
                 . 'grouped by severity, blocking before suggestion, each one naming the file and '
                 . 'line it is about. Do not rewrite the code yourself unless you are asked to.',
-            defaultTools: ['Read', 'Grep', 'Bash(git:*)'],
+            // `git *`, NOT `git:*`, AND THE COLON WAS NOT A TYPO — it was
+            // Claude Code's dialect, in which `Bash(git:*)` means "any command
+            // whose first word is git". This project's dialect is
+            // {@see \SugarCraft\Crush\Permissions\PermissionRule}'s, whose
+            // argument half is an `fnmatch()` glob over the command string, so
+            // the colon was matched LITERALLY. MEASURED on PHP 8.3.6:
+            // `(new PermissionRule('Bash(git:*)', Allow))->matches(new
+            // ToolCall('Bash', ['command' => 'git status']))` is FALSE, and so
+            // is every other real git command — the grant was well-formed and
+            // unmatchable, which is precisely the defect PermissionRule was
+            // rewritten to make impossible for a user's config and which had
+            // survived here in a preset. `AgentDefinitionTest` now refuses any
+            // argument-scoped declaration in any preset that matches nothing.
+            //
+            // The `Allow` arm is an INTERSECTION over `[;&|\r\n]+` segments, so
+            // this admits `git status` and refuses `git log && rm -rf /`. That
+            // is enforced per call by {@see AgentManager::refuseCallOutsideGrant()};
+            // the roster {@see AgentManager::resolveGrantedTools()} sends can
+            // only carry the NAME half, because a tool schema has no field for
+            // "git commands only".
+            defaultTools: ['Read', 'Grep', 'Bash(git *)'],
             defaultSkills: ['php-best-practices', 'security-audit'],
         );
     }
@@ -92,14 +112,31 @@ final readonly class AgentDefinition
             name: $name,
             description: 'System design and architecture',
             // The last clause states this preset's METHOD, the way the other
-            // five do. It used to assert a tool grant ("You have read-only
-            // tools"), which is not something $defaultTools can make true:
-            // the field reaches Agent::$tools and is thereafter only copied
-            // and serialised, and AgentManager::executeSubAgent() builds its
-            // CompleteRequest with no `tools` field at all. See §C7 of
-            // docs/plans/crush_code_hardening_backlog.md — the seam is to be
-            // wired, and until it is, a prompt must not describe the roster
-            // it would produce.
+            // five do, and it still must not assert a tool grant. The reason
+            // has changed, so the reason is rewritten rather than deleted.
+            //
+            // WHAT THIS SAID: that $defaultTools "is not something the field
+            // can make true", because it reached Agent::$tools and was
+            // thereafter only copied and serialised, with
+            // AgentManager::executeSubAgent() building its CompleteRequest
+            // with no `tools` field at all.
+            //
+            // WHAT IS TRUE NOW: half of that is fixed. executeSubAgent() does
+            // pass `tools:`, resolved from this very field by
+            // {@see AgentManager::resolveGrantedTools()}, and a call outside
+            // the grant is refused by
+            // {@see AgentManager::refuseCallOutsideGrant()}. So the field CAN
+            // make a roster true — but only for a caller that hands
+            // AgentManager a tool registry, and the production construction
+            // site ({@see \SugarCraft\Crush\Cli\Bootstrap::agentManager()})
+            // does not yet, so a launched sub-agent still reaches its provider
+            // with `tools: null`.
+            //
+            // WHY THIS STILL EARNS ITS PLACE: a prompt that asserts "you have
+            // read-only tools" would be false on exactly the path that runs
+            // today, and would go on being false silently — the failure this
+            // whole item exists to end. The clause may be restored when the
+            // registry reaches AgentManager on the launch path, and not before.
             prompt: 'You are a software architect. Read enough of the existing code to describe '
                 . 'the design that is actually there before proposing a different one. Offer at '
                 . 'least two options with their trade-offs, recommend one, and state what would '

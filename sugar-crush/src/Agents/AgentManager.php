@@ -752,7 +752,9 @@ final class AgentManager
      * documents its array as a wire order the model has learned, and a subset
      * that reshuffles it would hand two agents the same tools in two orders.
      * Iterating the registry outside also dedupes by construction, so
-     * `['Bash', 'Bash(git *)']` yields one `Bash`, not two.
+     * `['Bash', 'Bash(git *)']` yields one `Bash`, not two — and both
+     * declarations are still marked resolved, which is a separate fact the
+     * loop had to be corrected to get right.
      *
      * @return ?list<Tool>
      * @throws \RuntimeException When a declaration is malformed, resolves to no
@@ -791,14 +793,22 @@ final class AgentManager
                 ));
             }
 
+            // EVERY matching pattern is marked, not just the first, and this
+            // is not tidiness. `['Bash', 'Bash(git *)']` is a legitimate pair —
+            // the first grants the tool, the second narrows a call — and
+            // breaking out on the first hit left the second marked unresolved,
+            // so a correct grant was refused with a message saying it matched
+            // no tool. Found by the ordering test, not by reading this loop.
+            $hit = false;
             foreach ($patterns as $i => $namePattern) {
-                if (!PermissionRule::matchesToolName($namePattern, $tool->name())) {
-                    continue;
+                if (PermissionRule::matchesToolName($namePattern, $tool->name())) {
+                    $matched[$i] = true;
+                    $hit = true;
                 }
+            }
 
-                $matched[$i] = true;
+            if ($hit) {
                 $granted[] = $tool;
-                break;
             }
         }
 
