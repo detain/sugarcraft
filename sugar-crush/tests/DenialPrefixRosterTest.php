@@ -149,8 +149,32 @@ final class DenialPrefixRosterTest extends TestCase
      * invented verb that is not on it is invisible in exactly this way, and
      * {@see self::ROSTER_CASE_VARIANTS_ARE_CAUGHT_BY} covers only the one
      * sub-case that can be closed mechanically.
+     *
+     * AND THE VOCABULARY HAD A FALSE POSITIVE IN IT, WHICH IS THE OTHER
+     * DIRECTION AND HAD ALREADY BITTEN (E541). WHAT THIS SAID: `block(?:ed)?`,
+     * so the bare NOUN `block` was a denial term. WHAT IS TRUE NOW: it is
+     * `block(?:ed|ing)`, the verb forms only. `block` is the ordinary English
+     * word for a contiguous run of something — a header block, a code block, a
+     * memory block — and `[A-Z]...:` frames of that shape are written all over
+     * a protocol implementation. It did not stay theoretical:
+     * {@see \SugarCraft\Crush\LSP\LspConnection}'s over-size refusal was
+     * MEASURED tripping this guard on the phrase "Header block: %s", which is
+     * an HTTP-style header block being read as a permission denial, and was
+     * reworded to get around it. That is the shape where the next reader adds
+     * an exemption row for correct code, so the classifier was fixed instead.
+     *
+     * WHAT THE NARROWING COSTS, stated rather than glossed: an invented prefix
+     * spelling the bare noun — `Permission block: rm` — is now invisible to
+     * this scan. That is ungrammatical English for a refusal, no roster case
+     * uses it, and `Task creation blocked: ` and every DenialKind prefix still
+     * match. MEASURED on PHP 8.3.6: with the narrowed vocabulary this whole
+     * file is green, 16 tests / 114 assertions, and the whole-`src/` map names
+     * the same two files and the same four literals as before. The two
+     * polarities are pinned as fixtures in
+     * {@see self::testRuntimeSpellsNoDenialPrefixOutsideItsConstants()} rather
+     * than left to this paragraph.
      */
-    private const DENIAL_TERMS = '/\b(?:den(?:y|ied|ial)|refus(?:e|ed|al)|block(?:ed)?|reject(?:ed)?'
+    private const DENIAL_TERMS = '/\b(?:den(?:y|ied|ial)|refus(?:e|ed|al)|block(?:ed|ing)|reject(?:ed)?'
         . '|declin(?:e|ed)|prohibited|vetoed|barred'
         . '|forbidden|disallowed|unauthori[sz]ed|required|not (?:allowed|permitted|granted))\b/i';
 
@@ -585,6 +609,45 @@ final class DenialPrefixRosterTest extends TestCase
             'the scanner judges only the first colon-run in a literal, so a denial prefix behind an '
             . 'innocent one is invisible to the whole-src map',
         );
+
+        // AND E541's NEGATIVE, WHICH IS A FALSE POSITIVE THIS GUARD USED TO
+        // HAVE AND HAD ALREADY MADE SOMEBODY REWORD CORRECT CODE. The bare
+        // noun `block` was in the vocabulary, so any capitalised frame ending
+        // in it read as a permission denial. MEASURED on PHP 8.3.6 with the
+        // pre-narrowing vocabulary: every row below was REPORTED, and
+        // LspConnection's over-size refusal was reworded off the phrase
+        // "Header block: %s" for exactly this reason. Assembled from parts so
+        // this file is never matched by its own scan set.
+        foreach ([
+            'an LSP/HTTP header block, which is what actually tripped it' => 'Header bl' . 'ock: content-length missing',
+            'a code block, which any diagnostic may quote' => 'Code bl' . 'ock: unterminated',
+            'a memory or disk block' => 'Memory bl' . 'ock: 4096 bytes',
+        ] as $why => $innocent) {
+            self::assertSame(
+                [],
+                self::denialLiteralsIn('<?php $b = ' . var_export($innocent, true) . ';'),
+                "the vocabulary reads {$why} as a permission denial, so this guard reddens on correct "
+                . 'code and the next reader buys an exemption row with a sentence',
+            );
+        }
+
+        // AND ITS POSITIVE, WITHOUT WHICH THE THREE ROWS ABOVE ARE ALSO WHAT A
+        // DELETED VOCABULARY LOOKS LIKE (rules 15 and 25). The verb forms are
+        // the whole point of the narrowing and must still be seen; the middle
+        // row is the live roster prefix in src/Agents/TaskBlockedException.php,
+        // so this is not a fixture-only claim.
+        foreach ([
+            'the participle, which every real denial in this tree uses' => 'Task creation bl' . 'ocked: rm -rf',
+            'a one-word opener that is the participle' => 'Bl' . 'ocked: nope',
+            'the gerund' => 'Permission bl' . 'ocking: nope',
+        ] as $why => $real) {
+            self::assertSame(
+                [$real],
+                self::denialLiteralsIn('<?php $g = ' . var_export($real, true) . ';'),
+                "the narrowing went too far and the scanner can no longer express {$why}, so a real "
+                . 'denial prefix is invisible to the whole-src map',
+            );
+        }
 
         $declared = array_values(self::runtimeDenialPrefixes());
         $found = self::denialLiteralsIn($source);

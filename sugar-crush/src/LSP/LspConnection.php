@@ -1081,15 +1081,28 @@ final class LspConnection implements LspConnectionInterface
                 $this->pendingContentLength = null;
 
                 throw new LspProtocolException(sprintf(
-                    // ⚠️ "Header block: %s" HERE TRIPPED `DenialPrefixRosterTest`, and the
-                    // wording is the fix rather than an exemption. That guard reports any
-                    // capital-initial word-run ending in a colon that also carries one of its
-                    // denial vocabulary words, and "block" is in that vocabulary — so an HTTP
-                    // header block read as a permission denial. Both resolutions the guard's
-                    // own failure text offers fit badly: this is not a tool-result prefix, so
-                    // a roster row would be a licence, and its OFF_ROSTER exclusion is keyed
-                    // on the file BEING a Throwable class, which this one is not. Rewording is
-                    // the honest move from inside this lane; the classifier gap is reported.
+                    // ⚠️ WHAT THIS SAID: that "Header block: %s" tripped
+                    // `DenialPrefixRosterTest` — whose vocabulary carried the bare noun
+                    // "block", so an HTTP-style header block read as a permission denial —
+                    // and that "the wording is the fix rather than an exemption", because
+                    // both resolutions that guard's failure text offers fit badly: this is
+                    // not a tool-result prefix, so a roster row would be a licence, and the
+                    // OFF_ROSTER exclusion is keyed on the file BEING a Throwable class,
+                    // which this one is not.
+                    //
+                    // WHAT IS TRUE NOW: the classifier was the defect and the classifier was
+                    // fixed. Its vocabulary reads `block(?:ed|ing)` — the verb forms only —
+                    // so a header block, a code block and a memory block are no longer
+                    // denials, pinned in both polarities by fixtures in that file. Rewording
+                    // a correct message to satisfy a guard was always the second-best move;
+                    // it was the only one available from inside the lane that found it.
+                    //
+                    // WHY THIS STILL EARNS ITS PLACE: the wording below is STILL the reworded
+                    // one, so a reader who diffs it against the guard will find no reason for
+                    // it and is one step from "re-simplify this to `Header block: %s`". That
+                    // is now allowed. It is also no longer necessary, and the paragraph that
+                    // explains why a guard once forced a message to be phrased around it is
+                    // the only record that the guard could do that at all.
                     'LSP server declared Content-Length %d, which is outside 1..%d. The buffer '
                     . 'was dropped rather than truncated: Content-Length framing has no '
                     . 'resynchronisation point, so a partially-consumed frame desynchronises '
