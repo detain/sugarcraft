@@ -255,14 +255,18 @@ final class BuiltInToolCorpusTest extends TestCase
      * types and never was; see {@see testTheSecondaryDeclarationCensus()} for
      * the secondary ones and for the blind spot that equating the two produced.
      *
-     * ⚠️ THIS SENTENCE USED TO CARRY THE PAIR "288 files / 307 types" (rule 7,
-     * so here is what it said and why it now reads differently). WHAT IS TRUE
-     * NOW: both figures were stale — the tree is at 295 and 314, and had
-     * already moved before this paragraph was last edited. WHY THE CLAIM STILL
-     * EARNS ITS PLACE: the RELATION is the load-bearing part and does not rot,
-     * while the pair did, twice. The live numbers belong in the assertions
-     * below, which fail with the derived value in the message; prose that
-     * restates them is a second place to be wrong (rule 18).
+     * ⚠️ THIS SENTENCE USED TO CARRY THE PAIR "288 files / 307 types", then the
+     * pair "295 and 314" in the correction that replaced it (rule 7, so here is
+     * what it said and why it now reads differently). WHAT IS TRUE NOW: the
+     * SECOND pair went stale too, inside one round, the moment a lane added two
+     * source files — which is the third time this one paragraph has restated a
+     * census and been wrong about it. WHY THE CLAIM STILL EARNS ITS PLACE: the
+     * RELATION is the load-bearing part and does not rot, while every pair
+     * written beside it has. So the pair is now gone from the prose entirely
+     * rather than corrected a third time. The live numbers belong in the
+     * assertions below, which fail with the derived value in the message;
+     * prose that restates them is a second place to be wrong (rule 18), and
+     * this paragraph is the proof of its own argument.
      *
      * `Permissions/DenialKind` — the leaf enum the
      * three denial prefixes moved onto when the roster came off `Chat` (E239).
@@ -317,8 +321,14 @@ final class BuiltInToolCorpusTest extends TestCase
      * (crush_code.md P3.4). Each was a single concrete class too. The file
      * before that trio was `Providers/ToolCallParser/MarkupScanner`.
      *
-     * THE LAST BUMP, NAMED SO THE NEXT READER DOES NOT HAVE TO GUESS: +1 file
-     * and +1 concrete class from `src/Support/ProcessReaper.php`, the one
+     * THE LAST BUMP, NAMED SO THE NEXT READER DOES NOT HAVE TO GUESS: +2 files
+     * from E494's reasoning channel — `src/Events/ReasoningDelta.php` (+1
+     * concrete) and `src/Backend/ObservesReasoning.php` (+1 interface), each
+     * declaring exactly one top-level type, so files and declarations moved
+     * together and `abstract`/`trait`/`enum` did not move at all.
+     *
+     * THE BUMP BEFORE IT: +1 file and +1 concrete class from
+     * `src/Support/ProcessReaper.php`, the one
      * bounded SIGTERM -> signal 9 -> `proc_close()` ladder E366 hoisted out of
      * the four teardown paths that were each about to grow their own. It
      * declares one concrete final class and nothing else, which is why only
@@ -349,6 +359,18 @@ final class BuiltInToolCorpusTest extends TestCase
      * here: the walk below is `RecursiveDirectoryIterator` order, so "the Nth
      * file" is a fact about the filesystem, not about the tree.
      */
+    /**
+     * The resolution these literals need, IN THE FAILURE TEXT, because the
+     * person reading it is usually resolving a merge rather than debugging a
+     * test. Three lanes adding source files in one round each see a small
+     * increment that is correct for their own worktree and wrong for the merge,
+     * and a count merges cleanly without a conflict marker while being
+     * arithmetically wrong afterwards.
+     */
+    private const CENSUS_RESOLUTION = 'php files under src/ — a CENSUS OF THE TREE, not a policy. '
+        . 'Re-derive it; never resolve a conflict here by choosing a side. '
+        . 'Two lanes that each added one file both read +1, and the merge needs +2.';
+
     public function testTheSymbolKindCensusTheDocBlockQuotes(): void
     {
         $counts = ['concrete' => 0, 'enum' => 0, 'abstract' => 0, 'interface' => 0, 'trait' => 0, 'none' => 0];
@@ -380,9 +402,9 @@ final class BuiltInToolCorpusTest extends TestCase
             }
         }
 
-        $this->assertSame(295, $files, 'php files under src/');
+        $this->assertSame(297, $files, self::CENSUS_RESOLUTION);
         $this->assertSame(
-            ['concrete' => 244, 'enum' => 27, 'abstract' => 0, 'interface' => 18, 'trait' => 6, 'none' => 0],
+            ['concrete' => 245, 'enum' => 27, 'abstract' => 0, 'interface' => 19, 'trait' => 6, 'none' => 0],
             $counts,
         );
     }
@@ -475,8 +497,8 @@ final class BuiltInToolCorpusTest extends TestCase
         foreach ($files as $relative) {
             $declarations += count(BuiltInToolCorpus::declaredTypes($this->srcDir . '/' . $relative));
         }
-        $this->assertSame(295, count($files), 'php files under src/');
-        $this->assertSame(314, $declarations, 'top-level declarations in them');
+        $this->assertSame(297, count($files), self::CENSUS_RESOLUTION);
+        $this->assertSame(316, $declarations, 'top-level declarations in them — ' . self::CENSUS_RESOLUTION);
         $this->assertSame(
             $declarations - count($files),
             array_sum(array_map('count', $secondary)),

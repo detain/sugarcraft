@@ -64,7 +64,7 @@ use SugarCraft\Crush\Support\ContainedPath;
  * WHAT WAS DELIBERATELY NOT BUILT
  * -------------------------------
  *   - A per-CLASS listing. The declaration-line regex the item offers as an
- *     alternative is cheap to run, but `src/` here declares 314 top-level
+ *     alternative is cheap to run, but `src/` here declares 316 top-level
  *     types; at one line each that is several times this whole block's budget,
  *     emitted on every step, to tell the model things `Glob 'src/&#42;&#42;/&#42;.php'`
  *     tells it on demand. The map stops at the directory.
@@ -236,7 +236,7 @@ final readonly class RepoMapBlock
      * entry mapping a prefix to `""` or `"."` is legal and points the walk at
      * the whole repository, so this is the bound that keeps a malformed
      * manifest from turning prompt assembly into a full-tree crawl. Generous
-     * because it is a backstop and not a policy: `src/` here is 295 files, so
+     * because it is a backstop and not a policy: `src/` here is 297 files, so
      * a normal package is about SEVENTY times under it — not the "two orders
      * of magnitude" an earlier revision of this sentence claimed, which was
      * the arithmetic being rounded in the direction that flattered the bound.
