@@ -70,9 +70,12 @@ is asked to falsify.**
    `prompt_expand.md` (4,063 lines) arrived that way mid-round-58, authored as `Test User`.
 3. **E490 is answered but NOT closed.** See above. The next concrete action is 60 more takes with an
    instrument row armed FIRST, which would exclude 1-in-200 at 95%.
-4. **`left_steps.md` is stale AND WRONG, with no generator.** One of its claims — that `crush_code.md` no
-   longer exists — is false; the file is present and tracked. Its counts predate E455–E593 entirely.
-   Treat it as a weak hint, verify anything taken from it, or regenerate it.
+4. ~~**`left_steps.md`**~~ — **THE FILE IS GONE.** It was untracked (so it is in no commit and cannot be
+   recovered from git), stale, and wrong: one of its claims — that `crush_code.md` no longer exists — was
+   false. It was deleted from the working copy during the round-59 close. **Nothing depended on it and
+   nothing should be reconstructed from memory of it.** If a "what is left" census is wanted, generate it
+   from the backlog and `git log`, and commit the generator with it — an ungenerated ledger rots and this
+   one did.
 5. 🔴 **THE BACKLOG HAS NO OPEN/CLOSED MARKER.** 505 of ~590 entries carry no disposition stamp, and that
    is **not** 505 open items. Do not infer outstanding work by counting unmarked entries.
    Known file defects, measured and pre-existing: **`E70`, `E71`, `E72` are referenced in the body but
