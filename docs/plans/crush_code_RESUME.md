@@ -136,6 +136,16 @@ stage results pulled out of `journal.jsonl`. That regenerates each prompt byte-i
 alone. Preserve any uncommitted work with `git stash create` + `git update-ref refs/rescue/<tag>`, which
 snapshots into git WITHOUT committing red and WITHOUT disturbing the working tree.
 
+**The recipe was dry-run against round 55's own script on 2026-08-25, while the round was healthy and
+nothing needed recovering** — a known-positive control (rules 15/25), because a recovery tool is exactly
+the kind of instrument you cannot test at the moment you need it. It works: the truncate-and-`require`
+step exports `fixPrompt`, `reviewPrompt`, `implementPrompt`, `LANES`, `COMMON`, `BASE`, `ROUND`, and
+`fixPrompt(review, LANES[0], impl)` renders 23,995 chars with both stage results interpolated. Two things
+to know before you run it: the lane objects key on **`key`**, not `id` (`LANES.map(l => l.key)` → `abc`),
+and the script only parses if you wrap it — `node --check` on a workflow script fails with "await is only
+valid in async functions", which is expected, since the body runs in an async context. Wrap it in
+`async function __w(){ … }` and rewrite the trailing `return` before you check it.
+
 🔴 **`/tmp` DOES NOT SURVIVE A REBOOT.** Everything under `~/.claude` did — lane commits, the round
 script, the journal, per-agent transcripts. `/tmp` took the staged sweep script and every lane
 scratchpad. Anything a round needs across a reboot belongs in git or under `~/.claude`. Note also that a
