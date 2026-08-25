@@ -110,6 +110,55 @@ final class StdioMcpServer implements McpServer
      */
     private const READ_POLL_SECONDS = 1;
 
+    /**
+     * How many CONSECUTIVE `stream_select()` failures {@see writeLine()}
+     * tolerates before giving up on the write.
+     *
+     * `stream_select()` answers `false` for EINTR — a signal arrived — which is a
+     * retry and not an error, and that branch had no exit of ANY kind: a
+     * persistently failing select spun at 1 ms forever on a path that
+     * {@see callTool()} deliberately leaves unbounded. THIS COUNT IS THE EXIT
+     * THAT FIRES.
+     *
+     * ⚠️ THE LIVENESS HALF OF THE CONDITION IN THAT BRANCH IS DORMANT BY
+     * CONSTRUCTION, AND IT WAS WRITTEN AS THAT BRANCH'S PRIMARY EXIT. It is not. A write-set `stream_select()`
+     * can only be INTERRUPTED if it BLOCKS, and it only blocks when the pipe is
+     * full AND the child is alive — every other state makes the fd instantly
+     * ready. MEASURED on this host (PHP 8.3.6, Linux 6.8), 1s of a 300 µs SIGUSR1
+     * storm per state, three consecutive takes, identical every time:
+     *
+     *     pipe   child   select false   select ok
+     *     empty  live            0        ~695000
+     *     FULL   LIVE        ~2815              0     <- the only interruptible state
+     *     empty  dead            0        ~660000
+     *     full   dead            0        ~692000
+     *
+     * So a dead child can never reach this branch: its fd never blocks, the loop
+     * reaches `fwrite()`, and `$written === false` is what catches it — every
+     * time, on both pipe states. The check is KEPT rather than deleted because it
+     * costs one status call per EINTR, it is correct, and it becomes live the
+     * moment the loop's shape changes (an `except` set, a poll on an empty pipe,
+     * a child that dies between the select and the check). Its dormancy is pinned
+     * by `StdioMcpServerWriteBoundsTest::testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()`,
+     * which reds if the `full/dead` figure ever moves.
+     *
+     * ⚠️ `feof()` WOULD BE THE WRONG CHECK HERE, and {@see readLine()}'s EINTR
+     * branch using it is not a precedent to copy — see the measurement in the
+     * `$written === 0` branch below: a WRITE pipe does not report the reader's
+     * exit through `feof()` at all.
+     *
+     * DELIBERATELY GENEROUS. MEASURED on this host (PHP 8.3.6, Linux 6.8), the
+     * densest signal storm this box can produce — a forked child sending SIGUSR1
+     * every 300 µs — makes `stream_select()` fail about 2800 times a second with
+     * ZERO successes interleaved; three consecutive takes gave 1407, 1406 and
+     * 1407 failures in 0.5 s, and the `full/live` row of the table above is the
+     * same figure re-measured through a WRITE-set select rather than a read one.
+     * With this loop's 1 ms yield on the failure path
+     * that is roughly 500–900 a second, so 10000 is on the order of ten seconds
+     * of unbroken interruption.
+     */
+    private const MAX_CONSECUTIVE_SELECT_FAILURES = 10000;
+
     private float $startTimeoutSeconds;
 
     /**
@@ -237,7 +286,15 @@ final class StdioMcpServer implements McpServer
             'clientInfo' => ['name' => 'sugar-crush', 'version' => '1.0.0'],
         ], $deadline);
 
-        if ($response === null || ($response->result === null && $response->error === null)) {
+        // `!$response->resultSet`, NOT `result === null`: a server answering
+        // `initialize` with a legal `"result": null` used to be rejected here as
+        // "answered nothing at all", because the two were indistinguishable. It is
+        // still a MISBEHAVING answer — the MCP spec says the result is an object
+        // with a `protocolVersion` — but the gate this branch guards is "did the
+        // server answer", and it did. `parseTools()` reads the tools out with `??
+        // []`, so a server that answers null all the way through comes up with no
+        // tools rather than being reported as a failed launch.
+        if ($response === null || (!$response->resultSet && $response->error === null)) {
             // READ THE TAIL BEFORE `stop()`, which clears it. Without this the
             // only thing a user ever saw for a server that died printing a stack
             // trace was the bare name — the child's own explanation was written
@@ -248,7 +305,7 @@ final class StdioMcpServer implements McpServer
             throw new \RuntimeException("Failed to start MCP server: {$this->name}" . $diagnostics);
         }
 
-        $this->notify('initialized');
+        $this->notify('initialized', null, $deadline);
 
         $listResponse = $this->request('tools/list', [], $deadline);
         $this->tools = $listResponse === null ? [] : $this->parseTools($listResponse->toArray());
@@ -281,6 +338,34 @@ final class StdioMcpServer implements McpServer
     public function stop(): void
     {
         if ($this->process !== null && is_resource($this->process)) {
+            // CLOSE THE PIPES FIRST, AND THE ORDER IS THE WHOLE POINT — this is
+            // not hygiene about resource lifetimes. A server whose stdin is still
+            // open has been given no reason to leave, so it sits through the
+            // SIGTERM grace below and is killed with signal 9; closing fd 0
+            // delivers the EOF that a well-written server treats as "shut down
+            // now", and it exits on its own before the grace is paid.
+            //
+            // MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive
+            // takes, identical, against a child that traps SIGTERM to a no-op and
+            // exits on stdin EOF, driven through this exact ladder:
+            //
+            //     pipes left open    -> 1.05s, escalated to signal 9, status 9
+            //     pipes closed first -> 0.010s, exited on its own, status 0
+            //
+            // A hundredfold, and the difference between a clean exit and a
+            // SIGKILL for any server that traps SIGTERM to flush state. This
+            // method used to set `$this->pipes = null` below and leave the
+            // resources to the destructor, which arrives long after
+            // `proc_close()` has finished waiting.
+            //
+            // NO FINAL DRAIN BEFORE CLOSING FD 2, unlike
+            // {@see \SugarCraft\Crush\LSP\LspConnection::stopProcess()}: the one
+            // caller that wants the tail — {@see start()}'s failure branch —
+            // already read it into a local before calling this, and every path
+            // through here clears {@see $stderrTail} at the end regardless, so a
+            // drain here would collect bytes nothing can ever read.
+            $this->closePipes();
+
             proc_terminate($this->process);
 
             if (!self::waitForExit($this->process, self::TERMINATE_GRACE_SECONDS)) {
@@ -297,11 +382,36 @@ final class StdioMcpServer implements McpServer
 
             proc_close($this->process);
         }
+        // Unconditional, because {@see stop()} above only reaches its own call
+        // when the process handle is live: a connection torn down some other way
+        // still has pipes to release here.
+        $this->closePipes();
+
         $this->process = null;
         $this->pipes = null;
         $this->readBuffer = '';
         $this->stderrTail = '';
         $this->stderrOpen = false;
+    }
+
+    /**
+     * Release the three pipe resources, if they are still open.
+     *
+     * Idempotent, because {@see stop()} calls it twice on the ordinary path —
+     * once before the escalation ladder for the EOF, and once after, for a
+     * teardown that never reached the ladder at all.
+     */
+    private function closePipes(): void
+    {
+        if ($this->pipes === null) {
+            return;
+        }
+
+        foreach ($this->pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
     }
 
     /**
@@ -324,6 +434,25 @@ final class StdioMcpServer implements McpServer
         } while (microtime(true) < $deadline);
 
         return !proc_get_status($process)['running'];
+    }
+
+    /**
+     * Is the server child still there? A LIVENESS check, deliberately not a
+     * timeout: {@see writeLine()}'s EINTR branch needs to tell "a signal
+     * interrupted the select" from "there is nobody left to write to", and
+     * elapsed time answers neither. It is also the only bound
+     * {@see callTool()}'s deadline-less path can accept without capping a tool
+     * call that is legitimately slow.
+     *
+     * @param resource|null $process
+     */
+    private static function childIsRunning($process): bool
+    {
+        if (!is_resource($process)) {
+            return false;
+        }
+
+        return (bool) proc_get_status($process)['running'];
     }
 
     /**
@@ -351,7 +480,12 @@ final class StdioMcpServer implements McpServer
             'arguments' => $args,
         ]);
 
-        if ($response === null || $response->result === null) {
+        // `!$response->resultSet` rather than `result === null`, so a legal
+        // `"result": null` is a RESULT and falls through to the wrapping branch
+        // below — where it is rendered as the text `null`, exactly as `false` and
+        // `0` are. An error response still lands here, because an error carries no
+        // `result` key at all.
+        if ($response === null || !$response->resultSet) {
             return ['error' => 'Tool call failed'];
         }
 
@@ -377,12 +511,23 @@ final class StdioMcpServer implements McpServer
             // before the fix: `0` and `0.0` both arrived at the model as `''`,
             // `5` and `false` as `'5'` and `'false'`.
             //
-            // The `=== false` arm is a RETURN-TYPE FORMALITY, not a live path:
-            // `null` is answered above, arrays and strings take the other
-            // branches, so all this call can ever see is a bool, an int or a
-            // float from `json_decode()`, and `json_encode()` cannot fail on
-            // those. It is spelled explicitly anyway because `text` is declared
-            // `string` and `json_encode()` is declared `string|false`.
+            // The `=== false` arm is a RETURN-TYPE FORMALITY, not a live path.
+            //
+            // WHAT THIS SAID: "`null` is answered above ... so all this call can
+            // ever see is a bool, an int or a float from `json_decode()`."
+            // WHAT IS TRUE NOW: the gate above tests `!$response->resultSet`, not
+            // `result === null`, so a legal `"result": null` is a RESULT and
+            // reaches here — see that gate's own comment. The reachable set is
+            // `null`, a bool, an int or a float; arrays and strings still take the
+            // other branches.
+            // WHY THIS STILL EARNS ITS PLACE: the conclusion did not move with the
+            // premise. `json_encode()` cannot fail on any of those four either, so
+            // the arm is still dead in fact — `json_encode(null)` is the STRING
+            // `"null"`, which is precisely how a null result reaches the model as
+            // the text `null` instead of as the empty string the `?:` above would
+            // have made of it. The arm is spelled out anyway because `text` is
+            // declared `string` and `json_encode()` is declared `string|false`;
+            // nothing but the type system asks for it.
             $encoded = json_encode($response->result);
 
             return ['content' => [[
@@ -408,7 +553,7 @@ final class StdioMcpServer implements McpServer
     private function request(string $method, array $params, ?float $deadline = null): ?McpMessage
     {
         $id = (string) $this->nextId++;
-        if (!$this->writeLine(McpMessage::request($id, $method, $params)->toJson())) {
+        if (!$this->writeLine(McpMessage::request($id, $method, $params)->toJson(), $deadline)) {
             return null;
         }
 
@@ -419,10 +564,15 @@ final class StdioMcpServer implements McpServer
      * Send a JSON-RPC notification (no id, no response expected).
      *
      * @param array<string, mixed>|null $params
+     * @param float|null $deadline the caller's wall clock, where it has one — a
+     *        notification expects no reply, which is not the same as expecting no
+     *        bound: {@see start()}'s `initialized` sits BETWEEN its two bounded
+     *        exchanges and would otherwise be the one unbounded step in a
+     *        handshake that is bounded end to end
      */
-    private function notify(string $method, ?array $params = null): void
+    private function notify(string $method, ?array $params = null, ?float $deadline = null): void
     {
-        $this->writeLine(McpMessage::notification($method, $params)->toJson());
+        $this->writeLine(McpMessage::notification($method, $params)->toJson(), $deadline);
     }
 
     /**
@@ -479,46 +629,87 @@ final class StdioMcpServer implements McpServer
      * bound has to be "until the write completes", which is what the loop below
      * is.
      *
-     * NOT DEADLINE-BOUNDED, AND THAT IS AN ASYMMETRY RATHER THAN A CONTRACT. An
-     * earlier version of this sentence said "matching this class's existing
-     * contract", which is only half true and the half it gets wrong is the one
-     * that matters: {@see readLine()} takes a `?float $deadline` and
-     * {@see readResponse()} threads it from {@see request()}, so on
-     * {@see start()}'s path the handshake budget bounds the READ half of every
-     * exchange and never reaches this loop. It is only on {@see callTool()}'s
-     * path — which passes no deadline at all, deliberately, see that method —
-     * that the two halves genuinely match.
+     * ON THE DEADLINE, AND WHY THIS PARAGRAPH CHANGED TWICE.
      *
-     * WHY THIS STILL EARNS ITS PLACE UNBOUNDED: liveness here is no worse than
-     * the blocking `fwrite()` this loop replaced, which had no bound either, and
-     * the deadlock the loop exists to close is gone. Accepting the deadline the
-     * caller already holds is a real improvement, but it is a change to
-     * `start()`'s failure semantics rather than part of a deadlock fix, so it is
-     * recorded in the hardening backlog instead of being smuggled in here.
+     * WHAT IT SAID FIRST: that being unbounded matched "this class's existing
+     * contract". Half true, and wrong in the half that matters —
+     * {@see readLine()} takes a `?float $deadline` and {@see readResponse()}
+     * threads it from {@see request()}, so on {@see start()}'s path the handshake
+     * budget already bounded the READ half of every exchange and never reached
+     * this loop.
+     *
+     * WHAT IT SAID NEXT: that leaving the write unbounded still earned its place,
+     * because liveness was no worse than the blocking `fwrite()` the loop
+     * replaced. Also true, and also not good enough: a server that spawns, holds
+     * its pipes open, never reads stdin and never writes stderr held `start()`
+     * here indefinitely once the message exceeded the stdin pipe buffer, on a
+     * path whose caller was already holding a 60s budget it simply was not being
+     * given.
+     *
+     * WHAT IS TRUE NOW: the deadline is threaded. {@see request()} passes
+     * {@see start()}'s handshake budget through, and so does {@see notify()}, so
+     * BOTH halves of every handshake exchange are bounded by the one wall clock.
+     *
+     * WHY THE NULL DEFAULT STILL EARNS ITS PLACE: {@see callTool()} passes no
+     * deadline, deliberately — an MCP tool call is somebody else's real work and
+     * may legitimately run for minutes, so a wall clock there would abandon
+     * correct servers. That path is bounded by the CHILD'S LIVENESS instead (see
+     * {@see MAX_CONSECUTIVE_SELECT_FAILURES} and the `$written === false` branch
+     * below), which is the right question for it: "is there anybody to write to",
+     * not "has this taken too long".
+     *
+     * @param float|null $deadline `microtime(true)` value past which the write
+     *        gives up; null bounds on the child's liveness alone
      */
-    private function writeLine(string $json): bool
+    private function writeLine(string $json, ?float $deadline = null): bool
     {
         if (!is_resource($this->process) || $this->pipes === null) {
             return false;
         }
 
         $payload = $json . "\n";
+        $consecutiveSelectFailures = 0;
 
         while ($payload !== '') {
+            // Same shape as {@see readLine()}'s: the remaining budget is both the
+            // give-up test and the `select()` slice, so a loop with a deadline
+            // never waits past it and a loop without one falls back to the poll.
+            $remaining = $deadline === null ? null : $deadline - microtime(true);
+            if ($remaining !== null && $remaining <= 0.0) {
+                return false;
+            }
+
             $write = [$this->pipes[0]];
             $read = $this->stderrOpen ? [$this->pipes[2]] : [];
             $except = [];
+            $seconds = $remaining === null ? self::READ_POLL_SECONDS : (int) $remaining;
+            $micros = $remaining === null ? 0 : (int) (($remaining - $seconds) * 1_000_000);
 
             // `@` for EINTR, same as {@see readLine()}: a signal arriving
             // mid-select is a retry, and under `failOnWarning="true"` the warning
             // alone would red a passing run.
-            $ready = @stream_select($read, $write, $except, self::READ_POLL_SECONDS, 0);
+            $ready = @stream_select($read, $write, $except, $seconds, $micros);
 
             if ($ready === false) {
+                $consecutiveSelectFailures++;
+
+                // AN EINTR IS A RETRY; AN ENDLESS ONE IS NOT. This branch had no
+                // exit of any kind, so a persistently failing select spun here at
+                // 1 ms forever — on {@see callTool()}'s path, which has no
+                // deadline to stop it. See {@see MAX_CONSECUTIVE_SELECT_FAILURES}
+                // for why `feof()` is not the instrument, and for the dormancy of
+                // the liveness half of this condition.
+                if (!self::childIsRunning($this->process)
+                    || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
+                    return false;
+                }
+
                 usleep(1000);
 
                 continue;
             }
+
+            $consecutiveSelectFailures = 0;
 
             if ($read !== []) {
                 $this->absorbStderr();

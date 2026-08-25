@@ -36,9 +36,21 @@ final class McpMessage
      * answering `initialize` with a non-object `result` took down the whole MCP
      * subsystem for the session.
      *
+     * `$resultSet` IS THE PAIRED SENTINEL FOR THAT `mixed`, AND IT IS WHAT MAKES
+     * `"result": null` REPRESENTABLE. `null` is a conforming JSON-RPC result, and
+     * the value alone cannot say whether the peer sent it or sent nothing:
+     * `$result === null` is `{"jsonrpc":"2.0","id":"1","result":null}` AND
+     * `{"jsonrpc":"2.0"}` AND every error response, all three at once. This is the
+     * `bool $XSet` convention the rest of the repo uses for exactly that ambiguity
+     * (canonical `candy-sprinkles/src/Style.php`), and the two halves go together:
+     * without it {@see parse()} had to REJECT the null-result message outright,
+     * and {@see toJson()} DROPPED a null result on the way back out.
+     *
      * @param array<string, mixed>|null $params
      * @param mixed $result any JSON value the peer may put in `result`
      * @param array<string, mixed>|null $error
+     * @param bool $resultSet whether `result` was PRESENT — which is not the same
+     *        question as whether it is non-null
      */
     private function __construct(
         public readonly ?string $id,
@@ -47,6 +59,7 @@ final class McpMessage
         public readonly mixed $result,
         public readonly ?array $error,
         public readonly bool $isNotification,
+        public readonly bool $resultSet = false,
     ) {}
 
     /**
@@ -64,34 +77,36 @@ final class McpMessage
         $id = array_key_exists('id', $decoded) ? (is_string($decoded['id']) || is_int($decoded['id']) ? (string) $decoded['id'] : null) : null;
         $method = $decoded['method'] ?? null;
         $params = isset($decoded['params']) && is_array($decoded['params']) ? $decoded['params'] : null;
-        $result = array_key_exists('result', $decoded) ? ($decoded['result'] ?? null) : null;
+        $resultSet = array_key_exists('result', $decoded);
+        $result = $resultSet ? $decoded['result'] : null;
         $error = isset($decoded['error']) && is_array($decoded['error']) ? $decoded['error'] : null;
 
         $isNotification = $method !== null && !array_key_exists('id', $decoded);
 
-        // If method is null but error is set, this is an error response — id may be absent
+        // WHAT THIS SAID BEFORE: `$result === null` was the rejection, and it
+        // swallowed one legal message. `{"jsonrpc":"2.0","id":"1","result":null}`
+        // is a conforming JSON-RPC success response and `parse()` returned null
+        // for it. The reasoning was sound at the time — with `method`, `error` AND
+        // `result` all null there was no discriminator left in the decoded array,
+        // so the message was indistinguishable from `{"jsonrpc":"2.0"}` and from a
+        // reply whose `result` key is simply absent — and the comment said the
+        // proper fix was a paired `bool $resultSet` sentinel, deferred because a
+        // half-threaded one is worse than a documented rejection.
         //
-        // `$result === null` IS THE REJECTION AND IT SWALLOWS ONE LEGAL MESSAGE:
-        // `{"jsonrpc":"2.0","id":"1","result":null}` is a conforming JSON-RPC
-        // success response and this returns null for it. That is deliberate, not
-        // an oversight of the widening above. With `method`, `error` AND `result`
-        // all null there is no discriminator left in the decoded array — the
-        // message is indistinguishable from `{"jsonrpc":"2.0"}` and from a reply
-        // whose `result` key is simply absent, and this class carries no
-        // "was the key present" sentinel to tell them apart.
+        // WHAT IS TRUE NOW: the sentinel exists and is threaded — through
+        // {@see toJson()}, {@see toArray()} and both of
+        // {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s `result === null` tests
+        // — so `array_key_exists()` IS the discriminator and the three cases are
+        // told apart. A null-result reply now parses, reaches `callTool()`, and is
+        // rendered as the text `null` by the same branch that renders `false` and
+        // `0`, rather than being answered with `['error' => 'Tool call failed']`.
         //
-        // WHAT IT COSTS, measured rather than assumed: a null-`result` reply to
-        // `tools/call` leaves {@see \SugarCraft\Crush\MCP\StdioMcpServer::readResponse()}
-        // returning null, so `callTool()` answers `['error' => 'Tool call
-        // failed']` — a wrong answer, but a GRACEFUL one that stays inside the
-        // tool result. The scalars fixed above were an uncaught `TypeError` that
-        // escaped the MCP subsystem entirely. Closing this one properly needs a
-        // paired `bool $resultSet` sentinel (the convention this repo already
-        // uses for nullable state) threaded through `toJson()` and
-        // `StdioMcpServer`'s two `result === null` tests; it is recorded as a
-        // follow-up rather than bolted on here, because a half-threaded sentinel
-        // is worse than a documented rejection.
-        if ($method === null && $error === null && $result === null) {
+        // WHY THE GUARD STILL EARNS ITS PLACE: it is what rejects
+        // `{"jsonrpc":"2.0"}` and any other envelope carrying no method, no error
+        // and no result key. That message is not a request, not a response and not
+        // a notification; letting it through would hand `readResponse()` an object
+        // with nothing to match on.
+        if ($method === null && $error === null && !$resultSet) {
             return null;
         }
 
@@ -102,6 +117,7 @@ final class McpMessage
             result: $result,
             error: $error,
             isNotification: $isNotification,
+            resultSet: $resultSet,
         );
     }
 
@@ -143,7 +159,8 @@ final class McpMessage
      * Create a JSON-RPC 2.0 success response.
      *
      * @param mixed $result any JSON value — see the constructor for why this is
-     *        not `?array`
+     *        not `?array`, and for why `success($id, null)` is a REAL null result
+     *        rather than an absent one
      */
     public static function success(string $id, mixed $result): self
     {
@@ -154,6 +171,7 @@ final class McpMessage
             result: $result,
             error: null,
             isNotification: false,
+            resultSet: true,
         );
     }
 
@@ -195,7 +213,10 @@ final class McpMessage
         if ($this->params !== null) {
             $payload['params'] = $this->params;
         }
-        if ($this->result !== null) {
+        // `$this->resultSet`, NOT `$this->result !== null`: the second dropped a
+        // legal null result on the way out, so a message that arrived as
+        // `{"…","result":null}` re-serialised as `{"…"}` — a different message.
+        if ($this->resultSet) {
             $payload['result'] = $this->result;
         }
         if ($this->error !== null) {
@@ -206,7 +227,11 @@ final class McpMessage
     }
 
     /**
-     * @return array{jsonrpc: string, id: string|null, method: string|null, params: array<string, mixed>|null, result: mixed|null, error: array<string, mixed>|null, isNotification: bool}
+     * `resultSet` is carried too, because `result => null` in this array has the
+     * same ambiguity the sentinel exists to resolve and a consumer reading the
+     * array rather than the object would otherwise lose it.
+     *
+     * @return array{jsonrpc: string, id: string|null, method: string|null, params: array<string, mixed>|null, result: mixed|null, error: array<string, mixed>|null, isNotification: bool, resultSet: bool}
      */
     public function toArray(): array
     {
@@ -218,6 +243,7 @@ final class McpMessage
             'result' => $this->result,
             'error' => $this->error,
             'isNotification' => $this->isNotification,
+            'resultSet' => $this->resultSet,
         ];
     }
 

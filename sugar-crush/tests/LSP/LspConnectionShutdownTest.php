@@ -59,6 +59,13 @@ final class LspConnectionShutdownTest extends TestCase
     private const DESTRUCTOR_BOUND_SECONDS = 3.0;
 
     /**
+     * Sits between the 0.010s a pipe-closing teardown measures and the 1.0s
+     * grace a non-closing one pays in full. Half the grace, so neither a loaded
+     * box nor a regression is ambiguous.
+     */
+    private const EOF_EXIT_BOUND_SECONDS = 0.5;
+
+    /**
      * Under one pipe buffer (64 KiB on this host). The control volume: a server
      * writing this much is answered whether or not fd 2 is drained.
      */
@@ -421,6 +428,162 @@ final class LspConnectionShutdownTest extends TestCase
         $connection->disconnect();
         $this->assertFalse($connection->isConnected());
     }
+
+    // =========================================================================
+    // The pipes are closed BEFORE the reap, and that is not hygiene
+    // =========================================================================
+
+    /**
+     * CLOSING THE PIPES BEFORE THE REAP IS WHAT LETS A SIGTERM-TRAPPING SERVER
+     * EXIT CLEANLY, AND THE COST OF GETTING IT WRONG IS A SIGKILL.
+     *
+     * `stopProcess()` used to set `$this->pipes = null` and leave the resources
+     * to the destructor. That looks like ordering hygiene and it is not:
+     * `proc_close()` inside {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndClose()}
+     * WAITS for the child, and a server whose stdin is still open has been given
+     * no reason to leave. Closing fd 0 delivers the EOF that a well-written
+     * language server treats as "shut down now" — the same event
+     * `disconnect()`'s `exit` notification is asking for politely.
+     *
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive takes,
+     * identical every time, against a child that traps SIGTERM to a no-op and
+     * exits on stdin EOF, run through the same TERM / 1.0s poll / signal-9
+     * ladder {@see \SugarCraft\Crush\Support\ProcessReaper} uses:
+     *
+     *     pipes left open   -> 1.05s, escalated to signal 9, exit status 9
+     *     pipes closed first -> 0.010s, exited on its own, exit status 0
+     *
+     * A hundredfold, and the difference between a clean exit and a SIGKILL.
+     * `gopls`, `rust-analyzer` and `jdtls` all do real work on shutdown and all
+     * trap SIGTERM to do it, so this is the ordinary path for a real server, not
+     * a corner. THIS FALSIFIES THE SEVERITY THE FINDING WAS FILED UNDER, which
+     * called the ordering minor on the grounds that "the child is gone by then in
+     * practice".
+     *
+     * {@see LspConnection::stopProcess()} is driven directly rather than through
+     * `disconnect()`, which would add its own `shutdown` request wait to the
+     * clock and measure two budgets as one number — the mistake
+     * {@see WELL_BEHAVED_SERVER}'s doc-block records for the row above.
+     */
+    public function testThePipesAreClosedBeforeTheReapSoASigtermTrappingServerCanExit(): void
+    {
+        $connection = $this->connectedOver(self::EOF_EXITING_SERVER, requestTimeout: 0.3);
+        $pid = $this->selfReportedPid();
+
+        $stop = new \ReflectionMethod($connection, 'stopProcess');
+        $stop->setAccessible(true);
+
+        $started = microtime(true);
+        $stop->invoke($connection);
+        $elapsed = microtime(true) - $started;
+
+        $this->assertLessThan(
+            self::EOF_EXIT_BOUND_SECONDS,
+            $elapsed,
+            sprintf(
+                'stopProcess() took %.2fs against a server that exits on stdin EOF — the pipes '
+                . 'are not being closed before the reap, so the server never saw the EOF and '
+                . 'paid the whole %.1fs SIGTERM grace before being killed with signal 9',
+                $elapsed,
+                \SugarCraft\Crush\Support\ProcessReaper::TERMINATE_GRACE_SECONDS,
+            ),
+        );
+        $this->assertFalse($this->isAlive($pid), 'the server is still running after stopProcess()');
+    }
+
+    /**
+     * THE KNOWN-POSITIVE CONTROL for the row above, and without it that row is
+     * satisfied by a fixture that simply dies on SIGTERM like any other process.
+     *
+     * The SAME fixture is driven through the SAME escalation ladder by a raw
+     * `proc_open()` here in the test, with its pipes deliberately LEFT OPEN. It
+     * must pay the full grace and be killed with signal 9. If ext-pcntl were
+     * missing, or the trap were ineffective, or the fixture exited for some
+     * reason other than the EOF, this row goes red — which is the only thing
+     * that stops the fast row above being a coincidence.
+     */
+    public function testThatFixtureReallyDoesIgnoreSigtermWhenItsStdinStaysOpen(): void
+    {
+        $script = $this->tempDir . '/eof-control.php';
+        file_put_contents($script, self::EOF_EXITING_SERVER);
+        $pidFile = $this->tempDir . '/eof-control.pid';
+
+        $process = proc_open(
+            [PHP_BINARY, $script, $pidFile],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process, 'could not spawn the control fixture');
+
+        // Wait for the fixture to have installed its trap, not merely to exist.
+        $deadline = microtime(true) + 5.0;
+        while (microtime(true) < $deadline && !is_file($pidFile)) {
+            usleep(5000);
+        }
+        $this->assertFileExists($pidFile, 'the control fixture never started');
+        usleep(100000);
+
+        $started = microtime(true);
+        proc_terminate($process);
+        $graceDeadline = microtime(true) + \SugarCraft\Crush\Support\ProcessReaper::TERMINATE_GRACE_SECONDS;
+        $exitedPolitely = false;
+        do {
+            if (!proc_get_status($process)['running']) {
+                $exitedPolitely = true;
+                break;
+            }
+            usleep(5000);
+        } while (microtime(true) < $graceDeadline);
+
+        if (!$exitedPolitely) {
+            proc_terminate($process, 9);
+        }
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+        proc_close($process);
+        $elapsed = microtime(true) - $started;
+
+        $this->assertFalse(
+            $exitedPolitely,
+            'the control fixture exited on SIGTERM with its stdin still open, so it does not '
+            . 'trap the signal and the row above proves nothing about the EOF',
+        );
+        $this->assertGreaterThanOrEqual(
+            \SugarCraft\Crush\Support\ProcessReaper::TERMINATE_GRACE_SECONDS,
+            $elapsed,
+            sprintf('the control paid only %.2fs of the grace', $elapsed),
+        );
+    }
+
+    /**
+     * TRAPS SIGTERM AND LEAVES ONLY ON STDIN EOF — the shape a real language
+     * server has, because a server that must flush state cannot let the default
+     * SIGTERM disposition kill it mid-write.
+     *
+     * The 20s valve is a leak guard, not part of the test: every row using this
+     * fixture finishes in well under a second, and a child that outlived its
+     * parent would otherwise sit in the poll forever. It exits non-zero there so
+     * a row that accidentally depends on the valve cannot read as a clean exit.
+     */
+    private const EOF_EXITING_SERVER = <<<'PHP'
+        <?php
+        pcntl_async_signals(true);
+        pcntl_signal(SIGTERM, static function (): void {});
+        file_put_contents($argv[1], (string) getmypid());
+        stream_set_blocking(STDIN, false);
+        $deadline = microtime(true) + 20.0;
+        while (microtime(true) < $deadline) {
+            $chunk = fread(STDIN, 8192);
+            if ($chunk === false || ($chunk === '' && feof(STDIN))) {
+                exit(0);
+            }
+            usleep(5000);
+        }
+        exit(1);
+        PHP;
 
     /**
      * Ignores SIGTERM, and reports its pid ONLY ONCE THE HANDLER IS INSTALLED.

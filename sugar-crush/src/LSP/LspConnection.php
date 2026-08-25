@@ -78,6 +78,68 @@ final class LspConnection implements LspConnectionInterface
      */
     private string $stderrTail = '';
 
+    /**
+     * How long {@see writeMessage()} may wait for stdin to become writable
+     * before it goes back round to drain stderr again.
+     *
+     * A POLL SLICE RATHER THAN A `select()` ON FD 2, and the length is what
+     * turns that choice into a drain rate: {@see drainStderr()} takes up to
+     * 16 × 8192 = 128 KiB per pass, so 20 ms is a ceiling of roughly 6 MB/s of
+     * server logging absorbed while a large write is in flight. No language
+     * server produces that; `rust-analyzer`'s noisiest trace levels are orders
+     * of magnitude below it. The slice costs nothing in the ordinary case,
+     * because a writable pipe makes `stream_select()` return immediately.
+     */
+    private const WRITE_POLL_MICROS = 20000;
+
+    /**
+     * How many CONSECUTIVE `stream_select()` failures {@see writeMessage()}
+     * tolerates before abandoning the write.
+     *
+     * `stream_select()` returns `false` for EINTR — a signal arrived — which is
+     * a retry and not an error. OF THE TWO EXITS IN THAT BRANCH, THIS COUNT IS
+     * THE ONE THAT FIRES; the {@see childIsRunning()} check beside it is DORMANT
+     * BY CONSTRUCTION, for the reason measured against
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s copy of the same loop: a
+     * write-set select can only be INTERRUPTED while it BLOCKS, and it only
+     * blocks with a full pipe and a LIVE child, so a dead child never reaches the
+     * branch at all — `$written === false` catches it first. The check is kept
+     * because it is cheap and correct and becomes live if the loop's shape
+     * changes; its dormancy is pinned by that class's
+     * `testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()`.
+     *
+     * ⚠️ "IN THAT BRANCH" IS THE WHOLE QUALIFIER, and an earlier revision of this
+     * doc-block left it off and then contradicted itself two paragraphs down by
+     * awarding the dead-server case to the liveness check. Neither claim was
+     * right unqualified. The dead-server case is ended by `$written === false`,
+     * and the LOOP-TOP DEADLINE beats this count whenever the caller's budget is
+     * shorter than the walk: both public send paths pass
+     * `microtime(true) + $this->requestTimeout`, so at the 30.0s default the
+     * backstop gets there first and at the 0.2s and 1.0s timeouts this class's
+     * own tests use, the deadline does. The count is the LAST resort, not the
+     * usual one.
+     *
+     * It is deliberately generous, and the figure below is now MEASURED end to
+     * end rather than estimated. WHAT THIS SAID: "roughly 500–900 per second, so
+     * 10000 is on the order of ten seconds". WHAT IS TRUE: driving
+     * {@see writeMessage()} with no deadline under a 300 µs SIGUSR1 storm returns
+     * in 7.097 / 7.099 / 7.100 s over three consecutive takes (PHP 8.3.6, Linux
+     * 6.8) — 10000 failures in 7.1 s, so ~1408 per second, not 500–900. The old
+     * range came from halving a raw select-failure rate by hand to account for
+     * the 1 ms yield; the yield is not the only cost per pass. Pinned by
+     * `LspConnectionStdinWedgeTest::testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop()`,
+     * which is also where the enumeration proving the exit is this one lives.
+     */
+    private const MAX_CONSECUTIVE_SELECT_FAILURES = 10000;
+
+    /**
+     * Set once a `Content-Length`-framed message has been PARTIALLY written and
+     * then abandoned, which makes the stream unrecoverable — see
+     * {@see abandonWrite()} for why this class needs the latch and the two
+     * NDJSON-framed siblings do not.
+     */
+    private bool $framingBroken = false;
+
     public function __construct(
         private readonly string $serverPath,
         private readonly array $serverArgs = [],
@@ -131,6 +193,18 @@ final class LspConnection implements LspConnectionInterface
         // is a pipe nothing here ever read, and a pipe nobody reads stops the
         // writer at one buffer.
         stream_set_blocking($this->pipes[2], false);
+
+        // AND FD 0. It was the one pipe left blocking, and that is the whole of
+        // {@see writeMessage()}'s first defect: a server parked in `write(2)` on
+        // a full stderr pipe stops reading stdin, and a blocking `fwrite()` here
+        // then held the only thread that could have drained stderr and released
+        // it. Non-blocking is also what makes the partial-write loop possible at
+        // all — a blocking pipe never returns a short count.
+        stream_set_blocking($this->pipes[0], false);
+
+        // A fresh child is a fresh stream: whatever desynchronised the last one
+        // is not this one's problem.
+        $this->framingBroken = false;
 
         // Mark as initialized so isConnected returns true.
         // Caller is responsible for calling initialize() to complete LSP handshake.
@@ -228,11 +302,16 @@ final class LspConnection implements LspConnectionInterface
             $payload['params'] = $params;
         }
 
-        if (!$this->writeMessage($payload)) {
+        // ONE WALL CLOCK ACROSS THE WHOLE EXCHANGE, computed BEFORE the write.
+        // It used to be computed after, which left the write itself unbounded —
+        // and while `pipes[0]` was blocking that was not a budget problem but an
+        // indefinite one. Sharing the clock also stops a slow write buying itself
+        // a fresh full read budget on top.
+        $deadline = microtime(true) + $this->requestTimeout;
+
+        if (!$this->writeMessage($payload, $deadline)) {
             return LspResponse::ioError('Failed to write message');
         }
-
-        $deadline = microtime(true) + $this->requestTimeout;
 
         return $this->readResponse($id, $deadline);
     }
@@ -254,7 +333,14 @@ final class LspConnection implements LspConnectionInterface
             $payload['params'] = $params;
         }
 
-        $this->writeMessage($payload);
+        // A NOTIFICATION EXPECTS NO REPLY, WHICH IS NOT THE SAME AS EXPECTING NO
+        // BOUND. `textDocument/didOpen` and `didChange` are notifications, and
+        // they are the two messages in this protocol that routinely carry a whole
+        // file — so they are the likeliest to exceed a pipe buffer and the
+        // likeliest to meet a server that has stopped reading. `requestTimeout`
+        // is the only clock this class owns; a notification gets its own copy
+        // because there is no surrounding exchange to share one with.
+        $this->writeMessage($payload, microtime(true) + $this->requestTimeout);
     }
 
     /**
@@ -416,28 +502,196 @@ final class LspConnection implements LspConnectionInterface
     // -------------------------------------------------------------------------
 
     /**
-     * Write a message with LSP Content-Length header framing.
+     * Write one `Content-Length`-framed message to the server's stdin, DRAINING
+     * STDERR AS IT GOES and refusing to leave half a message in the pipe.
+     *
+     * WHAT THIS USED TO BE: one `@fwrite()` to a BLOCKING `pipes[0]`, with only
+     * `=== false` checked. Two defects in four lines, and they are the third and
+     * fourth instances of one family — {@see \SugarCraft\Crush\Providers\ClaudeCodeProvider::completeStream()}
+     * and {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()} are the two
+     * already fixed.
+     *
+     *  1. THE DEADLOCK. {@see connect()} took fds 1 and 2 out of blocking mode
+     *     and left fd 0 in it. A server parked in `write(2)` on a full stderr
+     *     pipe is not reading its stdin either, so once the parent's own stdin
+     *     buffer fills, this method blocked — holding the only thread that could
+     *     have run {@see drainStderr()} and released the server. Both sides have
+     *     to exceed a pipe buffer for it to bite, and both do in ordinary use: a
+     *     `textDocument/didOpen` carries a whole file, and this class's own
+     *     {@see drainStderr()} doc-block already argues that a
+     *     `rust-analyzer`/`gopls`/`jdtls` log storm is ordinary traffic.
+     *  2. THE SILENT DESYNC, which is WORSE HERE THAN AT EITHER FIXED SITE. A
+     *     short `fwrite()` returns an int below `strlen()`, not `false`, so the
+     *     old code reported success having written a PREFIX. The header has
+     *     already promised the server N bytes; it blocks reading a body that
+     *     never finishes, and there is no resynchronisation point. NDJSON framing
+     *     — what both fixed sites use — resyncs at the next newline, which is
+     *     why the same short write is recoverable there and terminal here. That
+     *     asymmetry is why {@see $framingBroken} exists and neither of them
+     *     needed it.
+     *
+     * HOW THE LOOP DIFFERS FROM {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()},
+     * which is the nearest fixed site (E442 records that a third copy must read
+     * the differences before copying either):
+     *
+     *  a. STDERR IS NOT IN THE `select()` READ SET; it is drained unconditionally
+     *     once per pass instead. `StdioMcpServer` can select on fd 2 because it
+     *     tracks stderr's EOF in a `stderrOpen` flag — a pipe at EOF is
+     *     permanently readable, so without that flag a server that closes stderr
+     *     while its stdin stays full turns this loop into a 100% CPU spin. This
+     *     class has no such flag ({@see drainStderr()} cannot tell EOF from a
+     *     spurious empty read), so the cheaper fix is to not select on fd 2 at
+     *     all. {@see drainStderr()} is non-blocking and bounded at 16 reads, and
+     *     runs at least once per {@see WRITE_POLL_MICROS}, which is a drain
+     *     ceiling of ~6 MB/s — far above what any language server logs.
+     *  b. EVERY PATH HERE IS DEADLINE-BOUNDED. `StdioMcpServer::callTool()` is
+     *     deliberately unbounded (an MCP tool call is somebody else's real work),
+     *     so its write loop has to accept a null deadline. Every caller here
+     *     already owns `$this->requestTimeout`, so both send paths pass one.
+     *  c. THE RETURN VALUE MEANS SOMETHING DIFFERENT. There, `false` costs one
+     *     exchange. Here it may mean the session's framing is gone, which is what
+     *     {@see abandonWrite()} decides.
      *
      * @param array<string, mixed> $payload
+     * @param float|null $deadline `microtime(true)` value past which the write
+     *        gives up; null waits on the child's liveness alone
      */
-    private function writeMessage(array $payload): bool
+    private function writeMessage(array $payload, ?float $deadline = null): bool
     {
-        if (!is_resource($this->process) || $this->pipes === null) {
+        if (!is_resource($this->process) || $this->pipes === null || $this->framingBroken) {
+            return false;
+        }
+
+        // `is_resource()`, NOT `@` — see {@see drainStderr()} for the measurement.
+        // `stream_select()` on a CLOSED pipe resource THROWS, and `@` does not
+        // suppress a throw because it is an exception and not a diagnostic.
+        //
+        // IN THIS CLASS THE THROW IS A `ValueError`, not the `TypeError` the
+        // sibling meets, and the difference is worth a line because it is easy to
+        // "correct" one into the other. MEASURED, PHP 8.3.6: the select below
+        // passes fd 0 as the ONLY entry across all three arrays — point (a) of
+        // the loop's doc-block is that fd 2 is drained rather than selected on —
+        // so PHP drops the invalid resource and then finds every array empty:
+        // `ValueError: No stream arrays were passed`.
+        // {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()} keeps an open
+        // fd 2 in its read set, so the same closed fd 0 there raises
+        // `TypeError: stream_select(): supplied resource is not a valid stream
+        // resource` instead. Same guard, same reason; different class name.
+        if (!is_resource($this->pipes[0])) {
             return false;
         }
 
         $json = json_encode($payload, JSON_THROW_ON_ERROR);
-        $contentLength = strlen($json);
+        $message = 'Content-Length: ' . strlen($json) . "\r\n\r\n" . $json;
+        $total = strlen($message);
+        $consecutiveSelectFailures = 0;
 
-        $header = "Content-Length: {$contentLength}\r\n\r\n";
-        $message = $header . $json;
+        while ($message !== '') {
+            if ($deadline !== null && microtime(true) >= $deadline) {
+                return $this->abandonWrite($total, strlen($message));
+            }
 
-        if (@fwrite($this->pipes[0], $message) === false) {
-            return false;
+            // BEFORE the select, every pass, and this is the line that closes
+            // defect 1: it is what lets a server blocked in `write(2)` get back
+            // to reading the stdin this loop is trying to fill.
+            $this->drainStderr();
+
+            $write = [$this->pipes[0]];
+            $read = [];
+            $except = [];
+
+            // `@` for EINTR: a signal arriving mid-select is a retry, and under
+            // `failOnWarning="true"` the warning alone would red a passing run.
+            $ready = @stream_select($read, $write, $except, 0, self::WRITE_POLL_MICROS);
+
+            if ($ready === false) {
+                $consecutiveSelectFailures++;
+
+                if (!self::childIsRunning($this->process)
+                    || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
+                    return $this->abandonWrite($total, strlen($message));
+                }
+
+                usleep(1000);
+
+                continue;
+            }
+
+            $consecutiveSelectFailures = 0;
+
+            if ($ready === 0 || $write === []) {
+                continue;
+            }
+
+            // A dead server closes the read end; writing then raises a "broken
+            // pipe" notice. Suppressed — the failed write is the signal, not the
+            // diagnostic.
+            $written = @fwrite($this->pipes[0], $message);
+
+            if ($written === false) {
+                return $this->abandonWrite($total, strlen($message));
+            }
+
+            if ($written === 0) {
+                // Reported writable and took nothing: a spurious wakeup. Yield
+                // rather than spinning.
+                usleep(1000);
+
+                continue;
+            }
+
+            $message = substr($message, $written);
         }
+
         fflush($this->pipes[0]);
 
         return true;
+    }
+
+    /**
+     * Give up on a write, and decide whether the CONNECTION goes with it.
+     *
+     * A message abandoned before its first byte is a lost message: the server
+     * saw nothing, the next request starts cleanly, and the caller gets an
+     * `ioError` for this one exchange only. A message abandoned PART-WAY is a
+     * different event — the server has consumed a `Content-Length` header
+     * promising bytes that will never arrive, and there is no point in the
+     * stream at which either side can agree on where the next message begins.
+     * Every subsequent reply would be parsed against that fragment.
+     *
+     * So the partial case latches {@see $framingBroken} and every later send
+     * fails fast, instead of the session producing confidently-parsed garbage.
+     * {@see isConnected()} is deliberately NOT changed — the process is alive and
+     * a caller may still want to {@see disconnect()} it politely — which is
+     * recorded as a follow-up rather than decided here.
+     *
+     * @param int $total     bytes the framed message started at
+     * @param int $remaining bytes still unwritten when the loop gave up
+     */
+    private function abandonWrite(int $total, int $remaining): bool
+    {
+        if ($remaining !== $total) {
+            $this->framingBroken = true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Is the server child still there? A LIVENESS check, deliberately not a
+     * timeout: {@see writeMessage()}'s EINTR branch needs to distinguish "a
+     * signal interrupted the select" from "there is nobody left to write to",
+     * and the elapsed time answers neither.
+     *
+     * @param resource|null $process
+     */
+    private static function childIsRunning($process): bool
+    {
+        if (!is_resource($process)) {
+            return false;
+        }
+
+        return (bool) proc_get_status($process)['running'];
     }
 
     /**
@@ -488,6 +742,25 @@ final class LspConnection implements LspConnectionInterface
         // polite signal — and leaves {@see stderrTail()} holding whatever it
         // said on the way out.
         $this->drainStderr();
+
+        // THEN CLOSE THE PIPES, BEFORE THE REAP. `proc_close()` inside
+        // {@see ProcessReaper::terminateAndClose()} WAITS for the child, so the
+        // documented ordering is to release its descriptors first — closing fd 0
+        // is also the polite EOF that lets a server exit on its own rather than
+        // on the escalation ladder. This class used to set `$this->pipes = null`
+        // and leave the resources to the destructor, which is the same ordering
+        // defect recorded against {@see \SugarCraft\Crush\MCP\StdioMcpServer::stop()}.
+        //
+        // AFTER the drain above, never before it: closing fd 2 first would throw
+        // away whatever the server said on its way out, which is the one thing
+        // {@see stderrTail()} exists to keep.
+        if ($this->pipes !== null) {
+            foreach ($this->pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+        }
 
         ProcessReaper::terminateAndClose($this->process);
 
