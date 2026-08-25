@@ -155,11 +155,15 @@ final class ReadPathCensusTest extends TestCase
         'Agents/ProcessExecutor.php|require' => [
             'PROCESS_DERIVED — inside the GENERATED live worker script: the composer '
                 . 'autoload of the installation already executing this code. The path is '
-                . 'computed in the PARENT (ProcessExecutor::autoloadPath(), two climbs from '
-                . '__DIR__) and reaches the child only down the stdin pipe proc_open() just '
-                . 'created for it, so no party outside this process can name it; the child '
-                . 'refuses a value that is not is_file(). Same shape and same verdict as '
-                . 'Sessions/BackgroundSupervisor.php|require',
+                . 'computed in the PARENT and reaches the child only down the stdin pipe '
+                . 'proc_open() just created for it, so no party outside this process can '
+                . 'name it; the child refuses a value that is not is_file(). Same verdict '
+                . 'AND, since round 60, the same MECHANISM as '
+                . 'Sessions/BackgroundSupervisor.php|require: '
+                . 'ProcessExecutor::autoloadPath() delegates to '
+                . 'BackgroundSupervisor::autoloadPath(), which asks the live Composer '
+                . 'ClassLoader first. It used to do its own two-climb arithmetic, which '
+                . 'resolved only in a root-package checkout',
         ],
         'Agents/TeamManager.php|file_get_contents' => [
             'SELF_LOCATED — the team registry this manager writes under `~/.sugar-crush`',

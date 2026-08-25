@@ -179,6 +179,40 @@ final class AgentWorkerPool
          * @var ?array<string, mixed>
          */
         private readonly ?array $workerProvider = null,
+        /**
+         * An executor used INSTEAD of the one this pool would build itself,
+         * on the FORKING path — the pool's default topology, unchanged.
+         *
+         * `$executor` and this are not spellings of the same thing, and the
+         * difference is the whole reason both exist. `$executor` sets
+         * {@see $customExecutor}, which routes dispatch synchronously into the
+         * parent, and it does that for a good reason stated in
+         * {@see startAgent()}: a PHPUnit mock does not survive `pcntl_fork()`.
+         * That reason is a property of the OBJECT, not of the act of passing
+         * one, and a real {@see ProcessExecutor} has the opposite property —
+         * it is what the forking path was written for.
+         *
+         * MEASURED round 60, which is why this parameter exists at all: the
+         * workflow live-pane suite needs a worker with a bounded, KNOWN live
+         * phase, because it samples {@see \SugarCraft\Crush\Agents\AgentManager::liveOutputs()}
+         * on a 20ms timer and that accessor goes empty the moment the agent
+         * completes. Driving it through `$workerProvider` with the offline
+         * EchoProvider collapsed that window to well under one tick and the
+         * suite failed 7 runs in 20; driving it through `$executor` deleted the
+         * fork, and with it the progress publishing the suite exists to test.
+         * There was no third way to say "fork, with THIS executor" — so this is
+         * it.
+         *
+         * It does NOT weaken the rule {@see createDefaultExecutor()} states.
+         * No construction of a pool alone can select the fabricating worker;
+         * reaching it still means building a {@see ProcessExecutor} yourself
+         * and asking for it by name, which nothing in `src/` does — pinned by
+         * the scan in
+         * {@see \SugarCraft\Crush\Tests\Agents\ProcessExecutorTest}.
+         *
+         * Null everywhere in `src/` today, so no shipped path changes shape.
+         */
+        private readonly ?ExecutorInterface $forkedExecutor = null,
     ) {
         $this->executor = $executor;
         $this->customExecutor = $executor !== null;
@@ -1489,6 +1523,21 @@ final class AgentWorkerPool
     }
 
     /**
+     * The executor this pool runs on its FORKING path, if a caller supplied one.
+     *
+     * Exists for the same reason {@see workerProvider()} does, and closes the
+     * same hole one seam wider: {@see \SugarCraft\Crush\Workflows\WorkflowEngine}
+     * rebuilds a pool per parallel stage, and a field it cannot read is a field
+     * that stage pool silently loses. `getExecutor()` cannot stand in — it
+     * answers for {@see $customExecutor}, the SYNCHRONOUS path, and handing this
+     * object to that parameter would delete the fork the caller chose it for.
+     */
+    public function forkedExecutor(): ?ExecutorInterface
+    {
+        return $this->forkedExecutor;
+    }
+
+    /**
      * Build the pool's own executor when none was injected.
      *
      * Forwards {@see $workerProvider} and NOTHING else, deliberately: the
@@ -1496,9 +1545,14 @@ final class AgentWorkerPool
      * pool can select a fabricating worker. The only way to reach that script
      * is to build a {@see ProcessExecutor} directly and ask for it, which is
      * what the executor's own tests do and what nothing in `src/` does.
+     *
+     * {@see $forkedExecutor} is that "build it yourself" route arriving on the
+     * forking path rather than the synchronous one; it is a caller's object,
+     * not a selection this method makes, which is why the sentence above still
+     * holds with it in place.
      */
     private function createDefaultExecutor(): ExecutorInterface
     {
-        return new ProcessExecutor(workerProvider: $this->workerProvider);
+        return $this->forkedExecutor ?? new ProcessExecutor(workerProvider: $this->workerProvider);
     }
 }

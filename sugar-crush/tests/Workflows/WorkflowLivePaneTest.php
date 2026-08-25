@@ -13,6 +13,7 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
+use SugarCraft\Crush\Agents\ProcessExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Chat;
@@ -959,16 +960,35 @@ final class WorkflowLivePaneTest extends TestCase
                 ->build(),
         );
 
-        // The pool is passed rather than defaulted so the DEFAULT executor it
-        // builds has a provider to consult. workerProvider, not an injected
-        // executor: injecting one sets AgentWorkerPool::$customExecutor, which
-        // routes dispatch down the synchronous in-parent path — and that path
-        // publishes no progress at all, which is precisely the mechanism this
-        // file exists to test. ['type' => 'echo'] is EchoProvider, a real
-        // ProviderInterface with no network behind it; without a provider the
-        // worker refuses rather than fabricating
-        // (ProcessExecutor::createLiveWorkerScript()).
-        return new WorkflowEngine($registry, new AgentWorkerPool(workerProvider: ['type' => 'echo']));
+        // forkedExecutor, and both halves of that name are load-bearing.
+        //
+        // FORKED, because `executor:` sets AgentWorkerPool::$customExecutor and
+        // routes dispatch down the synchronous in-parent path, which publishes
+        // no progress at all — precisely the mechanism this file exists to test.
+        //
+        // And the SIMULATION rather than a real provider relay, because this
+        // test needs a live phase with a KNOWN DURATION. The probe below samples
+        // AgentManager::liveOutputs() on a 20ms timer and that accessor empties
+        // the instant the agent completes, so the window it can see is
+        // first-chunk-to-completion — a property of the worker, not of the
+        // compositor. MEASURED on PHP 8.3.6: driven through
+        // `workerProvider: ['type' => 'echo']`, whose whole answer is assembled
+        // in-process and arrives inside a single tick, this test failed 7 runs
+        // in 20. The simulated worker spaces two streaming frames with usleep()
+        // over about a second — roughly fifty ticks — and the same 20 runs are
+        // clean. See ProcessExecutor::createInlineWorkerScript(), which is kept
+        // for this.
+        //
+        // What that costs is honest and stated: the bytes in the tile are
+        // fabricated by the worker script. This file asserts that the AGENT's
+        // OWN BYTES reach the AGENT's OWN TILE mid-run, and the probe is derived
+        // from whatever the worker published (see livenessProbe()), so nothing
+        // here names the worker's implementation. Whether those bytes came from
+        // a model is ProcessExecutorTest's question, not this file's.
+        return new WorkflowEngine(
+            $registry,
+            new AgentWorkerPool(forkedExecutor: new ProcessExecutor(simulatedWorker: true)),
+        );
     }
 
     private function subAgent(string $id): SubAgent

@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Agents;
 
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Sessions\BackgroundSupervisor;
 use SugarCraft\Crush\Tools\Tool;
 
 /**
@@ -453,6 +454,35 @@ final class ProcessExecutor implements ExecutorInterface
             ? $this->createInlineWorkerScript()
             : $this->createLiveWorkerScript();
 
+        // BEFORE proc_open(), because encodeMessages() THROWS on a message it
+        // cannot serialise. Built after the spawn — which is where this used to
+        // be — that throw escaped with a live `php -r` child and three open
+        // pipes already in hand and nothing recorded in $this->processes, so
+        // neither cancel() nor cancelAll() could ever reap it: the refusal that
+        // exists to stop a silently-wrong request leaked a process every time
+        // it fired. The proc_open()-failed branch below fcloses every pipe it
+        // opened, so this is the file's own convention, not a new one.
+        $startupMessage = json_encode([
+            'type' => 'startup',
+            'autoload' => self::autoloadPath(),
+            'provider' => $this->workerProvider,
+            'agent' => [
+                'id' => $agent->id,
+                'name' => $agent->agent->name,
+                'model' => $agent->agent->model,
+                'prompt' => $agent->agent->systemPrompt(),
+            ],
+            'task' => $agent->task,
+            'request' => [
+                'model' => $request->model,
+                'messages' => self::encodeMessages($request->messages),
+                'tools' => self::encodeTools($request->tools),
+                'systemPrompt' => $request->systemPrompt,
+                'temperature' => $request->temperature,
+                'maxTokens' => $request->maxTokens,
+            ],
+        ]) . "\n";
+
         $descriptors = [
             0 => ['pipe', 'r'],  // stdin
             1 => ['pipe', 'w'],  // stdout
@@ -485,28 +515,7 @@ final class ProcessExecutor implements ExecutorInterface
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
 
-        // Send startup message with agent config
-        $startupMessage = json_encode([
-            'type' => 'startup',
-            'autoload' => self::autoloadPath(),
-            'provider' => $this->workerProvider,
-            'agent' => [
-                'id' => $agent->id,
-                'name' => $agent->agent->name,
-                'model' => $agent->agent->model,
-                'prompt' => $agent->agent->systemPrompt(),
-            ],
-            'task' => $agent->task,
-            'request' => [
-                'model' => $request->model,
-                'messages' => self::encodeMessages($request->messages),
-                'tools' => self::encodeTools($request->tools),
-                'systemPrompt' => $request->systemPrompt,
-                'temperature' => $request->temperature,
-                'maxTokens' => $request->maxTokens,
-            ],
-        ]) . "\n";
-
+        // Send the startup message built above, before the spawn.
         fwrite($pipes[0], $startupMessage);
         fflush($pipes[0]);
 
@@ -544,23 +553,50 @@ final class ProcessExecutor implements ExecutorInterface
     }
 
     /**
-     * Absolute path to this package's Composer autoloader, for the child.
-     *
-     * TWO climbs, not three: `src/Agents` -> `src` -> package root, the same
-     * count and the same reasoning as
-     * {@see \SugarCraft\Crush\Providers\ProviderFactory::packageRoot()}. A
-     * third overshoots into whatever sits above sugar-crush on disk — harmless
-     * by coincidence in the monorepo checkout, wrong once this library is split
-     * into its own repo.
+     * Absolute path to the APPLICATION's Composer autoloader, for the child.
      *
      * Computed in the PARENT and shipped over the wire rather than derived in
      * the child, because the child is a `php -r` process: it has no `__DIR__`
      * pointing anywhere useful, no autoloader, and no way to find one. This is
      * the single fact that makes a real provider constructible in there at all.
+     *
+     * ## WHAT THIS USED TO SAY, AND WHY IT WAS WRONG
+     *
+     * "TWO climbs, not three: `src/Agents` -> `src` -> package root, the same
+     * count and the same reasoning as
+     * {@see \SugarCraft\Crush\Providers\ProviderFactory::packageRoot()}."
+     * The count was right for what that sentence described and the REASONING
+     * was inverted, which is why the arithmetic went unquestioned:
+     * `packageRoot()` locates THIS PACKAGE's own root, where two climbs is
+     * correct in every layout. This method needs the APPLICATION's autoloader,
+     * which in an installed layout is not under the package root at all.
+     *
+     * MEASURED on PHP 8.3.6 against a synthetic install
+     * (`app/vendor/sugarcraft/sugar-crush/src/Agents`), the two-climb form
+     * yields `app/vendor/sugarcraft/sugar-crush/vendor/autoload.php`, which
+     * `is_file()` says does not exist — so in any Composer consumer of this
+     * package EVERY sub-agent hit the child's "Worker autoloader is not
+     * readable" refusal. The monorepo checkout is the one layout where the
+     * old form happened to work, and it is the only layout this suite runs in.
+     *
+     * ## WHAT IS TRUE NOW
+     *
+     * {@see \SugarCraft\Crush\Sessions\BackgroundSupervisor::autoloadPath()}
+     * already solved exactly this for the session daemon — it is `public
+     * static` for reuse, it asks the LIVE `\Composer\Autoload\ClassLoader`
+     * for the autoloader this process is actually running under, and only
+     * falls back to path arithmetic (both the root-package and the
+     * installed-under-vendor spellings) when no ClassLoader is registered.
+     * Delegating is the whole fix; a second copy of the arithmetic here is how
+     * the two would drift.
+     *
+     * Null is a legitimate answer — no autoloader was found — and travels as
+     * `null` on the wire, where the child's own `is_file()` gate turns it into
+     * a named `error` frame rather than a `require` of nothing.
      */
-    private static function autoloadPath(): string
+    private static function autoloadPath(): ?string
     {
-        return \dirname(__DIR__, 2) . '/vendor/autoload.php';
+        return BackgroundSupervisor::autoloadPath();
     }
 
     /**
@@ -635,11 +671,37 @@ final class ProcessExecutor implements ExecutorInterface
      * sends `tools: null` into its CompleteRequest and a sub-agent worker
      * currently runs WITHOUT TOOLS.
      *
-     * Names are sent anyway, and that is the point of this method rather than
-     * a bare `null`: the frame then says which tools the parent believed it was
-     * granting, so the gap is legible to anyone reading a transcript instead of
-     * looking like a caller that passed none. Recorded as a deferred finding in
-     * `docs/plans/crush_code_hardening_backlog.md`.
+     * ## WHAT THIS USED TO SAY, AND WHY IT WAS FALSE
+     *
+     * "Names are sent anyway ... so the gap is legible to anyone reading a
+     * TRANSCRIPT." There is no transcript. MEASURED at the tree this sentence
+     * was written in: `request.tools` is read by NEITHER worker script (the
+     * live one's only `tools` occurrence is the literal `tools: null` it passes
+     * to its own CompleteRequest; the simulation has none) and the startup line
+     * is not logged anywhere — `$startupMessage` occurs at its `json_encode`,
+     * at its `fwrite`, and in prose. A justification that names a reader which
+     * does not exist buys the method its place with a fiction, and the price
+     * showed: mutating this whole function to `return null` SURVIVED the entire
+     * suite, 10293 tests green.
+     *
+     * ## WHAT IS TRUE NOW, AND WHY THE NAMES STILL GO OUT
+     *
+     * The names are on the WIRE, and the wire is the thing a future reader
+     * actually has: the startup frame is the sub-agent protocol's only record
+     * of what the parent believed it was granting, and it is what the first
+     * consumer — a worker that can rehydrate tools, or a parent-side dump of
+     * the frame — will read. That is a claim about the FRAME, which this
+     * package controls, not about a log nobody writes.
+     *
+     * Sending `null` instead would be lossy in a way nothing could recover:
+     * a request that granted twelve tools and one that granted none would be
+     * byte-identical on the wire. So the names are pinned by a test that
+     * decodes the startup line and asserts they are in it
+     * ({@see \SugarCraft\Crush\Tests\Agents\ProcessExecutorTest}), which is
+     * what makes the paragraph above falsifiable rather than decorative.
+     *
+     * The gap itself — a sub-agent worker runs WITHOUT TOOLS — is recorded as
+     * a deferred finding in `docs/plans/crush_code_hardening_backlog.md`.
      *
      * @param ?array<mixed> $tools
      * @return ?list<string>
@@ -806,12 +868,32 @@ while (!$executeReceived && time() < $deadline) {
     }
 }
 
-if (!$executeReceived) {
-    $fail('Timeout waiting for execute');
+// ORDER MATTERS, and getting it wrong made a real refusal unreachable.
+//
+// The first version tested $executeReceived first and reported 'Timeout
+// waiting for execute' — but the startup loop above consumes lines until it
+// finds a `startup` frame, so a parent that sent a MALFORMED startup line has
+// already had its `execute` eaten by that loop. Both conditions are then true
+// at once and the timeout branch won, naming the wrong cause: the operator was
+// told the parent never asked for execution when in fact the parent's config
+// frame was unreadable. Measured by driving this script directly (see
+// ProcessExecutorTest::testTheWorkerNamesAMissingStartupFrameRatherThanTheExecuteTimeout).
+//
+// The startup check therefore comes FIRST. It stays AFTER the ready/execute
+// handshake — see the comment above it — because spawnWorker() writes
+// `execute` into stdin unconditionally once its ready wait ends, and a child
+// that exited before that write would leave the parent writing into a closed
+// pipe.
+if ($agentConfig === null) {
+    $fail(
+        'Worker received no startup message, so it has no agent to run. The '
+        . 'parent either sent nothing or sent a line this worker could not '
+        . 'decode as a startup frame.'
+    );
 }
 
-if ($agentConfig === null) {
-    $fail('Worker received no startup message, so it has no agent to run.');
+if (!$executeReceived) {
+    $fail('Timeout waiting for execute');
 }
 
 if (!is_string($autoload) || $autoload === '' || !is_file($autoload)) {
@@ -841,6 +923,11 @@ try {
     $fail('Provider construction failed: ' . get_class($e) . ': ' . $e->getMessage());
 }
 
+// Rebuild each turn with EVERY field Message::toArray() put on the wire, not
+// just role+content. The first version of this loop dropped tool_calls,
+// reasoning, is_error and attachments on the floor: an errored tool result
+// arrived at the model as a successful one, which is the same class of silent
+// conversion loss encodeMessages() was written to stop one seam further out.
 $messages = [];
 foreach ((is_array($requestSpec['messages'] ?? null) ? $requestSpec['messages'] : []) as $entry) {
     if (!is_array($entry)) {
@@ -848,13 +935,38 @@ foreach ((is_array($requestSpec['messages'] ?? null) ? $requestSpec['messages'] 
     }
     $content = (string) ($entry['content'] ?? '');
     $messages[] = match ((string) ($entry['role'] ?? 'user')) {
-        'assistant' => new SugarCraft\Crush\Messages\AssistantMessage($content),
+        'assistant' => new SugarCraft\Crush\Messages\AssistantMessage(
+            $content,
+            is_array($entry['tool_calls'] ?? null) ? $entry['tool_calls'] : null,
+            isset($entry['reasoning']) ? (string) $entry['reasoning'] : null,
+        ),
         'system' => new SugarCraft\Crush\Messages\SystemMessage($content),
         'tool' => new SugarCraft\Crush\Messages\ToolResultMessage(
             (string) ($entry['tool_call_id'] ?? $entry['toolCallId'] ?? ''),
             $content,
+            (bool) ($entry['is_error'] ?? false),
         ),
-        default => new SugarCraft\Crush\Messages\UserMessage($content),
+        default => new SugarCraft\Crush\Messages\UserMessage(
+            $content,
+            array_values(array_filter(array_map(
+                static function ($a) {
+                    if (!is_array($a) || !is_string($a['path'] ?? null)) {
+                        return null;
+                    }
+                    $type = (string) ($a['type'] ?? 'File');
+                    // Attachment carries an enum; toArray() sent its case NAME.
+                    // An unknown name becomes File rather than a fatal: a worker
+                    // must not die over an attachment label it does not know.
+                    return new SugarCraft\Crush\Attachment(
+                        $a['path'],
+                        $type === 'Image'
+                            ? SugarCraft\Crush\AttachmentType::Image
+                            : SugarCraft\Crush\AttachmentType::File,
+                    );
+                },
+                is_array($entry['attachments'] ?? null) ? $entry['attachments'] : [],
+            ))),
+        ),
     };
 }
 
@@ -991,13 +1103,31 @@ PHP;
      * it, let alone with what key. Naming a provider is an addition to the
      * protocol, not a field somebody forgot to read.
      *
-     * Until that lands, this is the shipped default: {@see __construct()}'s
-     * `$binaryPath` is plain `php`,
+     * ⚠️ WHAT THIS USED TO SAY, and it was true when it was written: "Until
+     * that lands, this is the SHIPPED DEFAULT ... anything a user sees in the
+     * agent pane came from the script below."
+     *
+     * WHAT IS TRUE NOW: that landing happened in the same change that added
+     * {@see createLiveWorkerScript()}. The autoloader is computed in the parent
+     * and shipped over the startup frame, the provider identity travels as
+     * {@see __construct()}'s `$workerProvider`, and the offline substitute for
+     * CI is `['type' => 'echo']` — the three prerequisites that paragraph
+     * listed, in the order it listed them. `$simulatedWorker` defaults to
+     * FALSE, so neither
      * {@see \SugarCraft\Crush\Agents\AgentWorkerPool::createDefaultExecutor()}
-     * builds one of these with no arguments, and
-     * {@see \SugarCraft\Crush\Chat::executeAgents()} builds another from
-     * `AgentPoolConfig`. Anything a user sees in the agent pane came from the
-     * script below.
+     * nor {@see \SugarCraft\Crush\Chat::executeAgents()} reaches this script
+     * any more; nothing a user sees comes from it.
+     *
+     * WHY IT STILL EARNS ITS PLACE — and the reason is now stronger, not
+     * weaker. Its predecessor paragraph guessed that "this simulation does not
+     * disappear even then, it moves behind a seam", and that is exactly what
+     * happened. It is the only worker in the tree with a FIXED, KNOWN TIMING
+     * SHAPE (two `streaming` frames spaced by `usleep()`, about a second end to
+     * end), and a live-pane test needs a live phase that spans many repaints.
+     * MEASURED round 60: moving the workflow live-pane suite off this script
+     * and onto a real provider relay made it fail 7 runs in 20, because
+     * EchoProvider's whole answer arrives inside one 20ms sampling tick. The
+     * simulation is not a leftover; it is the clock.
      *
      * Recorded as E59 in `docs/plans/crush_code_hardening_backlog.md`. Do not
      * delete the simulation to "clean it up" — deleting it removes the only
