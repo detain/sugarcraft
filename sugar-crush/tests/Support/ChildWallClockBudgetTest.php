@@ -670,6 +670,23 @@ final class ChildWallClockBudgetTest extends TestCase
      * for THAT question an arrow counts, because `fn (int $budget) => …`
      * declares `$budget` exactly as a `function` does.
      *
+     * AN ARROW THIS CANNOT READ IS REFUSED, NOT WALKED PAST. Both arms below
+     * used to `continue`, which falls through to the enclosing method's call
+     * sites — the confident wrong number this helper exists to prevent, and the
+     * opposite of what the call site's own comment promises ("over-refusing
+     * costs an `unresolved` row a reader sees, where the alternative costs a
+     * wrong number nobody sees"). Returning `true` refuses instead, which is
+     * that policy applied to the helper as well as to the condition.
+     *
+     * NEITHER ARM IS REACHABLE ON A SOURCE THAT PARSES, and that is measured
+     * rather than assumed: after `fn` the grammar allows only `&` and then `(`,
+     * so `nextSignificant()` returning null or a non-paren, and
+     * {@see argumentSpans()} failing to find the closing bracket, both require
+     * a TRUNCATED file. That is E363's shape — untriggered is not dead — and a
+     * file on disk really can be truncated, which is why the arms are pinned by
+     * {@see testAnArrowWhoseParameterListCannotBeReadIsRefusedRatherThanIgnored()}
+     * rather than argued away.
+     *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      */
     private static function shadowedByAnArrowFunction(array $tokens, int $from, int $at, string $name): bool
@@ -684,11 +701,11 @@ final class ChildWallClockBudgetTest extends TestCase
                 $open = self::nextSignificant($tokens, $open);
             }
             if ($open === null || $tokens[$open] !== '(') {
-                continue;
+                return true;
             }
             $parameters = self::argumentSpans($tokens, $open);
             if ($parameters === null) {
-                continue;
+                return true;
             }
             foreach ($parameters as $span) {
                 foreach (self::significantIn($tokens, $span) as $k) {
@@ -820,6 +837,65 @@ final class ChildWallClockBudgetTest extends TestCase
         }
 
         return $out;
+    }
+
+    /**
+     * AN ARROW WHOSE PARAMETER LIST THIS CANNOT READ IS REFUSED, NOT IGNORED.
+     *
+     * {@see shadowedByAnArrowFunction()} answers "does something nearer than
+     * the enclosing named function declare this parameter", and a `false` from
+     * it means "carry on and read the enclosing method's call sites". So a
+     * `false` returned because the helper could not READ an arrow is not a
+     * neutral outcome: it is the misattribution the helper was added to stop.
+     * Both fixtures below are truncated, because on a source that parses the
+     * grammar after `fn` admits only `&` and then `(` — the arms are
+     * untriggered, not dead, and untriggered code with no test is how a
+     * silent fall-through survives.
+     *
+     * RULE 25: THE NEGATIVE HALF IS IN THIS TEST. A helper mutated to return
+     * `true` unconditionally would satisfy both rows above it, so the last row
+     * asserts a well-formed arrow that declares a DIFFERENT name still answers
+     * `false`.
+     */
+    public function testAnArrowWhoseParameterListCannotBeReadIsRefusedRatherThanIgnored(): void
+    {
+        $span = static function (string $source): array {
+            $tokens = \token_get_all($source);
+            $variable = \count($tokens) - 1;
+            foreach ($tokens as $index => $token) {
+                if (\is_array($token) && $token[0] === \T_FUNCTION) {
+                    $function = $index;
+                }
+            }
+
+            return [$tokens, $function ?? 0, $variable];
+        };
+
+        // (1) THE ARROW'S PARAMETER LIST NEVER OPENS.
+        [$tokens, $from, $at] = $span('<?php function a(int $budget) { $f = fn ');
+        $this->assertTrue(
+            self::shadowedByAnArrowFunction($tokens, $from, $at, '$budget'),
+            'an arrow whose parameter list this resolver could not even find was walked past, so '
+                . 'the site falls through to the ENCLOSING method\'s call sites and resolves to a '
+                . 'number that has nothing to do with what the arrow is handed',
+        );
+
+        // (2) THE ARROW'S PARAMETER LIST OPENS AND NEVER CLOSES.
+        [$tokens, $from, $at] = $span('<?php function a(int $budget) { $f = fn (int $budget');
+        $this->assertTrue(
+            self::shadowedByAnArrowFunction($tokens, $from, $at, '$budget'),
+            'an arrow whose parameter list never closes was walked past rather than refused',
+        );
+
+        // (3) AND A READABLE ARROW DECLARING A DIFFERENT NAME STILL ANSWERS
+        // `false`, so the two rows above are not satisfied by a helper stuck
+        // at "yes".
+        [$tokens, $from, $at] = $span('<?php function a(int $budget) { $f = fn (int $other) => $other; return $budget; }');
+        $this->assertFalse(
+            self::shadowedByAnArrowFunction($tokens, $from, $at, '$budget'),
+            'a readable arrow declaring a DIFFERENT parameter was reported as shadowing, which '
+                . 'refuses every site with an arrow anywhere above it',
+        );
     }
 
     /**
