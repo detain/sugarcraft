@@ -11,6 +11,30 @@ use SugarCraft\Crush\Support\ToolIpcFiles;
 require __DIR__ . '/../vendor/autoload.php';
 
 /*
+ * The suite's skip roster, armed before the first test event.
+ *
+ * "Exactly one test skipped" has been this plan's proof that a run was WHOLE --
+ * and therefore that the assertion total printed beside it is comparable to the
+ * last one -- for fifty-four rounds, checked by eye every time and asserted
+ * nowhere. `SuiteSkipRoster` turns it into a set compared by NAME, so a second
+ * skip appearing anywhere in `tests/` fails the run instead of quietly re-basing
+ * every figure that follows it.
+ *
+ * Installed here rather than in a test because skips happen throughout the run
+ * in discovery order: a test can only see the ones that ran before it, and
+ * roughly half the tree runs after any given file. The class's doc-block carries
+ * the mechanism, the three checks, the pid guard, and -- stated rather than left
+ * to be discovered -- what it does on a non-Linux runner, which is report and
+ * not fail.
+ *
+ * Registration happens here because PHPUnit loads this file BEFORE it seals its
+ * event facade. It is a no-op in the several test files that `require` this
+ * bootstrap in a plain child PHP process: no facade, nothing registered, nothing
+ * armed.
+ */
+\SugarCraft\Crush\Tests\Support\SuiteSkipRoster::install();
+
+/*
  * Pin the suite's shared event loop to StreamSelectLoop.
  *
  * DO NOT "clean this up" — it fixes a measured ~33% flake (2 failures in 6
