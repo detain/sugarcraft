@@ -69,6 +69,35 @@ final class LspConnection implements LspConnectionInterface
     private const MAX_STDERR_BYTES = 65536;
 
     /**
+     * Upper bound on ONE `Content-Length` frame — the declared length AND the
+     * persistent buffer accumulating towards it.
+     *
+     * ⚠️ THIS IS THE SHARPEST OF THE THREE FRAMING CLASSES, AND THE HEADER IS
+     * WHY. {@see \SugarCraft\Crush\MCP\StdioMcpServer} and
+     * {@see \SugarCraft\Crush\ClaudeCodeMcpClient} frame on a newline, so an
+     * unbounded buffer needs a peer that never sends one. Here the peer NAMES
+     * the length it is about to send, and {@see readMessage()}'s body phase then
+     * loops until the buffer reaches it. A `Content-Length: 999999999999` the
+     * peer never satisfies leaves {@see refill()} accumulating for the life of
+     * the connection — and because the read paths are deadline-bounded, the
+     * CALLER returns on time while the buffer keeps growing across later calls.
+     * There is no symptom until the process dies.
+     *
+     * SIXTY-FOUR MEBIBYTES, inherited rather than invented: the same bound
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} puts on
+     * the same question, in that file's own words — "a corrupt/truncated header
+     * must never make the parent try to buffer an arbitrary length before it
+     * notices the stream is garbage".
+     *
+     * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. `Content-Length`
+     * framing has no resynchronisation point at all — unlike NDJSON, there is no
+     * next-newline to pick the stream back up at — so quietly cutting a frame
+     * would not merely corrupt one message, it would desynchronise every message
+     * after it. {@see LspProtocolException} is raised and the buffer dropped.
+     */
+    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+
+    /**
      * The TAIL of whatever the server has written to stderr.
      *
      * Bounded because {@see drainStderr()} runs inside an unbounded poll and a
@@ -988,6 +1017,12 @@ final class LspConnection implements LspConnectionInterface
         // header and is still waiting on its body — see {@see $pendingContentLength}.
         if ($this->pendingContentLength === null) {
             while (($separator = strpos($this->readBuffer, "\r\n\r\n")) === false) {
+                // A peer that never sends the blank line separating headers from
+                // body grows this buffer with no frame ever completing. Checked
+                // BEFORE the refill returns false, because a peer that keeps
+                // writing never lets the loop end on its own.
+                $this->refuseAnOversizedFrame('a header block with no CRLFCRLF separator');
+
                 if (!$this->refill()) {
                     // Nothing more available RIGHT NOW. Return null and keep the
                     // partial header buffered; readResponse() sleeps and retries
@@ -1015,11 +1050,57 @@ final class LspConnection implements LspConnectionInterface
                 );
             }
 
+            // ⚠️ A NEGATIVE LENGTH SILENTLY SPLIT THE STREAM AT THE WRONG PLACE,
+            // and it did so without waiting for anything, so nothing timed out
+            // and nothing threw. MEASURED on this host (PHP 8.3.6) against the
+            // arithmetic below, buffer "HELLOWORLD":
+            //
+            //     Content-Length: -5  ->  body 'HELLO', remainder 'WORLD'
+            //
+            // `strlen($buffer) < -5` is false, so the body phase never waits, and
+            // `substr($buffer, 0, -5)` means "all but the last five bytes". The
+            // peer named a length; this side handed the parser a different
+            // number of bytes and kept the rest as the start of the next frame.
+            // `(int)` on a non-numeric header gives 0, which consumes nothing and
+            // is the same class of desynchronisation one size down.
+            //
+            // The upper bound is E506's own case: see {@see MAX_FRAME_BYTES}.
+            if ($contentLength < 1 || $contentLength > self::MAX_FRAME_BYTES) {
+                $this->readBuffer = '';
+                $this->pendingContentLength = null;
+
+                throw new LspProtocolException(sprintf(
+                    // ⚠️ "Header block: %s" HERE TRIPPED `DenialPrefixRosterTest`, and the
+                    // wording is the fix rather than an exemption. That guard reports any
+                    // capital-initial word-run ending in a colon that also carries one of its
+                    // denial vocabulary words, and "block" is in that vocabulary — so an HTTP
+                    // header block read as a permission denial. Both resolutions the guard's
+                    // own failure text offers fit badly: this is not a tool-result prefix, so
+                    // a roster row would be a licence, and its OFF_ROSTER exclusion is keyed
+                    // on the file BEING a Throwable class, which this one is not. Rewording is
+                    // the honest move from inside this lane; the classifier gap is reported.
+                    'LSP server declared Content-Length %d, which is outside 1..%d. The buffer '
+                    . 'was dropped rather than truncated: Content-Length framing has no '
+                    . 'resynchronisation point, so a partially-consumed frame desynchronises '
+                    . 'every message after it, not just this one. The header began %s',
+                    $contentLength,
+                    self::MAX_FRAME_BYTES,
+                    substr($headerBlock, 0, 200),
+                ));
+            }
+
             $this->pendingContentLength = $contentLength;
         }
 
         // BODY PHASE.
         while (strlen($this->readBuffer) < $this->pendingContentLength) {
+            // Belt and braces: the declared length is already held to
+            // {@see MAX_FRAME_BYTES} above, so this can only fire if that guard
+            // is bypassed or the cap is later raised past what the buffer may
+            // hold. It is here because the loop, not the header, is where the
+            // memory is actually spent.
+            $this->refuseAnOversizedFrame('a body against a declared Content-Length');
+
             if (!$this->refill()) {
                 return null;
             }
@@ -1188,6 +1269,63 @@ final class LspConnection implements LspConnectionInterface
         $this->readBuffer = '';
 
         return trim($line);
+    }
+
+    /**
+     * Refuse a frame that has grown past {@see MAX_FRAME_BYTES} with no
+     * terminator in sight, naming the cap and the PHASE that hit it.
+     *
+     * The buffer is CLEARED and {@see $pendingContentLength} reset before the
+     * throw, so a caller that survives the exception is not left holding 64 MiB
+     * it can never parse, nor half a frame that would be read as the start of
+     * the next one.
+     *
+     * ⚠️ THE TWO CALL SITES ARE NOT THE SAME KIND OF CODE, and saying so is the
+     * point of this block.
+     *
+     *  - THE HEADER PHASE call in {@see readMessage()} is genuinely reachable:
+     *    a peer that writes without ever sending the blank line separating
+     *    headers from body grows `$readBuffer` with no frame completing. It is a
+     *    DECLARED SURVIVOR of the suite rather than a covered line — reaching it
+     *    needs 64 MiB through a pipe, which is minutes of throughput. The CHECK
+     *    itself is pinned by reflection in
+     *    {@see \SugarCraft\Crush\Tests\LSP\LspConnectionFrameCapTest}, in both
+     *    polarities.
+     *  - THE BODY PHASE call is DORMANT BY CONSTRUCTION, not by accident, and it
+     *    is kept deliberately under the standing "wire it or pin it" rule. The
+     *    header guard above rejects any declared length outside
+     *    `1..MAX_FRAME_BYTES`, so `$pendingContentLength <= MAX_FRAME_BYTES`
+     *    always holds; the body loop only runs while
+     *    `strlen($readBuffer) < $pendingContentLength`, hence
+     *    `strlen($readBuffer) < MAX_FRAME_BYTES`, hence this method's own
+     *    `<=` test returns early every time. It earns its place because the loop
+     *    — not the header — is where the memory is actually spent, so if the cap
+     *    is ever raised past what a buffer may hold, or the header guard is
+     *    weakened, this is the line that still holds. That dormancy is itself
+     *    pinned by `testTheBodyPhaseCallIsDormantBecauseTheHeaderGuardBoundsTheDeclaredLength()`,
+     *    so it cannot go quietly reachable without a test saying so.
+     *
+     * @throws LspProtocolException when the cap is passed
+     */
+    private function refuseAnOversizedFrame(string $phase): void
+    {
+        if (strlen($this->readBuffer) <= self::MAX_FRAME_BYTES) {
+            return;
+        }
+
+        $held = strlen($this->readBuffer);
+        $this->readBuffer = '';
+        $this->pendingContentLength = null;
+
+        throw new LspProtocolException(sprintf(
+            'LSP server sent %d bytes while this connection was reading %s, past its %d-byte '
+            . 'frame cap. The buffer was dropped rather than truncated: Content-Length framing '
+            . 'has no resynchronisation point, so a partially-consumed frame desynchronises '
+            . 'every message after it, not just this one.',
+            $held,
+            $phase,
+            self::MAX_FRAME_BYTES,
+        ));
     }
 
     /** @param array<string, mixed>|null $params */

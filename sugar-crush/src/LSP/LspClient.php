@@ -37,7 +37,23 @@ final class LspClient
      */
     private array $diagnostics = [];
 
-    private ?string $language = null;
+    /**
+     * The language whose server the un-suffixed accessors use.
+     *
+     * NON-NULLABLE, AND THAT IS AN INVARIANT THE DELEGATION BELOW RESTS ON.
+     * {@see __construct()} sets it to `php` and registers a connection and a
+     * cache under that key; {@see use()} is the only other writer and refuses a
+     * language `$connections` does not already hold. So the subscript cannot
+     * miss, which is why {@see definitions()} and its four siblings could
+     * subscript it without a guard, and why they can now forward to their
+     * `…For()` twin — whose guard is therefore unreachable from this direction,
+     * not merely unused.
+     *
+     * It was `?string $language = null` with the same invariant already true;
+     * the type now says so. {@see language()} keeps its `?string` return so its
+     * (currently unused) contract is unchanged.
+     */
+    private string $language = 'php';
 
     public function __construct(
         private readonly LspConnectionInterface $connection,
@@ -123,29 +139,16 @@ final class LspClient
      * @param int    $line  Cursor line (0-indexed)
      * @param int    $col   Cursor column (0-indexed)
      * @return array<mixed> Locations (LSP Location[])
+     *
+     * ⚠️ THE BODY IS A FORWARD, AND IT USED TO BE A COPY. {@see definitionsFor()}
+     * carried a character-identical tail, and the cost was measured rather than
+     * aesthetic: a mutation anchored on that tail landed in the wrong twin and
+     * SURVIVED, which read as a hole in a test that was in fact sound. There is
+     * now one body, so a mutation of it cannot be misattributed.
      */
     public function definitions(string $uri, int $line = 0, int $col = 0): array
     {
-        $conn = $this->connections[$this->language];
-        $cache = $this->caches[$this->language];
-        $key = self::positionalKey('textDocument/definition', $line, $col);
-
-        // Try cache first.
-        if ($cache->has($uri, $key)) {
-            return $cache->get($uri, $key) ?? [];
-        }
-
-        // Try LSP.
-        if ($conn->isConnected()) {
-            $result = $conn->definitions($uri, $line, $col);
-            $cache->set($uri, $key, $result);
-            return $result;
-        }
-
-        // Fallback: grep.
-        $result = $this->fallbackGrep($uri, $line, 'definition');
-        $cache->set($uri, $key, $result);
-        return $result;
+        return $this->definitionsFor($this->language, $uri, $line, $col);
     }
 
     /**
@@ -186,26 +189,16 @@ final class LspClient
      * textDocument/references — find all references.
      *
      * @return array<mixed> Locations (LSP Location[])
+     *
+     * ⚠️ THE BODY IS A FORWARD, AND IT USED TO BE A COPY. {@see referencesFor()}
+     * carried a character-identical tail, and the cost was measured rather than
+     * aesthetic: a mutation anchored on that tail landed in the wrong twin and
+     * SURVIVED, which read as a hole in a test that was in fact sound. There is
+     * now one body, so a mutation of it cannot be misattributed.
      */
     public function references(string $uri, int $line = 0, int $col = 0): array
     {
-        $conn = $this->connections[$this->language];
-        $cache = $this->caches[$this->language];
-        $key = self::positionalKey('textDocument/references', $line, $col);
-
-        if ($cache->has($uri, $key)) {
-            return $cache->get($uri, $key) ?? [];
-        }
-
-        if ($conn->isConnected()) {
-            $result = $conn->references($uri, $line, $col);
-            $cache->set($uri, $key, $result);
-            return $result;
-        }
-
-        $result = $this->fallbackGrep($uri, $line, 'references');
-        $cache->set($uri, $key, $result);
-        return $result;
+        return $this->referencesFor($this->language, $uri, $line, $col);
     }
 
     /**
@@ -244,27 +237,16 @@ final class LspClient
      * textDocument/hover — hover information.
      *
      * @return array|null Hover result or null if not available
+     *
+     * ⚠️ THE BODY IS A FORWARD, AND IT USED TO BE A COPY. {@see hoverFor()}
+     * carried a character-identical tail, and the cost was measured rather than
+     * aesthetic: a mutation anchored on that tail landed in the wrong twin and
+     * SURVIVED, which read as a hole in a test that was in fact sound. There is
+     * now one body, so a mutation of it cannot be misattributed.
      */
     public function hover(string $uri, int $line = 0, int $col = 0): ?array
     {
-        $conn = $this->connections[$this->language];
-        $cache = $this->caches[$this->language];
-        $key = self::positionalKey('textDocument/hover', $line, $col);
-
-        if ($cache->has($uri, $key)) {
-            return $cache->get($uri, $key);
-        }
-
-        if ($conn->isConnected()) {
-            $result = $conn->hover($uri, $line, $col);
-            // Cache null results too so we don't re-query.
-            $cache->set($uri, $key, $result);
-            return $result;
-        }
-
-        // No fallback for hover.
-        $cache->set($uri, $key, null);
-        return null;
+        return $this->hoverFor($this->language, $uri, $line, $col);
     }
 
     /**
@@ -286,10 +268,12 @@ final class LspClient
 
         if ($conn->isConnected()) {
             $result = $conn->hover($uri, $line, $col);
+            // Cache null results too so we don't re-query.
             $cache->set($uri, $key, $result);
             return $result;
         }
 
+        // No fallback for hover — grep cannot synthesise a type signature.
         $cache->set($uri, $key, null);
         return null;
     }
@@ -302,25 +286,16 @@ final class LspClient
      * textDocument/documentSymbol — list symbols in a document.
      *
      * @return array<mixed> DocumentSymbol[] or SymbolInformation[]
+     *
+     * ⚠️ THE BODY IS A FORWARD, AND IT USED TO BE A COPY. {@see symbolsFor()}
+     * carried a character-identical tail, and the cost was measured rather than
+     * aesthetic: a mutation anchored on that tail landed in the wrong twin and
+     * SURVIVED, which read as a hole in a test that was in fact sound. There is
+     * now one body, so a mutation of it cannot be misattributed.
      */
     public function symbols(string $uri): array
     {
-        $conn = $this->connections[$this->language];
-        $cache = $this->caches[$this->language];
-
-        if ($cache->has($uri, 'textDocument/documentSymbol')) {
-            return $cache->get($uri, 'textDocument/documentSymbol') ?? [];
-        }
-
-        if ($conn->isConnected()) {
-            $result = $conn->symbols($uri);
-            $cache->set($uri, 'textDocument/documentSymbol', $result);
-            return $result;
-        }
-
-        $result = $this->fallbackGrep($uri, 0, 'symbols');
-        $cache->set($uri, 'textDocument/documentSymbol', $result);
-        return $result;
+        return $this->symbolsFor($this->language, $uri);
     }
 
     /**
@@ -364,26 +339,16 @@ final class LspClient
      * @param int    $col     Cursor column (0-indexed)
      * @param array  $context Context containing diagnostics; empty array uses server defaults
      * @return array<mixed> CodeAction[] — never null, may be empty
+     *
+     * ⚠️ THE BODY IS A FORWARD, AND IT USED TO BE A COPY. {@see codeActionsFor()}
+     * carried a character-identical tail, and the cost was measured rather than
+     * aesthetic: a mutation anchored on that tail landed in the wrong twin and
+     * SURVIVED, which read as a hole in a test that was in fact sound. There is
+     * now one body, so a mutation of it cannot be misattributed.
      */
     public function codeActions(string $uri, int $line = 0, int $col = 0, array $context = []): array
     {
-        $conn = $this->connections[$this->language];
-        $cache = $this->caches[$this->language];
-        $key = self::positionalKey('textDocument/codeAction', $line, $col, $context);
-
-        if ($cache->has($uri, $key)) {
-            return $cache->get($uri, $key) ?? [];
-        }
-
-        if ($conn->isConnected()) {
-            $result = $conn->codeActions($uri, $line, $col, $context);
-            $cache->set($uri, $key, $result);
-            return $result;
-        }
-
-        // No meaningful fallback for code actions — return empty.
-        $cache->set($uri, $key, []);
-        return [];
+        return $this->codeActionsFor($this->language, $uri, $line, $col, $context);
     }
 
     /**
@@ -411,6 +376,7 @@ final class LspClient
             return $result;
         }
 
+        // No meaningful fallback for code actions — return empty.
         $cache->set($uri, $key, []);
         return [];
     }

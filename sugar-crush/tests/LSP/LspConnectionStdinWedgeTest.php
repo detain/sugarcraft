@@ -642,11 +642,34 @@ final class LspConnectionStdinWedgeTest extends TestCase
      *
      * ⚠️ THIS IS NOT A FIX FOR E475 AND MUST NOT BE READ AS ONE. fd 2 is still
      * unread for the whole idle gap and the server is still stopped for the
-     * whole of it. The honest fix is fd 2 on the ReactPHP loop, a shape change
-     * to a class that is synchronous by design, recorded rather than reached
-     * for. What this pins is the SEVERITY: the moment "it self-heals" stops
-     * being true, E475 (and E440 for the sibling class) is a deadlock and needs
-     * re-triaging, and nothing else in this suite would notice.
+     * whole of it. What this pins is the SEVERITY: the moment "it self-heals"
+     * stops being true, E475 (and E440 for the sibling class) is a deadlock and
+     * needs re-triaging, and nothing else in this suite would notice.
+     *
+     * ⚠️ AND THE PROPOSED FIX IS NOT MERELY EXPENSIVE — IT IS WRONG FOR THIS
+     * TREE. REWRITTEN, because the sentence it replaces named a remedy nobody
+     * had checked against the way tool calls actually execute here.
+     * WHAT THIS SAID: "The honest fix is fd 2 on the ReactPHP loop, a shape
+     * change to a class that is synchronous by design, recorded rather than
+     * reached for."
+     * WHAT IS TRUE NOW: a tool call does not run in the process that owns the
+     * server's pipes. `Chat`'s parallel dispatch FORKS ONE CHILD PER CALL, and
+     * the parent collects them from `Loop::get()->addPeriodicTimer(0.05, …)` —
+     * verified in `Chat.php`, not inherited from a comment — so the parent's
+     * loop is servicing callbacks every 50 ms while a forked child sits inside
+     * `readMessage()`/`callTool()` on fds it inherited. Registering fd 2 with
+     * that loop would put TWO PROCESSES on one pipe at the same moment, and
+     * `read(2)` is destructive: the bytes would go to whichever won. The tail a
+     * failing exchange reports would then be missing exactly the lines the
+     * parent happened to consume, and each process's own EOF bookkeeping —
+     * `$stderrOpen` in the sibling class — would diverge from the other's. That
+     * is a worse defect than the stall, and it is silent.
+     * WHY THE STALL STILL EARNS ITS PLACE AS AN OPEN ITEM: the residual cost is
+     * bounded and measured — 3.02s against a 3.0s idle, i.e. ~20 ms on the
+     * first exchange after the gap. A fix that is safe under fork-per-tool-call
+     * has to drain while NO call is in flight, which is a question about the
+     * dispatch layer rather than about these two classes. See the round-57 lane
+     * b report.
      *
      * THE STDERR ASSERTIONS ARE THE POSITIVE COMPONENT. Without them a fixture
      * that quietly stopped logging would satisfy "the request was answered"

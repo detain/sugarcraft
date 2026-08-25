@@ -96,6 +96,33 @@ final class ClaudeCodeMcpClient
      * A POLICY NUMBER, NOT A MEASUREMENT: nothing in this tree derives 15.0. It
      * is chosen to be far above any scheduling hiccup on a local pipe and far
      * below the "indefinite" this loop would otherwise inherit.
+     *
+     * ⚠️ WHAT THE NUMBER ACTUALLY COSTS, MEASURED, BECAUSE THE FIRST ACCOUNT OF
+     * IT WAS WRONG ABOUT WHICH CALLS PAY IT.
+     * WHAT WAS SAID (E508): "The handshake is safe: a fresh pipe is empty, so a
+     * few hundred bytes always fit and the loop never waits. A large
+     * `tools/call` from the TUI is not: the loop can now park the calling thread
+     * for fifteen seconds." I.e. the cost was attributed to PAYLOAD SIZE.
+     * WHAT IS TRUE NOW: payload size is irrelevant. MEASURED on this host
+     * (PHP 8.3.6, Linux 6.8), three consecutive takes, `sendMessage()` driving
+     * this constant against two children:
+     *
+     *     a child that READS  10485853 bytes  ->  0.028s / 0.026s / 0.401s
+     *                          1048669 bytes  ->  0.036s / 0.035s / 0.037s
+     *     a child that DOES NOT  65629 bytes  ->  15.006s / 15.006s / 15.009s
+     *
+     * Ten mebibytes to a live reader never approaches the bound; sixty-five
+     * kilobytes to a deaf one pays it in full. So this is a WEDGED-SERVER bound,
+     * not a big-message bound, and 65629 is the interesting figure — barely one
+     * pipe buffer over, which is the smallest message that can pay the whole
+     * fifteen seconds.
+     * WHY IT STILL EARNS ITS PLACE: the alternative for a wedged server is the
+     * unbounded wait this loop used to have. The number is not defended here;
+     * what is defended is that it is an IDLE bound, so no progressing write can
+     * ever hit it — which the first row above is the evidence for.
+     *
+     * ⚠️ AND IT IS FIFTEEN TIMES {@see callTool()}'s OWN READ BUDGET, which is a
+     * live question rather than a settled trade — see that method.
      */
     private const WRITE_IDLE_SECONDS = 15.0;
 
@@ -148,6 +175,34 @@ final class ClaudeCodeMcpClient
      * {@see drainStderr()}.
      */
     private const MAX_STDERR_BYTES = 65536;
+
+    /**
+     * Upper bound on ONE NDJSON line, and on the persistent read buffer that
+     * accumulates towards it.
+     *
+     * ⚠️ IT IS THE BUFFER THAT WAS UNBOUNDED, NOT THE PEER. {@see $readBuffer}
+     * became instance state so that a line split across polls survived the call
+     * that read half of it — that fix was right and is measured in the property's
+     * own note — but it JOINED an existing family defect rather than creating
+     * one: {@see \SugarCraft\Crush\MCP\StdioMcpServer} and
+     * {@see \SugarCraft\Crush\LSP\LspConnection} were uncapped before it. A
+     * server that emits an endless stream with no newline grows this without
+     * limit for the life of the process, and {@see callTool()} polls
+     * {@see readMessages()} a hundred times per call.
+     *
+     * SIXTY-FOUR MEBIBYTES, inherited rather than invented: the same bound
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} puts on
+     * the same question, for the same reason — a frame legitimately carries raw
+     * image bytes, and a corrupt stream must never make the parent buffer an
+     * arbitrary length before noticing.
+     *
+     * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. Cutting the buffer at
+     * the cap would hand `McpMessage::parse()` half a line, which comes back as
+     * a malformed message and blames the SERVER for what is in fact this side
+     * refusing to hold more. The buffer is dropped and a `RuntimeException`
+     * naming the cap is raised instead.
+     */
+    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
     /**
      * The TAIL of whatever the MCP server has written to stderr, bounded.
@@ -288,6 +343,21 @@ final class ClaudeCodeMcpClient
         $id = (string) ++$this->requestId;
         $request = McpMessage::request($id, 'tools/call', ['name' => $name, 'arguments' => $params ?? []]);
 
+        // ⚠️ THE WRITE MAY BLOCK FIFTEEN TIMES AS LONG AS THE READ BELOW WILL
+        // WAIT, AND NOTHING RELATES THE TWO. `sendMessage()` inherits
+        // {@see WRITE_IDLE_SECONDS} = 15.0; the loop under it gives up after 100
+        // attempts 10 ms apart, so ~1.0s of waiting plus read time. Against a
+        // server that has stopped reading its stdin — the only shape that pays
+        // the write bound at all, MEASURED in that constant's note — this method
+        // parks its caller for fifteen seconds and then spends one more second
+        // waiting for an answer that the same wedge makes impossible.
+        //
+        // NOT changed here, and the reason is that the fix is a policy decision
+        // rather than a defect: shortening the write bound trades "the TUI is
+        // frozen for 15s" for "a slow-but-recovering server loses its message",
+        // and nothing in this tree measures how often the second happens. The
+        // asymmetry is recorded so the next reader is choosing rather than
+        // inheriting. See the round-57 lane b report.
         $this->sendMessage($request);
 
         // Read until we get a response with matching id
@@ -392,7 +462,10 @@ final class ClaudeCodeMcpClient
      *     and {@see drainStderr()} is non-blocking and bounded at 16 reads, so
      *     calling it every pass costs nothing and needs no EOF bookkeeping — the
      *     same choice `LspConnection::writeMessage()` makes for the same reason.
-     *  b. THE BOUND IS IDLE, NOT TOTAL. See {@see WRITE_IDLE_SECONDS}. The
+     *  b. THE BOUND IS IDLE, NOT TOTAL, AND MEASURING IT SHOWED IT IS A
+     *     DEAF-CHILD BOUND RATHER THAN A LARGE-MESSAGE ONE: ten mebibytes to a
+     *     reading child costs 0.03s, sixty-five kilobytes to a deaf one costs
+     *     the full 15.006s. Three takes each; see {@see WRITE_IDLE_SECONDS}. The
      *     sibling accepts an unbounded write on {@see \SugarCraft\Crush\MCP\StdioMcpServer::callTool()}'s
      *     path on the grounds that a tool call is somebody else's real work; that
      *     is the right instinct and the wrong instrument, because the work
@@ -599,6 +672,24 @@ final class ClaudeCodeMcpClient
                 break;
             }
             $this->readBuffer .= $chunk;
+
+            // INSIDE the loop, not after it. A peer that never stops writing
+            // never lets this loop end on its own, so a check placed after it
+            // would be a cap that is only consulted once the stream is already
+            // finished — which is the one case it is not needed in.
+            if (strlen($this->readBuffer) > self::MAX_FRAME_BYTES) {
+                $held = strlen($this->readBuffer);
+                $this->readBuffer = '';
+
+                throw new RuntimeException(sprintf(
+                    'the MCP server sent %d bytes with no newline, past this client\'s '
+                    . '%d-byte frame cap; the buffer was dropped rather than truncated, '
+                    . 'because half a line parses as a malformed message and would blame '
+                    . 'the server for this side\'s refusal',
+                    $held,
+                    self::MAX_FRAME_BYTES,
+                ));
+            }
         }
 
         // SPLIT ONCE, AFTER THE READS, rather than inside the loop. The old shape

@@ -78,6 +78,34 @@ final class StdioMcpServer implements McpServer
     private const MAX_STDERR_BYTES = 65536;
 
     /**
+     * Upper bound on ONE NDJSON line, and on the persistent read buffer that
+     * accumulates towards it.
+     *
+     * ⚠️ IT IS THE BUFFER THAT WAS UNBOUNDED, NOT THE PEER. {@see $readBuffer}
+     * is instance state and survives every call, so a peer that emits an endless
+     * stream WITH NO FRAME TERMINATOR grew it without limit for the life of the
+     * process. This class already caps its stderr tail at
+     * {@see MAX_STDERR_BYTES} for exactly this reason, so the asymmetry sat
+     * inside one file.
+     *
+     * SIXTY-FOUR MEBIBYTES, and the number is inherited rather than invented:
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} is the
+     * same bound on the same question — "a frame legitimately carries raw image
+     * bytes, so it has to be generous, but a corrupt header must never make the
+     * parent try to buffer an arbitrary length before it notices the stream is
+     * garbage". An MCP `tools/call` result carrying a file or an image is the
+     * same shape of payload.
+     *
+     * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION, AND THE DISTINCTION
+     * IS THE WHOLE DESIGN. Silently cutting the buffer at the cap would hand
+     * `\SugarCraft\Crush\McpMessage::parse()` half a frame, which parses as malformed — so the diagnostic
+     * would blame the peer for sending garbage when what actually happened is
+     * that THIS side refused to hold any more. The buffer is dropped and a
+     * `\RuntimeException` naming the cap is raised instead.
+     */
+    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+
+    /**
      * How long THE HANDSHAKE — `initialize` plus `tools/list`, one shared
      * wall clock across both — may take before {@see start()} gives this server
      * up. It is not, and must not become, a bound on {@see callTool()}: an MCP
@@ -850,6 +878,20 @@ final class StdioMcpServer implements McpServer
      * server did not come up" and {@see callTool()} passes no deadline at all.
      * Anything finer would be a distinction with no reader.
      *
+     * ⚠️ THIS METHOD OWNS THE FRAME CAP'S ONLY CALL SITE, AND THAT CALL IS A
+     * DECLARED SURVIVOR OF THE SUITE. The refill loop below calls
+     * {@see refuseAnOversizedFrame()} on every pass, which is what stops a peer
+     * that streams without ever sending a newline growing `$readBuffer` for the
+     * life of the process — the same unbounded-state defect
+     * {@see MAX_STDERR_BYTES} exists to close one field over.
+     * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest} pins the CHECK by
+     * reflection, in both polarities, but deliberately does NOT cover this line:
+     * deleting the call is a mutation those rows do not kill. Reaching it needs
+     * a child that writes 64 MiB into a pipe with no newline, minutes of
+     * throughput for a property {@see \SugarCraft\Crush\ClaudeCodeMcpClient}
+     * already pins end to end against a real child. If that trade stops looking
+     * right the row to add is a fixture child, not another reflection call.
+     *
      * @param float|null $deadline see {@see request()}
      */
     private function readLine(?float $deadline = null): ?string
@@ -960,6 +1002,7 @@ final class StdioMcpServer implements McpServer
                 continue;
             }
             $this->readBuffer .= $chunk;
+            $this->refuseAnOversizedFrame();
         }
 
         $line = substr($this->readBuffer, 0, $newline);
@@ -1062,6 +1105,36 @@ final class StdioMcpServer implements McpServer
             : ' stderr: ' . $tail;
     }
 
+    /**
+     * Refuse a frame that has passed {@see MAX_FRAME_BYTES} with no terminator.
+     *
+     * The buffer is CLEARED before the throw, so a caller that survives the
+     * exception — {@see \SugarCraft\Crush\MCP\McpClient::startServer()} drops
+     * the server, {@see \SugarCraft\Crush\Tools\McpToolBridge::execute()}
+     * turns it into a tool result — is not left with a live object still holding
+     * 64 MiB it can never parse.
+     *
+     * @throws \RuntimeException when the cap is passed
+     */
+    private function refuseAnOversizedFrame(): void
+    {
+        if (strlen($this->readBuffer) <= self::MAX_FRAME_BYTES) {
+            return;
+        }
+
+        $held = strlen($this->readBuffer);
+        $this->readBuffer = '';
+
+        throw new \RuntimeException(sprintf(
+            'MCP server %s sent %d bytes with no newline, past this client\'s %d-byte frame '
+            . 'cap; the buffer was dropped rather than truncated, because half a frame parses '
+            . 'as a malformed message and would blame the server for this side\'s refusal',
+            $this->name,
+            $held,
+            self::MAX_FRAME_BYTES,
+        ));
+    }
+
     /** Consume and return the entire pending buffer as one trimmed line. */
     private function drainBuffer(): string
     {
@@ -1072,69 +1145,26 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * The keys {@see \SugarCraft\Crush\MCP\McpTool::fromArray()} reads out of a
-     * tool definition, each with the check that says whether the value would
-     * satisfy the constructor parameter it lands in.
-     *
-     * ⚠️ THIS IS A HAND MIRROR OF ANOTHER CLASS, AND THAT IS THE HAZARD. A
-     * fourth `$data[...]` in `fromArray()` reopens exactly the `TypeError` this
-     * filter exists to close, and nothing about adding one would red a test that
-     * merely exercised the three keys below. It is a CONST rather than a literal
-     * inside the method so that
-     * `StdioMcpServerToolListRobustnessTest::testTheTypeFilterStillMirrorsEveryKeyMcpToolReads()`
-     * can read it and compare it against `fromArray()`'s actual subscripts and
-     * `McpTool`'s actual parameter types.
-     *
-     * `serverName` is absent deliberately: `fromArray()` takes it from its own
-     * second parameter, not from the definition, so it is not a key a peer's
-     * reply can put a wrong type into.
-     *
-     * @var array<string, callable-string>
-     */
-    private const TOOL_DEFINITION_TYPES = [
-        'name' => 'is_string',
-        'description' => 'is_string',
-        'inputSchema' => 'is_array',
-    ];
-
-    /**
      * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries a
      * third party got wrong instead of failing the server over them.
      *
-     * ⚠️ `is_array($def)` ALONE WAS NOT ENOUGH, AND THE GAP IS A MEASURED ONE-HOP
-     * KILL OF THE WHOLE MCP SUBSYSTEM. {@see McpTool::fromArray()} reads
-     * `$data['name'] ?? ''` into a `string` parameter, so a well-formed JSON-RPC
-     * reply of `{"tools":[{"name":5}]}` raises a `TypeError` — and a `TypeError`
-     * is not a `RuntimeException`, which is the only thing
-     * {@see McpClient::startServer()} catches under a comment promising that "a
-     * single unreachable/misbehaving server must not abort loading the rest".
-     *
-     * MEASURED end to end on this host (PHP 8.3.6, Linux 6.8), three consecutive
-     * takes, driving `McpClient::startServers()` over a two-server config the way
-     * {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()} does — one server
-     * answering `{"tools":[{"name":5}]}` and one answering correctly:
-     *
-     *     startServers() THREW TypeError ... Argument #1 ($name) must be of type
-     *     string, int given
-     *
-     * The well-formed server was never started. The same shape falls out of a
-     * `name` that is an object or a bool, and of an `inputSchema` that is a
-     * string; `name: null` alone is safe, because `??` catches it.
-     *
-     * WHAT THIS METHOD CAN AND CANNOT CLOSE. It closes the route through THIS
-     * server type, which is the one the trust grant exists for — `.mcp.json` is
-     * cloned content and starting a server from it is code execution. It does
-     * NOT close E436, which is the narrow catch itself: the identical
-     * `parseTools()` in {@see HttpMcpServer} still has the gap, and any future
-     * throw from a third party's output still walks through
-     * `catch (\RuntimeException)`. Both are out of this lane's file list and are
-     * reported rather than reached for. {@see \SugarCraft\Crush\Tools\McpToolBridge::execute()}
-     * already catches `\Throwable` for exactly this reason.
-     *
-     * SKIPPING RATHER THAN THROWING is the right shape here for the same reason
-     * `is_array($def)` was: one malformed tool in a list of forty is a defect in
-     * that tool, and taking the other thirty-nine down with it is the behaviour
-     * this whole path exists to avoid.
+     * ⚠️ THE TYPE FILTER MOVED, AND THE MOVE IS THE POINT.
+     * WHAT THIS SAID: a `TOOL_DEFINITION_TYPES` const and a
+     * `toolDefinitionIsWellTyped()` lived HERE, with a doc-block calling itself
+     * "a hand mirror of another class" and naming that as the hazard.
+     * WHAT IS TRUE NOW: both live on {@see McpTool} itself, reached through
+     * {@see McpTool::tryFromArray()}, because {@see HttpMcpServer::parseTools()}
+     * needed the identical filter and a copy would have made one mirror into
+     * two. The measurement, the `isset()`-not-`array_key_exists()` reasoning and
+     * the reason the table is a const are all carried over verbatim there.
+     * WHY THIS STILL EARNS A NOTE HERE: the `is_array($def)` below is NOT
+     * redundant with the filter. `tryFromArray()` takes `array $data`, so a
+     * scalar entry in the list — `{"tools":["write"]}`, which a peer is equally
+     * free to send — is a `TypeError` at the call rather than a skip. And the
+     * `is_array($toolDefs)` above it is a THIRD question again, about the
+     * CONTAINER: `?? []` covers `tools` being absent, not `tools` being a
+     * string. All three answer different questions and all three are
+     * load-bearing; the note used to say "two" and enumerate two.
      *
      * @param array<mixed> $response
      * @return array<McpTool>
@@ -1144,47 +1174,26 @@ final class StdioMcpServer implements McpServer
         $tools = [];
         $toolDefs = $response['result']['tools'] ?? [];
 
+        // THE CONTAINER, not the entries. `?? []` only covers `tools` being
+        // ABSENT or null; a peer that sends `{"result":{"tools":"nope"}}` gets
+        // past it with a string, and `foreach` over a string is a PHP warning
+        // (measured, PHP 8.3.6) plus zero iterations. Same family as the
+        // `is_array($def)` skip below, one level up.
+        if (!is_array($toolDefs)) {
+            $toolDefs = [];
+        }
+
         foreach ($toolDefs as $def) {
-            if (!is_array($def) || !self::toolDefinitionIsWellTyped($def)) {
+            if (!is_array($def)) {
                 continue;
             }
 
-            $tools[] = McpTool::fromArray($def, $this->name);
-        }
-
-        return $tools;
-    }
-
-    /**
-     * Does `$def` carry the types {@see McpTool}'s constructor declares?
-     *
-     * Checked HERE rather than made lenient THERE on purpose: `McpTool`'s
-     * promoted properties are the contract every consumer of a tool list reads,
-     * and widening them to `mixed` to survive a bad server would push the same
-     * `TypeError` out to whichever of those consumers touched it first.
-     *
-     * ⚠️ `isset()` AND NOT `array_key_exists()`, AND THE DIFFERENCE IS A TOOL.
-     * {@see McpTool::fromArray()} reads every field with `??`, which supplies the
-     * typed default for an ABSENT key and for an explicit `null` alike — so
-     * `{"name":"write","description":null}` is perfectly well-typed as far as the
-     * constructor is concerned. `array_key_exists()` would call that key present,
-     * find `null` failing `is_string()`, and drop a legitimate tool on the floor
-     * without saying so. `isset()` is false for both shapes, which is exactly the
-     * question this method is asking. Pinned by the `write` entry in
-     * {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerToolListRobustnessTest::testAMalformedEntryIsSkippedAndItsWellFormedNeighboursAreNot()},
-     * which is there because the `array_key_exists()` mutation SURVIVED a fixture
-     * whose alphabet had no explicit null in it.
-     *
-     * @param array<mixed> $def
-     */
-    private static function toolDefinitionIsWellTyped(array $def): bool
-    {
-        foreach (self::TOOL_DEFINITION_TYPES as $key => $check) {
-            if (isset($def[$key]) && !$check($def[$key])) {
-                return false;
+            $tool = McpTool::tryFromArray($def, $this->name);
+            if ($tool !== null) {
+                $tools[] = $tool;
             }
         }
 
-        return true;
+        return $tools;
     }
 }

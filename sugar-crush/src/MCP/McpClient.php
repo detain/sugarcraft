@@ -74,13 +74,46 @@ final class McpClient
 
     /**
      * Load and start MCP servers from config.
+     *
+     * EVERY ENTRY IS ATTEMPTED, and every one that comes up is registered, even
+     * when an earlier or later entry fails — see {@see startServer()} for the
+     * three measured routes by which one bad entry used to disable the whole
+     * file, and for why the failures are still reported rather than swallowed.
+     *
+     * @throws \RuntimeException naming every entry whose CONFIG could not be
+     *         built — an unrecognised `type` — AFTER all of them have been
+     *         attempted, so the throw no longer decides which servers get to
+     *         exist. A server whose `start()` merely fails is skipped silently,
+     *         as it always was; see {@see startServer()} for why those two are
+     *         not the same event. A caller that wants the working servers
+     *         regardless catches this and carries on — which is what
+     *         {@see \SugarCraft\Crush\Cli\Bootstrap::mcpClient()} does, and
+     *         why that seam is the one place in this package writing both
+     *         `error_log()` and the transcript.
      */
     public function startServers(): void
     {
         $config = $this->loadConfig();
+        $failures = [];
 
         foreach ($config['mcpServers'] ?? [] as $name => $serverConfig) {
-            $this->startServer($name, $serverConfig);
+            $failure = $this->startServer($name, $serverConfig);
+            if ($failure !== null) {
+                $failures[] = $failure;
+            }
+        }
+
+        // AFTER the loop, deliberately: this is the whole fix. The throw used to
+        // happen ON the offending entry, so entries after it were never even
+        // constructed and the same broken file lost a different set of servers
+        // depending purely on key order.
+        if ($failures !== []) {
+            throw new \RuntimeException(sprintf(
+                '%d MCP server %s in this config could not be built: %s',
+                count($failures),
+                count($failures) === 1 ? 'entry' : 'entries',
+                implode('; ', $failures),
+            ));
         }
     }
 
@@ -96,13 +129,94 @@ final class McpClient
     }
 
     /**
-     * Start a single server.
+     * Start a single server, and NEVER let one entry's failure reach the loop
+     * that is starting the others.
+     *
+     * ⚠️ THIS GUARD PROMISED SOMETHING IT DID NOT DELIVER, BY THREE SEPARATE
+     * ROUTES, AND ALL THREE WERE MEASURED.
+     * WHAT THIS SAID: "A single unreachable/misbehaving server must not abort
+     * loading the rest. An unknown type is a config error and is thrown above,
+     * before we get here." Both sentences were wrong in effect.
+     * WHAT IS TRUE NOW: the `match` is INSIDE the guard and the guard catches
+     * `\Throwable`. The three routes, each measured at this tree (PHP 8.3.6,
+     * Linux 6.8) by driving `startServers()` over a two-server `.mcp.json` with
+     * the offender FIRST and a well-formed server second:
+     *
+     *   1. `{"tools":[{"name":5}]}` from a `stdio` or `http` peer raised a
+     *      `TypeError` out of `McpTool::fromArray()`. Not a `RuntimeException`,
+     *      so it escaped: "tools visible: 0". Closed at source too, by
+     *      {@see McpTool::tryFromArray()}.
+     *   2. `"type": "sse"` threw `RuntimeException: Unknown MCP server type: sse`
+     *      from the `default` arm, which sat OUTSIDE the try. "tools visible: 0".
+     *      `sse` is not a typo hazard invented for the test — it is a transport
+     *      the MCP specification defines and this port has not implemented, so
+     *      the first `.mcp.json` carrying one silently disabled every OTHER
+     *      server in the file.
+     *   3. Anything else a constructor or a `start()` can raise that is not a
+     *      `RuntimeException` — an `\Error` from a third party's output, a
+     *      `JsonException`, a `ValueError` off a closed pipe.
+     *
+     * ⚠️ THE ORDER-DEPENDENCE IS WHY THIS READS AS INTERMITTENT. `startServers()`
+     * iterates the config map, so servers listed BEFORE the offender had already
+     * started and stayed started. The same broken `.mcp.json` therefore lost
+     * everything, something, or nothing depending purely on key order.
+     *
+     * ⚠️ TWO CATCHES, NOT ONE, AND FLATTENING THEM INTO ONE WAS THIS FIX'S FIRST
+     * CUT AND ITS FIRST MISTAKE. The original code distinguished the two classes
+     * by WHERE the throw came from, and the distinction is principled:
+     *
+     *   CONFIG ERROR (the `match`): the file is wrong and only a human can fix
+     *       it. Reported. `Bootstrap::mcpClient()` catches the report and writes
+     *       it to `error_log()` AND the transcript — the one site in that class
+     *       that uses both channels — then carries on with fewer tools.
+     *   RUNTIME FAILURE (`start()`): the binary is missing, the host is down,
+     *       the handshake timed out. Routine, expected, and SKIPPED SILENTLY, as
+     *       it always has been.
+     *
+     * Collapsing both into one aggregate report was green across the MCP suites
+     * and red across four rows that pin those two contracts. What was actually
+     * wrong was never the reporting — it was that reporting ABORTED THE LOOP.
+     * So both catches stay, both keep their old meaning, and the only change is
+     * that the config-error report is deferred to {@see startServers()} until
+     * every entry has been attempted. The runtime catch also widens from
+     * `\RuntimeException` to `\Throwable`, which is route 3.
+     *
+     * @return string|null a description of a CONFIG error, to be reported after
+     *         every entry has been attempted; null for a clean start and for a
+     *         runtime failure alike
      */
-    private function startServer(string $name, array $config): void
+    private function startServer(string $name, array $config): ?string
     {
         $type = $config['type'] ?? 'stdio';
 
-        $server = match ($type) {
+        try {
+            $server = $this->buildServer($name, $type, $config);
+        } catch (\Throwable $e) {
+            return sprintf('%s (%s)', $name, $e->getMessage());
+        }
+
+        try {
+            $server->start();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $this->servers[$name] = $server;
+
+        return null;
+    }
+
+    /**
+     * Construct the {@see McpServer} one `.mcp.json` entry asks for.
+     *
+     * Split out of {@see startServer()} so that the `default` arm's throw is
+     * inside that method's guard rather than beside it — see route 2 there.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function buildServer(string $name, string $type, array $config): McpServer
+    {
+        return match ($type) {
             // `startTimeout` (seconds) is OPTIONAL and per-server: a locally
             // installed binary answers the handshake in milliseconds, while a
             // cold `npx -y @modelcontextprotocol/server-…` first has to fetch a
@@ -135,16 +249,6 @@ final class McpClient
             ),
             default => throw new \RuntimeException("Unknown MCP server type: $type"),
         };
-
-        // A single unreachable/misbehaving server must not abort loading the rest.
-        // An unknown type is a config error and is thrown above, before we get here.
-        try {
-            $server->start();
-        } catch (\RuntimeException) {
-            return;
-        }
-
-        $this->servers[$name] = $server;
     }
 
     /**
