@@ -19199,9 +19199,17 @@ reason is mechanical rather than an omission: a `Message` is data and round-trip
 child needs the registry that built it, which needs the session it belongs to.
 
 Consequence: a fork-context skill or a workflow agent dispatched through `ProcessExecutor` can
-reason but cannot act. The names are on the wire so a transcript shows what the parent BELIEVED it
-was granting, which is why they are sent rather than dropped — but nothing surfaces the gap to a
-user, and the model is simply told about no tools.
+reason but cannot act. Nothing surfaces the gap to a user, and the model is simply told about no
+tools.
+
+⚠️ CORRECTION to this entry as first filed, which said the names are sent "so a transcript shows
+what the parent BELIEVED it was granting". MEASURED at the tree that sentence was written in: there
+is no transcript. `request.tools` is read by neither worker script and the startup line is logged
+nowhere, and mutating `encodeTools()` to `return null` unconditionally survived the whole 10293-test
+suite. The names still go out — the FRAME is the record, and a request granting twelve tools must
+not be byte-identical on the wire to one granting none — and that is now pinned by a test that
+decodes the startup line (`ProcessExecutorTest::testTheStartupFrameCarriesTheRequestTheParentBuilt`).
+The justification changed; the behaviour did not.
 
 This intersects lane b's round-60 work on `AgentManager::executeSubAgent()`'s tool grant: whatever
 grant that path computes cannot reach a `ProcessExecutor` worker until this is answered. The
@@ -19212,9 +19220,17 @@ an RPC back to the parent for `execute()`.
 
 **DEFERRED FINDING, currently contained.** The child `require`s `$msg['autoload']`, which arrives in
 the startup JSON line. Classified `PROCESS_DERIVED` in `ReadPathCensusTest::READ_PATHS` because the
-value is computed in the parent (`ProcessExecutor::autoloadPath()`, two climbs from `__DIR__`) and
-reaches the child only down the stdin pipe `proc_open()` just created, so no party outside this
-process can name it; the child additionally refuses a value that is not `is_file()`.
+value is computed in the parent (`ProcessExecutor::autoloadPath()`) and reaches the child only down
+the stdin pipe `proc_open()` just created, so no party outside this process can name it; the child
+additionally refuses a value that is not `is_file()`.
+
+⚠️ CORRECTION: this entry said the parent's value is "two climbs from `__DIR__`". It was, and that
+arithmetic was WRONG — measured on PHP 8.3.6 against a synthetic install, two climbs from
+`src/Agents` yields `<pkg>/vendor/autoload.php`, which does not exist in an installed layout, so
+every sub-agent in any Composer consumer of this package hit the child's "autoloader is not
+readable" refusal. Fixed in round 60 by delegating to `Sessions\BackgroundSupervisor::autoloadPath()`,
+which asks the live Composer `ClassLoader` first. The containment argument above is unaffected: it
+is about who can NAME the path, not about how the parent computes it.
 
 Recorded because the containment is a property of the TRANSPORT, not of the check. If the worker
 protocol ever gains a second writer — a supervisor multiplexing several children, a resumed worker
@@ -19222,7 +19238,7 @@ reading a spooled startup line off disk — the `require` becomes attacker-influ
 `is_file()` test does not bound it. `Sessions/BackgroundSupervisor.php|require` carries the same
 shape and the same exposure.
 
-### Ec60-4 — `Chat::executeAgents()` cannot give its sub-agents a provider
+### Ec60-4 — nothing in `src/` can give a sub-agent worker a provider, and `/workflow run` is the reachable case
 
 **DEFERRED FINDING, and it is the reason the production sub-agent path is unexercised.**
 `Chat::executeAgents()` builds its executor from `AgentPoolConfig`, which carries `maxConcurrent`,
@@ -19235,6 +19251,40 @@ same call returned a fabricated success. Closing it needs a provider CONFIG (the
 `ProviderFactory`-shaped array `ProcessExecutor::$workerProvider` takes) to reach the pool —
 `AgentWorkerPool::__construct()`'s `workerProvider` parameter and `AgentWorkerPool::workerProvider()`
 are the seam; what is missing is a source for it on `AgentPoolConfig` or on `Chat`.
+
+⚠️ SCOPE CORRECTION — this entry was filed against `Chat::executeAgents()` alone, and that is the
+one site of the three that **no production code reaches**. MEASURED: `Chat::executeAgents()` has no
+caller in `src/` or `bin/`. The other two do.
+
+  * `AgentManager` (`$pool ??= $this->workerPool ?? new AgentWorkerPool();`)
+  * `WorkflowEngine::__construct()`'s default `AgentWorkerPool $pool = new AgentWorkerPool()`, which
+    is what `Cli\Bootstrap` uses — it passes `registry`, `model:`, `provider:` and `permissionGate:`
+    and DEFAULTS the pool.
+
+The second is reachable from the shipped `/workflow run`, so the user-visible consequence of making
+the worker real is concrete and belongs on the record: **a workflow with an agent task now returns a
+FAILED agent where it previously returned Completed carrying fabricated text.** That is the honest
+outcome and not an argument against the change — the fabricated text was indistinguishable from an
+answer — but it is a behaviour change on a live command and it was not written down anywhere.
+
+Note also that `WorkflowEngine::$provider` is a provider NAME, not a config, so it is not a ready
+supplier for the seam either; the gap has the same shape at that site as at `AgentPoolConfig`.
+
+### Ec60-6 — the parent writes `execute` into a pipe whose child may already be gone
+
+**DEFERRED FINDING, cosmetic today.** `spawnWorker()` writes its `execute` line with a bare
+`fwrite($pipes[0], ...)` after a bounded wait for `ready`. A child that exited during startup —
+a bad binary, an OOM, a fatal before the handshake — makes that a write to a closed pipe, and PHP
+raises `fwrite(): Write of N bytes failed with errno=32 Broken pipe` from inside `ProcessExecutor`.
+Observed in round 60 while building `testRefusingAnUnserialisableMessageSpawnsNoChild`, whose first
+stand-in binary exited immediately.
+
+It is only a notice, and the live worker's ready-first ordering is deliberately designed so that a
+refusing child is still listening at that moment. But the notice reaches the operator as a PHP
+warning attributed to the executor rather than as a named failure, and `phpunit.xml` sets
+`failOnWarning="true"`, so a suite that provokes it goes red for the wrong reason. The fix is to
+detect the dead child (or guard the write) and turn it into the AgentResult the caller already
+expects.
 
 ### Ec60-5 — `src/Tui/Renderer.php` cites `ProcessExecutor.php:81`/`:235`
 

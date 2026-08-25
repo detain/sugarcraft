@@ -583,9 +583,15 @@ final class AppSkillDispatchTest extends TestCase
      * End to end through the real chain, and it REFUSES.
      *
      * App -> AgentWorkerPool::executeOne() -> ProcessExecutor -> a spawned PHP
-     * child, with a default-constructed executor: exactly what a production
-     * caller would get today. The result is a FAILED AgentResult naming the
-     * absent provider, and — the assertion that matters — a null output.
+     * child. The pool is constructed with NO arguments, so the executor comes
+     * from {@see AgentWorkerPool::createDefaultExecutor()} — this is the shipped
+     * default in full, not an executor this test built and then described as
+     * one. (It said "a default-constructed executor" while injecting one, which
+     * also set the pool's `$customExecutor` flag; immaterial to the outcome
+     * here, since `executeOne()` runs in-parent either way, but the distinction
+     * is load-bearing three comments away and should not be blurred in a
+     * fourth.) The result is a FAILED AgentResult naming the absent provider,
+     * and — the assertion that matters — a null output.
      *
      * This is the acceptance test for the C4/C8 pair together. Before the live
      * worker existed, this same call returned a Completed result carrying a
@@ -602,7 +608,7 @@ final class AppSkillDispatchTest extends TestCase
         $registry->register([$forkSkill]);
 
         $app = App::new($this->provider, 'test-model')->withAvailableSkills($registry);
-        $pool = new AgentWorkerPool(executor: new ProcessExecutor(timeoutSeconds: 30));
+        $pool = new AgentWorkerPool();
 
         $result = $app->dispatchSkill($forkSkill, $pool, 'summarise the changelog');
 

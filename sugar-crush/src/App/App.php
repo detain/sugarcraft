@@ -430,10 +430,19 @@ final class App implements Model
      * taken at $root and at the fork's own model.
      *
      * No fork is oriented by it YET, and the correct tense here is future. This
-     * method has no production caller: `grep -rn dispatchSkill src/ bin/` finds
-     * this definition and one docblock cross-reference from
-     * {@see applySkillsToSystemPrompt()}, and nothing that invokes it — the only
+     * method has no production CALLER: `src/` and `bin/` mention it in prose
+     * only — cross-references from {@see applySkillsToSystemPrompt()} and from
+     * {@see ProcessExecutor}'s own doc-blocks — and nothing invokes it; the only
      * caller anywhere is `tests/App/AppSkillDispatchTest.php`.
+     *
+     * ⚠️ A COUNT USED TO STAND HERE — "finds this definition and ONE docblock
+     * cross-reference". It was true when written and false by the end of the
+     * same round: the change that wrote the sentence added three more mentions,
+     * making it eight occurrences in two files. It is dropped rather than
+     * corrected, because a number no test derives rots whether or not anyone
+     * mis-typed it, and the half that is load-bearing — that nothing CALLS this
+     * — is pinned by a token-stream tripwire in
+     * {@see \SugarCraft\Crush\Tests\App\AppSkillDispatchTest} instead.
      *
      * ## WHAT THIS USED TO SAY ABOUT THE EXECUTOR
      *

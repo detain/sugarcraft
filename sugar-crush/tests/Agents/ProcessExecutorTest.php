@@ -761,6 +761,139 @@ final class ProcessExecutorTest extends TestCase
     }
 
     /**
+     * The child rebuilds each turn with EVERY field the wire carries.
+     *
+     * ⚠️ WHY THIS IS A STRUCTURAL TEST AND NOT A BEHAVIOURAL ONE. `is_error`,
+     * `tool_call_id`, `tool_calls`, `reasoning` and `attachments` are all
+     * unobservable from inside the child: the only provider it can construct
+     * without a network is {@see EchoProvider}, which reads the last USER
+     * turn's content and nothing else. MEASURED — there is no
+     * conversation-dumping provider anywhere in `src/Providers`, and adding one
+     * would be a new production class written for a test. So the role is pinned
+     * behaviourally by
+     * {@see testLiveWorkerKeepsEachTurnsRoleAcrossTheWire} and the remaining
+     * fields are pinned here, by ARITY over the generated script's own token
+     * stream.
+     *
+     * Arity, not text. A grep for `is_error` would be satisfied by the word
+     * appearing in a comment — and the comment explaining this very fix would
+     * satisfy it. Counting the arguments each `new ...Message(...)` is actually
+     * constructed with is a fact about the code, and it is exactly the fact
+     * that changed: every one of these lost a field by being constructed with
+     * fewer arguments than the wire supplies.
+     *
+     * The known-positive and known-negative fixtures are the point of the rest
+     * of the test: an arity counter that returned 0 for everything, or that
+     * miscounted a nested call's commas, would make the assertions below pass
+     * on a worker that had dropped every field.
+     */
+    public function testTheChildConstructsEachTurnWithEveryFieldTheWireCarries(): void
+    {
+        $count = static function (string $source, string $class): int {
+            $tokens = token_get_all("<?php\n" . $source);
+            $names = [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED];
+            foreach ($tokens as $i => $token) {
+                if (!\is_array($token) || !\in_array($token[0], $names, true)) {
+                    continue;
+                }
+                // The worker script spells every class fully qualified, which
+                // PHP 8 lexes as ONE T_NAME_FULLY_QUALIFIED token rather than
+                // T_STRING — the first draft of this scan matched T_STRING only
+                // and reported "not found" for all three constructions. Matching
+                // the trailing segment covers both spellings.
+                if ($token[1] !== $class && !str_ends_with($token[1], '\\' . $class)) {
+                    continue;
+                }
+
+                // Find the '(' that opens this construction.
+                $j = $i + 1;
+                while ($j < \count($tokens) && \is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                    ++$j;
+                }
+                // Rule: gate every text comparison on is_string(). On PHP 8.3.6
+                // token_get_all() yields T_ENCAPSED_AND_WHITESPACE whose text is
+                // exactly '(' or '}' inside an interpolated string, so an
+                // ungated comparison sees braces that are not braces.
+                if ($j >= \count($tokens) || !\is_string($tokens[$j]) || $tokens[$j] !== '(') {
+                    continue;
+                }
+
+                $depth = 0;
+                $commas = 0;
+                $sinceComma = false;
+                for ($k = $j; $k < \count($tokens); ++$k) {
+                    $t = $tokens[$k];
+                    if (\is_string($t) && ($t === '(' || $t === '[')) {
+                        ++$depth;
+                        if ($depth > 1) {
+                            $sinceComma = true;
+                        }
+                        continue;
+                    }
+                    if (\is_string($t) && ($t === ')' || $t === ']')) {
+                        --$depth;
+                        if ($depth === 0) {
+                            // A TRAILING comma closes no argument. The worker
+                            // script writes one on every multi-line call, so a
+                            // counter that added 1 unconditionally reported 4
+                            // arguments for a 3-argument construction.
+                            return $commas + ($sinceComma ? 1 : 0);
+                        }
+                        continue;
+                    }
+                    if ($depth === 1 && \is_string($t) && $t === ',') {
+                        ++$commas;
+                        $sinceComma = false;
+                        continue;
+                    }
+                    if ($depth >= 1 && !(\is_array($t) && \in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true))) {
+                        $sinceComma = true;
+                    }
+                }
+
+                return -1; // unbalanced: a guard that cannot parse says so
+            }
+
+            return -1; // not found at all is ALSO not a zero
+        };
+
+        // Known-positive controls, one per arity the assertions below rely on,
+        // including a nested call and an array literal — the two shapes a naive
+        // comma count gets wrong.
+        $this->assertSame(0, $count('new Foo();', 'Foo'), 'an empty argument list is not one argument');
+        $this->assertSame(1, $count('new Foo($a);', 'Foo'));
+        $this->assertSame(3, $count('new Foo($a, bar($b, $c), [$d, $e]);', 'Foo'), 'nested commas are not arguments');
+        $this->assertSame(2, $count("new Foo(\"a\$b(\", \$c);", 'Foo'), 'a brace inside a string is not a brace');
+        $this->assertSame(2, $count('new Bar\\Baz\\Foo($a, $b);', 'Foo'), 'a qualified name is the same construction');
+        $this->assertSame(1, $count('new \\Bar\\Foo($a);', 'Foo'), 'a fully qualified name is too');
+        $this->assertSame(-1, $count('new NotFoo($a, $b);', 'Foo'), 'a name that merely ENDS in the class is not it');
+        $this->assertSame(2, $count("new Foo(\n  \$a,\n  \$b,\n);", 'Foo'), 'a trailing comma closes no argument');
+        // Known-negative controls: a guard that cannot answer must not answer 0.
+        $this->assertSame(-1, $count('$x = 1;', 'Foo'), 'an absent construction reported as zero arguments');
+        $this->assertSame(-1, $count('new Foo($a', 'Foo'), 'an unbalanced list reported as an arity');
+
+        $script = (new \ReflectionMethod(ProcessExecutor::class, 'createLiveWorkerScript'))
+            ->invoke(new ProcessExecutor());
+
+        $this->assertSame(
+            3,
+            $count($script, 'ToolResultMessage'),
+            'the child rebuilds a tool result without its is_error flag: an errored '
+            . 'tool call reaches the model as a successful one',
+        );
+        $this->assertSame(
+            3,
+            $count($script, 'AssistantMessage'),
+            'the child rebuilds an assistant turn without its tool_calls and reasoning',
+        );
+        $this->assertSame(
+            2,
+            $count($script, 'UserMessage'),
+            'the child rebuilds a user turn without its attachments',
+        );
+    }
+
+    /**
      * The startup frame carries the request the parent built — on the WIRE.
      *
      * This is the one assertion that can be made about `request.tools`, and it
@@ -1152,7 +1285,99 @@ final class ProcessExecutorTest extends TestCase
                     continue;
                 }
 
+                // `simulatedWorker: false` is the DEFAULT spelled out loud, not
+                // an opt-in, and the first draft of this scan reported it as
+                // one. A guard that flags correct code is a guard people learn
+                // to route around.
+                $k = $i + 1;
+                while ($k < \count($tokens) && (
+                    (\is_array($tokens[$k]) && $tokens[$k][0] === T_WHITESPACE)
+                    || (\is_string($tokens[$k]) && $tokens[$k] === ':')
+                )) {
+                    ++$k;
+                }
+                $value = $k < \count($tokens) ? $tokens[$k] : null;
+                if (\is_array($value) && $value[0] === T_STRING && strtolower($value[1]) === 'false') {
+                    continue;
+                }
+
                 ++$count;
+            }
+
+            return $count;
+        };
+
+        // A SECOND scan, because the first cannot see the shape that will
+        // actually happen. `simulatedWorker` is the LAST of five constructor
+        // parameters, so any future parameter shifts its position — and a
+        // positional call carries no label at all, which is the only thing the
+        // token scan above matches on. MEASURED before this existed:
+        // `new ProcessExecutor("php", 300, 0.9, null, true)` was reported ZERO
+        // times by the scan that claims production cannot select the
+        // simulation.
+        //
+        // The threshold is READ OFF the constructor rather than written down,
+        // so adding a parameter cannot silently retune the guard.
+        $simulatedPosition = null;
+        foreach ((new \ReflectionMethod(ProcessExecutor::class, '__construct'))->getParameters() as $parameter) {
+            if ($parameter->getName() === 'simulatedWorker') {
+                $simulatedPosition = $parameter->getPosition();
+            }
+        }
+        $this->assertIsInt($simulatedPosition, 'ProcessExecutor no longer has a simulatedWorker parameter');
+
+        $scanPositional = static function (string $source) use ($simulatedPosition): int {
+            $tokens = token_get_all($source);
+            $count = 0;
+
+            foreach ($tokens as $i => $token) {
+                $isName = \is_array($token)
+                    && \in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+                    && ($token[1] === 'ProcessExecutor' || str_ends_with($token[1], '\\ProcessExecutor'));
+                if (!$isName) {
+                    continue;
+                }
+
+                $j = $i - 1;
+                while ($j >= 0 && \is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                    --$j;
+                }
+                if (!\is_array($tokens[$j] ?? null) || $tokens[$j][0] !== T_NEW) {
+                    continue;
+                }
+
+                $k = $i + 1;
+                while ($k < \count($tokens) && \is_array($tokens[$k]) && $tokens[$k][0] === T_WHITESPACE) {
+                    ++$k;
+                }
+                if (!\is_string($tokens[$k] ?? null) || $tokens[$k] !== '(') {
+                    continue;
+                }
+
+                $depth = 0;
+                $commas = 0;
+                for (; $k < \count($tokens); ++$k) {
+                    $t = $tokens[$k];
+                    if (\is_string($t) && ($t === '(' || $t === '[')) {
+                        ++$depth;
+                        continue;
+                    }
+                    if (\is_string($t) && ($t === ')' || $t === ']')) {
+                        if (--$depth === 0) {
+                            break;
+                        }
+                        continue;
+                    }
+                    if ($depth === 1 && \is_string($t) && $t === ',') {
+                        ++$commas;
+                    }
+                }
+
+                // More separators than the simulation flag's index means the
+                // flag itself was supplied, whatever it was supplied as.
+                if ($commas >= $simulatedPosition) {
+                    ++$count;
+                }
             }
 
             return $count;
@@ -1171,6 +1396,20 @@ final class ProcessExecutorTest extends TestCase
         $this->assertSame(0, $scan($read), 'reading the property is not an opt-in');
         $nullsafe = "<?php\n\$s = \$e?->simulatedWorker;\n";
         $this->assertSame(0, $scan($nullsafe), 'a nullsafe read is not an opt-in either');
+        $explicitDefault = "<?php\n\$e = new ProcessExecutor(simulatedWorker: false);\n";
+        $this->assertSame(0, $scan($explicitDefault), 'spelling out the default is not an opt-in');
+
+        // And the positional scan, in both polarities.
+        $positional = "<?php\n\$e = new ProcessExecutor('php', 300, 0.9, null, true);\n";
+        $this->assertSame(1, $scanPositional($positional), 'the positional scanner is dead');
+        $qualified = "<?php\n\$e = new \\SugarCraft\\Crush\\Agents\\ProcessExecutor('php', 300, 0.9, null, true);\n";
+        $this->assertSame(1, $scanPositional($qualified), 'a qualified name is the same construction');
+        $short = "<?php\n\$e = new ProcessExecutor('php', 300);\n";
+        $this->assertSame(0, $scanPositional($short), 'a call that stops short of the flag is not an opt-in');
+        $nested = "<?php\n\$e = new ProcessExecutor('php', max(1, 2), 0.9);\n";
+        $this->assertSame(0, $scanPositional($nested), 'commas inside an argument are not arguments');
+        $notNew = "<?php\nProcessExecutor::class;\n";
+        $this->assertSame(0, $scanPositional($notNew), 'a class-name mention is not a construction');
 
         $srcRoot = \dirname(__DIR__, 2) . '/src';
         $offenders = [];
@@ -1183,7 +1422,7 @@ final class ProcessExecutorTest extends TestCase
             ++$files;
             $source = file_get_contents($file->getPathname());
             $this->assertIsString($source);
-            if ($scan($source) > 0) {
+            if ($scan($source) > 0 || $scanPositional($source) > 0) {
                 $offenders[] = substr($file->getPathname(), \strlen($srcRoot) + 1);
             }
         }
