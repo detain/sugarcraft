@@ -65,6 +65,55 @@ final class ClaudeCodeMcpClient
     private const READ_CHUNK_SIZE = 8192;
 
     /**
+     * How long {@see sendMessage()} waits on a `select()` slice before looking
+     * at the clock again. Small enough that the idle bound below has resolution,
+     * large enough not to be a spin — the loop is not otherwise throttled,
+     * because a writable pipe makes `stream_select()` return immediately.
+     */
+    private const WRITE_POLL_MICROS = 20000;
+
+    /**
+     * How long the child may accept ZERO stdin bytes before the write gives up.
+     *
+     * AN IDLE BOUND, DELIBERATELY, AND NOT A TOTAL ONE. A child that keeps
+     * taking bytes is never abandoned however long the message is, so this
+     * cannot cut off a large-but-progressing `tools/call`. What it does bound is
+     * the one shape both siblings leave open: a LIVE child that has stopped
+     * reading, where `stream_select()` times out every {@see WRITE_POLL_MICROS},
+     * the `$ready === 0` branch continues, and no liveness check is consulted at
+     * all — MEASURED for {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()}'s
+     * null-deadline path, which ends at the child's death and at nothing else
+     * (see point (d) of that method's doc-block for the generator).
+     *
+     * ⚠️ STDERR TRAFFIC IS NOT PROGRESS, and that is the sharp edge. A server
+     * that floods fd 2 forever while never reading fd 0 is exactly the "live,
+     * chatty, never answering" shape {@see \SugarCraft\Crush\MCP\StdioMcpServer::start()}
+     * documents, and counting the drain as progress would let it hold this loop
+     * open indefinitely. Only bytes the child TOOK reset the clock. Both
+     * polarities are pinned in
+     * {@see \SugarCraft\Crush\Tests\ClaudeCodeMcpClientStdinWedgeTest}.
+     *
+     * A POLICY NUMBER, NOT A MEASUREMENT: nothing in this tree derives 15.0. It
+     * is chosen to be far above any scheduling hiccup on a local pipe and far
+     * below the "indefinite" this loop would otherwise inherit.
+     */
+    private const WRITE_IDLE_SECONDS = 15.0;
+
+    /**
+     * How many CONSECUTIVE `stream_select()` failures {@see sendMessage()} will
+     * absorb before treating the write as lost.
+     *
+     * `stream_select()` answers `false` for EINTR — a signal arrived — which is
+     * a retry and not an error. Without a ceiling a persistently failing select
+     * spins here forever. Same instrument and same count as
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::MAX_CONSECUTIVE_SELECT_FAILURES}
+     * and its `LspConnection` twin; see the former for the measurement of which
+     * half of the condition actually fires (the liveness check is dormant, the
+     * count is the exit).
+     */
+    private const MAX_CONSECUTIVE_SELECT_FAILURES = 10000;
+
+    /**
      * How much of the server's stderr is kept for diagnostics.
      *
      * 64 KiB is one pipe buffer on this host, which is the natural unit: it is
@@ -80,6 +129,44 @@ final class ClaudeCodeMcpClient
      * talking", and the reason a process gives is the last thing it says.
      */
     private string $stderrTail = '';
+
+    /**
+     * Bytes read from the child's stdout that do not yet end in a newline.
+     *
+     * A PROPERTY, NOT A LOCAL, AND THAT IS A FIX. {@see readMessages()} kept this
+     * buffer on its own stack frame, so a message whose line had not arrived
+     * whole by the time the method returned was DISCARDED — and the next call
+     * then parsed the remainder as a fragment. MEASURED on this host (PHP 8.3.6,
+     * Linux 6.8), one fixture generator with two arms differing only in whether
+     * the child's line crosses a poll boundary, three consecutive takes each:
+     *
+     *     whole line + newline in one write  ->  1 message seen
+     *     half, 400ms pause, rest + newline  ->  0 messages seen (LOST)
+     *
+     * Both arms poll for 1.8s, which is the shape {@see callTool()} and
+     * {@see listTools()} drive (100 attempts, 10 ms apart). A stdio server has no
+     * obligation to flush a response in one `write(2)`, so the second arm is the
+     * ordinary case for any reply larger than a pipe's worth — and the symptom
+     * was `RuntimeException: No response received`, which reads as a dead server.
+     */
+    private string $readBuffer = '';
+
+    /**
+     * Does the child's stdin hold a FRAGMENT that nothing has terminated?
+     *
+     * Set when {@see sendMessage()} gives up part-way through a message. The
+     * framing here is NDJSON, so — unlike `Content-Length` — the stream has a
+     * resynchronisation point and a fragment is not terminal. But it is not free
+     * either: MEASURED, three consecutive takes, a 200068-byte message against a
+     * 65536-byte pipe capacity leaves 65536 bytes in the pipe, and the NEXT
+     * message's bytes are appended to them, so the child reads ONE 65578-byte
+     * line that is unparseable and BOTH messages are lost.
+     *
+     * So the next send leads with a bare newline. That costs the child one
+     * malformed line it was going to get anyway, and buys back the message that
+     * would otherwise have been eaten closing the fragment.
+     */
+    private bool $stdinFragmentPending = false;
 
     /** @param array<string, mixed>|null $initialOptions */
     public function __construct(
@@ -223,7 +310,49 @@ final class ClaudeCodeMcpClient
     }
 
     /**
-     * Send a raw message and flush.
+     * Send a raw message, DRAINING STDERR AS IT GOES, and either write all of it
+     * or say so.
+     *
+     * THIS WAS A SINGLE `fwrite()` CHECKED WITH `!==  strlen()`, and that is the
+     * third member of the family {@see \SugarCraft\Crush\MCP\StdioMcpServer::writeLine()}
+     * and {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()} closed
+     * before it. The symptom here is different from both, because {@see connect()}
+     * puts fd 0 in NON-BLOCKING mode: there was no hang. There was a SHORT WRITE
+     * reported as a failure with the prefix already in the child's pipe.
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive takes,
+     * identical — a `tools/call` carrying 200000 bytes of arguments:
+     *
+     *     payload 200068 bytes  ->  fwrite() returned 65536 (the pipe capacity)
+     *     the child then read ONE 65578-byte line, unparseable
+     *
+     * 65578, not 65536, is the whole finding: the next message this client sent
+     * supplied the newline that terminated the fragment, so it was consumed INTO
+     * the malformed line and lost with it. One short write costs two messages.
+     *
+     * THREE DIFFERENCES FROM THE NDJSON SIBLING, and they are why this is not a
+     * copy of `writeLine()`:
+     *
+     *  a. STDERR IS DRAINED UNCONDITIONALLY ONCE PER PASS RATHER THAN SELECTED
+     *     ON. `StdioMcpServer` tracks stderr's EOF in a `$stderrOpen` flag, so it
+     *     can keep fd 2 in the read set and take it out when the child closes it;
+     *     leaving a closed stderr in a `select()` read set makes it permanently
+     *     "readable" and turns the loop into a spin. This class has no such flag,
+     *     and {@see drainStderr()} is non-blocking and bounded at 16 reads, so
+     *     calling it every pass costs nothing and needs no EOF bookkeeping — the
+     *     same choice `LspConnection::writeMessage()` makes for the same reason.
+     *  b. THE BOUND IS IDLE, NOT TOTAL. See {@see WRITE_IDLE_SECONDS}. The
+     *     sibling accepts an unbounded write on {@see \SugarCraft\Crush\MCP\StdioMcpServer::callTool()}'s
+     *     path on the grounds that a tool call is somebody else's real work; that
+     *     is the right instinct and the wrong instrument, because the work
+     *     happens AFTER the child has read the request, and a child that has read
+     *     nothing for fifteen seconds is not doing the work — it is not there.
+     *  c. A PARTIAL WRITE IS RECOVERABLE HERE. `Content-Length` framing has no
+     *     resynchronisation point, which is why `LspConnection` latches the
+     *     session dead. NDJSON resynchronises at the next newline, so this class
+     *     records {@see $stdinFragmentPending} and the next send leads with one.
+     *
+     * @throws RuntimeException if the client is not connected, or the message
+     *         could not be written in full
      */
     public function sendMessage(McpMessage $message): void
     {
@@ -231,21 +360,162 @@ final class ClaudeCodeMcpClient
             throw new RuntimeException('MCP client not connected');
         }
 
-        /** @var array<int, resource> $pipes */
-        $pipes = $this->getPipes();
-        $json = $message->toJson() . "\n";
-        $written = fwrite($pipes[0], $json);
+        // TERMINATE A FRAGMENT LEFT BY AN EARLIER GIVE-UP BEFORE ANYTHING ELSE
+        // GOES OUT — see {@see $stdinFragmentPending} for the measurement of what
+        // it costs not to. Cleared optimistically: if this write also gives up
+        // part-way the flag is set again below, and if it gives up before its
+        // first byte the fragment is still unterminated, which the `$sent === 0`
+        // branch restores.
+        $prefix = $this->stdinFragmentPending ? "\n" : '';
+        $this->stdinFragmentPending = false;
 
-        if ($written === false || $written !== strlen($json)) {
-            throw new RuntimeException('Failed to write to MCP process stdin');
+        $payload = $prefix . $message->toJson() . "\n";
+        $total = strlen($payload);
+        $sent = $this->writeAll($payload, self::WRITE_IDLE_SECONDS);
+
+        if ($sent === $total) {
+            return;
         }
 
-        fflush($pipes[0]);
+        // Partial only if something went out. Nothing written is a LOST message
+        // and leaves the stream where it was — including a fragment from an
+        // earlier failure, which is still waiting for its newline.
+        $this->stdinFragmentPending = $sent > 0 || $prefix !== '';
+
+        throw new RuntimeException(sprintf(
+            'Failed to write to MCP process stdin: %d of %d bytes went out%s',
+            $sent,
+            $total,
+            $sent > 0
+                ? '; the next send leads with a newline to resynchronise the stream'
+                : '; the message was lost and the stream is unchanged',
+        ));
     }
 
     /**
-     * Read any buffered messages from stdout.
-     * Uses newline-delimited JSON parsing.
+     * Push `$payload` at the child's stdin until it is gone or the loop gives
+     * up, and report how many bytes actually went out.
+     *
+     * The byte COUNT rather than a bool because {@see sendMessage()} has to tell
+     * "lost" from "half-sent", and those want different repairs.
+     *
+     * ⚠️ `$idleSeconds` HAS NO DEFAULT, AND THAT IS NOT COSMETIC. It is the same
+     * decision E480 forced on
+     * {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()}: a bound with
+     * a default is a bound a caller inherits without choosing, and the whole
+     * subject of this loop is a write that ran unbounded because nobody had to
+     * say. The one production caller passes {@see WRITE_IDLE_SECONDS}; the tests
+     * pass a small one so the row that pins the bound does not cost the suite
+     * fifteen seconds to observe a property that is about the CLOCK and not
+     * about the number.
+     *
+     * @param float $idleSeconds how long the child may accept ZERO bytes before
+     *        this gives up. Stderr traffic does not reset it — see
+     *        {@see WRITE_IDLE_SECONDS}.
+     */
+    private function writeAll(string $payload, float $idleSeconds): int
+    {
+        /** @var array<int, resource> $pipes */
+        $pipes = $this->getPipes();
+
+        if (!is_resource($pipes[0])) {
+            return 0;
+        }
+
+        $total = strlen($payload);
+        $lastProgress = microtime(true);
+        $consecutiveSelectFailures = 0;
+
+        while ($payload !== '') {
+            if (microtime(true) - $lastProgress >= $idleSeconds) {
+                return $total - strlen($payload);
+            }
+
+            // BEFORE the select, every pass. A child parked in `write(2)` on a
+            // full stderr pipe has not read its stdin either, so this is what
+            // makes the write below able to make progress at all — and it is
+            // deliberately NOT counted as progress, see {@see WRITE_IDLE_SECONDS}.
+            $this->drainStderr();
+
+            $write = [$pipes[0]];
+            $read = [];
+            $except = [];
+
+            // `@` for EINTR: a signal arriving mid-select is a retry, and under
+            // `failOnWarning="true"` the warning alone would red a passing run.
+            $ready = @stream_select($read, $write, $except, 0, self::WRITE_POLL_MICROS);
+
+            if ($ready === false) {
+                $consecutiveSelectFailures++;
+
+                if (!self::childIsRunning($this->process)
+                    || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
+                    return $total - strlen($payload);
+                }
+
+                usleep(1000);
+
+                continue;
+            }
+
+            $consecutiveSelectFailures = 0;
+
+            if ($ready === 0 || $write === []) {
+                continue;
+            }
+
+            // A dead child closes the read end; writing then raises a "broken
+            // pipe" notice. Suppressed — the failed write is the signal.
+            $written = @fwrite($pipes[0], $payload);
+
+            if ($written === false) {
+                return $total - strlen($payload);
+            }
+
+            if ($written === 0) {
+                // Reported writable and took nothing: a spurious wakeup. Yield
+                // rather than spinning. NOT progress, so the idle clock runs on.
+                usleep(1000);
+
+                continue;
+            }
+
+            $lastProgress = microtime(true);
+            $payload = substr($payload, $written);
+        }
+
+        fflush($pipes[0]);
+
+        return $total;
+    }
+
+    /**
+     * Is the server child still there? A LIVENESS check, deliberately not a
+     * timeout: {@see writeAll()}'s EINTR branch needs to tell "a signal
+     * interrupted the select" from "there is nobody left to write to", and
+     * elapsed time answers neither.
+     *
+     * @param resource|null $process
+     */
+    private static function childIsRunning($process): bool
+    {
+        if (!is_resource($process)) {
+            return false;
+        }
+
+        return (bool) proc_get_status($process)['running'];
+    }
+
+    /**
+     * Read whatever complete NDJSON lines the child has produced since last time.
+     *
+     * THE PARTIAL LINE SURVIVES THE CALL, and it used not to. The accumulator was
+     * a LOCAL, so a reply that had not arrived whole by the time this method
+     * returned was thrown away with the stack frame — see {@see $readBuffer} for
+     * the two-arm measurement. Nothing about the child was wrong in that case:
+     * a stdio server is under no obligation to put a response on the wire in one
+     * `write(2)`, and {@see callTool()} polls this method a hundred times, so
+     * crossing a poll boundary is the ordinary case rather than the corner.
      *
      * @return list<McpMessage>
      */
@@ -258,34 +528,42 @@ final class ClaudeCodeMcpClient
         /** @var array<int, resource> $pipes */
         $pipes = $this->getPipes();
         $messages = [];
-        $buffer = '';
 
         // BEFORE stdout. A child blocked writing to a full stderr pipe has not
         // written its next stdout byte either, so draining fd 2 first is what
         // makes the loop below able to make progress at all.
         $this->drainStderr();
 
-        // Read available bytes from stdout
+        // `is_resource()`, NOT `@`: `fread()` on an fclose'd pipe raises a
+        // TypeError, and `@` does not suppress an exception. Same guard and same
+        // measurement as {@see drainStderr()}.
+        if (!is_resource($pipes[1])) {
+            return [];
+        }
+
         while (true) {
             $chunk = fread($pipes[1], self::READ_CHUNK_SIZE);
             if ($chunk === false || $chunk === '') {
                 break;
             }
-            $buffer .= $chunk;
+            $this->readBuffer .= $chunk;
+        }
 
-            // Process complete newline-delimited JSON messages
-            $lines = explode("\n", $buffer);
-            $buffer = array_pop($lines);
+        // SPLIT ONCE, AFTER THE READS, rather than inside the loop. The old shape
+        // re-split a growing accumulator on every chunk, which was quadratic in
+        // the number of chunks and — far worse — put the "keep the tail" step
+        // somewhere the tail could not outlive.
+        $lines = explode("\n", $this->readBuffer);
+        $this->readBuffer = (string) array_pop($lines);
 
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if ($line === '') {
-                    continue;
-                }
-                $msg = McpMessage::parse($line);
-                if ($msg !== null) {
-                    $messages[] = $msg;
-                }
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            $msg = McpMessage::parse($line);
+            if ($msg !== null) {
+                $messages[] = $msg;
             }
         }
 
@@ -353,6 +631,11 @@ final class ClaudeCodeMcpClient
         $this->process = null;
         $this->pipes = null;
         $this->connected = false;
+        // The half-line and the unterminated fragment both belong to a session
+        // that no longer exists; carrying either into a reconnect would put a
+        // stranger's bytes at the head of the next server's first message.
+        $this->readBuffer = '';
+        $this->stdinFragmentPending = false;
     }
 
     public function isConnected(): bool
