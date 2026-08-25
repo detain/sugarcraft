@@ -955,7 +955,8 @@ final class EngineBackend implements Backend, ReportsContextWindow
                 // reply crosses as a `token` frame and $streamed is set here by
                 // the branch below - MEASURED, replacing the whole
                 // `$streamed ? null : $onToken` at the settle site with a bare
-                // null is green. The fallback this non-latch protects is
+                // null is green across the ENTIRE suite, not merely the tests
+                // that name this method. The fallback this non-latch protects is
                 // dormant, and
                 // {@see \SugarCraft\Crush\Tests\Backend\ReasoningProgressTest::testEveryByteOfTheReplyReachesTheTokenChannel()}
                 // is what will say so the day it stops being.
