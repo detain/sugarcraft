@@ -170,7 +170,7 @@ final class ChildLifetimeScanner
      * @return array{
      *     sites: list<array{
      *         line:int, function:string, lifetime:string, reason:string,
-     *         fds:list<int>|null, highFds:list<int>
+     *         closedBy:string|null, fds:list<int>|null, highFds:list<int>
      *     }>,
      *     unresolved: list<array{line:int, function:string, kind:string}>
      * }
@@ -251,7 +251,8 @@ final class ChildLifetimeScanner
                 continue;
             }
 
-            [$lifetime, $reason] = self::classifyLifetime($tokens, $i, $close, $functions);
+            $closedBy = null;
+            [$lifetime, $reason] = self::classifyLifetime($tokens, $i, $close, $functions, $closedBy);
             $fds = self::specFds($tokens, $open, $close, $functions, $i);
 
             $sites[] = [
@@ -259,6 +260,7 @@ final class ChildLifetimeScanner
                 'function' => self::functionName($functions, $i),
                 'lifetime' => $lifetime,
                 'reason' => $reason,
+                'closedBy' => $closedBy,
                 'fds' => $fds,
                 'highFds' => $fds === null ? [] : \array_values(\array_filter($fds, static fn (int $fd): bool => $fd >= 3)),
             ];
@@ -293,10 +295,25 @@ final class ChildLifetimeScanner
      *
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      * @param list<array{name:string,from:int,to:int}> $functions
+     * @param ?string $closedBy out-param: the {@see CLOSING_HELPERS} key that
+     *                           produced a {@see LIFETIME_SHORT} verdict, or
+     *                           null when the verdict came from a literal
+     *                           `proc_close()` or is not short at all. E425:
+     *                           `DescriptorInheritanceGuardTest` drops every
+     *                           short site, so a wrong row in that roster
+     *                           deletes a finding with no trace anywhere. This
+     *                           is the trace. It is deliberately NOT derived
+     *                           from the reason sentence - prose is what the
+     *                           reader gets, never what an instrument parses.
      * @return array{0:string,1:string}
      */
-    private static function classifyLifetime(array $tokens, int $at, int $close, array $functions): array
-    {
+    private static function classifyLifetime(
+        array $tokens,
+        int $at,
+        int $close,
+        array $functions,
+        ?string &$closedBy = null,
+    ): array {
         $enclosing = TokenFunctionRanges::enclosing($functions, $at);
         $floor = $enclosing['from'] ?? 0;
         $end = $enclosing['to'] ?? \count($tokens) - 1;
@@ -329,7 +346,7 @@ final class ChildLifetimeScanner
             ];
         }
 
-        return self::classifyLocal($tokens, $close, $end, $target);
+        return self::classifyLocal($tokens, $close, $end, $target, $closedBy);
     }
 
     /**
@@ -361,8 +378,13 @@ final class ChildLifetimeScanner
      * @param list<array{0:int,1:string,2:int}|string> $tokens
      * @return array{0:string,1:string}
      */
-    private static function classifyLocal(array $tokens, int $from, int $end, string $variable): array
-    {
+    private static function classifyLocal(
+        array $tokens,
+        int $from,
+        int $end,
+        string $variable,
+        ?string &$closedBy = null,
+    ): array {
         $unconditionalCloser = null;
         $conditionalCloser = null;
         $escapes = [];
@@ -505,6 +527,15 @@ final class ChildLifetimeScanner
         }
 
         if ($unconditionalCloser !== null) {
+            // THE ONLY PLACE A ROSTER ROW CAN TURN AN EXPOSED SPAWN SHORT, and
+            // therefore the only place worth recording. A literal
+            // `proc_close()` is the language closing the child and needs no
+            // provenance; a CLOSING_HELPERS key is somebody's claim about a
+            // method in another file, and E425 is what it costs when that
+            // claim is wrong and invisible.
+            $rostered = \strtolower($unconditionalCloser);
+            $closedBy = isset(self::CLOSING_HELPERS[$rostered]) ? $rostered : null;
+
             return [
                 self::LIFETIME_SHORT,
                 $unconditionalCloser . '(' . $variable . ') runs unconditionally in the same function',

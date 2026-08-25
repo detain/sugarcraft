@@ -9,10 +9,11 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
 /**
- * No `proc_open()` child in `src/` may outlive the call that spawned it while
- * its descriptor spec declines to say anything about fd 3 and above.
+ * No `proc_open()` child in this package's `src/`, or in a reachable sibling
+ * library's, may outlive the call that spawned it without a row here saying
+ * why that is acceptable.
  *
- * WHY THE PAIR AND NOT EITHER HALF. `proc_open()` remaps only the fds its spec
+ * WHY LIFETIME AND NOT THE SPEC. `proc_open()` remaps only the fds its spec
  * names; the child inherits every other descriptor the parent had open. For a
  * child closed where it was spawned that lasts microseconds. For an MCP
  * server, a language server or a session daemon it lasts as long as the child
@@ -21,13 +22,43 @@ use RecursiveIteratorIterator;
  * on an EOF that never came, after a green run. Two measurements were lost to
  * it, one of 11.5 hours.
  *
- * NO COUNT IS ASSERTED ANYWHERE IN THIS FILE, deliberately. E366's HIGH list
- * was five sites on the day it was written, and the round that acted on it had
- * four of those files open in another lane. A census pinned to "five" reds on
- * the commit that lands the fix, and the red looks like the fixer's defect
- * rather than the instrument's brittleness. What is asserted is the SHAPE:
- * every exposed spawn is either handled or carries a row here saying why not,
- * and every row still matches something.
+ * WHAT THIS HEADLINE USED TO SAY, and it is the round's finding rather than a
+ * tidy-up: "...while its descriptor spec declines to say anything about fd 3
+ * and above". WHAT IS TRUE NOW, measured by
+ * {@see testNamingAHighFdDoesNotStopTheInheritance()} rather than reasoned
+ * about: a spec that DOES say something about fd 3 is not safer in any
+ * respect. proc_open() replaces the descriptors named and inherits the rest,
+ * so naming fd 3 moves one descriptor and leaves fd 4 upwards untouched, and
+ * the parent's fd numbering is a runtime property no source-level spec can
+ * enumerate. The old headline described a condition this guard skipped on,
+ * which made "append one array element" a complete and undetectable way to
+ * delete any row below. WHY THE SPEC IS STILL READ AT ALL: an UNREADABLE spec
+ * is still a real finding of its own
+ * ({@see testNoDescriptorSpecInSrcIsUnreadable()}), and what a spec does name
+ * is useful detail on a failure. It is detail, never an exemption.
+ *
+ * NO CENSUS OF THE TREE IS ASSERTED IN THIS FILE, deliberately, WITH ONE
+ * EXCEPTION THAT IS ALSO DELIBERATE. E366's HIGH list was five sites on the
+ * day it was written, and the round that acted on it had four of those files
+ * open in another lane. A census pinned to "five" reds on the commit that
+ * lands the fix, and the red looks like the fixer's defect rather than the
+ * instrument's brittleness. What is asserted is the SHAPE: every exposed spawn
+ * is either handled or carries a row here saying why not, and every row still
+ * matches something.
+ *
+ * WHAT THIS PARAGRAPH USED TO SAY, and it is now a trap rather than doctrine:
+ * "NO COUNT IS ASSERTED ANYWHERE IN THIS FILE". WHAT IS TRUE NOW:
+ * {@see testEveryExposedSpawnInAReachableLibIsAccountedFor()} asserts the
+ * sibling walk saw more than a hundred files before believing what it did not
+ * find there. WHY THAT ONE EARNS ITS PLACE AND MUST NOT BE DELETED BY SOMEBODY
+ * QUOTING THE SENTENCE ABOVE AT IT: it is a LOWER BOUND far beneath what the
+ * closure actually holds, not an equality, so no fix and no lane's merge can
+ * carry the tree across it. The only thing that can is a walk pointed at
+ * nothing, which is the one thing it exists to catch - the arm it guards
+ * asserts a set is EMPTY, and a walk over zero files returns an empty set
+ * every bit as convincingly as a healthy closure does. A lower bound has none
+ * of the brittleness this paragraph is about; an equality would have all of
+ * it.
  *
  * THE ROSTER IS KEYED BY SYMBOL, NOT BY LINE. Line numbers in this tree rot
  * inside one round; `File.php::method` survives everything except a rename,
@@ -44,12 +75,34 @@ use RecursiveIteratorIterator;
 final class DescriptorInheritanceGuardTest extends TestCase
 {
     /**
-     * Spawns whose child outlives the call with nothing said about fd 3+.
+     * Spawns whose child outlives the call, and that no other row covers.
+     *
+     * WHAT THIS LINE USED TO SAY: "...with nothing said about fd 3+". WHAT IS
+     * TRUE NOW: {@see exposedIn()} stopped reading the spec as a condition in
+     * round 54, so membership here is decided by the child's LIFETIME alone -
+     * a row can perfectly well hold a site whose spec names fd 3, fd 9, or
+     * nothing at all. WHY THE OLD SENTENCE COULD NOT SIMPLY BE LEFT STANDING:
+     * it is still true of all seven rows below, by accident, because no site
+     * here happens to name a high fd. A definition that has stopped matching
+     * its code but still matches today's data is precisely the kind that
+     * survives a careful reading, and the reader it misleads is the one adding
+     * the eighth row.
      *
      * A ROW IS NOT AN EXCUSE, IT IS A RECORD. Everything here is E366's own
      * finding, kept where the instrument can see it go stale rather than in a
      * backlog file nothing executes. Deleting a row because it is inconvenient
      * makes the guard red, not green.
+     *
+     * ⚠️ THERE IS ONE WAY TO CLOSE A ROW HERE AND IT IS NOT THE OBVIOUS ONE.
+     * Until round 54 a row could be retired by appending an fd of 3 or above
+     * to the spawn's descriptor spec, which {@see exposedIn()} treated as
+     * handled. It is not: `proc_open()` replaces the descriptors its spec
+     * names and inherits every one it does not, so the append moved one fd and
+     * left the leak whole - measured in
+     * {@see testNamingAHighFdDoesNotStopTheInheritance()}. A row closes when
+     * the CHILD'S LIFETIME closes, by reaping it in the function that spawned
+     * it. E417 asked for all seven of these to be closed by naming fds; that
+     * measurement is why none of them were.
      *
      * EVERY ROW CARRIES A COUNT, and it is spent one site at a time. WHAT THIS
      * MAP USED TO BE: `File.php::function => reason`, with membership tested
@@ -140,6 +193,208 @@ final class DescriptorInheritanceGuardTest extends TestCase
     ];
 
     /**
+     * Where a reachable sibling library's sources live.
+     *
+     * `vendor/sugarcraft` IS THE REACHABILITY DEFINITION, not the monorepo
+     * directory beside this package - the same choice, for the same reason, as
+     * {@see \SugarCraft\Crush\Tests\TtyStreamArgumentCensusTest}. A lib
+     * nothing requires cannot spawn anything in this process whatever it
+     * contains, and a lib that IS required is here whether it arrived as a
+     * path-repo symlink (the monorepo, and CI's injection) or as a Packagist
+     * copy (a split-repo clone). Pointing at `../` instead would be a hard
+     * fatal in a split clone, which is the same class of mistake as a
+     * `repositories[]` entry in a published manifest.
+     */
+    private const LIB_SCOPE = 'vendor/sugarcraft';
+
+    /**
+     * Exposed spawns in reachable SIBLING libraries. E418.
+     *
+     * WHY THE GUARD WIDENED. Round 53 built this instrument, rostered seven
+     * sites, and scoped it to `sugar-crush/src` - and the defect class is not
+     * a sugar-crush property. The rows below are what the widening found, and
+     * most of them are in candy-pty, which every PTY-driven child in the tree
+     * goes through.
+     *
+     * NO CENSUS FIGURE IS WRITTEN IN THIS DOC-BLOCK, which is a correction
+     * rather than an omission. WHAT IT USED TO SAY: "8 spawn sites outside
+     * this package, 3 of them exposed". WHAT IS TRUE NOW: that was correct on
+     * the day it was written and any sibling's merge invalidates it, in a
+     * sentence no test reads. WHY THE INFORMATION IS NOT LOST: this roster IS
+     * the figure, and {@see testNoReachableLibRowIsStale()} re-derives it
+     * against the tree on every run - which a sentence cannot do.
+     *
+     * WHAT "REACHABLE" MEANS, TWICE OVER, AND NEITHER HALF IS A CHOICE MADE
+     * HERE. Which LIBRARIES: whatever `vendor/sugarcraft` holds, i.e. what
+     * this package requires - see {@see LIB_SCOPE}. Which FILES INSIDE ONE:
+     * the autoload roots that library's own `composer.json` declares, read by
+     * {@see autoloadRoots()} rather than assumed to be `src`. The distinction
+     * matters because the second half used to be unstated: the walk went to
+     * `<lib>/src` and nothing said why, which is the same shape as the
+     * exemption this round removed - a narrowing nobody had argued for.
+     *
+     * WHAT THAT DERIVATION LEAVES OUT, measured rather than waved at.
+     * `autoload-dev` is deliberately not read, and that is what puts a
+     * sibling's `tests/` out of scope: Composer registers `autoload-dev` for
+     * the ROOT package only, so a lib's own tests cannot be loaded from this
+     * process however many spawns they contain. `examples/` appears in no
+     * autoload section of any lib in the closure and is unreachable for the
+     * same reason - stated rather than left to be inferred, because
+     * candy-focus's examples do hold exposed spawns and a reader who found
+     * them would otherwise think this guard had missed them.
+     *
+     * THE GAP THIS ARGUMENT DOES NOT COVER, because "loadable" is not the same
+     * as "runs and inherits our descriptors": code a lib EXECS. candy-pty
+     * ships `bin/pty-shim.php` and `Spawn.php::wrapInShim()` runs it as a
+     * child, so that shim inherits this process's descriptors and anything it
+     * spawned would inherit them again - and no arm of this guard reads it.
+     * Measured on this tree: the shim mentions `proc_open` twice and both are
+     * prose in comments, so the scanner reports no site and no unresolved
+     * appearance there. That is a measurement of today, not a guarantee, and
+     * it is filed rather than fixed here.
+     *
+     * A ROW HERE IS A DIFFERENT ANIMAL FROM ONE IN {@see ACCOUNTED_FOR}, and
+     * the split into two rosters is the whole point rather than tidiness.
+     * A sugar-crush row is a deferral: this package could fix it and has
+     * chosen not to yet. A row here is a REPORT: sugar-crush cannot fix
+     * candy-pty from inside its own test suite, and a fix pushed from here
+     * would be an edit to a file this package does not own. What this roster
+     * buys is that the site cannot appear, move or multiply without somebody
+     * seeing it - which is precisely what was missing before.
+     *
+     * ⚠️ THIS ROSTER COUNTS CODE OTHER LANES OWN. It reads through
+     * `vendor/sugarcraft`, whose entries are symlinks into the monorepo, so a
+     * sibling's edit reds THIS suite. That is intended and it is also a merge
+     * hazard, so read {@see testEveryExposedSpawnInAReachableLibIsAccountedFor()}'s
+     * message before touching anything: the resolution is always a data edit
+     * here plus a finding filed against the lib, and never a narrowing of
+     * LIB_SCOPE.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    /**
+     * The highest fd the child probe looks at, single-sourced.
+     *
+     * IT IS IN A CONSTANT BECAUSE IT APPEARS IN FOUR PLACES and one of them is
+     * a failure message. The child's loop, the "name every fd" spec, and the
+     * two messages that tell a reader what was and was not searched all have
+     * to mean the same number; spelled four times, the message is the one that
+     * rots, and a message naming the wrong window sends the next reader after
+     * the wrong cause. Rule 4's shape, one level down from line numbers.
+     *
+     * WHY 40 AND NOT MORE. The probe OPENS a descriptor per fd it tests, so
+     * the ceiling is also a cost. Sampled during a full suite run the process
+     * held nothing above the teens, so 40 is roughly double the observed high
+     * water mark - loose enough not to be luck, cheap enough to run per test.
+     * If the marker ever lands above it the first assertion below reds, which
+     * is why that message names the window rather than only the two causes it
+     * used to offer.
+     */
+    private const PROBE_FD_CEILING = 40;
+
+    private const ACCOUNTED_FOR_IN_LIBS = [
+        'candy-core/WorkerPool.php::spawnWorker' => [
+            'count' => 1,
+            'reason' => 'pool worker held in $this->workers and drained from the ReactPHP loop, '
+                . 'so it outlives spawnWorker() by design. The scanner reads it as unclassified '
+                . 'rather than long because the handle goes to is_resource() first. Spec is '
+                . '0,1,2 only. NOT FIXABLE FROM THIS PACKAGE - candy-core owns it.',
+        ],
+        'candy-pty/Spawn.php::proc' => [
+            'count' => 1,
+            'reason' => 'the PTY child, whose three stdio descriptors are all the one open slave '
+                . 'stream; the handle is kept for the life of the pty. Spec names 0,1,2 only, so '
+                . 'anything the parent holds above that goes into a child that by design lives '
+                . 'as long as the terminal does. NOT FIXABLE FROM THIS PACKAGE.',
+        ],
+        'candy-pty/Posix/PosixProcess.php::spawn' => [
+            'count' => 1,
+            'reason' => 'the same shape one layer down, and the spec here is the more '
+                . 'interesting one: it already names fd 0 as a file and routes 1 and 2 to pipes '
+                . 'or the real STDOUT/STDERR, which shows the author thinking about descriptors '
+                . 'and still saying nothing about 3+. NOT FIXABLE FROM THIS PACKAGE.',
+        ],
+    ];
+
+    /**
+     * Sites that are short ONLY because a CLOSING_HELPERS row says so.
+     *
+     * E425, AND IT IS THE STRUCTURAL REASON THE PREVIOUS ROUND'S FINDING WAS
+     * EXPENSIVE TO FIND. {@see exposedIn()} drops every {@see
+     * ChildLifetimeScanner::LIFETIME_SHORT} site, which is correct - a child
+     * reaped in the function that spawned it is not the shape this guard is
+     * about. But "short" has two provenances and they are not equally
+     * trustworthy. A literal `proc_close($h)` is the language ending the
+     * child. A {@see ChildLifetimeScanner::CLOSING_HELPERS} row is a PERSON'S
+     * CLAIM about a method in another file, made at a glance, from its name -
+     * and the scanner's own doc-block says so: "this is the one roster whose
+     * rows can HIDE a finding rather than raise one".
+     *
+     * Before this roster existed those two were spelled the same way in the
+     * output and the second vanished without trace: a wrong row promoted an
+     * exposed spawn to short, `exposedIn()` dropped it, and nothing anywhere
+     * recorded that a judgement had been relied on. The count is the size of
+     * the reliance, for the same reason {@see ACCOUNTED_FOR}'s is.
+     *
+     * A ROW HERE IS NOT AN EXEMPTION FROM ANYTHING - the site is already not
+     * reported. It is a receipt. Adding a CLOSING_HELPERS row costs a row in a
+     * receipt roster too, which is the point: the promotion has to be written
+     * down somewhere a reviewer reads.
+     *
+     * THIS ROSTER IS THIS PACKAGE'S HALF ONLY. WHAT THE SENTENCE ABOVE USED TO
+     * SAY: that adding a CLOSING_HELPERS row costs a row HERE. WHAT IS TRUE
+     * NOW: E418 widened the exposure arm to the reachable closure and this
+     * receipt arm was not widened with it, so for the length of one round a
+     * promotion inside a sibling library cost nothing anywhere - E425 reopened
+     * at the scope the same round had just created. Measured: an exposed spawn
+     * appended to candy-mosaic's src and closed by a rostered helper left this
+     * guard green; the byte-identical injection into this package's own src
+     * reddened it. WHY THE SENTENCE STILL EARNS ITS PLACE: the argument was
+     * always right and only its scope was wrong. The sibling half now lives in
+     * {@see SHORT_VIA_HELPER_IN_LIBS}, kept separate for the reason the two
+     * exposure rosters are kept separate.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    private const SHORT_VIA_HELPER = [
+        'Providers/ClaudeCodeProvider.php::completeStream' => [
+            'count' => 1,
+            'reason' => 'reaped by ProcessReaper::terminateAndClose() in a generator finally, '
+                . 'which runs on normal completion, on an exception, and on a consumer that '
+                . 'breaks out of the foreach and destroys the generator mid-body. The short '
+                . 'verdict rests entirely on the CLOSING_HELPERS row for that helper; if that '
+                . 'row is ever wrong this site is a long-lived exposed spawn and nothing else '
+                . 'in this file would say so.',
+        ],
+    ];
+
+    /**
+     * The same receipt, for a reachable sibling library. E425 at E418's scope.
+     *
+     * EMPTY BY MEASUREMENT, NOT BY OMISSION, and that distinction is why the
+     * constant exists now rather than being invented when the first row is
+     * needed. Measured over the reachable closure: no spawn in any sibling
+     * library is promoted to short by a CLOSING_HELPERS row today - every
+     * short verdict out there rests on a literal proc_close().
+     *
+     * AN EMPTY ROSTER ASSERTED AGAINST A TREE THAT HAPPENS TO BE EMPTY IS
+     * WORTH NOTHING, which is the whole of rule 15 and the reason
+     * {@see testEveryHelperPromotedShortVerdictInAReachableLibIsRecorded()}
+     * pushes a known-positive fixture through the SAME accounting function in
+     * the same test, and refuses to believe the walk until it has seen a
+     * closure's worth of files.
+     *
+     * SEPARATE FROM {@see SHORT_VIA_HELPER} for the reason the two exposure
+     * rosters are separate. A row there is a promotion inside code this
+     * package owns and could undo. A row here is a promotion inside code it
+     * cannot edit, where the CLOSING_HELPERS claim being wrong is somebody
+     * else's bug and this package's leak.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    private const SHORT_VIA_HELPER_IN_LIBS = [];
+
+    /**
      * Appearances of the name that are not calls, and what each one is.
      *
      * The rule-14 half. `function_exists('proc_open')` is a capability probe,
@@ -164,6 +419,21 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'reason' => 'function_exists() capability probe for a build with proc_open disabled',
         ],
     ];
+
+    /**
+     * The rule-14 half, for a reachable sibling library.
+     *
+     * EMPTY BY MEASUREMENT: the reachable closure holds no appearance of the
+     * name that is not a direct global call today. This arm was the last one
+     * left reading `src/` only after E418 widened the exposure arm, and an
+     * indirectly-reached spawn is the one shape whose descriptor spec nothing
+     * can see at all - so leaving it narrow meant the least visible defect
+     * class kept the narrowest scope. Its liveness rests on the same fixture
+     * control the src twin uses, run in the same test.
+     *
+     * @var array<string, array{count:int, reason:string}>
+     */
+    private const NOT_A_SPAWN_IN_LIBS = [];
 
     /**
      * A synthetic spawn whose answer is known before the scanner is asked.
@@ -195,12 +465,53 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * Without it a scanner that flags unconditionally would satisfy every
      * assertion above by reporting the whole tree, and reddening correct code
      * is how the next real offender buys its exemption.
+     *
+     * WHAT THIS FIXTURE USED TO BE, because the swap is the whole finding: a
+     * long-lived spawn whose spec named `3 => ['file', '/dev/null', 'r']`,
+     * asserted NOT exposed under the sentence "a spec that names fd 3 is
+     * handled". WHAT IS TRUE NOW: that source is
+     * {@see KNOWN_POSITIVE_HIGH_FD} and is asserted EXPOSED, because naming
+     * fd 3 replaces fd 3 and leaves fd 4 upwards inherited - measured in
+     * {@see testNamingAHighFdDoesNotStopTheInheritance()}. WHY A NEGATIVE
+     * STILL EARNS ITS PLACE: the polarity argument above is unaffected and
+     * still needs a case that is genuinely fine. A child drained and
+     * `proc_close()`d in the function that spawned it is that case, and it is
+     * the ONLY shape this guard has ever had a real reason to pass - the
+     * inheritance window is the body of one function rather than the life of
+     * a daemon.
      */
     private const KNOWN_NEGATIVE = <<<'PHP'
         <?php
         class Fixture {
-            private $process;
             public function knownNegative(array $pipes): void {
+                $process = @proc_open(['srv'], [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ], $pipes);
+                proc_close($process);
+            }
+        }
+        PHP;
+
+    /**
+     * The spec that used to buy an exemption, and now buys a finding.
+     *
+     * THIS IS THE HOLE THE ROUND CLOSED, kept executable rather than described.
+     * `exposedIn()` skipped every site whose spec named an fd of 3 or above,
+     * so the cheapest way to make any row here disappear was to append one
+     * element to an array - no reaping, no closing, no change to what the child
+     * inherits. The guard's own failure text recommended it, first of two
+     * resolutions, in capitals.
+     *
+     * Its counterpart {@see KNOWN_NEGATIVE} is what keeps this from being a
+     * scanner that simply flags everything.
+     */
+    private const KNOWN_POSITIVE_HIGH_FD = <<<'PHP'
+        <?php
+        class Fixture {
+            private $process;
+            public function highFdNamed(array $pipes): void {
                 $this->process = @proc_open(['srv'], [
                     0 => ['pipe', 'r'],
                     1 => ['pipe', 'w'],
@@ -267,7 +578,19 @@ final class DescriptorInheritanceGuardTest extends TestCase
         self::assertSame(
             [],
             $this->exposedIn(self::KNOWN_NEGATIVE),
-            'A spec that names fd 3 is handled; flagging it would red correct code.',
+            'A child closed in the function that spawned it is not exposed; flagging it would '
+                . 'red correct code, and reddening correct code is how the next real offender '
+                . 'buys its exemption.',
+        );
+        self::assertSame(
+            ['highFdNamed'],
+            \array_column($this->exposedIn(self::KNOWN_POSITIVE_HIGH_FD), 'function'),
+            'NAMING A HIGH FD MUST NOT BUY AN EXEMPTION. proc_open() replaces the descriptors '
+                . 'its spec names and inherits every one it does not, so a spec naming fd 3 '
+                . 'leaves fd 4 upwards exactly as exposed as before - measured in '
+                . 'testNamingAHighFdDoesNotStopTheInheritance(). If this returns [] the escape '
+                . 'hatch is back and every row in ACCOUNTED_FOR can be deleted by appending one '
+                . 'array element that changes nothing.',
         );
 
         // THE ALLOWANCE IS SPENT ONE SITE AT A TIME, pushed through the SAME
@@ -304,15 +627,41 @@ final class DescriptorInheritanceGuardTest extends TestCase
         }
 
         self::assertSame([], $unaccounted, <<<'TEXT'
-            A proc_open() child here outlives the call and its descriptor spec says
-            nothing about fd 3 and above, so it inherits every descriptor this
-            process had open at spawn - E365's shape.
+            A proc_open() child here outlives the call that spawned it, and no row
+            in ACCOUNTED_FOR covers it. For as long as that child runs it holds
+            every descriptor this process had open at the moment of the spawn -
+            E365's shape.
 
-            TWO WAYS TO RESOLVE THIS, AND BOTH ARE FINE:
+            WHAT THE SPEC NAMES IS NOT WHY THE SITE IS LISTED. The bracket in each
+            line below reports the fds the spec does name, because it is useful
+            detail when you go and read the code. It is detail only: this guard
+            stopped testing it in round 54, and no addition to it will take a site
+            off this list.
 
-              1. NAME THE FDS in the spec so the child cannot inherit them, and
-                 this row disappears on its own.
-              2. ADD A ROW to ACCOUNTED_FOR with the reason it is acceptable, or
+            ⚠️ NAMING FDS IN THE SPEC IS NOT A RESOLUTION, and this message used
+            to say it was - in capitals, as the first of two. proc_open() REPLACES
+            the descriptors its spec names and inherits every one it does not, so
+            appending `3 => ['file', '/dev/null', 'r']` swaps fd 3 in the child and
+            leaves fd 4 upwards precisely as inherited as they were. Measured, not
+            argued: testNamingAHighFdDoesNotStopTheInheritance() in this file
+            spawns real children and shows a parent handle surviving the "fixed"
+            spec. Until this round that spec ALSO silenced this guard, which made
+            it the cheapest way to delete a row without changing anything.
+
+            THREE WAYS TO RESOLVE THIS:
+
+              1. REAP THE CHILD in the function that spawned it - proc_close(), or
+                 a helper rostered in ChildLifetimeScanner::CLOSING_HELPERS. This
+                 does not stop the inheritance; it BOUNDS it to one function body
+                 instead of the life of a daemon, and that is the whole difference
+                 E365 turned on. The row disappears on its own.
+              2. DO NOT HOLD AN INHERITABLE DESCRIPTOR ACROSS THE SPAWN. Measured
+                 on PHP 8.3.6 / Linux 6.8.0-138-generic: proc_open()'s own pipe
+                 parent-ends already carry O_CLOEXEC and cannot leak into a later
+                 child, but a plain fopen() handle, a stream_socket_pair() and the
+                 CLI's own script fd are all inheritable. If the long-lived child
+                 must exist, the fix lives at whatever is holding those open.
+              3. ADD A ROW to ACCOUNTED_FOR with the reason it is acceptable, or
                  RAISE THE COUNT on the row that is already there. A DATA EDIT IN
                  THIS FILE - not a reason to relax the check, and not a reason to
                  make the scanner quieter.
@@ -326,6 +675,173 @@ final class DescriptorInheritanceGuardTest extends TestCase
             handle. That is a failure, not an absence: work out where the handle
             goes and either fix it or say so in a row.
             TEXT);
+    }
+
+    /**
+     * The same question, asked of every reachable sibling library. E418.
+     *
+     * SPLIT FROM THE SUGAR-CRUSH ARM RATHER THAN FOLDED INTO IT. The two
+     * rosters mean different things - a deferral this package could act on
+     * versus a report about somebody else's file - and a single failure
+     * message cannot tell a reader which kind they are looking at. They also
+     * go red for different reasons: this one reds when a SIBLING changes,
+     * which a person resolving a sugar-crush merge would otherwise spend a
+     * while blaming on their own diff.
+     */
+    public function testEveryExposedSpawnInAReachableLibIsAccountedFor(): void
+    {
+        // Rule 15, in this test rather than a neighbouring one: what follows is
+        // an assertion that a set is empty, and an empty set is what a walk
+        // over nothing returns just as well as a healthy tree.
+        self::assertSame(
+            ['knownPositive'],
+            \array_column($this->exposedIn(self::KNOWN_POSITIVE), 'function'),
+            'the instrument is dead; the absence asserted below is worthless until this passes.',
+        );
+
+        $licences = \array_map(static fn (array $row): int => $row['count'], self::ACCOUNTED_FOR_IN_LIBS);
+
+        $unaccounted = [];
+        $scanned = 0;
+        foreach ($this->libSourceFiles() as $relative => $source) {
+            $scanned++;
+            foreach ($this->overspent($source, $relative, $licences, true) as $detail) {
+                $unaccounted[] = $detail;
+            }
+        }
+
+        // The walk finding no files at all would satisfy the assertion below
+        // perfectly, and is exactly what a renamed vendor directory looks like.
+        $this->assertLibWalkIsLive($scanned);
+
+        self::assertSame([], $unaccounted, <<<'TEXT'
+            A proc_open() child in a SIBLING LIBRARY outlives the call that spawned
+            it, and no row in ACCOUNTED_FOR_IN_LIBS covers it. For as long as that
+            child runs it holds every descriptor this process had open at the moment
+            of the spawn - E365's shape, in a package sugar-crush cannot edit from
+            here. What the spec names is reported in the bracket beside the finding
+            as detail, never as the reason it is listed.
+
+            YOU ARE PROBABLY RESOLVING A MERGE. This guard reads through
+            vendor/sugarcraft, which in the monorepo is a symlink into the tree, so
+            a change in candy-pty or candy-core reds THIS suite. That is deliberate
+            (E418) and the diff in front of you is very likely not the cause.
+
+            THE RESOLUTION IS ALWAYS BOTH HALVES:
+
+              1. A DATA EDIT to ACCOUNTED_FOR_IN_LIBS here - a new row, or a higher
+                 count on the row already there.
+              2. A FINDING FILED AGAINST THAT LIBRARY, because a row here records
+                 the exposure and fixes nothing. Reaping the child in the function
+                 that spawned it is the fix; naming high fds in the spec is NOT one,
+                 for the reason testNamingAHighFdDoesNotStopTheInheritance() measures.
+
+            NARROWING LIB_SCOPE IS NOT A RESOLUTION - widening it is the only reason
+            a sibling's spawn is visible from here at all, and every round before
+            round 54 had none of them in view.
+
+            DO NOT READ THIS GUARD AS COVERING THE MONOREPO. It covers the REACHABLE
+            closure, which is a strict subset of it, and there are exposed spawns in
+            libraries outside that closure which no guard anywhere is watching.
+            ACCOUNTED_FOR_IN_LIBS' doc-block says what the scope does and does not
+            reach.
+            TEXT);
+    }
+
+    /**
+     * No row in {@see ACCOUNTED_FOR_IN_LIBS} may match nothing.
+     *
+     * Separate from the arm above for the reason its sugar-crush twin is: an
+     * assertion that a set is empty cannot notice an instrument that returns
+     * nothing, and a row matching nothing is the only thing that can.
+     */
+    public function testNoReachableLibRowIsStale(): void
+    {
+        $seen = [];
+        foreach ($this->libSourceFiles() as $relative => $source) {
+            foreach ($this->exposedIn($source) as $site) {
+                $key = $relative . '::' . $site['function'];
+                $seen[$key] = ($seen[$key] ?? 0) + 1;
+            }
+        }
+
+        $wrong = [];
+        foreach (self::ACCOUNTED_FOR_IN_LIBS as $key => $row) {
+            self::assertNotSame('', \trim($row['reason']), $key . ' is recorded without a reason.');
+            $found = $seen[$key] ?? 0;
+            if ($found !== $row['count']) {
+                $wrong[] = $key . ': recorded ' . $row['count'] . ', found ' . $found;
+            }
+        }
+
+        self::assertSame([], $wrong, <<<'TEXT'
+            A row about a sibling library no longer matches what the scanner finds
+            there.
+
+            FOUND FEWER (0 included): that library fixed it, renamed it, or removed
+            it - delete the row and say so. OR the scanner stopped seeing it and
+            this row is the only thing that noticed.
+
+            FOUND MORE: the function grew another exposed spawn. Read it before
+            raising the number.
+            TEXT);
+    }
+
+    /**
+     * The reachability of a FILE is read off a manifest, in both polarities.
+     *
+     * The lib arms above assert that a walk found nothing wrong, and a walk
+     * pointed at the wrong directory finds nothing wrong very reliably. The
+     * `> 100` floor catches a walk pointed at nothing at all; this catches the
+     * subtler half - a derivation that quietly answers `src` whatever the
+     * manifest says, or quietly answers nothing whatever the manifest says.
+     * Both directions are pinned because a rule verified in one is half a rule.
+     */
+    public function testAutoloadRootsAreDerivedFromTheManifest(): void
+    {
+        self::assertSame(
+            ['src'],
+            self::autoloadRoots(['autoload' => ['psr-4' => ['SugarCraft\\Pty\\' => 'src/']]]),
+            'the ordinary shape every lib in the closure uses today; if this is wrong the walk '
+                . 'is scanning the wrong files and every absence it reports is empty.',
+        );
+
+        self::assertSame(
+            ['bin/boot.php', 'lib', 'map', 'other'],
+            self::autoloadRoots(['autoload' => [
+                'psr-4' => ['A\\' => 'lib/', 'B\\' => ['lib/', 'other/']],
+                'classmap' => ['map/'],
+                'files' => ['bin/boot.php'],
+            ]]),
+            'every autoload kind contributes, a list-valued psr-4 prefix contributes each of its '
+                . 'paths, and duplicates collapse. A derivation that reads only psr-4 would miss '
+                . 'a classmap, which is a perfectly ordinary way to ship loadable code.',
+        );
+
+        self::assertSame(
+            [],
+            self::autoloadRoots(['autoload-dev' => ['psr-4' => ['A\\Tests\\' => 'tests/']]]),
+            'autoload-dev MUST NOT contribute. Composer registers it for the root package only, '
+                . "so a sibling's tests/ is not loadable from this process - and that, rather "
+                . 'than a hard-coded directory name, is why lib test suites are out of scope. If '
+                . "this returns ['tests'] the guard starts reading every sibling's test suite "
+                . 'and reds on spawns that cannot reach this process at all.',
+        );
+
+        self::assertSame(
+            [],
+            self::autoloadRoots(['name' => 'sugarcraft/candy-nothing']),
+            'a manifest with no autoload section makes nothing loadable; the caller turns this '
+                . 'into a loud failure rather than a silent skip.',
+        );
+
+        self::assertSame(
+            [''],
+            self::autoloadRoots(['autoload' => ['psr-4' => ['A\\' => '']]]),
+            'a package-root autoload must survive normalisation as an empty string so the '
+                . 'caller can refuse it. Dropping it here would turn "walk this whole package, '
+                . 'vendor and all" into "walk nothing", silently.',
+        );
     }
 
     /**
@@ -397,20 +913,10 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 . 'would make every real call need a NOT_A_SPAWN row.',
         );
 
-        $unaccounted = [];
-        foreach ($this->sourceFiles() as $relative => $source) {
-            $allowance = [];
-            foreach (ChildLifetimeScanner::scan($source)['unresolved'] as $appearance) {
-                $key = $relative . '::' . $appearance['function'];
-                $allowance[$key] ??= self::NOT_A_SPAWN[$key]['count'] ?? 0;
-                if ($allowance[$key] > 0) {
-                    $allowance[$key]--;
-
-                    continue;
-                }
-                $unaccounted[] = $key . ': ' . $appearance['kind'];
-            }
-        }
+        $unaccounted = $this->unaccountedAppearances(
+            $this->sourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::NOT_A_SPAWN),
+        );
 
         self::assertSame([], $unaccounted, <<<'TEXT'
             The name proc_open appears here as something other than a direct global
@@ -508,6 +1014,243 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * Naming a high fd replaces THAT fd and inherits every other one.
+     *
+     * THE ONE CLAIM IN THIS FILE THAT IS NOT ABOUT SOURCE TEXT. Everything
+     * else here reads tokens and believes what the roster says; this spawns
+     * real children and asks the kernel. It exists because the resolution this
+     * guard used to recommend first - "NAME THE FDS in the spec so the child
+     * cannot inherit them, and this row disappears on its own" - is false, and
+     * a false prescription inside a failure message is worse than no message:
+     * it is a green button that deletes the finding and leaves the defect.
+     *
+     * THE GENERATOR, so the figure is a measurement and not a memory. A marker
+     * file is opened AFTER a spacer, which is what guarantees it cannot land
+     * on fd 3 - the one descriptor the "named" spec below replaces - so the
+     * comparison is not a coin flip on whatever PHPUnit happens to have open.
+     * Identity is `fstat()`'s dev+ino pair rather than a path or an fd number,
+     * because the child is asked whether it can reach the same FILE, which is
+     * the property that matters. The child probes fd 3 up to
+     * {@see PROBE_FD_CEILING} through `php://fd/N`, which is POSIX and does
+     * not need procfs. Three specs are compared: bare, one high fd named, and
+     * every fd in that window named.
+     *
+     * MEASURED at PHP 8.3.6 on Linux 6.8.0-138-generic, three consecutive
+     * takes, identical each time: bare VISIBLE / one named VISIBLE / all named
+     * gone. CI runs this package on ubuntu-latest at 8.3 and 8.4 only
+     * (`scripts/affected-libs.php` puts sugar-crush in neither WINDOWS_LIBS nor
+     * MACOS_LIBS), and the property under test is POSIX descriptor inheritance
+     * across `execve`, not a PHP-version behaviour - so 8.4 is not a claim
+     * being made from an untested box, it is the same kernel call.
+     *
+     * THE THIRD CASE IS NOT A RECOMMENDATION. Naming the whole window does close
+     * the marker, and that is exactly why it is here: it shows the mechanism is
+     * "replace by number", so the only spec that could be trusted is one that
+     * enumerates every descriptor the process holds at the instant of the
+     * spawn. That set is a runtime property. A spec written in source cannot
+     * know it, which is the reason resolution 1 was never available.
+     */
+    public function testNamingAHighFdDoesNotStopTheInheritance(): void
+    {
+        // Opened FIRST so the marker cannot be the fd the "named" spec below
+        // replaces. Without this the whole comparison is luck.
+        //
+        // WHAT THIS USED TO OPEN: `/dev/null`. WHAT IS TRUE NOW: it opens a
+        // real file, because /dev/null is also what the "named" spec puts on
+        // the child's fd 3, and that collision is only invisible here by an
+        // accident of how the suite is launched. WHY THE CHANGE EARNS ITS
+        // PLACE - MEASURED, PHP 8.3.6 on Linux 6.8.0-138-generic, all four
+        // cells: the CLI pins the running script at fd 3 when invoked as
+        // `php <file>` (which is what `vendor/bin/phpunit` is) and does NOT
+        // when invoked as `php -r`. So under phpunit the spacer lands on fd 4
+        // and everything below holds; under any runner with no script fd the
+        // spacer takes fd 3 itself, the bare child and the named child BOTH
+        // see /dev/null there, and the "did the spec take effect" control
+        // below reds with a message blaming the comparison rather than the
+        // descriptor the spacer took. A spacer that is not /dev/null cannot
+        // collide with the spec's /dev/null wherever it lands, so the control
+        // stops depending on the launcher. The refutation itself was never at
+        // risk in either world - only this control was.
+        $spacerPath = (string) \tempnam(\sys_get_temp_dir(), 'sc_r54c_spacer_' . \getmypid() . '_');
+        $spacer = \fopen($spacerPath, 'r');
+        self::assertIsResource($spacer, 'the probe cannot be set up without a spare descriptor.');
+
+        $marker = (string) \tempnam(\sys_get_temp_dir(), 'sc_r54c_inherit_' . \getmypid() . '_');
+        $handle = \fopen($marker, 'r');
+        self::assertIsResource($handle);
+
+        $stat = \fstat($handle);
+        self::assertIsArray($stat);
+        $identity = $stat['dev'] . ':' . $stat['ino'];
+
+        // Stat'd BY PATH rather than read off the spacer, which no longer
+        // points at it. This is the identity the named spec is expected to
+        // put on the child's fd 3.
+        $nullStat = \stat('/dev/null');
+        self::assertIsArray($nullStat);
+        $devNull = $nullStat['dev'] . ':' . $nullStat['ino'];
+
+        $spacerStat = \fstat($spacer);
+        self::assertIsArray($spacerStat);
+
+        // THE PIN ON THE PARAGRAPH ABOVE, and the only assertion here that
+        // reds if somebody "simplifies" the spacer back to /dev/null. It is
+        // not about descriptors at all - it is about the two identities the
+        // fd-3 control compares being distinguishable in the first place.
+        self::assertNotSame(
+            $devNull,
+            $spacerStat['dev'] . ':' . $spacerStat['ino'],
+            'the spacer is /dev/null, which is also what the named spec puts on the child\'s '
+                . 'fd 3. On a runner whose fd 3 is free at this point the spacer takes fd 3, and '
+                . 'the fd-3 control below then compares /dev/null with /dev/null and reds for a '
+                . 'reason that has nothing to do with descriptor inheritance. Open the spacer on '
+                . 'any real file instead.',
+        );
+
+        try {
+            $withBareSpec = $this->descriptorsVisibleToAChild([]);
+            $withHighFdNamed = $this->descriptorsVisibleToAChild([3]);
+            $withEveryFdNamed = $this->descriptorsVisibleToAChild(\range(3, self::PROBE_FD_CEILING));
+        } finally {
+            \fclose($handle);
+            \fclose($spacer);
+            \unlink($marker);
+            \unlink($spacerPath);
+        }
+
+        // THE CONTROL FOR THE CONTROL. Without it the refutation below is
+        // vacuous in the one way that matters: if proc_open had ignored the
+        // high-fd entry entirely, "the marker is still visible with fd 3
+        // named" would be true and would say nothing at all. This asserts the
+        // named spec DID take effect - the child's fd 3 is /dev/null and is
+        // not what the bare run had there - so the surviving marker is a
+        // statement about fd 4 and above rather than about a spec nobody read.
+        self::assertSame(
+            $devNull,
+            $withHighFdNamed[3] ?? 'absent',
+            'the spec naming fd 3 did not take effect, so nothing below is a measurement of '
+                . 'anything. Re-check the probe before reading the refutation.',
+        );
+        self::assertNotSame(
+            $withHighFdNamed[3] ?? 'absent',
+            $withBareSpec[3] ?? 'absent',
+            'the bare run and the named run put the SAME thing on fd 3, so the two cases are '
+                . 'not actually different and the comparison is empty.',
+        );
+
+        self::assertContains(
+            $identity,
+            $withBareSpec,
+            'The premise itself failed: a child spawned with a bare 0,1,2 spec could not reach '
+                . 'a file this process holds open. Nothing below means anything if this fails. '
+                . 'THREE causes, and the cheapest to check is listed first because it is not a '
+                . 'defect at all: (1) the marker landed above fd '
+                . self::PROBE_FD_CEILING . ', which is the whole window the child searches, so '
+                . 'it was never looked for - raise PROBE_FD_CEILING and re-run before reading '
+                . 'this as anything; (2) the probe is broken; (3) descriptors stopped being '
+                . 'inherited across execve, and that one would retire this entire guard.',
+        );
+
+        self::assertContains(
+            $identity,
+            $withHighFdNamed,
+            'THE REFUTATION. Naming fd 3 in the spec was this guard\'s first recommended fix '
+                . 'and an automatic exemption from it. The marker is open at fd 4 or above, and '
+                . 'the child can still reach it, so naming fd 3 changed nothing except which '
+                . 'file sits on fd 3. If this ever fails, proc_open has started closing '
+                . 'unnamed descriptors - re-measure before believing it, and then this guard '
+                . 'gets much smaller.',
+        );
+
+        self::assertNotContains(
+            $identity,
+            $withEveryFdNamed,
+            'The positive control for the mechanism: naming fd 3 through '
+                . self::PROBE_FD_CEILING . ' DOES take the '
+                . 'marker away, which is what proves the two assertions above are about "the '
+                . 'spec did not name that fd" rather than about a probe that cannot see '
+                . 'anything.',
+        );
+    }
+
+    /**
+     * `dev:ino` of every descriptor a child can reach at fd 3 and above.
+     *
+     * The child opens `php://fd/N` rather than listing procfs so the probe
+     * holds on any POSIX box, and reports `fstat()` identity rather than fd
+     * numbers because the caller is asking "can it reach this FILE", to which
+     * the number is irrelevant. Opening a descriptor allocates one, so the
+     * list is deduplicated and read for membership only, never counted.
+     *
+     * THE SPEC IS BUILT HERE FROM A LITERAL RATHER THAN TAKEN AS ONE, and the
+     * caller passes only the high fds to name. Taking the whole spec as a
+     * parameter is what a reader would write first, and
+     * {@see ChildStderrCaptureTest} reds on it - correctly: with the spec
+     * arriving as an argument, no scanner can see where fd 2 goes, and
+     * "unclassified" is that guard refusing to call an unreadable spec a pass.
+     * Naming fd 2 in a literal on the line above the spawn keeps it readable
+     * to an instrument, and the loop that follows can only ADD descriptors at
+     * 3 and above.
+     *
+     * @param list<int> $highFds fd numbers to point at /dev/null in the child
+     * @return array<int, string> child fd number => `dev:ino` of what it reaches
+     */
+    private function descriptorsVisibleToAChild(array $highFds): array
+    {
+        $probe = <<<'CHILD'
+            $seen = [];
+            for ($n = 3; $n <= __CEILING__; $n++) {
+                $f = @fopen('php://fd/' . $n, 'r');
+                if ($f === false) { continue; }
+                $s = @fstat($f);
+                if (is_array($s)) { $seen[] = $n . '=' . $s['dev'] . ':' . $s['ino']; }
+                @fclose($f);
+            }
+            echo implode(" ", $seen);
+            CHILD;
+
+        // The nowdoc above cannot interpolate - its body spells $n, $f and $s,
+        // which a heredoc would expand - so the ceiling is substituted, and
+        // the substitution is CHECKED. A placeholder that silently failed to
+        // match would leave the child scanning a literal that no longer
+        // exists, and a probe that scans nothing reports "not inherited",
+        // which is this guard's one dangerous answer.
+        $probe = \str_replace('__CEILING__', (string) self::PROBE_FD_CEILING, $probe);
+        self::assertStringNotContainsString(
+            '__CEILING__',
+            $probe,
+            'the probe ceiling was not substituted into the child source, so the child would '
+                . 'scan a window that does not parse. Every verdict below would be vacuous.',
+        );
+
+        $spec = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        foreach ($highFds as $fd) {
+            $spec[$fd] = ['null'];
+        }
+
+        $pipes = [];
+        $process = \proc_open([\PHP_BINARY, '-r', $probe], $spec, $pipes);
+        self::assertIsResource($process, 'the descriptor probe could not be spawned.');
+
+        \fclose($pipes[0]);
+        $out = (string) \stream_get_contents($pipes[1]);
+        $err = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($process);
+
+        self::assertSame('', \trim($err), 'the descriptor probe wrote to stderr: ' . $err);
+
+        $reached = [];
+        foreach (\array_filter(\explode(' ', \trim($out))) as $pair) {
+            [$fd, $identity] = \explode('=', $pair, 2);
+            $reached[(int) $fd] = $identity;
+        }
+
+        return $reached;
+    }
+
+    /**
      * The exposed spawns in one source that its licences do not cover.
      *
      * ONE FUNCTION FOR THE FIXTURE AND FOR THE TREE, which is the whole point:
@@ -541,7 +1284,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             }
 
             $over[] = $detailed
-                ? $key . ': ' . $site['lifetime'] . ' - ' . $site['reason']
+                ? $key . ': ' . $site['lifetime'] . ' (' . $site['namedFds'] . ') - ' . $site['reason']
                 : $key;
         }
 
@@ -549,9 +1292,35 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
-     * Sites whose child outlives the call with no fd 3+ named.
+     * Sites whose child outlives the call, whatever the spec names.
      *
-     * @return list<array{function:string,lifetime:string,reason:string}>
+     * WHAT THIS USED TO DO, AND WHY IT NO LONGER DOES IT. It skipped any site
+     * whose spec named an fd of 3 or above - `if ($site['highFds'] !== [])
+     * continue;` - on the belief, written into this file's failure text as the
+     * FIRST recommended resolution and into a fixture named KNOWN_NEGATIVE,
+     * that naming fd 3 stops the child inheriting.
+     *
+     * WHAT IS TRUE NOW, measured rather than reasoned - the generator is
+     * {@see testNamingAHighFdDoesNotStopTheInheritance()}, which spawns real
+     * children on every run of this suite: `proc_open()` REPLACES the
+     * descriptors its spec names and says nothing whatever about the ones it
+     * does not. A parent handle sitting at fd 4 is inherited byte-identically
+     * whether or not the spec names fd 3. Naming ONE high fd therefore bought
+     * no safety at all - it bought an exit from this guard. That is the worst
+     * trade available: the exit is one array element away for anyone who wants
+     * a row to stop failing, it leaves the leak exactly where it was, and
+     * unlike an ACCOUNTED_FOR row it leaves no record that anything was ever
+     * wrong.
+     *
+     * WHY THE PAIR STILL EARNS ITS PLACE. The two-part question the class
+     * doc-block poses - does the child outlive the call, and what does the
+     * spec say about fd 3+ - is still the right question, and the first part
+     * is unchanged. Only the second part's ANSWER was wrong: what the spec
+     * says about fd 3+ is diagnostic detail about one descriptor, never a
+     * clean bill of health for the rest. So `highFds` is still computed and is
+     * now REPORTED on the finding instead of cancelling it.
+     *
+     * @return list<array{function:string,lifetime:string,reason:string,namedFds:string}>
      */
     private function exposedIn(string $source): array
     {
@@ -561,18 +1330,528 @@ final class DescriptorInheritanceGuardTest extends TestCase
             if ($site['lifetime'] === ChildLifetimeScanner::LIFETIME_SHORT) {
                 continue;
             }
-            if ($site['highFds'] !== []) {
-                continue;
-            }
 
             $exposed[] = [
                 'function' => $site['function'],
                 'lifetime' => $site['lifetime'],
                 'reason' => $site['reason'],
+                'namedFds' => $site['fds'] === null
+                    ? 'spec unreadable'
+                    : 'spec names fd ' . \implode(', ', $site['fds']),
             ];
         }
 
         return $exposed;
+    }
+
+    /**
+     * A short verdict that rests on a roster row, and one that does not.
+     *
+     * BOTH POLARITIES IN ONE PAIR. The first is closed by a rostered helper
+     * and must carry provenance; the second is closed by the language itself
+     * and must carry none. A scanner that stamped every short site would make
+     * the roster below meaningless by filling it with `proc_close()` sites,
+     * and one that stamped none would empty it - and an empty roster is what
+     * an absence assertion cannot tell from a healthy tree.
+     */
+    private const KNOWN_SHORT_VIA_HELPER = <<<'PHP'
+        <?php
+        class Fixture {
+            public function viaHelper(array $pipes): void {
+                $h = proc_open('x', [2 => ['pipe', 'w']], $pipes);
+                ProcessReaper::terminateAndClose($h);
+            }
+        }
+        PHP;
+
+    private const KNOWN_SHORT_VIA_PROC_CLOSE = <<<'PHP'
+        <?php
+        class Fixture {
+            public function viaProcClose(array $pipes): void {
+                $h = proc_open('x', [2 => ['pipe', 'w']], $pipes);
+                proc_close($h);
+            }
+        }
+        PHP;
+
+    /**
+     * Every helper-promoted short verdict has a receipt, and every receipt matches.
+     *
+     * {@see SHORT_VIA_HELPER} carries the argument; this is the arithmetic.
+     */
+    public function testEveryShortVerdictThatRestsOnAHelperRowIsRecorded(): void
+    {
+        $viaHelper = ChildLifetimeScanner::scan(self::KNOWN_SHORT_VIA_HELPER)['sites'];
+        self::assertCount(1, $viaHelper, 'the scanner found no site in the helper fixture.');
+        self::assertSame(
+            ChildLifetimeScanner::LIFETIME_SHORT,
+            $viaHelper[0]['lifetime'],
+            'the fixture must be SHORT, or it is not exercising the promotion at all.',
+        );
+        self::assertSame(
+            'processreaper::terminateandclose',
+            $viaHelper[0]['closedBy'],
+            'a short verdict produced by a CLOSING_HELPERS row must name the row. With this '
+                . 'null, the roster below can only ever be empty and the assertion over the '
+                . 'tree is satisfied by an instrument that reports nothing.',
+        );
+
+        $viaProcClose = ChildLifetimeScanner::scan(self::KNOWN_SHORT_VIA_PROC_CLOSE)['sites'];
+        self::assertCount(1, $viaProcClose, 'the scanner found no site in the proc_close fixture.');
+        self::assertSame(ChildLifetimeScanner::LIFETIME_SHORT, $viaProcClose[0]['lifetime']);
+        self::assertNull(
+            $viaProcClose[0]['closedBy'],
+            'a literal proc_close() is the language ending the child, not a judgement about '
+                . 'another file. Stamping it too would fill the roster with sites nobody needs '
+                . 'to review and bury the ones who do.',
+        );
+
+        // THE ACCOUNTING'S OWN CONTROL, through the SAME helper the tree goes
+        // through and in this test. Measured, and it is why this block exists:
+        // with the "not recorded at all" arm deleted outright, the assertion
+        // over the tree stayed GREEN (mutation M7 SURVIVED) - because the one
+        // promotion in src/ today is rostered, so that arm never fires on real
+        // input. An arm that only runs when the tree is already broken is an
+        // arm nothing has ever executed.
+        $fixture = ['fixture.php' => self::KNOWN_SHORT_VIA_HELPER];
+        self::assertSame(
+            ['fixture.php::viaHelper: not recorded at all, found 1'],
+            $this->unrecorded($fixture, []),
+            'an UNROSTERED helper promotion must be reported. If this returns [] a new '
+                . 'CLOSING_HELPERS row can hide a spawn from this guard with nothing written '
+                . 'down anywhere, which is E425 exactly.',
+        );
+        self::assertSame(
+            [],
+            $this->unrecorded($fixture, ['fixture.php::viaHelper' => 1]),
+            'a receipt for one must cover one, or every real row below reads as a defect.',
+        );
+        self::assertSame(
+            ['fixture.php::viaHelper: recorded 2, found 1'],
+            $this->unrecorded($fixture, ['fixture.php::viaHelper' => 2]),
+            'a stale receipt must be reported too - a row that outlived its site is how a dead '
+                . 'scanner goes unnoticed.',
+        );
+
+        foreach (self::SHORT_VIA_HELPER as $key => $row) {
+            self::assertNotSame('', \trim($row['reason']), $key . ' has no reason recorded.');
+        }
+
+        $wrong = $this->unrecorded(
+            $this->sourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::SHORT_VIA_HELPER),
+        );
+
+        self::assertSame([], $wrong, <<<'TEXT'
+            A spawn in src/ is being treated as short-lived - and therefore dropped
+            from this guard entirely - on the strength of a
+            ChildLifetimeScanner::CLOSING_HELPERS row rather than a literal
+            proc_close(). That is allowed. It is not allowed to be invisible.
+
+            NOT RECORDED AT ALL: a CLOSING_HELPERS row was added, or a spawn was
+            changed to use one. Read the helper's source and satisfy yourself that
+            it really closes on EVERY path out of itself - if it closes only
+            sometimes it belongs in BEST_EFFORT_REAPERS instead, which reports the
+            site rather than hiding it - then add a row to SHORT_VIA_HELPER saying
+            what you checked.
+
+            RECORDED BUT NOT FOUND: the site was fixed, renamed, or switched to a
+            literal proc_close() (all good - delete the row), OR the scanner stopped
+            stamping provenance and this row is the only thing that noticed. Find
+            out which before deleting anything.
+            TEXT);
+    }
+
+    /**
+     * Appearances of the name that are not calls and that no licence covers.
+     *
+     * ONE FUNCTION FOR THE FIXTURE AND FOR THE TREE, and now for both scopes,
+     * for the reason {@see overspent()} gives: a licence-spending rule
+     * verified against a synthetic pair and then re-implemented inline for the
+     * real scan is two rules, and the one that matters is the untested one.
+     * This was inline in the src arm until the lib arm needed the same rule.
+     *
+     * @param iterable<string,string> $sources relative path => source
+     * @param array<string,int> $licences key => how many appearances the row covers
+     * @param ?int $scanned out-param, meaningful only after this returns
+     * @return list<string>
+     */
+    private function unaccountedAppearances(
+        iterable $sources,
+        array $licences,
+        ?int &$scanned = null,
+    ): array {
+        $scanned = 0;
+        $allowance = [];
+        $unaccounted = [];
+
+        foreach ($sources as $relative => $source) {
+            $scanned++;
+            foreach (ChildLifetimeScanner::scan($source)['unresolved'] as $appearance) {
+                $key = $relative . '::' . $appearance['function'];
+                $allowance[$key] ??= $licences[$key] ?? 0;
+
+                if ($allowance[$key] > 0) {
+                    $allowance[$key]--;
+
+                    continue;
+                }
+
+                $unaccounted[] = $key . ': ' . $appearance['kind'];
+            }
+        }
+
+        return $unaccounted;
+    }
+
+    /**
+     * The sibling walk actually walked something.
+     *
+     * THE ONE CARDINALITY THIS FILE ASSERTS, and the class doc-block explains
+     * why it is the exception rather than a lapse: a LOWER BOUND far beneath
+     * what the closure holds cannot be carried across by a fix or a merge,
+     * only by a walk pointed at nothing - which is precisely what every lib
+     * arm's empty result would otherwise be indistinguishable from. Shared by
+     * all three lib arms so there is one place to read and one to change.
+     */
+    private function assertLibWalkIsLive(int $scanned): void
+    {
+        self::assertGreaterThan(
+            100,
+            $scanned,
+            'only ' . $scanned . ' sibling source files were scanned, which is too few for this '
+                . 'closure - the walk is pointed somewhere wrong and every absence it reports is '
+                . 'empty. Check LIB_SCOPE, and check that the libraries still declare the '
+                . 'autoload roots libSourceFiles() derives their files from.',
+        );
+    }
+
+    /**
+     * Every helper-promoted short verdict in a sibling library has a receipt.
+     *
+     * E425 HAD A SCOPE HOLE FOR EXACTLY ONE ROUND AND THIS IS IT. Round 54
+     * widened the exposure arm to the reachable closure and left the receipt
+     * arm reading `src/` only, so a spawn in a sibling library hidden behind a
+     * new CLOSING_HELPERS row was invisible with nothing written down
+     * anywhere - which is the sentence E425 was filed to make impossible,
+     * reopened at the scope the same round had just created.
+     *
+     * MEASURED, BOTH DIRECTIONS, BEFORE THIS ARM EXISTED: an exposed spawn
+     * appended to candy-mosaic's src and closed by a rostered helper left the
+     * guard green at 10 tests; the byte-identical injection into this
+     * package's own src reddened it. The asymmetry was the finding.
+     *
+     * SEPARATE FROM ITS SRC TWIN rather than a widened loop inside it, for the
+     * reason the exposure arms are separate: this one reds when SOMEBODY ELSE
+     * changes a file, and a reader who has just been handed a red suite needs
+     * to be told that in the message rather than work it out.
+     */
+    public function testEveryHelperPromotedShortVerdictInAReachableLibIsRecorded(): void
+    {
+        // Rule 15, in THIS test: everything below asserts an absence, and the
+        // roster it checks is empty today - so without a known positive pushed
+        // through the same function, a dead scanner and a clean closure are
+        // the same observation.
+        $fixture = ['fixture.php' => self::KNOWN_SHORT_VIA_HELPER];
+        self::assertSame(
+            ['fixture.php::viaHelper: not recorded at all, found 1'],
+            $this->unrecorded($fixture, []),
+            'the accounting is dead - an unrostered helper promotion was not reported. Every '
+                . 'absence below is worthless until this passes.',
+        );
+        self::assertSame(
+            [],
+            $this->unrecorded($fixture, ['fixture.php::viaHelper' => 1]),
+            'a receipt for one must cover one, or a real row would read as a defect.',
+        );
+
+        $scanned = 0;
+        $wrong = $this->unrecorded(
+            $this->libSourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::SHORT_VIA_HELPER_IN_LIBS),
+            $scanned,
+        );
+        $this->assertLibWalkIsLive($scanned);
+
+        foreach (self::SHORT_VIA_HELPER_IN_LIBS as $key => $row) {
+            self::assertNotSame('', \trim($row['reason']), $key . ' has no reason recorded.');
+        }
+
+        self::assertSame([], $wrong, <<<'TEXT'
+            A spawn in a SIBLING LIBRARY is being treated as short-lived - and so
+            dropped from this guard entirely - on the strength of a
+            ChildLifetimeScanner::CLOSING_HELPERS row rather than a literal
+            proc_close(). That is allowed. It is not allowed to be invisible.
+
+            YOU ARE PROBABLY RESOLVING A MERGE. This arm reads through
+            vendor/sugarcraft, so a change in candy-pty or candy-core reds THIS
+            suite and the diff in front of you is very likely not the cause.
+
+            NOT RECORDED AT ALL: a CLOSING_HELPERS row was added, or a library
+            changed a spawn to use one. Read that helper's source and satisfy
+            yourself it closes on EVERY path out of itself - if it closes only
+            sometimes it belongs in BEST_EFFORT_REAPERS, which reports the site
+            instead of hiding it - then add a row to SHORT_VIA_HELPER_IN_LIBS
+            naming the library and what you checked.
+
+            RECORDED BUT NOT FOUND: the library fixed it, renamed it, or switched
+            to a literal proc_close() (all good - delete the row), OR the scanner
+            stopped stamping provenance and this row is the only thing that
+            noticed. Find out which before deleting anything.
+            TEXT);
+    }
+
+    /**
+     * The rule-14 arm, asked of every reachable sibling library.
+     *
+     * THE LAST ARM LEFT AT THE OLD SCOPE. E418 widened the exposure arm and
+     * E425's receipt followed it; this one did not, and it is the arm about
+     * the shape whose descriptor spec nothing can read AT ALL - a spawn
+     * reached through a variable function, a callable string or a method.
+     * Leaving it narrow gave the least visible defect class the narrowest
+     * scope, which is the wrong way round.
+     *
+     * The closure holds no such appearance today, so this arm is green on an
+     * empty set - which is why the fixture control below is not optional.
+     */
+    public function testEveryAppearanceThatIsNotACallInAReachableLibIsAccountedFor(): void
+    {
+        $fixture = ['fixture.php' => self::KNOWN_POSITIVE_NOT_A_CALL];
+        self::assertSame(
+            [
+                'fixture.php::probe: ' . ChildLifetimeScanner::REF_STRING,
+                'fixture.php::probe: ' . ChildLifetimeScanner::REF_METHOD,
+            ],
+            $this->unaccountedAppearances($fixture, []),
+            'the unresolved half of the instrument is dead; the absence asserted below is '
+                . 'worthless until this passes.',
+        );
+        self::assertSame(
+            [],
+            $this->unaccountedAppearances(['fixture.php' => self::KNOWN_NEGATIVE_PLAIN_CALL], []),
+            'a plain global call is a SITE, not an unresolved appearance; reporting it here '
+                . 'would make every real call in every library need a row.',
+        );
+
+        $scanned = 0;
+        $unaccounted = $this->unaccountedAppearances(
+            $this->libSourceFiles(),
+            \array_map(static fn (array $row): int => $row['count'], self::NOT_A_SPAWN_IN_LIBS),
+            $scanned,
+        );
+        $this->assertLibWalkIsLive($scanned);
+
+        self::assertSame([], $unaccounted, <<<'TEXT'
+            The name proc_open appears in a SIBLING LIBRARY as something other than
+            a direct global call - a method, a static, a string. It is not counted
+            as a spawn and it is not dropped silently either, because an alphabet
+            written to match only the cases already known has a hole shaped exactly
+            like the next defect.
+
+            YOU ARE PROBABLY RESOLVING A MERGE: this arm reads through
+            vendor/sugarcraft, so another library's change reds THIS suite.
+
+            If it really is not a spawn, add a row to NOT_A_SPAWN_IN_LIBS saying
+            what it is. If it IS a spawn reached indirectly, then nothing anywhere
+            can see its descriptor spec, and that is the finding - file it against
+            the library that owns the file.
+            TEXT);
+    }
+
+    /**
+     * Helper-promoted short sites whose receipts do not match, both directions.
+     *
+     * ONE FUNCTION FOR THE FIXTURE AND FOR THE TREE, for the reason
+     * {@see overspent()} gives: a rule verified against a synthetic pair and
+     * then re-implemented inline for the real scan is two rules, and the one
+     * that matters is the untested one.
+     *
+     * @param iterable<string,string> $sources relative path => source
+     * @param array<string,int> $receipts key => how many promotions are recorded
+     * @param ?int $scanned out-param: how many sources were consumed, which the
+     *                      lib arms need because a walk over nothing satisfies
+     *                      an empty result exactly as well as a clean tree does.
+     *                      Only meaningful once this function has returned.
+     * @return list<string>
+     */
+    private function unrecorded(iterable $sources, array $receipts, ?int &$scanned = null): array
+    {
+        $scanned = 0;
+        $seen = [];
+        foreach ($sources as $relative => $source) {
+            $scanned++;
+            foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
+                if ($site['closedBy'] === null) {
+                    continue;
+                }
+                $key = $relative . '::' . $site['function'];
+                $seen[$key] = ($seen[$key] ?? 0) + 1;
+            }
+        }
+
+        $wrong = [];
+        foreach ($receipts as $key => $count) {
+            $found = $seen[$key] ?? 0;
+            if ($found !== $count) {
+                $wrong[] = $key . ': recorded ' . $count . ', found ' . $found;
+            }
+            unset($seen[$key]);
+        }
+        foreach ($seen as $key => $count) {
+            $wrong[] = $key . ': not recorded at all, found ' . $count;
+        }
+
+        return $wrong;
+    }
+
+    /**
+     * Every reachable sibling library's loadable sources, keyed `<lib>/<path>`.
+     *
+     * THE ROOTS ARE READ, NOT ASSUMED. This walk used to go to `<lib>/src`
+     * with nothing saying why, which is an unargued narrowing of exactly the
+     * kind this round removed elsewhere. It now asks each library's own
+     * `composer.json` which directories it autoloads - see
+     * {@see autoloadRoots()} and {@see ACCOUNTED_FOR_IN_LIBS}' doc-block for
+     * what that reaches and what it does not. At the time of writing every
+     * lib in the closure declares `src/` and nothing else, so the file set is
+     * the same one the hard-coded directory produced; the difference is that
+     * a lib which starts autoloading somewhere else is followed without
+     * anybody having to remember this method exists.
+     *
+     * @return iterable<string, string>
+     */
+    private function libSourceFiles(): iterable
+    {
+        $base = \dirname(__DIR__, 2) . '/' . self::LIB_SCOPE;
+
+        // Loud rather than skipped: this suite cannot have loaded without it,
+        // so its absence means the walk is being pointed somewhere new - and a
+        // skip here would silently retire every assertion that reads it.
+        self::assertDirectoryExists($base, self::LIB_SCOPE . ' is missing, so no sibling library can be scanned.');
+
+        $libs = \glob($base . '/*', \GLOB_ONLYDIR) ?: [];
+        \sort($libs);
+
+        foreach ($libs as $lib) {
+            $name = \basename($lib);
+            $manifest = $lib . '/composer.json';
+
+            // Rule 14, and the reason none of these three are `continue`: a
+            // library this package requires but whose roots cannot be derived
+            // is a library silently dropped from every absence assertion
+            // downstream, which is indistinguishable from a clean one.
+            self::assertFileExists(
+                $manifest,
+                $name . ' is in the reachable closure but has no composer.json, so its autoload '
+                    . 'roots cannot be derived and this walk would skip it without saying so.',
+            );
+
+            $decoded = \json_decode((string) \file_get_contents($manifest), true);
+            self::assertIsArray($decoded, $name . '/composer.json did not decode to an array.');
+
+            $roots = self::autoloadRoots($decoded);
+            self::assertNotSame(
+                [],
+                $roots,
+                $name . ' declares no autoload section, so nothing in it is loadable from this '
+                    . 'process - which may well be true, but it has never been true here before '
+                    . 'and the walk must not decide that quietly.',
+            );
+
+            foreach ($roots as $root) {
+                self::assertNotSame(
+                    '',
+                    $root,
+                    $name . ' autoloads from its package root. Walking that would descend into '
+                        . "the library's own vendor/ directory, so this needs a decision rather "
+                        . 'than a default.',
+                );
+
+                $path = $lib . '/' . $root;
+
+                if (\is_file($path)) {
+                    if (\pathinfo($path, \PATHINFO_EXTENSION) === 'php') {
+                        yield $name . '/' . $root => (string) \file_get_contents($path);
+                    }
+
+                    continue;
+                }
+
+                if (!\is_dir($path)) {
+                    continue;
+                }
+
+                $files = [];
+                /** @var \SplFileInfo $file */
+                foreach (new RecursiveIteratorIterator(
+                    new RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+                ) as $file) {
+                    if ($file->isFile() && $file->getExtension() === 'php') {
+                        $files[] = $file->getPathname();
+                    }
+                }
+                \sort($files);
+
+                foreach ($files as $each) {
+                    yield $name . '/' . \substr($each, \strlen($path) + 1)
+                        => (string) \file_get_contents($each);
+                }
+            }
+        }
+    }
+
+    /**
+     * The directories and files a Composer manifest makes loadable.
+     *
+     * PURE, AND SEPARATE FROM THE WALK ON PURPOSE: it is the one part of the
+     * reachability argument that can be pinned against literals instead of
+     * against whatever the closure happens to contain today, so
+     * {@see testAutoloadRootsAreDerivedFromTheManifest()} can assert both
+     * polarities without coupling this file to a sibling's manifest.
+     *
+     * `autoload-dev` IS NOT READ, and that omission is load-bearing rather
+     * than an oversight: Composer registers a package's `autoload-dev` only
+     * when that package is the ROOT of the install, so a sibling library's
+     * `tests/` is not loadable from this process. That is the derived reason
+     * lib test suites are out of this guard's scope, and it is a better reason
+     * than "we walk src".
+     *
+     * An empty path string means the package root; it is returned as-is rather
+     * than dropped, because the caller has to refuse it loudly and a filter
+     * here would turn that refusal into a silent skip.
+     *
+     * @param array<string, mixed> $manifest a decoded composer.json
+     * @return list<string> normalised, unique, sorted; may be empty
+     */
+    private static function autoloadRoots(array $manifest): array
+    {
+        $section = $manifest['autoload'] ?? null;
+        if (!\is_array($section)) {
+            return [];
+        }
+
+        $roots = [];
+
+        foreach (['psr-4', 'psr-0'] as $kind) {
+            /** @var mixed $paths */
+            foreach ((array) ($section[$kind] ?? []) as $paths) {
+                foreach ((array) $paths as $path) {
+                    $roots[] = \rtrim(\trim((string) $path), '/');
+                }
+            }
+        }
+
+        foreach (['classmap', 'files'] as $kind) {
+            /** @var mixed $path */
+            foreach ((array) ($section[$kind] ?? []) as $path) {
+                $roots[] = \rtrim(\trim((string) $path), '/');
+            }
+        }
+
+        $roots = \array_values(\array_unique($roots));
+        \sort($roots);
+
+        return $roots;
     }
 
     /** @return iterable<string, string> relative path => source */

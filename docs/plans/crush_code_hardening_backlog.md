@@ -14532,3 +14532,130 @@ measured this round, `feof()` on a write pipe does NOT report the reader's exit 
 deadline from Eb54-4 through and let it terminate the loop. Pin with a fixture that makes `select()`
 fail repeatedly; note that a coverage-only test here is very hard to write without a signal harness, so
 this may be a documented seam rather than a guarded one.
+### Ec54-1 — `ForkedChildExitConventionTest`'s licence is spent by the FILE, not the site it argues for
+
+**Recorded 2026-08-24 by round 54 lane c.** Severity: instrument granularity. **Measured, and it is NOT
+E423's shape.**
+
+E426 asked whether `ForkedChildExitScanner`'s roster shares E423's key-collision shape — an exemption
+keyed by function that licensed the whole function rather than the one spawn. **It does not**, and the
+difference is the `count`. Both `ForkedChildExitConventionTest::ACCEPTED_BARE_EXIT` and
+`ForkedChildReaperAdoptionTest::UNTRACKED_FORKS_ALLOWED` are keyed by FILE and carry one, and the second
+roster's own doc-block already says why: "A bare file-keyed exemption is a blank cheque — it would
+license every future fork added to the file as well as the one that was argued for." E423 was
+*unbounded* absorption; a count caps absorption at the licensed number whatever the key granularity is.
+
+Measured, three mutations, `--filter ForkedChildExitConventionTest` (scope: these guards, not the suite):
+
+| # | mutation | verdict |
+|---|---|---|
+| M11 | `WorkflowResumptionTest.php` count 2 → 3 | **KILLED** — the count is read |
+| M12 | a second bare exit injected into the already-exempted `ForkedChildTest.php`, new function | **KILLED** — the licence does not absorb it |
+| M13 | the ONE licensed bare exit converted to `exitNow()`, and a fresh bare exit added in a **different function of the same file** — net count unchanged at 1 | **SURVIVED** |
+
+M13 is the residue. The licence is bounded in NUMBER and unbounded in LOCATION, so a licensed site can be
+removed and an unrelated one appear elsewhere in the same file with the roster still green — while the
+reason text, which argues specifically about
+`testPlainExitInAForkedChildNoLongerClobbersRawMode()`, has quietly become false about the site it now
+covers. Compare `DescriptorInheritanceGuardTest::ACCOUNTED_FOR`, which keys `File.php::function` AND
+counts.
+
+**STEP:** re-key both rosters to `File.php::function` and keep the counts. Both files are outside lane
+c's ownership, which is why this is a step and not a commit.
+
+### Ec54-2 — the only spec-level fix for descriptor inheritance is a runtime enumeration, and it is worse than the disease
+
+**Recorded 2026-08-24 by round 54 lane c.** Severity: finding, deliberately not implemented.
+
+E417 is refuted (see the round report): naming individual high fds in a `proc_open()` spec replaces those
+fds and does nothing about the rest. The only spec that *would* work names every descriptor the process
+holds at the instant of the spawn, which is a runtime property — measured, PHP 8.3.6 / Linux
+6.8.0-138-generic: a spec naming 3..40 does take a marker away, one naming only fd 3 does not.
+
+Written out, the runtime form would be roughly `foreach (glob('/proc/self/fd/*') …) $spec[$n] = ['null'];`
+before each of the long-lived spawns. Against it, all measured or read off the code rather than assumed:
+
+- **procfs-only.** No portable PHP API reports the process's open descriptors, and PHP exposes no
+  `fcntl`, so `FD_CLOEXEC` cannot be set from userland either.
+- **It adds descriptors rather than removing them.** Every named fd is an open `/dev/null` in the child.
+  Measured: a child under a 3..8 spec carried one MORE fd than under a bare spec.
+- **It is racy** — anything opened between the `glob()` and the `fork` is inherited anyway.
+- **It would have to exclude the fds `proc_open` is about to dup into place.**
+- **Most of what it would close is already safe.** Measured from `/proc/self/fdinfo`: `proc_open()`'s own
+  pipe parent-ends carry `O_CLOEXEC` (`02000000`) and cannot reach a later child at all. What is
+  inheritable is `fopen()` handles, `stream_socket_pair()` and the CLI's own script fd.
+
+**STEP:** if this is ever worth doing, it belongs at the HOLDER — do not keep a plain `fopen()` handle or
+a socket pair open across a long-lived spawn — not at the seven spawn sites. Recorded so the next reader
+does not re-derive it.
+
+### Ec54-3 — `candy-core/src/Program.php::runExec`'s descriptor spec is unreadable to every instrument
+
+**Recorded 2026-08-24 by round 54 lane c.** Severity: blind spot, out of lane.
+
+`DescriptorInheritanceGuardTest::testNoDescriptorSpecInSrcIsUnreadable()` refuses a spawn whose spec the
+scanner cannot read, on the argument that an unreadable spec is not a clean bill of health but an
+instrument with no opinion — and it explicitly forbids an exemption row for that case. When the guard's
+exposure arm widened to `vendor/sugarcraft` (E418) the unreadability arm was deliberately NOT widened,
+because exactly one site outside this package would red it: `candy-core/src/Program.php::runExec`, whose
+`$descriptors` is assembled by a helper before the call. The site is short-lived, so the exposure window
+is one function body — but nothing is checking which fds it names.
+
+Widening the arm and adding an exemption would contradict the arm's own doctrine, and the fix is a
+candy-core edit. Hence: not done, recorded.
+
+**STEP:** spell the spec where the call can see it, in candy-core, then widen
+`testNoDescriptorSpecInSrcIsUnreadable()` to `LIB_SCOPE` alongside the exposure arm.
+
+### Ec54-4 — three exposed spawns sit in libraries `sugar-crush` cannot reach
+
+**Recorded 2026-08-24 by round 54 lane c.** Severity: finding. **Measured.**
+
+The E418 widening reaches only what `vendor/sugarcraft` contains. Scanning every `*/src` in the monorepo
+with the same instrument found **35 sites, 13 exposed**; seven are sugar-crush's own and three are now
+rostered in `ACCOUNTED_FOR_IN_LIBS`. The remaining three are in packages sugar-crush does not require, so
+no guard anywhere sees them:
+
+- `sugar-dash/src/Plugin/ExternalModule.php::startProcess` — long, spec 0,1,2
+- `sugar-reel/src/Decode/FfmpegDecoder.php::open` — long, spec 0,1,2
+- `sugar-reel/src/AudioPlayer.php::start` — long, spec 0,1,2
+
+Generator: `ChildLifetimeScanner::scan()` over every `<lib>/src/**/*.php`, PHP 8.3.6.
+
+**STEP:** `ChildLifetimeScanner` is a `tests/Support/` class in sugar-crush and cannot be required by a
+lib that does not depend on it. Either promote it into `candy-testing`, where every lib can reach it, or
+copy the guard into `sugar-dash` and `sugar-reel`. The first is the one that does not drift.
+
+### Ec54-5 — the sibling walk follows `autoload`, so code a library EXECS or ships as an example is invisible to it
+
+**Recorded 2026-08-25 by round 54 lane c.** Severity: finding. **Measured.**
+
+`DescriptorInheritanceGuardTest::libSourceFiles()` derives each sibling's files from that library's own
+`composer.json` `autoload` section rather than assuming `src`, and deliberately does not read
+`autoload-dev` — Composer registers `autoload-dev` for the ROOT package only, so a sibling's `tests/`
+genuinely cannot be loaded from this process. That derivation is right, and it is stated at the roster.
+What it leaves out is not `tests/`, and is worth a step of its own.
+
+Measured over the 18 libraries in `sugar-crush/vendor/sugarcraft`, PHP 8.3.6 on Linux 6.8.0-138-generic:
+every one declares `autoload.psr-4 => src` and nothing else, so the walk sees **438** `.php` files. Two
+kinds of real code sit outside that set:
+
+- **Code a library executes as a child rather than loading.** `candy-pty/bin/pty-shim.php` is run by
+  `candy-pty/src/Spawn.php::wrapInShim()`, and it inherits this process's descriptors when it runs. It is
+  in no autoload section, so no instrument reads it. It happens to be clean today — `proc_open` appears
+  in it exactly twice and both are comments — so the gap is currently silent, which is why it needs
+  writing down rather than leaving for the first person whose shim spawns something.
+- **Code shipped as an example.** `candy-focus/examples/focus-ring.php` holds **two** `proc_open()` calls
+  that the scanner classifies as exposed. Unreachable by autoload, so out of the guard's scope by the same
+  derived reason as `tests/` — but unlike `tests/`, an example is code a user is invited to run.
+
+Generator: `autoloadRoots()`'s own logic re-implemented standalone over
+`sugar-crush/vendor/sugarcraft/*/composer.json`, plus `ChildLifetimeScanner::scan()` over the non-autoload
+paths. Both re-run at `c54172f09`.
+
+**STEP:** decide, once, whether "reachable" for this guard means *loadable* (today's answer, derived and
+defensible) or *executable* (which would pull in `bin/` and every `examples/`). If the first, the two
+findings above are real and belong to the libraries that own them. If the second, the walk needs a second
+root list and `Ec54-4`'s promotion of the scanner into `candy-testing` is the cheaper way to get there.
+This is a scope decision, not a defect, and it should not be settled inside a guard's doc-block by
+whoever next touches it.
