@@ -38,10 +38,13 @@ Prediction: `.../workflows/scripts/round57-prediction.txt`, written BEFORE launc
 
 ### 🔴 WHAT IS OUTSTANDING WHEN YOU PICK THIS UP
 
-1. **Plan commits are UNPUSHED.** Everything from `4ecff10d3` onward sits above `origin/master`. Standing
-   correction: **never infer publication state from your own actions** — the user pushes this same working
-   copy from their own terminal, so `git ls-remote origin master` is the only reliable answer, and this
-   line has been wrong in both directions already.
+1. **Publication state, and DO NOT TRUST THIS LINE — re-measure it.** At the round-57 launch,
+   `git ls-remote origin master` answered **`8e8af356a`**: all three round-56 lane merges and the id
+   renumber are PUBLIC, and only the two closing plan commits (`1dea13c4f`, `0df7a0a34`) were above it.
+   **The user pushed this working copy from their own terminal while the supervisor was mid-merge** —
+   which is the third time this file has recorded a publication state that changed under it.
+   **Never infer publication state from your own actions**; `git ls-remote origin master` is the only
+   reliable answer, and this line has now been wrong in both directions.
 2. **E490 is open, with a candidate and no reproducer.** Round 56 found a leaked 5s cap timer on the
    SHARED ReactPHP loop and offered it as a candidate, explicitly not a diagnosis. Steps (a) and (b) — the
    `--testdox` repro loop, and the same loop at `a8acfcc9` — have now been outstanding for two rounds.
