@@ -667,9 +667,29 @@ final class StdioMcpServer implements McpServer
             return false;
         }
 
-        // See {@see readLine()} for the measurement behind this guard; the same
-        // three call shapes are exposed here.
-        if (!is_resource($this->pipes[0]) || ($this->stderrOpen && !is_resource($this->pipes[2]))) {
+        // THE GUARD IS ON FD 0 ONLY, AND THE SHAPE IS THE POINT.
+        //
+        // WHAT THIS SAID: `!is_resource($this->pipes[0]) || ($this->stderrOpen &&
+        // !is_resource($this->pipes[2]))`, i.e. refuse the whole write when EITHER
+        // is closed, citing {@see readLine()} for "the same three call shapes".
+        //
+        // WHAT IS TRUE NOW: the second clause was unreachable AND wrongly shaped.
+        // Unreachable, because this class `fclose()`s a pipe in exactly one place
+        // — {@see closePipes()}, which closes all three — so fd 2 closed implies
+        // fd 0 closed and the first clause short-circuits before the second is
+        // ever evaluated. Wrongly shaped, because if it HAD been reachable it
+        // would have refused a write to a perfectly writable stdin on the
+        // strength of a closed DIAGNOSTIC stream. Stderr is what this loop drains
+        // while it waits; stdin is the job.
+        //
+        // WHY THE FD-2 CHECK STILL EARNS ITS PLACE, moved rather than deleted:
+        // fd 2 is exposed in this method too, inside the loop, where a closed
+        // resource in the read set is the TypeError {@see readLine()} measures.
+        // It is now the same degrade that `readLine()` performs — drop fd 2 from
+        // the select set and carry on writing — instead of a refusal. Pinned in
+        // both polarities by `StdioMcpServerClosedPipeGuardTest`: fd 0 closed
+        // still returns false, fd 2 closed ALONE now completes the write.
+        if (!is_resource($this->pipes[0])) {
             return false;
         }
 
@@ -686,7 +706,10 @@ final class StdioMcpServer implements McpServer
             }
 
             $write = [$this->pipes[0]];
-            $read = $this->stderrOpen ? [$this->pipes[2]] : [];
+            // `is_resource()` as well as the flag, exactly as {@see readLine()}
+            // builds its read set: the flag tracks stderr's EOF, not the
+            // resource's liveness, and they are not the same question.
+            $read = $this->stderrOpen && is_resource($this->pipes[2]) ? [$this->pipes[2]] : [];
             $except = [];
             $seconds = $remaining === null ? self::READ_POLL_SECONDS : (int) $remaining;
             $micros = $remaining === null ? 0 : (int) (($remaining - $seconds) * 1_000_000);

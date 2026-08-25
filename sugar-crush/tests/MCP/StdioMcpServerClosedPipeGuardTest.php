@@ -228,6 +228,85 @@ final class StdioMcpServerClosedPipeGuardTest extends TestCase
     }
 
     /**
+     * FD 2 CLOSED ALONE MUST DEGRADE THE WRITE, NOT REFUSE IT — and this row is
+     * the acceptance test for a FIX, so it mutates the fix rather than the
+     * original defect.
+     *
+     * {@see StdioMcpServer::writeLine()} used to open with
+     * `!is_resource($pipes[0]) || ($stderrOpen && !is_resource($pipes[2]))`,
+     * which is two defects wearing one condition:
+     *
+     *  - UNREACHABLE. This class `fclose()`s a pipe in exactly one place,
+     *    {@see StdioMcpServer::closePipes()}, and that closes all three. So fd 2
+     *    closed implied fd 0 closed, the first clause short-circuited, and the
+     *    second was never evaluated on any path in the tree. The file's other
+     *    rows could not reach it either — they close all three.
+     *  - WRONGLY SHAPED. Had it been reachable it would have abandoned a whole
+     *    message to a healthy stdin because a DIAGNOSTIC stream had gone. Its
+     *    sibling {@see StdioMcpServer::readLine()} got the other resolution for
+     *    the same exposure: drop fd 2 from the select set and carry on. The two
+     *    comments claimed "the same three call shapes"; the resolutions differed
+     *    in kind.
+     *
+     * So the state is reached HERE by closing fd 2 and nothing else — which no
+     * production path does, which is exactly why it needs a row — and the write
+     * is required to COMPLETE, with the server's own reply as the evidence that
+     * it did. Asserting only `true` would be satisfied by a `writeLine()` that
+     * returned true without writing anything.
+     *
+     * `stderrOpen` is deliberately left TRUE. Clearing it would route round the
+     * guard under test instead of exercising it: the flag tracks stderr's EOF,
+     * the `is_resource()` tracks the resource, and the whole finding is that
+     * those are not the same question.
+     */
+    public function testFdTwoClosedOnItsOwnDegradesTheWriteInsteadOfAbandoningIt(): void
+    {
+        $server = $this->startedServer();
+
+        try {
+            /** @var array<int, resource> $pipes */
+            $pipes = (new \ReflectionProperty(StdioMcpServer::class, 'pipes'))->getValue($server);
+            $stderrOpen = new \ReflectionProperty(StdioMcpServer::class, 'stderrOpen');
+
+            $this->assertTrue(
+                $stderrOpen->getValue($server),
+                'the control: start() must have armed the stderr flag, or this row proves nothing '
+                . 'about the flag-plus-resource pair it exists to separate',
+            );
+            $this->assertTrue(is_resource($pipes[0]), 'the control: stdin is open, so a refusal cannot be blamed on it');
+
+            fclose($pipes[2]);
+
+            $this->assertFalse(is_resource($pipes[2]), 'fd 2 did not actually close');
+            $this->assertTrue(
+                $stderrOpen->getValue($server),
+                'the flag cleared itself, so the state under test — flag true, resource gone — '
+                . 'was never actually reached',
+            );
+
+            $writeLine = new \ReflectionMethod($server, 'writeLine');
+            $readLine = new \ReflectionMethod($server, 'readLine');
+
+            $this->assertTrue(
+                $writeLine->invoke($server, '{"jsonrpc":"2.0","id":"77","method":"echo"}', microtime(true) + 5.0),
+                'a closed stderr abandoned a write to a healthy stdin — stderr is the diagnostic '
+                . 'stream and stdin is the job, so this must degrade rather than refuse',
+            );
+
+            $line = $readLine->invoke($server, microtime(true) + 5.0);
+
+            $this->assertIsString($line, 'the server answered nothing, so the write did not actually reach it');
+            $this->assertStringContainsString(
+                '"id":"77"',
+                $line,
+                'writeLine() reported success without putting the message on the wire',
+            );
+        } finally {
+            $server->stop();
+        }
+    }
+
+    /**
      * The window this file is about is a real window, not an argument: after
      * {@see StdioMcpServer::closePipes()} the FIELD is still populated.
      *
