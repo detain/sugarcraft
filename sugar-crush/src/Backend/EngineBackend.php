@@ -103,8 +103,35 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * legitimately carries raw image bytes, so it has to be generous - but a
      * corrupt/truncated header must never make the parent try to buffer an
      * arbitrary length before it notices the stream is garbage.
+     *
+     * THIS IS THE ONLY PLACE THE NUMBER IS WRITTEN, AND THAT IS WHY IT IS
+     * PUBLIC. Three other classes frame a peer's output against the same bound
+     * for the same reason -- {@see \SugarCraft\Crush\LSP\LspConnection},
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} and
+     * {@see \SugarCraft\Crush\ClaudeCodeMcpClient} -- and each now spells
+     * `= EngineBackend::MAX_FRAME_BYTES` rather than repeating the arithmetic.
+     *
+     * WHAT WAS TRUE BEFORE: this constant was `private`, so PHP could not name
+     * it from those files and all three carried their own `64 * 1024 * 1024`
+     * under doc-blocks calling the value "inherited rather than invented". The
+     * inheritance was PROSE. Raising this cap desynchronised the family
+     * silently, and the only thing that could catch it was a reflection test
+     * ({@see \SugarCraft\Crush\Tests\FrameCapFamilyTest}) comparing four
+     * independent literals to each other.
+     *
+     * WHY THIS STILL EARNS ITS PLACE, i.e. why widening the visibility is not
+     * merely convenience: a constant expression referencing another class's
+     * constant is a LOAD-TIME fact, so the family can no longer disagree at
+     * all. The reflection test remains, but its job changed -- it now pins that
+     * every member DERIVES rather than that four literals happen to match.
+     *
+     * ⚠️ PUBLIC HERE MEANS "READABLE BY THE FAMILY", NOT "TUNABLE". Moving this
+     * number moves all four framers at once, which is the intent; the two
+     * suites that assert the concrete value
+     * (`tests/MCP/McpFrameCapTest.php`, `tests/LSP/LspConnectionFrameCapTest.php`)
+     * will red, and that is the deliberate-change signal, not an obstacle.
      */
-    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+    public const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 
     /**
      * {@see reapChild()}'s bounded WNOHANG poll: 20 attempts x 5ms is a 100ms

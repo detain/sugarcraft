@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\LSP;
 
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
@@ -83,33 +84,32 @@ final class LspConnection implements LspConnectionInterface
      * CALLER returns on time while the buffer keeps growing across later calls.
      * There is no symptom until the process dies.
      *
-     * SIXTY-FOUR MEBIBYTES, inherited rather than invented: the same bound
-     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} puts on
+     * SIXTY-FOUR MEBIBYTES, AND THE INHERITANCE IS NOW A LANGUAGE FACT: this
+     * line NAMES {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES}
+     * rather than repeating its arithmetic. The engine puts the same bound on
      * the same question, in that file's own words — "a corrupt/truncated header
      * must never make the parent try to buffer an arbitrary length before it
      * notices the stream is garbage".
      *
-     * WHAT THIS SAID: "inherited rather than invented". WHAT IS TRUE NOW: it is
-     * inherited, but nothing DERIVED it — the engine's constant is `private`, so
-     * PHP cannot name it here and this line spells `64 * 1024 * 1024` as its own
-     * literal, exactly as the other two members of the family do. Raising the
-     * engine's cap would have desynchronised all four without any framing test
-     * noticing. That last clause used to read "while every test stayed green",
-     * which was broader than what was run: MEASURED on PHP 8.3.6 by raising the
-     * engine's constant to 128 MiB and running the two suites that exist to pin
-     * this bound, `tests/MCP/McpFrameCapTest.php` and
-     * `tests/LSP/LspConnectionFrameCapTest.php`, both stayed green. No
-     * whole-suite run was made under that mutation, and at this commit a
-     * whole-suite run under it would go RED, because the test named below now
-     * exists to catch exactly this.
+     * WHAT THIS SAID, TWICE OVER. First: "inherited rather than invented",
+     * which was prose — the value was copied, not derived. Then, after round
+     * 58: "it is inherited, but nothing DERIVED it — the engine's constant is
+     * `private`, so PHP cannot name it here and this line spells
+     * `64 * 1024 * 1024` as its own literal", with a reflection test standing
+     * in for the derivation.
      *
-     * WHY THIS STILL EARNS ITS PLACE: the claim is now CHECKED rather than
-     * asserted — {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} reads the
-     * engine's private constant by reflection and refuses any divergence. Its
-     * roster is DERIVED from the `MAX_FRAME_BYTES` declarations in `src/`, so
-     * there is no list to edit: move both caps, or drop the claim from this
-     * doc-block and stop this class declaring its own constant, in the same
-     * commit.
+     * WHAT IS TRUE NOW: the engine's constant is `public`, this class's
+     * initialiser references it, and a constant expression naming another
+     * class's constant is resolved by PHP itself. The family cannot disagree.
+     *
+     * WHY THE REFLECTION TEST STILL EARNS ITS PLACE — and it does, because its
+     * job CHANGED rather than ended.
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} no longer exists to
+     * compare four literals that happen to match; it exists to pin that every
+     * member DERIVES. Its roster is read off the `MAX_FRAME_BYTES` declarations
+     * in `src/`, so a FOURTH framer that copies this doc-block and spells the
+     * arithmetic joins the family and is reported — which is the only way the
+     * family can still come apart. There is no hand list to edit.
      *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. `Content-Length`
      * framing has no resynchronisation point at all — unlike NDJSON, there is no
@@ -117,7 +117,7 @@ final class LspConnection implements LspConnectionInterface
      * would not merely corrupt one message, it would desynchronise every message
      * after it. {@see LspProtocolException} is raised and the buffer dropped.
      */
-    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+    private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
 
     /**
      * The TAIL of whatever the server has written to stderr.

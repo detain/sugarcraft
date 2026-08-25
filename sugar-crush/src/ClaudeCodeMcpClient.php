@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use RuntimeException;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
@@ -190,11 +191,39 @@ final class ClaudeCodeMcpClient
      * limit for the life of the process, and {@see callTool()} polls
      * {@see readMessages()} a hundred times per call.
      *
-     * SIXTY-FOUR MEBIBYTES, inherited rather than invented: the same bound
-     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} puts on
+     * SIXTY-FOUR MEBIBYTES, AND THE INHERITANCE IS NOW A LANGUAGE FACT: this
+     * line NAMES {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES}
+     * rather than repeating its arithmetic. The engine puts the same bound on
      * the same question, for the same reason — a frame legitimately carries raw
      * image bytes, and a corrupt stream must never make the parent buffer an
      * arbitrary length before noticing.
+     *
+     * WHAT THIS SAID: "inherited rather than invented", full stop. WHAT WAS
+     * TRUE WHEN IT SAID IT: nothing derived the value and nothing checked it.
+     * The engine's constant was `private`, so PHP could not name it here, and
+     * this line spelled `64 * 1024 * 1024` as its own literal — as did the
+     * other two framers, all three under doc-blocks claiming an inheritance
+     * that existed only in the comments. Round 58 corrected that sentence in
+     * {@see \SugarCraft\Crush\LSP\LspConnection} and
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} and left this file alone,
+     * because it sat outside that lane's file list; for one round the third
+     * member of the family was the only one still overstating.
+     *
+     * WHAT IS TRUE NOW: the engine's constant is `public`, this initialiser
+     * references it, and the family cannot disagree at all.
+     *
+     * WHY A TEST STILL EARNS ITS PLACE: its job changed rather than ended.
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} no longer compares
+     * literals that happen to match — it pins that every member DERIVES, over a
+     * roster read off the `MAX_FRAME_BYTES` declarations in `src/`. A FOURTH
+     * framer that copies this doc-block and spells the arithmetic is the one
+     * way the family can still come apart, and it is reported.
+     *
+     * ⚠️ AND THE DERIVATION IS WHAT MAKES THIS CLASS'S DORMANCY SAFE TO IGNORE.
+     * Nothing calls this client (see the class doc-block), so no test exercises
+     * its cap end to end. Copying a number into a dormant file is exactly how a
+     * value goes stale unobserved; naming the engine's constant means this one
+     * cannot, whether or not anybody ever wires the class up.
      *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. Cutting the buffer at
      * the cap would hand `McpMessage::parse()` half a line, which comes back as
@@ -202,7 +231,7 @@ final class ClaudeCodeMcpClient
      * refusing to hold more. The buffer is dropped and a `RuntimeException`
      * naming the cap is raised instead.
      */
-    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+    private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
 
     /**
      * The TAIL of whatever the MCP server has written to stderr, bounded.
