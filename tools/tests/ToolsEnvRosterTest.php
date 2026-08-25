@@ -56,6 +56,37 @@ use PHPUnit\Framework\TestCase;
  */
 final class ToolsEnvRosterTest extends TestCase
 {
+    use PhpFunctionBodyTokens;
+
+    /**
+     * The copy of this file's environment scanner that ships with `candy-pty`.
+     */
+    private const CANDY_PTY_COPY = '/candy-pty/tests/EnvRosterTest.php';
+
+    /**
+     * The scanner methods the two implementations must agree about.
+     *
+     * @var list<string>
+     */
+    private const SHARED_SCANNER = ['envAccessesIn', 'significantAfter', 'significantBefore'];
+
+    /**
+     * Accesses that resolve to no NAME, and so can roster nothing.
+     *
+     * `getenv()` with no argument returns the whole environment, and a
+     * superglobal used without a subscript is the same shape. Neither
+     * introduces a variable a help block could name — but the scanner still
+     * REPORTS them rather than dropping them (rule 14), and the decision to
+     * exclude them is made HERE, where a reader can see it, rather than inside
+     * the scanner where it would look like a blind spot. `<not a literal>` is
+     * the genuinely unresolvable one and is asserted absent on its own.
+     *
+     * @var list<string>
+     */
+    private const NAMES_NOTHING = ['<the whole environment>', '<the whole array>'];
+
+    private const UNRESOLVED = '<not a literal>';
+
     /**
      * Variables supplied by the environment rather than by this repo.
      *
@@ -172,6 +203,7 @@ final class ToolsEnvRosterTest extends TestCase
 
         $undocumented = [];
         $unread = [];
+        $unresolved = [];
         foreach ($scripts as $script) {
             $help = self::helpTextOf($script);
             $this->assertNotSame(
@@ -185,7 +217,12 @@ final class ToolsEnvRosterTest extends TestCase
             $read = [];
             foreach (self::envAccessesIn((string) \file_get_contents($script)) as $access) {
                 $name = $access['name'];
-                if (isset(self::AMBIENT[$name])) {
+                if ($name === self::UNRESOLVED) {
+                    $unresolved[] = \basename($script) . ':' . $access['line'];
+
+                    continue;
+                }
+                if (\in_array($name, self::NAMES_NOTHING, true) || isset(self::AMBIENT[$name])) {
                     continue;
                 }
                 $read[$name] = true;
@@ -201,6 +238,16 @@ final class ToolsEnvRosterTest extends TestCase
         }
         \sort($undocumented);
         \sort($unread);
+        \sort($unresolved);
+
+        $this->assertSame(
+            [],
+            $unresolved,
+            'These environment accesses have a name the scanner cannot resolve — a computed '
+            . 'getenv() argument or a computed superglobal subscript. It refuses to guess '
+            . 'rather than scoring them zero (rule 14). Spell the variable as a literal, or '
+            . 'say deliberately in ToolsEnvRosterTest why this access rosters nothing.',
+        );
 
         $this->assertSame(
             [],
@@ -282,7 +329,9 @@ final class ToolsEnvRosterTest extends TestCase
         $local = [];
         foreach ($files as $file) {
             foreach (self::envAccessesIn((string) \file_get_contents($file)) as $access) {
-                if (isset(self::AMBIENT[$access['name']])) {
+                if (\in_array($access['name'], self::NAMES_NOTHING, true)
+                    || isset(self::AMBIENT[$access['name']])
+                ) {
                     continue;
                 }
                 $local[] = \basename($file) . ':' . $access['line'] . ' — ' . $access['name'];
@@ -298,6 +347,60 @@ final class ToolsEnvRosterTest extends TestCase
             . 'row to ToolsEnvRosterTest::AMBIENT with the reason it is not ours, or move the '
             . 'knob into the script it configures where the help block will cover it.',
         );
+    }
+
+    /**
+     * `candy-pty`'s copy of this scanner has not drifted from this one.
+     *
+     * WHY THERE IS A COPY AT ALL, AND WHY THE PIN LIVES HERE. `candy-pty` is
+     * published standalone as `sugarcraft/candy-pty`; a guard for its four
+     * environment knobs that lived under `tools/` would not ship with the
+     * package and would not run for anyone who cloned the split repo. So the
+     * package carries its own, and the copy is only defensible while divergence
+     * is loud. The pin cannot live WITH the copy: `tools/` does not exist in
+     * that split repo, and a published package reaching up into the monorepo is
+     * the dependency inversion `StackedDocCommentTest`'s doc-block measures and
+     * refuses. A `tools/` guard may read a package; never the reverse.
+     *
+     * COMPARED AS TOKENS, NOT TEXT, so comment edits and reformatting on either
+     * side are free and only a change in what the code DOES reds. Read as text
+     * rather than by reflection because the job that runs this file installs a
+     * PHPUnit PHAR and does no `composer install` — there is no autoloader for
+     * `SugarCraft\Pty\Tests\*` in it.
+     */
+    public function testTheScannerHasNotDriftedFromTheCandyPtyCopy(): void
+    {
+        $copy = \dirname(__DIR__, 2) . self::CANDY_PTY_COPY;
+
+        $this->assertFileExists(
+            $copy,
+            "candy-pty's copy of the environment scanner has moved or been deleted. Update "
+            . \basename(__FILE__) . '::CANDY_PTY_COPY to wherever it lives now — do not delete '
+            . 'this guard, which would leave that copy unwatched',
+        );
+
+        $mine = (string) \file_get_contents(__FILE__);
+        $theirs = (string) \file_get_contents($copy);
+
+        foreach (self::SHARED_SCANNER as $method) {
+            $ours = self::functionBodyTokens($mine, $method);
+            $them = self::functionBodyTokens($theirs, $method);
+
+            // RULE 14 IN BOTH DIRECTIONS: an extractor that found nothing would
+            // answer [] === [] and pass. Neither side may be empty.
+            $this->assertNotSame([], $ours, 'no ' . $method . '() body was found in this file');
+            $this->assertNotSame([], $them, 'no ' . $method . '() body was found in ' . self::CANDY_PTY_COPY);
+
+            $this->assertSame(
+                $ours,
+                $them,
+                'candy-pty\'s copy of ' . $method . '() has drifted from the one in this file. '
+                . 'Port the change across rather than letting the two diverge: one of the two '
+                . 'packages would otherwise be scanned by an implementation that no longer '
+                . 'agrees with the other about what an environment access IS. The copy lives '
+                . 'in ' . self::CANDY_PTY_COPY,
+            );
+        }
     }
 
     // ── the instruments ──────────────────────────────────────────────────

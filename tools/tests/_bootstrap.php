@@ -122,3 +122,79 @@ trait TmpTree
         \rmdir($dir);
     }
 }
+
+/**
+ * The significant tokens of one named function's body.
+ *
+ * WHY THIS IS SHARED RATHER THAN COPIED A THIRD TIME. `tools/tests/` now
+ * carries TWO drift pins of the same shape — `StackedDocCommentTest` pins its
+ * copy of `sugar-crush`'s stacked-doc-comment scanner, and `ToolsEnvRosterTest`
+ * pins `candy-pty`'s copy of the environment scanner. Both answer "have these
+ * two implementations diverged" by comparing token streams, and a divergence
+ * detector that itself existed in two copies would be the joke writing itself.
+ *
+ * The extractor is checked against sources whose answers are already known by
+ * {@see StackedDocCommentTest::testTheBodyExtractorReadsTheFunctionItIsAskedFor()}
+ * — an extractor that always returned `[]`, or always the first function in the
+ * file, satisfies every equality that uses it perfectly (rule 25).
+ */
+trait PhpFunctionBodyTokens
+{
+    /**
+     * The significant tokens of one named function's body, or `[]`.
+     *
+     * Whitespace and comments are dropped so the comparison is about behaviour;
+     * braces are matched so a nested block cannot end the body early.
+     *
+     * @return list<string>
+     */
+    private static function functionBodyTokens(string $source, string $name): array
+    {
+        $tokens = token_get_all($source);
+        $count = \count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FUNCTION) {
+                continue;
+            }
+            $named = null;
+            for ($j = $i + 1; $j < $count; $j++) {
+                if (\is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                    continue;
+                }
+                $named = $j;
+
+                break;
+            }
+            if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][1] !== $name) {
+                continue;
+            }
+
+            $depth = 0;
+            $body = [];
+            for ($j = $named; $j < $count; $j++) {
+                $token = $tokens[$j];
+                if ($token === '{') {
+                    $depth++;
+                    if ($depth === 1) {
+                        continue;
+                    }
+                } elseif ($token === '}') {
+                    $depth--;
+                    if ($depth === 0) {
+                        return $body;
+                    }
+                }
+                if ($depth === 0) {
+                    continue;
+                }
+                if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                $body[] = \is_array($token) ? $token[1] : $token;
+            }
+        }
+
+        return [];
+    }
+}

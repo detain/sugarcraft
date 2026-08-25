@@ -64,6 +64,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class StackedDocCommentTest extends TestCase
 {
+    use PhpFunctionBodyTokens;
+
     /**
      * The canonical implementation this file's scanner is a copy of.
      */
@@ -273,63 +275,6 @@ final class StackedDocCommentTest extends TestCase
         return $files;
     }
 
-    /**
-     * The significant tokens of one named function's body, or `[]`.
-     *
-     * Whitespace and comments are dropped so the comparison is about behaviour;
-     * braces are matched so a nested block cannot end the body early.
-     *
-     * @return list<string>
-     */
-    private static function functionBodyTokens(string $source, string $name): array
-    {
-        $tokens = token_get_all($source);
-        $count = \count($tokens);
-
-        for ($i = 0; $i < $count; $i++) {
-            if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FUNCTION) {
-                continue;
-            }
-            $named = null;
-            for ($j = $i + 1; $j < $count; $j++) {
-                if (\is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
-                    continue;
-                }
-                $named = $j;
-
-                break;
-            }
-            if ($named === null || !\is_array($tokens[$named]) || $tokens[$named][1] !== $name) {
-                continue;
-            }
-
-            $depth = 0;
-            $body = [];
-            for ($j = $named; $j < $count; $j++) {
-                $token = $tokens[$j];
-                if ($token === '{') {
-                    $depth++;
-                    if ($depth === 1) {
-                        continue;
-                    }
-                } elseif ($token === '}') {
-                    $depth--;
-                    if ($depth === 0) {
-                        return $body;
-                    }
-                }
-                if ($depth === 0) {
-                    continue;
-                }
-                if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
-                    continue;
-                }
-                $body[] = \is_array($token) ? $token[1] : $token;
-            }
-        }
-
-        return [];
-    }
 
     /**
      * The 1-indexed lines of every doc-comment immediately followed by another

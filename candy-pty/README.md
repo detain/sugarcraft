@@ -322,6 +322,23 @@ Defaults: `libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib` on macOS.
 Override via the `SUGARCRAFT_LIBC` env var for unusual setups (musl,
 Alpine, custom sysroots).
 
+## Environment variables
+
+Every environment variable this package reads, in one place. The table is
+CHECKED, not proof-read: `tests/EnvRosterTest.php` token-scans `src/`, `bin/`
+and `tests/` and reds in both directions — a variable read with no row here,
+and a row here nothing reads.
+
+| Variable | Read by | Effect |
+|---|---|---|
+| `SUGARCRAFT_LIBC` | `Libc` | Path to the C library to bind FFI against, instead of the platform default (`libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib` on macOS). For musl, Alpine and custom sysroots. |
+| `SUGARCRAFT_PTY_BACKEND` | `PtySystemFactory::default()` | Which PTY backend to build: unset / `auto`, `posix-ffi`, `sidecar`, `pecl`. Unrecognised values throw `\InvalidArgumentException`. See [Backend selection](#backend-selection). |
+| `SUGARCRAFT_TERMIOS` | `TermiosFactory` | `stty` forces the subprocess termios backend instead of the FFI one. Anything else leaves the platform default in place. |
+| `CANDY_PTY_HANG_BUDGET` | `tests/Support/HangWatchdog` | Seconds a single test may run before the suite's own watchdog turns a wedged test into a named failure plus a forensic bundle. `0` opts the watchdog out entirely; unset uses the built-in budget. **Test suite only** — it configures nothing in `src/`, and it is here because a contributor chasing a hang needs to find it. |
+
+`SUGARCRAFT_LIBC` and `SUGARCRAFT_TERMIOS` are also read by the test suite,
+which sets and restores them around the cases that exercise each branch.
+
 ## Mirrors
 
 | Charm symbol                      | candy-pty                                                |
