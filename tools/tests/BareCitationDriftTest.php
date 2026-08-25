@@ -21,16 +21,37 @@ use PHPUnit\Framework\TestCase;
  * alphabet — the one whose answer is not a judgement call — and applies it to
  * the population nobody was applying it to at all.
  *
- * THE POPULATION IS THE FINDING (rule 48). `sugar-crush`'s own
- * `SymbolCitationDriftTest` walks `sugar-crush/tests` and nothing else, so
- * every `.php` file under `tools/` and under `candy-pty/` was outside every
- * citation guard in the repo. Building this over the whole of both trees rather
- * than over the two files a census happened to name found that both offenders
- * were real, and that ONE OF THEM WAS NOT A TYPO: `SharedLoopResidueTest`'s
- * class doc-block cited a method that has never existed in this repo, in a
- * sentence asserting a mechanism that the nearest real method's own doc-block
- * explicitly refutes. A bare citation naming nothing is the visible symptom;
- * a mechanism claim standing with nothing under it is the defect.
+ * THE POPULATION IS THE FINDING (rule 48). Every `.php` file under `tools/` and
+ * under `candy-pty/` was outside every citation guard in the repo, for the
+ * plainest possible reason: the only such guard is `sugar-crush`'s
+ * `SymbolCitationDriftTest`, and neither tree is inside `sugar-crush`.
+ *
+ * WHAT THIS PARAGRAPH USED TO SAY, AND IT WAS FALSE: that
+ * `SymbolCitationDriftTest` "walks `sugar-crush/tests` and nothing else".
+ * WHAT IS TRUE, MEASURED in its own `citations()`:
+ *
+ *     foreach ([['src', 'php'], ['tests', 'php'], ['docs', 'md']] as ...)
+ *
+ * — it walks all three. What is scoped to `tests/` is the bare-test-name SHAPE
+ * only, in `scrape()`, and deliberately: its own comment gives the same reason
+ * this file gives below, that elsewhere the shape is overwhelmingly a
+ * production method on the class being documented. WHY THE CORRECTION MATTERS
+ * RATHER THAN BEING PEDANTRY: the false version reads as "`src/` is
+ * unguarded", which is an invitation to add `sugar-crush/src` to {@see ROOTS}
+ * — and that would red on exactly the correct citations the alphabet paragraph
+ * below measures. The conclusion survives the correction; the reason does not,
+ * and the reason is what a later reader acts on.
+ *
+ * Building this over the whole of both trees rather than over the two files a
+ * census happened to name found that both offenders were real, and that ONE OF
+ * THEM WAS NOT A TYPO: `SharedLoopResidueTest`'s class doc-block cited
+ * `testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()` in a sentence asserting
+ * a mechanism that the nearest real method's own doc-block refutes. THE
+ * CITATION WAS CORRECT WHEN IT WAS WRITTEN. The method was declared in that
+ * same file by `f1ffc409f` and DELETED by `cd365f8ec` 83 seconds later, which
+ * left the prose behind. That history is what makes this guard worth having:
+ * catching a citation orphaned by a REMOVAL is worth more than catching a typo,
+ * because the sentence around it goes on reading like a statement of fact.
  *
  * WHY ONLY TEST-SHAPED NAMES, AND IT IS MEASURED RATHER THAN ASSUMED (rule 16).
  * A citation naming a method of the CLASS UNDER TEST is correct and common, and
@@ -142,6 +163,19 @@ final class BareCitationDriftTest extends TestCase
         yield 'a declaration found only inside a string does not resolve a citation' => [
             "<?php\n/**\n * " . $tag . "testAbsent()}\n */\n\$s = 'function testAbsent() {}';",
             ['testAbsent'],
+        ];
+
+        // THE ALPHABET'S OWN BOUNDARY, IN THE WIDENING DIRECTION. The paragraph
+        // on this class justifies the exact `test<Upper-or-digit>` shape at
+        // length, and until this row nothing pinned it: MEASURED, relaxing
+        // `/^test[A-Z0-9]/` to `/^test/` SURVIVED the whole of `tools/tests/`.
+        // The narrowing direction was already pinned (`/^testZZ/` reds four
+        // ways), so the guard could be widened into a different alphabet
+        // without a single test noticing — which is the alphabet becoming
+        // whatever someone last typed rather than a decision (rule 11).
+        yield 'a lower-case word merely STARTING with test is out of the alphabet' => [
+            "<?php\n/**\n * " . $tag . "testing()}\n */\nclass I {}",
+            [],
         ];
     }
 
@@ -266,9 +300,11 @@ final class BareCitationDriftTest extends TestCase
             $broken,
             'These doc-blocks cite a TEST method by bare name and no method of that name is '
             . 'declared in the same file — so the citation resolves to nothing and the sentence '
-            . 'around it is a claim with no referent. That is usually a rename leaving its '
-            . 'prose behind, and it is worth more than a typo: the one this guard was written '
-            . 'for left a mechanism claim standing that the nearest real method refuted. Point '
+            . 'around it is a claim with no referent. A RENAME IS NOT THE ONLY WAY TO GET HERE '
+            . 'and it is not how the offender this guard was written for got here: that '
+            . 'citation was correct when written and was orphaned 83 seconds later by the '
+            . 'method being DELETED, which left a mechanism claim standing that the nearest '
+            . 'real method refuted. Look for a deletion before you look for a typo. Point '
             . 'the citation at the method that exists, or rewrite the sentence (rule 7: say '
             . 'what it said, what is true now, and why it still earns its place). A citation of '
             . 'a method on the CLASS UNDER TEST, or of a built-in, is deliberately outside this '
@@ -323,6 +359,30 @@ final class BareCitationDriftTest extends TestCase
      * and measured to be correct where it occurs here. A citation written
      * `Class::method()` is another guard's business. A citation assembled by
      * concatenation inside a doc-block cannot exist — a doc-block is one token.
+     *
+     * AND THREE MORE, CENSUSED RATHER THAN GUESSED. Measured over this exact
+     * population by an independent re-implementation, with the control run that
+     * rule 15 requires — every figure below re-ran with the relevant exclusion
+     * removed and came back non-zero, so the scanner was alive when it answered
+     * zero:
+     *
+     * - THE BLOCK-TAG SPELLING `@see testX()`, without the braces, is not read.
+     *   Test-shaped occurrences: ZERO. Control: dropping the "not preceded by
+     *   `{`" condition takes the count from 1 to 53, so the pattern matches.
+     *   (The one live block tag names a production method, not a test.)
+     * - AN INHERITED OR TRAIT TEST METHOD would be cited correctly and reported
+     *   anyway, because "declared in this file" is the whole of the question
+     *   here. This is the one place the sentence above about a test method
+     *   belonging to the file that declares it is not universally true: a
+     *   PHPUnit base class or a trait can declare one. Not live — no file in
+     *   this population declares a `test*` method that another inherits.
+     * - `function &testX()` is never registered as DECLARED, because the scan
+     *   below takes the first significant token after `T_FUNCTION` and `&` is
+     *   not it. A by-ref test method would therefore be reported as naming
+     *   nothing while sitting in the same file. Live occurrences: ZERO.
+     *
+     * None is live, so none is fixed here; they are written down so the next
+     * zero this guard reports is a zero someone can size.
      *
      * BOTH HALVES ARE STRUCTURAL (rule 40). Citations are read from
      * `T_DOC_COMMENT` tokens, so a line comment, a string literal and a heredoc
