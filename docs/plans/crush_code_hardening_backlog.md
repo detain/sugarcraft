@@ -19170,3 +19170,119 @@ than a promise. It is where a future widening starts.
 not committed and not a policy breach. Recorded only because a per-lib lock makes CI's path-repo
 injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
 resolve from the lock and silently ignore the injected closure.
+
+### Ea60-1 — a mis-namespaced file under `src/` is a HARD FATAL, not "reported rather than thrown on"
+
+`tests/Tools/BuiltInToolCorpus.php`'s class doc-block and `classNames()`'s own comment both say a
+PSR-4 exemption elsewhere in the tree is *reported* by `nonClassSources()` rather than aborting suite
+construction, and `BuiltInToolCorpusTest::testAnExemptFileElsewhereIsReportedRatherThanThrownOn()`
+demonstrates exactly that — **on the synthetic probe tree, whose autoloader the test file itself
+declares with `require_once`, in a comment explaining that a plain `require` would fatal.**
+
+**MEASURED on the real tree, PHP 8.3.6, at `c3ddc7483`.** Drop one file into `sugar-crush/src/` whose
+namespace does not match its path (`src/TeethSkewed.php` declaring
+`SugarCraft\Crush\Elsewhere\TeethSkewed`) and run `--filter testEverySourceFileDeclaresItsPsr4Symbol`
+— a test that predates round 60 and was not touched by it. The whole PHPUnit process dies rc **255**
+before any assertion runs:
+
+```
+PHP Fatal error:  Cannot declare class SugarCraft\Crush\Elsewhere\TeethSkewed,
+because the name is already in use in .../src/TeethSkewed.php on line 7
+```
+
+**Mechanism, verified rather than argued.** Both `classNames()` and `nonClassSources()` gate on
+`!class_exists($class) && !interface_exists($class) && !trait_exists($class)` — present in identical
+form at `88374be64`, so this is not a round-60 regression. When the primary symbol is absent, all
+three calls miss and all three trigger the autoloader for the same name. Composer's `includeFile()`
+is a plain `include`, not `include_once`, so the second attempt re-executes the file and PHP fatals
+on the redeclaration. The probe autoloader in `BuiltInToolCorpusTest::setUp()` uses `require_once`
+precisely because its author hit this — the synthetic tree is immunised against the defect the real
+tree still has, which is why fifty-nine rounds of green said nothing.
+
+**Why it matters beyond tidiness.** The reachability story sold by the doc-block is "a PSR-4 exemption
+arriving does not stop the suite enumerating; it turns up as one named failure". The truth is that it
+takes the runner down with a fatal that names a class rather than a policy, so the reader is told
+about a redeclaration and not about the exemption. Rule 8: a mechanism claim written into a comment
+without being measured, inverted in fact.
+
+**Step.** Not fixed here — `tests/Tools/BuiltInToolCorpus.php` was outside round 60 lane a's file list
+and the fix is a behaviour change to a scanner three suites depend on. Two candidate resolutions,
+both needing the fatal reproduced as an acceptance test first: (a) resolve the kind through
+`token_get_all()` (already available as `declaredTypes()`) instead of three `*_exists()` probes, which
+removes the repeat autoload entirely; or (b) keep the probes but guard them behind one
+`class_exists($class, false)`-style pre-check plus an explicit `include_once`. Whichever is taken, the
+doc-block's "reported rather than thrown on" must be rewritten under rule 7 rather than left standing,
+and `testAnExemptFileElsewhereIsReportedRatherThanThrownOn()` needs a sibling that drives the REAL
+autoloader, because the probe autoloader cannot express this case.
+
+### Ea60-2 — `BuiltInToolCorpus.php`'s own doc-block is the fifth restatement of the `src/` census
+
+Round 60 lane a retired every cardinality over `src/` from `BuiltInToolCorpusTest` and both restated
+figures from `src/Context/RepoMapBlock.php`. It did not touch the scanner's own doc-block, which is
+outside the lane's file list and still carries:
+
+> MEASURED with `token_get_all()` rather than `class_exists()`: 278 `.php` files under `src/` declare
+> 297 top-level types, 19 of them secondary, in 8 files.
+
+plus a symbol-kind vector (`220 concrete classes, 25 enums, 16 interfaces, 6 traits`) a few lines
+above. Both are explicitly framed as historical — "the tree AS IT WAS WHEN THIS PARAGRAPH WAS
+MEASURED" — so this is not the rot the other four copies were, and rule 7 says leave a stale
+justification standing rather than delete it.
+
+**The specific hazard, which is new.** `297` in that sentence is the DECLARATION count as of some past
+round. At `88374be64` the tree's FILE count is also 297 and its declaration count is 316. A reader
+grepping for the census now finds the same digits attached to the wrong noun, and a future automated
+sweep for "restated census figures" cannot distinguish the historical from the live —
+`BuiltInToolCorpusTest::testRepoMapBlockNoLongerRestatesTheSourceCensus()` deliberately scopes itself
+to `RepoMapBlock.php` for that reason.
+
+**Step.** Elide the digits from the historical sentence the way `RepoMapBlock`'s rule-7 paragraph now
+does (`<N>`), keeping the narrative and the argument — the argument is about the ZERO abstract classes
+and about interfaces/traits already being present, and neither needs a number. Then widen the
+no-restatement scanner to cover `tests/Tools/BuiltInToolCorpus.php` as well.
+
+### Ea60-3 — a figure was asserted; the claim the figure supported was not, and it was false
+
+`RepoMapBlock`'s WHAT WAS DELIBERATELY NOT BUILT list argued that a per-class listing was rejected
+because at one line each it would be "several times this whole block's budget". The DIGIT in that
+sentence was pinned — `BuiltInToolCorpusTest` asserted the prose spelled today's declaration count —
+and the digit was correct. **The claim was not.** MEASURED at `88374be64` on PHP 8.3.6: summing
+`strlen($fqn) + 1` over every top-level type `declaredTypes()` finds under `src/` gives 12,278 B
+against `MAX_SECTION_BYTES` of 8,192 — 1.5x, over the cap but not "several times" it — and at bare
+short-name width it is 4,516 B, roughly half the cap, which would comfortably FIT. The WIDTH the claim
+depends on was never stated in the sentence.
+
+Fixed this round: the prose now names the width, and the assertion is
+`assertGreaterThan(MAX_SECTION_BYTES, $fullyQualifiedListing)` — the argument, derived — instead of a
+string match on a count. The generalisable part is the pattern, not this instance.
+
+**Step.** Sweep for its siblings: a doc-block that quotes a measured figure AND draws a qualitative
+conclusion from it ("several times", "orders of magnitude", "a quarter of the cap", "about SEVENTY
+times under"), where a test pins the figure and nothing pins the conclusion. `RepoMapBlock`'s
+`MAX_SECTION_BYTES` doc-block alone carries three more of that shape (`1,314 B of headroom, about
+eleven more packages at this repository's mean line`; `33 source-directory lines in 1,915 B, a quarter
+of the cap`). Each is either derivable — in which case derive it and delete the digit — or it is a
+one-off observation about two named repositories, in which case it should say so and stop being
+read as a live property.
+
+### Ea60-4 — the suite's TEST COUNT is still a function of `src/`'s size, via one data provider
+
+Round 60 lane a removed every ASSERTION that counts `src/`, and the acceptance test is green in both
+polarities. That does not make the suite's totals independent of the tree, and a supervisor predicting
+a merged figure needs to know why.
+
+**MEASURED at `c3ddc7483` with `--list-tests`,** which enumerates without running: adding one
+`.php` file under `sugar-crush/src/` takes the collected total from 10,289 to 10,290, and `diff` names
+the single arrival —
+`Integration\BinSugarcrushWiringTest::testNoRootResolvingSiteFallsBackToBareGetcwd` with the new
+filename as its data-set key. Full-suite effect of one added source file, measured on two complete
+runs at that commit: **+1 test and +58 assertions** (10,286/159,393 → 10,287/159,451).
+
+This is a per-file CHECK driven by a provider over the tree, not a census of it — it is exactly the
+shape a census should have been, and it is correct as it stands. It is recorded because the earlier
+backlog entry E383 predicted "+48 assertions and +1 TEST" for the same operation, and the assertion
+half of that figure is now stale by ten; anyone arithmetically reconciling a merged total from lane
+deltas will be off by 58 per added source file if they do not know this provider exists.
+
+**Step.** No fix. Cite this entry, not E383, for the per-file delta, and re-measure the +58 whenever
+`BinSugarcrushWiringTest`'s per-file body changes.
