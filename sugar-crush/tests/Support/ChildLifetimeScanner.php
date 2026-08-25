@@ -884,9 +884,19 @@ final class ChildLifetimeScanner
                 // 8.3.6 (nested ternary with and without parentheses, `?:`
                 // chained, `??`, `?->`, a ternary inside a call argument, an
                 // array-union tail) - found ZERO differing answers. The
-                // trailing `:` clause below already refuses every multi-`?`
-                // shape those spellings can produce, because a second `?` at
-                // depth 0 always arrives with a second `:` behind it.
+                // clause below refuses every multi-`?` shape those spellings
+                // can produce, because a second `?` at depth 0 always arrives
+                // with a second `:` behind it.
+                //
+                // THE REDUNDANCY IS SYMMETRIC, WHICH THE FIRST READING OF THIS
+                // MISSED. Deleting the `:` clause instead leaves the suite
+                // green too - each of the two refusals covers the other's
+                // cases on its own. Deleting BOTH reds the
+                // nested-ternary-without-parentheses fixture. So the PAIR is
+                // load-bearing and neither member is individually, which is
+                // what defence in depth looks like under mutation and is worth
+                // saying plainly: a reader who mutates one of these, sees
+                // green, and removes it has not measured what they think.
                 //
                 // NOT DELETED, and the reason is not sentiment. The rule this
                 // method advertises is "exactly one top-level `?` and one
