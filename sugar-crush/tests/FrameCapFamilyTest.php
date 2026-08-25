@@ -841,6 +841,69 @@ final class FrameCapFamilyTest extends TestCase
     }
 
     /**
+     * THE WHOLE grouped statement, not just the member this file cares about —
+     * because that narrower window is where a real mutation survived.
+     *
+     * WHAT THE FIRST VERSION OF THIS PIN ASSERTED: the output of
+     * {@see self::declarersIn()} for a source whose grouped declaration held an
+     * array. That method FILTERS to the one name the family is about, so the
+     * sibling row — the one an off-by-a-bracket split actually corrupts — was
+     * never looked at. MEASURED: with the `$depth === 0` gate deleted from the
+     * member separator in {@see self::constDeclarationsAt()}, that fixture
+     * stayed GREEN, because the name phase takes the LAST non-trivia token
+     * before the `=` and so recovers from the bad split by accident.
+     *
+     * WHY THAT MATTERS RATHER THAN BEING AN EXCUSE: a walk that recovers by
+     * accident on the one shape a fixture happens to use is not a walk that
+     * reads grouped declarations. This assertion widens the window to the thing
+     * the depth counter protects.
+     *
+     * THE NESTING IS LOAD-BEARING TOO. A single `[1, 2]` is satisfied by a
+     * boolean "inside brackets" flag; `[[1, 2], 3]` is not, because the first
+     * `]` would clear that flag and the `, 3` would split the statement. Depth
+     * has to be COUNTED, and this is the row that says so.
+     */
+    public function testTheDeclarationWalkReadsEveryMemberOfAGroupedStatement(): void
+    {
+        $const = self::CONSTANT;
+        $tokens = token_get_all(
+            "<?php\nfinal class F { private const array SIZES = [[1, 2], 3], "
+            . $const . " = 64 * 1024 * 1024; }\n",
+        );
+        $n = \count($tokens);
+
+        $at = -1;
+        foreach ($tokens as $i => $token) {
+            if (\is_array($token) && $token[0] === T_CONST) {
+                $at = $i;
+
+                break;
+            }
+        }
+
+        $this->assertGreaterThan(
+            -1,
+            $at,
+            'the fixture source holds no T_CONST at all, so the walk below is being handed '
+            . 'nothing and whatever it answers is meaningless',
+        );
+
+        $this->assertSame(
+            [
+                ['name' => 'SIZES', 'init' => '[[1,2],3]'],
+                ['name' => $const, 'init' => '64*1024*1024'],
+            ],
+            self::constDeclarationsAt($tokens, $at, $n),
+            'the declaration walk is splitting a grouped statement on a `,` that belongs to an '
+            . 'ARRAY rather than to the statement. MEASURED on PHP 8.3.6, token_get_all() emits '
+            . 'both as the same bare `,` token, so the separator has to be recognised by '
+            . 'BRACKET DEPTH and the depth has to be counted rather than flagged. Reaching '
+            . 'this means constDeclarationsAt() reports members that do not exist and '
+            . 'initialisers cut in the middle',
+        );
+    }
+
+    /**
      * Every name the derivation produces is a class that actually exists, and
      * there is at least one of them.
      *
