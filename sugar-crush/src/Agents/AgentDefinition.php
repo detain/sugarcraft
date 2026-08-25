@@ -121,22 +121,38 @@ final readonly class AgentDefinition
             // AgentManager::executeSubAgent() building its CompleteRequest
             // with no `tools` field at all.
             //
-            // WHAT IS TRUE NOW: half of that is fixed. executeSubAgent() does
-            // pass `tools:`, resolved from this very field by
+            // WHAT IS TRUE NOW: part of that is fixed, and the part matters
+            // less than the first draft of this paragraph claimed.
+            // {@see AgentManager::executeSubAgent()} does pass `tools:`,
+            // resolved from this very field by
             // {@see AgentManager::resolveGrantedTools()}, and a call outside
             // the grant is refused by
             // {@see AgentManager::refuseCallOutsideGrant()}. So the field CAN
-            // make a roster true — but only for a caller that hands
-            // AgentManager a tool registry, and the production construction
-            // site ({@see \SugarCraft\Crush\Cli\Bootstrap::agentManager()})
-            // does not yet, so a launched sub-agent still reaches its provider
-            // with `tools: null`.
+            // make a roster true — on that method, and TWO separate things
+            // still stop it being true of a launched sub-agent:
+            //
+            //   1. No production caller hands AgentManager a tool registry.
+            //      {@see \SugarCraft\Crush\Cli\Bootstrap::agentManager()}
+            //      passes none, so `resolveGrantedTools()` returns null.
+            //   2. executeSubAgent() ITSELF has no production caller. MEASURED
+            //      by grepping `src/` and `bin/`: the live paths are
+            //      {@see AgentManager::executeAll()} (from `Chat::executeAgents()`
+            //      and `WorkflowEngine`), which forwards ONE caller-built
+            //      CompleteRequest into {@see AgentWorkerPool::executeAll()} and
+            //      calls neither of the two methods above.
             //
             // WHY THIS STILL EARNS ITS PLACE: a prompt that asserts "you have
-            // read-only tools" would be false on exactly the path that runs
+            // read-only tools" would be false on exactly the paths that run
             // today, and would go on being false silently — the failure this
-            // whole item exists to end. The clause may be restored when the
-            // registry reaches AgentManager on the launch path, and not before.
+            // whole item exists to end.
+            //
+            // WHAT WOULD ACTUALLY EARN THE CLAUSE BACK — and an earlier version
+            // of this note got this wrong, naming only (1). Satisfying (1)
+            // alone restores a clause that is STILL false, because a launched
+            // sub-agent takes the executeAll() path in (2). The test is not
+            // "does Bootstrap pass a registry" but "does the path a launched
+            // sub-agent actually takes resolve this field into its request".
+            // Restore the clause when that is true, and not before.
             prompt: 'You are a software architect. Read enough of the existing code to describe '
                 . 'the design that is actually there before proposing a different one. Offer at '
                 . 'least two options with their trade-offs, recommend one, and state what would '

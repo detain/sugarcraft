@@ -734,7 +734,8 @@ final class AgentManager
      * two things `mcp__git__*` can mean. The NAME half selects the tool;
      * {@see PermissionRule::matchesToolName()} is the same static
      * {@see \SugarCraft\Crush\Cli\Bootstrap::filterToolSet()} already filters
-     * the model-facing set with. The ARGUMENT half of `Bash(git *)` cannot be
+     * the model-facing set with — one hop down, in the `toolSetUnder()`
+     * predicate it delegates to; `filterToolSet()` itself holds no matcher. The ARGUMENT half of `Bash(git *)` cannot be
      * expressed on the wire at all — a tool schema has no place to say "only
      * git commands" — so it is NOT dropped here: it is enforced per call by
      * {@see refuseCallOutsideGrant()}, which is where the arguments exist.
@@ -747,6 +748,39 @@ final class AgentManager
      * and for a registry entry that is not a {@see Tool} — an instrument that
      * quietly ignores what it cannot parse has a hole shaped like the next
      * defect.
+     *
+     * AND THAT REFUSAL IS SOUND ONLY WHILE THE REGISTRY IS THE UNFILTERED
+     * CEILING — a caveat this paragraph did not carry, and the reason wiring
+     * this method up is not the one-liner the backlog first called it.
+     * `$toolRegistry` is compared against as if it were every tool that could
+     * exist, but the obvious thing to pass is
+     * {@see \SugarCraft\Crush\Cli\Bootstrap::tools()}, whose return is
+     * `filterToolSet($tools)` — ALREADY narrowed by the operator's own
+     * `allowedTools`/`disabledTools`. That method's own doc-block names
+     * `disabledTools: ["*"]` as the SUPPORTED way to ask for a toolless agent
+     * and says refusing it "would break a configuration this class documents as
+     * intentional". Handed the filtered set, this method refuses exactly that.
+     *
+     * MEASURED on PHP 8.3.6, by reflection against `Bootstrap::tools()`'s
+     * eleven-tool ceiling: with `Bash` removed, FIVE of the six built-in
+     * presets throw (only `architect` survives, being genuinely read-only);
+     * with the registry empty, all six do. The figure is recorded here, not
+     * asserted anywhere — a count over the preset table would rot the next time
+     * a preset changes. What IS pinned is the semantics, by
+     * AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo:
+     * a policy-narrowed absence and a typo produce the identical refusal, so
+     * this method cannot tell an operator's deliberate narrowing from a
+     * mistake.
+     *
+     * LEFT AS A REFUSAL, DELIBERATELY, because fixing it properly needs
+     * something no caller currently has. Distinguishing "the registry never had
+     * this tool" from "the registry had it and policy removed it" requires the
+     * UNFILTERED set, which `filterToolSet()` discards; intersecting instead
+     * would re-open the silent-narrowing hole this whole method exists to
+     * close, for typos as much as for policy. So the decision is deferred to
+     * whoever wires the launch path, with the trade-off written down here and
+     * in the hardening backlog rather than discovered by a user whose
+     * `disabledTools` suddenly crashes five presets.
      *
      * ORDER IS THE REGISTRY'S, not the declaration list's: `Bootstrap::tools()`
      * documents its array as a wire order the model has learned, and a subset
@@ -893,9 +927,12 @@ final class AgentManager
         // MEASURED at this commit rather than assumed, because a first draft of
         // this comment said the two spellings were indistinguishable to this
         // project's providers and that is FALSE for four of the six.
-        // `OpenAIProvider`, `CustomProvider` and `SglangProvider` each gate on
-        // `$request->tools !== null` ALONE, so `[]` puts a present-but-empty
-        // `tools` key in the payload where `null` omits the key; and
+        // `OpenAIProvider` and `SglangProvider` each gate on
+        // `$request->tools !== null` alone, and `CustomProvider` on that
+        // conjoined with its own `supportsFunctionCalling` flag — so on all
+        // three `[]` puts a present-but-empty `tools` key in the payload where
+        // `null` omits the key. (This paragraph once said all THREE gated on
+        // the null check "ALONE"; the conclusion holds, the word did not.) And
         // `ClaudeCodeProvider` turns `[]` into `allowedTools: ''`, an empty
         // allow-list rather than an absent one. Only `VertexProvider` gates on
         // `!== null && !== []` and cannot tell them apart. `BedrockProvider`
@@ -1018,6 +1055,25 @@ final class AgentManager
      * to grant a tool and malformed at the moment a call arrives. Keys are
      * preserved so a caller can report WHICH entry failed against the original
      * array.
+     *
+     * "BOTH GO THROUGH IT FOR BOTH LISTS" IS NOT TRUE OF EVERY CALL, and the
+     * sentence above said it flatly until this was measured.
+     * {@see resolveGrantedTools()} returns early on a null registry and again on
+     * an empty grant, BOTH above its `disallowedTools` parse — so an agent that
+     * names a denylist and no grant reaches neither. Measured on PHP 8.3.6:
+     * `tools: []` with `disallowedTools: ['Bash(rm -rf *']` resolves with NO
+     * throw, where `tools: ['Bash']` with the same denylist throws.
+     *
+     * That matters because a malformed rule does not fail closed, it fails
+     * INERT: `new PermissionRule('Bash(rm -rf *', Deny)` constructs, yields a
+     * null argument pattern and a tool-NAME pattern of `Bash(rm -rf *`, and
+     * matches nothing that exists. So on the registry-less path — which is
+     * every production caller today — the two calls in
+     * {@see refuseCallOutsideGrant()} are the ONLY validation a denylist ever
+     * gets. They are pinned there by
+     * AgentManagerTest::testAMalformedDenylistIsRefusedAtCallTimeWithNoRegistryAndNoGrant
+     * and its `tools` sibling, one per call, after deleting either one was
+     * measured green across the whole suite.
      *
      * @param array<int|string, mixed> $declarations
      * @param string $field The property being read, named in the failure text —

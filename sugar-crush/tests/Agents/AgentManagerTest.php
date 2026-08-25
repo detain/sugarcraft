@@ -1928,11 +1928,22 @@ final class AgentManagerTest extends TestCase
     //
     // AgentDefinition::$defaultTools reached Agent::$tools faithfully and then
     // died: executeSubAgent() built its CompleteRequest with no `tools`
-    // argument, CompleteRequest defaults that to null, and every provider gates
-    // its tool block on `$request->tools !== null`. A preset reached the model
-    // with NO tools while its system prompt described the roster it thought it
-    // had. These pin the behaviour, not the structure — the RESTRICTION as much
-    // as the grant, because a test that only proves tools arrive would pass an
+    // argument, CompleteRequest defaults that to null, and every provider that
+    // reads the field gates on `$request->tools !== null`. On THAT method a
+    // preset reached the model with NO tools while its system prompt described
+    // the roster it thought it had.
+    //
+    // SCOPED TO executeSubAgent() ON PURPOSE, because the sentence above is not
+    // true of every path and an earlier version of this header implied it was.
+    // The live parallel path is executeAll() -> AgentWorkerPool, and
+    // WorkflowEngine builds its request with `tools: $firstTask->tools`, where
+    // WorkflowTask::$tools defaults to `[]` and NOT to null — a distinction
+    // this file spends a whole test on, since `[]` and `null` are
+    // distinguishable to four of the six providers. That path is a separate,
+    // still-open finding; nothing below claims to cover it.
+    //
+    // These pin the behaviour, not the structure — the RESTRICTION as much as
+    // the grant, because a test that only proves tools arrive would pass an
     // implementation that ships the whole registry.
     // -------------------------------------------------------------------------
 
