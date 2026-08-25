@@ -379,7 +379,7 @@ final class DuplicatedTestHelperDriftTest extends TestCase
         $this->assertNotSame([], $sources, 'no test file was read at all, so nothing was compared');
 
         [$drifted, $unparseable, $declarations, $cores] = self::driftReport($sources);
-        [$drifted, $subjectSpellings, $unreadable] = self::partitionBySubject($drifted, $cores);
+        [$drifted, , $unreadable] = self::partitionBySubject($drifted, $cores);
 
         $this->assertSame(
             [],
