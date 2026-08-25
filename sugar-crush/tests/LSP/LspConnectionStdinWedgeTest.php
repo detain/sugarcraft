@@ -550,6 +550,64 @@ final class LspConnectionStdinWedgeTest extends TestCase
         );
     }
 
+    /**
+     * OMITTING THE DEADLINE IS AN ERROR, AND SAYING `null` IS NOT (E480).
+     *
+     * `writeMessage(array $payload, ?float $deadline = null)` had a null DEFAULT
+     * that no production caller used — both send paths pass
+     * `microtime(true) + $this->requestTimeout`. The default was the whole risk:
+     * MEASURED this round, the null path is not "bounded by the child's
+     * liveness" the way its `@param` claimed. With no deadline, no signals and a
+     * LIVE child that has stopped reading, `stream_select()` times out every
+     * `WRITE_POLL_MICROS`, `$ready === 0` takes the `continue`, and no liveness
+     * check is consulted at all; `timeout 12 php probe.php` -> rc 124, and
+     * against a 30s fixture the loop returned at 29.843s. A caller could inherit
+     * that by writing nothing.
+     *
+     * ⚠️ WHAT THIS ROW PINS IS A SIGNATURE, NOT A BEHAVIOUR, and it is written
+     * that way on purpose because there is no behaviour to pin: re-adding `=
+     * null` is a WIDENING and would red nothing anywhere in this suite. The
+     * `ArgumentCountError` is the only observable the change has. Its mutation is
+     * therefore the fix itself — put the default back and this row is the one
+     * thing that notices.
+     *
+     * THE `null` ARM IS THE KNOWN-POSITIVE CONTROL, and without it this row is
+     * satisfied by a `writeMessage()` that has been deleted, renamed, or made to
+     * throw unconditionally — every one of which also produces an error from a
+     * one-argument call. The nullable path must still be REACHABLE, because
+     * {@see testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop()}
+     * drives it deliberately.
+     */
+    public function testTheDeadlineHasToBeStatedAndNullIsStillAThingYouCanState(): void
+    {
+        $connection = $this->connectionTo($this->echoServerScript(self::SAFE_BYTES), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        try {
+            $connection->initialize();
+
+            $write = new \ReflectionMethod($connection, 'writeMessage');
+            $write->setAccessible(true);
+
+            $this->assertTrue(
+                $write->invoke($connection, ['jsonrpc' => '2.0', 'method' => 'noDeadlinePlease'], null),
+                'the control: an explicit null deadline still writes, so the assertion below is '
+                . 'about the DEFAULT and not about the parameter having been removed',
+            );
+
+            try {
+                $write->invoke($connection, ['jsonrpc' => '2.0', 'method' => 'noDeadlineAtAll']);
+                $this->fail(
+                    'writeMessage() accepted a call with no deadline argument, so the unbounded '
+                    . 'path is reachable by omission again rather than by decision',
+                );
+            } catch (\ArgumentCountError $e) {
+                $this->assertStringContainsString('writeMessage', $e->getMessage());
+            }
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
     // =========================================================================
     // Fixtures and helpers
     // =========================================================================
