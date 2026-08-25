@@ -159,6 +159,28 @@ final class PosixBackendTest extends TestCase
      * version, same run as the numbers above: real fd 4, `/dev/fd/4` readable
      * and a link, gate open.
      *
+     * ## Why the probe is a `tmpfile()` and not `/dev/null`
+     *
+     * `descriptorForStream()`'s second arm identifies a descriptor naming the
+     * SAME DEVICE as the stream and prefers the lowest match -- it says so in
+     * its own doc-block. `/dev/null` is the most-shared device on the box, so
+     * with that as the probe the answer is whatever OTHER `/dev/null`
+     * descriptor happens to be lower. MEASURED, PHP 8.3.6: with the process's
+     * stdin `< /dev/null` -- which is how CI runs it and how this suite's own
+     * child harnesses spawn `phpunit` -- `descriptorForStream(fopen('/dev/null',
+     * 'r'))` answered **0**, i.e. stdin's descriptor, with `/dev/null` present
+     * on fds `0,4`. With stdin a pipe it answered 4, the probe's own.
+     *
+     * That made the "handle stays open" half of the repair above non-load-
+     * bearing under exactly the shape CI uses: the descriptor being stat()ed
+     * was not the one being closed. The gate still ANSWERED correctly there
+     * (verified: `< /dev/null`, `OK (1 test, 9 assertions)`) -- it was right
+     * for the wrong reason, which is the state a guard is in just before it
+     * silently stops being right at all. A `tmpfile()` has an inode nothing
+     * else in the process holds, so the resolution is unambiguous under both
+     * stdin shapes (MEASURED: fd 5 in both), and the identity is now ASSERTED
+     * rather than assumed wherever procfs can settle it.
+     *
      * WHY THERE IS STILL A GATE AT ALL: `SttyTermios` addresses the terminal as
      * `stty -F /dev/fd/<n>` (`-f` on Darwin), so a host whose `/dev/fd` is not a
      * live view of the calling process's descriptor table cannot run this at
@@ -204,8 +226,13 @@ final class PosixBackendTest extends TestCase
         // A genuine descriptor, and the handle stays open until after the
         // probe - see the doc-block for the two ways the old gate got this
         // wrong and why fixing either one alone changes nothing.
-        $probe = fopen('/dev/null', 'r');
+        //
+        // tmpfile() rather than /dev/null: descriptorForStream()'s same-device
+        // arm prefers the LOWEST descriptor naming the device, and under
+        // `< /dev/null` that is stdin, not the probe. See the doc-block.
+        $probe = tmpfile();
         $this->assertIsResource($probe);
+        $probeUri = stream_get_meta_data($probe)['uri'] ?? null;
 
         try {
             $probeFd = PosixBackend::descriptorForStream($probe);
@@ -213,6 +240,20 @@ final class PosixBackendTest extends TestCase
             clearstatcache(true, $probePath);
             $fdDirectoryIsLive = $probeFd !== null
                 && (is_readable($probePath) || is_link($probePath));
+
+            // The claim above is that the resolved descriptor is the PROBE's.
+            // Where procfs can settle that, settle it rather than assert it in
+            // prose: this is what /dev/null could not have satisfied.
+            if ($fdDirectoryIsLive && is_string($probeUri) && is_dir('/proc/self/fd')) {
+                self::assertSame(
+                    $probeUri,
+                    readlink('/proc/self/fd/' . $probeFd),
+                    'the gate probe resolved a descriptor belonging to something else. '
+                    . 'descriptorForStream() prefers the lowest descriptor naming the same device, '
+                    . 'so a probe on a shared device answers with a stranger fd and the '
+                    . '"hold the handle open" half of this gate stops meaning anything.',
+                );
+            }
         } finally {
             fclose($probe);
         }
