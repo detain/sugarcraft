@@ -14207,3 +14207,37 @@ Generator: `ChildLifetimeScanner::scan()` over every `<lib>/src/**/*.php`, PHP 8
 **STEP:** `ChildLifetimeScanner` is a `tests/Support/` class in sugar-crush and cannot be required by a
 lib that does not depend on it. Either promote it into `candy-testing`, where every lib can reach it, or
 copy the guard into `sugar-dash` and `sugar-reel`. The first is the one that does not drift.
+
+### Ec54-5 — the sibling walk follows `autoload`, so code a library EXECS or ships as an example is invisible to it
+
+**Recorded 2026-08-25 by round 54 lane c.** Severity: finding. **Measured.**
+
+`DescriptorInheritanceGuardTest::libSourceFiles()` derives each sibling's files from that library's own
+`composer.json` `autoload` section rather than assuming `src`, and deliberately does not read
+`autoload-dev` — Composer registers `autoload-dev` for the ROOT package only, so a sibling's `tests/`
+genuinely cannot be loaded from this process. That derivation is right, and it is stated at the roster.
+What it leaves out is not `tests/`, and is worth a step of its own.
+
+Measured over the 18 libraries in `sugar-crush/vendor/sugarcraft`, PHP 8.3.6 on Linux 6.8.0-138-generic:
+every one declares `autoload.psr-4 => src` and nothing else, so the walk sees **438** `.php` files. Two
+kinds of real code sit outside that set:
+
+- **Code a library executes as a child rather than loading.** `candy-pty/bin/pty-shim.php` is run by
+  `candy-pty/src/Spawn.php::wrapInShim()`, and it inherits this process's descriptors when it runs. It is
+  in no autoload section, so no instrument reads it. It happens to be clean today — `proc_open` appears
+  in it exactly twice and both are comments — so the gap is currently silent, which is why it needs
+  writing down rather than leaving for the first person whose shim spawns something.
+- **Code shipped as an example.** `candy-focus/examples/focus-ring.php` holds **two** `proc_open()` calls
+  that the scanner classifies as exposed. Unreachable by autoload, so out of the guard's scope by the same
+  derived reason as `tests/` — but unlike `tests/`, an example is code a user is invited to run.
+
+Generator: `autoloadRoots()`'s own logic re-implemented standalone over
+`sugar-crush/vendor/sugarcraft/*/composer.json`, plus `ChildLifetimeScanner::scan()` over the non-autoload
+paths. Both re-run at `c54172f09`.
+
+**STEP:** decide, once, whether "reachable" for this guard means *loadable* (today's answer, derived and
+defensible) or *executable* (which would pull in `bin/` and every `examples/`). If the first, the two
+findings above are real and belong to the libraries that own them. If the second, the walk needs a second
+root list and `Ec54-4`'s promotion of the scanner into `candy-testing` is the cheaper way to get there.
+This is a scope decision, not a defect, and it should not be settled inside a guard's doc-block by
+whoever next touches it.
