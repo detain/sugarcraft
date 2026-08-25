@@ -411,6 +411,13 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
      *     FULL    none              15            0
      *     FULL    RUNNING            0         ~843   <- discriminates
      *
+     * VERIFIED BY MUTATION, not inferred from that table: with the probe forked so
+     * the storm runs in `control` mode too (and reaped, so the row is not merely
+     * timing out), this row reds — on the `SELECTOK` FLOOR rather than on
+     * `SELECTFAIL`, because under a storm the select does not merely fail
+     * sometimes, it stops succeeding at all. Both bounds are therefore live; the
+     * floor is simply the one that gets there first.
+     *
      * THE TWO BOUNDS ON `SELECTOK` ARE THE FILL'S OWN KNOWN-POSITIVE CHECK, and
      * they are why this row cannot quietly go vacuous again. 15 is the 0.3s window
      * divided by the 20 ms slice — every select BLOCKED to its timeout, which only
