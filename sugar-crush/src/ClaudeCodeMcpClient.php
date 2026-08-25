@@ -118,10 +118,17 @@ final class ClaudeCodeMcpClient
      *
      * WHAT IS TRUE NOW: here neither term is evaluated at all, because the
      * `$ready === false` branch that holds them is never entered. MEASURED at
-     * this tree: replacing {@see childIsRunning()}'s body with a `throw` SURVIVES
-     * the covering suite, which it could not do if anything reached the branch.
-     * Reaching it needs a signal to land inside this loop's `stream_select()`,
-     * and nothing in the suite delivers one there.
+     * this tree by mutating the BRANCH rather than either term — a `throw` as the
+     * first statement inside `if ($ready === false)` SURVIVES all four
+     * `ClaudeCodeMcpClient` suites, 42 rows, rc 0. Reaching it needs a signal to
+     * land inside this loop's `stream_select()`, and nothing in the suite
+     * delivers one there.
+     *
+     * ⚠️ MUTATE THE BRANCH, NOT {@see childIsRunning()}, IF YOU RE-CHECK THIS.
+     * A `throw` in that method's body used to survive too, and no longer does —
+     * the row named below calls it directly. That row is deliberately not a
+     * caller of the branch, so a surviving mutation of the METHOD would now
+     * report the reachability of a test rather than of the branch.
      *
      * WHY BOTH STILL EARN THEIR PLACE: this is the class's only write path with
      * no wall clock, so an EINTR storm is exactly the failure they exist for, and

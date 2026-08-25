@@ -725,12 +725,17 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
      * ⚠️ ITS ONE CALLER IS UNREACHED, AND SAYING SO IS THE POINT.
      * {@see ClaudeCodeMcpClient::writeAll()} consults it only in the
      * `$ready === false` branch, i.e. after `stream_select()` fails — an EINTR,
-     * in practice. MEASURED at this tree: replacing the whole method body with a
-     * `throw` SURVIVES the covering suite, so nothing calls it there. The
-     * dormancy note on
+     * in practice. MEASURED at this tree: a `throw` as the first statement inside
+     * that branch SURVIVES all four `ClaudeCodeMcpClient` suites, 42 rows, rc 0.
+     * The dormancy note on
      * {@see ClaudeCodeMcpClient::MAX_CONSECUTIVE_SELECT_FAILURES} says the
      * LIVENESS HALF of that condition is dormant; the measurement says the whole
      * BRANCH is.
+     *
+     * ⚠️ THE MUTATION HAS TO BE OF THE BRANCH, and this row is why. Throwing from
+     * `childIsRunning()`'s own body survived before this row existed and reds now
+     * — because THIS row calls it, and it is not a caller of the branch. A
+     * verdict taken that way would measure the test, not the code.
      *
      * So this row does not pretend to exercise the branch. It measures the
      * FUNCTION, directly, in both polarities — which is the thing a
