@@ -184,6 +184,67 @@ final class McpClientServerIsolationTest extends TestCase
     }
 
     /**
+     * ROUTE 3, PROPERLY: a `start()` that raises something which is not a
+     * `RuntimeException` AT ALL.
+     *
+     * ⚠️ THIS ROW EXISTS BECAUSE A MUTATION SURVIVED. Narrowing
+     * `startServer()`'s runtime catch from `\Throwable` back to
+     * `\RuntimeException` was GREEN across every MCP suite — 100 rows, 290
+     * assertions — so the widening that closes route 3 was pinned by nothing.
+     * The rows above could not reach it: with `McpTool::tryFromArray()` in
+     * place a mistyped tool entry is filtered rather than thrown, and a scalar
+     * entry is skipped by `is_array()`, so neither makes `start()` raise
+     * anything.
+     *
+     * The fixture is a `MockHandler` seeded with an `\Error`. That is not
+     * contrived: `HttpMcpServer::start()` wraps its whole handshake in
+     * `catch (\Exception)`, and an `\Error` is not an `\Exception`, so `\Error`
+     * is precisely the class that reaches {@see McpClient} from that server
+     * type. Measured at this tree — `start()` on such a server escapes with
+     * `Error: synthetic non-Exception`.
+     */
+    public function testAStartThatRaisesANonExceptionThrowableDoesNotAbortTheOthers(): void
+    {
+        $client = $this->clientFor(
+            ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
+            [$this->handshake(), new \Error('a server type raised something that is not an Exception'),
+             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+        );
+
+        // Silent, like any other runtime start failure: the config was fine, the
+        // server was not. See McpClient::startServer() for why those two are not
+        // the same event.
+        $client->startServers();
+
+        $this->assertSame(
+            ['ok'],
+            array_map(static fn ($t) => $t->name, $client->listTools()),
+            'a start() raising a non-Exception Throwable still aborts the loop, so route 3 is '
+            . 'open: startServer()\'s runtime catch has to be \Throwable, not \RuntimeException',
+        );
+    }
+
+    /**
+     * AND THE OFFENDER IS DROPPED, not registered half-started. Without this the
+     * row above is satisfied by a client that keeps a server whose handshake
+     * never completed.
+     */
+    public function testTheServerWhoseStartRaisedIsNotRegistered(): void
+    {
+        $client = $this->clientFor(
+            ['bad' => $this->httpEntry(), 'good' => $this->httpEntry()],
+            [$this->handshake(), new \Error('boom'),
+             $this->handshake(), $this->toolsList('[{"name":"ok","description":"fine","inputSchema":{}}]')],
+        );
+
+        $client->startServers();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Unknown MCP server: bad');
+        $client->callTool('bad', 'anything', []);
+    }
+
+    /**
      * THE ORDER CONTROL. The offender is listed SECOND here, so the server that
      * must survive is one the old code ALSO started — the row would pass against
      * the defect. It is here to make the ordering claim in the file's doc-block
@@ -269,7 +330,7 @@ final class McpClientServerIsolationTest extends TestCase
 
     /**
      * @param array<string, array<string, string>> $servers
-     * @param list<Response> $responses
+     * @param list<Response|\Throwable> $responses
      */
     private function clientFor(array $servers, array $responses): McpClient
     {
