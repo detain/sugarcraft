@@ -17459,7 +17459,7 @@ sibling finding this entry sits beside, in the same run. **That is the guard pai
 intended, on the supervisor, one commit after it caught the lanes.**
 
 
-### Ea58-1 — 🔴 E529 IS FALSE AS FILED, and the figure it missed was hiding across a line break
+### E556 — 🔴 E529 IS FALSE AS FILED, and the figure it missed was hiding across a line break
 
 **Round 58, lane a. MEASURED.** E529 says `src/Context/RepoMapBlock.php` carries two `src/`
 cardinalities (297 and 316) that nothing verifies, citing that `tests/Context/RepoMapBlockTest.php`
@@ -17492,7 +17492,7 @@ check in the same test. Mutation: making `capture()` read the two documents kill
 grep. Flatten `^\s*\*\s?` before searching for a restated number, or the search reports zero for the
 same reason the assertion would have.
 
-### Ea58-2 — the implicitly-nullable scanner was blind to TWO of PHP's own spellings
+### E557 — the implicitly-nullable scanner was blind to TWO of PHP's own spellings
 
 **Round 58, lane a. E526/E531 closed.** E526's remaining two offenders were exactly where the class
 doc-block said — `src/Workflows/Workflow.php::mutate()` — and are fixed; the guard now WALKS all of
@@ -17517,7 +17517,7 @@ away, the `\null` fix, was **also** unpinned and also green when reverted. **Two
 commit, both found by mutating the fix rather than by reading it (rule 43), and the second only because
 the first was killed and its neighbours were mutated anyway.**
 
-### Ea58-3 — E528 is a SEAM, not a drift; the guard's silence was correct
+### E558 — E528 is a SEAM, not a drift; the guard's silence was correct
 
 **Round 58, lane a. Both halves of the finding refuted with measurements.** E528 asks for the two
 `runOnScaledClock()` copies to be consolidated, and warns that `DuplicatedTestHelperDriftTest` "exists to
@@ -17546,7 +17546,7 @@ doc-block first. `ScaledClockHelperSeamTest` is that trigger as a test, with the
 text in both directions, a token recogniser checked in both polarities, and the "these are two different
 helpers" claim keyed on parameter count rather than on either doc-block's prose (rule 40).
 
-### Ea58-4 — the brief's own E527 premise was inverted, and PHP is not symmetric here
+### E559 — the brief's own E527 premise was inverted, and PHP is not symmetric here
 
 **Round 58, lane a. RE-MEASURED independently on PHP 8.3.6**, after the killed lane-a agent's file
 recorded the same conclusion. The round brief states: *"PHP lets an implementation declare fewer
@@ -17569,7 +17569,7 @@ swallow the fifth argument with the suite green.
 What was missing was the measurement behind its "(measured; …)". That is now
 `tests/Backend/BackendContractWideningTest.php`.
 
-### Ea58-5 — three `catch (\Throwable)` sites in `tests/Backend/`, and what they actually cost
+### E560 — three `catch (\Throwable)` sites in `tests/Backend/`, and what they actually cost
 
 **Round 58, lane a.** E546's family is lane b's this round and lane b is fenced out of `tests/Backend/`,
 so these three were reachable by nobody else. **They are NOT E546's shape** — no assertion runs inside
@@ -17588,7 +17588,7 @@ settle:
 Both red; only one names the problem. The two `CommandBackend` copies assert `instanceof RuntimeException`
 instead, where the real message is not quoted at all.
 
-### Ea58-6 — this round's ownership map and lane a's file list DISAGREE, again
+### E561 — this round's ownership map and lane a's file list DISAGREE, again
 
 **Round 58, lane a. Reported, not resolved.** The brief states the map and each lane's file list "were
 reconciled before launch, deliberately", so a disagreement is news. There is one:
@@ -17600,7 +17600,7 @@ Lane a followed the intersection and touched only `RepoMapBlockTest.php`, so not
 way. **This is the same shape round 57's lane b found (`src/MCP/`), one round after the reconciliation
 that was supposed to prevent it.** The rate of lanes checking the map is now 2/6 across two rounds.
 
-### Ea58-7 — a mutation harness that scored "No tests executed!" as a SURVIVAL
+### E562 — a mutation harness that scored "No tests executed!" as a SURVIVAL
 
 **Round 58, lane a, found in its own harness.** A `--filter` naming a method that does not exist makes
 PHPUnit print `No tests executed!` and **exit 0**, which the harness read as "the mutation survived". Two
@@ -17611,10 +17611,10 @@ The harness now refuses a run whose output contains `No tests executed`, and tha
 known-answer control. **Rule 14 applies to the mutation harness itself: a verdict it cannot compute must
 be a DISCARD, never a survival — and "survival" is the direction that silently retires a finding.**
 
-### Ea58-8 — the fourth `awaitPromise()` swallow, and it was the one that could go GREEN
+### E563 — the fourth `awaitPromise()` swallow, and it was the one that could go GREEN
 
 **Round 58, lane a, fix stage. FIXED.** The review asked for a guard pinning the three narrowed
-`catch` arms Ea58-5 describes. Building it — over the whole of `tests/` rather than over the three
+`catch` arms E560 describes. Building it — over the whole of `tests/` rather than over the three
 commissioned files — found a fourth site nobody had named:
 `StreamingCommandBackendTest::testACancelledCompletionReapsItsChild()` wrapped `awaitPromise()` in
 
@@ -17631,12 +17631,12 @@ decided the verdict. Unlike its three siblings, which still went red through the
 assertions, **a hang there could come out green.** That is E546's actual shape, three sites away from
 the three that were reported as having it and did not.
 
-**The lesson is rule 11's, exactly:** Ea58-5's population was written from the shape of the first
+**The lesson is rule 11's, exactly:** E560's population was written from the shape of the first
 example (`catch (\Throwable)`), and the alphabet that mattered was "every supertype of
 `AssertionFailedError`". `AssertionSwallowingCatchTest` had already learned this a round earlier and
 its lesson had not travelled.
 
-### Ea58-9 — `RepoMapBlock`'s remaining unpinned figures, with the generator
+### E564 — `RepoMapBlock`'s remaining unpinned figures, with the generator
 
 **Round 58, lane a. RECORDED, deliberately not hand-corrected.** `src/Context/RepoMapBlock.php`'s
 `MAX_SECTION_BYTES` and `MAX_ENTRY_BYTES` doc-blocks restate this repository's package count, its
@@ -17667,7 +17667,7 @@ stands.
 The sentence claiming "the digits are gone rather than corrected" has been rewritten in rule-7 form —
 it was true of the census it retired and false read as a statement about the file.
 
-### Ea58-10 — `DuplicatedTestHelperDriftTest` carries the visibility hole lane a's guard just lost
+### E565 — `DuplicatedTestHelperDriftTest` carries the visibility hole lane a's guard just lost
 
 **Round 58, lane a. REPORTED, out of lane — `tests/Support/` is not lane a's this round.**
 `ScaledClockHelperSeamTest::declaresPrivateHelper()` required `T_PRIVATE`, so a third
@@ -17683,7 +17683,7 @@ so a test can vary it, and one test does (`protected` adds no pairs *today*). Th
 is whether "no pairs today" is the same claim as "the alphabet is right". Lane a's guard inherited its
 neighbour's blindness rather than a bug of its own, which is where rule 11 says alphabets come from.
 
-### Ea58-11 — nineteen files in `tests/` key a token walk on `T_FUNCTION` with no `T_FN`
+### E566 — nineteen files in `tests/` key a token walk on `T_FUNCTION` with no `T_FN`
 
 **Round 58, lane a. CENSUS ONLY — not audited, and mostly out of lane.** `BackendSignatureNullability
 Test` had `T_FN` missing from a guard whose entire subject is parameter spellings. Generator:
@@ -17702,7 +17702,7 @@ a reason. The ones worth reading are those asking about **parameter lists** or *
 callables**, where an arrow function declares parameters exactly like a `function` does. Do NOT resolve
 this with a blanket edit; rule 26 applies, and the file that documents the pattern is one of the hits.
 
-### Ea58-12 — `compileInFreshInterpreter()` deadlocked, and the proof is a hang rather than a red
+### E567 — `compileInFreshInterpreter()` deadlocked, and the proof is a hang rather than a red
 
 **Round 58, lane a. FIXED, with a residual worth knowing.** The helper read stdout to EOF and only then
 stderr. Every probe in the file emits a few hundred bytes, so nothing there could reach it. Measured
@@ -17716,7 +17716,7 @@ hanging test in CI is worse than a failing one. Its doc-block says so in as many
 properly needs a wall-clock budget around the child, which is `HangWatchdog`'s territory in `candy-pty`
 and does not exist in this package.
 
-### Ea58-13 — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
+### E568 — `Workflow::mutate()` cannot set `stopOnFirstFailure` to `false`
 
 **Round 58, lane a. REPORTED, deliberately NOT fixed.** `src/Workflows/Workflow.php::mutate()` spells
 the field as `$stopOnFirstFailure ?? $this->stopOnFirstFailure`, so passing `false` is
@@ -17727,11 +17727,11 @@ indistinguishable from passing nothing. Every other nullable field in this tree 
 It is currently **unreachable** — no wither passes the parameter — so this is dormant, not broken, and
 rule 6 says it gets wired or documented rather than deleted. It is recorded rather than fixed because
 `src/Workflows/` is in no lane's file list this round and lane a already made one forced out-of-lane
-edit to this exact file (Ea58-3's two characters). Whoever adds the first `withStopOnFirstFailure()`
+edit to this exact file (E558's two characters). Whoever adds the first `withStopOnFirstFailure()`
 inherits the bug.
 
 
-### Eb58-1 — `src/ClaudeCodeMcpClient.php` still claims an inheritance nothing checks *for it*
+### E569 — `src/ClaudeCodeMcpClient.php` still claims an inheritance nothing checks *for it*
 
 `FrameCapFamilyTest` (round 58) pins that all three `MAX_FRAME_BYTES` claimants agree with
 `EngineBackend::MAX_FRAME_BYTES`, and rewrote the doc-blocks in `src/LSP/LspConnection.php` and
@@ -17740,7 +17740,7 @@ carries the same stale sentence — "SIXTY-FOUR MEBIBYTES, inherited rather than
 round 58 lane b's file list**, so it was left alone. The class IS in `claimants()`, so the VALUE is pinned;
 only its prose still overstates. One paragraph, same three-part form as the other two.
 
-### Eb58-2 — the same E541 defect one word over: `required` reads an HTTP 401 as a denial
+### E570 — the same E541 defect one word over: `required` reads an HTTP 401 as a denial
 
 E541 was fixed by narrowing `block(?:ed)?` to the verb forms. **`required` has the identical shape and was
 deliberately NOT narrowed**, because `Permission required:` is a live `DenialKind` case and the term is
@@ -17760,7 +17760,7 @@ files most likely to write one. There is no free narrowing here: the honest opti
 a preceding permission noun, or to accept the false positive and make the guard's failure text name
 "reword, do not add a row" as the resolution.
 
-### Eb58-3 — `EngineBackend::MAX_FRAME_BYTES` is `private`, so the family cannot name it
+### E571 — `EngineBackend::MAX_FRAME_BYTES` is `private`, so the family cannot name it
 
 The reason `FrameCapFamilyTest` exists at all. PHP 8.3.6 cannot initialise a `const` from another class's
 private constant, so three classes spell `64 * 1024 * 1024` and a reflection-driven test holds them
@@ -17769,7 +17769,7 @@ together. **Promoting the engine's constant to `public` collapses all of it**: e
 fact. `FrameCapFamilyTest` already asserts the constant IS still private, with a failure message saying to
 do exactly this when that stops being true. `src/Backend/EngineBackend.php` is not lane b's file.
 
-### Eb58-4 — the swallowing-catch census's two stated blind spots
+### E572 — the swallowing-catch census's two stated blind spots
 
 `SwallowingCatchCensusTest` refuses a general-purpose exception type caught around an asserting try, and
 says in its own doc-block what it cannot see. Both remain open:
@@ -17784,7 +17784,7 @@ says in its own doc-block what it cannot see. Both remain open:
 Closing (1) needs a call-graph pass over test-local private methods, which is a real piece of work rather
 than a widening.
 
-### Eb58-5 — the round-58 ownership map names a lane-c file that does not exist
+### E573 — the round-58 ownership map names a lane-c file that does not exist
 
 The map's preamble states that every path in it "was verified to exist at `535d721ff` before this brief was
 written (E334)". `git ls-tree 535d721ff sugar-crush/tests/` has no `StackedDocCommentTest.php`, which the
@@ -17792,7 +17792,7 @@ map lists among lane c's four test-root files. Round 57's map/brief disagreement
 three; this round's was reconciled before launch and still carries one bad path. **The E334 check evidently
 does not cover the ownership block**, only the per-lane file lists.
 
-### Eb58-6 — the round-58 brief's E546 distribution was one short, in `Providers/`
+### E574 — the round-58 brief's E546 distribution was one short, in `Providers/`
 
 The brief states 22 sites: "test root ×4, `tests/Agents/` ×8, `tests/Cli/` ×2, `tests/MCP/` ×4,
 `tests/Providers/` ×3, `tests/Workflows/` ×1". Re-measured at `535d721ff` with round 57's own generator
@@ -17801,7 +17801,7 @@ being `Providers/ToolSchemaEncodingTest.php:364 catch(\PHPUnit\Framework\Asserti
 correct code and one of the four deliberate survivors. Every other bucket matched exactly. Harmless here
 because the missed row needed no fix, but a distribution used to decide "am I done" was wrong by one.
 
-### Eb58-7 — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
+### E575 — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
 
 `parsePresetFile()` throws `"Invalid YAML frontmatter in: {$filePath}"` when `Frontmatter::parse()` returns
 a non-array. MEASURED on PHP 8.3.6: malformed YAML never reaches it — `Frontmatter::parse()` raises
@@ -17810,7 +17810,7 @@ is reachable only for frontmatter that parses to a scalar, e.g. `---\nfoo\n---`.
 the wrong branch and asserted the filename appears in the message, which was red. Worth a test naming the
 scalar case, or a note saying which input reaches it.
 
-### Eb58-8 — `src/ClaudeCodeMcpClient.php`'s frame-cap prose was not corrected with the other two
+### E576 — `src/ClaudeCodeMcpClient.php`'s frame-cap prose was not corrected with the other two
 
 Round 58's fix stage narrowed an over-broad scope claim in `src/LSP/LspConnection.php` and
 `src/MCP/StdioMcpServer.php` — both said raising the engine's cap desynchronises the family "while every
@@ -17824,7 +17824,7 @@ latter now derived from the declaration rather than a hand list. Only the prose 
 tells the reader to edit a roster that no longer exists. One paragraph, mechanical, no measurement needed
 beyond re-reading the other two.
 
-### Eb58-9 — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
+### E577 — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
 
 `AssertionSwallowingCatchTest::swallowingCatchesIn()` resolves each caught type through the import map and
 the file's namespace in order to DECIDE whether the catch swallows, then records the type in the row as the
@@ -17838,7 +17838,7 @@ The remaining consumer of `types` is a failure-message renderer, which is the co
 that the key is DISPLAY-ONLY and nothing says so at its definition: any future decision keyed on it repeats
 the defect exactly. Either add the resolved FQN as a second key, or name the existing one for what it is.
 
-### Eb58-10 — the census's resolver is deliberately more permissive than PHP, and that is unpinned
+### E578 — the census's resolver is deliberately more permissive than PHP, and that is unpinned
 
 `SwallowingCatchCensusTest::resolve()` tries the file's own namespace and then falls back to the global
 name. PHP does neither: an unqualified class name in a namespaced file resolves to the current namespace
@@ -17851,7 +17851,7 @@ asserting that the permissive fallback cannot produce a `safe` verdict for a typ
 load would close it. MEASURED at round 58: zero bare-unimported catch types exist in `sugar-crush/tests`
 (463 files), so this is latent.
 
-### Eb58-11 — a duplicated line in `GlobFigureDriftTest`'s doc-block, present at the floor
+### E579 — a duplicated line in `GlobFigureDriftTest`'s doc-block, present at the floor
 
 `sugar-crush/tests/Config/GlobFigureDriftTest.php`'s class doc-block repeats one line verbatim:
 
@@ -17871,7 +17871,7 @@ count — a figure someone will otherwise treat as unexplained noise.
 
 ---
 
-## Ec58-1 — a parametrised child budget was never 20, and nothing had re-read it in two rounds
+### E580 — a parametrised child budget was never 20, and nothing had re-read it in two rounds
 
 `ChildWallClockBudgetTest`'s regex census could see that a budget went through a `%d` placeholder and not
 what it was, so the values rested on a doc-block sentence: *"those sites are at 20 by inspection, MEASURED
@@ -17897,7 +17897,7 @@ silence.** Four further mutations of the resolver (wrong conversion ordinal, `%%
 the rule-14 report silently dropped, only the first caller's value taken) were all killed, as was blinding
 the token census on all but one directory — which the two-instrument cross-check catches.
 
-## Ec58-2 — `tools/` joins a doc-drift roster, and BOTH halves of the prescribed shape were wrong
+### E581 — `tools/` joins a doc-drift roster, and BOTH halves of the prescribed shape were wrong
 
 E551 said the fix was a guard in `tools/tests/` with "the token-stream scanner lifted somewhere both can
 reach", since copying it "is the shape `DuplicatedTestHelperDriftTest` exists to catch". **Measured, and
@@ -17924,7 +17924,7 @@ free and a behaviour change reds naming the file to port into. **Mutating the CA
 `sugar-crush` reds `tools/tests/` (M9, KILLED)**, which is the property that makes the copy defensible.
 A real stacked pair injected into `tools/gen-docs.php` also reds (M14).
 
-## Ec58-3 — rule 18 demonstrated on itself, inside one round
+### E582 — rule 18 demonstrated on itself, inside one round
 
 Round 58's own first commit wrote two cardinalities into `CONTRIBUTING.md` prose. **Both were wrong within
 the hour**, one of them invalidated by this same round's other work:
@@ -17946,7 +17946,7 @@ was added. **52 was a mis-measurement, not staleness.** The causal clause is rem
 is making survives it: a figure no test derives rots whether or not anyone also mis-typed it, and the
 reason it is dropped rather than corrected is unchanged.
 
-## Ec58-4 — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
+### E583 — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
 
 E547 inherited "eight bare `{@see someMethod()}` citations name no method that exists". Re-censused with a
 generator, the answer depends entirely on the alphabet (rule 11):
@@ -17965,7 +17965,7 @@ Neither number is wrong; they answer different questions. **One was fixed** —
 reported rather than edited. **Widening the tree's guard to this alphabet would red twelve files across
 two other lanes**, so it is a decision for a round where one lane owns `tests/`.
 
-## Ec58-5 — a 🔴 "before anything else" instruction was skipped, and only the transcript recorded it
+### E584 — a 🔴 "before anything else" instruction was skipped, and only the transcript recorded it
 
 Round 58's first lane-c agent was told, in red, to start the E490 campaign in the background **before
 doing anything else**. Its transcript contains **zero** campaign calls across 43 tool uses; it went
@@ -17975,7 +17975,7 @@ but about the harness: a leading imperative in a long brief has no enforcement, 
 transcript would have revealed the omission. Same class as E492, where three lanes read a stale ownership
 map and none reported it. **The rate is the part worth keeping.**
 
-## Ec58-6 — a census that could express two shapes, under a doc-block saying "every"
+### E585 — a census that could express two shapes, under a doc-block saying "every"
 
 `ChildWallClockBudgetTest::childBudgets()` scanned raw source for
 `/<wrapper> -s KILL (\d+|%d)/` and documented itself as "every literal child budget in `tests/`, and
@@ -18008,7 +18008,7 @@ with no whitespace at the literal's end (`'time' . 'out 5 sh'` — this file's o
 deliberate act anywhere else), and a budget assembled by `implode()`. Everything else lands in
 `unresolved`.
 
-## Ec58-7 — the mutation harness's uniqueness check was meaningless for exactly the anchors that need it
+### E586 — the mutation harness's uniqueness check was meaningless for exactly the anchors that need it
 
 Rule 13, self-inflicted and caught mid-run. The harness refused a mutation unless
 `/usr/bin/grep -cF -- "$OLD" "$FILE"` returned 1. **GNU `grep -F` treats a newline in the pattern as a
@@ -18022,7 +18022,7 @@ discard" and filed everything else non-zero as KILLED. Removing `resolveThroughP
 produced **rc 139 — SIGSEGV**, the runner dying rather than reporting, and it was filed as a clean kill. A
 signal death is neither a kill nor a survival and is now named as such.
 
-## Ec58-8 — a `--check` that did nothing satisfied the guard for `--check`
+### E587 — a `--check` that did nothing satisfied the guard for `--check`
 
 `GenDocsTest::testCheckDoesNotWriteToTheTree()` asserted only that the bytes on disk were unchanged after
 `--check` ran over a hand-edited page. **That is also exactly what a `--check` which never ran leaves
@@ -18030,26 +18030,26 @@ behind** (rule 25). Proved by mutation rather than argued: with `gen-docs.php`'s
 `if (false)`, the test with the new `assertSame(1, $result['exit'])` **reds**, and the same mutation with
 that assertion reverted is **GREEN — 1 test, 2 assertions**. One line, and the exposure is closed.
 
-## Ec58-9 — repo-root `tools/` env vars are on no roster at all
+### E588 — repo-root `tools/` env vars are on no roster at all
 
 `SUGARCRAFT_GEN_DOCS_ROOT` (added this round) and `SUGARCRAFT_CHECK_PATH_REPOS_ROOT` (pre-existing) are
 documented only in their own comments. `EnvRosterDriftTest`'s roster is `sugar-crush/src` +
 `sugar-crush/bin` under the `SUGARCRUSH_`/`SUGAR_CRUSH_` alphabet, so a `SUGARCRAFT_`-prefixed variable at
 the monorepo root is covered by nothing — the new one is consistent with its sibling rather than a
 regression, which is why it was left. **Not deferred for cost: deferred because the roster is
-`sugar-crush`-rooted by design and reaching `tools/` from it is the same dependency inversion Ec58-2
+`sugar-crush`-rooted by design and reaching `tools/` from it is the same dependency inversion E581
 records.** A `tools/tests/` guard is the shape that would work, on the model of `StackedDocCommentTest`.
 
-## Ec58-10 — a manifest-policy CI job now reds on a test file's token stream
+### E589 — a manifest-policy CI job now reds on a test file's token stream
 
 `path-repo-check` — a job about composer manifests — is the only job that runs `tools/tests/`, so it now
 goes red whenever `RuntimeNoticeSinkDeliveryTest::stackedDocCommentLines()` changes by one token. That is
 the design (`StackedDocCommentTest` pins its copy against the canonical, and the failure text names the
-file to port into), and it is the price of Ec58-2's dependency direction. **Stated here because a sibling
+file to port into), and it is the price of E581's dependency direction. **Stated here because a sibling
 lane editing that method will see a job whose NAME gives no hint of the reason.** Renaming the job, or
 splitting `tools/tests/` into its own, is the cheap improvement whenever someone is next in `ci.yml`.
 
-## Ec58-11 — three arms compute a line, one fixture pinned none of them, and one arm was wrong
+### E590 — three arms compute a line, one fixture pinned none of them, and one arm was wrong
 
 Rule 41 three times in one file, and the third pass found a real defect rather than a gap.
 
