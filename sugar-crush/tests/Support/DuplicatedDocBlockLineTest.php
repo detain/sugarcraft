@@ -20,14 +20,25 @@ use PHPUnit\Framework\TestCase;
  * the rest of the sentence belongs to.
  *
  * WHY A GUARD AND NOT A ONE-LINE EDIT. The edit was one line. The population is
- * what makes it worth an instrument: MEASURED on PHP 8.3.6 over `tests/`,
- * `src/` and `bin/`, with NO minimum length and NO exemption of any kind, this
- * scanner reports exactly ONE site in the whole package — the E579 one, now
- * fixed. A census whose clean state is a true empty needs no allow-list to keep
- * it clean, and an instrument with no exemption row cannot be bought with one
+ * what makes it worth an instrument: MEASURED on PHP 8.3.6 over `tests/` and
+ * every root in {@see SOURCE_ROOTS}, with NO minimum length and NO exemption of
+ * any kind, this scanner reports exactly ONE site — the E579 one, now fixed. A
+ * census whose clean state is a true empty needs no allow-list to keep it
+ * clean, and an instrument with no exemption row cannot be bought with one
  * (rule 33). The number is not written into any assertion here; it is derived
  * on every run by {@see repeatedDocBlockLinesIn()} over
- * {@see everyTestFile()} and the two source roots beside it.
+ * {@see everyTestFile()} and the source roots beside it.
+ *
+ * WHAT THAT SENTENCE USED TO CLAIM, and why it is worth recording rather than
+ * quietly correcting: it said "`tests/`, `src/` and `bin/`" and "the whole
+ * package". Neither was true. The walk's file test was the `.php` extension,
+ * `bin/` holds one extensionless executable, and so the `bin/` root
+ * contributed ZERO files under a sentence naming it — see {@see isPhp()}. And
+ * "the whole package" left out `examples/` and `workflows/` entirely. Both
+ * halves are now true rather than narrowed: the walk sees `bin/sugarcrush`,
+ * the two missing roots are in {@see SOURCE_ROOTS}, and the roots are asked
+ * for their contribution ONE AT A TIME so that the next root to fall out of
+ * the walk cannot hide inside a total.
  *
  * RULE 15: THE ABSENCE IS NOT THE EVIDENCE. An assertion that this tree
  * contains no repeated line is exactly what a scanner deleted outright also
@@ -64,6 +75,24 @@ final class DuplicatedDocBlockLineTest extends TestCase
 {
     use TestFileWalkTrait;
 
+    /**
+     * The package roots walked beside `tests/`, which
+     * {@see TestFileWalkTrait::everyTestFile()} supplies.
+     *
+     * NAMED AS A CONSTANT SO THE POPULATION ASSERTION CAN ITERATE IT. The
+     * roots used to be a literal inside the walk, which left the test above
+     * unable to ask each one for a contribution and reduced to a single count
+     * over all of them — the shape a whole root can vanish through.
+     *
+     * `examples` AND `workflows` ARE HERE BECAUSE THE PROSE ALREADY CLAIMED
+     * THEM. This file's argument is about the whole package, and those two
+     * roots hold five `.php` files that no census here has ever read.
+     * Measured on PHP 8.3.6 before adding them: both are clean, so widening
+     * the walk changed no answer — which is the only kind of widening worth
+     * doing without a lane owning the files it reaches.
+     */
+    private const SOURCE_ROOTS = ['src', 'bin', 'examples', 'workflows'];
+
     public function testNoDocBlockInThisPackageRepeatsALineUnderItself(): void
     {
         $sources = [];
@@ -78,12 +107,38 @@ final class DuplicatedDocBlockLineTest extends TestCase
         // only worth reading if the scanner that computed it still answers a
         // source whose answer is known, and if the population it walked is not
         // empty.
-        $this->assertGreaterThan(
-            400,
-            \count($sources),
-            'the file walk collected almost nothing, so the emptiness asserted below is a fact '
-                . 'about the walk and not about the tree',
-        );
+        //
+        // WHAT THIS SAID: one `assertGreaterThan(400, count($sources))`,
+        // offered as the proof that the walk collected something. WHAT IS TRUE
+        // NOW, measured on PHP 8.3.6: {@see everyTestFile()} ALONE returns 467
+        // files, so that floor sat BELOW one of the two halves it was meant to
+        // be guarding, and the entire source side could vanish without
+        // reddening it — mutation-checked, replacing this walk's root list
+        // with an empty one left the census green. WHY A PER-ROOT SHAPE AND
+        // NOT A BIGGER NUMBER: a bigger number is a cardinality over `tests/`
+        // written into an assertion, and the next merge invalidates it
+        // (rule 18). Asking each root for a contribution is structural, cannot
+        // drift, and reds on exactly the failure a single scalar cannot see —
+        // one root silently contributing nothing at all.
+        //
+        // IT IS ALSO WHAT PINS {@see isPhp()}. `bin/` holds exactly one file
+        // and that file has no `.php` extension, so the shebang arm dying is
+        // indistinguishable from `bin/` being empty — and both red here.
+        foreach (['tests', ...self::SOURCE_ROOTS] as $root) {
+            $contributed = array_filter(
+                array_keys($sources),
+                static fn (string $where): bool => str_starts_with($where, $root . '/'),
+            );
+            $this->assertNotSame(
+                [],
+                $contributed,
+                'the walk collected NOTHING from `' . $root . '/`, so the emptiness asserted '
+                    . 'below is a fact about the walk and not about that root. A directory that '
+                    . 'has moved, a root dropped from the walk, and a file-type test that cannot '
+                    . 'express what lives there all produce this, and all three are invisible to '
+                    . 'a population count taken over every root at once.',
+            );
+        }
         $control = self::repeatedDocBlockLinesIn(self::sourceCarryingARepeatedLine());
         $this->assertCount(
             1,
@@ -362,14 +417,21 @@ final class DuplicatedDocBlockLineTest extends TestCase
         $package = \dirname(__DIR__, 2);
         $found = [];
 
-        foreach (['src', 'bin'] as $root) {
+        foreach (self::SOURCE_ROOTS as $root) {
             $directory = $package . '/' . $root;
             if (!is_dir($directory)) {
+                // SILENT HERE AND CAUGHT THERE, deliberately. A root that has
+                // been renamed away contributes nothing, and nothing is what
+                // the per-root assertion in
+                // {@see testNoDocBlockInThisPackageRepeatsALineUnderItself()}
+                // reds on. Throwing here would move the diagnosis into the
+                // walker and leave the test that makes the claim unable to
+                // state which root went missing.
                 continue;
             }
             foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory)) as $file) {
                 /** @var \SplFileInfo $file */
-                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.php')) {
+                if (!$file->isFile() || !self::isPhp($file->getPathname())) {
                     continue;
                 }
                 $found[substr($file->getPathname(), \strlen($package) + 1)] = $file->getPathname();
@@ -378,5 +440,37 @@ final class DuplicatedDocBlockLineTest extends TestCase
         ksort($found);
 
         return $found;
+    }
+
+    /**
+     * Whether $path holds PHP source — asked of the FILE, not of its name.
+     *
+     * WHY NOT `str_ends_with($path, '.php')`, which is what stood here. That
+     * test reported ZERO files for the `bin/` root while the doc-block above
+     * claimed the census covered it: measured on PHP 8.3.6, `bin/` holds
+     * exactly one entry, `bin/sugarcrush`, and it is 431 lines of PHP behind a
+     * `#!/usr/bin/env php` line with no extension at all. The root was in the
+     * walk, the walk was in the prose, and the file was in neither — rule 11 at
+     * its plainest, the alphabet here being the file extension and the one file
+     * it could not express being the package's own executable.
+     *
+     * The shebang is read from the file rather than guessed from the path, so
+     * a second extensionless entry point arrives covered instead of arriving
+     * uncounted.
+     */
+    private static function isPhp(string $path): bool
+    {
+        if (str_ends_with($path, '.php')) {
+            return true;
+        }
+
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+        $first = (string) fgets($handle, 256);
+        fclose($handle);
+
+        return str_starts_with($first, '#!') && str_contains($first, 'php');
     }
 }
