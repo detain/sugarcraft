@@ -18161,3 +18161,167 @@ unverified.** Round 58's briefs asserted two and cited neither. Both survived to
 the lane's own scepticism caught them. **Rule 16 applies to the brief exactly as it applies to a review** —
 and a brief carries more authority, because nothing downstream is asked to falsify it.
 
+
+### Eb59-1 — two of lane b's five brief items commission edits to files lane b does not own
+
+🔴 **The round's first finding, and it was visible before any work started.** Round 59's brief gives lane b
+five items. Items 1 and 2 (E572, E577, E578) are entirely about two files:
+
+| file | owner per the round-59 ownership block |
+|---|---|
+| `sugar-crush/tests/SwallowingCatchCensusTest.php` | **nobody** — "NO LANE OWNS `sugar-crush/tests/` ROOT THIS ROUND except the two files named for lane a and the one named for lane b" |
+| `sugar-crush/tests/Support/AssertionSwallowingCatchTest.php` | **lane a** — `sugar-crush/tests/Support/` |
+
+Neither is in lane b's file list, and both are rejected by lane b's own scope regex (run: each prints as an
+out-of-lane path). So the brief's items 1 and 2 could not be implemented without breaching the map, and the
+map's own instruction for that case is "report it; do not make it". They were therefore MEASURED rather
+than edited, and the measurements are Eb59-2 … Eb59-5 below.
+
+Two further inconsistencies in the same block, both cosmetic but both in the mechanism that has now been
+wrong three rounds running (E561, E573, E591): the block says "the ONE named for lane b" (singular) while
+lane b's list names TWO test-root files, `DenialPrefixRosterTest.php` and `FrameCapFamilyTest.php`. And the
+new per-lane scope regex — which IS correct — permits both, so the regex and the prose disagree about the
+count. **The E334 path check verifies that paths EXIST. Nothing checks that a lane's WORK ITEMS fall inside
+its own file list**, which is the gap that produced this, and it is mechanically checkable: every file a
+brief item names should be run through that item's lane regex at prep time.
+
+### Eb59-2 — `SwallowingCatchCensusTest` does not model catch-clause ORDER, so it reports round 58's own repair shape as an offender
+
+🔴 MEASURED on PHP 8.3.6 / PHPUnit 10.5.64, by driving the SHIPPED `scanSource()` through reflection (not a
+copy of it). Two sources, identical but for one clause:
+
+    REPAIRED   try { assert } catch (\PHPUnit\Framework\AssertionFailedError) { throw; } catch (\Throwable) {}
+    UNREPAIRED try { assert }                                                            catch (\Throwable) {}
+
+    REPAIRED   -> hits=1  catch(\Throwable)=[offender]
+    UNREPAIRED -> hits=1  catch(\Throwable)=[offender]
+
+**The census cannot tell them apart.** PHP dispatches to the FIRST matching clause (measured directly: with
+the narrow clause first, an `ExpectationFailedException` lands there), so the `\Throwable` clause in the
+repaired shape **cannot receive an assertion failure at all**. It is safe by the language, not by judgement.
+
+Why the census is green today: all four sites in the tree that carry this shape
+(`Backend/CommandBackendTest.php:300`, `Backend/EngineBackendTest.php:304`,
+`Backend/StreamingCommandBackendTest.php:943` and `:1001`) have try bodies that assert only INDIRECTLY, so
+`$asserts` is false and the walk never reaches their catch clauses. The first person to apply round 58's own
+prescribed repair around a DIRECTLY asserting try reddens the census on correct code.
+
+That is rule 33 exactly, and the census's failure text makes it worse rather than better: it tells the reader
+*"If the assertion failure genuinely IS the subject under test, catch the assertion-failure type BY NAME …
+and this census will accept it on the structure alone."* **That sentence is false whenever a wide clause
+follows the named one** — which is the shape the repair produces. FIX: skip every clause standing after one
+that already catches an `ExpectationFailedException`, and pin BOTH polarities (narrow-first → not reported;
+wide-first → reported).
+
+### Eb59-3 — E572 blind spot (1) closes at ZERO, and the four apparent offenders were round 58's own repairs
+
+E572 records that the swallowing-catch census cannot see an assertion reached through a helper. It is now
+measured. Generator: `census_indirect_assert.php` (round 59 lane b scratchpad), PHP 8.3.6, run over
+`sugar-crush/tests` at `891b17ba7`. It reuses `bodyAsserts()`'s alphabet VERBATIM so the direct arm
+reproduces the live census, and adds a transitive expansion over same-file method declarations
+(`$this->x()`, `self::x()`, `static::x()`), depth-bounded at 8 with a visited set.
+
+**Result: 466 files scanned, 0 hits.** Seven known-answer controls pass in the same run — one hop, two hops,
+direct-only (must be 0, the live census owns it), no-assert-anywhere, mutual recursion (0 and no hang), and
+the two ordering controls from Eb59-2 (narrow-first → 0, wide-first → 1).
+
+**Before the ordering rule was added it reported 4**, all `via awaitPromise`, all in `tests/Backend/`, and
+all four are CORRECT CODE carrying round 58's repair. Rule 33: the classifier was the defect, not the code.
+The finding for whoever builds this into a guard is that the emptiness is real, so the guard is cheap — but
+it is only worth anything with the ordering rule and the controls, because without them it starts life
+reporting four false alarms and gets answered with four exemption rows.
+
+⚠️ Still not covered, and stated so the next reader does not inherit an overclaim: a helper declared in a
+PARENT class or a TRAIT is invisible to a same-file walk. Cross-file expansion was not built.
+
+### Eb59-4 — E572 blind spot (2) is latent: 11 `set_error_handler` sites, 10 restored in a `finally`, the 11th has zero callers
+
+Measured at `891b17ba7`, PHP 8.3.6, over 466 files. The mechanism is not what the blind-spot wording
+suggests: a PHPUnit assertion failure is a THROWN EXCEPTION and no error handler intercepts it. What an
+installed handler suppresses is PHPUnit's conversion of PHP warnings/notices into failures — and a handler
+**not restored on every path out leaks into every later test in the process**, silencing that conversion
+suite-wide. So the checkable property is pairing, not presence.
+
+    Backend/BackendContractWideningTest.php:310                     finally
+    Diagnostics/RuntimeNoticeSinkTest.php:444                       finally
+    MCP/StdioMcpServerToolListRobustnessTest.php:259, :294          finally
+    Support/RefusesAnUnreadableSourceTrait.php:105, :113            finally
+    Tools/BuiltIn/GlobTest.php:603, :670                            finally
+    VhsTapeContractTest.php:4123, :4482                             finally
+    Skills/SkillLoaderTest.php:59  (suppressErrorLog)               NEVER RESTORED
+
+The single unrestored site is **dormant**: `/usr/bin/grep -rn "suppressErrorLog()\|restoreErrorHandler()"`
+over `tests/` returns nothing but the declarations — zero callers of either. Per rule 6 it is a seam to wire
+or to pin, not to delete. There is no live leak, so a guard here would be pinning a property the tree
+already has.
+
+⚠️ **AND THE SCANNER THAT PRODUCED THIS TABLE WAS WRONG ON ITS FIRST RUN, IN THE WAY RULE 14 DESCRIBES.** It
+matched only `T_STRING`, and reported **9** sites. MEASURED on PHP 8.3.6: `\set_error_handler(` is a single
+`T_NAME_FULLY_QUALIFIED` token whose text carries the leading backslash, so the leading-`\` spelling was
+invisible and `Support/RefusesAnUnreadableSourceTrait.php` was dropped entirely. It was caught only by
+diffing the scanner's answer against a plain `grep`. Any guard built from this must match both token kinds
+and pin each with its own fixture.
+
+### Eb59-5 — E578's prescribed fixture is FALSE as written; the resolver's real divergence is the other direction
+
+E578 prescribes: *"A fixture asserting that the permissive fallback cannot produce a `safe` verdict for a
+type PHP would have failed to load would close it."* MEASURED against the shipped `scanSource()`, PHP 8.3.6,
+namespace `Demo578`, catch type spelled bare and unimported:
+
+| catch type | PHP would resolve to | census verdict |
+|---|---|---|
+| `InvalidArgumentException` | `Demo578\InvalidArgumentException` — does not exist | **`safe`** |
+| `RuntimeException` | `Demo578\RuntimeException` — does not exist | **`offender`** |
+
+Row 1 is exactly the state the prescribed fixture asserts is impossible. **The fixture would be red.** That
+is the eleventh wrong prescription in this tree's audit history and the third whose failure mode is
+"describes a state the code cannot reach" — here inverted: it describes a state the code reaches routinely.
+
+The doc-block's own reassurance — *"can only turn an `[unclassified]` into a real verdict … can never turn
+an offender into `safe`"* — is literally true and names the harmless direction. The direction that bites is
+`[unclassified]` → **`offender`**, row 2: MEASURED, `catch (RuntimeException)` in a namespace with no such
+class **does not match at all** — the exception propagates straight past it (verified by running it). So the
+census reports as a swallow a clause PHP will never enter. A false alarm on an emptiness guard is answered
+with an exemption row, and an exemption row for correct code is a licence (rule 33).
+
+What would actually close E578: a fixture pinning BOTH rows above with the verdicts as measured, plus a
+sentence at `resolve()` saying the fallback answers for a name PHP would not have loaded, so its verdict
+describes the GLOBAL class and not the clause's real behaviour. Latent either way — zero bare-unimported
+catch types exist in `sugar-crush/tests`.
+
+### Eb59-6 — `DENIAL_SHAPE`'s lookbehind lets the tail of a hyphenated compound open a frame, for EVERY term
+
+Found while fixing E570 and deliberately not fixed with it, because it is not a `required` problem. The
+shape is `/(?<![A-Za-z])[A-Z][A-Za-z]*(?: [A-Za-z]+){0,3}:/`. A hyphen is not `[A-Za-z]`, so in
+`Content-Length required:` the frame extracted is `Length required:` — the compound's second half opens a
+frame of its own. MEASURED on PHP 8.3.6; two of E570's four false positives arrive this way and neither is
+about the word `required`.
+
+The property belongs to the whole vocabulary: `Cache-Control disallowed:`, `Transfer-Encoding rejected:`,
+`Auto-Approve denied:` all frame on their tail. **It is not a free fix.** Adding `-` to the lookbehind kills
+those false positives and simultaneously blinds the scan to a genuinely invented hyphenated prefix
+(`Auto-Approve denied:` → today frames as `Approve denied:` and is reported; with the hyphen excluded it is
+reported nowhere). Both directions need fixtures before either is chosen. No occurrence in `src/` today.
+
+### Eb59-7 — E577 was not addressed and was not re-measured; it is out of every lane's reach this round
+
+`AssertionSwallowingCatchTest::swallowingCatchesIn()` lives in `sugar-crush/tests/Support/`, which is lane
+a's directory, and lane a's file list names four specific paths that do not include it. So E577 (the `types`
+key records the AUTHOR's spelling while the failure message reads as the resolved one, and nothing at the
+definition says it is display-only) is untouched, and this entry does NOT restate round 58's measurement as
+though it had been re-taken — per rule 47, it is recorded as unverified at this commit. It wants one
+sentence at the key's definition, or a second key carrying the resolved FQN, and it wants an owner.
+
+### Eb59-8 — a class constant naming another class's constant is evaluated LAZILY, so narrowing the source fails late
+
+Recorded because two doc-blocks were written this round asserting the opposite and the mutation run caught
+it. MEASURED on PHP 8.3.6: with `Src::V` private and `class Dst { public const W = Src::V; }`,
+`class_exists('Dst')` answers **true** and the `Error: Cannot access private constant` is raised on the first
+READ of `Dst::W`. Confirmed on the real tree by mutation M3 — narrowing `EngineBackend::MAX_FRAME_BYTES` back
+to `private` surfaced as an error inside `ClaudeCodeMcpClient.php:234` during a constant read, not as a load
+failure.
+
+Consequence for the frame-cap family: the derivation landed this round is NOT protected by a load-time
+fatal. Narrowing the engine's constant would leave all three framers loadable and throw inside whichever
+framing path checked its bound first — in production, not at boot. That is precisely why
+`FrameCapFamilyTest::testTheConstantReaderIsAliveInBothPolarities()` still asserts the visibility.
