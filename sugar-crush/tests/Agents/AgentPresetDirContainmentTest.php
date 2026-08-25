@@ -342,12 +342,19 @@ final class AgentPresetDirContainmentTest extends TestCase
         // directory was rejected when it was read.
         $this->assertSame([], $registry->refusedDirectories());
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest} for the family.
+        $caught = null;
+
         try {
             $registry->load('stolen');
-            $this->fail('a linked-out preset must not be loadable by name either');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('not found', $e->getMessage());
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'a linked-out preset must not be loadable by name either');
+        $this->assertStringContainsString('not found', $caught->getMessage());
     }
 
     /**

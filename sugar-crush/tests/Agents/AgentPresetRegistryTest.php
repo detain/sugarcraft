@@ -369,15 +369,29 @@ YAML;
 
         $registry = new AgentPresetRegistry([$this->tempDir]);
 
+        // MEASURED, and the reason this shape is now forbidden tree-wide: with
+        // `$registry->load('bad-yaml')` DELETED OUTRIGHT this test still passed,
+        // 1 test / 2 assertions / rc 0. `fail()` throws AssertionFailedError,
+        // which extends PHPUnit\Framework\Exception, which extends
+        // \RuntimeException — so the catch below caught the fail() standing one
+        // line above it, and `assertNotEmpty()` was satisfied by the fail()
+        // message itself. The test asserted that load() throws and could not
+        // tell whether load() was called at all.
+        $caught = null;
+
         try {
             $registry->load('bad-yaml');
-            $this->fail('Expected RuntimeException was not thrown');
         } catch (\RuntimeException $e) {
-            // The RuntimeException wraps Symfony's ParseException; the actual
-            // message is the ParseException message since that is what was
-            // re-thrown. Verify it is non-empty (YAML parse failure occurred).
-            $this->assertNotEmpty($e->getMessage());
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
+        // The RuntimeException wraps Symfony's ParseException; the actual
+        // message is the ParseException message since that is what was
+        // re-thrown. `assertNotEmpty()` alone is satisfiable by ANY message, so
+        // it is paired with a substring the parse failure genuinely carries.
+        $this->assertNotEmpty($caught->getMessage());
+        $this->assertStringContainsString('bad-yaml.md', $caught->getMessage());
     }
 
     // -------------------------------------------------------------------------
