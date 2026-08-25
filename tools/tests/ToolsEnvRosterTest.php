@@ -290,7 +290,9 @@ final class ToolsEnvRosterTest extends TestCase
                 // this reader's row pattern can match. MEASURED: with that
                 // version in place and `$inBlock = false` deleted from the
                 // section-boundary branch, so the block never ends at all, the
-                // suite is GREEN — 45 tests, 175 assertions. The mutation was
+                // suite is GREEN — 45 tests, 175 assertions AT `d63c02c56`. The
+                // count carries its sha because it rots and the GREEN does not
+                // (rule 18). The mutation was
                 // relevant; the fixture's window was wrong (rule 2).
                 "usage: x\n\nOptions:\n  BEFORE_THE_BLOCK  prose in an earlier section\n\n"
                 . "Environment:\n  B_ONE  the first\n  B_TWO\n         the second, wrapped\n\n"
@@ -303,6 +305,60 @@ final class ToolsEnvRosterTest extends TestCase
             [],
             self::environmentBlockNames("usage: x\n\nOptions:\n  --flag  a flag\n"),
             'the Environment: block reader invented rows for a help text with no such block',
+        );
+
+        // AND THE SHAPE THE ROW PATTERN ALONE CANNOT TELL FROM A ROW, which is
+        // ORDINARY WRAPPED PROSE. `[A-Z][A-Z0-9_]*` followed by a space is a
+        // perfectly good English line opener, so a continuation beginning `AND`
+        // or `A` used to be read as a variable. That is not hypothetical: a
+        // re-wrap of gen-docs.php's own help with ZERO WORDS CHANGED, moving
+        // `AND WRITE under, instead` to a line start, reported
+        // `gen-docs.php - AND` as a documented-but-unread knob and told the
+        // contributor to delete a row that does not exist (rule 33). The
+        // block's indent COLUMN is what separates them, and both offending
+        // openers are here because they fail differently: `AND` is all-caps
+        // and `A` is a single capital.
+        $this->assertSame(
+            ['C_ONE' => true],
+            self::environmentBlockNames(
+                "Environment:\n  C_ONE  a real row whose prose wraps three times, and the wrap\n"
+                . "         AND WRITE is where it lands, so this line opens all-caps\n"
+                . "         A path that is invalid exits 2, so this one opens with a\n"
+                . "         bare capital instead\n",
+            ),
+            'the Environment: block reader is reading wrapped PROSE as a variable row. A '
+            . 'continuation line is not a row however it begins; only the block\'s own indent '
+            . 'column says what a row is',
+        );
+
+        // THE OTHER POLARITY (rule 41): a phantom row is still caught. It sits
+        // at the column like every real row, so narrowing to the column costs
+        // the guard nothing it was actually for.
+        $this->assertSame(
+            ['C_ONE' => true, 'C_PHANTOM' => true],
+            self::environmentBlockNames(
+                "Environment:\n  C_ONE  a real row\n         wrapped once\n"
+                . "  C_PHANTOM  a row naming a variable nothing reads\n",
+            ),
+            'the Environment: block reader stopped seeing a second row at the same column, so '
+            . 'a knob documented and read by nothing would no longer be reported',
+        );
+
+        // AND WHAT THE COLUMN RULE CANNOT EXPRESS, pinned rather than promised
+        // (rule 11). Rows indented DEEPER than an intro line in the same block
+        // take their column from the intro, and are read as nothing. It reds
+        // rather than passing -- with no documented names every variable the
+        // script reads is reported undocumented -- so the direction is safe,
+        // but it is a real limit and this is where a future widening starts.
+        $this->assertSame(
+            [],
+            self::environmentBlockNames(
+                "Environment:\n  everything below is read at startup:\n    C_DEEP  a row\n",
+            ),
+            'the Environment: block reader now reads rows indented deeper than an intro line '
+            . 'in the same block. That is a WIDENING, not a bug fix: decide deliberately '
+            . 'whether the column should be the first ROW-SHAPED line rather than the '
+            . 'shallowest line, and pin whichever you choose in both directions',
         );
     }
 
@@ -344,7 +400,9 @@ final class ToolsEnvRosterTest extends TestCase
         // `array_diff($everything, $scripts, $files)` is empty — which is a
         // TAUTOLOGY of how `$files` is built, and MEASURED: with `$files`
         // narrowed to `/tests/` paths only, so the partition really does have a
-        // hole, the suite stayed GREEN at 46 tests / 188 assertions, because
+        // hole, the suite stayed GREEN at 46 tests / 188 assertions AT
+        // `bbc69b15d` — sha attached because the count rots and the GREEN is
+        // what the record is for (rule 18) — because
         // `tools/` happens to contain nothing outside those two shapes today.
         // An assertion of `[]` that a broken instrument also satisfies is not
         // evidence (rule 25).
@@ -497,16 +555,53 @@ final class ToolsEnvRosterTest extends TestCase
      *
      * KEYED ON THE BLOCK'S SHAPE, NOT ON THE NAME (rule 40): the section runs
      * from the `Environment:` heading to the next unindented line, and a row is
-     * an indented line whose first token is a bare upper-case identifier. A
-     * continuation line is indented too but starts with prose, so the leading
-     * token settles it. This is why `--flag  SOMETHING` under `Options:` is not
-     * a row and why a variable merely NAMED in a paragraph is not documented.
+     * a line at the block's OWN INDENT COLUMN whose first token is a bare
+     * upper-case identifier. This is why `--flag  SOMETHING` under `Options:`
+     * is not a row and why a variable merely NAMED in a paragraph is not
+     * documented.
+     *
+     * THE INDENT COLUMN IS THE FIX FOR A CLAIM THIS DOC-BLOCK GOT WRONG.
+     * WHAT IT SAID: "a continuation line is indented too but starts with prose,
+     * so the leading token settles it." WHAT IS TRUE: the leading token settles
+     * NOTHING, because `[A-Z][A-Z0-9_]*` followed by a space matches ordinary
+     * English at the start of a wrapped line -- `A `, `AND `, `NOT `, `CI `.
+     * MEASURED, by re-wrapping one sentence of `gen-docs.php`'s own help with
+     * ZERO WORDS ADDED OR REMOVED so that `AND WRITE under, instead` moved to a
+     * line start: the suite went RED with `gen-docs.php - AND` reported as a
+     * documented-but-unread knob. The text that ships today is one reflow away
+     * from that.
+     *
+     * WHY THAT WAS WORTH FIXING RATHER THAN TOLERATING, AND IT IS RULE 33's
+     * SHAPE EXACTLY. The failure a contributor would have seen blesses a
+     * resolution -- "Delete the row, or restore the read" -- and BOTH halves
+     * are wrong for a phantom: there is no row to delete and nothing to
+     * restore, so the only way out is to re-flow the paragraph until the guard
+     * stops complaining, with no idea why. A guard that red-flags correct prose
+     * and then prescribes damage is worse than no guard.
+     *
+     * WHY IT STILL EARNS ITS PLACE: the true positive is unaffected. A real
+     * phantom row sits at the block's indent column like every other row, and
+     * is still caught -- pinned in both directions by the fixtures on
+     * {@see testEveryVariableAToolsScriptReadsIsDocumentedInItsHelp()}.
+     *
+     * WHAT THIS SHAPE CANNOT EXPRESS, stated rather than left to be found
+     * (rule 11). A block whose rows are indented DEEPER than some other line
+     * in the same block -- an intro paragraph above the rows, say -- has its
+     * column taken from that other line, and its rows are then read as nothing.
+     * That direction FAILS CLOSED: with no documented names, every variable the
+     * script reads is reported undocumented and the suite reds loudly. It is a
+     * fixture below rather than a promise. Indent is counted in raw leading
+     * spaces and tabs, so a block that mixed the two would be measuring
+     * characters rather than columns; nothing here does.
      *
      * @return array<string, true>
      */
     private static function environmentBlockNames(string $help): array
     {
-        $names = [];
+        // PASS ONE: the block's own lines. The column cannot be known until
+        // they have all been seen, which is the whole reason this is not the
+        // single streaming pass it used to be.
+        $block = [];
         $inBlock = false;
         foreach (\explode("\n", $help) as $line) {
             if (\preg_match('/^Environment:\s*$/', $line) === 1) {
@@ -520,9 +615,27 @@ final class ToolsEnvRosterTest extends TestCase
             if (\trim($line) === '') {
                 continue;
             }
-            if ($line[0] !== ' ') {
+            if ($line[0] !== ' ' && $line[0] !== "\t") {
                 $inBlock = false;
 
+                continue;
+            }
+            $block[] = $line;
+        }
+
+        if ($block === []) {
+            return [];
+        }
+
+        $column = null;
+        foreach ($block as $line) {
+            $indent = \strlen($line) - \strlen(\ltrim($line, " \t"));
+            $column = $column === null ? $indent : \min($column, $indent);
+        }
+
+        $names = [];
+        foreach ($block as $line) {
+            if (\strlen($line) - \strlen(\ltrim($line, " \t")) !== $column) {
                 continue;
             }
             if (\preg_match('/^\s+([A-Z][A-Z0-9_]*)(\s|$)/', $line, $m) === 1) {

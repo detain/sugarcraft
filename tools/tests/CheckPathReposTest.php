@@ -369,7 +369,11 @@ final class CheckPathReposTest extends TestCase
      * `needs:` edge, which is a declaration in a file and can be deleted like
      * any other. MEASURED: with `needs: [tools-guards]` removed from
      * `path-repo-check`, the whole of `tools/tests/` was GREEN — 29 tests, 140
-     * assertions — while three doc-blocks in this tree (this file's
+     * assertions AT `810cc6d82`, WHICH IS THE HALF THAT ROTS AND SO CARRIES ITS
+     * SHA (rule 18): the suite has grown since and a reader re-running this
+     * today gets a different pair, which says nothing about whether the
+     * mutation still survives. The GREEN is the load-bearing half. Meanwhile
+     * three doc-blocks in this tree (this file's
      * {@see CI_JOBS}, the `--help` block in `tools/check-path-repos.php`, and
      * the job comment in `ci.yml`) all asserted the edge was there.
      *
