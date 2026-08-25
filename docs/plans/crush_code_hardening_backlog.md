@@ -15804,7 +15804,7 @@ candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608
 **STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
 stays open on its own evidence.
 
-## Round 56 — lane b (mcp-lsp remainder). Eb56-1 … Eb56-8.
+## Round 56 — lane b (mcp-lsp remainder). Eb56-1 … Eb56-13.
 
 **Provisional lane-prefixed ids per the brief; the supervisor renumbers at merge. None of them is cited
 from a source file.**
@@ -16023,3 +16023,105 @@ mutation reds by assertion in 9.6s instead of aborting in 60s.
 row pins. `StdioMcpServerWriteBoundsTest`'s `DEAF_SERVER_LIFETIME_SECONDS = 90` and
 `LspConnectionStdinWedgeTest`'s `DEAF_SERVER` `sleep(30)` are both deliberate and both documented; the
 question is whether their rows fail by assertion or by abort under the mutation each names.
+
+### Eb56-9 — `$readBuffer` is persistent and uncapped in all three framing classes
+
+**Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer's NOTE 12.** Severity: resource,
+family-wide, pre-existing. **Not this lane's defect** — the fix that made `ClaudeCodeMcpClient`'s
+accumulator survive a call JOINED this family rather than creating it.
+
+`ClaudeCodeMcpClient::$readBuffer`, `MCP\StdioMcpServer::$readBuffer` and `LSP\LspConnection::$readBuffer`
+are all instance state and none is capped. A peer that emits an unbounded stream with no frame terminator
+grows all three without limit. The same classes DO cap their stderr tails — `MAX_STDERR_BYTES = 65536`,
+capped in `absorbStderr()`/`drainStderr()` — for exactly this reason, so the asymmetry is inside one file
+in each case.
+
+`LspConnection` is the sharpest of the three: a `Content-Length` header the peer never satisfies leaves
+`refill()` accumulating against `$this->pendingContentLength` forever, and the read paths are
+deadline-bounded so the CALLER returns on time while the buffer keeps growing across later calls.
+`ClaudeCodeMcpClient` is the next: `callTool()` polls `readMessages()` a hundred times per call, and
+before the accumulator became a property the memory was at least reclaimed each call.
+
+**STEP:** decide the cap per class — it is NOT one number, because the frame sizes differ — and make
+exceeding it a diagnosable failure rather than a silent truncation: a truncated frame that is then parsed
+is a worse outcome than a refused one. Pin with a fixture emitting more than the cap with no terminator,
+and give the row a positive control (a frame just under the cap that still parses), or "the buffer stayed
+small" is satisfied by a reader that stopped reading.
+
+### Eb56-10 — the stacked-doc-comment guard scans `src/` only, and `tests/` has three instances
+
+**Recorded 2026-08-25 by round 56 lane b (fix stage).** Severity: guard coverage. **Measured.** Out of
+lane; reported, not reached for.
+
+`RuntimeNoticeSinkDeliveryTest::testNoSourceFileCarriesStackedDocComments` is the guard that caught this
+round's `parseTools()` stack, and it caught a SECOND one during this stage — a const hoisted between a
+method's doc-block and its signature. It is a good guard. It does not scan `tests/`.
+
+A token-stream scan (`T_DOC_COMMENT` immediately following `T_DOC_COMMENT`, whitespace skipped) over the
+files this lane touched reports three. One was introduced this round in
+`tests/LSP/LspConnectionStdinWedgeTest.php` and is fixed here; two predate `d38b644f4` in
+`tests/ClaudeCodeMcpClientShutdownTest.php` and are untouched.
+
+The `tests/` instance mattered more than a tidiness defect would: the orphaned block described the wrong
+const AND, reattached verbatim, would have stated the arrangement that same file's own doc-block records
+as MEASURED VACUOUS. A misattributed doc-block on a fixture is a false mechanism, not a formatting nit.
+
+**STEP:** widen the guard's roster to `tests/**.php`. Per rule 15 it needs a synthetic two-block fixture
+pushed through the SAME scanner in the SAME test, expecting exactly 1 — the "no file carries a stack"
+assertion is otherwise satisfied by a scanner that has stopped matching. Expect the two pre-existing
+`ClaudeCodeMcpClientShutdownTest` instances to red on the first run; they are real.
+
+### Eb56-11 — `writeAll()` is a synchronous up-to-15-second block on the caller's thread
+
+**Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer.** Severity: latency shape, new
+this round. **Deliberate and better than what it replaced** — recorded because nothing measures or
+documents it at the call sites.
+
+`WRITE_IDLE_SECONDS = 15.0`, and `sendMessage()` is reached from `connect()` and from `callTool()`. The
+handshake is safe: a fresh pipe is empty, so a few hundred bytes always fit and the loop never waits. A
+large `tools/call` from the TUI is not: where the old non-blocking `fwrite()` returned immediately and
+threw, the loop can now park the calling thread for fifteen seconds. That is the right trade — the
+message used to be silently half-sent — but it is a new shape on a path the TUI drives.
+
+**STEP:** measure the worst realistic `tools/call` payload against the 65536-byte pipe capacity and decide
+whether the caller wants the bound threaded (as `LspConnection::writeMessage()` now takes one) rather than
+inheriting the constant. Note the standing instruction against blanket total-request timeouts on LLM
+work — this is a PIPE write to a local child, not a completion, so the two are not the same question.
+
+### Eb56-12 — Eb56-1's widening needs a rule-15 fixture, and its own file must not spell the pattern
+
+**Recorded 2026-08-25 by round 56 lane b (fix stage), from the reviewer.** Severity: instrument. A rider
+on Eb56-1, filed separately because it is the half most likely to be skipped.
+
+Eb56-1 proposes widening `SymbolCitationDriftTest` to scrape `tests/**.php` and backticked PHP cites. An
+"every citation resolves" assertion passes exactly as well with a dead scraper. The widened guard needs a
+known-positive inside the same test: a fabricated dangling cite pushed through the same `resolve()`,
+required to be reported.
+
+And per the rule about blanket textual passes: the guard's own file must be excluded from its roster BY
+PATH, and written so the backtick-cite pattern never appears literally in it — build the fixture string by
+concatenation, never spell it in prose. Two separate incidents have had a sweep eat the file that
+documented the pattern it was sweeping.
+
+### Eb56-13 — `catch (\Throwable)` around a test body swallows PHPUnit's own assertion failures
+
+**Recorded 2026-08-25 by round 56 lane b (fix stage).** Severity: test-shape, general. **Measured**, and
+fixed in this lane's own file.
+
+PHPUnit reports a failed assertion by THROWING `ExpectationFailedException`. A row shaped as
+
+    try { $x->start(); $this->assertSame(...); } catch (\Throwable $e) { $this->fail('start() raised ...'); }
+
+therefore catches its OWN assertion failures and re-reports them under a banner naming a defect that did
+not happen. MEASURED here: mutating a fixture harness reddened
+`StdioMcpServerToolListRobustnessTest::testAMistypedToolEntryDoesNotAbortTheServerLaunch` correctly, and
+the failure text read `start() raised PHPUnit\Framework\ExpectationFailedException over a mistyped tool
+entry` — which sends the reader to `parseTools()` rather than to the assertion that failed. Fixed by
+narrowing the try to the call whose throwing is under test.
+
+This is the same class of defect as a census whose failure text names the wrong resolution: the row still
+goes red, so no mutation table notices, and the cost is paid entirely by whoever has to read it.
+
+**STEP:** census `tests/` for `catch (\Throwable` / `catch (\Exception` blocks that enclose `assert*` or
+`$this->fail()` calls, and narrow each to the statement whose throwing is the subject. A guard is cheap
+here because the shape is syntactic; it needs a known-positive fixture like anything else.
