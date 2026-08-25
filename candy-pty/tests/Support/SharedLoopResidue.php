@@ -35,11 +35,30 @@ use React\EventLoop\StreamSelectLoop;
  * inspect. A residue report that silently answers "nothing armed" for an
  * unrecognised loop is indistinguishable from a clean one, and it is the
  * assertion of an ABSENCE that would rest on it.
+ *
+ * WHAT THIS COVERED BEFORE, and why that was not enough. It counted timers,
+ * read streams and write streams -- three of the FOUR things that keep
+ * `StreamSelectLoop::run()` from returning. The rule above was applied to an
+ * unknown loop CLASS and not to a known loop's unread properties, which is the
+ * same hole one level down: `run()` also continues while `signals` is
+ * non-empty, and while `futureTickQueue` is non-empty. Measured on PHP 8.3.6:
+ * with a signal added to the shared loop this census answered
+ * `{timers:0, readStreams:0, writeStreams:0}` -- a comfortable zero, of exactly
+ * the kind the paragraph above refuses to give.
+ *
+ * AND THE SIGNAL BRANCH IS THE ONE THAT MATTERS MOST, which is what makes this
+ * more than completeness. Read `run()`: of the conditions that keep it alive,
+ * the `readStreams || writeStreams || !signals->isEmpty()` branch is the one
+ * that sets `$timeout = null` -- `stream_select()` with no timeout at all. That
+ * is the `wchan: do_select` state named above as the E490 candidate. A leaked
+ * signal handler on the shared loop reaches it with no stream involved.
+ * `futureTickQueue` sets `$timeout = 0` instead, so it spins rather than
+ * blocking; it is residue that holds the loop either way and is counted too.
  */
 final class SharedLoopResidue
 {
     /**
-     * @return array{timers:int, readStreams:int, writeStreams:int}
+     * @return array{timers:int, readStreams:int, writeStreams:int, signals:int, futureTicks:int}
      */
     public static function census(): array
     {
@@ -57,6 +76,8 @@ final class SharedLoopResidue
             'timers' => self::countTimers($loop),
             'readStreams' => \count(self::read($loop, 'readStreams')),
             'writeStreams' => \count(self::read($loop, 'writeStreams')),
+            'signals' => self::countSignals($loop),
+            'futureTicks' => self::countFutureTicks($loop),
         ];
     }
 
@@ -66,10 +87,12 @@ final class SharedLoopResidue
         $census = self::census();
 
         return \sprintf(
-            '%d timer(s), %d read stream(s), %d write stream(s)',
+            '%d timer(s), %d read stream(s), %d write stream(s), %d signal(s), %d future tick(s)',
             $census['timers'],
             $census['readStreams'],
             $census['writeStreams'],
+            $census['signals'],
+            $census['futureTicks'],
         );
     }
 
@@ -94,6 +117,63 @@ final class SharedLoopResidue
         throw new \RuntimeException(
             'the loop\'s timer store holds a ' . \get_debug_type($value) . ', which this census '
             . 'cannot count - and a timer it cannot count is a timer it cannot report',
+        );
+    }
+
+    /**
+     * Listeners armed across all signals.
+     *
+     * `SignalsHandler` keeps `array<int, list<callable>>`, so this counts
+     * LISTENERS rather than distinct signal numbers: two handlers on one signal
+     * are two things that must be removed, and reporting them as one would make
+     * a half-cleaned loop look clean.
+     */
+    private static function countSignals(StreamSelectLoop $loop): int
+    {
+        $signals = self::read($loop, 'signals');
+        if (!\is_object($signals)) {
+            throw new \RuntimeException('the loop\'s signal store is not an object');
+        }
+
+        $property = new \ReflectionProperty($signals, 'signals');
+        $property->setAccessible(true);
+        $value = $property->getValue($signals);
+
+        if (!\is_array($value)) {
+            throw new \RuntimeException(
+                'the loop\'s signal store holds a ' . \get_debug_type($value) . ', which this '
+                . 'census cannot count - and a signal it cannot count is a signal it cannot '
+                . 'report',
+            );
+        }
+
+        $listeners = 0;
+        foreach ($value as $forOneSignal) {
+            $listeners += \is_array($forOneSignal) ? \count($forOneSignal) : 1;
+        }
+
+        return $listeners;
+    }
+
+    /** Callbacks queued on the future-tick queue. */
+    private static function countFutureTicks(StreamSelectLoop $loop): int
+    {
+        $queue = self::read($loop, 'futureTickQueue');
+        if (!\is_object($queue)) {
+            throw new \RuntimeException('the loop\'s future-tick queue is not an object');
+        }
+
+        $property = new \ReflectionProperty($queue, 'queue');
+        $property->setAccessible(true);
+        $value = $property->getValue($queue);
+
+        if (\is_array($value) || $value instanceof \Countable) {
+            return \count($value);
+        }
+
+        throw new \RuntimeException(
+            'the loop\'s future-tick queue holds a ' . \get_debug_type($value) . ', which this '
+            . 'census cannot count',
         );
     }
 

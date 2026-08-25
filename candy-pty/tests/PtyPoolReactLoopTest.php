@@ -45,7 +45,7 @@ final class PtyPoolReactLoopTest extends TestCase
         $residue = SharedLoopResidue::census();
 
         $this->assertSame(
-            ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0],
+            ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0, 'signals' => 0, 'futureTicks' => 0],
             $residue,
             'this test left something armed on the SHARED loop: ' . SharedLoopResidue::describe()
                 . '. A leaked one-shot timer makes the NEXT Loop::run() in this suite return on '

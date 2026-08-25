@@ -150,7 +150,7 @@ final class SharedLoopResidueTest extends TestCase
     public function testTheSharedLoopIsCleanByTheTimeThisFileRuns(): void
     {
         $this->assertSame(
-            ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0],
+            ['timers' => 0, 'readStreams' => 0, 'writeStreams' => 0, 'signals' => 0, 'futureTicks' => 0],
             SharedLoopResidue::census(),
             'something armed on the shared loop has outlived the test that armed it: '
                 . SharedLoopResidue::describe() . '. A leaked one-shot timer makes the next '
@@ -160,5 +160,157 @@ final class SharedLoopResidueTest extends TestCase
                 . 'the handle on every path out of the test that armed it, including the path '
                 . 'where a safety cap fired.',
         );
+    }
+
+    /**
+     * AN ARMED SIGNAL IS RESIDUE, and it is the residue with the worst
+     * consequence.
+     *
+     * Read `StreamSelectLoop::run()`: of the conditions that keep it running,
+     * `readStreams || writeStreams || !signals->isEmpty()` is the one that sets
+     * `$timeout = null`, i.e. `stream_select()` with no timeout at all. That is
+     * the `wchan: do_select` state the one observed E490 hang was sitting in,
+     * and a leaked signal handler reaches it with no stream involved.
+     *
+     * Measured before this axis existed: with a signal added, the census
+     * answered `{timers:0, readStreams:0, writeStreams:0}` -- a clean bill of
+     * health for a loop that could no longer return.
+     */
+    public function testAnArmedSignalIsCountedAsResidue(): void
+    {
+        if (!\defined('SIGUSR1')) {
+            self::markTestSkipped('this platform has no SIGUSR1 to arm');
+        }
+
+        $this->assertSame(0, SharedLoopResidue::census()['signals'], 'the loop was not clean');
+
+        $listener = static function (): void {};
+        Loop::get()->addSignal(\SIGUSR1, $listener);
+
+        try {
+            $this->assertSame(
+                1,
+                SharedLoopResidue::census()['signals'],
+                'an armed signal handler was invisible to the residue census. That is the '
+                    . 'branch of StreamSelectLoop::run() which waits with NO timeout, so a '
+                    . 'census that cannot see it reports a loop that can never return as clean',
+            );
+        } finally {
+            Loop::get()->removeSignal(\SIGUSR1, $listener);
+        }
+
+        // The negative half: removing it must return the count to zero, or the
+        // axis is stuck at one and says nothing.
+        $this->assertSame(
+            0,
+            SharedLoopResidue::census()['signals'],
+            'removing the signal handler did not clear the count, so this axis cannot tell a '
+                . 'cleaned loop from a leaking one',
+        );
+    }
+
+    /**
+     * A QUEUED FUTURE TICK IS RESIDUE TOO, on the `$timeout = 0` branch -- it
+     * spins rather than blocking, but it still keeps `run()` from returning.
+     *
+     * THE DRAIN IS THE QUEUE'S OWN `tick()`, NOT `Loop::run()`, and that
+     * distinction cost a hang to learn. Draining via `Loop::run()` passes in
+     * isolation and WEDGES inside the full suite: `run()` returns only when
+     * nothing is left, so a read stream armed by any earlier test leaves it
+     * blocking in `stream_select()` for ever. That is the `wchan: do_select`
+     * state this very class documents as the E490 candidate -- reached, in the
+     * first draft of this test, by the test that measures it. The out-of-process
+     * watchdog caught it and named it, which is what it is for.
+     */
+    public function testAQueuedFutureTickIsCountedAsResidue(): void
+    {
+        $this->assertSame(0, SharedLoopResidue::census()['futureTicks'], 'the loop was not clean');
+
+        $ran = false;
+        Loop::get()->futureTick(static function () use (&$ran): void {
+            $ran = true;
+        });
+
+        $this->assertSame(
+            1,
+            SharedLoopResidue::census()['futureTicks'],
+            'a queued future tick was invisible to the residue census',
+        );
+
+        // Drain ONLY the future-tick queue. Loop::run() would also wait on
+        // every stream and timer the rest of the suite has armed.
+        $queue = new \ReflectionProperty(Loop::get(), 'futureTickQueue');
+        $queue->setAccessible(true);
+        $queue->getValue(Loop::get())->tick();
+
+        $this->assertTrue($ran, 'the fixture tick never ran, so the drain below proves nothing');
+        $this->assertSame(
+            0,
+            SharedLoopResidue::census()['futureTicks'],
+            'the future-tick queue did not drain, so this axis cannot tell a cleaned loop from '
+                . 'a leaking one',
+        );
+    }
+
+    /**
+     * THE REFUSAL IS DORMANT, AND DORMANT IS NOT THE SAME AS DEAD.
+     *
+     * `census()` throws for a loop class it cannot inspect. That branch cannot
+     * be reached in this suite as it stands -- `LoopPin::pinStableClock()`
+     * installs a `StreamSelectLoop` and nothing replaces it -- so it is a seam
+     * kept for the day someone changes the loop, not a live path. Rule 6 asks
+     * for such a seam to be PINNED rather than argued about, because an
+     * untested branch is what the next reader deletes as unreachable.
+     *
+     * The swap is restored in `finally`. Leaving another loop installed on the
+     * shared facade is precisely the class of damage this whole file exists to
+     * detect, and doing it here while looking for it would be its own joke.
+     */
+    public function testTheCensusRefusesALoopItCannotInspect(): void
+    {
+        $original = Loop::get();
+
+        $foreign = new class () implements \React\EventLoop\LoopInterface {
+            public function addReadStream($stream, $listener): void {}
+
+            public function addWriteStream($stream, $listener): void {}
+
+            public function removeReadStream($stream): void {}
+
+            public function removeWriteStream($stream): void {}
+
+            public function addTimer($interval, $callback): \React\EventLoop\TimerInterface
+            {
+                throw new \LogicException('fixture');
+            }
+
+            public function addPeriodicTimer($interval, $callback): \React\EventLoop\TimerInterface
+            {
+                throw new \LogicException('fixture');
+            }
+
+            public function cancelTimer(\React\EventLoop\TimerInterface $timer): void {}
+
+            public function futureTick($listener): void {}
+
+            public function addSignal($signal, $listener): void {}
+
+            public function removeSignal($signal, $listener): void {}
+
+            public function run(): void {}
+
+            public function stop(): void {}
+        };
+
+        try {
+            Loop::set($foreign);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('which this census cannot inspect');
+
+            SharedLoopResidue::census();
+        } finally {
+            Loop::set($original);
+        }
     }
 }
