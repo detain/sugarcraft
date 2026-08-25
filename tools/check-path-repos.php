@@ -183,6 +183,30 @@ Exit codes:
   1  Issues detected (closure drift, or --unused prune candidates)
   2  Fatal error (cannot resolve monorepo root)
 
+WHAT CI RUNS, IN ORDER, so you can run it before it runs you. The
+`path-repo-check` job in .github/workflows/ci.yml is these five commands and
+nothing else; three of them had no counterpart anyone had written down, which
+is why a contributor could be failed by a check they had no way to reproduce:
+
+    phpunit --no-configuration tools/tests/        # this script's own guard
+    php tools/check-path-repos.php --no-lib-path-repos
+    php tools/check-path-repos.php
+    php tools/check-path-repos.php --unused
+    php tools/check-path-repos.php --fix --strict-closure \
+      && php tools/check-path-repos.php --strict-closure \
+      ; git checkout -- .                          # the injection is SCRATCH
+
+The last one REWRITES every lib manifest and the `git checkout` is not
+optional: those entries must never be committed. `phpunit` there is any
+PHPUnit 10 — a PHAR, or `<any-lib>/vendor/bin/phpunit --bootstrap
+<any-lib>/vendor/autoload.php`.
+
+WHY THE FIRST LINE IS FIRST. The four checks under it are hard gates, and
+until round 57 nothing checked the classifiers that decide what they gate on.
+`--unused` in particular reports CANDIDATES and fails the build on them; a
+version of it that had stopped matching would report a clean tree from every
+branch forever, which is indistinguishable from the tree being clean.
+
 EOF
     );
     exit(0);

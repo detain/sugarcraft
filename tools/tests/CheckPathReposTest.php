@@ -3,10 +3,38 @@
 declare(strict_types=1);
 
 /**
- * PHPUnit test for tools/check-path-repos.php --fix functionality.
+ * The only automated guard `tools/` has, and until round 57 nothing ran it.
  *
- * Runs as a standalone script: php tools/tests/CheckPathReposTest.php
- * Bootstraps from monorepo root vendor/autoload.php.
+ * WHAT THIS DOC-BLOCK USED TO SAY, and it was wrong in a way that mattered
+ * (rule 7): "Runs as a standalone script: php tools/tests/CheckPathReposTest.php
+ * — bootstraps from monorepo root vendor/autoload.php". WHAT IS TRUE NOW, and
+ * was true then: running a PHPUnit `TestCase` file with the PHP binary defines
+ * a class and returns. MEASURED on PHP 8.3.6:
+ * `php tools/tests/CheckPathReposTest.php` prints NOTHING and exits 0. The
+ * documented way to run this file was a silent green, which is the same shape
+ * as the defects the suite it guards exists to catch. And the root `vendor/`
+ * carries no PHPUnit, so the second half was wrong too. WHY THE SENTENCE IS
+ * REWRITTEN RATHER THAN DELETED: someone believed it, and the next reader will
+ * reach for the same command.
+ *
+ * HOW TO RUN IT, both of which are exercised:
+ *
+ *     candy-core/vendor/bin/phpunit --no-configuration \
+ *         --bootstrap candy-core/vendor/autoload.php tools/tests/
+ *     phpunit --no-configuration tools/tests/     # a phpunit PHAR, as CI uses
+ *
+ * IT WAS DORMANT FOR SIX MONTHS AND IT PASSES. No `phpunit.xml` in the tree
+ * references `tools/tests/`, no CI job ran it, and nothing autoloads
+ * `SugarCraft\Tools\Tests`. `.github/workflows/ci.yml`'s `path-repo-check`
+ * job runs it now — the same job that gates on the script under test, which is
+ * where a guard for that script belongs.
+ *
+ * WHAT IT COVERS. `--fix`, `--help`, the report-only default and
+ * `--no-lib-path-repos` were here already. `--unused` — the pass that is a HARD
+ * CI GATE on candidate-grade output, and the one E487 is about — had no test at
+ * all, in either polarity: not that it finds a dead require, and not that the
+ * `deferred-wiring` release valve suppresses one. Both are here now, with the
+ * IDLE_DEFERRAL arm that stops the valve becoming an exemption.
  */
 
 namespace SugarCraft\Tools\Tests;
@@ -28,8 +56,12 @@ foreach (\glob(\dirname(__DIR__, 2) . '/*/vendor/autoload.php') ?: [] as $candid
 $autoloadCandidates[] = ($_SERVER['HOME'] ?? '') . '/.composer/vendor/autoload.php';
 $autoloadCandidates[] = ($_SERVER['HOME'] ?? '') . '/.config/composer/vendor/autoload.php';
 
-$loaded = false;
-foreach ($autoloadCandidates as $candidate) {
+// AND NOT AT ALL WHEN PHPUNIT IS ALREADY HERE. A phpunit PHAR bundles its own
+// classes, so the hunt below finds nothing it needs and the `exit(2)` fired on
+// a runner that was perfectly capable of running this file — which is how a
+// guard ends up unrunnable in the one environment you want it in.
+$loaded = \class_exists(\PHPUnit\Framework\TestCase::class, false);
+foreach ($loaded ? [] : $autoloadCandidates as $candidate) {
     if (\is_file($candidate)) {
         require_once $candidate;
         $loaded = true;
@@ -84,9 +116,40 @@ final class CheckPathReposTest extends TestCase
         \file_put_contents($dir . '/composer.json', $json . "\n");
     }
 
+    /**
+     * `sugarcraft/lib-a` to the directory name `lib-a`.
+     *
+     * IT WAS DEAD AND IT WAS BROKEN, and the second fact is what the first one
+     * hid. It read `preg_replace('#^sugarcraft/##', …)`: `#` opens the pattern
+     * and `#` closes it, so the trailing `#` is a MODIFIER, and there is no
+     * such modifier. MEASURED on PHP 8.3.6 it returns `null` with
+     * `preg_last_error_msg()` of "Internal error" — every call would have
+     * produced an empty slug. Nothing called it, in a file nothing ran, so
+     * nothing said so for six months.
+     *
+     * Wired rather than deleted: the fixtures below name their packages and
+     * their directories separately, and this is the mapping between them.
+     * {@see testTheSlugMappingIsTheOneTheFixturesRelyOn()} pins it, so a
+     * silent `null` cannot come back.
+     */
     private function makeSlug(string $name): string
     {
-        return \preg_replace('#^sugarcraft/##', '', $name);
+        return (string) \preg_replace('#^sugarcraft/#', '', $name);
+    }
+
+    /**
+     * The slug mapping answers what the fixture layout assumes.
+     *
+     * BOTH POLARITIES: a prefixed name loses the prefix, an unprefixed one is
+     * unchanged, and — the half that would have caught the original — the
+     * result is never empty for a non-empty input.
+     */
+    public function testTheSlugMappingIsTheOneTheFixturesRelyOn(): void
+    {
+        $this->assertSame('lib-a', $this->makeSlug('sugarcraft/lib-a'));
+        $this->assertSame('lib-a', $this->makeSlug('lib-a'));
+        $this->assertSame('other/lib-a', $this->makeSlug('other/lib-a'));
+        $this->assertNotSame('', $this->makeSlug('sugarcraft/lib-b'));
     }
 
     private function runScript(string $fixtureRoot, array $args = []): array
@@ -228,6 +291,139 @@ final class CheckPathReposTest extends TestCase
      * pins them as inverses rather than as two independent assertions: --fix
      * writes the entry, --no-lib-path-repos must then refuse it.
      */
+    /**
+     * A fixture monorepo of two libs, with `lib-a` requiring `lib-b`.
+     *
+     * `$aSource` is what `lib-a/src/A.php` contains, which is the ONLY thing
+     * `--unused` looks at to decide whether the require is live: it resolves
+     * `lib-b`'s PSR-4 prefix from `lib-b`'s own manifest and greps `lib-a/src`
+     * for it. `$extra` carries the deferred-wiring valve when a case needs one.
+     *
+     * @param array<string, mixed> $extra
+     */
+    private function twoLibFixture(string $aSource, array $extra = []): string
+    {
+        $root = $this->tmpDir;
+        $a = $root . '/' . $this->makeSlug('sugarcraft/lib-a');
+        $b = $root . '/' . $this->makeSlug('sugarcraft/lib-b');
+
+        $this->writeComposerJson($b, [
+            'name' => 'sugarcraft/lib-b',
+            'autoload' => ['psr-4' => ['SugarCraft\\LibB\\' => 'src/']],
+        ]);
+        $manifest = [
+            'name' => 'sugarcraft/lib-a',
+            'require' => ['sugarcraft/lib-b' => '@dev'],
+            'repositories' => [[
+                'type' => 'path',
+                'url' => '../lib-b',
+                'options' => ['symlink' => true],
+            ]],
+            'autoload' => ['psr-4' => ['SugarCraft\\LibA\\' => 'src/']],
+        ];
+        if ($extra !== []) {
+            $manifest['extra'] = $extra;
+        }
+        $this->writeComposerJson($a, $manifest);
+
+        \mkdir($a . '/src', 0777, true);
+        \mkdir($b . '/src', 0777, true);
+        \file_put_contents($a . '/src/A.php', $aSource);
+        \file_put_contents($b . '/src/B.php', "<?php\nnamespace SugarCraft\\LibB;\nclass B {}\n");
+
+        return $root;
+    }
+
+    /** `lib-a/src` that never mentions `lib-b`. */
+    private const A_IGNORES_B = "<?php\nnamespace SugarCraft\\LibA;\nclass A {}\n";
+
+    /** `lib-a/src` that uses `lib-b`, so the require is live. */
+    private const A_USES_B = "<?php\nnamespace SugarCraft\\LibA;\nuse SugarCraft\\LibB\\B;\nclass A { public function f(): B { return new B(); } }\n";
+
+    /**
+     * `--unused` finds a require nothing in `src/` reaches.
+     *
+     * THE POSITIVE HALF OF A GATE THAT HAD NEITHER. This pass runs in CI with
+     * no `continue-on-error`, so it fails a push, and nothing anywhere asserted
+     * that it can still see a dead require at all. A `--unused` that had
+     * stopped matching would have reported the same clean tree it reports
+     * today, from every branch, indefinitely.
+     */
+    public function testUnusedFindsARequireThatSrcNeverReaches(): void
+    {
+        $result = $this->runScript($this->twoLibFixture(self::A_IGNORES_B), ['--unused']);
+
+        $this->assertSame(1, $result['exit'], "--unused must exit 1 on a finding:\n" . $result['output']);
+        $this->assertStringContainsString('PRUNE_REQUIRE_AND_REPO', $result['output']);
+        $this->assertStringContainsString('sugarcraft/lib-b', $result['output']);
+        $this->assertStringContainsString('tests_uses: no', $result['output']);
+    }
+
+    /**
+     * And it stays quiet when the require is live.
+     *
+     * THE NEGATIVE HALF, which is not decoration: a pass that flagged every
+     * require would satisfy the assertion above just as well, and would gate
+     * CI on every dependency in the monorepo.
+     */
+    public function testUnusedIsQuietWhenSrcActuallyUsesTheDep(): void
+    {
+        $result = $this->runScript($this->twoLibFixture(self::A_USES_B), ['--unused']);
+
+        $this->assertSame(0, $result['exit'], "--unused must exit 0 on a live require:\n" . $result['output']);
+        $this->assertStringContainsString('no dead path-repo deps found', $result['output']);
+        $this->assertStringNotContainsString('PRUNE_REQUIRE', $result['output']);
+    }
+
+    /**
+     * The `deferred-wiring` valve suppresses a real finding, and says so.
+     *
+     * This is the release valve that makes gating on candidate-grade output
+     * survivable: a candidate confirmed by hand in the KEEP direction is
+     * recorded in the consuming manifest and stops counting. The fixture is the
+     * SAME tree as the positive case above, plus the row — so the assertion is
+     * about the row and not about the fixture.
+     */
+    public function testADeferredWiringRowSuppressesTheFindingItRecords(): void
+    {
+        $root = $this->twoLibFixture(self::A_IGNORES_B, [
+            'sugarcraft' => ['deferred-wiring' => [
+                'sugarcraft/lib-b' => 'kept for a named, still-open item',
+            ]],
+        ]);
+
+        $result = $this->runScript($root, ['--unused']);
+
+        $this->assertSame(0, $result['exit'], "a recorded deferral must not gate CI:\n" . $result['output']);
+        $this->assertStringContainsString('DEFERRED_WIRING', $result['output']);
+        $this->assertStringContainsString('kept for a named, still-open item', $result['output']);
+        $this->assertStringContainsString('no dead path-repo deps found', $result['output']);
+    }
+
+    /**
+     * A row that suppresses nothing is itself a finding.
+     *
+     * WITHOUT THIS ARM THE VALVE IS AN EXEMPTION. The commonest way a row goes
+     * idle is the happy one — the wiring landed, `src/` reaches the dep, and
+     * the row is now a licence sitting in a manifest with nobody watching it.
+     * The fixture is the LIVE tree plus a stale row, and the report must name
+     * the ROW rather than advise pruning a require the lib is using.
+     */
+    public function testARowThatSuppressesNothingIsReportedRatherThanHonoured(): void
+    {
+        $root = $this->twoLibFixture(self::A_USES_B, [
+            'sugarcraft' => ['deferred-wiring' => [
+                'sugarcraft/lib-b' => 'stale: the wiring landed rounds ago',
+            ]],
+        ]);
+
+        $result = $this->runScript($root, ['--unused']);
+
+        $this->assertSame(1, $result['exit'], "an idle deferral must gate:\n" . $result['output']);
+        $this->assertStringContainsString('IDLE_DEFERRAL', $result['output']);
+        $this->assertStringContainsString('delete the row', $result['output']);
+    }
+
     public function testNoLibPathReposIsTheInverseOfFix(): void
     {
         $this->writeComposerJson($this->tmpDir . '/lib-b', [

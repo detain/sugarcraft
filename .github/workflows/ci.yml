@@ -159,6 +159,18 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
+          # phpunit as a PHAR, for the tools/tests step below. This job does no
+          # composer install (it reads manifests, it does not resolve them), so
+          # there is no per-lib vendor/bin/phpunit to borrow.
+          tools: phpunit
+      # THE GUARD FOR THE SCRIPT THE REST OF THIS JOB GATES ON, and it existed
+      # unrun for six months: tools/tests/CheckPathReposTest.php is referenced
+      # by no phpunit.xml, no composer autoload and, until now, no workflow.
+      # Every step below is a hard gate whose classifier nothing checked.
+      # It runs FIRST, deliberately — a red here means the verdicts underneath
+      # it are not worth reading.
+      - name: Verify the path-repo checker's own classifiers
+        run: phpunit --no-configuration --colors=never tools/tests/
       - name: Verify no sibling path-repos in published manifests
         run: php tools/check-path-repos.php --no-lib-path-repos
       - name: Verify the root closure is complete
