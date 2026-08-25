@@ -8,6 +8,118 @@ Summary + Implementation Plan, 209-2160 are the 13 research dossiers.
 
 ---
 
+
+## Round 55 — the prediction was exact, and the round's two best finds were in a library nobody was auditing
+
+**Closed 2026-08-25.** Base `a8acfcc9` → merged `b489405ba` → `d38b644f4` after a supervisor fix.
+Three lanes, nine agents, zero errors, ~2.8 hours wall clock.
+
+| package | base | closed |
+|---|---|---|
+| sugar-crush | 9994 / 144819 / 1 | **10059 / 148589 / 1** |
+| candy-core | 842 / 7573 / 25 | **842 / 7587 / 24** |
+| candy-flip | 83 / 227 / 2 | 83 / 227 / 2 |
+| candy-mosaic | 459 / 7753 / 6 | 459 / 7753 / 6 |
+| candy-pty | 606 / ~1476 / 16 | **610 / 1408 / 16** |
+
+### The prediction
+
+Written to `round55-prediction.txt` before a single merge: **10059 tests, 148589 assertions**, skips
+exactly 1, backlog-only conflicts. All four exact — tests for the thirteenth consecutive round, assertions
+for the fourth, and assertions are only ever claimed as a lower bound. candy-core's skip drop 25 → 24 was
+predicted, as was candy-pty's assertion DROP (1476 → 1401), which is the E435 fix landing rather than a
+regression: the count is a function of the source again instead of a timing artifact wobbling 1475-1478.
+
+One predicted conflict did NOT materialise. Lane b declared a forced out-of-lane edit to
+`DuplicatedTestHelperDriftTest.php` naming lane c's work as the reason, so a rule-32 semantic conflict was
+predicted — but lane c never touched the file. The prediction was conservative in the right direction,
+which is the correct failure mode for a prediction.
+
+### The two best findings are in candy-pty, and candy-pty was not the target
+
+Lane a went there only because E434/E435 said its assertion count wobbled. It came back with a real fd
+leak, and the supervisor then found a dead retry.
+
+**E462 — a leak of one `/dev/ptmx` descriptor per pty that had been used.** `PosixMasterPty::close()`
+called `dup()` and discarded the return value under a comment claiming it prevented an FD-reuse race.
+MEASURED over five open/write/close cycles: 1, 2, 3, 4, 5 leaked, linear, with a control (five cycles that
+never materialise the stream leak none). Each leaked descriptor pins the master side of a pty the caller
+believes it closed. The comment's race was also demolished: `fopen('php://fd/N')` allocates a NEW
+descriptor, so the original is open continuously and its number is never free during the window described
+— and the dup was taken AFTER the `fclose()` anyway, so it could neither detect nor prevent a
+substitution. The dup is KEPT as a documented dormant seam (rule 6) with E466 filed to measure its
+reachability, rather than deleted on "no test notices".
+
+**E491 — `retryOnEintr()` had never retried, in the library's entire history.** The helper exists to retry
+an interrupted `stream_select()`; its docblock explains the design at length. It decided EINTR with
+`Libc::errno() !== Libc::EINTR`. MEASURED on PHP 8.3.6, reading errno on the very next line after an
+interrupted call: **errno is 0, not 4.** PHP raises its own warning first and that path resets the
+C-level errno before any userland code — an FFI shim included — can read it. So the guard was permanently
+true, the function returned `false` on every interruption, and `read()` turned that into a thrown
+`PtyException`. A plain SIGCHLD from a reaped child could surface as a fatal read error, in a library
+whose entire job is talking to processes that send signals.
+
+It was found by writing the first test that ever CALLED the function. Its only prior coverage asserted
+`method_exists()` and poked a `ReflectionMethod`, under a comment conceding *"we can't actually call
+retryOnEintr with invalid args due to by-ref signature"* — which became **rule 36**.
+
+The fix reads the errno PHP still reports in its warning text, matched NUMERICALLY
+(`/Unable to select \[(\d+)\]/`) because `strerror()` output is locale-dependent and the number is not.
+The errno read is kept and tried first: a fallback, not a replacement. A second defect in the same
+function was fixed alongside — the retry re-passed the caller's ORIGINAL timeout, so every interruption
+restarted the full wait and all three finite-timeout callers could be stretched past their own deadline
+without bound. Both halves kill the new test independently as mutations (rule 16). The timing is the proof
+the retry runs at all: **3.03 s for a 3 s deadline across three interruptions**, which the pre-fix code
+could not produce in either direction.
+
+**Rule 37 came from the same test.** Its first draft was written against `pcntl_setitimer`, which this
+host does not have. It SKIPPED SILENTLY and was worth nothing, and was caught only because someone ran it
+and read the output — the same shape as E432, arriving in brand-new code the day the rule was written.
+
+### E490 — the one thing this round did not close
+
+Taking the merged floor, candy-pty **hung indefinitely**: stalled at ~363/608, `State: S`,
+`wchan: do_select`, two `/dev/ptmx` fds open, a `sleep` child reaped every few seconds, 0.1% CPU for nine
+minutes, killed by pid. Evidence was collected from `/proc` while it was still wedged rather than
+reconstructed afterwards.
+
+It has not reproduced: **0/60 hammering `--filter PtyPool`, 0/15 full-suite takes, 1 in ~76 total.**
+E491 removed one unbounded-wait path but does not explain it — a missing retry throws, it does not block —
+so E490 is NOT closed by pointing at E491. The untried experiment is the only context it ever happened in:
+sugar-crush THEN candy-pty in the same script, repeatedly. Every reproduction attempt ran candy-pty alone.
+
+Until it is closed, every suite run goes through a pid-scoped watchdog capturing `--testdox`, because a
+hang is invisible: a slow suite locally, a job timeout naming nothing in CI. That is now written into the
+RESUME procedure, not left as a habit.
+
+### E453 — CI had been red on master and the local guard could not see it
+
+The `--unused` step exits **1** at `a8acfcc9` and **0** on the merged tree, verified by the supervisor
+rather than taken on lane c's word. The fix was to RECORD the `candy-kit` deferral in
+`extra.sugarcraft.deferred-wiring` with the reason it is unwired and the condition for deleting the row —
+not to prune the dependency, which the standing rule forbids. Lane c then filed E487 and E488 against its
+own fix: `--unused` is candidate-grade output wired in as a hard gate, and the new escape hatch never
+expires a row for any of the other 57 libs.
+
+### Three bugs arrived from the user, mid-round, and none were injected into a running lane
+
+E455 (the chat input box never wraps — the one pane that skips the wrap choke point), E456 (the 120 s idle
+timer counts only content deltas as progress, so a long think block dies as a hung provider), and E457
+(a bare `grep` in an agent shell is ugrep; `grep -qv` silently always answers no). All three were
+diagnosed to a named line and filed with the fix specified; all three are round-56 lane-a and lane-c work.
+Injecting them into lanes that were already cut is how a round's figures stop meaning anything.
+
+E457 also cost a lesson worth more than the finding: the first control written to verify it —
+`/usr/bin/grep -qv x /dev/null` — reported FAILED. The grep was fine; an empty file has no line an
+inverted match can select, so the control could never pass. A control must be a known positive, and
+asserting the known negative too catches an implementation that answers yes to everything.
+
+### Backlog
+
+457 → 491. Lane ids E458-E489, renumbered from provisional `Ea55-*`/`Eb55-*`/`Ec55-*` longest-id-first,
+base derived from the file rather than read off a line in RESUME — that line had gone stale three times in
+one day and is now replaced by the command that derives it.
+
 ## Round 55 — IN FLIGHT (this entry is a checkpoint, not a result)
 
 **Launched 2026-08-25 from `a8acfcc9`.** Run `wf_0de018d2-8ba`, task `wn1fah05y`. Three lanes:
