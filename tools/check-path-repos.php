@@ -178,6 +178,20 @@ Options:
                     ../<dep> does not exist there. Read-only; runs on its own.
   --help            Show this usage message.
 
+Environment:
+  SUGARCRAFT_CHECK_PATH_REPOS_ROOT
+                    The monorepo root to resolve everything under, instead of
+                    the parent of this script. Exists so this script's own guard
+                    can drive it against a throwaway fixture tree; --fix WRITES
+                    to every composer.json it resolves, so pointing it at the
+                    real tree to test it is not an option. Invalid path exits 2.
+
+THE BLOCK ABOVE IS CHECKED, NOT PROOF-READ. Every variable this script reads
+must have a row in it and every row must name a variable it reads, asserted in
+both directions by tools/tests/ToolsEnvRosterTest.php over a token scan. A knob
+that redirects a hard CI gate and is discoverable only by reading the source is
+the defect that guard exists for.
+
 Exit codes:
   0  No issues found (or --fix succeeded for all issues; or --unused clean)
   1  Issues detected (closure drift, or --unused prune candidates)

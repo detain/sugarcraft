@@ -65,6 +65,50 @@ declare(strict_types=1);
 
 const SLUG_RE = '[a-z0-9]+(?:-[a-z0-9]+)+';
 
+/**
+ * The usage text, WITH the environment block that ToolsEnvRosterTest checks.
+ *
+ * THE `Environment:` SECTION IS NOT DECORATION. Every variable this script
+ * reads must have a row here and every row must name a variable it reads —
+ * asserted in both directions by tools/tests/ToolsEnvRosterTest.php, over a
+ * token scan rather than a grep. Read-but-undocumented is a knob a contributor
+ * cannot discover; documented-but-unread is a knob they set with no effect.
+ * The row shape is load-bearing: two spaces, the NAME, then the description.
+ */
+const USAGE = <<<'TXT'
+    usage: gen-docs.php [--extract|--check|--help]
+
+      (no flag)   Regenerate docs/lib/<slug>.html from docs/_data/<slug>.{json,body.html}.
+      --extract   Seed docs/_data/ from the pages that are already there.
+      --check     Regenerate in memory and exit 1 on any difference. This is a
+                  HARD CI GATE (the docs-generated job): the pages are generated
+                  and AGENTS.md forbids hand-editing them, while pages.yml
+                  publishes docs/ verbatim on every push to master.
+      --help      Print this text and exit 0.
+
+    Environment:
+      SUGARCRAFT_GEN_DOCS_ROOT  The monorepo root to read AND WRITE under, instead
+                                of the parent of this script. Exists because this
+                                generator writes to every path it resolves and
+                                --check is a hard gate, so its own guard has to
+                                drive it against a throwaway tree rather than
+                                point it at the real docs/ and hope. Invalid path
+                                exits 2.
+
+    Exit codes:
+      0  Nothing to do, or the requested work succeeded
+      1  --check found a page that differs from what the data would generate
+      2  Bad usage, or the monorepo root could not be resolved
+    TXT;
+
+// --help IS ANSWERED BEFORE THE ROOT IS RESOLVED, deliberately: the text below
+// documents SUGARCRAFT_GEN_DOCS_ROOT, and a script that refuses to explain the
+// variable while that variable is set wrong is the least useful moment to fail.
+if (($argv[1] ?? '') === '--help' || ($argv[1] ?? '') === '-h') {
+    fwrite(STDOUT, USAGE . "\n");
+    exit(0);
+}
+
 // Allow override via env for testing scenarios (e.g. fixture dirs), exactly as
 // tools/check-path-repos.php does. WHY THIS EXISTS RATHER THAN A --root FLAG:
 // this generator WRITES to every path it resolves, and its --check mode is a
@@ -94,7 +138,7 @@ $index    = $docs . '/index.html';
 
 $mode = $argv[1] ?? '';
 if (!in_array($mode, ['', '--extract', '--check'], true)) {
-    fwrite(STDERR, "usage: gen-docs.php [--extract|--check]\n");
+    fwrite(STDERR, USAGE . "\n");
     exit(2);
 }
 
