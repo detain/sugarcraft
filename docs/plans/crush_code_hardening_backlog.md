@@ -19177,11 +19177,99 @@ resolve from the lock and silently ignore the injected closure.
 `AgentManager::executeSubAgent()` resolve `Agent::$tools` into the `CompleteRequest`'s `tools` field
 (§C7). The resolution is driven by a new optional `toolRegistry` constructor parameter, and
 `Bootstrap::agentManager()` does not pass one — so a LAUNCHED sub-agent still reaches its provider
-with `tools: null`, exactly as before. The change is a one-liner (`toolRegistry: self::tools($root,
-...)`), and it was not made because `Bootstrap.php` belongs to no lane this round. `null` was chosen
-as the parameter's default precisely so this state is the pre-existing behaviour rather than a
-refusal a launcher cannot act on, and `AgentManagerTest::testWithNoRegistryTheRequestKeepsItsPreExistingNullTools`
-pins it.
+with `tools: null`, exactly as before. It was not made because `Bootstrap.php` belongs to no lane
+this round. `null` was chosen as the parameter's default precisely so this state is the pre-existing
+behaviour rather than a refusal a launcher cannot act on, and
+`AgentManagerTest::testWithNoRegistryTheRequestKeepsItsPreExistingNullTools` pins it.
+
+🔴 **THIS ENTRY ORIGINALLY CALLED THE FIX "a one-liner (`toolRegistry: self::tools($root, ...)`)".
+THAT SENTENCE IS WITHDRAWN — the one-liner is a BREAKING CHANGE for any operator who has narrowed
+their tool set, and it is the single most likely thing a future agent would act on.**
+
+`resolveGrantedTools()` REFUSES a declaration that matches no tool in the registry, rather than
+intersecting. That is correct only while the registry it is handed is the UNFILTERED ceiling.
+`Bootstrap::tools()` is not that: it returns `self::filterToolSet($tools)`, already narrowed by the
+operator's own `allowedTools`/`disabledTools`. `filterToolSet()`'s own doc-block states the opposite
+policy in as many words — *"NO FLOOR, and there deliberately still is not one … `disabledTools:
+["*"]` … refusing it would break a configuration this class documents as intentional."*
+
+**MEASURED on PHP 8.3.6 at round 60, by reflection against `Bootstrap::tools()`'s eleven-tool
+ceiling** (`Bash, Read, Edit, Glob, Grep, Write, WebFetch, WebSearch, doctor, Skill, Lsp`):
+
+| session config | presets that THROW |
+|---|---|
+| `disabledTools: ["Bash"]` | **5 of 6** — `coder`, `reviewer`, `debugger`, `tester`, `devops`; only `architect` survives |
+| `disabledTools: ["*"]` | **6 of 6** (the registry is empty) |
+
+So a user who disables `Bash` and launches a `coder` sub-agent gets a hard `RuntimeException`, not a
+narrowed agent. Today this is latent only because nothing supplies a registry.
+
+**WHOEVER WIRES THIS MUST FIRST DECIDE WHICH OF THESE IT IS**, and record the decision in
+`resolveGrantedTools()`'s doc-block:
+
+1. **Intersect when the shortfall is the SESSION's own narrowing, refuse when the tool never
+   existed.** The honest fix, and the expensive one: telling those two apart needs the UNFILTERED
+   tool set, which `filterToolSet()` currently discards. It would mean `Bootstrap` passing both sets,
+   or passing the ceiling and letting `AgentManager` apply the narrowing itself.
+2. **Keep the refusal and pass the UNFILTERED ceiling**, letting the per-call denylist and the
+   permission gate carry the narrowing instead. Cheaper, but it means a sub-agent's roster ignores
+   `disabledTools`, which is a widening — the exact shape round 60 was fixing — and would need its
+   own argument.
+3. **Keep the refusal and pass the filtered set**, accepting the crash as the intended signal. Only
+   defensible with a message that names `disabledTools` as the likely cause; the current message says
+   "match no tool this session offers", which sends the reader hunting for a typo.
+
+Pinned by `AgentManagerTest::testAPolicyNarrowedRegistryIsIndistinguishableFromATypo`, which asserts
+that a policy-narrowed absence and a typo produce the byte-identical refusal. That test is the trap's
+tripwire: it names this entry's decision in its failure message.
+
+### Eb60-5 — `WorkflowEngine` puts DECLARATION STRINGS into `CompleteRequest::$tools`, which providers call `->name()` on
+
+**DEFERRED, out of lane (`src/Workflows/WorkflowEngine.php`, `src/Workflows/WorkflowTask.php`).**
+Found while checking round 60's review MAJOR 4. `WorkflowEngine` builds its stage request as
+
+    $defaultRequest = new CompleteRequest(
+        model: $firstAgent->model,
+        messages: [...],
+        tools: $firstTask->tools,
+        systemPrompt: $firstAgent->systemPrompt(),
+    );
+
+`WorkflowTask::$tools` is an untyped `array $tools = []` carrying whatever the workflow file
+declared — tool-name STRINGS. `CompleteRequest::$tools` is documented `?array<mixed>` but every
+provider that reads it treats the entries as `Tool` OBJECTS: `ClaudeCodeProvider` does
+`array_map(fn($t) => $t->name(), $request->tools)`, and `OpenAIProvider`/`CustomProvider`/
+`SglangProvider` hand them to `formatTools()`. So a workflow stage whose task declares any tool
+should fatal on `->name()` on a string.
+
+This is exactly the type mismatch `AgentManager::resolveGrantedTools()`'s doc-block warns about
+("Passing the strings through would fatal on `->name()` or serialise garbage") — the same defect, on
+a path lane b did not touch. **UNVERIFIED end-to-end: not executed against a live provider**, because
+every workflow test in the tree appears to use tasks with no `tools` (the default `[]` is falsy for
+`!== null` gating only in Vertex, so the other providers would receive `[]` and iterate nothing).
+The reachability question — can a workflow file actually set `WorkflowTask::$tools` non-empty — is
+the first thing to settle before treating this as live.
+
+Note this also makes the `[]`-vs-`null` distinction load-bearing on that path: `$firstTask->tools`
+defaults to `[]`, NOT to `null`, so four of the six providers put a present-but-empty `tools` key on
+the wire for every workflow stage.
+
+### Eb60-6 — `declarationDefect()`'s bare-name half is now guarded, but only over the SIX BUILT-IN presets
+
+**PARTIALLY CLOSED in round 60's fix stage.** `AgentDefinitionTest::declarationDefect()` returns
+`null` for any declaration with no argument half, on the grounds that the name half is matched
+against the live registry by `AgentManager` — which, per Eb60-1, no production caller makes it do. A
+typo'd bare `defaultTools: ['Reed']` was therefore caught by nothing.
+`testEveryBarePresetToolNameResolvesAgainstTheShippedToolSet` now closes that for the six built-in
+presets, resolving each bare name against `Bootstrap::tools()` under a sandboxed HOME (the sandbox's
+emptiness is asserted, so the guard cannot silently measure a narrowed set — see Eb60-1).
+
+**STILL OPEN:** the same typo in a USER or FOREIGN preset (`.sugar-crush/agents`, `.claude/agents`,
+`.opencode/agents`) is caught by nothing, since those are not in the fixture table and are not
+validated at load time. Closing it properly means validating at `AgentPresetRegistry` /
+`ForeignAgentPresetRegistry` load time against the session's tool set — which needs Eb60-1's decision
+first, since a user preset naming a tool the operator disabled must warn rather than refuse. Related
+to Eb60-4, which is the argument-scoped half of the same gap.
 
 ### Eb60-2 — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
 
