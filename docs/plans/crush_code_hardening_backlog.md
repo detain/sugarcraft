@@ -14905,3 +14905,135 @@ gives `sugar-crush/tests/` to lanes b and c; the brief's YOUR FILES section give
 `sugar-crush/tests/`, `candy-pty/tests/` and exactly one file under `candy-core/tests/Util/Tty/`. This is
 E416 recurring in the round that rewrote the map to fix it. Work was done against YOUR FILES, widened
 where a guard or a real defect forced it, and every such edit is named at the top of the lane report.
+
+### Ea55-7 — the skip roster was blind to a skipped CLASS, the larger of the two silent re-bases
+
+**Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: real, in the instrument. **Fixed.**
+
+PHPUnit's `Skipped: N` summary line is a SUM of two unrelated event families — MEASURED in
+`TextUI/Output/SummaryPrinter.php`: `numberOfTestSuiteSkippedEvents() + numberOfTestSkippedEvents()`. The
+roster as first shipped registered `Test\PreparedSubscriber` and `Test\SkippedSubscriber` and nothing
+else, so it saw only the second.
+
+A class that skips from `setUpBeforeClass()` (or on class-level `#[Requires…]` metadata) emits
+`TestSuite\Skipped` and then `return false` — MEASURED in
+`Framework/TestSuite.php::invokeMethodsBeforeFirstTest()` — so its test methods never run, never emit
+`Test\Prepared`, and never emit `Test\Skipped`. **MEASURED, PHP 8.3.6 / PHPUnit 10.5.64**, a child suite
+booted from `sugar-crush/tests/bootstrap.php` holding one two-method class skipping in
+`setUpBeforeClass()` plus one ordinary passing test: `OK, but some tests were skipped! / Tests: 1,
+Assertions: 1, Skipped: 1`, **rc 0, no roster output** — two tests gone from the `Tests:` total while the
+printed skip figure moved by one, so even a guard asserting "exactly one skip" on the printed line is
+satisfied by it. Known-answer control through the same harness in the same session: a body-level skip and
+an attribute-level skip both exited 1 and were both named. The gap was specific to the suite event.
+
+This is rule 11. The e2e fixture's alphabet was body-level `markTestSkipped` — the shape already known —
+and the class doc-block's argument about *when* skips happen never asked *which event* carries them.
+
+Fixed by registering a `TestSuite\SkippedSubscriber` as check 4. It is **unconditionally** red rather than
+roster-able: `TestSuite\Skipped` carries a `PHPUnit\Event\TestSuite\TestSuite`, not a
+`PHPUnit\Event\Code\Test`, so `keyOf()` has no key to make and the `Class::method` roster has nothing to
+compare. The failure text says so and names the resolution (make the gate per-method so it becomes
+rosterable, or remove it) instead of inviting a row that cannot exist. Acceptance is a mutation of the
+FIX, not of the defect: a child suite whose probe class skips in `setUpBeforeClass()` must exit non-zero.
+MEASURED: neutralising `recordSuiteSkip()` KILLED (2); removing the subscriber registration KILLED (1).
+
+`report()` also no longer waves through a run that skipped while preparing nothing. `checkRequirements()`
+runs ABOVE `$emitter->testPrepared()` in `TestCase::runBare()`, so a `--filter` selecting only a
+`#[Requires…]` test lands there, and a skipped class lands there by definition.
+
+### Ea55-8 — the roster's "a plain child arms nothing" safety property is false; the load-bearing one is the other
+
+**Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: false justification. **Fixed.**
+
+Three passages — the `SuiteSkipRoster` class doc-block, `tests/bootstrap.php`, and
+`SuiteSkipRosterTest`'s doc-block — said that the several test files which `require tests/bootstrap.php`
+in a plain child PHP process have "no facade, nothing registered, nothing armed".
+
+**MEASURED, PHP 8.3.6:** a `php` script whose only statement is that `require` reports
+`SuiteSkipRoster::live()` **non-null** and exits 0. `PHPUnit\Event\Facade` autoloads out of `vendor/` like
+anything else and an unsealed facade accepts subscribers from anyone. Registration succeeds; the
+shutdown handler is armed. What keeps those children harmless is the SECOND listed property —
+`report()` returning null with nothing prepared — which was presented as a restatement of the first.
+
+Rewritten in the three-part form in all three places and pinned by
+`SuiteSkipRosterTest::testAPlainChildProcessThatRequiresTheBootstrapExitsZero()`, which spawns exactly
+that child and asserts rc 0, no roster output, AND `live()` non-null — so the day registration really does
+stop happening, the doc-blocks are told rather than quietly vindicated. The `try`/`catch` around
+registration still earns its place (a sealed facade, or a moved class, would otherwise be a fatal in every
+such child); it is simply not what makes them quiet.
+
+### Ea55-9 — the `PosixMasterPty::close()` dup is retained dormant, and its reachability is still unmeasured
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: open question, deliberately deferred. **Not done.**
+
+Ea55-5's correction establishes that the dup does not prevent the race it was written for and that
+removing it together with its release is inert across `candy-pty --filter Posix`
+(`165 / 394 / 1 warning / 2 skipped / rc 0`, identical). It is KEPT under rule 6 and now documented as a
+deliberate dormant seam.
+
+What is **not** established is that no caller pattern anywhere wants a stable reference across that
+`close()`. "No test notices" is a much weaker claim than "no reachable caller was found", and the
+difference is exactly the kind of sentence this plan has had to retract before. Someone closing this owes
+a generator: a census of `PosixMasterPty::close()` callers across the monorepo (`candy-pty`,
+`candy-flip`, `candy-mosaic`, `candy-wish`, `sugar-crush`) and a statement of which, if any, hold the
+descriptor number across the call. Until then the block stays and the comment says what it does not know.
+
+### Ea55-10 — the stty gate's probe resolved a stranger's descriptor under the stdin shape CI uses
+
+**Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: right answer, wrong reason. **Fixed.**
+
+`PosixBackend::descriptorForStream()`'s second arm identifies a descriptor naming the same DEVICE as the
+stream and prefers the lowest match — its own doc-block says so. The gate in
+`PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()` probed with `fopen('/dev/null','r')`, the
+most-shared device on the box.
+
+**MEASURED, PHP 8.3.6:** with the process's stdin `< /dev/null` — how CI runs, and how this suite's own
+child harnesses spawn `phpunit` (`0 => ['file','/dev/null','r']`) — the probe resolved fd **0**, i.e.
+stdin, with `/dev/null` present on fds `0,4`. With stdin a pipe it resolved 4. So the "hold the handle
+open across the probe" half of the earlier repair was stat()ing a descriptor it never closed. The gate
+still ANSWERED correctly there (verified `< /dev/null`: green) — right for the wrong reason.
+
+Fixed by probing with `tmpfile()`, whose inode nothing else in the process holds (MEASURED: fd 5 under
+both stdin shapes), and by ASSERTING the identity instead of claiming it in prose.
+
+⚠️ **The first assertion written for this was wrong, and mutating the FIX is what caught it** (rule 16 /
+rule 2). Comparing `readlink('/proc/self/fd/<n>')` against the probe's uri **SURVIVED** the revert to
+`/dev/null` under `< /dev/null`: the resolved descriptor was stdin, and stdin's readlink is `/dev/null`
+too, so a path compare is satisfied by precisely the stranger fd it exists to catch. The window was
+wrong, not the mutation. The shipped assertion counts descriptors sharing the probe's dev+ino and
+requires exactly one, which KILLS the revert (`[0]` vs `[0, 5]`). **Do not relax it back to a path
+compare.**
+
+### Ea55-11 — the torn-read fixture's alphabet could not express two of the three separators its reader accepts
+
+**Recorded 2026-08-25 by round-55 lane a (review stage).** Severity: coverage hole in a new instrument.
+**Fixed.**
+
+`ResizeRaceTest::readWidths()` splits on `\r\n|\r|\n`, and every string in the fixture that exists to
+prove the reader works spelled its endings `\r\n` — the one shape a cooked Linux PTY produces, i.e. the
+shape already known. **MEASURED: narrowing the split to `\r\n` alone SURVIVED `--filter ResizeRaceTest`**
+(`OK (2 tests, 9 assertions)`). Two of three separators were asserted by nobody, and the live test above
+cannot cover for that: it asserts an ABSENCE, and a split that stops matching produces exactly that.
+
+Rule 11 again, in the same round, in a different file: a fuzz or fixture's alphabet is usually written to
+match the cases already known. Bare-LF (raw, non-cooked master) and bare-CR (a child writing CR without
+LF) rows added, plus a whitespace-padded row — the `trim()` arm had the identical hole and no row had ever
+needed trimming. MEASURED after: narrowing the split KILLED; removing `trim()` KILLED.
+
+### Ea55-12 — two roster arms are argued and neither is exercised end to end
+
+**Recorded 2026-08-25 by round-55 lane a.** Severity: unpinned reasoning. **Not done.**
+
+1. **The pid guard.** `install()` captures the owning pid and the shutdown handler returns early in a
+   `pcntl_fork()`ed child. This suite forks heavily and a child exiting 1 on its parent's bookkeeping
+   would be a fault injected by the guard itself — but nothing exercises it. An e2e needs a
+   `pcntl_fork()` inside a child suite that is ALSO violating, since the guard only matters on a run whose
+   report is non-null. Buildable; out of scope for the review stage.
+2. **Check 2 disables itself silently if a rostered entry stops emitting `Prepared`.** `countsOff` is
+   gated on `rosterWasFullyReached()`, and a rostered test that acquires a `#[Requires…]` attribute or a
+   class-level gate would never prepare, leaving that arm off forever with nothing red. Today's single
+   entry is a body-level skip (`McpClientTest.php`, `$this->markTestSkipped(...)` inside the method
+   body — checked), so it works. The cheap pin is a synthetic recording asserting `countsOff` is live for
+   the current roster shape; the honest fix is for check 3 to notice a rostered entry that neither
+   prepared nor skipped across a FULL run, which needs a "was this a full run" signal the roster does not
+   currently have.
