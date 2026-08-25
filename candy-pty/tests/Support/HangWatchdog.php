@@ -30,8 +30,19 @@ use PHPUnit\Event\TestRunner\ExecutionFinishedSubscriber;
  *
  * So this bounds the wait at the harness level, which is the one place that
  * covers every such loop at once including the ones nobody has found yet.
- * It converts "the suite stopped and we do not know where" into a named
- * test plus the forensic bundle E490 had to be assembled by hand.
+ *
+ * WHAT IT ACTUALLY CONVERTS THE HANG INTO, stated precisely because the first
+ * draft of this paragraph overstated it and a mechanism written down with
+ * confidence is how the next reader stops checking. It does NOT produce a
+ * PHPUnit failure: the runner is SIGKILLed, so PHPUnit emits nothing at all
+ * and the process exits 137 with no summary line. Measured -- a mutation that
+ * made the watchdog fire unconditionally ended the run at `rc=137` with no
+ * `Tests:` line anywhere in the output. What it converts "the suite stopped
+ * and we do not know where" into is a BOUNDED run that exits non-zero, plus a
+ * report on fd 2 naming the test and carrying the forensic bundle E490 had to
+ * be assembled by hand. That is the whole gain, and it is enough: a job that
+ * fails at 137 with a name in the log is diagnosable, and a job that hangs
+ * until the CI timeout is not.
  *
  * HOW. Registered from `tests/bootstrap.php`, which PHPUnit loads before it
  * seals the event facade (`TextUI\Application` loads the bootstrap script
@@ -96,7 +107,7 @@ final class HangWatchdog
         }
 
         $budgetSec ??= self::budgetFromEnv();
-        if ($budgetSec <= 0.0) {
+        if (!self::armsFor($budgetSec)) {
             return false;
         }
 
@@ -134,6 +145,29 @@ final class HangWatchdog
         });
 
         return true;
+    }
+
+    /**
+     * Whether $budgetSec is a budget this watchdog will arm for.
+     *
+     * A NAMED PREDICATE RATHER THAN AN INLINE COMPARISON, and the reason is a
+     * measurement rather than taste. The test that used to cover the opt-out
+     * asserted `install(0.0) === false` from inside a running suite -- where
+     * {@see install()} returns false at its FIRST guard, because bootstrap has
+     * already installed an instance, and never looks at the budget at all.
+     * Measured: with the budget guard deleted outright that assertion still
+     * passed. (It cannot reach the arming path either way: PHPUnit's event
+     * facade is sealed by the time any test runs, so a mid-suite `install()`
+     * with ANY budget lands in the catch branch.) The decision has to be
+     * reachable on its own to be checkable at all.
+     *
+     * Non-positive means "do not arm": `CANDY_PTY_HANG_BUDGET=0` is the
+     * documented opt-out, and a negative budget would otherwise fire the
+     * instant the first test started.
+     */
+    public static function armsFor(float $budgetSec): bool
+    {
+        return $budgetSec > 0.0;
     }
 
     /** The per-test budget, honouring `CANDY_PTY_HANG_BUDGET`. */

@@ -112,8 +112,9 @@ while (true) {
         . "  test:    %s\n"
         . "  in flight: %.1fs (budget %.1fs)\n"
         . "%s"
-        . "The runner is being SIGKILLed so this surfaces as a named failure\n"
-        . "instead of an unbounded stall. See E490.\n"
+        . "The runner is being SIGKILLed. PHPUnit prints NOTHING after this --\n"
+        . "the run ends at exit 137 with no summary -- so THIS report is the\n"
+        . "only record of which test it was. See E490.\n"
         . "================================================================\n",
         $testName,
         $age,
