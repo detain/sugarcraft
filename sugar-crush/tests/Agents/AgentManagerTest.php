@@ -2451,6 +2451,45 @@ final class AgentManagerTest extends TestCase
         $this->assertSame(['Read', 'Grep'], self::toolNames($request->tools));
     }
 
+    /**
+     * AN ARGUMENT-SCOPED DENIAL DOES NOT STRIP THE TOOL FROM THE ROSTER, and
+     * this is the shipped-then-caught bug rather than a nicety: a roster entry
+     * is a DECLARATION, and `PermissionGate::refuses()` already states that an
+     * argument-sensitive rule never settles one in either direction. Applying
+     * it here made `disallowedTools: ['Bash(git push*)']` remove the whole
+     * `Bash` tool, so a reviewer granted `Bash(git *)` could no longer run `git
+     * status` — the denial defeated the grant it was written to narrow.
+     */
+    public function testAnArgumentScopedDenialDoesNotStripTheToolFromTheRoster(): void
+    {
+        $request = $this->captureSubAgentRequestWithDenylist(
+            ['Bash(git *)', 'Read'],
+            ['Bash(git push*)'],
+            $this->fakeRegistry('Bash', 'Read', 'Edit'),
+        );
+
+        $this->assertSame(
+            ['Bash', 'Read'],
+            self::toolNames($request->tools),
+            'the tool must survive; the denial bites at call time',
+        );
+    }
+
+    /**
+     * The other polarity of the same rule, so the test above is not simply
+     * "denials do nothing": a NAME-ONLY denial of the same tool still strips it.
+     */
+    public function testANameOnlyDenialOfTheSameToolStillStripsIt(): void
+    {
+        $request = $this->captureSubAgentRequestWithDenylist(
+            ['Bash(git *)', 'Read'],
+            ['Bash'],
+            $this->fakeRegistry('Bash', 'Read', 'Edit'),
+        );
+
+        $this->assertSame(['Read'], self::toolNames($request->tools));
+    }
+
     /** The dialect is the same one, so `mcp__git__*` means here what it means in disabledTools. */
     public function testTheDenylistGlobsToolNames(): void
     {

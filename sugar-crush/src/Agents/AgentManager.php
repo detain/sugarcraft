@@ -791,7 +791,32 @@ final class AgentManager
         // only `$tools` would have handed a preset the very tool its own
         // denylist refuses. That is a widening committed inside the fix for a
         // lie, which is the shape this whole item is about.
-        $denied = $this->namePatterns($agent, $agent->disallowedTools, 'disallowedTools');
+        // VALIDATED IN FULL, APPLIED IN PART, and the part is the whole point.
+        //
+        // An ARGUMENT-SCOPED denial cannot remove a tool from the roster. A
+        // roster entry is a DECLARATION, and this project already decided what
+        // an argument-scoped rule may do to one: {@see PermissionGate::refuses()}
+        // states, and {@see PermissionRule::matches()}'s `$argumentsKnown`
+        // branch enforces, that such a rule never settles a declaration in
+        // either direction — it is "left to the call site that has them". Doing
+        // otherwise here is not merely inconsistent, it is a functional bug I
+        // shipped and then caught: `disallowedTools: ['Bash(git push*)']`
+        // stripped the WHOLE `Bash` tool, so a `reviewer` granted `Bash(git *)`
+        // could no longer run `git status` — the denial defeated the grant it
+        // was meant to narrow. The per-call half in
+        // {@see refuseCallOutsideGrant()} applies the full list, arguments and
+        // all, which is where `Bash(git push*)` actually bites.
+        $this->namePatterns($agent, $agent->disallowedTools, 'disallowedTools');
+
+        $denied = [];
+        foreach ($agent->disallowedTools as $denial) {
+            $rule = new PermissionRule((string) $denial, PermissionAction::Deny);
+            if ($rule->argumentPattern() !== null) {
+                continue;
+            }
+
+            $denied[] = $rule->toolNamePattern();
+        }
 
         $matched = array_fill_keys(array_keys($patterns), false);
         $granted = [];
