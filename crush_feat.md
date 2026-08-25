@@ -1766,7 +1766,7 @@ Sources: [Aider — Agent Patterns Catalog](https://www.agentpatternscatalog.org
 > material is history. Three things §12 states that are now FALSE of the live deployment:
 >
 > - **`--context-length 196608`.** §12 and the summary at the top of this document both cite it. The
->   DeepSeek deployment's `http://skynet2.interserver.net:30000/server_info` reports
+>   DeepSeek deployment's `https://skynet2.interserver.net/server_info` reports
 >   `context_length: null` — it was **never launched with `--context-length` at all**. Any doc in this
 >   repo citing that flag for DeepSeek is describing the MiniMax deployment it replaced. The live figure
 >   is `max_req_input_len` = **1,048,570** (the scheduler's enforced per-request INPUT ceiling, and the

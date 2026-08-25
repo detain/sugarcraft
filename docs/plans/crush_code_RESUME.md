@@ -3307,7 +3307,7 @@ now set it to max as default for this model"**.
   `deepseek-ai/DeepSeek-V4-Flash-0731`, `max_model_len` **1048576** — but **the constant tracks
   1048570, and that is deliberate.** The server publishes two nearly-identical figures and the
   difference is the domain: `/v1/models` `max_model_len` = 1048576 is the model's TOTAL window
-  (input + output), while `http://skynet2.interserver.net:30000/server_info`
+  (input + output), while `https://skynet2.interserver.net/server_info`
   `max_req_input_len` = **1048570** is the ceiling the scheduler enforces on one request's INPUT and
   the one that actually returns an error. `contextWindow()` is the denominator of every context tier,
   and `ProviderInterface::contextWindow()` states that erring LARGE is the harmful direction (too
