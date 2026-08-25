@@ -524,6 +524,105 @@ final class ReasoningProgressTest extends TestCase
         $this->assertSame(['a first thought ', ''], $progress);
     }
 
+    /**
+     * The retry gate's OTHER announcement branch, and the caller shape that
+     * makes it observable at all.
+     *
+     * `runStreaming()` announces a chunk that carries BOTH content and
+     * reasoning through a second branch, because its thinking still has to be
+     * paintable even though its text already went out through `$onToken`. With
+     * a token sink attached, latching `$emitted` there changes nothing - the
+     * `$onToken` branch one line up already latched it - which is why the
+     * obvious mutation of that branch SURVIVES the tests above and is not the
+     * defect it looks like.
+     *
+     * With NO token sink it is a different statement entirely. Nothing outside
+     * the method has observed anything, the docblock says so explicitly ("a
+     * mid-stream failure IS retried in full"), and a latch on that branch would
+     * silently take the guarantee away from every caller that paints thinking
+     * without painting text - which {@see EngineBackend::complete()} produces
+     * directly, since it derives its token sink from `$onToken` and its
+     * progress sink from `$onReasoning` independently.
+     */
+    public function testAStreamWithNoTokenSinkIsRetriedAfterAChunkThatBothSpokeAndThought(): void
+    {
+        $provider = new ThinkThenFailDouble('the answer', throwOnFirstAttempt: true, speakWhileThinking: true);
+
+        $progress = [];
+        $messages = iterator_to_array($this->runtime($provider)->run(
+            $this->app(),
+            null,
+            null,
+            null,
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(
+            2,
+            $provider->attempts(),
+            'with no token sink nothing has been observed, so a mid-stream failure is retried in full - '
+                . 'announcing the chunk\'s thinking must not take that away',
+        );
+        $this->assertSame(
+            'the answer',
+            $messages[0]->content(),
+            "'half a the answer' would mean the retry did not reset the accumulator",
+        );
+        $this->assertSame(['a first thought '], $progress);
+    }
+
+    /**
+     * The invariant that keeps TWO documented one-shot fallbacks dormant, and
+     * the reason they are still worth keeping.
+     *
+     * {@see EngineBackend::complete()} and {@see EngineBackend::completeAsync()}
+     * each carry a `!$streamed && $content !== ''` re-delivery, both described
+     * as covering "a provider whose stream yielded nothing but that still
+     * resolved to content". MEASURED: replacing the parent's whole
+     * `$streamed ? null : $onToken` with a bare `null` is green, because that
+     * case cannot arise. The assistant's content IS the stream - `$buffer` in
+     * {@see Runtime::runStreaming()} is the concatenation of exactly the chunks
+     * `$onToken` was handed, and {@see Runtime::runBatch()} hands over its whole
+     * reply in one delta for the same reason - so non-empty content implies a
+     * delta was emitted, which implies the latch is set.
+     *
+     * That is a property of `Runtime`, not of `EngineBackend`, and it is
+     * asserted HERE so that the day it stops holding this test names the two
+     * fallbacks that stop being dormant. They are NOT removed: a latch of this
+     * shape can only ever suppress a delivery, never invent one, so an
+     * unreachable one is inert while a missing one would double a reply on
+     * screen - the asymmetry is the reason to keep them.
+     */
+    public function testEveryByteOfTheReplyReachesTheTokenChannel(): void
+    {
+        $shapes = [
+            'a streaming provider that thinks first' => new StreamingDouble(3, 0, 'reasoning', 'the answer'),
+            'a chunk that both speaks and thinks' => new StreamingDouble(1, 0, 'mixed', 'the answer'),
+            'chunks with no payload at all' => new StreamingDouble(3, 0, 'blank', 'the answer'),
+            'a non-streaming provider' => new BatchDouble(),
+        ];
+
+        foreach ($shapes as $label => $provider) {
+            $tokens = [];
+            $messages = iterator_to_array($this->runtime($provider)->run(
+                $this->app(),
+                null,
+                null,
+                static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            ));
+
+            $assistant = $messages[0];
+            $this->assertInstanceOf(AssistantMessage::class, $assistant);
+            $this->assertNotSame('', $assistant->content(), "{$label}: the fixture answered nothing");
+            $this->assertSame(
+                $assistant->content(),
+                implode('', $tokens),
+                "{$label}: the reply and the deltas disagree - EngineBackend's two one-shot "
+                    . 'fallbacks are no longer dormant and their behaviour is now unknown',
+            );
+        }
+    }
+
     // =====================================================================
     // the two paths of one public contract
     // =====================================================================
@@ -1070,6 +1169,12 @@ final class ThinkThenFailDouble implements ProviderInterface
     public function __construct(
         private string $answer,
         private bool $throwOnFirstAttempt,
+        /**
+         * Put CONTENT on the thinking chunk as well, so the announcement takes
+         * runStreaming()'s `elseif` branch (a chunk that both spoke and
+         * thought) instead of its `content === ''` branch.
+         */
+        private bool $speakWhileThinking = false,
     ) {}
 
     public function name(): string { return 'thinkthenfail'; }
@@ -1092,7 +1197,10 @@ final class ThinkThenFailDouble implements ProviderInterface
         $this->attempts++;
 
         if ($this->attempts === 1) {
-            yield new CompleteResponse(content: '', reasoning: 'a first thought ');
+            yield new CompleteResponse(
+                content: $this->speakWhileThinking ? 'half a ' : '',
+                reasoning: 'a first thought ',
+            );
 
             if ($this->throwOnFirstAttempt) {
                 throw new ServerException(

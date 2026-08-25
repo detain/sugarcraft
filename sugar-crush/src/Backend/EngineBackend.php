@@ -562,6 +562,19 @@ final class EngineBackend implements Backend, ReportsContextWindow
         // stream yielded nothing but that still resolved to content. Keeping
         // the one-shot for that case means a consumer is never left with an
         // empty screen and a finished turn.
+        //
+        // MEASURED, and worth knowing before anyone reasons from this branch:
+        // no such provider can exist through {@see \SugarCraft\Crush\Runtime}
+        // today, so this is dormant. The assistant's content IS the stream —
+        // runStreaming()'s $buffer is the concatenation of exactly the chunks
+        // it handed $tokenSink, and runBatch() emits its whole reply as one
+        // delta — so a non-empty $content implies $streamed. Deliberately kept
+        // rather than deleted: this guard can only ever suppress a duplicate,
+        // never invent a delivery, so being unreachable costs nothing while
+        // being absent would cost a consumer its reply the day a provider path
+        // resolves content it did not stream.
+        // {@see \SugarCraft\Crush\Tests\Backend\ReasoningProgressTest::testEveryByteOfTheReplyReachesTheTokenChannel()}
+        // pins the Runtime-side invariant this dormancy rests on.
         if ($onToken !== null && !$streamed && $content !== '') {
             $onToken($content);
         }
@@ -930,11 +943,29 @@ final class EngineBackend implements Backend, ReportsContextWindow
                 // something to show has to reach the caller so it can be
                 // painted as it arrives.
                 //
-                // It deliberately does NOT set $streamed. That latch suppresses
-                // the result frame's one-shot re-delivery of the assistant's
-                // TEXT, and a turn that thought at length and then answered
-                // with a single un-streamed content block still needs that
-                // fallback.
+                // It deliberately does NOT set $streamed.
+                //
+                // WHAT THIS SAID: that the latch suppresses the result frame's
+                // one-shot re-delivery of the assistant's TEXT, and that "a
+                // turn that thought at length and then answered with a single
+                // un-streamed content block still needs that fallback".
+                // WHAT IS TRUE NOW: that turn does not exist. The child's
+                // complete() runs its OWN `!$streamed && $content !== ''`
+                // one-shot before it writes the result frame, so an unstreamed
+                // reply crosses as a `token` frame and $streamed is set here by
+                // the branch below - MEASURED, replacing the whole
+                // `$streamed ? null : $onToken` at the settle site with a bare
+                // null is green. The fallback this non-latch protects is
+                // dormant, and
+                // {@see \SugarCraft\Crush\Tests\Backend\ReasoningProgressTest::testEveryByteOfTheReplyReachesTheTokenChannel()}
+                // is what will say so the day it stops being.
+                // WHY THE NON-LATCH STILL EARNS ITS PLACE: the two directions
+                // are not symmetrical. Setting $streamed here can only ever
+                // SUPPRESS a delivery; leaving it clear can only ever permit
+                // one that a second guard then declines. So the wrong choice
+                // costs a lost reply and the right one costs nothing, on a
+                // branch whose whole subject - reasoning - is display-only and
+                // is never the assistant's text.
                 if (($frame['kind'] ?? null) === 'reasoning') {
                     $text = $frame['text'] ?? null;
                     if ($onReasoning !== null && is_string($text) && $text !== '') {
@@ -1196,7 +1227,12 @@ final class EngineBackend implements Backend, ReportsContextWindow
      * has already handed the caller these bytes, and repeating them whole
      * would double the reply on screen. It survives for the child that
      * produced no deltas (a provider whose stream yielded nothing), matching
-     * {@see complete()}'s own fallback.
+     * {@see complete()}'s own fallback — which is where the honest note
+     * belongs: that child cannot arise today, because complete()'s fallback
+     * fires first and turns exactly that case into a `token` frame. See the
+     * paragraph on that guard, and on the reasoning branch in
+     * {@see completeAsync()} that must not latch $streamed, for why both are
+     * kept rather than reduced to the one that can fire.
      *
      * @param ?array<string, mixed> $data
      */
