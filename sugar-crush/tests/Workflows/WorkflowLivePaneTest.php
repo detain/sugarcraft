@@ -874,6 +874,22 @@ final class WorkflowLivePaneTest extends TestCase
                 continue;
             }
 
+            // The width the caller's clip arithmetic assumes, asserted on the
+            // probe that is actually RETURNED rather than only used to choose a
+            // line. Relocated, not dropped: the pre-`continue` version of this
+            // method asserted the same thing on the first line it saw, and a
+            // mutation that widened the skip test to accept every line SURVIVED
+            // the whole file until this assertion moved down here — the probe
+            // went out nine cells wide while the offset returned beside it said
+            // sixteen.
+            self::assertSame(
+                self::LIVE_TEXT_PROBE_CELLS,
+                mb_strlen($probe),
+                'The probe returned is narrower than the offset reported beside it, '
+                . 'so the caller\'s clip arithmetic is measuring a window that does '
+                . 'not exist: ' . var_export($probe, true),
+            );
+
             self::assertStringNotContainsString(
                 self::AGENT_NAME,
                 $probe,
