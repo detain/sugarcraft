@@ -14257,7 +14257,20 @@ if (!is_readable('/dev/fd/' . $fd) && !is_link('/dev/fd/' . $fd)) { skip; }
 descriptor, so the answer is always no and the test always skips. **The gate is itself an instance of the
 defect family the test sits inside.**
 
-**STEP**: the gate should probe a real descriptor — `descriptorForStream()` now returns one — after which
+**AMENDED 2026-08-25 by the round-54 lane-a recovery run — the gate is worse than recorded above, and
+the STEP as first written would NOT have fixed it.** WHAT THIS ENTRY SAID: the gate fails because
+`(int) $testFd` yields a resource id rather than a descriptor. WHAT IS ALSO TRUE: the handle is
+`fclose()`d on the line BEFORE the path is tested. MEASURED at `5bef36cb`, PHP 8.3.6, reading
+`PosixBackendTest::testRawModeWithSttyFallbackOnRealPty()` in source order — `$fd = (int) $testFd;`,
+then `fclose($testFd);`, then `is_readable('/dev/fd/' . $fd)`. So even with the cast corrected to a
+genuine descriptor, `/dev/fd/<n>` would name a descriptor the test had just closed and the gate would
+skip anyway. WHY THIS MATTERS TO WHOEVER PICKS THIS UP: a round that implements the STEP below
+literally — swap the cast for `descriptorForStream()` — will watch the test go on skipping and may
+conclude the environment is at fault rather than the gate. **Both defects must be fixed together: probe
+a real descriptor AND keep the handle open until after the probe.**
+
+**STEP**: the gate should probe a real descriptor — `descriptorForStream()` now returns one — and must
+hold the handle open across the probe (see the amendment above) — after which
 the test would actually run and would exercise E368 site 4 through the `stty` backend, which the
 FFI-backed pin shipped this round does not cover. **NOT DONE THIS ROUND** because that test reads from a
 pty master against a 2-second deadline while a `/bin/cat` child echoes, and turning a
