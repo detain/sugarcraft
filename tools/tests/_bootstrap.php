@@ -146,6 +146,35 @@ trait PhpFunctionBodyTokens
      * Whitespace and comments are dropped so the comparison is about behaviour;
      * braces are matched so a nested block cannot end the body early.
      *
+     * A BRACE IS NOT ALWAYS A STRING TOKEN, AND THE FIRST DRAFT OF THIS WALK
+     * ASSUMED IT WAS. WHAT IT SAID: the sentence above, with `$token === '{'`
+     * as its only opener test. WHAT IS TRUE, MEASURED on PHP 8.3.6: inside a
+     * double-quoted string or a heredoc, `token_get_all()` emits the OPENING
+     * brace of `"{$a}"` as an ARRAY token (`T_CURLY_OPEN`) and of `"${a}"` as
+     * `T_DOLLAR_OPEN_CURLY_BRACES`, while emitting the matching CLOSING brace
+     * as the plain string `'}'`. A body containing either therefore counted one
+     * close it had never counted an open for, `$depth` fell to 0 early, and the
+     * function returned a TRUNCATED body:
+     *
+     *     $s = "a{$a}b"; return 1;   =>   ["$s", "=", '"', "a", "{", "$a"]
+     *
+     * WHY THAT MATTERED RATHER THAN BEING UNTIDY. Both callers are drift pins
+     * that compare two copies of one function for EQUALITY. Truncate both sides
+     * at the same interpolation and a real divergence after it compares equal —
+     * the guard passes on exactly the change it exists to catch, and
+     * `assertNotSame([], ...)` does not save it because a truncated body is not
+     * empty. Adding the interpolation to both copies is what the failure text
+     * itself tells a contributor to do ("port the change across"), so the
+     * blind spot was reachable by following the instructions.
+     *
+     * THE MIRROR-IMAGE SHAPE IS ALREADY SAFE, and it is safe by accident of the
+     * strict comparison rather than by intent, so it is pinned too (rule 49):
+     * `"$a}"` yields a `T_ENCAPSED_AND_WHITESPACE` whose text is exactly `}`
+     * and `"$a{"` one whose text is exactly `{`. Those are ARRAYS, and `===`
+     * against a string rejects them, so a literal brace inside a string is
+     * correctly not counted in either direction. Both shapes are fixtures on
+     * {@see StackedDocCommentTest::testTheBodyExtractorReadsTheFunctionItIsAskedFor()}.
+     *
      * @return list<string>
      */
     private static function functionBodyTokens(string $source, string $name): array
@@ -174,7 +203,7 @@ trait PhpFunctionBodyTokens
             $body = [];
             for ($j = $named; $j < $count; $j++) {
                 $token = $tokens[$j];
-                if ($token === '{') {
+                if ($token === '{' || (\is_array($token) && \in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true))) {
                     $depth++;
                     if ($depth === 1) {
                         continue;

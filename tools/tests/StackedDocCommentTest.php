@@ -247,6 +247,69 @@ final class StackedDocCommentTest extends TestCase
             ),
             'a nested brace closed the body early',
         );
+
+        // AND NEITHER MAY AN INTERPOLATION BRACE, WHICH IS THE SHAPE THE
+        // FIXTURE ABOVE CANNOT EXPRESS (rule 11). Its alphabet is `if (…) {…}`
+        // — a brace that is a plain string token on both sides — so it is
+        // silent about the asymmetric ones. MEASURED on PHP 8.3.6: inside a
+        // string, `{$a}` opens with an ARRAY token (`T_CURLY_OPEN`), `${a}`
+        // with `T_DOLLAR_OPEN_CURLY_BRACES`, and BOTH close with the plain
+        // string `'}'`. A walk testing only `$token === '{'` counts the close
+        // and not the open, so the body ends at the interpolation. Every row
+        // below therefore carries a statement AFTER the string: truncation is
+        // only visible as the absence of something that follows.
+        //
+        // EVERY FIXTURE SOURCE IS SINGLE-QUOTED. A double-quoted one would
+        // interpolate in THIS file and the fixture would never carry the bytes
+        // it is about (rule 26).
+        self::assertSame(
+            ['$s', '=', '"', 'a', '{', '$a', '}', 'b', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "a{$a}b"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a `{$a}` interpolation closed the body early: the opening brace is a T_CURLY_OPEN '
+            . 'array token and only the closing one is the string `}`, so an opener test of '
+            . '`$token === \'{\'` alone counts one close it never counted an open for',
+        );
+
+        self::assertSame(
+            ['$s', '=', '"', 'a', '${', 'a', '}', 'b', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "a${a}b"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a `${a}` interpolation closed the body early — the same defect as the row above '
+            . 'with T_DOLLAR_OPEN_CURLY_BRACES as the opener, and a fix that names only '
+            . 'T_CURLY_OPEN leaves this half of it open',
+        );
+
+        // THE MIRROR IMAGE, PINNED IN THE OTHER POLARITY (rules 41 and 49). A
+        // LITERAL brace inside a string arrives as `T_ENCAPSED_AND_WHITESPACE`
+        // whose text is exactly `}` or exactly `{` — an ARRAY, which the strict
+        // `===` against a string rejects. That is correct and it is an accident
+        // of the comparison rather than an intent, so widening the opener test
+        // to any token whose TEXT is `{` would break these two rows while
+        // leaving the two above green.
+        self::assertSame(
+            ['$s', '=', '"', '$a', '}', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "$a}"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a literal `}` inside a string ended the body: it is T_ENCAPSED_AND_WHITESPACE, '
+            . 'not the string token `}`, and must not be counted',
+        );
+
+        self::assertSame(
+            ['$s', '=', '"', '$a', '{', '"', ';', 'return', '$s', ';'],
+            self::functionBodyTokens(
+                '<?php' . "\n" . 'function wanted(): string { $s = "$a{"; return $s; }' . "\n",
+                'wanted',
+            ),
+            'a literal `{` inside a string was counted as an opening brace, so the body now '
+            . 'runs one level too deep and never closes',
+        );
     }
 
     /**
