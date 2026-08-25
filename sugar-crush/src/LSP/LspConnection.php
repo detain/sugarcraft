@@ -353,9 +353,50 @@ final class LspConnection implements LspConnectionInterface
         $this->notificationCallback = $callback;
     }
 
+    /**
+     * Can this session still be used? NOT "is the process up", and the
+     * difference is the {@see $framingBroken} latch.
+     *
+     * WHY THIS IS THE SESSION QUESTION AND NOT THE PROCESS QUESTION, measured
+     * rather than argued: {@see \SugarCraft\Crush\LSP\LspClient} is the only
+     * consumer of this predicate in `src/`, and every one of its ten call sites
+     * spells the same branch —
+     *
+     *     if ($conn->isConnected()) { $r = $conn->definitions(...); $cache->set(...); return $r; }
+     *     $r = $this->fallbackGrep(...); $cache->set(...); return $r;
+     *
+     * — so the answer chooses between the language server and the grep
+     * fallback. A latched session answers every request with
+     * `LspResponse::ioError()`, which {@see definitions()} and its siblings turn
+     * into `[]`; with `true` here the client takes that `[]` for an ANSWER and
+     * WRITES IT INTO THE CACHE, so the empty result outlives the failure and is
+     * served from cache on every later call for that uri+position. Reporting
+     * `false` instead sends the same call down `fallbackGrep()`, which is the
+     * degraded-but-real answer that path exists to provide. "The process is
+     * alive" is true of a latched session and is not a fact any caller in this
+     * tree acts on.
+     *
+     * THE POLITE-SHUTDOWN CONCERN THIS USED TO BE HELD BACK BY DOES NOT ARISE.
+     * {@see disconnect()} gates on `$this->initialized`, never on this method,
+     * so a latched session still speaks `shutdown`/`exit` and still runs
+     * {@see stopProcess()}. Pinned by
+     * `LspConnectionStdinWedgeTest::testALatchedSessionStillDisconnectsPolitely()`.
+     *
+     * `$this->initialized` STAYS THE FIRST GATE: a connected-but-not-yet-
+     * initialised server cannot serve a request either, and that has always been
+     * false here.
+     */
     public function isConnected(): bool
     {
         if (!$this->initialized) {
+            return false;
+        }
+
+        // A partially-written `Content-Length` message left the stream with no
+        // agreed frame boundary, so {@see writeMessage()} refuses every later
+        // send. A predicate that answers "usable" for a session that can never
+        // send again is the one thing worse than no predicate.
+        if ($this->framingBroken) {
             return false;
         }
 
@@ -552,11 +593,31 @@ final class LspConnection implements LspConnectionInterface
      *     exchange. Here it may mean the session's framing is gone, which is what
      *     {@see abandonWrite()} decides.
      *
+     *  d. THE NULL DEADLINE HAS NO DEFAULT HERE, AND THAT IS NOT COSMETIC.
+     *     `StdioMcpServer::writeLine()` keeps `= null` because
+     *     {@see \SugarCraft\Crush\MCP\StdioMcpServer::callTool()} genuinely
+     *     wants it. No caller here does — both send paths pass
+     *     `microtime(true) + $this->requestTimeout` — and MEASURED this round the
+     *     null path is far worse than "waits on the child's liveness" suggests:
+     *     with no deadline, no signals and a LIVE child that has stopped reading,
+     *     `stream_select()` times out every {@see WRITE_POLL_MICROS}, `$ready ===
+     *     0` takes the `continue`, and NO liveness check is consulted on that
+     *     path at all. `timeout 12 php probe.php` -> rc 124; against a 30s
+     *     fixture the loop returned at 29.843s and against a 120s one it ran past
+     *     a 45s bound. The EINTR backstop does not help, because it counts
+     *     consecutive FAILURES and a timeout is not a failure. So the parameter
+     *     stays nullable — the backstop test drives it that way on purpose — but
+     *     every call site now has to SAY `null`, which is the difference between
+     *     choosing the unbounded path and inheriting it from a default.
+     *
      * @param array<string, mixed> $payload
      * @param float|null $deadline `microtime(true)` value past which the write
-     *        gives up; null waits on the child's liveness alone
+     *        gives up. `null` is NOT "bounded by the child's liveness": on that
+     *        path a live-but-unreading child is polled forever and the loop ends
+     *        only when the child dies. Pass a deadline unless you have measured
+     *        that you want that — see (d) above.
      */
-    private function writeMessage(array $payload, ?float $deadline = null): bool
+    private function writeMessage(array $payload, ?float $deadline): bool
     {
         if (!is_resource($this->process) || $this->pipes === null || $this->framingBroken) {
             return false;
@@ -661,9 +722,22 @@ final class LspConnection implements LspConnectionInterface
      *
      * So the partial case latches {@see $framingBroken} and every later send
      * fails fast, instead of the session producing confidently-parsed garbage.
-     * {@see isConnected()} is deliberately NOT changed — the process is alive and
-     * a caller may still want to {@see disconnect()} it politely — which is
-     * recorded as a follow-up rather than decided here.
+     *
+     * WHAT THIS SAID: that {@see isConnected()} was "deliberately NOT changed —
+     * the process is alive and a caller may still want to {@see disconnect()} it
+     * politely", recorded as a follow-up rather than decided here.
+     *
+     * WHAT IS TRUE NOW: the follow-up is decided and {@see isConnected()} DOES
+     * consult the latch. The politeness worry was not wrong, it was aimed at the
+     * wrong method — {@see disconnect()} gates on `$this->initialized` and never
+     * on {@see isConnected()}, so nothing about the graceful shutdown path went
+     * through the predicate to begin with.
+     *
+     * WHY THE DISTINCTION STILL EARNS ITS PLACE: the zero-byte case really is
+     * different and really does leave the session usable, which is what keeps
+     * this method a decision rather than an unconditional `$this->framingBroken
+     * = true`. See {@see isConnected()} for the measurement of what the wrong
+     * answer costs downstream.
      *
      * @param int $total     bytes the framed message started at
      * @param int $remaining bytes still unwritten when the loop gave up

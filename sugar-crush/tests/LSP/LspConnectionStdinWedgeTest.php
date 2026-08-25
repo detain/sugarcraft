@@ -420,6 +420,137 @@ final class LspConnectionStdinWedgeTest extends TestCase
     }
 
     // =========================================================================
+    // The latch is what `isConnected()` answers on (E474)
+    // =========================================================================
+
+    /**
+     * A LATCHED SESSION REPORTS ITSELF UNUSABLE, and the reason this is worth a
+     * row of its own is that {@see \SugarCraft\Crush\LSP\LspClient} branches on
+     * exactly this predicate to choose between the language server and its grep
+     * fallback — and CACHES whichever answer it gets. With `isConnected()`
+     * answering true for a session that can never send again, the client took the
+     * `[]` that a latched `sendRequest()` produces for a real answer and wrote it
+     * into the cache, so one desynchronised write turned into a permanently empty
+     * result for that uri+position. The consequence is pinned one file over, in
+     * `LspClientTest::testAConnectionThatReportsItselfDisconnectedIsNotCached()`.
+     *
+     * BOTH POLARITIES ARE IN THIS ONE ROW ON PURPOSE. The `true` before the
+     * oversized write is not decoration: without it, an `isConnected()` mutated
+     * to `return false;` outright would satisfy the assertion this row is named
+     * for. See {@see testASessionWhoseWriteWasAbandonedBeforeItsFirstByteStaysUsable()}
+     * for the third polarity — a FAILED write that must NOT latch.
+     */
+    public function testALatchedSessionReportsItselfUnusable(): void
+    {
+        $connection = $this->connectionTo($this->deafServerScript(), timeout: 1.0);
+
+        try {
+            $this->assertTrue(
+                $connection->isConnected(),
+                'the control: a fresh connection to a live child is usable, so a later false '
+                . 'cannot be attributed to the predicate simply always answering false',
+            );
+
+            $connection->sendRequest('textDocument/didOpen', [
+                'text' => str_repeat('x', self::OVERSIZED_BYTES),
+            ]);
+
+            $this->assertFalse(
+                $connection->isConnected(),
+                'the session reported itself usable after a partially-written Content-Length '
+                . 'message desynchronised the stream, so every caller that branches on this '
+                . 'predicate would keep routing work to a connection that can never send again',
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    /**
+     * THE THIRD POLARITY. A write abandoned before its FIRST byte is a lost
+     * message and not a broken stream, so the session stays usable and
+     * {@see \SugarCraft\Crush\LSP\LspConnection::isConnected()} must keep saying
+     * so. Without this row, moving the latch into the predicate is satisfied by
+     * an `isConnected()` that goes false after any failed write at all — which
+     * would send every recoverable one-off hiccup permanently down the grep
+     * fallback.
+     *
+     * Reached the same way {@see testAWriteAbandonedBeforeItsFirstByteLeavesTheConnectionUsable()}
+     * reaches it: an already-expired deadline trips the loop's first check with
+     * the payload untouched.
+     */
+    public function testASessionWhoseWriteWasAbandonedBeforeItsFirstByteStaysUsable(): void
+    {
+        $connection = $this->connectionTo($this->echoServerScript(self::SAFE_BYTES), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        try {
+            $connection->initialize();
+
+            $write = new \ReflectionMethod($connection, 'writeMessage');
+            $write->setAccessible(true);
+
+            $this->assertFalse(
+                $write->invoke($connection, ['jsonrpc' => '2.0', 'method' => 'nope'], microtime(true) - 1.0),
+                'an already-expired deadline must abandon the write',
+            );
+
+            $this->assertTrue(
+                $connection->isConnected(),
+                'a write that never put a byte on the wire marked the whole session unusable, so '
+                . 'the predicate now reports the framing as gone for a stream that is intact',
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    /**
+     * THE CONCERN THE LATCH USED TO BE HELD BACK BY, PINNED SO IT STAYS ANSWERED.
+     *
+     * {@see \SugarCraft\Crush\LSP\LspConnection::abandonWrite()} used to record
+     * that `isConnected()` was left alone because "a caller may still want to
+     * {@see \SugarCraft\Crush\LSP\LspConnection::disconnect()} it politely". That
+     * worry was aimed at the wrong method: `disconnect()` gates on the private
+     * `initialized` flag and never on the predicate, so the graceful path never
+     * went through it. This row is the guard that keeps that true — mutate
+     * `disconnect()`'s first condition to `!$this->isConnected()` and it reds,
+     * because the early-return branch calls `stopProcess()` and returns WITHOUT
+     * clearing the capabilities the full branch clears.
+     *
+     * `capabilities()` is the observable because it is PUBLIC and only the full
+     * shutdown branch nulls it. The latch is set through reflection rather than
+     * through a real partial write, because this row needs a server that
+     * ANSWERED `initialize` (so there are capabilities to lose) and such a server
+     * by construction never wedges the write.
+     */
+    public function testALatchedSessionStillDisconnectsPolitely(): void
+    {
+        $connection = $this->connectionTo($this->echoServerScript(self::SAFE_BYTES), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        $connection->initialize();
+
+        $this->assertNotNull(
+            $connection->capabilities(),
+            'the control: the fixture answered initialize, so there are capabilities for '
+            . 'disconnect() to clear and the assertion below is not vacuous',
+        );
+
+        $latch = new \ReflectionProperty($connection, 'framingBroken');
+        $latch->setAccessible(true);
+        $latch->setValue($connection, true);
+
+        $this->assertFalse($connection->isConnected(), 'the latch did not reach the predicate');
+
+        $connection->disconnect();
+
+        $this->assertNull(
+            $connection->capabilities(),
+            'disconnect() took its early-return branch on a latched session, so the LSP '
+            . 'shutdown/exit sequence was skipped for a server that was alive and reachable',
+        );
+    }
+
+    // =========================================================================
     // Fixtures and helpers
     // =========================================================================
 
