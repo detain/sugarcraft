@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use RuntimeException;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Support\ProcessReaper;
 
 /**
@@ -190,11 +191,78 @@ final class ClaudeCodeMcpClient
      * limit for the life of the process, and {@see callTool()} polls
      * {@see readMessages()} a hundred times per call.
      *
-     * SIXTY-FOUR MEBIBYTES, inherited rather than invented: the same bound
-     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} puts on
+     * SIXTY-FOUR MEBIBYTES, AND THE INHERITANCE IS NOW A LANGUAGE FACT: this
+     * line NAMES {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES}
+     * rather than repeating its arithmetic. The engine puts the same bound on
      * the same question, for the same reason — a frame legitimately carries raw
      * image bytes, and a corrupt stream must never make the parent buffer an
      * arbitrary length before noticing.
+     *
+     * WHAT THIS SAID: "inherited rather than invented", full stop. WHAT WAS
+     * TRUE WHEN IT SAID IT: nothing derived the value and nothing checked it.
+     * The engine's constant was `private`, so PHP could not name it here, and
+     * this line spelled `64 * 1024 * 1024` as its own literal — as did the
+     * other two framers, all three under doc-blocks claiming an inheritance
+     * that existed only in the comments. Round 58 corrected that sentence in
+     * {@see \SugarCraft\Crush\LSP\LspConnection} and
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} and left this file alone,
+     * because it sat outside that lane's file list; for one round the third
+     * member of the family was the only one still overstating.
+     *
+     * WHAT IS TRUE NOW: the engine's constant is `public`, this initialiser
+     * references it, and the family cannot disagree at all.
+     *
+     * WHY A TEST STILL EARNS ITS PLACE: its job changed rather than ended.
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} no longer compares
+     * literals that happen to match — it pins that every member DERIVES, over a
+     * roster read off the `MAX_FRAME_BYTES` declarations in `src/`. A FOURTH
+     * framer that copies this doc-block and spells the arithmetic is reported.
+     *
+     * WHAT THIS SAID FOR ONE ROUND: that such a framer was "the one way the
+     * family can still come apart". WHAT IS TRUE: that sentence was written
+     * into three files at once and was wrong in all three. The roster's own
+     * scanner could not read four of PHP 8.3's five `const` spellings — the
+     * typed one this tree already uses elsewhere among them — so a framer
+     * written that way left the family SILENTLY, and the whole suite came out
+     * rc 0 with one in place. WHY IT STILL EARNS ITS PLACE, REPHRASED: a
+     * copied literal is the way the family comes apart THAT ANYONE WOULD
+     * WRITE ON PURPOSE, and it is caught; the scanner's own blind spots are
+     * now held by a second instrument that decides membership without parsing
+     * anything, in
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest::testEveryFileDeclaringTheCapReachesTheRoster()}.
+     *
+     * ⚠️ AND A WORD ABOUT DORMANCY, BECAUSE THE OBVIOUS INFERENCE IS BACKWARDS.
+     * WHAT AN EARLIER DRAFT OF THIS PARAGRAPH SAID: that nothing calls this
+     * client, so no test exercises its cap end to end, and the derivation is
+     * what keeps a number in a dormant file from going stale unobserved.
+     *
+     * WHAT IS TRUE: the first half is right and the second is inverted. This
+     * class has no call site in `src/` — the class doc-block explains why — but
+     * its framing path IS exercised end to end.
+     * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest} drives the real
+     * {@see readMessages()} against a real child process at `cap` and at
+     * `cap + 1`, so those rows cover the CALL SITE as well as the check, unlike
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s equivalent rows, which
+     * reach a private method by reflection and deliberately do not kill a
+     * mutation of the line that calls it.
+     *
+     * ⚠️ AND NOT "THE BEST COVERED OF THE THREE", WHICH IS WHAT AN EARLIER
+     * DRAFT OF THIS SENTENCE CLAIMED. Its evidence was that scope note, and
+     * the note compares this class with `StdioMcpServer` only — two of the
+     * three. MEASURED against the third:
+     * {@see \SugarCraft\Crush\Tests\LSP\LspConnectionFrameCapTest} carries
+     * seven test methods to this class's two, drives a real child of its own,
+     * and adds a dormancy pin this class has no counterpart for. A superlative
+     * needs the whole population; this one was read off a pairwise comparison,
+     * which is the same mistake one level down from the one the paragraph
+     * above corrects.
+     *
+     * WHY THE POINT SURVIVES THE CORRECTION: product dormancy and test coverage
+     * are separate facts, and it is the FIRST that makes copying a number here
+     * dangerous. Nobody editing a caller will ever be led to this file, so a
+     * literal that drifted would be found by whoever next read the class for
+     * unrelated reasons. Naming the engine's constant removes the possibility
+     * rather than relying on somebody looking.
      *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. Cutting the buffer at
      * the cap would hand `McpMessage::parse()` half a line, which comes back as
@@ -202,7 +270,7 @@ final class ClaudeCodeMcpClient
      * refusing to hold more. The buffer is dropped and a `RuntimeException`
      * naming the cap is raised instead.
      */
-    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+    private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
 
     /**
      * The TAIL of whatever the MCP server has written to stderr, bounded.

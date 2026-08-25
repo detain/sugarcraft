@@ -163,6 +163,47 @@ final class DenialPrefixRosterTest extends TestCase
      * reworded to get around it. That is the shape where the next reader adds
      * an exemption row for correct code, so the classifier was fixed instead.
      *
+     * AND THE SAME DEFECT SAT ONE WORD OVER, WHICH IS WHY E541's FIX WAS NOT
+     * THE END OF IT (E570). WHAT THIS SAID: `required`, a bare term matched
+     * anywhere in the frame. WHAT IS TRUE NOW: it is
+     * `(?:permission|approval|consent)s?\s+(?:is\s+|are\s+)?required` — the
+     * word only counts when a permission-domain noun stands in front of it.
+     *
+     * `required` is ordinary protocol English, and the HTTP vocabulary in
+     * particular is full of it. MEASURED on PHP 8.3.6 against the shape and the
+     * pre-narrowing vocabulary, every one of these was reported as a
+     * denial-shaped literal:
+     *
+     *   Authorization Required:                      frame `Authorization Required:`
+     *   Proxy Authorization Required: yes            frame `Proxy Authorization Required:`
+     *   Content-Length required: header is mandatory frame `Length required:`
+     *   Content-Length is required:                  frame `Length is required:`
+     *
+     * The last two are worth reading twice: the SHAPE's lookbehind is
+     * `(?<![A-Za-z])`, and a hyphen is not a letter, so the tail of a
+     * hyphenated compound opens a frame of its own. `Content-Length` supplies
+     * `Length`. That property belongs to every term in this vocabulary, not
+     * just this one, and it is filed rather than fixed here.
+     *
+     * None of the four occurred in `src/` when this landed — the only
+     * `required` hit anywhere was the roster's own `Permission required:` — so
+     * this was latent exactly as E541 was until `LspConnection` wrote the
+     * phrase. `src/LSP/` and `src/MCP/` are where the next one gets written.
+     *
+     * WHAT THIS NARROWING COSTS, and it is not nothing: `Authorization
+     * required: approve this tool call` is now invisible, and so is a bare
+     * `Required:`. Those were the honest alternatives — key the term on a
+     * permission noun, or keep the false positive and hope the next reader
+     * rewords correct HTTP code instead of buying an exemption row. E541 chose
+     * the classifier over the exemption and this follows it, because an
+     * exemption row written for correct code is a licence and is exactly where
+     * the next real offender hides. MEASURED with the narrowed vocabulary: the
+     * whole-`src/` map names the same two files and the same four literals, and
+     * every roster prefix, `Approval required:`, `Consent required:`,
+     * `Permissions required:` and `Permission is required:` are all still seen.
+     * Both directions are pinned as fixtures below rather than left to this
+     * paragraph.
+     *
      * WHAT THE NARROWING COSTS, stated rather than glossed: an invented prefix
      * spelling the bare noun — `Permission block: rm` — is now invisible to
      * this scan. That is ungrammatical English for a refusal, no roster case
@@ -183,7 +224,9 @@ final class DenialPrefixRosterTest extends TestCase
      */
     private const DENIAL_TERMS = '/\b(?:den(?:y|ied|ial)|refus(?:e|ed|al)|block(?:ed|ing)|reject(?:ed)?'
         . '|declin(?:e|ed)|prohibited|vetoed|barred'
-        . '|forbidden|disallowed|unauthori[sz]ed|required|not (?:allowed|permitted|granted))\b/i';
+        . '|forbidden|disallowed|unauthori[sz]ed'
+        . '|(?:permission|approval|consent)s?\s+(?:is\s+|are\s+)?required'
+        . '|not (?:allowed|permitted|granted))\b/i';
 
     /**
      * A NOTE, NOT A PATTERN: the frame above requires a CAPITALISED opener, so
@@ -651,6 +694,49 @@ final class DenialPrefixRosterTest extends TestCase
             self::assertSame(
                 [$real],
                 self::denialLiteralsIn('<?php $g = ' . var_export($real, true) . ';'),
+                "the narrowing went too far and the scanner can no longer express {$why}, so a real "
+                . 'denial prefix is invisible to the whole-src map',
+            );
+        }
+
+        // AND E570's NEGATIVE, WHICH IS E541's DEFECT ONE WORD OVER. The bare
+        // term `required` was in the vocabulary, so ordinary HTTP and protocol
+        // English read as a permission denial. MEASURED on PHP 8.3.6 with the
+        // pre-narrowing vocabulary: every row below was REPORTED. The last two
+        // are reported through a frame the reader will not expect -- the SHAPE's
+        // lookbehind is `(?<![A-Za-z])` and a hyphen is not a letter, so
+        // `Content-Length` supplies the frame opener `Length`.
+        foreach ([
+            'an HTTP 401 status line' => 'Authorization Requi' . 'red:',
+            'an HTTP 407 status line' => 'Proxy Authorization Requi' . 'red: yes',
+            'a protocol header being called mandatory'
+                => 'Content-Length requi' . 'red: the header is mandatory',
+            'the same, spelled with a copula' => 'Content-Length is requi' . 'red:',
+        ] as $why => $innocent) {
+            self::assertSame(
+                [],
+                self::denialLiteralsIn('<?php $r = ' . var_export($innocent, true) . ';'),
+                "the vocabulary reads {$why} as a permission denial, so this guard reddens on correct "
+                . 'code and the next reader buys an exemption row with a sentence. THE FIX IS THE '
+                . 'CLASSIFIER, not a row: key `required` on a permission-domain noun',
+            );
+        }
+
+        // AND ITS POSITIVE, WITHOUT WHICH THE FOUR ROWS ABOVE ARE ALSO WHAT A
+        // DELETED TERM LOOKS LIKE (rules 15 and 25) -- `[]` is exactly what
+        // dropping `required` from the vocabulary outright would produce, and
+        // that drop would silence the LIVE roster prefix. The first row is that
+        // roster prefix, so this is not a fixture-only claim.
+        foreach ([
+            'the live DenialKind case' => 'Permission requi' . 'red: rm -rf',
+            'the same noun in the plural' => 'Permissions requi' . 'red:',
+            'the same noun with a copula between' => 'Permission is requi' . 'red:',
+            'a permission-domain synonym' => 'Approval requi' . 'red: sign off',
+            'the other permission-domain synonym' => 'Consent requi' . 'red:',
+        ] as $why => $real) {
+            self::assertSame(
+                [$real],
+                self::denialLiteralsIn('<?php $q = ' . var_export($real, true) . ';'),
                 "the narrowing went too far and the scanner can no longer express {$why}, so a real "
                 . 'denial prefix is invisible to the whole-src map',
             );

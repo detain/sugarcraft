@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\MCP;
 
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\McpMessage;
 
 final class StdioMcpServer implements McpServer
@@ -88,35 +89,47 @@ final class StdioMcpServer implements McpServer
      * {@see MAX_STDERR_BYTES} for exactly this reason, so the asymmetry sat
      * inside one file.
      *
-     * SIXTY-FOUR MEBIBYTES, and the number is inherited rather than invented:
-     * {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES} is the
-     * same bound on the same question — "a frame legitimately carries raw image
-     * bytes, so it has to be generous, but a corrupt header must never make the
-     * parent try to buffer an arbitrary length before it notices the stream is
-     * garbage". An MCP `tools/call` result carrying a file or an image is the
-     * same shape of payload.
+     * SIXTY-FOUR MEBIBYTES, AND THE INHERITANCE IS NOW A LANGUAGE FACT: this
+     * line NAMES {@see \SugarCraft\Crush\Backend\EngineBackend::MAX_FRAME_BYTES}
+     * rather than repeating its arithmetic. The engine puts the same bound on
+     * the same question — "a frame legitimately carries raw image bytes, so it
+     * has to be generous, but a corrupt header must never make the parent try
+     * to buffer an arbitrary length before it notices the stream is garbage".
+     * An MCP `tools/call` result carrying a file or an image is the same shape
+     * of payload.
      *
-     * WHAT THIS SAID: "inherited rather than invented". WHAT IS TRUE NOW: it is
-     * inherited, but nothing DERIVED it — the engine's constant is `private`, so
-     * PHP cannot name it here and this line spells `64 * 1024 * 1024` as its own
-     * literal, exactly as the other two members of the family do. Raising the
-     * engine's cap would have desynchronised all four without any framing test
-     * noticing. That last clause used to read "while every test stayed green",
-     * which was broader than what was run: MEASURED on PHP 8.3.6 by raising the
-     * engine's constant to 128 MiB and running the two suites that exist to pin
-     * this bound, `tests/MCP/McpFrameCapTest.php` and
-     * `tests/LSP/LspConnectionFrameCapTest.php`, both stayed green. No
-     * whole-suite run was made under that mutation, and at this commit a
-     * whole-suite run under it would go RED, because the test named below now
-     * exists to catch exactly this.
+     * WHAT THIS SAID, TWICE OVER. First: "inherited rather than invented",
+     * which was prose — the value was copied, not derived. Then, after round
+     * 58: "it is inherited, but nothing DERIVED it — the engine's constant is
+     * `private`, so PHP cannot name it here and this line spells
+     * `64 * 1024 * 1024` as its own literal", with a reflection test standing
+     * in for the derivation.
      *
-     * WHY THIS STILL EARNS ITS PLACE: the claim is now CHECKED rather than
-     * asserted — {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} reads the
-     * engine's private constant by reflection and refuses any divergence. Its
-     * roster is DERIVED from the `MAX_FRAME_BYTES` declarations in `src/`, so
-     * there is no list to edit: move both caps, or drop the claim from this
-     * doc-block and stop this class declaring its own constant, in the same
-     * commit.
+     * WHAT IS TRUE NOW: the engine's constant is `public`, this class's
+     * initialiser references it, and a constant expression naming another
+     * class's constant is resolved by PHP itself. The family cannot disagree.
+     *
+     * WHY THE REFLECTION TEST STILL EARNS ITS PLACE — and it does, because its
+     * job CHANGED rather than ended.
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} no longer exists to
+     * compare four literals that happen to match; it exists to pin that every
+     * member DERIVES. Its roster is read off the `MAX_FRAME_BYTES` declarations
+     * in `src/`, so a FOURTH framer that copies this doc-block and spells the
+     * arithmetic joins the family and is reported. There is no hand list to
+     * edit.
+     *
+     * WHAT THIS SAID FOR ONE ROUND: that such a framer was "the only way the
+     * family can still come apart". WHAT IS TRUE: that clause was written into
+     * three framing files at once and was wrong in all three, because the
+     * roster's own scanner could not read four of PHP 8.3's five `const`
+     * spellings — `private const int …` among them, which is a spelling this
+     * tree already uses. A framer written that way left the family SILENTLY,
+     * with the whole suite rc 0. WHY THE POINT SURVIVES THE CORRECTION: a
+     * copied literal remains the way the family comes apart that anyone would
+     * write on purpose, and it is caught. The scanner's own blind spots are now
+     * held separately, by a second instrument that decides membership without
+     * parsing anything, in
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest::testEveryFileDeclaringTheCapReachesTheRoster()}.
      *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION, AND THE DISTINCTION
      * IS THE WHOLE DESIGN. Silently cutting the buffer at the cap would hand
@@ -125,7 +138,7 @@ final class StdioMcpServer implements McpServer
      * that THIS side refused to hold any more. The buffer is dropped and a
      * `\RuntimeException` naming the cap is raised instead.
      */
-    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+    private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;
 
     /**
      * How long THE HANDSHAKE — `initialize` plus `tools/list`, one shared
