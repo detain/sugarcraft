@@ -178,9 +178,13 @@ final class SwallowingCatchCensusTest extends TestCase
         // emptiness guard is answered with an exemption row — which is a
         // licence, and exactly where the next real offender hides.
         //
-        // MEASURED at this commit: neither shape occurs in sugar-crush/tests,
-        // and `.php-cs-fixer.dist.php` pins no rule that would prevent one. So
-        // these are latent rather than live, and they are pinned on fixtures
+        // MEASURED at this commit: neither shape occurs in sugar-crush/tests
+        // (463 files: zero group-use catch types, zero bare-unimported ones).
+        // Nor is either shape prevented. `.php-cs-fixer.dist.php` enables
+        // `@PSR12`, which DOES carry `single_import_per_statement` -- but
+        // configured `['group_to_single_imports' => false]` (php-cs-fixer
+        // v3.95.21), i.e. the fixer deliberately leaves a group import alone.
+        // So these are latent rather than live, and they are pinned on fixtures
         // rather than on the tree for that reason.
         $groupPrelude = "namespace Demo;\n"
             . 'use PHPUnit\\Framework\\' . '{' . 'AssertionFailedError, Exception as WideOne};' . "\n";
