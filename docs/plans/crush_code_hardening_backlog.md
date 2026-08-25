@@ -17638,3 +17638,36 @@ the design (`StackedDocCommentTest` pins its copy against the canonical, and the
 file to port into), and it is the price of Ec58-2's dependency direction. **Stated here because a sibling
 lane editing that method will see a job whose NAME gives no hint of the reason.** Renaming the job, or
 splitting `tools/tests/` into its own, is the cheap improvement whenever someone is next in `ci.yml`.
+
+## Ec58-11 — three arms compute a line, one fixture pinned none of them, and one arm was wrong
+
+Rule 41 three times in one file, and the third pass found a real defect rather than a gap.
+
+`wallClockWrappersIn()` computes a row's line in **three** places — the literal branch, the parametrised
+branch, and the unresolved arm. A fixture was added claiming *"the line numbers matter as much as the
+classification"*, and it was rendering the classification and the seconds and **not the line** — rule 43
+exactly: honestly satisfied, doing no work. With the line added to every fixture, the mutation replacing
+the row's line with the token's own line **still survived**, because every fixture literal was ONE LINE
+long and the heredoc's wrapper sat on the first line of its body. The correction added zero everywhere,
+so a dead one was indistinguishable from a live one (rule 2 — the mutation was relevant, the window was
+wrong).
+
+| tag | arm | before a multi-line fixture | after |
+|---|---|---|---|
+| MF12 | literal branch | **SURVIVED** | KILLED |
+| MF13 | unresolved arm | **SURVIVED** | KILLED — **and the fixture failed on the CODE** |
+| MF15 | parametrised branch | **SURVIVED** | KILLED |
+
+**MF13's fixture found a live off-by-one.** The left-boundary group CONSUMES the character ahead of the
+wrapper, and in a multi-line literal that character is the newline — so the unresolved arm, which
+reported from the WHOLE match, named a line one above the wrapper's. An interpolated budget three lines
+into a literal was reported two lines up. It reports from group 1 now (the flag run begins immediately
+after the wrapper and cannot contain a newline, so its offset is on the wrapper's own line whether or not
+the group is empty). The other arm was already right: it reports from the BUDGET group, past the flags.
+
+**MEASURED on PHP 8.3.6**, by driving the shipped scanner through reflection rather than a copy of it:
+`token_get_all()` reports a multi-line single-quoted string at the line it STARTS on, and a heredoc body
+at the line the body starts on. Both shapes are fixtures now, in all three arms.
+
+**The transferable finding:** killing a mutation does not transfer to its neighbour any more than
+excusing one does. Rule 41 is written for survivors; this is the same rule for kills.
