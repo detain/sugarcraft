@@ -14795,3 +14795,77 @@ sibling directory (unused path repos are ignored by Composer), then a single `co
 `git checkout -- '*/composer.json'`, then verify. That reached 18/18 · 3/3 · 6/6 · 7/7 in one go. Never
 re-run `--fix` between the append and the update. And **verify with `is_link()` + `realpath()` after the
 LAST step, not after the tool** — the tool exiting 0 says nothing about `vendor/`.
+
+## User-reported (not from a round). E455.
+
+### E455 — 🔴 the chat input box never wraps: a long draft runs off the right edge instead of growing to multiple lines
+
+**Reported 2026-08-25 by the user, typing normal space-separated words into the live TUI.** Severity:
+functional, user-visible, on the single most-used surface in the app. Not a round finding — this came
+from daily-driving `sugar-crush`.
+
+> "when you are typing a long line in sugar-crush it keeps going past the end of the screen instead of
+> expanding the chat input to multiple lines and wrapping to the next line (im putting in diff words with
+> spaces .. so it should have wrapped)"
+
+The report explicitly rules out the usual excuse: the draft is ordinary words with spaces, so there is no
+unbreakable token and a word wrap has somewhere to break.
+
+**Diagnosis.** `Renderer::renderInput()` (`sugar-crush/src/Renderer.php:3776`) composes the draft as ONE
+string — `"> "` + the sanitized buffer with the block cursor spliced in at the cursor column — and hands
+it straight to a bordered `Style` with `padding(0, 1)` and **no `->width()` and no wrap call at all**:
+
+```php
+$body = "> " . mb_substr($clean, 0, $at, 'UTF-8') . $cursor . mb_substr($clean, $at, null, 'UTF-8');
+return Style::new()->border(Border::normal())->borderForeground($theme->border)
+    ->padding(0, 1)->render($body);
+```
+
+`Style::render()` does not word-wrap; `Style::width()` sizes and pads a box, it is not a wrapper. So the
+box grows to the natural width of the draft and emits a single row far wider than the terminal.
+
+**It is the one pane that skips the choke point.** Every other surface in this renderer wraps: the
+transcript goes through `fitToPane($body, $contentWidth)` at `Renderer.php:1067` — described in its own
+comment as "the single choke point where the pane-width invariant is enforced" — and even the permission
+prompt hand-rolls a `wordwrap()` at `Renderer.php:3748`. `InputPane::render()`
+(`sugar-crush/src/Tui/Components/InputPane.php:17`) computes `max(1, $cols - 4)` and sets a width, but
+that class only ever paints the *placeholder* box; the live input is painted here, and here nothing
+constrains it.
+
+**This is a violation of a standing project invariant, not just a cosmetic annoyance.** candy-core's
+`Renderer` repaints changed rows by ABSOLUTE `cursorTo($row, 1)` and has no concept of a line that soft-
+wraps in the terminal. An over-wide logical row occupies two physical rows, so every row below it is off
+by one against what the diff renderer believes is on screen — the same failure class as the round-49
+status-bar collision, arriving from the opposite direction.
+
+**The height half is already solved — do not re-solve it.** `render()`'s tail clip
+(`Renderer.php:1126-1133`) slices `$content` to the LAST `$available` lines, and the input box is at the
+tail. A taller input box therefore costs history rows and stays fully visible on its own. No change to
+`$contentWidth`, to the `max(1, $chat->rows() - 2)` picture budget, or to the status-bar layout is needed;
+a fix that touches them is doing too much.
+
+**STEP:** wrap the composed body to the pane width inside `renderInput()` before the `Style` call.
+Specifics that matter:
+
+- Width is `max(1, $chat->cols() - 4)` — 2 border cells + 2 padding cells. `$chat->cols()` is already
+  reachable from `renderInput()`'s existing `$chat` argument, so **no signature change and no caller
+  edit**; `cols()` is sourced from `WindowSizeMsg`, which is the size truth (never a second
+  `getTerminalSize()` query — see the comment at `Renderer.php:1105`).
+- Use `Width::wrapAnsi()` (`candy-core/src/Util/Width.php:314`), **not** `wordwrap()`. The draft can hold
+  wide/CJK and combining characters, and `wordwrap()` counts bytes, not cells — it would under-wrap a CJK
+  draft into exactly the over-wide row this fixes.
+- The cursor glyph `█` is spliced into the string BEFORE wrapping and is a real cell. It must survive the
+  wrap unsplit and be counted; a wrap that drops or duplicates it breaks cursor tracking, which
+  `renderInput()`'s own doc-comment calls out as the thing that makes cursor motion visible at all.
+- Decide and pin the continuation-row treatment: the `"> "` prefix costs 2 cells on row 1 only, so
+  unindented continuation rows will hang 2 cells left of the text above them. Indenting continuations by
+  2 to align under the first row's text is the better look; either way it needs a test, because it is
+  exactly the kind of thing that regresses silently.
+- 🔴 Regression test must be **width-driven, not length-driven**: assert that for a draft of N
+  space-separated words at a given `cols()`, EVERY row of the rendered box measures `<= cols()` by
+  `Width::of()`, and that the box gained rows. Asserting "the output contains a newline" would pass on a
+  fix that wraps at the wrong column. Include a CJK case and a case where the cursor sits mid-draft.
+
+**Watch for a second instance.** `renderSlashMenu()` is concatenated onto `$content` on the same line as
+the input box (`Renderer.php:1078`) and was not examined here — check whether it constrains its own width
+before assuming this defect is a singleton.

@@ -47,6 +47,25 @@ master. DO NOT DELETE the lane dirs until the merged floor is measured.
   candidate), E447, **E453** (CI's path-repo policy job is RED on a dead `candy-kit` require and the
   local guard exits 0 on the same commit).
 
+### 🐛 E455 — A USER-REPORTED BUG LANDED MID-ROUND, AND IT IS NOT ASSIGNED TO ANY LANE
+
+**2026-08-25, from daily-driving the app:** the chat input box never wraps. A long draft of ordinary
+space-separated words runs off the right edge instead of growing the box to multiple lines.
+
+Diagnosed and filed as **E455** with the fix specified, but **deliberately NOT handed to a round-55 lane**
+— the lanes were already cut and running, and injecting work into a live lane is how a round's figures
+stop meaning anything. It is the first candidate for round 56.
+
+Short version: `Renderer::renderInput()` (`sugar-crush/src/Renderer.php:3776`) is the ONE pane that skips
+the wrap choke point — it hands a single composed string to a bordered `Style` with no width and no wrap,
+while the transcript goes through `fitToPane()` and even the permission prompt hand-rolls a `wordwrap()`.
+The height half needs no work: `render()`'s tail clip already keeps the box visible as it grows. Wrap with
+`Width::wrapAnsi()` at `max(1, $chat->cols() - 4)`, keep the block-cursor cell intact, and pin it with a
+**width-driven** test (every row `<= cols()` by `Width::of()`), not a "contains a newline" test.
+
+🔴 This is also an invariant violation, not a cosmetic one: candy-core repaints by absolute `cursorTo()`
+and has no concept of a soft-wrapped row, so an over-wide row throws off every row beneath it.
+
 ### NEW STANDING RULES THIS ROUND
 
 - **34** — if you inherit a lane with commits above the tree your review was written at, **review those
@@ -62,9 +81,10 @@ closure restored and verified → round 55 launched. **Nothing from that instruc
 
 ### AT THE MERGE
 
-Merge a→b→c. **Renumber from E455** (the backlog closed round 54 at exactly 454 entries, highest id
-E454 — re-derive both yourself with `grep -cE '^#{2,3} E'` and a `sort -n | tail -1` before you trust that
-number). Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
+Merge a→b→c. **Renumber from E456** (the backlog closed round 54 at 454 entries, and **E455 was then
+taken mid-round by a user-reported bug** — see the section below — so 455 is SPOKEN FOR; re-derive the
+base yourself with `grep -cE '^#{2,3} E'` and a `sort -n | tail -1` before you trust any number written
+here). Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
 Measure the merged floor for **sugar-crush, candy-core, candy-flip** and **candy-pty if lane a touched
 it**. Verify skips stay exactly 1, closure 18/18 · 3/3 · 6/6 · 7/7, `check-path-repos` rc 0, config md5
 `05480c743aff302fd6c06c5a4a4c2210`, zero tracked per-lib locks, and zero orphaned `php -S` servers
