@@ -618,8 +618,102 @@ final class LspConnectionStdinWedgeTest extends TestCase
     }
 
     // =========================================================================
+    // E475 — the between-exchange stall, and why it is a STALL
+    // =========================================================================
+
+    /**
+     * A SERVER THAT LOGS WHILE THE PARENT IS IDLE PARKS IN `write(2)`, AND THE
+     * NEXT EXCHANGE FREES IT. That is the whole difference between E475's
+     * severity and a deadlock, and it was inherited as prose until this row.
+     *
+     * {@see LspConnection::drainStderr()} runs from `refill()` (every read
+     * pass), from the write loop (every write pass) and once in `stopProcess()`.
+     * Between exchanges — the editor idle, the user typing — NOTHING reads fd 2,
+     * so a `gopls`/`rust-analyzer`/`jdtls` that logs continuously fills its
+     * stderr pipe and stops. E475 records that as a stall rather than a deadlock
+     * because the next exchange drains it. This asserts it rather than repeating
+     * it.
+     *
+     * MEASURED out of process first, three consecutive takes, PHP 8.3.6 /
+     * Linux 6.8: a server logging 4096 bytes at a time between exchanges wrote
+     * 81920 / 86016 / 81920 bytes — past the 65536-byte pipe capacity, so it
+     * really was blocked — while the parent idled 3.0s, and the very next
+     * request completed at 3.02s with the parent's tail at its 65536 cap.
+     *
+     * ⚠️ THIS IS NOT A FIX FOR E475 AND MUST NOT BE READ AS ONE. fd 2 is still
+     * unread for the whole idle gap and the server is still stopped for the
+     * whole of it. The honest fix is fd 2 on the ReactPHP loop, a shape change
+     * to a class that is synchronous by design, recorded rather than reached
+     * for. What this pins is the SEVERITY: the moment "it self-heals" stops
+     * being true, E475 (and E440 for the sibling class) is a deadlock and needs
+     * re-triaging, and nothing else in this suite would notice.
+     *
+     * THE STDERR ASSERTIONS ARE THE POSITIVE COMPONENT. Without them a fixture
+     * that quietly stopped logging would satisfy "the request was answered"
+     * while exercising nothing at all.
+     */
+    public function testTheBetweenExchangeStderrStallSelfHealsOnTheNextExchange(): void
+    {
+        $connection = $this->connectionTo($this->idleLoggingServerScript(), timeout: self::REQUEST_TIMEOUT_SECONDS);
+
+        try {
+            $connection->initialize();
+
+            // The parent does nothing at all. Nothing reads fd 2 in this gap,
+            // which is exactly the state E475 describes.
+            usleep(1500000);
+
+            $response = $connection->sendRequest('textDocument/hover', ['x' => 1]);
+
+            $this->assertFalse(
+                $response->isError,
+                'the next exchange did not free a server parked on a full stderr pipe, so E475 '
+                . 'is a DEADLOCK rather than a stall and its severity needs re-triaging',
+            );
+            $this->assertGreaterThan(
+                65536,
+                $response->result['stderrWritten'] ?? 0,
+                'the server never got past one pipe buffer, so it was never blocked and this row '
+                . 'is not about the stall at all',
+            );
+            $this->assertSame(
+                65536,
+                strlen($connection->stderrTail()),
+                'the parent did not retain a full buffer of the flood, so the drain that freed '
+                . 'the child is not the one this class performs',
+            );
+        } finally {
+            $connection->disconnect();
+        }
+    }
+
+    // =========================================================================
     // Fixtures and helpers
     // =========================================================================
+
+    /**
+     * ANSWERS THE HANDSHAKE, THEN LOGS BETWEEN EXCHANGES — the E475 shape.
+     *
+     * ⚠️ IT CANNOT USE `sc_read_framed()` FOR THE SECOND MESSAGE, and that is
+     * not a style choice: that helper blocks in `fgets(STDIN)`, so a server
+     * built on it is parked in a READ between exchanges and never has the
+     * opportunity to write anything. The premise here is a server busy on its
+     * OWN account while the parent is idle, so the wait has to be a
+     * `stream_select()` on a non-blocking stdin with the logging in the timeout
+     * branch. The framing helpers are still pulled in, for the handshake
+     * exchange and for the framed reply.
+     *
+     * It reports how many bytes it managed to write, which is what lets the row
+     * tell "the server was blocked and then freed" from "the server never had
+     * anything to say".
+     */
+    private function idleLoggingServerScript(): string
+    {
+        $path = $this->tempDir . '/idlelogger.php';
+        file_put_contents($path, $this->withFraming(self::IDLE_LOGGING_SERVER));
+
+        return $path;
+    }
 
     /** @return array{0: int, 1: string, 2: float} rc, stdout+stderr, elapsed */
     private function runProbe(int $floodBytes, int $requestBytes): array
@@ -983,6 +1077,55 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * Above the pipe capacity the child parks inside that `fwrite()` and stops
      * reading stdin, which is the state the oversized write has to meet.
      */
+    /** The E475 fixture body; see {@see idleLoggingServerScript()} for why it polls. */
+    private const IDLE_LOGGING_SERVER = <<<'PHP'
+        <?php
+        SC_FRAMING_HELPERS
+        $first = sc_read_framed();
+        if ($first !== null && isset($first['id'])) {
+            sc_write_framed(['jsonrpc' => '2.0', 'id' => $first['id'], 'result' => sc_reply($first)]);
+        }
+        stream_set_blocking(STDIN, false);
+        $written = 0;
+        $buffer = '';
+        $deadline = microtime(true) + 20;
+        while (microtime(true) < $deadline) {
+            $read = [STDIN];
+            $write = [];
+            $except = [];
+            if (@stream_select($read, $write, $except, 0, 1000) === 1) {
+                $chunk = fread(STDIN, 8192);
+                if ($chunk === false || $chunk === '') {
+                    continue;
+                }
+                $buffer .= $chunk;
+                $separator = strpos($buffer, "\r\n\r\n");
+                if ($separator === false || !preg_match('/Content-Length:\s*(\d+)/i', $buffer, $m)) {
+                    continue;
+                }
+                $bodyAt = $separator + 4;
+                $len = (int) $m[1];
+                if (strlen($buffer) - $bodyAt < $len) {
+                    continue;
+                }
+                $message = json_decode(substr($buffer, $bodyAt, $len), true);
+                $buffer = substr($buffer, $bodyAt + $len);
+                if (is_array($message) && isset($message['id'])) {
+                    sc_write_framed([
+                        'jsonrpc' => '2.0',
+                        'id' => $message['id'],
+                        'result' => ['stderrWritten' => $written],
+                    ]);
+                }
+                continue;
+            }
+            // Nothing to read: LOG. Blocks here once fd 2 is full, which is
+            // the state under test.
+            fwrite(STDERR, str_repeat('e', 4096));
+            $written += 4096;
+        }
+        PHP;
+
     private const BLOCKED_SERVER_TEMPLATE = <<<'PHP'
         <?php
         SC_FRAMING_HELPERS
