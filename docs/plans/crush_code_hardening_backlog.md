@@ -15803,3 +15803,46 @@ candy-pty after the fix: **610 / 1408 / 16 skipped / 1 warning / rc 0** (was 608
 
 **STILL OPEN:** this does NOT explain [[E490]]'s hang. A missing retry throws, it does not block. E490
 stays open on its own evidence.
+
+### E492 — 🔴 The round-56 script shipped ROUND 53's ownership map, three lanes read it, and none of them noticed
+
+**Measured 2026-08-25 by the round-56 recovery supervisor**, from the three killed implementers'
+surviving transcripts. Severity: the map is the mechanism that keeps concurrent lanes from writing over
+each other, and for a whole round it described a different round's lanes. **Fixed in the recovery script.**
+
+`crush-round-56.js`'s `OWNERSHIP` block named lanes **"candy-core descriptor census"** (owning
+`candy-core/src/Util/Tty/`), **"sugar-crush runtime bugs"** and **"close the inheritance"** — round 53's
+three lanes — and listed files no round-56 lane touches. The real lanes were `the-bugs-the-user-hit`,
+`mcp-lsp-remainder` and `harness-integrity`. Every lane's brief therefore carried a map contradicting its
+own YOUR FILES section, in the same document.
+
+**This is [[E416]] recurring inside the very block whose own text warns about E416.** That block opens by
+telling lanes that rounds 49-53 shipped a stale map naming lanes that did not exist, and instructs them:
+*"If this map and your brief disagree, say so in your report — one of them is wrong and it matters
+which."* The block giving that instruction was the thing that was wrong.
+
+**AND THE INSTRUCTION WAS NOT FOLLOWED, WHICH IS THE MORE USEFUL HALF.** All three transcripts were
+searched: `E416` and the phrase "ownership map" occur on **line 1 of each — the brief itself — and nowhere
+else.** Three independent agents read a map describing a different round's work; none registered it. The
+contradictions were not subtle:
+
+| lane | the map said it owned | it actually worked in |
+|---|---|---|
+| a | `candy-core/src/Util/Tty/` | `sugar-crush/src/Renderer.php`, `Runtime.php`, `Backend/EngineBackend.php` |
+| b | `src/MCP/`, `src/McpMessage.php`, `src/Sessions/` | `src/LSP/` — **a directory the map does not grant it at all** |
+| c | three `sugar-crush/tests/Support/*` scanners + seven descriptor specs | `candy-pty/`, which appears nowhere in the map |
+
+**What this measures is not the defect. It is how much of a 30,000-character brief is load-bearing.** A
+standing rule that names its own failure mode, gives the exact reporting action, and cites the round it
+came from went unexecuted three times out of three. Any future rule that depends on a lane NOTICING a
+contradiction in its own brief should be assumed to fire at roughly this rate.
+
+**Two sibling defects in the same script, same cause:** the driver's `log()` line described round 54's
+items (`E438 skip invariant`, `E443, E444+E439` …), and rule 24's scratchpad path pointed into a session
+that no longer exists. Both fixed in `crush-round-56-recover.js`.
+
+**THE RULE THIS LEAVES BEHIND.** Two defects in this script's `COMMON` floors were caught at launch by
+re-measuring them against the base commit — that check exists and it worked. **It only covers the
+numbers.** A prepped script's PROSE rots the same way: the ownership map, the log line, and every path in
+the rules block are written against the round they were drafted for, and the base moves after they are
+written. Re-read them at launch, not just the figures.
