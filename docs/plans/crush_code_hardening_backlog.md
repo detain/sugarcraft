@@ -17797,7 +17797,7 @@ does not cover the ownership block**, only the per-lane file lists.
 The brief states 22 sites: "test root ×4, `tests/Agents/` ×8, `tests/Cli/` ×2, `tests/MCP/` ×4,
 `tests/Providers/` ×3, `tests/Workflows/` ×1". Re-measured at `535d721ff` with round 57's own generator
 (`census_swallow.php`, PHP 8.3.6, alphabet unchanged): **23**, with `tests/Providers/` at **4** — the extra
-being `Providers/ToolSchemaEncodingTest.php:364 catch(\PHPUnit\Framework\AssertionFailedError)`, which is
+being `Providers\ToolSchemaEncodingTest`'s `catch (\PHPUnit\Framework\AssertionFailedError)`, which is
 correct code and one of the four deliberate survivors. Every other bucket matched exactly. Harmless here
 because the missed row needed no fix, but a distribution used to decide "am I done" was wrong by one.
 
@@ -18201,8 +18201,10 @@ the narrow clause first, an `ExpectationFailedException` lands there), so the `\
 repaired shape **cannot receive an assertion failure at all**. It is safe by the language, not by judgement.
 
 Why the census is green today: all four sites in the tree that carry this shape
-(`Backend/CommandBackendTest.php:300`, `Backend/EngineBackendTest.php:304`,
-`Backend/StreamingCommandBackendTest.php:943` and `:1001`) have try bodies that assert only INDIRECTLY, so
+(`CommandBackendTest::testCompleteAsyncIsCancellableWhileTheCommandIsStillRunning()`,
+`EngineBackendTest::testCancellationTokenAbortsAnInFlightCompletion()`, and
+`StreamingCommandBackendTest::testCompleteAsyncIsCancellableWhileTheCommandIsStillRunning()`
+and `::testACancelledCompletionReapsItsChild()`) have try bodies that assert only INDIRECTLY, so
 `$asserts` is false and the walk never reaches their catch clauses. The first person to apply round 58's own
 prescribed repair around a DIRECTLY asserting try reddens the census on correct code.
 
@@ -18242,13 +18244,15 @@ installed handler suppresses is PHPUnit's conversion of PHP warnings/notices int
 **not restored on every path out leaks into every later test in the process**, silencing that conversion
 suite-wide. So the checkable property is pairing, not presence.
 
-    Backend/BackendContractWideningTest.php:310                     finally
-    Diagnostics/RuntimeNoticeSinkTest.php:444                       finally
-    MCP/StdioMcpServerToolListRobustnessTest.php:259, :294          finally
-    Support/RefusesAnUnreadableSourceTrait.php:105, :113            finally
-    Tools/BuiltIn/GlobTest.php:603, :670                            finally
-    VhsTapeContractTest.php:4123, :4482                             finally
-    Skills/SkillLoaderTest.php:59  (suppressErrorLog)               NEVER RESTORED
+    BackendContractWideningTest::testASurplusPositionalArgumentToAUserlandMethodIsDroppedSilently()   finally
+    RuntimeNoticeSinkTest::testAWriteAfterTheReaderIsGoneRaisesNothingPhpWouldPrint()                 finally
+    StdioMcpServerToolListRobustnessTest::testAScalarWhereTheToolListBelongsIsEmptyRatherThanAWarning()  finally (x2)
+    Support\RefusesAnUnreadableSourceTrait::testTheCensusRefusesASourceItCannotOpenInsteadOfScanningItAsEmpty()  finally (x2)
+    Tools\BuiltIn\GlobTest::testAnUncompilablePatternIsOneCleanErrorNotASilentEmptyResult()           finally
+    Tools\BuiltIn\GlobTest::testAnUnterminatedBracketDegradesToALiteralWithoutWarning()              finally
+    VhsTapeContractTest::testAMissingTapeIsReportedByTheReadNotByThePromotion()                       finally
+    VhsTapeContractTest::withPhpDiagnosticsPromoted()                                                 finally
+    Skills\SkillLoaderTest::suppressErrorLog()                                                        NEVER RESTORED
 
 The single unrestored site is **dormant**: `/usr/bin/grep -rn "suppressErrorLog()\|restoreErrorHandler()"`
 over `tests/` returns nothing but the declarations — zero callers of either. Per rule 6 it is a seam to wire
@@ -18318,10 +18322,108 @@ Recorded because two doc-blocks were written this round asserting the opposite a
 it. MEASURED on PHP 8.3.6: with `Src::V` private and `class Dst { public const W = Src::V; }`,
 `class_exists('Dst')` answers **true** and the `Error: Cannot access private constant` is raised on the first
 READ of `Dst::W`. Confirmed on the real tree by mutation M3 — narrowing `EngineBackend::MAX_FRAME_BYTES` back
-to `private` surfaced as an error inside `ClaudeCodeMcpClient.php:234` during a constant read, not as a load
+to `private` surfaced as an error inside `ClaudeCodeMcpClient::MAX_FRAME_BYTES`'s read, not as a load
 failure.
 
 Consequence for the frame-cap family: the derivation landed this round is NOT protected by a load-time
 fatal. Narrowing the engine's constant would leave all three framers loadable and throw inside whichever
 framing path checked its bound first — in production, not at boot. That is precisely why
 `FrameCapFamilyTest::testTheConstantReaderIsAliveInBothPolarities()` still asserts the visibility.
+
+### Eb59-9 — a `token_get_all()` walk that reads a constant's name as the FIRST token after `const` is blind to four of PHP 8.3's five spellings
+
+**Fixed this round**, recorded because the SHAPE recurs and the failure mode is the dangerous one:
+the walk answered "no declaration here" rather than "I could not read this", so the loss was silent.
+
+MEASURED on PHP 8.3.6 by driving the shipped method through reflection. Of the five spellings PHP
+accepts, one was read and four were reported as `[]`:
+
+    private const MAX_FRAME_BYTES = 64 * 1024 * 1024;          read
+    private const int MAX_FRAME_BYTES = ...;                   []
+    private const ?int MAX_FRAME_BYTES = ...;                  []
+    private const \Foo\Bar MAX_FRAME_BYTES = ...;              []
+    private const A = 1, MAX_FRAME_BYTES = ...;                []
+    private const /* c */ MAX_FRAME_BYTES = ...;               []
+
+The typed spelling is this tree's own house style — `Compactor` and `Agents\AgentManager` already write
+`private const array`. With one of the three real framers rewritten to `private const int` plus a copied
+literal, `vendor/bin/phpunit` came out **rc 0 over 10 270 tests**.
+
+**The rule that covers all five without needing extension:** whatever sits between `const` and the `=` is
+a type or nothing, so the name is the LAST non-trivia token before the bare `=`; the initialiser then runs
+to the bare `,` or `;` **at bracket depth zero**.
+
+⚠️ **Depth zero is the part a prescription got wrong.** The review that commissioned the fix said to
+resume after the terminating bare `,`. MEASURED: `token_get_all()` emits the `,` inside `[1, 2]` as the
+same bare `,` token, so that rule reads `private const array A = [1, 2], X = ...` as a constant `A`
+initialised to `[1` followed by a member named `2`. Any walk over a declaration list must count brackets.
+
+### Eb59-10 — an initialiser reader that appends comment text lets a SENTENCE satisfy a derivation guard
+
+**Fixed this round.** The same reader appended the text of every token, comments included, so
+
+    private const MAX_FRAME_BYTES = /* EngineBackend::MAX_FRAME_BYTES */ 64 * 1024 * 1024;
+
+READ as `/*EngineBackend::MAX_FRAME_BYTES*/64*1024*1024` and matched a guard requiring `::MAX_FRAME_BYTES`
+— passing while spelling the arithmetic. The identical mutation without the comment was killed.
+
+This is the "exemption keyed on prose" shape one level down: not an exemption LIST keyed on text, but a
+guard whose INPUT silently contains prose. In a tree whose house style explains every constant in a
+comment, the author re-literalising a value is the one most likely to write the comment that buys it.
+**Any scanner that reads source text to decide a structural question must drop `T_COMMENT` /
+`T_DOC_COMMENT` explicitly, and must pin both polarities** — a reader that drops the whole initialiser
+passes the negative fixture and fails the family.
+
+### Eb59-11 — the round-59 review's assertion attribution is wrong: the −8 is a TESTS effect, and nothing lost coverage
+
+The review reported the round's +21 assertions as **prose +13, tests +16, code −8**, and made the −8 a
+MAJOR on the grounds that "the code change silently removed 8 assertions somewhere in the suite and
+nobody noticed". **Both halves are refuted by measurement.**
+
+Localised with `--log-junit` at both trees and a per-class diff (generator: `junitdiff.php`, XMLReader
+over the `assertions` attribute of every `testcase`). The whole delta is four classes:
+
+    +13  Config\GlobFigureDriftTest        (20722 -> 20735)
+     +9  DenialPrefixRosterTest            (120 -> 129)
+     +7  FrameCapFamilyTest                (23 -> 30)
+     -8  SymbolCitationDriftTest           (2913 -> 2905)
+    NET +21
+
+**Attributed by reverting one half of the diff at a time**, single-file runs:
+
+- Revert the four `src/` files → `GlobFigureDriftTest` returns to **20722**, `SymbolCitationDriftTest`
+  stays at **2905**. So `src/` owns the +13 and **none** of the −8.
+- Revert the two `tests/` files → `SymbolCitationDriftTest` returns to **2913**. The −8 is theirs.
+
+**The mechanism, and why it is not a coverage loss.** `SymbolCitationDriftTest::danglingIn()` contains no
+assertions at all. Its helper `root()` calls `self::assertIsString()` on **every invocation**, and
+`resolve()` calls `root()` only on its bare-name fallback — the path taken when a citation names a class
+with no backslash that none of the four namespace bases resolves. So this class's assertion count is a
+**citation-population proxy**, not a measure of what it checks.
+
+The exact four: baseline `FrameCapFamilyTest` cited two BARE class names, `McpFrameCapTest` and
+`LspConnectionFrameCapTest`. The rewrite fully-qualified the first and dropped the second, so two
+fallback resolutions disappeared × the two methods that call `danglingIn()` = **−4 each, −8 total**.
+A fully-qualified citation is the BETTER one; the census merely charges less for it.
+
+**Why the review could not see this:** every experiment it ran held the `tests/` files at HEAD in both
+arms, so the only variable it could move was `src/`. It then measured `SymbolCitationDriftTest` at 2905 in
+both arms and read that as "rules out citation drift as the mover" — the inference is backwards. Two arms
+agreeing rules the varied thing OUT, which should have pointed at the one thing that was never varied.
+
+⚠️ **The transferable lesson is about the instrument, not the arithmetic.** A test whose private helpers
+assert (here `assertIsString()` inside a path-resolver) reports an assertion count that moves with the
+SIZE OF THE INPUT rather than with what is verified. Any decomposition of a suite-wide assertion delta
+that treats such a class as a coverage signal will mis-attribute. `root()` would be better as a plain
+`realpath()` with a one-time assertion in `setUp()`, which would make the class's count stable — that file
+is in `tests/` root and belongs to no lane this round, so it is recorded rather than done.
+
+### Eb59-12 — `class_exists()` rejects two of the four kinds a class-like roster tracks
+
+**Fixed this round** in `FrameCapFamilyTest`, recorded because the pairing is easy to write anywhere.
+A scanner tracked `T_CLASS|T_INTERFACE|T_TRAIT|T_ENUM` and the assertion over its output gated on
+`class_exists()`. MEASURED on PHP 8.3.6: `class_exists()` is **false** for an interface and **false** for
+a trait (true for an enum). A family member legitimately declared in either would have redded with a
+message blaming the scanner for source it read perfectly well — correct code answered with a misdirecting
+failure, which is where an exemption row gets written for a defect that is really in the classifier.
+Pair all four: `class_exists() || interface_exists() || trait_exists() || enum_exists()`.
