@@ -9,6 +9,7 @@ use SugarCraft\Crush\Agents\AgentDefinition;
 use SugarCraft\Crush\Permissions\PermissionAction;
 use SugarCraft\Crush\Permissions\PermissionRule;
 use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\ToolCall;
 
 /**
@@ -16,6 +17,8 @@ use SugarCraft\Crush\ToolCall;
  */
 final class AgentDefinitionTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     // -------------------------------------------------------------------------
     // Factory methods
     // -------------------------------------------------------------------------
@@ -525,9 +528,12 @@ final class AgentDefinitionTest extends TestCase
     public function testEveryBarePresetToolNameResolvesAgainstTheShippedToolSet(): void
     {
         $sandbox = sys_get_temp_dir() . '/sc_r60b_barename_' . bin2hex(random_bytes(6));
-        mkdir($sandbox . '/home', 0700, true);
-        $home = getenv('HOME');
-        putenv('HOME=' . $sandbox . '/home');
+
+        // HomeSandboxTrait, NOT a bare putenv(). Measured: the first draft here
+        // moved only `getenv('HOME')` and OneSidedHomeSandboxTest reddened,
+        // correctly -- `$_SERVER['HOME']` does not follow putenv(), so half the
+        // readers in src/ would still have consulted the developer's real home.
+        $this->useHomeSandbox($sandbox . '/home');
 
         try {
             $config = \SugarCraft\Crush\Cli\Bootstrap::readUserConfig();
@@ -583,12 +589,12 @@ final class AgentDefinitionTest extends TestCase
                     . implode("\n  ", $unresolvable),
             );
         } finally {
-            if ($home === false) {
-                putenv('HOME');
-            } else {
-                putenv('HOME=' . $home);
-            }
-            exec('rm -rf ' . escapeshellarg($sandbox));
+            $this->restoreHomeSandbox();
+            // NOT exec('rm -rf ...'): a child spawned from a test leaves its
+            // stderr on the suite's, which ChildStderrCaptureTest refuses --
+            // and it refuses redirecting to /dev/null too, so the fix is to
+            // spawn nothing at all.
+            self::removeTree($sandbox);
         }
     }
 
@@ -616,4 +622,23 @@ final class AgentDefinitionTest extends TestCase
         );
         $this->assertContains('Bash(git *)', AgentDefinition::reviewer()->defaultTools);
     }
+
+    /** Recursive delete without spawning a child; see the caller's `finally`. */
+    private static function removeTree(string $path): void
+    {
+        if (!is_dir($path)) {
+            @unlink($path);
+
+            return;
+        }
+
+        foreach (scandir($path) ?: [] as $entry) {
+            if ($entry !== '.' && $entry !== '..') {
+                self::removeTree($path . '/' . $entry);
+            }
+        }
+
+        @rmdir($path);
+    }
+
 }
