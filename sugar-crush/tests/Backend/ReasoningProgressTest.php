@@ -1,0 +1,1268 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Crush\Tests\Backend;
+
+use GuzzleHttp\Exception\ServerException;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
+use PHPUnit\Framework\TestCase;
+use React\EventLoop\Loop;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\Timer\Timer;
+use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Messages\AssistantMessage;
+use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\EmbeddingsRequest;
+use SugarCraft\Crush\Providers\EmbeddingsResponse;
+use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Tools\ToolCall;
+
+/**
+ * **E456 — a long think must not be killed as a hung provider.**
+ *
+ * A user lost a turn to `Provider request timed out after 120s without
+ * progress` while the model was mid-think.
+ * {@see \SugarCraft\Crush\Runtime::runStreaming()} gated its live observer on
+ * `$response->content !== ''`, and that observer was the ONLY thing writing a
+ * frame across {@see EngineBackend::completeAsync()}'s fork, while the parent
+ * resets its idle deadline only when a frame arrives. A reasoning-only chunk
+ * carries `content: ''` — so a model that thought for two minutes wrote no
+ * frames, reset no deadline, and was SIGKILLed while it was working.
+ *
+ * ## Why the fix is a channel and not a bigger number
+ *
+ * The timer was never the defect; its DEFINITION OF PROGRESS was. Raising
+ * {@see EngineBackend}'s ceiling relocates the bug, removing it resurrects the
+ * hang the ceiling exists to bound, and a blanket total-request timeout on an
+ * LLM call is wrong outright — a completion can legitimately run tens of
+ * minutes. So `$onProgress`/`$onReasoning` carries every chunk that did NOT
+ * reach `$onToken`, on a frame kind of its own.
+ *
+ * ## Why a distinct frame kind and not a `token` frame
+ *
+ * `$onToken`'s bytes accumulate into the `$buffer` that becomes the
+ * {@see AssistantMessage} fed back to the model on the next agentic step and
+ * checkpointed into the transcript. Routing thinking through that channel
+ * would corrupt the CONVERSATION, not merely the display —
+ * {@see testAThoughtNeverEntersTheAssistantsOwnWords()} is what pins it.
+ *
+ * ## The defect is a FAMILY, and its members are killed by different mutations
+ *
+ * Three real chunk shapes carry `content === ''`:
+ *
+ *   - **reasoning-only** — the reported case;
+ *   - **tool-call-only** — a chunk carrying nothing but the structure of a
+ *     call. {@see \SugarCraft\Crush\Providers\VertexProvider}'s buffered
+ *     `input_json_delta` flush and
+ *     {@see \SugarCraft\Crush\Providers\SglangProvider}'s recovered-call
+ *     chunk both emit it as `content: '', toolCalls: [ToolCall]`;
+ *   - **usage-only** — `VertexProvider`'s `message_start` reports input tokens
+ *     with no content at all.
+ *
+ * WHAT THIS SAID, and it was wrong where it mattered most: that all three were
+ * covered by the three clock tests below. WHAT IS TRUE NOW: the third clock
+ * test's fixture emitted `toolCalls: []` — an EMPTY array, which is not a tool
+ * call, and which the provider most likely to produce one goes out of its way
+ * not to: `VertexProvider`'s batch decoder spells
+ * `toolCalls: $toolCalls === [] ? null : $toolCalls` for exactly that reason. It
+ * was a chunk with no payload at all, and MEASURED it died in lockstep with the
+ * usage test under every mutation either could see, never killing anything on
+ * its own. WHY BOTH STILL EARN THEIR PLACE: renamed to what it is, the blank
+ * chunk is the degenerate control — it proves the gate keys on empty CONTENT
+ * and not on any particular payload — while the real tool-call shape is now
+ * pinned where it is cheap to pin,
+ * {@see testAChunkCarryingOnlyARealToolCallIsAnnouncedAsProgress()}. It is not
+ * pinned across the FORK, and deliberately: a real tool call is DISPATCHED,
+ * so forty of them would turn a one-second clock test into an eight-step
+ * agentic loop measuring something else entirely.
+ *
+ * MEASURED, and worth stating because the obvious mutation is the misleading
+ * one: re-gating the reasoning announcement on `content !== ''` — the mutation
+ * the round brief prescribed — does NOT redden the reasoning-only case, because
+ * the `elseif` beside it still announces any chunk that carries reasoning text.
+ * It reddens the members that have NOTHING to show, which is why
+ * {@see testATurnWhoseChunksCarryOnlyUsageSurvivesTheIdleCeiling()} exists and
+ * is not a decorative sibling of the reasoning test. See the mutation table in
+ * the round report.
+ *
+ * ## How a 120-second ceiling is crossed in under a second
+ *
+ * {@see ScaledClockLoop} is a real event loop — real `stream_select()` on the
+ * real socket pair, real frames off a real forked child — whose TIMERS run on a
+ * clock scaled so one real second is
+ * {@see ScaledClockLoop::VIRTUAL_SECONDS_PER_REAL_SECOND} virtual ones. The
+ * code under test calls `addTimer(120)` unchanged and the loop genuinely
+ * carries its clock past 120; the assertions check the high-water mark rather
+ * than trusting the arithmetic. The scale is chosen so that the property the
+ * fix delivers and the property it does not are both far from the boundary:
+ *
+ *   - a `usleep()` between chunks is a GUARANTEED LOWER BOUND on real elapsed
+ *     time, so "the clock passed the ceiling" cannot flake — a killed turn is
+ *     always a real verdict;
+ *   - the per-chunk gap is ~10 virtual seconds against a 120 ceiling, so a
+ *     20 ms sleep would have to take twelve times as long as asked before a
+ *     surviving turn could be reported as killed.
+ *
+ * That margin covers the gaps BETWEEN chunks, which is not the whole story and
+ * is stated so nobody reads it as if it were. The tightest interval here is the
+ * FIRST one — fork, `App`/`Runtime` construction, config reads, provider entry
+ * — and no `usleep()` bounds it, so it is whatever this box happens to cost.
+ * MEASURED on an idle host (PHP 8.3.6): the file's four forks contribute on the
+ * order of 50 ms of overhead in total against the same 240 ms real ceiling, so
+ * the margin is real today. It is nonetheless the term that degrades first
+ * under load, and it is the one to suspect if a `survived` assertion here ever
+ * flakes.
+ *
+ * PHP 8.3.6 on this host.
+ */
+final class ReasoningProgressTest extends TestCase
+{
+    /**
+     * Chunks the streaming doubles emit before they answer, and the real pause
+     * between them. 40 x 20 ms is at least 0.8 s of real time, which
+     * {@see ScaledClockLoop} reports as at least 400 virtual seconds — more
+     * than three times the ceiling — while each individual gap is about 10.
+     */
+    private const THINK_CHUNKS = 40;
+
+    private const CHUNK_PAUSE_MICROS = 20_000;
+
+    private ?LoopInterface $previousLoop = null;
+
+    protected function tearDown(): void
+    {
+        // Restore the SUITE's loop object, not a fresh StreamSelectLoop:
+        // tests/bootstrap.php pins one instance for the whole run and other
+        // files have registered on it.
+        if ($this->previousLoop !== null) {
+            Loop::set($this->previousLoop);
+            $this->previousLoop = null;
+        }
+
+        parent::tearDown();
+    }
+
+    // =====================================================================
+    // the clock tests - real fork, real socket, scaled timer clock
+    // =====================================================================
+
+    /**
+     * The reported bug. A model that only thinks, for longer than the idle
+     * ceiling, must still get to answer.
+     */
+    public function testATurnThatOnlyThinksSurvivesTheIdleCeiling(): void
+    {
+        $this->requireFork();
+
+        $thoughts = [];
+        $tokens = [];
+        $run = $this->runOnScaledClock(
+            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'reasoning', 'the answer'),
+            $tokens,
+            $thoughts,
+        );
+
+        $this->assertTurnSurvivedPastTheCeiling($run);
+        $this->assertSame('the answer', $run['message']->content);
+        $this->assertSame(['the answer'], $tokens, 'the assistant text channel must carry only the answer');
+        $this->assertCount(
+            self::THINK_CHUNKS,
+            $thoughts,
+            'every reasoning chunk must reach the caller so it can be painted as it arrives',
+        );
+        $this->assertSame('think 0 ', $thoughts[0]);
+    }
+
+    /**
+     * The family member with NOTHING to paint: chunks that carry only usage
+     * figures (`VertexProvider`'s `message_start`). There is no reasoning text
+     * to forward, so the ONLY thing these chunks can do is prove the turn is
+     * alive — and they must still write a frame, or the deadline never moves.
+     *
+     * This is the case that the `content === ''` gate alone is responsible for:
+     * the reasoning branch beside it cannot see a chunk with no reasoning in it.
+     */
+    public function testATurnWhoseChunksCarryOnlyUsageSurvivesTheIdleCeiling(): void
+    {
+        $this->requireFork();
+
+        $thoughts = [];
+        $tokens = [];
+        $run = $this->runOnScaledClock(
+            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'usage', 'the answer'),
+            $tokens,
+            $thoughts,
+        );
+
+        $this->assertTurnSurvivedPastTheCeiling($run);
+        $this->assertSame('the answer', $run['message']->content);
+        $this->assertSame(
+            [],
+            $thoughts,
+            'a usage-only chunk has nothing showable - it must move the deadline WITHOUT reaching the painter',
+        );
+    }
+
+    /**
+     * The degenerate control: a chunk with NO payload at all — no content, no
+     * reasoning, no tool calls, no usage.
+     *
+     * It is not a shape any provider in this library is known to emit, and it
+     * is not the tool-call member it used to claim to be (see the class
+     * docblock). It is here for what it proves that the two payload-bearing
+     * cases cannot: that the gate keys on the CONTENT being empty and on
+     * nothing else, so a future chunk kind nobody has thought of still writes
+     * its frame. A gate re-spelled as "has usage or has tool calls" would pass
+     * both siblings and fail here.
+     */
+    public function testATurnWhoseChunksCarryNoPayloadAtAllSurvivesTheIdleCeiling(): void
+    {
+        $this->requireFork();
+
+        $thoughts = [];
+        $tokens = [];
+        $run = $this->runOnScaledClock(
+            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'blank', 'the answer'),
+            $tokens,
+            $thoughts,
+        );
+
+        $this->assertTurnSurvivedPastTheCeiling($run);
+        $this->assertSame('the answer', $run['message']->content);
+        $this->assertSame([], $thoughts);
+    }
+
+    /**
+     * The KNOWN-POSITIVE control for the three tests above (rule 15): the same
+     * loop, the same scale, the same fork, and a provider that emits nothing at
+     * all until it answers. That turn MUST be killed — otherwise the ceiling is
+     * not being reached in this harness and every "it survived" above is a
+     * measurement of a dead timer rather than of the fix.
+     *
+     * It also pins the property the fix must NOT have destroyed: a genuinely
+     * silent provider still dies.
+     */
+    public function testASilentProviderIsStillKilledByTheSameCeilingOnTheSameClock(): void
+    {
+        $this->requireFork();
+
+        $thoughts = [];
+        $tokens = [];
+        $run = $this->runOnScaledClock(
+            new StreamingDouble(self::THINK_CHUNKS, self::CHUNK_PAUSE_MICROS, 'silent', 'the answer'),
+            $tokens,
+            $thoughts,
+        );
+
+        $this->assertFalse($run['realCeiling'], 'the harness ran out of real time instead of virtual time');
+        $this->assertTrue($run['settled'], 'the promise never settled at all');
+        $this->assertNotNull($run['error'], 'a provider that streamed nothing for the whole ceiling must be killed');
+        $this->assertStringContainsString(
+            'without progress',
+            $run['error']->getMessage(),
+            'the rejection must be the idle-timeout one, not some other failure',
+        );
+        $this->assertGreaterThan(
+            $this->ceilingSeconds(),
+            $run['virtualSeconds'],
+            'the control did not actually reach the ceiling',
+        );
+    }
+
+    // =====================================================================
+    // the Runtime half, without a fork
+    // =====================================================================
+
+    /**
+     * The conversation-corruption guard. Reasoning reaches `$onProgress` and
+     * NOT `$onToken`, and — the part that matters — it is absent from the
+     * {@see AssistantMessage} that the agentic loop feeds back to the model and
+     * that the transcript checkpoints.
+     */
+    public function testAThoughtNeverEntersTheAssistantsOwnWords(): void
+    {
+        $tokens = [];
+        $progress = [];
+
+        $messages = iterator_to_array($this->runtime(
+            new StreamingDouble(3, 0, 'reasoning', 'the answer'),
+        )->run(
+            $this->app(),
+            null,
+            null,
+            static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $assistant = null;
+        foreach ($messages as $message) {
+            if ($message instanceof AssistantMessage) {
+                $assistant = $message;
+            }
+        }
+
+        // Located by class, and the class is asserted to EXIST first: a
+        // mistyped FQN makes `instanceof` silently false, so this loop would
+        // have found nothing and the failure would have read as a defect in
+        // the code under test rather than in the test. (It did, once.)
+        $this->assertTrue(class_exists(AssistantMessage::class), 'the roster class this test looks for is gone');
+        $this->assertNotNull($assistant, 'the turn yielded no assistant message at all');
+        $this->assertSame('the answer', $assistant->content());
+        $this->assertStringNotContainsString('think 0', $assistant->content());
+        $this->assertSame(['the answer'], $tokens);
+        $this->assertSame(['think 0 ', 'think 1 ', 'think 2 '], $progress);
+        // Reasoning is still ACCUMULATED onto the message for the transcript's
+        // own collapsed think block - it is the assistant's WORDS it must stay
+        // out of, not the message.
+        $this->assertSame('think 0 think 1 think 2 ', $assistant->reasoning());
+    }
+
+    /**
+     * A chunk carrying BOTH content and reasoning already moved the deadline
+     * through `$onToken`, but its thinking still has to reach the screen.
+     */
+    public function testAChunkCarryingBothTextAndThinkingAnnouncesBoth(): void
+    {
+        $tokens = [];
+        $progress = [];
+
+        iterator_to_array($this->runtime(
+            new StreamingDouble(0, 0, 'mixed', 'the answer'),
+        )->run(
+            $this->app(),
+            null,
+            null,
+            static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(['the answer'], $tokens);
+        $this->assertSame(['thought alongside '], $progress);
+    }
+
+    /**
+     * Uniformity with `$onToken`: a consumer painting live reasoning must not
+     * need its own `supportsStreaming()` check to know whether any will arrive.
+     * A batch provider has nothing incremental to offer, so it is the whole
+     * think as one delta.
+     *
+     * This does NOT make a batch turn idle-timeout-proof and cannot — see the
+     * DEFERRED note in {@see \SugarCraft\Crush\Runtime::runBatch()}.
+     */
+    public function testABatchProviderAnnouncesItsWholeThinkAsOneDelta(): void
+    {
+        $progress = [];
+
+        iterator_to_array($this->runtime(new BatchDouble())->run(
+            $this->app(),
+            null,
+            null,
+            null,
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(['thought it through'], $progress);
+    }
+
+    /**
+     * The channel is OPTIONAL end to end. Nobody has to pass one for the timer
+     * fix to work — the frame is written by the child and the deadline is reset
+     * by the parent whether or not the caller is listening — so every existing
+     * four-argument caller must keep working untouched.
+     */
+    public function testTheProgressChannelIsOptional(): void
+    {
+        $tokens = [];
+
+        $messages = iterator_to_array($this->runtime(
+            new StreamingDouble(3, 0, 'reasoning', 'the answer'),
+        )->run(
+            $this->app(),
+            null,
+            null,
+            static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+        ));
+
+        $this->assertSame(['the answer'], $tokens);
+        $this->assertNotSame([], $messages);
+    }
+
+    /**
+     * The tool-call-only family member, with a REAL tool call on it.
+     *
+     * The clock test that used to claim this shape carried `toolCalls: []` — an
+     * empty array is not a tool call, and the branch it took in
+     * {@see Runtime::runStreaming()} was byte-for-byte the usage member's. The
+     * real shape (`content: ''` with one actual `ToolCall`) takes a second
+     * branch as well: `$response->toolCalls !== null` merges into the
+     * accumulator, and a chunk that will go on to be DISPATCHED must still
+     * announce itself first. That is what this pins, and it is why it lives at
+     * the Runtime level rather than beside the fork tests — a real call is
+     * dispatched, and forty of them across the fork would be an eight-step
+     * agentic loop rather than a one-second clock measurement.
+     *
+     * The tool name is deliberately one nothing registers, so dispatch produces
+     * the "Tool not found" result by the branch that has always produced it and
+     * this test does not become a test of a tool.
+     */
+    public function testAChunkCarryingOnlyARealToolCallIsAnnouncedAsProgress(): void
+    {
+        $tokens = [];
+        $progress = [];
+
+        $messages = iterator_to_array($this->runtime(
+            new StreamingDouble(1, 0, 'toolcall', 'the answer'),
+        )->run(
+            $this->app(),
+            null,
+            null,
+            static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(
+            [''],
+            $progress,
+            'a chunk carrying only the structure of a call has nothing to paint and everything to prove - '
+                . 'it must reach the progress channel as a bare heartbeat',
+        );
+        $this->assertSame(['the answer'], $tokens, 'and the call structure must not reach the text channel');
+
+        $assistant = $messages[0];
+        $this->assertInstanceOf(AssistantMessage::class, $assistant);
+        $calls = $assistant->toolCalls();
+        $this->assertIsArray($calls);
+        $this->assertCount(1, $calls, 'the announcement must not have cost the chunk its tool call');
+        $this->assertSame('NoSuchToolExistsHere', $calls[0]->name());
+        $this->assertGreaterThan(1, count($messages), 'the accumulated call was never dispatched');
+    }
+
+    // =====================================================================
+    // the retry gate the progress channel must NOT latch
+    // =====================================================================
+
+    /**
+     * A stream that only THOUGHT before failing transiently is still retried.
+     *
+     * {@see Runtime::runStreaming()} gates its retry on `$emitted`, which means
+     * "something left this method that a retry cannot undo". `$onToken`'s bytes
+     * qualify: they become the `$buffer` that becomes the
+     * {@see AssistantMessage} the agentic loop feeds back to the model, so a
+     * re-sent stream would duplicate the CONVERSATION. E456 added a SECOND
+     * channel out of that loop, and the docblock argues at length that
+     * reasoning must not latch it — reasoning is display-only, so a re-sent
+     * think is a repaint.
+     *
+     * That argument had no guard behind it. MEASURED before this test existed:
+     * inserting `$emitted = true;` beside the `$onProgress(...)` call survived
+     * `ReasoningProgressTest`, `RuntimeTest`, `EngineBackendTest` and
+     * `EngineBackendReapTest` together — 141 tests, 411 assertions, entirely
+     * green — while turning every stream that thinks before it fails into an
+     * unretryable one. Which is most of them.
+     *
+     * A reasoning chunk before the failure is not a contrived fixture: it is
+     * the ONLY thing a thinking model emits before its first content byte, and
+     * it is the exact window a dropped connection lands in.
+     */
+    public function testAStreamThatOnlyThoughtBeforeFailingIsStillRetried(): void
+    {
+        $provider = new ThinkThenFailDouble('the answer', throwOnFirstAttempt: true);
+
+        $tokens = [];
+        $progress = [];
+        $messages = iterator_to_array($this->runtime($provider)->run(
+            $this->app(),
+            null,
+            null,
+            static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(
+            2,
+            $provider->attempts(),
+            'a stream that had only THOUGHT when it died was not retried - the progress channel latched '
+                . 'the retry gate, and reasoning is display-only',
+        );
+        $this->assertSame(['the answer'], $tokens, 'and the reply reached the user exactly once');
+        $this->assertSame('the answer', $messages[0]->content());
+        $this->assertSame(
+            ['a first thought '],
+            $progress,
+            "the failed attempt's think is the only one, and it is not re-announced by the retry",
+        );
+    }
+
+    /**
+     * The same gate on the OTHER channel, which is the one the providers this
+     * matters for actually use: {@see
+     * \SugarCraft\Crush\Providers\VertexProvider} reports an overloaded
+     * backend as an `isError` CHUNK on a 200 stream rather than by throwing, so
+     * the think-then-fail case arrives through the error-chunk gate. Both gates
+     * read `$emitted`; a latch added for reasoning would close both.
+     */
+    public function testAStreamThatOnlyThoughtBeforeATransientErrorChunkIsStillRetried(): void
+    {
+        $provider = new ThinkThenFailDouble('the answer', throwOnFirstAttempt: false);
+
+        $progress = [];
+        $messages = iterator_to_array($this->runtime($provider)->run(
+            $this->app(),
+            null,
+            null,
+            null,
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(2, $provider->attempts(), 'the error-chunk gate latched on a think');
+        $this->assertSame('the answer', $messages[0]->content());
+        // Two deltas, not one: the error CHUNK carries `content: ''` as well,
+        // so it beats the heartbeat on its way past. That is the behaviour and
+        // not an artefact - a failing stream is still a live one until the
+        // retry decides otherwise, and the parent's idle timer needs to hear
+        // from it.
+        $this->assertSame(['a first thought ', ''], $progress);
+    }
+
+    /**
+     * The retry gate's OTHER announcement branch, and the caller shape that
+     * makes it observable at all.
+     *
+     * `runStreaming()` announces a chunk that carries BOTH content and
+     * reasoning through a second branch, because its thinking still has to be
+     * paintable even though its text already went out through `$onToken`. With
+     * a token sink attached, latching `$emitted` there changes nothing - the
+     * `$onToken` branch one line up already latched it - which is why the
+     * obvious mutation of that branch SURVIVES the tests above and is not the
+     * defect it looks like.
+     *
+     * With NO token sink it is a different statement entirely. Nothing outside
+     * the method has observed anything, the docblock says so explicitly ("a
+     * mid-stream failure IS retried in full"), and a latch on that branch would
+     * silently take the guarantee away from every caller that paints thinking
+     * without painting text - which {@see EngineBackend::complete()} produces
+     * directly, since it derives its token sink from `$onToken` and its
+     * progress sink from `$onReasoning` independently.
+     */
+    public function testAStreamWithNoTokenSinkIsRetriedAfterAChunkThatBothSpokeAndThought(): void
+    {
+        $provider = new ThinkThenFailDouble('the answer', throwOnFirstAttempt: true, speakWhileThinking: true);
+
+        $progress = [];
+        $messages = iterator_to_array($this->runtime($provider)->run(
+            $this->app(),
+            null,
+            null,
+            null,
+            static function (string $p) use (&$progress): void { $progress[] = $p; },
+        ));
+
+        $this->assertSame(
+            2,
+            $provider->attempts(),
+            'with no token sink nothing has been observed, so a mid-stream failure is retried in full - '
+                . 'announcing the chunk\'s thinking must not take that away',
+        );
+        $this->assertSame(
+            'the answer',
+            $messages[0]->content(),
+            "'half a the answer' would mean the retry did not reset the accumulator",
+        );
+        $this->assertSame(['a first thought '], $progress);
+    }
+
+    /**
+     * The invariant that keeps TWO documented one-shot fallbacks dormant, and
+     * the reason they are still worth keeping.
+     *
+     * {@see EngineBackend::complete()} and {@see EngineBackend::completeAsync()}
+     * each carry a `!$streamed && $content !== ''` re-delivery, both described
+     * as covering "a provider whose stream yielded nothing but that still
+     * resolved to content". MEASURED: replacing the parent's whole
+     * `$streamed ? null : $onToken` with a bare `null` is green, because that
+     * case cannot arise. The assistant's content IS the stream - `$buffer` in
+     * {@see Runtime::runStreaming()} is the concatenation of exactly the chunks
+     * `$onToken` was handed, and {@see Runtime::runBatch()} hands over its whole
+     * reply in one delta for the same reason - so non-empty content implies a
+     * delta was emitted, which implies the latch is set.
+     *
+     * That is a property of `Runtime`, not of `EngineBackend`, and it is
+     * asserted HERE so that the day it stops holding this test names the two
+     * fallbacks that stop being dormant. They are NOT removed: a latch of this
+     * shape can only ever suppress a delivery, never invent one, so an
+     * unreachable one is inert while a missing one would double a reply on
+     * screen - the asymmetry is the reason to keep them.
+     */
+    public function testEveryByteOfTheReplyReachesTheTokenChannel(): void
+    {
+        $shapes = [
+            'a streaming provider that thinks first' => new StreamingDouble(3, 0, 'reasoning', 'the answer'),
+            'a chunk that both speaks and thinks' => new StreamingDouble(1, 0, 'mixed', 'the answer'),
+            'chunks with no payload at all' => new StreamingDouble(3, 0, 'blank', 'the answer'),
+            'a non-streaming provider' => new BatchDouble(),
+        ];
+
+        foreach ($shapes as $label => $provider) {
+            $tokens = [];
+            $messages = iterator_to_array($this->runtime($provider)->run(
+                $this->app(),
+                null,
+                null,
+                static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+            ));
+
+            $assistant = $messages[0];
+            $this->assertInstanceOf(AssistantMessage::class, $assistant);
+            $this->assertNotSame('', $assistant->content(), "{$label}: the fixture answered nothing");
+            $this->assertSame(
+                $assistant->content(),
+                implode('', $tokens),
+                "{$label}: the reply and the deltas disagree - EngineBackend's two one-shot "
+                    . 'fallbacks are no longer dormant and their behaviour is now unknown',
+            );
+        }
+    }
+
+    // =====================================================================
+    // the two paths of one public contract
+    // =====================================================================
+
+    /**
+     * The SYNC path must deliver the empty heartbeat, because the child is its
+     * caller and the frame it writes for an empty delta is the only thing that
+     * moves the parent's idle deadline for a chunk with nothing to show.
+     * Dropping it here would silently un-fix E456 for exactly the two family
+     * members that have no reasoning text.
+     */
+    public function testTheSyncPathDeliversTheEmptyHeartbeatBecauseTheChildNeedsIt(): void
+    {
+        $seen = [];
+        EngineBackend::new(new StreamingDouble(3, 0, 'usage', 'the answer'), 'sync')->complete(
+            [Message::user('go')],
+            null,
+            null,
+            static function (string $delta) use (&$seen): void { $seen[] = $delta; },
+        );
+
+        $this->assertSame(['', '', ''], $seen, 'the heartbeat must reach the child sink or no frame is written');
+    }
+
+    /**
+     * ...and the pcntl-less fallback must NOT, because it is reached through
+     * {@see EngineBackend::completeAsync()} and its caller is a painter.
+     *
+     * On the forked path the parent drops an empty-`text` reasoning frame, so a
+     * `completeAsync()` caller is never invoked with ''. Before this was fixed,
+     * the same caller on a host without ext-pcntl WAS - the callback contract
+     * of one public method differed by extension, which is not a difference a
+     * consumer painting live thinking can be expected to know about.
+     */
+    public function testThePcntllessFallbackNeverInvokesThePainterWithAnEmptyDelta(): void
+    {
+        $this->assertSame([], $this->throughTheBlockingFallback('usage'));
+    }
+
+    /** The other polarity of the test above: real thinking still gets through. */
+    public function testThePcntllessFallbackStillPaintsRealThinking(): void
+    {
+        $this->assertSame(['think 0 ', 'think 1 ', 'think 2 '], $this->throughTheBlockingFallback('reasoning'));
+    }
+
+    /**
+     * Drives the private fallback directly. `completeAsync()` cannot be steered
+     * onto it from a test - it is selected by `function_exists('pcntl_fork')`,
+     * and MEASURED on this host (PHP 8.3.6) that is true, so a test that simply
+     * called `completeAsync()` would exercise the fork and assert nothing about
+     * this path at all.
+     *
+     * @return list<string>
+     */
+    private function throughTheBlockingFallback(string $shape): array
+    {
+        $seen = [];
+        $method = new \ReflectionMethod(EngineBackend::class, 'completeAsyncBlocking');
+        $method->invoke(
+            EngineBackend::new(new StreamingDouble(3, 0, $shape, 'the answer'), 'blocking'),
+            [Message::user('go')],
+            null,
+            new Deferred(),
+            null,
+            static function (string $delta) use (&$seen): void { $seen[] = $delta; },
+        );
+
+        return $seen;
+    }
+
+    // =====================================================================
+    // fixtures
+    // =====================================================================
+
+    private function requireFork(): void
+    {
+        // An ungated arm is not available for these three - they measure a
+        // forked child's socket. Named explicitly rather than copied from a
+        // neighbouring gate: both functions were checked on this host
+        // (PHP 8.3.6) and both exist, so this gate does NOT fire here and the
+        // tests really run.
+        if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
+            self::markTestSkipped('completeAsync() falls back to a blocking, timer-less path without pcntl');
+        }
+    }
+
+    private function ceilingSeconds(): float
+    {
+        // Read off the constant rather than spelled as 120: a future change to
+        // the ceiling must not silently turn these tests into assertions about
+        // a number nothing uses.
+        return (float) (new \ReflectionClass(EngineBackend::class))
+            ->getReflectionConstant('COMPLETE_TIMEOUT_SECONDS')
+            ->getValue();
+    }
+
+    /**
+     * @param array<int, string> $tokens
+     * @param array<int, string> $thoughts
+     *
+     * @return array{settled: bool, message: ?Message, error: ?\Throwable, virtualSeconds: float, realCeiling: bool}
+     */
+    private function runOnScaledClock(ProviderInterface $provider, array &$tokens, array &$thoughts): array
+    {
+        $backend = EngineBackend::new($provider, 'scaled');
+
+        $loop = new ScaledClockLoop();
+        $this->previousLoop = Loop::get();
+        Loop::set($loop);
+
+        $settled = false;
+        $value = null;
+        $error = null;
+
+        try {
+            $promise = $backend->completeAsync(
+                [Message::user('think about it')],
+                static function (string $t) use (&$tokens): void { $tokens[] = $t; },
+                null,
+                null,
+                static function (string $d) use (&$thoughts): void { $thoughts[] = $d; },
+            );
+
+            $this->settleOn($promise, $loop, $settled, $value, $error);
+        } finally {
+            Loop::set($this->previousLoop);
+            $this->previousLoop = null;
+        }
+
+        return [
+            'settled' => $settled,
+            'message' => $value instanceof Message ? $value : null,
+            'error' => $error,
+            'virtualSeconds' => $loop->highWaterVirtualSeconds(),
+            'realCeiling' => $loop->hitRealCeiling(),
+        ];
+    }
+
+    private function settleOn(
+        PromiseInterface $promise,
+        ScaledClockLoop $loop,
+        bool &$settled,
+        mixed &$value,
+        ?\Throwable &$error,
+    ): void {
+        $promise->then(
+            static function ($v) use (&$settled, &$value, $loop): void {
+                $settled = true;
+                $value = $v;
+                $loop->stop();
+            },
+            static function (\Throwable $e) use (&$settled, &$error, $loop): void {
+                $settled = true;
+                $error = $e;
+                $loop->stop();
+            },
+        );
+
+        // A single run()/stop() pair, matching EngineBackendTest::awaitPromise()
+        // and Program::run() itself. The bound is ScaledClockLoop's own REAL
+        // ceiling, not an addTimer() - a timer here would be measured on the
+        // scaled clock and would fire in milliseconds.
+        if (!$settled) {
+            $loop->run();
+        }
+    }
+
+    /** @param array{settled: bool, message: ?Message, error: ?\Throwable, virtualSeconds: float, realCeiling: bool} $run */
+    private function assertTurnSurvivedPastTheCeiling(array $run): void
+    {
+        $this->assertFalse(
+            $run['realCeiling'],
+            'the harness ran out of REAL time - nothing below is a verdict about the idle ceiling',
+        );
+        if ($run['error'] !== null) {
+            $this->fail('the turn was killed: ' . $run['error']->getMessage());
+        }
+        $this->assertTrue($run['settled'], 'the promise never settled');
+        $this->assertNotNull($run['message'], 'the turn settled without a reply');
+        // The whole point: the loop's clock genuinely went past the ceiling
+        // while the turn was in flight. Without this the three tests above
+        // would pass on a build where the timer never got close.
+        $this->assertGreaterThan(
+            $this->ceilingSeconds(),
+            $run['virtualSeconds'],
+            'the clock never reached the idle ceiling, so surviving it proves nothing',
+        );
+    }
+
+    private function runtime(ProviderInterface $provider): Runtime
+    {
+        return new Runtime($provider, new HookManager(new HookRegistry()));
+    }
+
+    private function app(): App
+    {
+        return App::new(new BatchDouble(), 'double');
+    }
+}
+
+/**
+ * A `LoopInterface` whose STREAMS are real and whose CLOCK is scaled.
+ *
+ * `stream_select()` runs for real against the real socket pair
+ * {@see EngineBackend::completeAsync()} creates, so frames arrive from a real
+ * forked child in real order. Only `addTimer()`/`addPeriodicTimer()` are
+ * re-based: a timer's deadline is compared against
+ * `real elapsed x VIRTUAL_SECONDS_PER_REAL_SECOND`, so the 120-second idle
+ * ceiling the code arms unchanged is crossed in 240 ms of wall time.
+ *
+ * Two properties this deliberately keeps:
+ *
+ *   - `run()` has its own REAL ceiling, so a regression that stops the promise
+ *     settling fails the test rather than hanging the suite;
+ *   - `addSignal()` THROWS rather than no-opping. A silently dropped signal
+ *     handler would be a behaviour this loop quietly removed from the code
+ *     under test; nothing in `completeAsync()` registers one today, and if that
+ *     changes the test must go red rather than lie.
+ */
+final class ScaledClockLoop implements LoopInterface
+{
+    /**
+     * Virtual seconds per real second. 500 puts a 120-second ceiling 240 ms of
+     * wall time away, which is far enough from a 20 ms inter-chunk gap
+     * (~10 virtual seconds) that a slow host cannot turn a surviving turn into
+     * a killed one, and near enough that a `usleep()`-bounded silence is a
+     * guaranteed crossing.
+     */
+    public const VIRTUAL_SECONDS_PER_REAL_SECOND = 500.0;
+
+    /** Wall-clock backstop so a never-settling promise fails instead of hanging. */
+    private const REAL_CEILING_SECONDS = 25.0;
+
+    private const SELECT_MICROS = 200;
+
+    private float $startNs;
+
+    private \SplObjectStorage $timers;
+
+    /** @var array<int, array{0: resource, 1: callable}> */
+    private array $readStreams = [];
+
+    /** @var array<int, array{0: resource, 1: callable}> */
+    private array $writeStreams = [];
+
+    /** @var list<callable> */
+    private array $ticks = [];
+
+    private bool $stopped = false;
+
+    private bool $realCeiling = false;
+
+    private float $highWater = 0.0;
+
+    public function __construct()
+    {
+        $this->startNs = (float) hrtime(true);
+        $this->timers = new \SplObjectStorage();
+    }
+
+    /** Virtual seconds since this loop was constructed. */
+    public function now(): float
+    {
+        $seconds = ((float) hrtime(true) - $this->startNs) / 1e9 * self::VIRTUAL_SECONDS_PER_REAL_SECOND;
+        if ($seconds > $this->highWater) {
+            $this->highWater = $seconds;
+        }
+
+        return $seconds;
+    }
+
+    public function highWaterVirtualSeconds(): float
+    {
+        return $this->highWater;
+    }
+
+    public function hitRealCeiling(): bool
+    {
+        return $this->realCeiling;
+    }
+
+    public function addReadStream($stream, $listener): void
+    {
+        $this->readStreams[(int) $stream] = [$stream, $listener];
+    }
+
+    public function addWriteStream($stream, $listener): void
+    {
+        $this->writeStreams[(int) $stream] = [$stream, $listener];
+    }
+
+    public function removeReadStream($stream): void
+    {
+        unset($this->readStreams[(int) $stream]);
+    }
+
+    public function removeWriteStream($stream): void
+    {
+        unset($this->writeStreams[(int) $stream]);
+    }
+
+    public function addTimer($interval, $callback): TimerInterface
+    {
+        $timer = new Timer($interval, $callback, false);
+        $this->timers->attach($timer, $this->now() + (float) $interval);
+
+        return $timer;
+    }
+
+    public function addPeriodicTimer($interval, $callback): TimerInterface
+    {
+        $timer = new Timer($interval, $callback, true);
+        $this->timers->attach($timer, $this->now() + (float) $interval);
+
+        return $timer;
+    }
+
+    public function cancelTimer(TimerInterface $timer): void
+    {
+        $this->timers->detach($timer);
+    }
+
+    public function futureTick($listener): void
+    {
+        $this->ticks[] = $listener;
+    }
+
+    public function addSignal($signal, $listener): void
+    {
+        throw new \LogicException(
+            'ScaledClockLoop has no signal support and will not pretend to: the code under test registered '
+            . 'signal ' . $signal . ', which this loop would silently drop.',
+        );
+    }
+
+    public function removeSignal($signal, $listener): void
+    {
+        throw new \LogicException('ScaledClockLoop has no signal support; see addSignal().');
+    }
+
+    public function run(): void
+    {
+        $this->stopped = false;
+        $realDeadline = microtime(true) + self::REAL_CEILING_SECONDS;
+
+        while (!$this->stopped) {
+            foreach ($this->drainTicks() as $tick) {
+                $tick();
+                if ($this->stopped) {
+                    return;
+                }
+            }
+
+            $this->fireDueTimers();
+            if ($this->stopped) {
+                return;
+            }
+
+            if (microtime(true) >= $realDeadline) {
+                $this->realCeiling = true;
+
+                return;
+            }
+
+            $hasStreams = $this->readStreams !== [] || $this->writeStreams !== [];
+            if (!$hasStreams && $this->timers->count() === 0 && $this->ticks === []) {
+                return;
+            }
+
+            if ($hasStreams) {
+                $this->pollStreams();
+            } else {
+                usleep(self::SELECT_MICROS);
+            }
+
+            $this->now();
+        }
+    }
+
+    public function stop(): void
+    {
+        $this->stopped = true;
+    }
+
+    /** @return list<callable> */
+    private function drainTicks(): array
+    {
+        $ticks = $this->ticks;
+        $this->ticks = [];
+
+        return $ticks;
+    }
+
+    private function pollStreams(): void
+    {
+        $read = array_column($this->readStreams, 0);
+        $write = array_column($this->writeStreams, 0);
+        $except = [];
+
+        if (@stream_select($read, $write, $except, 0, self::SELECT_MICROS) < 1) {
+            return;
+        }
+
+        foreach ($read as $stream) {
+            $key = (int) $stream;
+            if (isset($this->readStreams[$key])) {
+                ($this->readStreams[$key][1])($stream, $this);
+            }
+            if ($this->stopped) {
+                return;
+            }
+        }
+        foreach ($write as $stream) {
+            $key = (int) $stream;
+            if (isset($this->writeStreams[$key])) {
+                ($this->writeStreams[$key][1])($stream, $this);
+            }
+            if ($this->stopped) {
+                return;
+            }
+        }
+    }
+
+    private function fireDueTimers(): void
+    {
+        $now = $this->now();
+
+        foreach (iterator_to_array($this->timers, false) as $timer) {
+            if (!$this->timers->contains($timer)) {
+                continue;
+            }
+            if ((float) $this->timers[$timer] > $now) {
+                continue;
+            }
+            if ($timer->isPeriodic()) {
+                $this->timers[$timer] = $now + $timer->getInterval();
+            } else {
+                $this->timers->detach($timer);
+            }
+
+            ($timer->getCallback())($timer);
+
+            if ($this->stopped) {
+                return;
+            }
+        }
+    }
+}
+
+/**
+ * A streaming provider whose pre-answer chunks all carry `content: ''` — one
+ * shape per family member, plus a `silent` shape that emits nothing at all and
+ * is the known-positive control.
+ */
+final class StreamingDouble implements ProviderInterface
+{
+    public function __construct(
+        private int $chunks,
+        private int $pauseMicros,
+        private string $shape,
+        private string $answer,
+    ) {}
+
+    public function name(): string { return 'double'; }
+    public function supportsStreaming(): bool { return true; }
+    public function supportsFunctionCalling(): bool { return false; }
+    public function supportsVision(): bool { return false; }
+    public function supportsJsonSchema(): bool { return false; }
+    public function contextWindow(): int { return 1000; }
+    public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
+
+    public function complete(CompleteRequest $request): CompleteResponse
+    {
+        return new CompleteResponse(content: $this->answer);
+    }
+
+    public function completeStream(CompleteRequest $request): \Generator
+    {
+        if ($this->shape === 'mixed') {
+            yield new CompleteResponse(content: $this->answer, reasoning: 'thought alongside ');
+
+            return;
+        }
+
+        for ($i = 0; $i < $this->chunks; $i++) {
+            if ($this->pauseMicros > 0) {
+                // A guaranteed LOWER bound on real elapsed time, which is what
+                // makes "the clock crossed the ceiling" unflakeable.
+                usleep($this->pauseMicros);
+            }
+            if ($this->shape === 'silent') {
+                continue;
+            }
+
+            yield match ($this->shape) {
+                'reasoning' => new CompleteResponse(content: '', reasoning: 'think ' . $i . ' '),
+                'usage' => new CompleteResponse(content: '', tokensUsed: 1),
+                // NO payload of any kind - see the test that uses it. Not
+                // `toolCalls: []`, which reads like a tool call and is not one.
+                'blank' => new CompleteResponse(content: ''),
+                // The REAL tool-call-only shape, as VertexProvider flushes a
+                // buffered `input_json_delta` and as SglangProvider emits a
+                // recovered call: empty content, one actual ToolCall on it.
+                'toolcall' => new CompleteResponse(content: '', toolCalls: [
+                    ToolCall::fromArray([
+                        'id' => 'call_r56a',
+                        'name' => 'NoSuchToolExistsHere',
+                        'arguments' => ['probe' => $i],
+                    ]),
+                ]),
+                default => throw new \LogicException('unknown shape ' . $this->shape),
+            };
+        }
+
+        yield new CompleteResponse(content: $this->answer, tokensUsed: 7);
+    }
+
+    public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+    {
+        return new EmbeddingsResponse([]);
+    }
+}
+
+/**
+ * A streaming provider whose FIRST attempt thinks and then dies transiently,
+ * and whose second answers.
+ *
+ * Two failure shapes because {@see Runtime::runStreaming()} has two gates on
+ * `$emitted` and real providers use both: a thrown 503
+ * ({@see \SugarCraft\Crush\Providers\SglangProvider},
+ * {@see \SugarCraft\Crush\Providers\BedrockProvider}) and an `isError` chunk
+ * on an otherwise-successful stream
+ * ({@see \SugarCraft\Crush\Providers\VertexProvider},
+ * {@see \SugarCraft\Crush\Providers\CustomProvider}).
+ *
+ * The reasoning chunk goes out BEFORE the failure in both, which is the whole
+ * fixture: it is the only thing on the wire in the window where a thinking
+ * model's connection drops.
+ */
+final class ThinkThenFailDouble implements ProviderInterface
+{
+    private int $attempts = 0;
+
+    public function __construct(
+        private string $answer,
+        private bool $throwOnFirstAttempt,
+        /**
+         * Put CONTENT on the thinking chunk as well, so the announcement takes
+         * runStreaming()'s `elseif` branch (a chunk that both spoke and
+         * thought) instead of its `content === ''` branch.
+         */
+        private bool $speakWhileThinking = false,
+    ) {}
+
+    public function name(): string { return 'thinkthenfail'; }
+    public function supportsStreaming(): bool { return true; }
+    public function supportsFunctionCalling(): bool { return false; }
+    public function supportsVision(): bool { return false; }
+    public function supportsJsonSchema(): bool { return false; }
+    public function contextWindow(): int { return 1000; }
+    public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
+
+    public function attempts(): int { return $this->attempts; }
+
+    public function complete(CompleteRequest $request): CompleteResponse
+    {
+        return new CompleteResponse(content: $this->answer);
+    }
+
+    public function completeStream(CompleteRequest $request): \Generator
+    {
+        $this->attempts++;
+
+        if ($this->attempts === 1) {
+            yield new CompleteResponse(
+                content: $this->speakWhileThinking ? 'half a ' : '',
+                reasoning: 'a first thought ',
+            );
+
+            if ($this->throwOnFirstAttempt) {
+                throw new ServerException(
+                    '503 Service Unavailable',
+                    new Request('POST', 'https://example.invalid/v1'),
+                    new Response(503),
+                );
+            }
+
+            yield new CompleteResponse(
+                content: '',
+                isError: true,
+                errorMessage: 'overloaded',
+                errorTransient: true,
+            );
+
+            return;
+        }
+
+        yield new CompleteResponse(content: $this->answer);
+    }
+
+    public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+    {
+        return new EmbeddingsResponse([]);
+    }
+}
+
+/** A non-streaming provider that thinks and then answers in one call. */
+final class BatchDouble implements ProviderInterface
+{
+    public function name(): string { return 'batch'; }
+    public function supportsStreaming(): bool { return false; }
+    public function supportsFunctionCalling(): bool { return false; }
+    public function supportsVision(): bool { return false; }
+    public function supportsJsonSchema(): bool { return false; }
+    public function contextWindow(): int { return 1000; }
+    public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
+
+    public function complete(CompleteRequest $request): CompleteResponse
+    {
+        return new CompleteResponse(content: 'the answer', reasoning: 'thought it through');
+    }
+
+    public function completeStream(CompleteRequest $request): \Generator
+    {
+        yield new CompleteResponse(content: 'the answer');
+    }
+
+    public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+    {
+        return new EmbeddingsResponse([]);
+    }
+}

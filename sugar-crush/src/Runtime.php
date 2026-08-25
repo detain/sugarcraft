@@ -258,9 +258,51 @@ final class Runtime
      *                           one delta so a consumer never has to ask
      *                           whether the provider streams.
      *
+     * @param ?callable $onProgress Optional out-of-band progress observer,
+     *                           signature `function(string $reasoningDelta):
+     *                           void`. A non-empty argument is the model's
+     *                           reasoning text; the empty string is a bare
+     *                           heartbeat - a chunk that carried only
+     *                           tool-call structure, only usage figures, or
+     *                           nothing at all.
+     *
+     *                           WHEN IT FIRES, stated exactly because the
+     *                           first draft of this paragraph said "once for
+     *                           EVERY chunk that did not already reach
+     *                           $onToken" and the code beside it has always
+     *                           done something wider: a chunk that carries
+     *                           BOTH content and reasoning reaches $onToken
+     *                           AND this channel, because its thinking still
+     *                           has to be paintable. The one shape that skips
+     *                           this channel is a chunk that is pure content
+     *                           with no reasoning on it - which has already
+     *                           announced itself through $onToken, and has
+     *                           nothing left to say.
+     *
+     *                           E456, a user-reported bug: $onToken is gated on
+     *                           `$response->content !== ''` and it is the ONLY
+     *                           thing that writes a frame across
+     *                           {@see \SugarCraft\Crush\Backend\EngineBackend::completeAsync()}'s
+     *                           fork, while the parent resets its 120s IDLE
+     *                           deadline only when a frame arrives. A
+     *                           reasoning-only chunk carries `content: ''`, so
+     *                           a long think produced no frames, no reset, and
+     *                           the turn was SIGKILLed as a hung provider
+     *                           mid-thought. This channel is what makes
+     *                           "progress" mean what the timer needs it to
+     *                           mean.
+     *
+     *                           It is deliberately NOT $onToken. Text handed to
+     *                           $onToken lands in the `$buffer` that becomes the
+     *                           {@see AssistantMessage} fed back to the model on
+     *                           the next agentic step and checkpointed into the
+     *                           transcript, so routing reasoning through it
+     *                           would corrupt the CONVERSATION and not merely
+     *                           the display.
+     *
      * @return \Generator yields CompleteResponse chunks
      */
-    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
+    public function run(App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
     {
         $messages = $this->buildMessages($app);
 
@@ -279,8 +321,8 @@ final class Runtime
         // collapsed by iterator_to_array(). Re-yielding lets this outer
         // generator hand out fresh sequential keys.
         $inner = $this->provider->supportsStreaming()
-            ? $this->runStreaming($request, $app, $onEvent, $onPermissionRequest, $onToken)
-            : $this->runBatch($request, $app, $onEvent, $onPermissionRequest, $onToken);
+            ? $this->runStreaming($request, $app, $onEvent, $onPermissionRequest, $onToken, $onProgress)
+            : $this->runBatch($request, $app, $onEvent, $onPermissionRequest, $onToken, $onProgress);
 
         foreach ($inner as $msg) {
             yield $msg;
@@ -300,10 +342,52 @@ final class Runtime
      * `$buffer` below is what becomes the {@see AssistantMessage} the agentic
      * loop feeds back to the model - the transcript would carry it twice too.
      *
-     * So the retry is gated on `$emitted`, which is set at the ONE point where
-     * a byte leaves this method: the `$onToken($response->content)` call. That
-     * is the precise safety condition, and it has a useful consequence worth
-     * stating exactly rather than rounding off:
+     * So the retry is gated on `$emitted`, which is set at the
+     * `$onToken($response->content)` call.
+     *
+     * WHAT THIS SAID: that this is "the ONE point where a byte leaves this
+     * method".
+     * WHAT IS TRUE NOW: it is not. E456 added `$onProgress`, and reasoning text
+     * leaves by that channel too - across the same fork, onto the same screen.
+     * WHY `$emitted` STILL EARNS ITS PLACE UNCHANGED: the condition it encodes
+     * is not "did anything leave" but "is there anything a retry cannot undo",
+     * and reasoning is the one kind of output for which the answer is no.
+     * $onToken's bytes become `$buffer`, which becomes the AssistantMessage the
+     * agentic loop feeds back to the model and the transcript checkpoints - a
+     * re-sent stream would duplicate the CONVERSATION. Reasoning is display
+     * only: `$reasoning` is reset per attempt like every other accumulator, and
+     * it is never fed back to the model.
+     *
+     * WHAT THIS SAID: that `AssistantMessage::reasoning()` "has exactly ONE
+     * reader in `src/`". WHAT IS TRUE NOW: the sentence was true when written
+     * and is not a claim a doc-block can keep - a count taken over a tree is
+     * void the moment anything merges beside it, and the whole argument here
+     * rests on it. WHY THE REASONING STILL EARNS ITS PLACE, stated as the
+     * symbol it is about rather than as a tally: the reader is
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}, which folds
+     * reasoning onto the returned {@see \SugarCraft\Crush\Message} for the
+     * transcript. And it never reaches a provider because the wire form of a
+     * message is built from `content()` alone - every provider maps a history
+     * entry to `['role' => ..., 'content' => $msg->content()]` and there is no
+     * `reasoning` key in that shape at all
+     * (VERIFIED against {@see \SugarCraft\Crush\Providers\SglangProvider}'s
+     * history mapping; `CompleteRequest::$reasoningEffort` is a request KNOB,
+     * not the model's thoughts, and is the only reasoning-shaped thing on the
+     * outbound side). Both are checkable in one jump from here, which a count
+     * is not.
+     *
+     * So a re-sent think is a repaint and never a duplicated turn. Latching
+     * `$emitted` on it would trade a
+     * cosmetic repaint for the loss of retry coverage on every stream that
+     * thinks before it fails, which is most of them - the wrong side of that
+     * trade. Do not "fix" this by widening the latch; widen it only if
+     * reasoning ever starts being fed back to the model - and it is no longer
+     * only prose that says so:
+     * {@see \SugarCraft\Crush\Tests\Backend\ReasoningProgressTest::testAStreamThatOnlyThoughtBeforeFailingIsStillRetried()}
+     * goes red on exactly that widening, on both of the gates below.
+     *
+     * The consequence of the gate is worth stating exactly rather than rounding
+     * off:
      *
      *   - With a token sink attached (every interactive turn - {@see
      *     \SugarCraft\Crush\Backend\EngineBackend::runCompleteInChild()}
@@ -331,7 +415,7 @@ final class Runtime
      * propagates, or the accumulated (possibly error-bearing) stream is yielded
      * onward. Only the number of attempts is new.
      */
-    private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
+    private function runStreaming(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
     {
         $buffer = '';
         $toolCalls = [];
@@ -351,9 +435,10 @@ final class Runtime
             $reasoning = null;
             $usages = [];
 
-            // True once a byte has been handed to $onToken - the only channel
-            // out of this loop, and therefore the only thing a retry cannot
-            // undo.
+            // True once a byte has been handed to $onToken. NOT "the only
+            // channel out of this loop" - $onProgress is a second one since
+            // E456 - but the only one carrying output a retry cannot undo. The
+            // docblock above says why reasoning is deliberately exempt.
             $emitted = false;
             // The last error-bearing chunk, for providers that report failure
             // as a response instead of by throwing (Vertex, Custom).
@@ -386,6 +471,36 @@ final class Runtime
                     }
                     if ($response->reasoning !== null && $response->reasoning !== '') {
                         $reasoning = ($reasoning ?? '') . $response->reasoning;
+                    }
+                    // E456. EVERY chunk that did not already reach $onToken is
+                    // announced here, and the condition is `content === ''`
+                    // rather than "has reasoning" on purpose: the defect is a
+                    // FAMILY, and a definition of progress that named only the
+                    // reasoning member would leave the other two alive. All
+                    // three are real chunk shapes off real providers -
+                    //
+                    //   - reasoning-only: the reported case, a model thinking
+                    //     for minutes before its first content byte;
+                    //   - tool-call-only: a chunk carrying nothing but the
+                    //     structure of a call;
+                    //   - usage-only: VertexProvider's `message_start` reports
+                    //     input tokens with no content at all (the retry note
+                    //     on $usages above describes the same chunk).
+                    //
+                    // - and every one of them used to leave the parent's idle
+                    // timer un-reset, because $onToken is the only other thing
+                    // in this loop that writes a byte across the fork.
+                    //
+                    // The delta is the reasoning text when there is any and the
+                    // empty string otherwise, so one channel carries both "here
+                    // is thinking to paint" and "still alive, nothing to show".
+                    if ($onProgress !== null && $response->content === '') {
+                        $onProgress($response->reasoning ?? '');
+                    } elseif ($onProgress !== null && $response->reasoning !== null && $response->reasoning !== '') {
+                        // A chunk carrying BOTH content and reasoning already
+                        // reset the deadline through $onToken, but its thinking
+                        // still has to reach the screen.
+                        $onProgress($response->reasoning);
                     }
                     $usages[] = Usage::reported($response->tokensUsed, $response->costUsd);
 
@@ -463,7 +578,7 @@ final class Runtime
      * yielded onward as an assistant message. Retrying is added; the terminal
      * outcome is unchanged.
      */
-    private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null): \Generator
+    private function runBatch(CompleteRequest $request, App $app, ?callable $onEvent = null, ?callable $onPermissionRequest = null, ?callable $onToken = null, ?callable $onProgress = null): \Generator
     {
         $response = null;
 
@@ -495,6 +610,21 @@ final class Runtime
         // all, and would silently render nothing for a batch provider.
         if ($onToken !== null && $response->content !== '') {
             $onToken($response->content);
+        }
+        // Same uniformity rule one line up, for the same reason: a consumer
+        // painting live reasoning must not need its own supportsStreaming()
+        // check to know whether any will arrive. There is nothing incremental
+        // to offer here, so it is the whole think as one delta.
+        //
+        // This does NOT make a batch provider's turn idle-timeout-proof, and it
+        // cannot: `$this->provider->complete()` above is one blocking call that
+        // returns everything at once, so a batch provider that takes longer
+        // than EngineBackend's ceiling to answer still dies with nothing having
+        // crossed the fork. That is a separate defect with a separate fix (a
+        // heartbeat the child raises on a timer rather than on a chunk) and it
+        // is recorded rather than half-done here.
+        if ($onProgress !== null && $response->reasoning !== null && $response->reasoning !== '') {
+            $onProgress($response->reasoning);
         }
 
         yield new AssistantMessage(

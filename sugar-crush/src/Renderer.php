@@ -299,6 +299,23 @@ final class Renderer
     private const SLASH_MENU_CHROME_COLS = 4;
 
     /**
+     * Chrome {@see renderInput()}'s box spends on itself: `border()` is 1 cell
+     * each side and `padding(0, 1)` is another 1 each side.
+     *
+     * NOT {@see SHELL_CHROME_COLS}, whose 6 is the same arithmetic for the
+     * transcript shell's wider `padding(1, 2)`. Named because the draft's wrap
+     * budget subtracts it and a boundary spelled twice is a boundary that
+     * drifts.
+     */
+    private const INPUT_CHROME_COLS = 4;
+
+    /**
+     * Cells the `"> "` prompt (and the matching continuation indent) takes out
+     * of {@see renderInput()}'s per-row text budget.
+     */
+    private const INPUT_PROMPT_COLS = 2;
+
+    /**
      * Fixed head of a finished tool row, ahead of the model-chosen tool name.
      * Named because {@see renderToolResults()} subtracts its width from the row
      * budget and a boundary spelled twice is a boundary that drifts.
@@ -3807,13 +3824,53 @@ final class Renderer
                 mb_substr($chat->inputBuf, 0, $chat->inputCursorOffset(), 'UTF-8')
             ), 'UTF-8'),
         );
-        $body = "> " . mb_substr($clean, 0, $at, 'UTF-8')
+        $draft = mb_substr($clean, 0, $at, 'UTF-8')
             . $cursor
             . mb_substr($clean, $at, null, 'UTF-8');
+
+        // E455, a user-reported bug: this used to be `"> " . $draft` handed
+        // straight to the Style below with no width and no wrap, and
+        // `Style::render()` does not word-wrap - `Style::width()` only SIZES a
+        // box. So an ordinary long sentence painted one row wider than the
+        // terminal and ran off the right edge. Every other producer in this
+        // file is held to the pane: the transcript goes through
+        // {@see fitToPane()} and even {@see renderPermissionPrompt()}
+        // hand-rolls its own wrap. The input box was the one pane that skipped
+        // the choke point.
+        //
+        // {@see wrapToPane()}, not `wordwrap()` and not a bare
+        // `Width::wrapAnsi()`: a draft can hold wide/CJK cells, which
+        // `wordwrap()` counts in BYTES, and wrapToPane() carries the retry +
+        // {@see hardFit()} backstop for the grapheme clusters whose wrap and
+        // whose measure disagree. The block cursor is spliced in ABOVE, before
+        // the wrap, precisely so it is wrapped as the real cell it occupies
+        // rather than being appended to a row that is already full - and it is
+        // a single cluster, so no break can split it.
+        //
+        // Only the WIDTH is handled here. The height half needs nothing:
+        // {@see render()}'s tail clip slices to the last N lines and the input
+        // box sits at the tail, so a taller box costs history rows and stays
+        // visible on its own.
+        $inner = max(1, $chat->cols() - self::INPUT_CHROME_COLS);
+        // The prompt costs its 2 cells on row 1 only, but the continuation
+        // rows pay the same indent so the draft occupies ONE text column all
+        // the way down - a wrapped word that jumped left by two cells reads as
+        // a second, separate line of input. Below a pane that cannot afford
+        // the indent at all the prompt is dropped rather than shrunk: at
+        // $inner == 2 the prompt alone is the whole row and the draft would
+        // wrap at width 0.
+        $indented = $inner > self::INPUT_PROMPT_COLS;
+        $textWidth = $indented ? $inner - self::INPUT_PROMPT_COLS : $inner;
+
+        $rows = [];
+        foreach (self::wrapToPane($draft, $textWidth) as $i => $row) {
+            $rows[] = ($indented ? ($i === 0 ? '> ' : '  ') : '') . $row;
+        }
+
         return Style::new()
             ->border(Border::normal())
             ->borderForeground($theme->border)
             ->padding(0, 1)
-            ->render($body);
+            ->render(implode("\n", $rows));
     }
 }
