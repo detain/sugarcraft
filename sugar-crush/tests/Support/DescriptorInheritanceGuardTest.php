@@ -240,7 +240,17 @@ final class DescriptorInheritanceGuardTest extends TestCase
      * rather than being skipped in silence. That is rule 14 at directory
      * granularity: the guard goes red on what it cannot classify.
      *
-     * @var array<string, array{walked:bool, reason:string}>
+     * `mechanism` IS THE EVIDENCE, AND IT IS WHAT MAKES A ROW FALSIFIABLE.
+     * Every `walked => true` row names a file in the closure and a marker in
+     * it, and {@see testEveryFileOutsideAnAutoloadRootIsClassified()} asserts
+     * the BICONDITIONAL: marker present means the row must be walked, marker
+     * gone means it must not be. Without it `walked` is a flag anybody can
+     * flip to `false` to make a directory disappear from the walk while the
+     * reason beside it still says the code runs in this process - a narrowing
+     * with a justification attached that has stopped being true, which is the
+     * one shape rule 7 exists for. With it, flipping the flag reds.
+     *
+     * @var array<string, array{walked:bool, reason:string, mechanism?:array{0:string,1:string}}>
      */
     private const LIB_HORIZON = [
         // WALKED. Not in any autoload section, and executed in THIS process
@@ -253,6 +263,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'walked' => true,
             'reason' => 'executed in this process by a runtime require in candy-core '
                 . 'I18n\T::load(), not by the autoloader, so no autoload root names it',
+            'mechanism' => ['candy-core/src/I18n/T.php', 'require $path'],
         ],
 
         // WALKED, and for a DIFFERENT reachability - this one is the gap
@@ -266,6 +277,7 @@ final class DescriptorInheritanceGuardTest extends TestCase
             'walked' => true,
             'reason' => 'exec\'d as a child of this process - candy-pty Spawn::SHIM_RELATIVE '
                 . 'runs bin/pty-shim.php under PHP_BINARY, so it inherits our descriptors',
+            'mechanism' => ['candy-pty/src/Spawn.php', "SHIM_RELATIVE = '/../bin/pty-shim.php'"],
         ],
 
         // NOT WALKED, and this is the one derived reason rather than a
@@ -984,6 +996,31 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * The top-level segment of a file that is outside the autoload roots AND
+     * outside {@see LIB_HORIZON}, or null when the file is accounted for.
+     *
+     * THE WHOLE DECISION IN ONE PURE CALL, and that is the point rather than
+     * tidiness. Its caller asserts a set is EMPTY, so the roster lookup has to
+     * be reachable by a known-positive fixture in the same test - and a lookup
+     * spelled inline in the walk is reachable only by a real unclassified file,
+     * which by construction the tree does not have. Rule 25: a fixture whose
+     * expected value is what a dead instrument returns proves nothing, and
+     * `[]` is what an inline `isset()` deleted outright returns too.
+     *
+     * @param list<string> $roots
+     */
+    private static function unrosteredSegment(string $relative, array $roots): ?string
+    {
+        $segment = self::horizonSegment($relative, $roots);
+
+        if ($segment === null || isset(self::LIB_HORIZON[$segment])) {
+            return null;
+        }
+
+        return $segment;
+    }
+
+    /**
      * Every PHP file in the reachable closure is either walked or classified.
      *
      * E449. THIS IS THE ARM THAT MAKES THE GUARD SAY WHAT IT CANNOT SEE.
@@ -1014,10 +1051,16 @@ final class DescriptorInheritanceGuardTest extends TestCase
     {
         self::assertSame(
             'daemon',
-            self::horizonSegment('daemon/Run.php', ['src']),
-            'the horizon classifier is dead - it cannot see a directory outside the autoload '
-                . 'roots, so the absence asserted below is what it would report for any tree at '
-                . 'all.',
+            self::unrosteredSegment('daemon/Run.php', ['src']),
+            'the horizon classifier is dead - it cannot see an unrostered directory outside the '
+                . 'autoload roots, so the absence asserted below is what it would report for any '
+                . 'tree at all.',
+        );
+        self::assertNull(
+            self::unrosteredSegment('lang/en.php', ['src']),
+            'and the other polarity, without which the line above is satisfied by a classifier '
+                . 'that reports every file in the closure - which would red correct trees and '
+                . 'teach the next reader to widen the roster until it stopped.',
         );
 
         $base = \dirname(__DIR__, 2) . '/' . self::LIB_SCOPE;
@@ -1055,18 +1098,15 @@ final class DescriptorInheritanceGuardTest extends TestCase
                 }
 
                 $seen++;
-                $segment = self::horizonSegment($relative, $roots);
-                if ($segment === null) {
-                    continue;
-                }
 
-                if (!isset(self::LIB_HORIZON[$segment])) {
+                if (self::unrosteredSegment($relative, $roots) !== null) {
                     $unclassified[] = $name . '/' . $relative;
 
                     continue;
                 }
 
-                if (self::LIB_HORIZON[$segment]['walked'] === true) {
+                $segment = self::horizonSegment($relative, $roots);
+                if ($segment !== null && (self::LIB_HORIZON[$segment]['walked'] ?? false) === true) {
                     $walkedHits[$segment] = ($walkedHits[$segment] ?? 0) + 1;
                 }
             }
@@ -1083,6 +1123,32 @@ final class DescriptorInheritanceGuardTest extends TestCase
 
         foreach (self::LIB_HORIZON as $segment => $row) {
             self::assertNotSame('', \trim($row['reason']), $segment . ' is rostered without a reason.');
+
+            if (isset($row['mechanism'])) {
+                [$file, $marker] = $row['mechanism'];
+                $path = $base . '/' . $file;
+                self::assertFileExists($path, $segment . "'s mechanism cites " . $file
+                    . ', which is no longer in the closure. The row is unfalsifiable until the '
+                    . 'citation is repaired or the row is retired.');
+
+                self::assertSame(
+                    $row['walked'],
+                    \str_contains((string) \file_get_contents($path), $marker),
+                    $segment . " is rostered walked=" . \var_export($row['walked'], true)
+                        . ', and ' . $file . ' now says otherwise. THE MARKER IS THE EVIDENCE: '
+                        . 'if it is present the directory runs with our descriptors and the walk '
+                        . 'must read it; if it is gone the mechanism has been removed and the row '
+                        . 'is stale. Do not flip the flag to match - work out which happened.',
+                );
+            } else {
+                self::assertNotSame(
+                    true,
+                    $row['walked'],
+                    $segment . ' is walked with no mechanism recorded. A walked row is a claim '
+                        . 'that the directory runs with this process\'s descriptors, and a claim '
+                        . 'with no citation cannot go stale visibly.',
+                );
+            }
 
             if ($row['walked'] !== true) {
                 continue;
