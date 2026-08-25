@@ -17564,3 +17564,77 @@ commits it did make are both good and both verified here — so this is not a fi
 but about the harness: a leading imperative in a long brief has no enforcement, and nothing but the
 transcript would have revealed the omission. Same class as E492, where three lanes read a stale ownership
 map and none reported it. **The rate is the part worth keeping.**
+
+## Ec58-6 — a census that could express two shapes, under a doc-block saying "every"
+
+`ChildWallClockBudgetTest::childBudgets()` scanned raw source for
+`/<wrapper> -s KILL (\d+|%d)/` and documented itself as "every literal child budget in `tests/`, and
+every parametrised one". **An alphabet is coverage (rule 11), and this one could express two shapes.**
+Measured by mutation at the fix commit:
+
+| what was mutated | before | after |
+|---|---|---|
+| `tests/Backend/CommandBackendTest.php`'s live `<wrapper> 10` raised to **300**, against a 60s `defaultTimeLimit` | **SURVIVED** | KILLED |
+| an existing `'... KILL 20 ...'` respelled as `"... KILL {$bound} ..."`, `$bound = 300` | **SURVIVED** | KILLED |
+
+The second is the sharper one. It removed the site from **both** censuses in a single edit — no digits for
+the text scan, no `%d` for the token scan — so it produced no `unresolved` row **and no cross-census
+disagreement either**, which falsified the file's own class doc-block: *"neither can go blind without
+disagreeing with the other."* True of a census being blinded; false of a site LEAVING the population.
+Two censuses that both see nothing agree perfectly.
+
+**Fixed by widening, not by narrowing the prose.** The scan reads string-literal tokens rather than raw
+text (structural, rule 40 — two rows the old scan reported were doc-block SENTENCES describing the shape,
+counted as real budgets); the alphabet is now the wrapper, an optional preceding printf conversion
+(`%s<wrapper>` is live, and `\b` does not fire between `s` and `t`), any run of the flags `timeout(1)`
+takes ahead of its duration, then one budget token — **classified, not required**. Digits are literal,
+`%d` goes to the resolver, and anything else it recognises as a budget, or a literal that ENDS at the
+wrapper, becomes an `unresolved` row carrying the token it choked on. The coverage diff is a strict
+superset over real invocations: all 15 kept, the 2 plain-form sites added, only the 2 prose sentences
+dropped.
+
+**What it still cannot see, stated rather than left to be found:** a wrapper split across a concatenation
+with no whitespace at the literal's end (`'time' . 'out 5 sh'` — this file's own discipline, and a
+deliberate act anywhere else), and a budget assembled by `implode()`. Everything else lands in
+`unresolved`.
+
+## Ec58-7 — the mutation harness's uniqueness check was meaningless for exactly the anchors that need it
+
+Rule 13, self-inflicted and caught mid-run. The harness refused a mutation unless
+`/usr/bin/grep -cF -- "$OLD" "$FILE"` returned 1. **GNU `grep -F` treats a newline in the pattern as a
+pattern SEPARATOR**, so a multi-line anchor was being counted as *"any of these lines"* — it reported 1
+for an anchor that matched nothing as a whole. It failed closed (the Python apply step asserts the real
+count and aborted), so no verdict was corrupted, but the check itself was worthless for multi-line
+anchors and a single-line-anchor harness would never have noticed. The count is taken in Python now.
+
+**A second harness defect from the same run:** the verdict classifier special-cased rc 255 as "php fatal,
+discard" and filed everything else non-zero as KILLED. Removing `resolveThroughParameter()`'s cycle guard
+produced **rc 139 — SIGSEGV**, the runner dying rather than reporting, and it was filed as a clean kill. A
+signal death is neither a kill nor a survival and is now named as such.
+
+## Ec58-8 — a `--check` that did nothing satisfied the guard for `--check`
+
+`GenDocsTest::testCheckDoesNotWriteToTheTree()` asserted only that the bytes on disk were unchanged after
+`--check` ran over a hand-edited page. **That is also exactly what a `--check` which never ran leaves
+behind** (rule 25). Proved by mutation rather than argued: with `gen-docs.php`'s drift branch neutered to
+`if (false)`, the test with the new `assertSame(1, $result['exit'])` **reds**, and the same mutation with
+that assertion reverted is **GREEN — 1 test, 2 assertions**. One line, and the exposure is closed.
+
+## Ec58-9 — repo-root `tools/` env vars are on no roster at all
+
+`SUGARCRAFT_GEN_DOCS_ROOT` (added this round) and `SUGARCRAFT_CHECK_PATH_REPOS_ROOT` (pre-existing) are
+documented only in their own comments. `EnvRosterDriftTest`'s roster is `sugar-crush/src` +
+`sugar-crush/bin` under the `SUGARCRUSH_`/`SUGAR_CRUSH_` alphabet, so a `SUGARCRAFT_`-prefixed variable at
+the monorepo root is covered by nothing — the new one is consistent with its sibling rather than a
+regression, which is why it was left. **Not deferred for cost: deferred because the roster is
+`sugar-crush`-rooted by design and reaching `tools/` from it is the same dependency inversion Ec58-2
+records.** A `tools/tests/` guard is the shape that would work, on the model of `StackedDocCommentTest`.
+
+## Ec58-10 — a manifest-policy CI job now reds on a test file's token stream
+
+`path-repo-check` — a job about composer manifests — is the only job that runs `tools/tests/`, so it now
+goes red whenever `RuntimeNoticeSinkDeliveryTest::stackedDocCommentLines()` changes by one token. That is
+the design (`StackedDocCommentTest` pins its copy against the canonical, and the failure text names the
+file to port into), and it is the price of Ec58-2's dependency direction. **Stated here because a sibling
+lane editing that method will see a job whose NAME gives no hint of the reason.** Renaming the job, or
+splitting `tools/tests/` into its own, is the cheap improvement whenever someone is next in `ci.yml`.
