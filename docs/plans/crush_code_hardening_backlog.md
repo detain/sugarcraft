@@ -18169,8 +18169,14 @@ and a brief carries more authority, because nothing downstream is asked to falsi
 `No tests executed!` (rc 0) as a SURVIVAL, and asks for every backlog SURVIVED verdict that could have
 been produced that way to be re-run or marked unverified.
 
-**THE POPULATION, AND ITS ALPHABET IS THE FIRST FINDING (rule 11).** `SURVIVED` in capitals appears **37**
-times in this file. That is not the population. Widening to the prose spellings of the same verdict —
+**THE POPULATION, AND ITS ALPHABET IS THE FIRST FINDING (rule 11).** `SURVIVED` in capitals appears on
+**37 lines** of this file as it stood at `e4c69b04e` — 39 occurrences, in 32 entries. (The entry as first
+written said "appears **37** times", which is the LINE count the shipped `awk` generator honestly
+produces, mislabelled as an occurrence count; corrected by the round's reviewer and re-measured here.
+🔴 And the figure is doubly unshippable, because THIS ENTRY is in the file it counts: measured again
+after it landed, the same census answers 45 lines and 48 occurrences. A census of a pattern must exclude
+the text describing the pattern — rule 26 — and a backlog entry quoting its own subject cannot.) That is
+not the population either. Widening to the prose spellings of the same verdict —
 `stayed green`, `still green`, `was not killed`, `unkillable` — adds **12 more lines in 12 further
 entries** (E74, E76, E230, E244, E264, E270, E381, E384, E445, E513, E576, E577). A census of mutation
 verdicts keyed on the word `SURVIVED` cannot see a third of them. Generator, PHP-free, run from the repo
@@ -18290,10 +18296,28 @@ every one of the twenty, not inherited.
 
 **IDIOM A — "the PREVIOUS significant token is `T_FUNCTION`, so this name is a declaration and not a
 call".** Eight files. Adding `T_FN` to these lists would be an arm that selects nothing, and that is
-measured rather than argued: over `sugar-crush/tests` on PHP 8.3.6 there are **542 `T_FN` tokens in 467
-files and every single one is followed immediately by `(`**. `fn` cannot be followed by a name, so it can
-never be the token this idiom tests for. Generator: `token_get_all()` over every `.php` under `tests/`,
-tallying the next non-whitespace, non-comment token after each `T_FN`.
+measured rather than argued: over `sugar-crush/tests` on PHP 8.3.6 the next SIGNIFICANT token after
+every single `T_FN` is `(`. `fn` cannot be followed by a name, so it can never be the token this idiom
+tests for. Generator: `token_get_all()` over every `.php` under `tests/`, tallying the next
+non-whitespace, non-comment token after each `T_FN`.
+
+🔴 **WHAT THAT SENTENCE SAID, AND WHY BOTH HALVES OF ITS ARITHMETIC WERE WRONG — corrected by the
+round's reviewer, then re-measured rather than copied (rule 12).** It said "**542 `T_FN` tokens in 467
+files** and every single one is **followed immediately by `(`**".
+
+  * **467 was the wrong population.** It is the number of `.php` files under `tests/`, not the number
+    CONTAINING a `T_FN`. Re-measured with the same generator: 157 files contain one.
+  * **"followed immediately" was false, and dangerously so.** Splitting on the RAW next token rather
+    than the next significant one: 267 are followed by `(` with no gap and **276 have whitespace in
+    between**. A reader trusting the word "immediately" would write `$tokens[$j + 1] === '('` and break
+    the majority of the sites. The lane's own `shadowedByAnArrowFunction()` was always correct here —
+    it goes through `nextSignificant()` — so the prose was wrong about code that was right.
+  * 🔴 **AND THE FIGURES ARE NOT SHIPPABLE AT ALL, which is the transferable half (rule 18).** The
+    reviewer measured 542 and 156; this correction measures **543 and 157** — the count moved INSIDE
+    the same lane, in the same session, because the fix for MAJOR 1 added one arrow function to a file
+    under `tests/`. A cardinality over `tests/` written into prose is stale before the round that
+    writes it ends. What is durable is the CLAIM — the next significant token after `fn` is always `(`
+    — and its generator, both of which are above.
 
 **COMMENT-ONLY — four files name `T_FUNCTION` in prose and nowhere else.** Nothing to widen.
 
@@ -18396,3 +18420,97 @@ removed must still be reported). MEASURED that it is not redundant: narrowing th
 NON-empty starless line — `if ($trimmed !== '') { $previous = null; }`, a plausible tidy-up — **SURVIVES**
 the file as its predecessor left it and is **KILLED** with the new rows. One mutation, both polarities,
 `--filter DuplicatedDocBlockLineTest` (scope: these guards, not the suite).
+
+### Ea59-10 — 🔴 a population floor that sat BELOW one of the two halves it was guarding
+
+**Round 59, lane a (fix stage). FIXED.** `DuplicatedDocBlockLineTest`'s rule-15 population control was a
+single `assertGreaterThan(400, count($sources))` over `tests/` + `src/` + `bin/` at once. Measured on PHP
+8.3.6: `everyTestFile()` alone returns 467, so the floor sat below the `tests/` half and the entire
+source side could vanish without reddening it. Mutation-checked at `87fd31a79`: replacing the walk's root
+list with an empty one left the census **green at 19 assertions**, scope `--filter
+DuplicatedDocBlockLineTest`.
+
+**THE TRANSFERABLE SHAPE, and it is not scoped to this file.** Any guard that pairs a broad multi-root
+walk with ONE scalar population floor has this hole whenever the floor sits below the largest single
+contributing root — and the floor is normally chosen by looking at the total, which is exactly how it
+ends up there. The fix is not a bigger number (that is a cardinality over `tests/` in an assertion,
+rule 18); it is a per-root contribution assertion, which is structural and cannot rot.
+
+🔴 **AND THE FIRST VERSION OF THAT FIX PINNED NOTHING — rule 43, caught by mutating my own fix rather
+than reading it.** The per-root loop iterated `self::SOURCE_ROOTS`, the same constant the WALK reads, so
+emptying the constant emptied the check with it and the mutation SURVIVED again, green at 19 assertions.
+A guard that derives its expectation from the thing it guards has no expectation. The roots are now
+spelled as a literal in the assertion. Both mutations KILL against the corrected form (18 and 19
+assertions, reddening at the first root that stops contributing).
+
+**NEXT CANDIDATE, not done:** `tests/Backend/BackendSignatureNullabilityTest` carries its own private
+`everySourceFile()` and its own population guard.
+
+### Ea59-11 — 🔴 a walk over `bin/` that had never read a file, under prose naming `bin/` as covered
+
+**Round 59, lane a. FIXED.** The same census walked `['src', 'bin']` and selected files by
+`str_ends_with($path, '.php')`. `sugar-crush/bin/` holds exactly one entry — `bin/sugarcrush`, 431 lines
+of PHP behind `#!/usr/bin/env php`, no extension — so the `bin/` root contributed **zero files** while the
+class doc-block stated the census was "MEASURED … over `tests/`, `src/` and `bin/`" and reported "exactly
+ONE site in the whole package". Rule 11 with the file extension as the alphabet: the one file it could
+not express was the package's own executable.
+
+🔴 **THIS IS ALSO THE ELEVENTH WRONG REVIEWER PRESCRIPTION.** The round-59 review's MAJOR 1 prescribed
+asserting "one key beginning `tests/`, one beginning `src/`, and one beginning `bin/`". Implemented
+literally against the tree as it stood, that reds immediately — there is no `bin/` key to find. The
+prescription was right about the SHAPE and wrong about the tree, and measuring it first (rule 16) is what
+turned a red into a second finding. The fix asks the FILE: `.php`, or a shebang line naming php.
+
+**Same pass:** the prose claimed "the whole package" while never reading `examples/` (4 `.php`) or
+`workflows/` (1). Both are now walked. Both were measured clean BEFORE being added, so the widening
+changed no answer — the only kind of widening worth doing into files no lane owns.
+
+### Ea59-12 — 🔴 a name walk that could read one spelling of a method name, where PHP has three
+
+**Round 59, lane a. FIXED.** `DuplicatedTestHelperDriftTest::declarationsIn()` read a declaration's name
+as "the first non-whitespace token after `function`, if it is a `T_STRING`". Two real spellings fall
+outside that, measured through the method itself on PHP 8.3.6:
+
+  * **BY REFERENCE.** `public function &byRef()` returned an EMPTY name and was filed as a declaration
+    whose name cannot be read; the implicitly-public `function &byRef()` produced **no row at all** —
+    silently dropped. That second one is E565's own defect surviving inside E565's own fix: an absent
+    modifier made invisible a second time by an ampersand. The private alphabet is hit too —
+    `private function &byRef()` files as unparseable.
+  * 🔴 **A RESERVED WORD AS THE METHOD NAME**, legal since PHP 7.0 and lexed as the KEYWORD token, never
+    as `T_STRING`. Censused over `tests/`, `src/` and `bin/sugarcrush`: **30 declarations**, of which 22
+    are `::new()` — the default root factory this repo's own conventions mandate for every class — plus
+    `list()`, `match()`, `echo()`, `default()`, `use()`, `empty()`. Two are PRIVATE (`Glob::match()`,
+    `EchoProvider::echo()`), which is this guard's own population. All 30 are in `src/`, which this
+    census does not walk, so it is an untriggered hole rather than a live miss (E363's shape) — but the
+    convention pushing on it is the repo's own, so it will not stay untriggered by luck.
+
+**THE REVIEW'S STATED MECHANISM FOR THE FIRST ONE WAS ALSO WRONG, and the wrong fix would have been a
+silent no-op.** It said `&` "is a bare string token, so the loop breaks". Measured: on PHP 8.1+ `&` in
+this position is an ARRAY token, `T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG`. Skipping the bare-string
+spelling alone — the literal reading of the review — changes nothing on 8.3/8.4. Mutation-checked in
+both polarities: removing the array-token comparison KILLS, removing the bare-string one SURVIVES (it is
+the dormant half on this host, kept for PHP ≤ 8.0 and now pinned by a probe that reads the running
+lexer, per rule 6).
+
+**How it was found: rule 48.** The review commissioned a fix for ONE spelling. Building the census over
+the whole population — every `T_FUNCTION` in the package, tallied by what follows it — is what surfaced
+the reserved-word family, which is 30 sites against the ampersand's zero.
+
+### Ea59-13 — the unreadable-name branch had no pin in the silence direction
+
+**Round 59, lane a. FIXED.** The review reported two survivals in `declarationsIn()`: collapsing the
+anonymous-function discriminator to a bare `if ($name === null) { continue; }`, and deleting the
+`$name === null` report body outright. Both left the class green at 10 tests / 95 assertions. The
+`$anAbsentModifierIsPublic` parameter and its 7-line `@param` block were pinned only in the direction
+that makes NOISE (turning it on reds), never in the direction that makes SILENCE. Rule 43's shape again.
+
+Post-fix the only source that still reaches that branch is a TRUNCATED declaration — every legal spelling
+after `function` is now `&`, an identifier, or `(` — and a truncated file is a real thing on disk, so it
+is the honest fixture. Both mutations now KILL against it.
+
+**DEFERRED, measured, not done:** a COMMENT between `function` and the name (`function /* x */ foo()`)
+is legal and still unread — the loop skips only `T_WHITESPACE`. Census on PHP 8.3.6: **zero sites** in
+`tests/`, `src/` or `bin/`, and the failure mode is asymmetric — with an explicit modifier it reds as
+unparseable (rule 14, safe), and implicitly-public it is silently dropped (unsafe, same as the by-ref
+case). One line in the skip list plus a fixture; left out to keep this diff to the population that
+exists.
