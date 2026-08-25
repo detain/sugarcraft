@@ -14366,3 +14366,169 @@ should suspect `ResizeRaceTest` first: it is the one test in the package already
 timing, and its `WALLCLOCK_BUDGET_SEC` assertion is exactly the shape that fails under load. **Note that
 three lanes share this box**, so a sibling lane's suite running concurrently is a plausible trigger and
 would not reproduce in a quiet tree — which is consistent with both failures to reproduce.
+## Round 54 — lane b (runtime bugs). Provisional ids, renumber at merge.
+
+### Eb54-1 — `McpClient::startServer()` catches `\RuntimeException`, so any other throw defeats its own stated purpose
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: real. **Measured.** Out of lane b's file list
+(`sugar-crush/src/MCP/McpClient.php`).
+
+`startServer()` wraps `$server->start()` in `catch (\RuntimeException) { return; }` under a comment that
+says "A single unreachable/misbehaving server must not abort loading the rest." Only `RuntimeException`
+is caught. E412's `TypeError` — raised inside `McpMessage::parse()`, reached from `start()` — is not a
+`RuntimeException`, so ONE server answering `initialize` with a non-object `result` aborted the whole MCP
+server list for the session rather than being skipped. That specific route is closed by E412's fix, but
+the narrow catch is the general defect and any future throw from a third party's output walks straight
+through it. `McpToolBridge::execute()` already catches `\Throwable` for exactly this reason, and its
+doc-block says so.
+
+**STEP:** widen to `catch (\Throwable)` at that one site, and pin it with a server fixture that throws
+something that is not a `RuntimeException` during the handshake.
+
+### Eb54-2 — `McpMessage` has no `resultSet` sentinel, so a legal `"result": null` reply is unparseable
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: minor, graceful. **Measured.**
+
+`{"jsonrpc":"2.0","id":"1","result":null}` is a conforming JSON-RPC success response. `parse()` returns
+`null` for it, because with `method`, `error` and `result` all null there is no discriminator left in the
+decoded array. `StdioMcpServer::callTool()` then answers `['error' => 'Tool call failed']` — a wrong
+answer, but inside the tool result rather than an escaped throw, which is why it was split off from E412
+rather than bundled into it. `toJson()` has the mirror problem: `if ($this->result !== null)` drops a
+null result from the wire.
+
+Closing it properly needs the paired `bool $resultSet` sentinel this repo already uses for nullable
+state, threaded through `parse()`, `toJson()` and `StdioMcpServer`'s two `result === null` tests. It was
+deliberately NOT bolted on inside E412's fix — a half-threaded sentinel is worse than a documented
+rejection — and the rejection is now pinned with both polarities in
+`tests/MCP/McpMessageResultTypeTest::testANullResultIsRejectedWhileTheAdjacentFalseIsNot()`.
+
+### Eb54-3 — the "exactly 1 skipped" invariant is a LINUX figure, is asserted nowhere, and rests on far more than one file
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: plan-instrument defect. **Measured. This entry
+falsifies E413.**
+
+E413 said `BackgroundSupervisorReapTest` "moves the suite's skip count off 1 on any non-Linux runner" and
+asked for its `markTestSkipped()` calls to be replaced with doubles. Three measurements against the tree:
+
+1. **`sugar-crush` is in neither `WINDOWS_LIBS` nor `MACOS_LIBS`** in `scripts/affected-libs.php` — the
+   hand-maintained opt-in pools that populate `ci.yml`'s `windows_matrix`/`macos_matrix`. The suite runs
+   on `ubuntu-latest` and nowhere else, so no gate in that file can reach a runner without `/proc`.
+2. **The file holds 4 of the suite's skip sites, not all of them.** Generator, PHP 8.3.6, run BOTH in the
+   lane-b worktree and against the base commit (`git grep … 606a131c -- sugar-crush/tests/`), identical
+   answers: `grep -rnE '\$this->markTestSkipped\(' sugar-crush/tests/ | wc -l` → **149** call sites
+   across **51** files.
+   ⚠️ THE OBVIOUS GENERATOR IS WRONG HERE, AND IT CAUGHT ME. Grepping the bare word `markTestSkipped`
+   answers **164** at this HEAD and **162** at `606a131c` — the difference is prose. Doc-blocks that
+   DISCUSS skipping (including the two paragraphs written this round) are counted as skips by it. The
+   call-site form above is the honest one, and it is the same at both commits because this round added
+   no skips. This is rule 26 in miniature: a census must exclude the text that describes the pattern.
+   ⚠️ Per rule 18 these are cardinalities over `tests/` and WILL drift; they are here with their
+   generator to size the problem, and are deliberately not asserted anywhere.
+3. **The gates are not replaceable by doubles.** `commOf()` reads `/proc/<pid>/comm` and
+   `directChildPids()` reads `/proc/self/task/<tid>/children`. Every test that skips there observes the
+   real process tree, which is why it is not already a test against a double. There is no double for
+   "this kernel has no procfs", and removing the gates would red the suite on macOS for a runner that
+   does not exist.
+
+**What was shipped instead:**
+`BackgroundSupervisorReapTest::testThisSuiteIsNotOptedIntoAnyNonLinuxCiRunner()` — a tripwire that reds
+the day `sugar-crush` is added to either pool, i.e. the day E413's premise becomes true, in the same
+change that would otherwise have moved the count silently. It carries a known-positive control
+(`candy-core` IS in both pools) and reds on a pool it cannot parse rather than passing.
+
+**STEP (unresolved):** nothing asserts "exactly 1 skipped" anywhere in the suite; the figure lives only
+in doc-block prose in `tests/bootstrap.php`, `tests/SuiteChildStdinIsolationTest.php` and
+`tests/SuiteChildStdinPrependResidualTest.php`. If it is load-bearing for the plan it should be derived
+(a PHPUnit extension counting skips, or a CI step asserting on the summary line), not restated.
+
+### Eb54-4 — `StdioMcpServer::writeLine()` is not covered by `start()`'s handshake deadline
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: latent, pre-existing.
+
+`start()`'s 60s budget is threaded through `request()` → `readResponse()` → `readLine()`. It is NOT
+threaded through `writeLine()`. A server that spawns, holds its pipes open, never reads stdin and never
+writes stderr will hold `start()` inside `writeLine()` indefinitely once the message exceeds the stdin
+pipe buffer. The liveness is unchanged from the blocking `fwrite()` this round replaced — that blocked
+forever too — but the loop is now the obvious place to accept the deadline the caller already has.
+
+**STEP:** give `writeLine()` an optional `?float $deadline` and pass `start()`'s through; leave
+`callTool()`'s path deadline-less, matching `readLine()`.
+
+### Eb54-5 — stderr is only drained while the parent is inside an exchange
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: minor, no longer a deadlock.
+
+The drain added this round runs inside `readLine()` and `writeLine()`. Between exchanges — the model
+thinking, another server's tool call in flight — nothing reads fd 2, so a chatty server can still fill
+its stderr pipe and park in `write()`. It now self-heals on the next exchange (both loops drain until the
+child unblocks), so it is a stall rather than a deadlock, but a server that logs progress continuously is
+stopped for the whole gap.
+
+**STEP:** the honest fix puts fd 2 on the ReactPHP loop alongside the rest of the runtime's descriptors.
+Recorded rather than done, because it is a shape change to a class that is currently synchronous by
+design.
+
+### Eb54-6 — `StdioMcpServer::stop()` does not `fclose()` the pipes before `proc_close()`
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: minor.
+
+`stop()` sets `$this->pipes = null` and relies on the resource destructor. `proc_close()` waits for the
+child, so the documented ordering is to close the pipes first. The SIGTERM→signal-9 escalation above it
+means the child is gone by then in practice, which is why this has never bitten — but the ordering is the
+one `ProcessReaper` and `ClaudeCodeProvider::completeStream()`'s `finally` both use explicitly.
+
+### Eb54-7 — the stderr-drain loop now exists in two places
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: hygiene.
+
+`ClaudeCodeProvider::completeStream()` and `StdioMcpServer` now each carry a select-plus-drain loop with
+their own `MAX_STDERR_BYTES = 65536` and their own tail-clipping. They are NOT the same shape — see
+`StdioMcpServer::absorbStderr()`'s doc-block for the three differences (one-shot vs long-lived, EOF as
+loop-terminator vs tracked flag, bounded vs unbounded caller) — so this is explicitly not a
+"deduplicate them" step. It is a note that a third site must read those differences before copying
+either one, the way this round had to.
+
+### Eb54-8 — the undrained blocking stdin write exists in two more classes, OUT OF LANE b
+
+**Recorded 2026-08-24 by round 54 lane b (found by its reviewer).** Severity: `LspConnection` major,
+`ClaudeCodeMcpClient` minor. Neither file is in lane b's ownership list, so both are reported and not
+touched.
+
+`StdioMcpServer` was the third member of a family, and the fix this round is narrower than the family.
+Verified in the tree at the time of writing rather than inherited from prose:
+
+- **`src/LSP/LspConnection.php`.** The other long-lived stdio-framed session class. It already has the
+  READ-side drain (`drainStderr()`, called before stdout on every poll pass), but `connect()` calls
+  `stream_set_blocking(..., false)` on `pipes[1]` and `pipes[2]` and NOT on `pipes[0]`, and
+  `writeMessage()` is a bare `@fwrite($this->pipes[0], $message)` with no drain and no partial-write
+  loop. That is verbatim the stdin half this round measured (`N=100000 D=1 M=200000 -> WEDGED`) and
+  rewrote `writeLine()` to close. An LSP `textDocument/didOpen` or `didChange` carries a file's contents
+  and routinely exceeds 64 KiB, and `LspConnection`'s own doc-block already argues that a
+  `rust-analyzer`/`gopls`/`jdtls` log storm is ordinary traffic — so both sides of the deadlock are
+  reachable there for the same reasons they were reachable here.
+- **`src/ClaudeCodeMcpClient.php::sendMessage()`.** Third member, different symptom. `pipes[0]` IS
+  non-blocking there (`connect()` sets fds 0, 1 and 2), so there is no hang; instead the method throws
+  when `$written !== strlen($json)`. By then a PARTIAL message is already in the child's pipe, which
+  desynchronises the newline-framed JSON-RPC stream for the remainder of the session — every subsequent
+  reply is parsed against a leading fragment.
+
+**STEP:** port `StdioMcpServer::writeLine()`'s select-driven, stderr-draining, partial-write loop to both
+sites, in the owning lane. Read `absorbStderr()`'s doc-block first: the three differences recorded in
+Eb54-7 apply, and `LspConnection`'s framing is `Content-Length`, not newline, so its resync story on a
+short write differs from both.
+
+### Eb54-9 — `writeLine()`'s EINTR branch has no liveness check
+
+**Recorded 2026-08-24 by round 54 lane b.** Severity: minor, not reachable via any current caller.
+
+When `@stream_select()` returns `false`, `writeLine()` does `usleep(1000); continue;` with no check of
+any kind. `readLine()`'s equivalent branch checks `feof($this->pipes[1])` before retrying. A
+persistently failing `select()` therefore spins at 1 ms in `writeLine()` with no exit, on a path that is
+already unbounded (see Eb54-4). The dead-child case is caught by `$written === false` further down —
+measured this round, `feof()` on a write pipe does NOT report the reader's exit — so a `feof()` copy of
+`readLine()`'s check would be the WRONG fix here.
+
+**STEP:** bound the consecutive-`false` retries and return `false` past the bound, or thread the
+deadline from Eb54-4 through and let it terminate the loop. Pin with a fixture that makes `select()`
+fail repeatedly; note that a coverage-only test here is very hard to write without a signal harness, so
+this may be a documented seam rather than a guarded one.

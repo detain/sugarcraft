@@ -1179,6 +1179,139 @@ final class BackgroundSupervisorReapTest extends TestCase
         );
     }
 
+    /**
+     * THE FOUR `markTestSkipped()` GATES IN THIS FILE ARE PLATFORM GATES, AND
+     * THIS IS THE TRIPWIRE FOR THE DAY THEY START FIRING IN CI.
+     *
+     * The claim they were filed under (E413) was that they move the suite's
+     * skip count off 1 "on any non-Linux runner", making the plan's floor
+     * unreadable on macOS/Windows CI. MEASURED against the repository rather
+     * than assumed: `sugar-crush` appears in NEITHER `WINDOWS_LIBS` nor
+     * `MACOS_LIBS` in `scripts/affected-libs.php` — the hand-maintained opt-in
+     * pools that populate `ci.yml`'s `windows_matrix` and `macos_matrix` — so
+     * this suite runs on `ubuntu-latest` and nowhere else, and no gate below can
+     * reach a runner without `/proc`.
+     *
+     * The gates themselves are also not removable. {@see commOf()} reads
+     * `/proc/<pid>/comm` and {@see directChildPids()} reads
+     * `/proc/self/task/<tid>/children`; every test that skips here observes the
+     * REAL process tree, which is the whole reason these tests exist rather
+     * than being assertions about a double. There is no test double for "this
+     * kernel has no procfs".
+     *
+     * So the finding is not "replace these with doubles" — it is "the skip
+     * figure quoted throughout the plan is a LINUX figure, and it stops being
+     * one the moment sugar-crush is opted into an OS pool". That is a fact about
+     * a config file, so it is asserted here rather than written down in a
+     * sentence that would rot: add `'sugar-crush'` to either pool and this goes
+     * red, in the same change that would have silently moved the count.
+     */
+    public function testThisSuiteIsNotOptedIntoAnyNonLinuxCiRunner(): void
+    {
+        $script = dirname(__DIR__, 3) . '/scripts/affected-libs.php';
+
+        if (!is_file($script)) {
+            // A split-repo clone of `sugarcraft/sugar-crush` has no monorepo
+            // scripts dir. ASSERTED rather than skipped: a `markTestSkipped()`
+            // here would add exactly the second skip this test exists to warn
+            // about.
+            $this->assertFalse(
+                is_dir(dirname(__DIR__, 3) . '/scripts'),
+                'scripts/ exists but affected-libs.php does not — the CI matrix generator has '
+                . 'moved and this tripwire is now reading nothing'
+            );
+
+            return;
+        }
+
+        $source = (string) file_get_contents($script);
+
+        foreach (['WINDOWS_LIBS', 'MACOS_LIBS'] as $pool) {
+            $matched = preg_match('/const\s+' . $pool . '\s*=\s*\[(.*?)\];/s', $source, $m);
+
+            // RED ON WHAT IT CANNOT PARSE, never a silent pass: a pool this
+            // regex stops matching is a pool that is no longer being checked.
+            $this->assertSame(
+                1,
+                $matched,
+                "could not find a `const $pool = [...]` array in scripts/affected-libs.php, so "
+                . 'this tripwire is not reading the CI pools at all'
+            );
+
+            $body = self::stripPhpComments($m[1]);
+
+            // THE SHAPE CHECK, and it is rule "red on what you cannot parse"
+            // applied to the pool's CONTENTS rather than to its declaration.
+            // Everything below reasons about quoted slugs; a pool that grew a
+            // heredoc entry, a constant, a variable or a call would satisfy
+            // "does not contain sugar-crush" for a reason that has nothing to
+            // do with sugar-crush being absent. It is also the known-positive
+            // for the comment stripper directly above: MACOS_LIBS carries a
+            // multi-line `//` comment explaining a hold-out, so a stripper that
+            // had stopped working could not produce a body matching this, and a
+            // stripper that ate everything could not produce a non-empty one.
+            $this->assertSame(
+                1,
+                preg_match('/^(?:\s*([\'"])[a-z0-9\-]+\1\s*,?)+\s*$/', $body),
+                "the $pool body is no longer a plain list of quoted lib slugs, so the checks "
+                . 'below are reasoning about a shape that is not there. Body after comment '
+                . "stripping: {$body}"
+            );
+
+            // EITHER QUOTE, because nothing normalises them. The first cut of
+            // this tripwire matched the single-quoted spelling only; MEASURED,
+            // inserting `"sugar-crush",` into MACOS_LIBS left it green. There
+            // is no backstop for that: `.php-cs-fixer.dist.php` enables
+            // @PSR12, strict_param, array_syntax and declare_strict_types and
+            // NOT `single_quote`, and no workflow in .github/workflows runs
+            // php-cs-fixer at all, so a double-quoted entry would simply sit
+            // there. Quotes are still REQUIRED rather than matching the bare
+            // word: MACOS_LIBS' comment names libs in prose, and a guard that
+            // reddened on a sentence would be retired the first time someone
+            // documented why sugar-crush is held out.
+            $this->assertSame(
+                0,
+                preg_match('/([\'"])sugar-crush\1/', $body),
+                "sugar-crush has been added to $pool, so its suite now runs on a runner without "
+                . '/proc. The four platform gates in this file will fire there, and every '
+                . "`1 skipped` figure in docs/plans is a Linux-only figure from that point on."
+            );
+
+            // THE KNOWN-POSITIVE CONTROL. The absence assertion above is
+            // satisfied by a `$body` that is empty, or by a pool that no longer
+            // names anything — which is also what a gutted generator looks
+            // like. `candy-core` is in BOTH pools, so requiring it proves the
+            // extraction returned real content before an absence is allowed to
+            // mean anything. It is matched through the SAME quote-agnostic
+            // regex as the absence, so the two cannot drift into testing
+            // different alphabets.
+            $this->assertSame(
+                1,
+                preg_match('/([\'"])candy-core\1/', $body),
+                "the $pool extraction came back without candy-core, which IS in that pool — the "
+                . 'scanner is dead and its "sugar-crush is absent" answer means nothing'
+            );
+        }
+    }
+
+    /**
+     * Drop `//`, `#` and block comments from a const-array body.
+     *
+     * Deliberately naive — it would corrupt a string literal containing a
+     * comment marker — and that is safe here ONLY because the shape check in
+     * the caller runs on this function's OUTPUT and rejects any body that is
+     * not a list of `[a-z0-9-]` slugs. A pool entry that could confuse this
+     * stripper cannot survive that assertion.
+     */
+    private static function stripPhpComments(string $body): string
+    {
+        return (string) preg_replace(
+            ['~/\*.*?\*/~s', '~(?://|\#)[^\n]*~'],
+            '',
+            $body
+        );
+    }
+
     private function requireProcTools(): void
     {
         foreach (['proc_open', 'posix_kill'] as $fn) {
