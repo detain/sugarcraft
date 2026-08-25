@@ -47,7 +47,7 @@ master. DO NOT DELETE the lane dirs until the merged floor is measured.
   candidate), E447, **E453** (CI's path-repo policy job is RED on a dead `candy-kit` require and the
   local guard exits 0 on the same commit).
 
-### 🐛 E455 — A USER-REPORTED BUG LANDED MID-ROUND, AND IT IS NOT ASSIGNED TO ANY LANE
+### 🐛 E455 + E456 — TWO USER-REPORTED BUGS LANDED MID-ROUND, NEITHER ASSIGNED TO ANY LANE
 
 **2026-08-25, from daily-driving the app:** the chat input box never wraps. A long draft of ordinary
 space-separated words runs off the right edge instead of growing the box to multiple lines.
@@ -66,6 +66,23 @@ The height half needs no work: `render()`'s tail clip already keeps the box visi
 🔴 This is also an invariant violation, not a cosmetic one: candy-core repaints by absolute `cursorTo()`
 and has no concept of a soft-wrapped row, so an over-wide row throws off every row beneath it.
 
+**E456 — the 120s idle timer does not count reasoning as progress.** Reported the same day: a turn died
+with `Provider request timed out after 120s without progress` while the model was mid-think. The report
+was right. `Runtime::runStreaming()` (`sugar-crush/src/Runtime.php:380`) gates the live observer on
+`$response->content !== ''`, so a reasoning-only chunk calls no `$onToken`, writes no frame across the
+fork, and never resets the parent's idle deadline (`EngineBackend.php:855`) — even though the child is
+streaming the whole time. `EngineBackend`'s own docblock (lines 55-59) claims "every frame the child
+streams resets it, so a turn that is making visible progress stays alive indefinitely"; that holds for
+content deltas and for nothing else. Tool-call-only chunks have the identical defect.
+
+🔴 **The fix is NOT a bigger timeout.** A longer idle timer relocates the bug; removing it resurrects the
+hang it exists for; and a blanket total-request timeout on an LLM call is prohibited by standing rule. The
+timer is right — its *definition of progress* is the defect. Emit a distinct `reasoning` frame kind, not a
+`token` frame: `token` text lands in `$buffer`, which becomes the `AssistantMessage` fed back to the model
+and checkpointed, so reusing that channel would corrupt the conversation rather than just the display.
+
+Both are round-56 candidates. Neither was injected into a running lane.
+
 ### NEW STANDING RULES THIS ROUND
 
 - **34** — if you inherit a lane with commits above the tree your review was written at, **review those
@@ -81,9 +98,9 @@ closure restored and verified → round 55 launched. **Nothing from that instruc
 
 ### AT THE MERGE
 
-Merge a→b→c. **Renumber from E456** (the backlog closed round 54 at 454 entries, and **E455 was then
-taken mid-round by a user-reported bug** — see the section below — so 455 is SPOKEN FOR; re-derive the
-base yourself with `grep -cE '^#{2,3} E'` and a `sort -n | tail -1` before you trust any number written
+Merge a→b→c. **Renumber from E457** (the backlog closed round 54 at 454 entries, and **E455 and E456 were
+then taken mid-round by two user-reported bugs** — see the section below — so both are SPOKEN FOR;
+re-derive the base yourself with `grep -cE '^#{2,3} E'` and a `sort -n | tail -1` before you trust any number written
 here). Renumber **longest-id-first**. Count headings as `^#{2,3} E`.
 Measure the merged floor for **sugar-crush, candy-core, candy-flip** and **candy-pty if lane a touched
 it**. Verify skips stay exactly 1, closure 18/18 · 3/3 · 6/6 · 7/7, `check-path-repos` rc 0, config md5

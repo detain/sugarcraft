@@ -14869,3 +14869,76 @@ Specifics that matter:
 **Watch for a second instance.** `renderSlashMenu()` is concatenated onto `$content` on the same line as
 the input box (`Renderer.php:1078`) and was not examined here — check whether it constrains its own width
 before assuming this defect is a singleton.
+
+### E456 — 🔴 the 120s idle timer does not count reasoning as progress, so a long think block is killed as a hung provider
+
+**Reported 2026-08-25 by the user, mid-turn against a reasoning model.** Severity: functional, kills real
+work, and the failure message actively misleads. Second user-reported bug of the day; see [[E455]].
+
+> "`[error: Provider request timed out after 120s without progress]` got this while server was generating
+> a response ... i think there was likely some text sent .. probably in a think block... so i doubt it had
+> no progress"
+
+**The report is correct, and the mechanism is exact.** `Runtime::runStreaming()`
+(`sugar-crush/src/Runtime.php:380`):
+
+```php
+$buffer .= $response->content;
+if ($onToken !== null && $response->content !== '') {   // <-- the gate
+    $emitted = true;
+    $onToken($response->content);
+}
+...
+if ($response->reasoning !== null && $response->reasoning !== '') {
+    $reasoning = ($reasoning ?? '') . $response->reasoning;   // accumulated, but silent
+}
+```
+
+A reasoning-only SSE chunk carries `content: ''` and `reasoning: "…"`. It fails the `!== ''` gate, so
+`$onToken` is never called. `$onToken` is the ONLY thing that writes a `token` frame across the fork
+(`EngineBackend.php:988`), and the parent resets its idle deadline **only** when a frame arrives
+(`EngineBackend.php:855`, "Progress of any kind pushes the idle deadline out"). No frame, no reset. After
+`COMPLETE_TIMEOUT_SECONDS = 120` of uninterrupted thinking the parent tears the turn down and reports
+"without progress" — while the child is mid-stream and the socket is busy.
+
+**The chain is intact everywhere except that one gate.** The provider parses `reasoning_content` properly
+(`SglangProvider::parseChunk()` via `extractReasoning()`), yields a chunk per SSE line in wire order, and
+`runStreaming()` accumulates the reasoning and attaches it to the finished `AssistantMessage`, which
+`Renderer.php:2386` knows how to paint. Reasoning is NOT lost data — it is simply invisible until the turn
+ends, and the turn is killed before it ends.
+
+**`EngineBackend`'s own docblock states the invariant this breaks.** Lines 55-59 say the per-fork wall
+clock was replaced precisely because it "SIGKILLed any turn whose legitimate multi-step tool work ran past
+it", and that "every frame the child streams resets it, so a turn that is making visible progress stays
+alive indefinitely". That is true for content deltas and false for every other kind of progress. The
+comment should be corrected as part of the fix, not left asserting a property the code does not have.
+
+**A second instance of the same shape, same gate.** A chunk carrying only tool-call deltas
+(`content: ''`, `toolCalls` set) also writes no frame. A model that spends more than 120s emitting a large
+structured tool-call payload dies identically. Fix the family, not the one report.
+
+🔴 **DO NOT "fix" this by raising `COMPLETE_TIMEOUT_SECONDS` or by removing the timer.** A longer idle
+timer relocates the bug to a longer think; removing it resurrects the hung-provider hang the timer exists
+for. And a blanket total-request timeout on an LLM call is prohibited outright by standing project rule —
+completions can legitimately run for tens of minutes. **The timer is the right design; its definition of
+progress is the defect.**
+
+**STEP:** make every kind of streamed progress cross the fork.
+
+- Give the child a distinct frame kind (`'reasoning'`) rather than reusing `'token'`. Reusing `'token'`
+  would push thinking text into `$buffer`, and `$buffer` becomes the `AssistantMessage` that is fed back
+  to the model on the next agentic step and checkpointed into the transcript — so reusing the channel
+  corrupts the conversation, not just the display. Route it through a new `$onReasoning` observer
+  alongside `$onToken` in `Runtime::runStreaming()`.
+- The parent already resets on **any** frame, so no parent-side change is needed for the timeout itself
+  once the frame exists. Verify that by reading `EngineBackend.php:855` rather than assuming it.
+- Emit for tool-call-only chunks too. Cheapest correct form is a progress/heartbeat frame whenever a chunk
+  is received at all, independent of what it carries.
+- **Then, separately, render it.** Once reasoning crosses the fork live, the TUI can paint thinking as it
+  arrives instead of only after the turn settles — which is the visible half of what the user expected.
+  Keep it out of `$buffer`.
+- 🔴 The regression test must **advance a clock past 120s with only reasoning chunks in flight** and
+  assert the turn survives and completes. A test that merely checks a reasoning frame is emitted would
+  pass on a fix that emits the frame somewhere the timer cannot see it. Add the tool-call-only case.
+  Per rule 16 the acceptance test is a mutation of THE FIX: re-gate the reasoning branch on
+  `content !== ''` and the test must go red.
