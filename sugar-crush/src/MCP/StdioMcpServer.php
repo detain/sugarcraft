@@ -667,6 +667,12 @@ final class StdioMcpServer implements McpServer
             return false;
         }
 
+        // See {@see readLine()} for the measurement behind this guard; the same
+        // three call shapes are exposed here.
+        if (!is_resource($this->pipes[0]) || ($this->stderrOpen && !is_resource($this->pipes[2]))) {
+            return false;
+        }
+
         $payload = $json . "\n";
         $consecutiveSelectFailures = 0;
 
@@ -836,8 +842,38 @@ final class StdioMcpServer implements McpServer
                 return $this->readBuffer === '' ? null : $this->drainBuffer();
             }
 
+            // `is_resource()`, NOT `@`, AND NOT `$this->pipes !== null` ALONE.
+            // MEASURED on this host (PHP 8.3.6, Linux 6.8), three consecutive
+            // takes, identical every time — every one of these is an EXCEPTION
+            // and `@` suppresses none of them, because `@` silences diagnostics
+            // and not throws:
+            //
+            //     stream_select() with a closed fd as the ONLY entry across all
+            //         three arrays  ->  ValueError: No stream arrays were passed
+            //     stream_select() with a closed fd beside an open one
+            //         ->  TypeError: supplied resource is not a valid stream resource
+            //     fread() / feof() / fwrite() on a closed pipe  ->  TypeError
+            //
+            // WHICH of the two `stream_select()` raises depends on whether
+            // {@see $stderrOpen} put fd 2 in the read set, so a guard written to
+            // catch one class BY NAME would miss the other. Both are exceptions;
+            // that is the load-bearing half.
+            //
+            // THE WINDOW IS THIS CLASS'S OWN, and it is why `pipes !== null` is
+            // not the same question. {@see stop()} calls {@see closePipes()}
+            // FIRST — the EOF that lets a well-behaved server leave without
+            // paying the escalation — and only nulls the field after
+            // `proc_close()` has returned, so the field holds three CLOSED
+            // resources for the whole SIGTERM grace, the signal-9 grace and the
+            // wait. Nothing in this synchronous class re-enters that window
+            // today, which is exactly what {@see \SugarCraft\Crush\LSP\LspConnection}
+            // could have said and chose not to.
+            if (!is_resource($this->pipes[1])) {
+                return $this->readBuffer === '' ? null : $this->drainBuffer();
+            }
+
             $read = [$this->pipes[1]];
-            if ($this->stderrOpen) {
+            if ($this->stderrOpen && is_resource($this->pipes[2])) {
                 $read[] = $this->pipes[2];
             }
             $write = [];
@@ -941,7 +977,11 @@ final class StdioMcpServer implements McpServer
      */
     private function absorbStderr(): void
     {
-        if (!$this->stderrOpen || $this->pipes === null) {
+        // `is_resource()` as well as the flag — see {@see readLine()} for the
+        // measurement. This `fread()` is the exact call
+        // {@see \SugarCraft\Crush\LSP\LspConnection::drainStderr()}'s doc-block
+        // cites E367 about, and it was the one site E476's own list did not name.
+        if (!$this->stderrOpen || $this->pipes === null || !is_resource($this->pipes[2])) {
             return;
         }
 

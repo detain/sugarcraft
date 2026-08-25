@@ -662,6 +662,20 @@ final class LspConnection implements LspConnectionInterface
         // fd 2 in its read set, so the same closed fd 0 there raises
         // `TypeError: stream_select(): supplied resource is not a valid stream
         // resource` instead. Same guard, same reason; different class name.
+        //
+        // ⚠️ AND THE DISCRIMINATOR IS "SELECTABLE", NOT "VALID", which is a
+        // sharper statement than an earlier draft of this comment made and was
+        // measured only when a test tried to reproduce the TypeError arm.
+        // PHP 8.3.6, three consecutive takes each, one closed pipe in the write
+        // set beside: another `proc_open()` pipe -> TypeError; `STDIN` on a
+        // plain CLI -> TypeError; `STDIN` under this repo's PHPUnit config ->
+        // ValueError; a `php://memory` stream -> ValueError. A memory stream is a
+        // perfectly valid resource with no descriptor to select on, so it is
+        // dropped alongside the closed pipe and every array ends up empty. The
+        // load-bearing half is unchanged — both are exceptions and `@` suppresses
+        // neither — but a guard written to catch one BY NAME would miss the
+        // other, and so would a test that picked its companion stream casually.
+        // Pinned in {@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerClosedPipeGuardTest::testTheClosedPipeHazardIsRealOnThisHostAndPhpVersion()}.
         if (!is_resource($this->pipes[0])) {
             return false;
         }
