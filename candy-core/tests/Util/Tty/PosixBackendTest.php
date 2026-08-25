@@ -232,7 +232,6 @@ final class PosixBackendTest extends TestCase
         // `< /dev/null` that is stdin, not the probe. See the doc-block.
         $probe = tmpfile();
         $this->assertIsResource($probe);
-        $probeUri = stream_get_meta_data($probe)['uri'] ?? null;
 
         try {
             $probeFd = PosixBackend::descriptorForStream($probe);
@@ -243,15 +242,47 @@ final class PosixBackendTest extends TestCase
 
             // The claim above is that the resolved descriptor is the PROBE's.
             // Where procfs can settle that, settle it rather than assert it in
-            // prose: this is what /dev/null could not have satisfied.
-            if ($fdDirectoryIsLive && is_string($probeUri) && is_dir('/proc/self/fd')) {
+            // prose.
+            //
+            // The check is UNIQUENESS OF THE INODE, not equality of the path,
+            // and the difference is the whole finding. Comparing
+            // readlink('/proc/self/fd/<n>') against the probe's uri passes
+            // happily when the resolved descriptor belongs to something else
+            // that opened the SAME path -- which is precisely the /dev/null
+            // case: stdin's readlink is '/dev/null' too. MEASURED: with the
+            // probe reverted to fopen('/dev/null','r') under `< /dev/null`,
+            // the path comparison SURVIVED. Counting descriptors that share
+            // the probe's dev+ino is what distinguishes "this fd is mine"
+            // from "this fd names a device I also happen to have open", and
+            // it is the property that makes descriptorForStream()'s
+            // lowest-match rule safe to rely on here at all.
+            if ($fdDirectoryIsLive && is_dir('/proc/self/fd')) {
+                $probeStat = fstat($probe);
+                $sharing = [];
+                foreach ((array) scandir('/proc/self/fd') as $entry) {
+                    if (!ctype_digit((string) $entry)) {
+                        continue;
+                    }
+                    $entryStat = @stat('/proc/self/fd/' . $entry);
+                    if (is_array($entryStat)
+                        && $entryStat['dev'] === $probeStat['dev']
+                        && $entryStat['ino'] === $probeStat['ino']
+                    ) {
+                        $sharing[] = (int) $entry;
+                    }
+                }
+
                 self::assertSame(
-                    $probeUri,
-                    readlink('/proc/self/fd/' . $probeFd),
-                    'the gate probe resolved a descriptor belonging to something else. '
-                    . 'descriptorForStream() prefers the lowest descriptor naming the same device, '
-                    . 'so a probe on a shared device answers with a stranger fd and the '
-                    . '"hold the handle open" half of this gate stops meaning anything.',
+                    [$probeFd],
+                    $sharing,
+                    'the gate probe is not the only holder of its inode, so the descriptor '
+                    . 'descriptorForStream() returned is not provably the probe\'s. That method '
+                    . 'prefers the LOWEST descriptor naming the same device (its own doc-block '
+                    . 'says so), and a probe on a shared device -- /dev/null being the worst -- '
+                    . 'answers with a stranger fd whenever one is lower. MEASURED, PHP 8.3.6: '
+                    . 'under `< /dev/null` a /dev/null probe resolved fd 0, i.e. stdin. Keep the '
+                    . 'probe on a private inode (tmpfile()); do not relax this to a path compare, '
+                    . 'which passes on exactly the case it needs to catch.',
                 );
             }
         } finally {
