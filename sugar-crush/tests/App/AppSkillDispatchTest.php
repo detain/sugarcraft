@@ -9,6 +9,7 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
+use SugarCraft\Crush\Agents\ProcessExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\App\OpenSkillPickerMsg;
@@ -432,5 +433,219 @@ final class AppSkillDispatchTest extends TestCase
         } finally {
             @rmdir($root);
         }
+    }
+    // -------------------------------------------------------------------------
+    // C8 — the dormant seam, and the one thing about it that was NOT dormant
+    // -------------------------------------------------------------------------
+
+    /**
+     * Selecting a `context: fork` skill must not claim it was applied.
+     *
+     * MEASURED before the branch this pins existed: a fork-context skill is
+     * user-invocable, so it appears in the picker; selecting it reported
+     * "Enabled skill 'x'."; and {@see App::applySkillsToSystemPrompt()} then
+     * skipped it, because fork skills are excluded from the inline path by
+     * design. Nothing dispatched it either — {@see App::dispatchSkill()} has no
+     * production caller. So the skill had no effect of any kind and the status
+     * bar said the opposite.
+     *
+     * The two halves are asserted together on purpose. The status text alone
+     * would be a string test; pairing it with the unchanged system prompt is
+     * what makes it a statement about the outcome the user was told about.
+     */
+    public function testSelectingAForkContextSkillDoesNotClaimItWasInlined(): void
+    {
+        $registry = new SkillRegistry();
+        $forkSkill = $this->skillFromYaml(
+            "description: Fork skill\nuser-invocable: true\ncontext: fork",
+            'forky',
+        );
+        $registry->register([$forkSkill]);
+
+        $app = App::new($this->provider, 'test-model')->withAvailableSkills($registry);
+        [$opened] = $app->update(new OpenSkillPickerMsg());
+        [$next, $cmd] = $opened->update(new SelectSkillMsg('forky'));
+
+        $this->assertNull($cmd);
+        $this->assertSame([$forkSkill], $next->enabledSkills);
+        $this->assertStringContainsString('context: fork', (string) $next->status);
+        $this->assertStringNotContainsString('Enabled skill', (string) $next->status);
+        $this->assertSame('BASE', $next->applySkillsToSystemPrompt('BASE'));
+    }
+
+    /**
+     * The other polarity: a normal skill still reports plain enablement and
+     * still reaches the prompt. Without this, narrowing the message to fork
+     * skills could be "fixed" by giving every skill the fork wording.
+     */
+    public function testSelectingANonForkSkillStillReportsPlainEnablementAndIsInlined(): void
+    {
+        $registry = new SkillRegistry();
+        $inlineSkill = $this->skillFromYaml("description: Inline skill\nuser-invocable: true", 'inliney');
+        $registry->register([$inlineSkill]);
+
+        $app = App::new($this->provider, 'test-model')->withAvailableSkills($registry);
+        [$opened] = $app->update(new OpenSkillPickerMsg());
+        [$next] = $opened->update(new SelectSkillMsg('inliney'));
+
+        $this->assertSame("Enabled skill 'inliney'.", $next->status);
+        $this->assertNotSame('BASE', $next->applySkillsToSystemPrompt('BASE'));
+    }
+
+    /**
+     * The dormancy itself, pinned.
+     *
+     * {@see App::dispatchSkill()} is documented as having no production caller
+     * and three named mechanisms that keep it that way. That documentation is
+     * prose, and prose rots. This is the part a reader can trust: a token-stream
+     * scan of `src/` and `bin/` for a CALL to `dispatchSkill`, which must find
+     * none. The declaration is a `T_FUNCTION` followed by the name, so it does
+     * not count; a `{@see}` in a doc-block is a `T_DOC_COMMENT`, so it does not
+     * count either.
+     *
+     * If a production caller is ever added, this test goes red — which is the
+     * point. It is not a prohibition, it is a tripwire: the person adding one
+     * must come here, delete this test, and in doing so read the three blockers
+     * on `dispatchSkill()` before deciding they have answered them.
+     *
+     * The known-positive fixture is what stops this being a green nothing:
+     * an assertion of "no occurrences" is satisfied just as well by a scanner
+     * that has stopped working.
+     */
+    public function testDispatchSkillStillHasNoProductionCaller(): void
+    {
+        $scan = static function (string $source): int {
+            $tokens = token_get_all($source);
+            $calls = 0;
+
+            foreach ($tokens as $i => $token) {
+                if (!\is_array($token) || $token[0] !== T_STRING || $token[1] !== 'dispatchSkill') {
+                    continue;
+                }
+
+                // Backwards over whitespace: `function dispatchSkill` is the
+                // declaration, not a call.
+                $j = $i - 1;
+                while ($j >= 0 && \is_array($tokens[$j]) && $tokens[$j][0] === T_WHITESPACE) {
+                    --$j;
+                }
+                if (\is_array($tokens[$j] ?? null) && $tokens[$j][0] === T_FUNCTION) {
+                    continue;
+                }
+
+                // Forwards over whitespace: a call has `(` next.
+                $k = $i + 1;
+                while ($k < \count($tokens) && \is_array($tokens[$k]) && $tokens[$k][0] === T_WHITESPACE) {
+                    ++$k;
+                }
+                if (($tokens[$k] ?? null) === '(') {
+                    ++$calls;
+                }
+            }
+
+            return $calls;
+        };
+
+        $positive = "<?php\n\$r = \$app->dispatchSkill(\$skill, \$pool, 'do the thing');\n";
+        $this->assertSame(1, $scan($positive), 'the scanner is dead — it cannot see a real call');
+        $declaration = "<?php\nclass X { public function dispatchSkill(\$a, \$b, \$c) {} }\n";
+        $this->assertSame(0, $scan($declaration), 'a declaration is not a call');
+        $mention = "<?php\n/** {@see dispatchSkill()} does the thing. */\n\$x = 1;\n";
+        $this->assertSame(0, $scan($mention), 'a docblock mention is not a call');
+
+        $root = \dirname(__DIR__, 2);
+        $callers = [];
+        $scanned = 0;
+
+        foreach (['src', 'bin'] as $dir) {
+            $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/' . $dir));
+            foreach ($iterator as $file) {
+                if (!$file->isFile()) {
+                    continue;
+                }
+                $source = file_get_contents($file->getPathname());
+                $this->assertIsString($source);
+                if (!str_contains($source, '<?php')) {
+                    continue;
+                }
+                ++$scanned;
+                if ($scan($source) > 0) {
+                    $callers[] = substr($file->getPathname(), \strlen($root) + 1);
+                }
+            }
+        }
+
+        $this->assertGreaterThan(200, $scanned, 'the walk found almost nothing — the scan is not running');
+        $this->assertSame([], $callers, 'dispatchSkill() gained a production caller; read its three blockers first');
+    }
+
+    /**
+     * End to end through the real chain, and it REFUSES.
+     *
+     * App -> AgentWorkerPool::executeOne() -> ProcessExecutor -> a spawned PHP
+     * child, with a default-constructed executor: exactly what a production
+     * caller would get today. The result is a FAILED AgentResult naming the
+     * absent provider, and — the assertion that matters — a null output.
+     *
+     * This is the acceptance test for the C4/C8 pair together. Before the live
+     * worker existed, this same call returned a Completed result carrying a
+     * sentence the worker made up, and no test anywhere could have told the
+     * difference between that and a real answer.
+     */
+    public function testDispatchSkillThroughTheDefaultExecutorRefusesRatherThanFabricating(): void
+    {
+        $registry = new SkillRegistry();
+        $forkSkill = $this->skillFromYaml(
+            "description: Fork skill\nuser-invocable: true\ncontext: fork",
+            'refusing-fork',
+        );
+        $registry->register([$forkSkill]);
+
+        $app = App::new($this->provider, 'test-model')->withAvailableSkills($registry);
+        $pool = new AgentWorkerPool(executor: new ProcessExecutor(timeoutSeconds: 30));
+
+        $result = $app->dispatchSkill($forkSkill, $pool, 'summarise the changelog');
+
+        $this->assertInstanceOf(AgentResult::class, $result);
+        $this->assertSame(AgentStatus::Failed, $result->status);
+        $this->assertNull($result->output);
+        $this->assertStringContainsString('Refusing to fabricate', (string) $result->error?->getMessage());
+    }
+
+    /**
+     * And the same chain with a provider configured produces that PROVIDER's
+     * answer to this skill's task.
+     *
+     * The expectation is computed by running the same provider in-process, so
+     * a worker that invented a plausible sentence fails here. This is what
+     * makes the claim "a fork-context skill's task reached a model" testable
+     * at all — the thing that was impossible while the worker was a simulation.
+     */
+    public function testDispatchSkillRelaysARealProvidersAnswer(): void
+    {
+        $registry = new SkillRegistry();
+        $forkSkill = $this->skillFromYaml(
+            "description: Fork skill\nuser-invocable: true\ncontext: fork",
+            'relaying-fork',
+        );
+        $registry->register([$forkSkill]);
+
+        $task = 'summarise the changelog';
+        $app = App::new($this->provider, 'test-model')->withAvailableSkills($registry);
+        $pool = new AgentWorkerPool(executor: new ProcessExecutor(
+            timeoutSeconds: 30,
+            workerProvider: ['type' => 'echo'],
+        ));
+
+        $result = $app->dispatchSkill($forkSkill, $pool, $task);
+
+        $expected = (new \SugarCraft\Crush\Providers\EchoProvider())->complete(new CompleteRequest(
+            model: 'test-model',
+            messages: [new \SugarCraft\Crush\Messages\UserMessage($task)],
+        ))->content;
+
+        $this->assertNotNull($result);
+        $this->assertSame(AgentStatus::Completed, $result->status);
+        $this->assertSame($expected, $result->output);
     }
 }

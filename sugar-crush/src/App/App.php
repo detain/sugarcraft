@@ -433,15 +433,60 @@ final class App implements Model
      * method has no production caller: `grep -rn dispatchSkill src/ bin/` finds
      * this definition and one docblock cross-reference from
      * {@see applySkillsToSystemPrompt()}, and nothing that invokes it — the only
-     * caller anywhere is `tests/App/AppSkillDispatchTest.php`. The executor it
-     * would reach,
-     * {@see ProcessExecutor::createInlineWorkerScript()}, is still the Phase-1
-     * simulation — it reads `$agentConfig['name']` and the task, and consumes
-     * neither `agent.prompt` nor `request.systemPrompt`. So this is a DORMANT
-     * SEAM whose payload is ready, not a live orientation path; it will orient
-     * a fork once a real executor and a production caller exist. Logged as
-     * §C8 in docs/plans/crush_code_hardening_backlog.md, alongside §C4 for the
-     * simulated executor.
+     * caller anywhere is `tests/App/AppSkillDispatchTest.php`.
+     *
+     * ## WHAT THIS USED TO SAY ABOUT THE EXECUTOR
+     *
+     * "The executor it would reach, ProcessExecutor::createInlineWorkerScript(),
+     * is still the Phase-1 simulation — it reads `$agentConfig['name']` and the
+     * task, and consumes neither `agent.prompt` nor `request.systemPrompt`."
+     *
+     * ## WHAT IS TRUE NOW
+     *
+     * That is no longer the executor this would reach. The shipped default is
+     * {@see ProcessExecutor::createLiveWorkerScript()}, which constructs a real
+     * `ProviderInterface` in the child and DOES consume both fields — the
+     * orientation this method spent so much care assembling now has a consumer
+     * at the far end. The simulation survives, but only behind an explicit
+     * `simulatedWorker: true`, and nothing in `src/` passes it.
+     *
+     * What ALSO changed is what a call would do: with no `workerProvider`
+     * configured — and nothing in `src/` configures one — the live worker
+     * refuses with an `error` frame rather than answering, so a dispatch today
+     * returns a FAILED AgentResult naming the absent provider. That is a
+     * better position than the previous one, not a worse one: the old path
+     * returned a fabricated success, which is indistinguishable from a real
+     * one.
+     *
+     * ## WHY IT IS STILL DORMANT — THE THREE BLOCKERS, MEASURED
+     *
+     * Not intention, mechanism. Each of these is a fact about this class as it
+     * stands, and each would have to be answered by whatever wires this up:
+     *
+     *  1. **No pool can reach it.** `App` has no `AgentWorkerPool` field, no
+     *     constructor parameter and no `with*()` for one — which is exactly why
+     *     this method takes the pool as an ARGUMENT. `Bootstrap` builds a pool
+     *     for {@see \SugarCraft\Crush\Chat}, not for the shell.
+     *  2. **No task exists at the only moment a user selects a skill.**
+     *     {@see SelectSkillMsg} carries a skill NAME and nothing else; the third
+     *     parameter here is the task the fork is oriented by, and at picker-Enter
+     *     time the user has not typed one. A caller has to come from somewhere a
+     *     prompt already exists.
+     *  3. **`executeOne()` is synchronous, and `update()` must not block.**
+     *     {@see handleSelectSkill()} runs inside the TEA update path;
+     *     `AgentWorkerPool::executeOne()` blocks until the worker finishes, and
+     *     {@see ProcessExecutor}'s default ceiling is 300 seconds. Calling this
+     *     from `update()` would freeze the interface for the fork's whole life.
+     *
+     * MEASURED consequence of leaving that gap unstated, and the reason
+     * {@see handleSelectSkill()} now says something different for these skills:
+     * a `context: fork` skill IS user-invocable, so it appears in the picker,
+     * and selecting it used to report `Enabled skill 'x'.` while
+     * {@see applySkillsToSystemPrompt()} skipped it — the skill contributed
+     * nothing to the prompt, nothing dispatched it, and the user was told it
+     * had been enabled. Logged as §C8 in
+     * docs/plans/crush_code_hardening_backlog.md, alongside §C4 for the
+     * executor.
      *
      * Worth naming, because the mistake is easy to repeat: an earlier revision
      * of this comment described the outcome in the present tense while the
@@ -1145,11 +1190,25 @@ final class App implements Model
         }
         $enabledSkills = $alreadyEnabled ? $this->enabledSkills : [...$this->enabledSkills, $skill];
 
+        // A `context: fork` skill is still ENABLED — {@see dispatchSkill()} reads
+        // the enabled set, so removing it here would close the seam rather than
+        // describe it — but it is not enabled in the sense the plain message
+        // means. MEASURED before this branch existed: selecting one reported
+        // "Enabled skill 'x'." while applySkillsToSystemPrompt() skipped it and
+        // nothing dispatched it, so the skill had NO EFFECT WHATSOEVER and the
+        // status bar said otherwise. The three mechanisms that keep it dormant
+        // are named on dispatchSkill(); this line's job is only to stop the
+        // interface claiming an outcome that does not happen.
+        $status = $this->availableSkills->isContextFork($skill->name)
+            ? "Skill '{$skill->name}' declares context: fork — enabled, but not inlined, "
+                . 'and no fork dispatch is wired yet.'
+            : "Enabled skill '{$skill->name}'.";
+
         $next = $this->mutate(
             enabledSkills: $enabledSkills,
             skillPickerOptions: [],
             skillPickerIndex: 0,
-            status: "Enabled skill '{$skill->name}'.",
+            status: $status,
             error: null,
         );
 
