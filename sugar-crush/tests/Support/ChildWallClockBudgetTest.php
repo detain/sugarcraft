@@ -40,14 +40,30 @@ use PHPUnit\Framework\TestCase;
  * and so does lowering `defaultTimeLimit` under an existing child budget. No
  * count is asserted (rule 18) — the census re-derives itself.
  *
- * WHAT IT DOES NOT COVER. A budget passed as a constant rather than a literal
- * (`timeout -s KILL %d` with a `const` argument, which two files use) is not
- * read: resolving it means following a `sprintf()` argument list, and a scan
- * that guesses is worse than one that says what it cannot see. Those two are
- * at 20 by inspection, MEASURED at the time of writing, and
- * {@see testTheParametrisedFormIsSeenAndReported()} makes them VISIBLE rather
- * than silently absent — a scan that quietly ignored them would be reporting a
- * clean tree over a roster it had narrowed itself.
+ * WHAT IT DOES NOT COVER. A budget passed through `sprintf()` as a `%d`
+ * placeholder rather than as a digit is not EVALUATED: resolving it means
+ * following an argument list, and a scan that guesses is worse than one that
+ * says what it cannot see. Those sites are at 20 by inspection, MEASURED at
+ * the time of writing, and {@see testTheParametrisedFormIsSeenAndReported()}
+ * makes them VISIBLE rather than silently absent — a scan that quietly ignored
+ * them would be reporting a clean tree over a roster it had narrowed itself.
+ *
+ * NO COUNT OF THEM IS WRITTEN HERE, and the earlier draft of this paragraph is
+ * why. WHAT IT SAID: "which two files use". WHAT IS TRUE NOW: it was five
+ * sites in four files when that sentence was written, so the number was wrong
+ * in the commit that shipped it — and it was a cardinality over `tests/`,
+ * which the next lane to add a launch helper invalidates anyway (rule 18).
+ * WHY THE SENTENCE STILL EARNS ITS PLACE: the SHAPE is the coverage statement,
+ * and a reader who does not know this form exists will read the empty verdict
+ * below as covering it.
+ *
+ * AND THIS FILE DOES NOT SPELL EITHER FORM (rule 26, and rule 40 under it).
+ * The census walks its own directory, so a wrapper-and-number written out in a
+ * paragraph here is scraped as a real child budget and a wrapper-and-`%d` is
+ * scraped as a real parametrised one — which is exactly how the liveness arm
+ * below came to be satisfied by the sentence describing it. Every occurrence
+ * in this file is assembled at run time, and
+ * {@see testThisFileIsNotItsOwnEvidence()} pins that.
  *
  * MEASURED ON PHP 8.3.6, PHPUnit 10.5.64. `timeout(1)` is coreutils and is not
  * a PHP behaviour, so the stamp is provenance for the surrounding claims.
@@ -139,6 +155,27 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
+     * The number every child budget in the tree has to come in at or under.
+     *
+     * EXTRACTED BECAUSE THE EXPRESSION AT THE CALL SITE WAS THE ONE THING
+     * NOTHING WATCHED. It used to be spelled inline in the guard below, and
+     * widening it there by a hundred seconds — the change that switches the
+     * whole check off — passed the ENTIRE SUITE, byte-identical: the fixture
+     * beside it drove {@see tooLooseIn()} with literal ceilings, so the derived
+     * number was never the subject of any assertion. That is rule 2 one level
+     * out from where it was first found: the mutation was relevant, the
+     * assertion's window was in the wrong place.
+     *
+     * {@see testTheComparisonRejectsBudgetsWhoseAnswerIsKnown()} now drives
+     * rows derived from THIS method and states the invariant it has to satisfy
+     * as a relation, so a widened ceiling has nowhere left to hide.
+     */
+    private function ceiling(): int
+    {
+        return $this->defaultTimeLimit() - self::REQUIRED_HEADROOM_SECONDS;
+    }
+
+    /**
      * The rows in `$literal` whose budget is over `$ceiling`.
      *
      * EXTRACTED BECAUSE A MUTATION OF IT SURVIVED. Written inline in the guard
@@ -159,9 +196,10 @@ final class ChildWallClockBudgetTest extends TestCase
         $tooLoose = [];
         foreach ($literal as [$label, $line, $seconds]) {
             if ($seconds > $ceiling) {
-                // ASSEMBLED for the same reason the fixture's expectations are: a
-            // literal here is a match for this census's own scan of this file.
-            $tooLoose[] = $label . ':' . $line . ' — ' . 'timeout -s ' . 'KILL ' . $seconds;
+                // ASSEMBLED for the same reason the fixture's expectations are:
+                // a literal here is a match for this census's own scan of this
+                // file.
+                $tooLoose[] = $label . ':' . $line . ' — ' . 'timeout -s ' . 'KILL ' . $seconds;
             }
         }
 
@@ -205,6 +243,92 @@ final class ChildWallClockBudgetTest extends TestCase
             'a ceiling every row satisfies still produced findings, so the comparison reports '
             . 'rows for reasons of its own',
         );
+
+        // AND THE SAME TWO ROWS AGAIN, DERIVED FROM THE CEILING THE GUARD
+        // ACTUALLY USES. The four rows above are literals, so they cannot tell
+        // a correct `ceiling()` from one widened by a hundred seconds — the
+        // mutation that survived the whole suite. These two straddle whatever
+        // `ceiling()` answers, so the boundary moves with it and the pair below
+        // is what stops it moving anywhere it likes.
+        $ceiling = $this->ceiling();
+        $this->assertSame(
+            ['fixture/OverTheDerivedCeiling.php:6 — ' . $shape . ($ceiling + 1)],
+            $this->tooLooseIn(
+                [
+                    ['fixture/AtTheDerivedCeiling.php', 5, $ceiling],
+                    ['fixture/OverTheDerivedCeiling.php', 6, $ceiling + 1],
+                ],
+                $ceiling,
+            ),
+            'the comparison does not separate a budget one second over the DERIVED ceiling '
+            . 'from one exactly at it',
+        );
+
+        // THE INVARIANT THE DERIVED NUMBER HAS TO SATISFY, STATED AS A RELATION
+        // AND NOT AS A SECOND SPELLING OF THE SAME ARITHMETIC. A ceiling widened
+        // by any amount leaves the parent less headroom than the constant
+        // declares, and that is the property, not the subtraction.
+        $limit = $this->defaultTimeLimit();
+        $this->assertGreaterThanOrEqual(
+            self::REQUIRED_HEADROOM_SECONDS,
+            $limit - $ceiling,
+            'the ceiling leaves the parent alarm less room than REQUIRED_HEADROOM_SECONDS '
+            . 'declares, so a child budget this guard accepts can still win the race the '
+            . 'headroom exists to lose',
+        );
+        $this->assertLessThan(
+            $limit,
+            $ceiling,
+            'the ceiling is at or above the per-test limit it is derived from, so every child '
+            . 'budget passes and this guard asserts nothing',
+        );
+    }
+
+    /**
+     * This file is not the evidence for its own liveness arms.
+     *
+     * RULE 40, AND IT WAS BOUGHT ONCE ALREADY. The census walks `tests/`, which
+     * includes this file, and the paragraph explaining the parametrised form
+     * used to SPELL that form — so `assertNotSame([], $parametrised)` below was
+     * satisfied by the sentence describing the arm, and a mutation restricting
+     * the parametrised scan to this one file survived the entire suite. An
+     * exemption keyed on prose is bought with a sentence, and the fix's own
+     * comment is what buys it.
+     *
+     * The resolution is structural rather than textual: every occurrence of
+     * either form in this file is assembled at run time, and this asserts the
+     * census sees nothing here at all. Spell either form in a comment and this
+     * reds, in the file where that matters most.
+     */
+    public function testThisFileIsNotItsOwnEvidence(): void
+    {
+        $budgets = $this->childBudgets();
+        $self = 'tests/Support/' . basename(__FILE__);
+
+        $mine = array_merge(
+            array_values(array_filter(
+                array_map(static fn (array $row): string => $row[0] . ':' . $row[1], $budgets['literal']),
+                static fn (string $row): bool => str_starts_with($row, $self . ':'),
+            )),
+            array_values(array_filter(
+                $budgets['parametrised'],
+                static fn (string $row): bool => str_starts_with($row, $self . ':'),
+            )),
+        );
+
+        $this->assertSame(
+            [],
+            $mine,
+            'this file is inside its own census and is now contributing rows to it, so the '
+            . 'liveness arms below are satisfied by this file\'s own text rather than by the '
+            . 'tree. Assemble the occurrence from pieces instead of spelling it',
+        );
+
+        // AND THE KNOWN-POSITIVE IN THE SAME TEST (rule 15): an empty list here
+        // is also what a dead scanner returns, so the scanner has to be shown
+        // finding something somewhere.
+        $this->assertNotSame([], $budgets['literal'], 'the census found no literal budget anywhere');
+        $this->assertNotSame([], $budgets['parametrised'], 'the census found no parametrised budget anywhere');
     }
 
     /**
@@ -213,7 +337,7 @@ final class ChildWallClockBudgetTest extends TestCase
     public function testEveryChildWallClockBudgetLeavesTheParentAlarmRoomToLose(): void
     {
         $limit = $this->defaultTimeLimit();
-        $ceiling = $limit - self::REQUIRED_HEADROOM_SECONDS;
+        $ceiling = $this->ceiling();
 
         $this->assertSame(
             [],
@@ -256,10 +380,13 @@ final class ChildWallClockBudgetTest extends TestCase
         $this->assertNotSame(
             [],
             $budgets['parametrised'],
-            'no `timeout -s KILL %d` site is being reported. Either the two files that pass '
-            . 'their budget as a constant have been rewritten — in which case this arm should '
+            'no `timeout -s ' . 'KILL %d` site is being reported. Either every file that passes '
+            . 'its budget through sprintf() has been rewritten — in which case this arm should '
             . 'go — or the scan has stopped seeing that form, and it is exactly the form whose '
-            . 'value this guard cannot check',
+            . 'value this guard cannot check. NOTE the needle above is ASSEMBLED: spelling it '
+            . 'here makes this file its own evidence, which is how this arm passed while the '
+            . 'scan was blind to every other file '
+            . '(see testThisFileIsNotItsOwnEvidence())',
         );
 
         // AND THE COMPARISON ITSELF, over an answer already known. A ceiling
