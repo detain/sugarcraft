@@ -18081,3 +18081,68 @@ at the line the body starts on. Both shapes are fixtures now, in all three arms.
 
 **The transferable finding:** killing a mutation does not transfer to its neighbour any more than
 excusing one does. Rule 41 is written for survivors; this is the same rule for kills.
+
+---
+
+## Round 58 — the merge. E591 … E592, filed by the supervisor.
+
+### E591 — 🔴 THE OWNERSHIP MECHANISM IS PROSE, AND PROSE IS NOT READ. THE RATE IS NOW MEASURED THREE TIMES.
+
+**MEASURED across rounds 56, 57 and 58.** The ownership map exists so concurrent lanes do not edit each
+other's files. Its enforcement is a paragraph asking lanes to report disagreements. The rate at which that
+paragraph is acted on:
+
+| round | map's state | lanes mentioning it |
+|---|---|---|
+| 56 | **stale** — shipped round 53's map (E492) | **0 of 3** |
+| 57 | freshly written, self-flagging; **rule 42 added in response** | **1 of 3** — and that lane found a real map-vs-brief disagreement |
+| 58 | **reconciled against every lane's file list before launch**, and said so | **0 of 3** |
+
+🔴 **ADDING A RULE ABOUT THE RULE DID NOT WORK, AND NEITHER DID FIXING THE UNDERLYING DEFECT.** Round 57's
+side-prediction (e) said in writing that a fallback to ≤1 would be "a measured verdict that adding a rule
+ABOUT a rule does not change the rate, and the ownership mechanism needs to stop being prose." That is now
+the measurement, over three rounds and nine lanes.
+
+**AND THE SAME ROUND PRODUCED THE SHARPEST SINGLE INSTANCE.** Lane a flagged two files as out-of-lane
+edits, justifying it: *"the review explicitly said 'confirm both files are in lane a's list before editing'
+and I could NOT confirm, because no explicit list was in my brief."* **The list was in its brief.** It sits
+under a heading reading `## YOUR FILES — the split is strict this round`, and
+`sugar-crush/src/Backend.php` — one of the two files — is its **first entry**. Verified by re-rendering the
+exact prompt the agent received. Both edits were in fact in-lane, so nothing was breached; **the edits were
+right and the reasoning was invented.** That is rule 12 pointed at the brief: prose you were handed is not
+a measurement either, and "my brief does not say" is a claim that can be checked in one grep.
+
+**PRESCRIPTION FOR ROUND 59 — STOP ASKING AND START CHECKING.** The map should become something a lane
+cannot skim past: a machine-readable per-lane path list the lane is told to run its own diff against
+before reporting, so an out-of-lane file is a RED, not a paragraph nobody read. A guard that reds is worth
+more than three rounds of asking politely.
+
+### E592 — 🔴 TWO OF THE SUPERVISOR'S OWN BRIEF ITEMS WERE WRONG, AND BOTH WERE CAUGHT BY MEASUREMENT
+
+**MEASURED, round 58, by lane a.** One lane's five-item brief contained **two items that were false as
+written**, both authored by the supervisor:
+
+- **E527's rule was stated INVERTED.** The brief said *"PHP lets an implementation declare fewer parameters
+  than its interface, so a new one added to the interface is silently absent in every implementation that
+  does not take it."* Measured on PHP 8.3.6: false in both halves, and the two directions are **not
+  symmetric** — widening an interface method is a **load-time fatal** for every existing implementation
+  declaring the narrower signature. That is the opposite failure mode, and it is the reason reasoning
+  arrived as a capability interface rather than a fifth parameter.
+- **E529 was FALSE AS FILED, and it had been promoted to the lane's headline item.** It claimed two `src/`
+  cardinalities in `RepoMapBlock.php` that "NOTHING verifies", citing that `RepoMapBlockTest.php` matches
+  neither. It matches neither **because the guard is in a different file**:
+  `BuiltInToolCorpusTest::testTheSecondaryDeclarationCensus()` asserts both restatements against the
+  derived census. The lane proved it by **mutating the prose** — `316` → `317` and `297 files` →
+  `298 files` each turn `BuiltInToolCorpusTest` red.
+
+**THE PATTERN, AND IT IS ABOUT HOW BRIEFS ARE WRITTEN.** Both defects came from the supervisor restating a
+backlog entry in its own words at brief-writing time, without re-deriving the claim. E529's original entry
+had itself reasoned from an absence (`grep -c` returned 0 in the file it expected) **without asking whether
+the guard lived somewhere else** — which is rule 14's shape, and rule 11's: a census that looks in one file
+answers a question about one file.
+
+🔴 **The standing consequence: a brief item that ASSERTS A MECHANISM must cite the measurement or say it is
+unverified.** Round 58's briefs asserted two and cited neither. Both survived to become lane work, and only
+the lane's own scepticism caught them. **Rule 16 applies to the brief exactly as it applies to a review** —
+and a brief carries more authority, because nothing downstream is asked to falsify it.
+
