@@ -17458,3 +17458,94 @@ existing one, so the method below it lost its documentation — caught immediate
 sibling finding this entry sits beside, in the same run. **That is the guard pair working exactly as
 intended, on the supervisor, one commit after it caught the lanes.**
 
+
+---
+
+## Ec58-1 — a parametrised child budget was never 20, and nothing had re-read it in two rounds
+
+`ChildWallClockBudgetTest`'s regex census could see that a budget went through a `%d` placeholder and not
+what it was, so the values rested on a doc-block sentence: *"those sites are at 20 by inspection, MEASURED
+at the time of writing"*. `resolvedParametrisedIn()` now walks the token stream — counting conversions
+(`%%` is an escape, not a conversion) to find which argument the placeholder consumes, then resolving it
+through an integer literal, a `self::` constant, or every argument the callers pass when the budget is
+handed down as a parameter.
+
+🔴 **THE FIRST THING IT REPORTED WAS THAT THE INSPECTION HAD ALREADY ROTTED.** MEASURED: the five sites
+resolve to **20, 30, 20, 20 and — through a parameter with two callers — 6 and 30.** Two of the five were
+never 20. Nothing was over the ceiling, so the TREE was fine and the CLAIM was not. That is rule 3 in its
+purest form: a load-bearing figure with no generator, wrong by the time anyone next read it.
+
+**The acceptance test was a mutation of the FIX, not of the defect (rule 16), and it came in two halves:**
+
+| # | mutation | verdict |
+|---|---|---|
+| M5a | a real parametrised constant raised to 100, against a ceiling of 50 | **KILLED** |
+| M5b | the same 100, with the fix's `array_merge` fold-in reverted | **SURVIVED** |
+
+M5b is the entry's whole point: **before this, a child budget of double the ceiling passed the guard in
+silence.** Four further mutations of the resolver (wrong conversion ordinal, `%%` counted as a conversion,
+the rule-14 report silently dropped, only the first caller's value taken) were all killed, as was blinding
+the token census on all but one directory — which the two-instrument cross-check catches.
+
+## Ec58-2 — `tools/` joins a doc-drift roster, and BOTH halves of the prescribed shape were wrong
+
+E551 said the fix was a guard in `tools/tests/` with "the token-stream scanner lifted somewhere both can
+reach", since copying it "is the shape `DuplicatedTestHelperDriftTest` exists to catch". **Measured, and
+neither half survives contact:**
+
+1. **The zero-copy reach is impossible.** `.github/workflows/ci.yml`'s `path-repo-check` — the only job
+   that runs `tools/tests/` — does NO `composer install` (that is why it installs a PHPUnit PHAR rather
+   than borrowing a lib's `vendor/bin`). There is no autoloader for `SugarCraft\Crush\Tests\*` there, and
+   `require`-ing the canonical guard to reflect its scanner fatals before PHPUnit reports anything:
+   VERIFIED, PHP 8.3.6, `Trait "SugarCraft\Crush\Tests\Support\DiscardsErrorLogTrait" not found`.
+2. **`DuplicatedTestHelperDriftTest` would never have seen the copy.** MEASURED: its roster is
+   `sugar-crush/src` alone. The copy would have been unwatched drift, which is worse than a pinned copy.
+
+So the scanner IS copied, and the copy is **pinned** rather than wished away: the new guard reads the
+canonical implementation as TEXT — needing no autoloader — and compares token streams, so reformatting is
+free and a behaviour change reds naming the file to port into. **Mutating the CANONICAL scanner in
+`sugar-crush` reds `tools/tests/` (M9, KILLED)**, which is the property that makes the copy defensible.
+A real stacked pair injected into `tools/gen-docs.php` also reds (M14).
+
+## Ec58-3 — rule 18 demonstrated on itself, inside one round
+
+Round 58's own first commit wrote two cardinalities into `CONTRIBUTING.md` prose. **Both were wrong within
+the hour**, one of them invalidated by this same round's other work:
+
+| claim as shipped | measured one commit later |
+|---|---|
+| tools/tests is "10 tests / 45 assertions" | **28 tests, 135 assertions** |
+| `--fix --strict-closure` dirties "52 files" | **53** |
+
+Neither was corrected to today's number, which would only rot again. The verifiable half of each is kept
+as a property instead: the run prints its own totals, and `--fix` dirties `*/composer.json` and nothing
+outside that glob — re-measured, 53 entries, every one a `*/composer.json`, no root manifest, no lock.
+
+## Ec58-4 — the bare-citation count is alphabet-dependent, and the tree's guard is the narrow one
+
+E547 inherited "eight bare `{@see someMethod()}` citations name no method that exists". Re-censused with a
+generator, the answer depends entirely on the alphabet (rule 11):
+
+- **This round's alphabet** — a bare `X()` where no `function X(` is declared anywhere in the same file —
+  reports **16 raw / 13 real** (3 are `SymbolCitationDriftTest`'s own prose *describing* the shape, which
+  rule 26 requires it to contain).
+- **The tree's own guard** counts a bare citation only when the member is spelled as a **test** method,
+  which excludes every one of `pump()`, `flattened()`, `drain()`, `significantTokens()`, `forPaths()`,
+  `readResponse()`, `__destruct()`, `selectedProviderLabel()`, `warnPermissionConfigOnce()`.
+
+Neither number is wrong; they answer different questions. **One was fixed** —
+`RuntimeNoticeSinkDeliveryTest`'s `{@see drain()}`, where the same file already spells it
+`RuntimeNoticeSink::drain()` two hundred lines up. The remaining twelve sit in `tests/Backend`,
+`tests/Cli`, `tests/LSP`, `tests/Support` and `tests/Tools` — lanes a and b's concurrent files this round,
+reported rather than edited. **Widening the tree's guard to this alphabet would red twelve files across
+two other lanes**, so it is a decision for a round where one lane owns `tests/`.
+
+## Ec58-5 — a 🔴 "before anything else" instruction was skipped, and only the transcript recorded it
+
+Round 58's first lane-c agent was told, in red, to start the E490 campaign in the background **before
+doing anything else**. Its transcript contains **zero** campaign calls across 43 tool uses; it went
+straight to E552. **Measured compliance with a 🔴 "before anything else" instruction: 0 of 1.** The two
+commits it did make are both good and both verified here — so this is not a finding about the agent's work
+but about the harness: a leading imperative in a long brief has no enforcement, and nothing but the
+transcript would have revealed the omission. Same class as E492, where three lanes read a stale ownership
+map and none reported it. **The rate is the part worth keeping.**
