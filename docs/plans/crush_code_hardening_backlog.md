@@ -18161,3 +18161,102 @@ unverified.** Round 58's briefs asserted two and cited neither. Both survived to
 the lane's own scepticism caught them. **Rule 16 applies to the brief exactly as it applies to a review** —
 and a brief carries more authority, because nothing downstream is asked to falsify it.
 
+
+### Ec59-1 — E490's campaign excludes the prior rate, and that is all it does
+
+**MEASURED by the supervisor, 240 takes, verified here from the raw TSV rather than from the
+summary paragraph:** every take `rc=0`, and all 240 result lines byte-identical at
+`Tests: 630, Assertions: 1494, Warnings: 1, Skipped: 16.` — one distinct result string across the
+whole campaign. Take numbering is contiguous 1..240. The only non-zero rc in the log is the single
+`instrument` row at `rc=137`, which is the rule-15 known-positive proving the hang watchdog can
+still fire at `CANDY_PTY_HANG_BUDGET=0.6`; it is not a take.
+
+**The arithmetic, stated the way rule 45 requires.** The one-sided 95% upper bound after N clean
+takes is `1 - 0.05^(1/N)`.
+
+| N | bound | note |
+|---|---|---|
+| 240 (this campaign) | **1.2405%** | |
+| — | 1.3158% | the prior estimate, 1 in 76 |
+
+**240 takes excludes the prior rate at 95%, by 0.0753 percentage points.** The minimum N that
+reaches that exclusion is **227**; the campaign ran 240. This is the first time in five rounds the
+campaign has said anything the previous ones could not.
+
+**WHAT IT DOES NOT SAY: that E490 is fixed, or that the defect is gone.** 1.2405% is not zero, and
+the bound falls off brutally: to exclude 1 in 200 needs **598** takes, 1 in 500 needs **1497**, and
+1 in 1000 needs **2995**. A defect at 1-in-500 is entirely consistent with 240 clean takes.
+
+**Recommended disposition: (ii) KEEP OPEN, with the bound recorded — not "closed".** The reasoning
+is that the campaign falsified a *rate*, not a *mechanism*. Nothing in these 240 takes identifies
+what was wedging the loop, so there is no causal claim to retire; the only thing retired is the
+1-in-76 estimate, which was itself derived from a handful of observations. Retiring E490 would also
+retire the instrumentation argument along with it, and the instrumentation is the part that has been
+earning its keep — `SharedLoopResidue` and the per-class `tearDown()` census exist because of this
+hunt and have caught a real leak. **Concretely: mark the 1-in-76 estimate SUPERSEDED, record 1.2405%
+as the standing bound, and stop running takes** — a further campaign is only worth launching if
+someone wants to exclude 1-in-200, which costs 598 takes for a bound that still would not be zero.
+
+### Ec59-2 — E585 was already fixed, and the brief promoted it as open
+
+Round 59's lane-c brief listed E585 as "the same shape still open". **It is not.** Measured in the
+tree at `e4c69b04e`: `ChildWallClockBudgetTest::wallClockWrappersIn()` already reads
+`T_CONSTANT_ENCAPSED_STRING` and `T_ENCAPSED_AND_WHITESPACE` tokens rather than raw text, already
+classifies rather than requires a budget token, and already routes what it cannot evaluate into
+`unresolved`. The class doc-block already carries the widening in rule 7's three-part form,
+including the "two censuses that both see nothing agree perfectly" finding. E585's own backlog entry
+says so in its own words — *"Fixed by widening, not by narrowing the prose"* — with a two-row
+mutation table.
+
+This is **rule 47** with a second instance: a brief carries more authority than a review because
+nothing downstream is asked to falsify it. It is also the second consecutive round in which a lane's
+brief named an already-closed item as its headline work. **The file is `sugar-crush/tests/Support/`,
+which is lane a's this round**, so the brief additionally directed lane c at a file lane c may not
+touch.
+
+### Ec59-3 — no citation guard walked `tools/` or `candy-pty/`, and one of the two offenders was a refuted mechanism claim
+
+E583 left the bare-citation alphabet question open for "a round where one lane owns `tests/`".
+**The alphabet was never the reachable half of it.** `sugar-crush`'s `SymbolCitationDriftTest` walks
+`sugar-crush/tests` and nothing else, so every `.php` file under `tools/` and under `candy-pty/` —
+96 files in the first census, 141 counting `candy-pty/src` and `bin` — sat outside every citation
+guard in the repo. Applying E583's *narrow* alphabet (test-shaped names only, the one whose answer is
+not a judgement call) to that population reported **two** unresolvable citations, both real:
+
+- `tools/tests/ToolsEnvRosterTest.php` — `scriptRoster()` cited a sibling test method under its
+  pre-rename name. A rename leftover committed **this round**, by the lane that owns the file.
+- `candy-pty/tests/Support/SharedLoopResidueTest.php` — the class doc-block cited
+  `testThePoolSuiteLeavesNothingArmedOnTheSharedLoop()`, **a method that has never existed anywhere
+  in this repo**.
+
+**The second is the finding.** The sentence around it asserted that the leak the file was written
+for "is pinned directly, in <that method>, by driving that class's own loop work here". The nearest
+real method says the *opposite* in its own doc-block: restoring the leak in `PtyPoolReactLoopTest`
+left it GREEN, because that file's third test waits out the orphan cap and a later observer always
+finds a clean loop. **A rename had left a mechanism claim standing with nothing under it, pointing at
+a method that refutes it.** A bare citation naming nothing is the visible symptom; the unreferenced
+mechanism claim is the defect, and it is the shape rule 8 exists for.
+
+**The alphabet choice is measured, not assumed (rule 16).** Widening it to every bare citation was
+run as a mutation: it reds **two correct files** in this population and finds **no** additional real
+offender — `candy-pty/src/PtyPool.php:41` cites `spl_object_id()`, a PHP built-in, and
+`candy-pty/tests/Support/HangWatchdogTest.php:115` cites `budgetFromEnv()`, a real
+`public static function` on the class under test. For this population, widening buys 0 true positives
+and 2 false ones. That is E583's "the two numbers answer different questions" with a count attached.
+
+**Rule 17 was load-bearing rather than decorative.** Measured on PHP 8.3.6, one `T_DOC_COMMENT` token
+can carry a `@see` tag and its argument on two lines with the ` * ` continuation marker between them,
+so a scanner matching the raw token text reports **zero** for it — an absence indistinguishable from
+a clean tree. The guard flattens the marker first and a wrapped fixture pins it; deleting the
+flattening reds.
+
+### Ec59-4 — an inherited figure disagreed with the brief's floor, and the brief was right
+
+Round 59's killed lane-c agent recorded `tools/tests` at `29 / 137` for `e4c69b04e`; the brief said
+`28 / 136`. Settled by extracting the tree at that exact commit with `git archive` and running it:
+**28 tests, 136 assertions, rc 0.** The brief is correct and the inherited observation is not — most
+likely measured after the agent's own first commit. Recorded because the standing rules assume the
+brief is the thing that rots (rule 42, rule 47) and this is the converse: **a handed-down
+"OBSERVED" figure is a measurement you did not watch anyone take**, and it is as capable of being
+wrong as a brief. The `git archive` technique is cheap — under a minute — and settles it without a
+worktree.
