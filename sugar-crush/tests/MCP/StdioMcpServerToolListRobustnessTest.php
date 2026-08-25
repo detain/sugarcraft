@@ -232,37 +232,6 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
     // =========================================================================
 
     /**
-     * THE FILTER IS A HAND MIRROR OF A CLASS IT DOES NOT OWN, AND DRIFT REOPENS
-     * THE DEFECT SILENTLY.
-     *
-     * {@see McpTool::TOOL_DEFINITION_TYPES} lists three keys with three
-     * checks. Those three are exactly what {@see McpTool::fromArray()} subscripts
-     * out of `$data` today, and the checks match the constructor parameters they
-     * land in. Nothing enforced that. A fourth `$data['newField'] ?? ...` reading
-     * into a typed parameter reopens precisely the `TypeError` this file exists
-     * to close, and every row above it would stay green — they exercise the three
-     * keys that already work.
-     *
-     * So the correspondence is DERIVED here rather than restated: the keys come
-     * out of `fromArray()`'s own source, the expected checks out of
-     * {@see McpTool}'s constructor via reflection, and the const is required to
-     * agree with both in both directions — a missing key is drift, and a stale
-     * extra key is drift too.
-     *
-     * ⚠️ THE FIXTURE IS THE POINT. This row's central assertion is "two sets are
-     * equal", which a scanner that has stopped finding anything satisfies as
-     * happily as a correct one — an empty set equals an empty set. The first
-     * block therefore pushes a KNOWN-ANSWER source through the same extractor and
-     * requires it to return a specific non-empty set, including a key that is NOT
-     * in the const. If the extractor dies, that block reds before the comparison
-     * is ever reached.
-     *
-     * ⚠️ AND IT REFUSES WHAT IT CANNOT CLASSIFY. A constructor parameter whose
-     * type is not in the small map below FAILS the row rather than being skipped.
-     * A guard that quietly ignores the unparseable has a hole shaped exactly like
-     * the next defect.
-     */
-    /**
      * THE CONTAINER IS A THIRD SHAPE, AND `?? []` DOES NOT COVER IT.
      *
      * Both `parseTools()` implementations read `$response['result']['tools'] ??
@@ -352,6 +321,37 @@ final class StdioMcpServerToolListRobustnessTest extends TestCase
         yield 'an array (the control)' => [[]];
     }
 
+    /**
+     * THE FILTER IS A HAND MIRROR OF A CLASS IT DOES NOT OWN, AND DRIFT REOPENS
+     * THE DEFECT SILENTLY.
+     *
+     * {@see McpTool::TOOL_DEFINITION_TYPES} lists three keys with three
+     * checks. Those three are exactly what {@see McpTool::fromArray()} subscripts
+     * out of `$data` today, and the checks match the constructor parameters they
+     * land in. Nothing enforced that. A fourth `$data['newField'] ?? ...` reading
+     * into a typed parameter reopens precisely the `TypeError` this file exists
+     * to close, and every row above it would stay green — they exercise the three
+     * keys that already work.
+     *
+     * So the correspondence is DERIVED here rather than restated: the keys come
+     * out of `fromArray()`'s own source, the expected checks out of
+     * {@see McpTool}'s constructor via reflection, and the const is required to
+     * agree with both in both directions — a missing key is drift, and a stale
+     * extra key is drift too.
+     *
+     * ⚠️ THE FIXTURE IS THE POINT. This row's central assertion is "two sets are
+     * equal", which a scanner that has stopped finding anything satisfies as
+     * happily as a correct one — an empty set equals an empty set. The first
+     * block therefore pushes a KNOWN-ANSWER source through the same extractor and
+     * requires it to return a specific non-empty set, including a key that is NOT
+     * in the const. If the extractor dies, that block reds before the comparison
+     * is ever reached.
+     *
+     * ⚠️ AND IT REFUSES WHAT IT CANNOT CLASSIFY. A constructor parameter whose
+     * type is not in the small map below FAILS the row rather than being skipped.
+     * A guard that quietly ignores the unparseable has a hole shaped exactly like
+     * the next defect.
+     */
     public function testTheTypeFilterStillMirrorsEveryKeyMcpToolReads(): void
     {
         // ---- The known-answer control, first, because everything after it is a

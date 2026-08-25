@@ -115,6 +115,29 @@ final class SymbolCitationDriftTest extends TestCase
     private array $unparseable = [];
 
     /**
+     * Backticked tokens that name a NAMESPACE rather than a class.
+     *
+     * ROUND 57's MERGE IS WHY THIS EXISTS, and the mechanism is rule 33's. The
+     * backtick widening this round shipped scraped
+     * `SugarCraft\Crush\Tests\Backend` out of four test doubles that were
+     * explaining which namespace they had been lifted OUT of — correct prose,
+     * correct code — and `resolve()` answered null because no CLASS of that
+     * name exists. The guard then offered its blessed remedy: rename the
+     * citation. Both the citation and the class were right; the CLASSIFIER was
+     * the defect, and it was invisible to either lane alone because one lane
+     * wrote the doubles and the other widened the scraper.
+     *
+     * The negative half of {@see testTheResolverAgreesWithAnswersAlreadyKnown()}
+     * already covered the `Foo\Bar\` spelling WITH its trailing separator.
+     * The spelling without one reached the dangling list instead.
+     *
+     * Kept rather than dropped so the count is visible: a namespace citation is
+     * not an error, but a scraper that started classifying EVERYTHING as one
+     * would empty the dangling list, and this list is where that shows.
+     */
+    private array $namespaceCitations = [];
+
+    /**
      * The lib root, resolved from this file rather than from a CWD a runner
      * chooses.
      */
@@ -372,6 +395,46 @@ final class SymbolCitationDriftTest extends TestCase
     }
 
     /**
+     * The directory a namespace token maps to, or null if it maps to none.
+     *
+     * DELIBERATELY STRUCTURAL. The question "is this a namespace?" is answered
+     * by a directory existing and holding at least one `.php` file, never by
+     * the token's shape or by prose around it — rule 40, after round 56's HOME
+     * census was bought with a sentence. An empty directory does not buy the
+     * exemption either, because an empty one is where a deleted class used to
+     * live and a citation of it IS dangling.
+     */
+    private function namespaceDirectoryFor(string $class): ?string
+    {
+        $class = ltrim($class, '\\');
+
+        $roots = [
+            'SugarCraft\\Crush\\Tests\\' => $this->root() . '/tests',
+            'SugarCraft\\Crush\\' => $this->root() . '/src',
+        ];
+
+        foreach ($roots as $prefix => $dir) {
+            if (!str_starts_with($class, $prefix)) {
+                continue;
+            }
+
+            $tail = substr($class, \strlen($prefix));
+            if ($tail === '') {
+                return null;
+            }
+
+            $path = $dir . '/' . str_replace('\\', '/', $tail);
+            if (!is_dir($path)) {
+                return null;
+            }
+
+            return glob($path . '/*.php') === [] ? null : $path;
+        }
+
+        return null;
+    }
+
+    /**
      * A class token as written in prose, resolved to a symbol that exists.
      *
      * THE BASE LIST IS ORDERED AND THE ORDER IS THE CONTRACT, for the reason
@@ -494,6 +557,14 @@ final class SymbolCitationDriftTest extends TestCase
             [$class, $member, $kind] = $parsed;
 
             $fqn = $this->resolve($class, $row['namespace']);
+            if ($fqn === null && $kind === '' && $this->namespaceDirectoryFor($class) !== null) {
+                // A NAMESPACE IS NOT A DANGLING CLASS. Structural, not textual
+                // (rule 40): the token has to map to a directory that actually
+                // holds PHP files, so a made-up `A\B\C` still reds.
+                $this->namespaceCitations[] = $row['label'] . ': ' . $row['token'];
+
+                continue;
+            }
             if ($fqn === null) {
                 // THE RAW TOKEN AND NOT THE PARSED CLASS. Two citations of the
                 // same missing class through different shapes would otherwise
@@ -781,6 +852,57 @@ final class SymbolCitationDriftTest extends TestCase
     }
 
     /**
+     * An EMPTY directory does not buy a namespace exemption.
+     *
+     * WRITTEN BECAUSE THE CLAUSE SURVIVED A MUTATION. Deleting the
+     * `glob(...) === []` arm of {@see namespaceDirectoryFor()} left all six
+     * tests in this file green, because no empty directory exists under
+     * `tests/` or `src/` for the census to trip over — the survivor was a fact
+     * about the tree, not about the guard. Rule 41: a survivor's excuse does
+     * not transfer, and the honest answer to an unpinnable clause is to make it
+     * pinnable rather than to write a paragraph about why it is not.
+     *
+     * The directory an emptied namespace leaves behind is exactly where a
+     * citation of a DELETED class points, which is the case the clause is for.
+     */
+    public function testAnEmptyNamespaceDirectoryIsNotANamespace(): void
+    {
+        $dir = $this->root() . '/tests/EmptyNamespaceProbe';
+        self::assertDirectoryDoesNotExist($dir, 'the probe directory is left over from an earlier run');
+        self::assertTrue(mkdir($dir), 'could not create the probe directory');
+
+        try {
+            $tick = '`';
+            $token = 'SugarCraft\\Crush\\Tests\\EmptyNamespaceProbe';
+            $source = "<?php\nnamespace SugarCraft\\Crush\\Tests;\n/**\n * "
+                . $tick . $token . $tick . "\n */\nfinal class EmptyProbeCiter {}";
+
+            $rows = $this->scrape('tests/EmptyProbe.php', $source, false);
+            self::assertCount(1, $rows, 'the probe citation was not scraped, so this test proves nothing');
+
+            self::assertSame(
+                ['tests/EmptyProbe.php: ' . $token . ' — no such test class'],
+                $this->danglingIn($rows),
+                'an EMPTY directory bought a namespace exemption; a citation of a class whose '
+                . 'namespace has been emptied is exactly the dangling case this clause exists for',
+            );
+
+            // AND THE OTHER POLARITY, through the same call: one `.php` file in
+            // the same directory flips it, so the clause is keyed on the
+            // directory's CONTENTS and not on its existence.
+            self::assertTrue((bool) file_put_contents($dir . '/Placeholder.php', "<?php\n"));
+            self::assertSame(
+                [],
+                $this->danglingIn($this->scrape('tests/EmptyProbe.php', $source, false)),
+                'a namespace directory holding a PHP file is still being reported dangling',
+            );
+        } finally {
+            @unlink($dir . '/Placeholder.php');
+            @rmdir($dir);
+        }
+    }
+
+    /**
      * A source this scraper has never seen, whose every citation is known.
      *
      * RULE 15, AND IT IS THE ASSERTION THE REST OF THIS FILE RESTS ON. Every
@@ -814,6 +936,12 @@ final class SymbolCitationDriftTest extends TestCase
             ' * ' . $open . 'testNoMethodOfThisNameExistsHere()}',
             ' * ' . $tick . $real . '::' . $realMethod . '()' . $tick,
             ' * ' . $tick . $dead . '::testWhatever()' . $tick,
+            // ROUND 57's MERGE, PINNED IN BOTH DIRECTIONS. The first names a
+            // namespace that really is one; the second is spelled identically
+            // and maps to no directory. A classifier that waved both through
+            // reds on the second, and one that waved neither reds on the first.
+            ' * ' . $tick . 'SugarCraft\\Crush\\Tests\\Backend' . $tick,
+            ' * ' . $tick . 'SugarCraft\\Crush\\Tests\\NoSuchNamespace' . $tick,
             ' */',
             // THE FIXTURE DECLARES THIS TEST CLASS'S OWN NAME, deliberately.
             // A self-citation can only be checked against a class that is
@@ -826,7 +954,7 @@ final class SymbolCitationDriftTest extends TestCase
         $rows = $this->scrape('tests/Fixture.php', $fixture, false);
 
         $this->assertSame(
-            ['tests-see', 'tests-see', 'see-self', 'see-self', 'tests-tick', 'tests-tick'],
+            ['tests-see', 'tests-see', 'see-self', 'see-self', 'tests-tick', 'tests-tick', 'tests-tick', 'tests-tick'],
             array_map(static fn (array $r): string => $r['shape'], $rows),
             'the scraper did not find one row of each shape in a source that carries exactly '
             . 'one of each; with this red, every "nothing is dangling" assertion above is void',
@@ -836,12 +964,17 @@ final class SymbolCitationDriftTest extends TestCase
             [
                 'tests/Fixture.php: ' . $dead . ' — no such test class',
                 'tests/Fixture.php: ' . $dead . '::testWhatever() — no such test class',
+                // THE NAMESPACE-SHAPED TOKEN THAT MAPS TO NOTHING IS STILL
+                // DANGLING. Its sibling one line above it in the fixture —
+                // spelled the same way, but a real directory — is absent from
+                // this list, and that absence is the other polarity.
+                'tests/Fixture.php: SugarCraft\\Crush\\Tests\\NoSuchNamespace — no such test class',
                 'tests/Fixture.php: testNoMethodOfThisNameExistsHere()'
                     . ' — no class declared in this file has that method ('
                     . 'SugarCraft\\Crush\\Tests\\' . $real . ')',
             ],
             $this->danglingIn($rows),
-            'the three dangling citations in the fixture were not all reported, so the census '
+            'the four dangling citations in the fixture were not all reported, so the census '
             . 'over the real tree cannot be trusted to report the next one',
         );
 

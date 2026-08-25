@@ -17398,3 +17398,63 @@ MEASURED at this commit: **five such sites in four files**, all passing `20` by 
 a `const`/literal argument through the token stream at the call site, or moving those four files to a
 literal. Re-derive the roster from `ChildWallClockBudgetTest::childBudgets()['parametrised']` rather than
 from the list above.
+
+---
+
+## Round 57 — the merge. E554 … E555, filed by the supervisor.
+
+### E554 — 🔴 a thirty-line doc-block documented nothing, and only the MERGE could see it
+
+**MEASURED at the round-57 merge. Fixed in the merge-fix commit.** Lane b's new
+`tests/MCP/StdioMcpServerToolListRobustnessTest.php` put a 31-line doc-block — "THE FILTER IS A HAND
+MIRROR OF A CLASS IT DOES NOT OWN" — under a `// Fixtures` banner, immediately above a SECOND doc-block
+for a different test. **PHP attaches only the last of a run**, so the first documented nothing and
+`testTheTypeFilterStillMirrorsEveryKeyMcpToolReads()`, 120 lines below, which is what it actually
+describes, had no doc-block at all.
+
+**Neither lane could have caught this alone.** Lane b wrote the file; lane c widened the stacked-doc-comment
+guard into `tests/` (E507) in a different lane copy, and the two only met at the merge. **Zero textual
+conflict, semantic red** — rule 32's exact case.
+
+Fixed by MOVING the block onto the method it names, not by merging the two blocks: they document different
+tests. **Attachment verified with `ReflectionMethod::getDocComment()`, not by eye** — the same check lane a
+used for E521's census block, and the only one that distinguishes "looks attached" from "is attached".
+
+### E555 — 🔴 the citation guard called a NAMESPACE a dangling class, and the classifier was the defect
+
+**MEASURED at the round-57 merge. Fixed and pinned in three directions.** Lane c's backtick widening
+(E498/E509) scraped `` `SugarCraft\Crush\Tests\Backend` `` out of the four test doubles lane a created —
+where the sentence explains which shared namespace they were lifted OUT of — and `resolve()` answered null,
+because no CLASS of that name exists. Four rows, all reported as "no such test class".
+
+🔴 **THE CODE WAS CORRECT IN BOTH FILES, SO THE CLASSIFIER WAS THE DEFECT — RULE 33, and this is its third
+occurrence in four rounds.** The guard's blessed remedy is "rename the citation in the same commit as the
+method"; taking it would have damaged correct prose to satisfy a broken scanner.
+
+**The guard's own author had anticipated the case and covered half of it.** Its negative fixture already
+pinned that a namespace PREFIX spelled with its trailing separator (`Foo\Bar\`) is not scraped. The same
+namespace spelled WITHOUT one reached the dangling list.
+
+Fixed with `namespaceDirectoryFor()`: a token whose parsed shape carries no member, and which maps to a
+real directory holding at least one `.php` file, is recorded as a namespace citation rather than reported
+dangling. **Keyed on structure, never on text (rule 40)** — a made-up `A\B\C` still reds.
+
+**Three mutations, all killed** (the third only after the pin below was written):
+
+| # | mutation | verdict |
+|---|---|---|
+| M1 | drop the namespace arm entirely | **KILLED** — 2 tests: the fixture and the real-tree census |
+| M2 | return the path without checking `is_dir()` | **KILLED** — the made-up namespace stops being reported |
+| M3 | drop the empty-directory clause | **SURVIVED at first** — see below |
+
+🔴 **M3 SURVIVING WAS A FACT ABOUT THE TREE, NOT ABOUT THE GUARD** — no empty directory exists under
+`tests/` or `src/` for it to trip over. Rule 41 says a survivor's excuse does not transfer, and the honest
+answer to an unpinnable clause is to make it pinnable rather than to write a paragraph excusing it. So
+`testAnEmptyNamespaceDirectoryIsNotANamespace()` now creates a real empty directory, asserts the citation
+IS dangling, drops one `.php` file into it, and asserts through the same call that it is not. M3 now dies.
+
+**And the fix for E555 tripped E554's guard.** Inserting the new test stacked its doc-block under the
+existing one, so the method below it lost its documentation — caught immediately by the very guard whose
+sibling finding this entry sits beside, in the same run. **That is the guard pair working exactly as
+intended, on the supervisor, one commit after it caught the lanes.**
+
