@@ -18086,36 +18086,51 @@ excusing one does. Rule 41 is written for survivors; this is the same rule for k
 
 ## Round 58 — the merge. E591 … E592, filed by the supervisor.
 
-### E591 — 🔴 THE OWNERSHIP MECHANISM IS PROSE, AND PROSE IS NOT READ. THE RATE IS NOW MEASURED THREE TIMES.
+### E591 — 🔴 THE OWNERSHIP MECHANISM IS PROSE, AND THE STAGE THAT EDITS FILES IS NOT GIVEN IT AT ALL
 
-**MEASURED across rounds 56, 57 and 58.** The ownership map exists so concurrent lanes do not edit each
-other's files. Its enforcement is a paragraph asking lanes to report disagreements. The rate at which that
-paragraph is acted on:
+> ⚠️ **THIS ENTRY WAS FILED WRONG AND IS CORRECTED IN PLACE. The correction is the finding.** As first
+> written it claimed the ownership map was mentioned by **0 of 3** lanes, and that lane a had *invented* a
+> justification. Both halves were false, and both came from the supervisor measuring with the wrong
+> instrument: a grep over the lanes' **structured result fields**, which do not contain the backlog entries
+> the lanes actually filed. **Rule 30 — read the tree, not the report — pointed at the supervisor's own
+> census.** What follows is what the tree says.
 
-| round | map's state | lanes mentioning it |
-|---|---|---|
-| 56 | **stale** — shipped round 53's map (E492) | **0 of 3** |
-| 57 | freshly written, self-flagging; **rule 42 added in response** | **1 of 3** — and that lane found a real map-vs-brief disagreement |
-| 58 | **reconciled against every lane's file list before launch**, and said so | **0 of 3** |
+**MEASURED, round 58.** Two of three lanes filed an ownership-map finding, and **both found a real defect**,
+one round after the supervisor's brief asserted that the map and every lane's file list "were reconciled
+before launch, deliberately":
 
-🔴 **ADDING A RULE ABOUT THE RULE DID NOT WORK, AND NEITHER DID FIXING THE UNDERLYING DEFECT.** Round 57's
-side-prediction (e) said in writing that a fallback to ≤1 would be "a measured verdict that adding a rule
-ABOUT a rule does not change the rate, and the ownership mechanism needs to stop being prose." That is now
-the measurement, over three rounds and nine lanes.
+- **E561 (lane a)** — the map grants lane a `sugar-crush/tests/Context/`, **the whole directory**; lane a's
+  own FILES section names `tests/Context/RepoMapBlockTest.php`, **one file of eleven**. The lane followed
+  the intersection, so nothing was breached. Same shape as round 57's `src/MCP/` disagreement.
+- **E573 (lane b)** — the map names `sugar-crush/tests/StackedDocCommentTest.php` among lane c's files, and
+  **`git ls-tree 535d721ff` says it does not exist.** The map's own preamble claims every path in it was
+  verified to exist (E334). 🔴 **The E334 check covers the per-lane file lists and NOT the ownership block**,
+  which nobody had noticed in three rounds of writing that preamble.
 
-**AND THE SAME ROUND PRODUCED THE SHARPEST SINGLE INSTANCE.** Lane a flagged two files as out-of-lane
-edits, justifying it: *"the review explicitly said 'confirm both files are in lane a's list before editing'
-and I could NOT confirm, because no explicit list was in my brief."* **The list was in its brief.** It sits
-under a heading reading `## YOUR FILES — the split is strict this round`, and
-`sugar-crush/src/Backend.php` — one of the two files — is its **first entry**. Verified by re-rendering the
-exact prompt the agent received. Both edits were in fact in-lane, so nothing was breached; **the edits were
-right and the reasoning was invented.** That is rule 12 pointed at the brief: prose you were handed is not
-a measurement either, and "my brief does not say" is a claim that can be checked in one grep.
+So the rate is **2 of 3**, the mechanism is being read, and round 58's side-prediction (c) — "≥ 2 of 3" —
+was CONFIRMED, not falsified.
 
-**PRESCRIPTION FOR ROUND 59 — STOP ASKING AND START CHECKING.** The map should become something a lane
-cannot skim past: a machine-readable per-lane path list the lane is told to run its own diff against
-before reporting, so an out-of-lane file is a RED, not a paragraph nobody read. A guard that reds is worth
-more than three rounds of asking politely.
+🔴 **AND THE REAL DEFECT IS WORSE THAN THE ONE ORIGINALLY FILED. The FIX stage is handed no ownership
+information whatsoever.** Measured directly against the round-58 script: `fixPrompt` interpolates neither
+`lane.files`, nor the `OWNERSHIP` block, nor `lane.work`. It is ~2,000 characters of review-and-figures
+instruction and nothing else.
+
+That matters because **the fix stage is the one under the most pressure to edit out of lane** — it is
+acting on a reviewer's prescriptions, which routinely name files the reviewer noticed and the lane does not
+own. When lane a's fix agent flagged two files and wrote *"the review explicitly said 'confirm both files
+are in lane a's list before editing' and I could NOT confirm, because no explicit list was in my brief"*,
+**it was telling the truth about its own prompt.** The supervisor's first version of this entry accused it
+of inventing that, having checked the FINISH prompt instead of the FIX prompt. Both edits were in-lane, and
+the agent's caution was correct and correctly reported.
+
+**PRESCRIPTION, and it now has three parts:**
+
+1. **Carry scope into EVERY stage.** Whatever the mechanism is, `fixPrompt` must have it too.
+2. **Make it machine-checkable, not askable.** A per-lane path pattern the lane runs its own diff against —
+   `git diff --name-only <base>..HEAD` minus the lane's pattern — so an out-of-lane file is a visible
+   non-empty output rather than a paragraph.
+3. **Force it through the structured-output schema**, which is enforced at the tool-call layer and cannot
+   be skimmed past, rather than through prose, which demonstrably can.
 
 ### E592 — 🔴 TWO OF THE SUPERVISOR'S OWN BRIEF ITEMS WERE WRONG, AND BOTH WERE CAUGHT BY MEASUREMENT
 
