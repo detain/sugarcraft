@@ -142,6 +142,36 @@ final class SwallowingCatchCensusTest extends TestCase
             . 'after the first such string in a file is invisible to this census',
         );
 
+        // AND THE MIRROR OF IT: A TOKEN WHOSE TEXT IS A BRACE BUT WHICH IS NOT
+        // ONE. A double-quoted string holding a simple variable next to a brace
+        // arrives as a single T_ENCAPSED_AND_WHITESPACE token whose text is
+        // EXACTLY that brace. A walk deciding on extracted text counts it, the
+        // depth goes wrong, and the catch clause after it is never reached —
+        // the same failure as the row above, arrived at from the opposite side.
+        // Both spellings are pinned, because the close brace unbalances the
+        // walk downwards and the open brace unbalances it upwards, and only one
+        // of the two is fixed by gating either comparison alone.
+        //
+        // The bodies are assembled by concatenation so this file never spells a
+        // whole offender literally; see the doc-block on this method.
+        $closeBraceInString = self::fixture('$this->assertSame(1, "$' . 'x}");', $wide);
+        self::assertCount(
+            1,
+            self::scanSource($closeBraceInString, 'FIXTURE_CLOSE_BRACE_IN_STRING.php'),
+            'a close brace inside a string literal is being counted as a real brace, so the '
+            . 'try-body walk under-counts its depth, ends early, and every catch clause after '
+            . 'the first such string in a file is invisible to this census',
+        );
+
+        $openBraceInString = self::fixture('$this->assertSame(1, "$' . 'x{");', $wide);
+        self::assertCount(
+            1,
+            self::scanSource($openBraceInString, 'FIXTURE_OPEN_BRACE_IN_STRING.php'),
+            'an open brace inside a string literal is being counted as a real brace, so the '
+            . 'try-body walk over-counts its depth and never returns to level zero at the end '
+            . 'of the try body',
+        );
+
         // THE UNPARSEABLE CASE, which must go red rather than be skipped.
         $unknown = self::scanSource(
             self::fixture('$this->assertSame(1, 1);', '\\No\\Such\\Namespace\\NopeException'),
@@ -323,21 +353,48 @@ final class SwallowingCatchCensusTest extends TestCase
     }
 
     /**
-     * EVERY TOKEN THE RUNNING PHP USES TO OPEN A BRACE, NOT JUST THE CHARACTER.
-     * An interpolated string opens a brace through a token whose TEXT is not
-     * `{`: `"${y}"` arrives as `T_DOLLAR_OPEN_CURLY_BRACES` spelled `${`, while
-     * its closing `}` is an ordinary character token. Counting only the
-     * character therefore decrements a level that was never incremented, the
-     * walk leaves this method early, and the scan silently stops matching after
-     * the first such string — a clean bill of health for a file the scanner
-     * stopped reading. `"{$x}"` arrives as `T_CURLY_OPEN`, whose text IS `{`, so
-     * it happened to work; it is named here anyway, because relying on a token's
-     * text matching its role is what produced the other bug.
+     * BRACE DEPTH IS A FACT ABOUT TOKENS, NOT ABOUT TEXT — IN BOTH DIRECTIONS.
      *
-     * MEASURED on PHP 8.3.6: `tests/` contains ZERO
-     * `T_DOLLAR_OPEN_CURLY_BRACES` tokens today, so this fixed no wrong answer
-     * in the census's current result — it removes a hole that opens the first
-     * time somebody writes `"${x}"` inside a try body.
+     * WHAT THIS SAID BEFORE: "every token the running PHP uses to open a brace,
+     * not just the character" — a completeness claim about OPENERS only.
+     *
+     * WHAT IS TRUE NOW: that heading named half the family. A walk over
+     * `token_get_all()` that decides on extracted TEXT can be wrong two ways,
+     * and this method was wrong both:
+     *
+     *   1. A TOKEN THAT OPENS A BRACE WITHOUT SPELLING `{`. `"${y}"` arrives as
+     *      `T_DOLLAR_OPEN_CURLY_BRACES`, spelled `${`, while its closing `}` is
+     *      an ordinary character token. Counting only the character decremented
+     *      a level that was never incremented, the walk left this method early,
+     *      and the scan silently stopped matching after the first such string —
+     *      a clean bill of health for a file the scanner had stopped reading.
+     *      `"{$x}"` arrives as `T_CURLY_OPEN`, whose text IS `{`, so it happened
+     *      to work; it is named anyway, because relying on a token's text
+     *      matching its role is what produced the bug.
+     *   2. A TOKEN WHOSE TEXT IS A BRACE BUT WHICH IS NOT A BRACE. MEASURED on
+     *      PHP 8.3.6: `token_get_all()` on a double-quoted string holding a
+     *      simple variable followed by a close brace yields a
+     *      `T_ENCAPSED_AND_WHITESPACE` whose text is EXACTLY `}`; the open-brace
+     *      spelling yields one whose text is exactly `{`. Extracting text first
+     *      therefore counted braces that live inside a string literal. MEASURED
+     *      through this scanner before the gate below existed: an offender whose
+     *      try body carried either spelling was reported ZERO times — the same
+     *      defect class as (1), one token short of the family.
+     *
+     * So both comparisons are now gated on the token being a bare character
+     * token, and the two interpolation openers are named explicitly. Every other
+     * brace walk in this tree compares the RAW token rather than its text and is
+     * immune to (2) already; this method was the only one extracting text first,
+     * which is why it was the only one wrong in both directions.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: at this commit, on PHP 8.3.6, `tests/`
+     * holds no token whose text is a lone brace and which is not the brace
+     * character, so neither defect changed any census answer — both removed a
+     * hole that opens the first time somebody writes one inside a try body.
+     * That reachability is prose and is deliberately asserted nowhere; the
+     * MECHANISM is pinned by the fixtures in
+     * {@see self::testTheScannerIsAliveInBothPolarities()}, which do not depend
+     * on what the tree happens to contain this week.
      *
      * @param  list<array{0:int,1:string,2:int}|string> $tokens
      * @return array{0:string,1:int} the brace-balanced text, and the index of its closing brace
@@ -349,7 +406,11 @@ final class SwallowingCatchCensusTest extends TestCase
         for ($k = $open; $k < $n; $k++) {
             $token = $tokens[$k];
             $txt = \is_array($token) ? $token[1] : $token;
-            $opensABrace = $txt === '{'
+            // `is_string()` is the whole point: a bare character token IS the
+            // brace, while an array token whose text merely reads `{` or `}` is
+            // a fragment of a string literal.
+            $isPunctuation = \is_string($token);
+            $opensABrace = ($isPunctuation && $txt === '{')
                 || (\is_array($token) && \in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true));
             if ($opensABrace) {
                 $depth++;
@@ -357,7 +418,7 @@ final class SwallowingCatchCensusTest extends TestCase
             if ($depth > 0) {
                 $text .= $txt;
             }
-            if ($txt === '}') {
+            if ($isPunctuation && $txt === '}') {
                 $depth--;
                 if ($depth === 0) {
                     return [$text, $k];
