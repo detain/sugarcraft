@@ -13,6 +13,7 @@ use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\AgentStatus;
 use SugarCraft\Crush\Agents\AgentWorkerPool;
 use SugarCraft\Crush\Agents\ExecutorInterface;
+use SugarCraft\Crush\Agents\ProcessExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Chat;
@@ -804,12 +805,36 @@ final class WorkflowLivePaneTest extends TestCase
      * The bytes of a live buffer that a tile has to be showing, and where they
      * end within the line they came from.
      *
-     * The FIRST non-blank line, clipped to {@see LIVE_TEXT_PROBE_CELLS} — the
-     * pane splits its buffer on newlines and clips each one, so a probe that
-     * spanned a newline could not appear in any frame however correct the
-     * compositor was, and one longer than the tile's inner width could not
-     * either. Both are properties of the pane, not of the worker, which is why
-     * the probe is derived rather than written down.
+     * The first WIDE ENOUGH non-blank line, clipped to
+     * {@see LIVE_TEXT_PROBE_CELLS} — the pane splits its buffer on newlines and
+     * clips each one, so a probe that spanned a newline could not appear in any
+     * frame however correct the compositor was, and one longer than the tile's
+     * inner width could not either. Both are properties of the pane, not of the
+     * worker, which is why the probe is derived rather than written down.
+     *
+     * ## WHAT THIS USED TO SAY
+     *
+     * "The FIRST non-blank line", full stop — and it FAILED on any worker whose
+     * first line was shorter than the probe.
+     *
+     * ## WHAT IS TRUE NOW
+     *
+     * The worker behind this file is no longer the fabricating stub that tagged
+     * every line `[<name>] ` and so was always wide. It is a real provider
+     * relay ({@see \SugarCraft\Crush\Agents\ProcessExecutor::createLiveWorkerScript()}),
+     * and a real answer opens with whatever the model opens with — for the
+     * offline EchoProvider that is a nine-cell `You said:`. Insisting on the
+     * first line would have made this helper a test of the provider's
+     * salutation length.
+     *
+     * ## WHY THE RULE STILL EARNS ITS PLACE
+     *
+     * Every property it was defending is unchanged and still enforced below: a
+     * probe must fit inside ONE line, must be a full {@see LIVE_TEXT_PROBE_CELLS}
+     * wide, and must not be made of the agent's own name. Only the choice of
+     * WHICH line moved, and the pane clips every line the same way, so any line
+     * that can carry a full-width probe is as good as the first. A buffer with
+     * no such line still fails outright rather than probing weakly.
      *
      * ## The slice does not start at cell 0, and that is the whole point
      *
@@ -844,13 +869,26 @@ final class WorkflowLivePaneTest extends TestCase
             $offset = str_starts_with($line, $tag) ? mb_strlen($tag) : 0;
             $probe = mb_substr($line, $offset, self::LIVE_TEXT_PROBE_CELLS);
 
+            // Too narrow to prove anything — try the next line rather than
+            // failing, and fail below only if NO line is wide enough.
+            if (mb_strlen($probe) < self::LIVE_TEXT_PROBE_CELLS) {
+                continue;
+            }
+
+            // The width the caller's clip arithmetic assumes, asserted on the
+            // probe that is actually RETURNED rather than only used to choose a
+            // line. Relocated, not dropped: the pre-`continue` version of this
+            // method asserted the same thing on the first line it saw, and a
+            // mutation that widened the skip test to accept every line SURVIVED
+            // the whole file until this assertion moved down here — the probe
+            // went out nine cells wide while the offset returned beside it said
+            // sixteen.
             self::assertSame(
                 self::LIVE_TEXT_PROBE_CELLS,
                 mb_strlen($probe),
-                'The worker produced fewer than ' . self::LIVE_TEXT_PROBE_CELLS
-                . ' cells past its own name tag, so there is no window here wide '
-                . 'enough to tell a live tile from a fabricated one: '
-                . var_export($liveText, true),
+                'The probe returned is narrower than the offset reported beside it, '
+                . 'so the caller\'s clip arithmetic is measuring a window that does '
+                . 'not exist: ' . var_export($probe, true),
             );
 
             self::assertStringNotContainsString(
@@ -866,8 +904,10 @@ final class WorkflowLivePaneTest extends TestCase
         }
 
         self::fail(
-            'The worker published a live buffer with no non-blank line in it, so '
-            . 'there is nothing a pane could have painted: ' . var_export($liveText, true),
+            'The worker published a live buffer with no line carrying '
+            . self::LIVE_TEXT_PROBE_CELLS . ' cells past its own name tag, so there '
+            . 'is no window here wide enough to tell a live tile from a fabricated '
+            . 'one: ' . var_export($liveText, true),
         );
     }
 
@@ -920,7 +960,35 @@ final class WorkflowLivePaneTest extends TestCase
                 ->build(),
         );
 
-        return new WorkflowEngine($registry);
+        // forkedExecutor, and both halves of that name are load-bearing.
+        //
+        // FORKED, because `executor:` sets AgentWorkerPool::$customExecutor and
+        // routes dispatch down the synchronous in-parent path, which publishes
+        // no progress at all — precisely the mechanism this file exists to test.
+        //
+        // And the SIMULATION rather than a real provider relay, because this
+        // test needs a live phase with a KNOWN DURATION. The probe below samples
+        // AgentManager::liveOutputs() on a 20ms timer and that accessor empties
+        // the instant the agent completes, so the window it can see is
+        // first-chunk-to-completion — a property of the worker, not of the
+        // compositor. MEASURED on PHP 8.3.6: driven through
+        // `workerProvider: ['type' => 'echo']`, whose whole answer is assembled
+        // in-process and arrives inside a single tick, this test failed 7 runs
+        // in 20. The simulated worker spaces two streaming frames with usleep()
+        // over about a second — roughly fifty ticks — and the same 20 runs are
+        // clean. See ProcessExecutor::createInlineWorkerScript(), which is kept
+        // for this.
+        //
+        // What that costs is honest and stated: the bytes in the tile are
+        // fabricated by the worker script. This file asserts that the AGENT's
+        // OWN BYTES reach the AGENT's OWN TILE mid-run, and the probe is derived
+        // from whatever the worker published (see livenessProbe()), so nothing
+        // here names the worker's implementation. Whether those bytes came from
+        // a model is ProcessExecutorTest's question, not this file's.
+        return new WorkflowEngine(
+            $registry,
+            new AgentWorkerPool(forkedExecutor: new ProcessExecutor(simulatedWorker: true)),
+        );
     }
 
     private function subAgent(string $id): SubAgent

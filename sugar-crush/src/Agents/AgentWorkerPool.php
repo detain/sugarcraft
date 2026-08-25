@@ -158,6 +158,61 @@ final class AgentWorkerPool
     public function __construct(
         private readonly int $maxConcurrent = 5,
         ?ExecutorInterface $executor = null,
+        /**
+         * The provider spec handed to the DEFAULT executor this pool builds.
+         *
+         * Two parameters rather than one because they are not alternatives.
+         * Injecting `$executor` sets `$customExecutor`, and that flag selects
+         * a different dispatch path entirely — the synchronous in-parent one,
+         * with no fork and no live progress ({@see startAgent()}). A caller who
+         * only wants to say WHICH MODEL the default worker consults must be
+         * able to do that without silently opting out of forking, which is
+         * what passing a hand-built ProcessExecutor would do.
+         *
+         * Null means the default worker has no provider and will refuse rather
+         * than fabricate — see
+         * {@see ProcessExecutor::createLiveWorkerScript()}. Nothing in `src/`
+         * passes this yet, so that is the shipped behaviour; the parameter is
+         * the seam a production wiring uses, and the one the pool's own
+         * fork-path tests use to get a worker that actually answers.
+         *
+         * @var ?array<string, mixed>
+         */
+        private readonly ?array $workerProvider = null,
+        /**
+         * An executor used INSTEAD of the one this pool would build itself,
+         * on the FORKING path — the pool's default topology, unchanged.
+         *
+         * `$executor` and this are not spellings of the same thing, and the
+         * difference is the whole reason both exist. `$executor` sets
+         * {@see $customExecutor}, which routes dispatch synchronously into the
+         * parent, and it does that for a good reason stated in
+         * {@see startAgent()}: a PHPUnit mock does not survive `pcntl_fork()`.
+         * That reason is a property of the OBJECT, not of the act of passing
+         * one, and a real {@see ProcessExecutor} has the opposite property —
+         * it is what the forking path was written for.
+         *
+         * MEASURED round 60, which is why this parameter exists at all: the
+         * workflow live-pane suite needs a worker with a bounded, KNOWN live
+         * phase, because it samples {@see \SugarCraft\Crush\Agents\AgentManager::liveOutputs()}
+         * on a 20ms timer and that accessor goes empty the moment the agent
+         * completes. Driving it through `$workerProvider` with the offline
+         * EchoProvider collapsed that window to well under one tick and the
+         * suite failed 7 runs in 20; driving it through `$executor` deleted the
+         * fork, and with it the progress publishing the suite exists to test.
+         * There was no third way to say "fork, with THIS executor" — so this is
+         * it.
+         *
+         * It does NOT weaken the rule {@see createDefaultExecutor()} states.
+         * No construction of a pool alone can select the fabricating worker;
+         * reaching it still means building a {@see ProcessExecutor} yourself
+         * and asking for it by name, which nothing in `src/` does — pinned by
+         * the scan in
+         * {@see \SugarCraft\Crush\Tests\Agents\ProcessExecutorTest}.
+         *
+         * Null everywhere in `src/` today, so no shipped path changes shape.
+         */
+        private readonly ?ExecutorInterface $forkedExecutor = null,
     ) {
         $this->executor = $executor;
         $this->customExecutor = $executor !== null;
@@ -1444,8 +1499,60 @@ final class AgentWorkerPool
         return $parsed !== false ? $parsed : null;
     }
 
+    /**
+     * The provider spec this pool hands to the default executor it builds.
+     *
+     * Public because a caller that RECONSTRUCTS a pool has to carry it over,
+     * and one does: {@see \SugarCraft\Crush\Workflows\WorkflowEngine} builds
+     * a fresh pool per parallel stage so stage-level maxConcurrent does not
+     * mutate the shared instance. That reconstruction already carried
+     * {@see getExecutor()} across; without this it silently dropped the
+     * provider, so a workflow's parallel stage would talk to no model while
+     * its sequential stages talked to one — a divergence with no error and no
+     * log line, visible only as an agent that answers nothing.
+     *
+     * Latent until something sets a provider, which nothing in `src/` does
+     * yet. Fixed at the same time as the seam it depends on rather than left
+     * for whoever first wires a real provider to discover.
+     *
+     * @return ?array<string, mixed>
+     */
+    public function workerProvider(): ?array
+    {
+        return $this->workerProvider;
+    }
+
+    /**
+     * The executor this pool runs on its FORKING path, if a caller supplied one.
+     *
+     * Exists for the same reason {@see workerProvider()} does, and closes the
+     * same hole one seam wider: {@see \SugarCraft\Crush\Workflows\WorkflowEngine}
+     * rebuilds a pool per parallel stage, and a field it cannot read is a field
+     * that stage pool silently loses. `getExecutor()` cannot stand in — it
+     * answers for {@see $customExecutor}, the SYNCHRONOUS path, and handing this
+     * object to that parameter would delete the fork the caller chose it for.
+     */
+    public function forkedExecutor(): ?ExecutorInterface
+    {
+        return $this->forkedExecutor;
+    }
+
+    /**
+     * Build the pool's own executor when none was injected.
+     *
+     * Forwards {@see $workerProvider} and NOTHING else, deliberately: the
+     * simulation opt-in is not plumbed through here, so no construction of a
+     * pool can select a fabricating worker. The only way to reach that script
+     * is to build a {@see ProcessExecutor} directly and ask for it, which is
+     * what the executor's own tests do and what nothing in `src/` does.
+     *
+     * {@see $forkedExecutor} is that "build it yourself" route arriving on the
+     * forking path rather than the synchronous one; it is a caller's object,
+     * not a selection this method makes, which is why the sentence above still
+     * holds with it in place.
+     */
     private function createDefaultExecutor(): ExecutorInterface
     {
-        return new ProcessExecutor();
+        return $this->forkedExecutor ?? new ProcessExecutor(workerProvider: $this->workerProvider);
     }
 }

@@ -1431,9 +1431,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // settings (maxConcurrent, stopOnFirstFailure) do not mutate the shared
         // $this->pool instance. The pool's executor is preserved from $this->pool
         // via getExecutor() so that custom executors (e.g., test mocks) are honoured.
+        //
+        // workerProvider() is carried across for the same reason and was NOT,
+        // until this line existed. getExecutor() is null for a pool that builds
+        // its own executor, so a stage pool reconstructed from one silently
+        // reverted to a default executor with no provider — and a default
+        // executor without a provider REFUSES rather than answering
+        // (ProcessExecutor::createLiveWorkerScript()). The failure shape was a
+        // workflow whose sequential stages consulted a model and whose parallel
+        // stages did not, with nothing logged to say so.
+        // forkedExecutor() is carried for exactly the reason workerProvider()
+        // is: it is pool state getExecutor() cannot answer for (that one reports
+        // the SYNCHRONOUS custom executor), so a stage pool rebuilt without it
+        // drops back to a self-built worker and the caller's choice of worker
+        // silently applies to sequential stages only.
         $pool = new AgentWorkerPool(
             maxConcurrent: $workflow->maxConcurrent,
             executor: $this->pool->getExecutor(),
+            workerProvider: $this->pool->workerProvider(),
+            forkedExecutor: $this->pool->forkedExecutor(),
         );
         if ($workflow->stopOnFirstFailure) {
             $pool = $pool->withStopOnFirstFailure(true);
