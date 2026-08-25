@@ -14941,3 +14941,112 @@ for exactly this reason.
 
 **STEP:** widen to `catch (\Throwable)` and pin with a server fixture that throws something that is not
 a `RuntimeException` during the handshake.
+
+### Eb55-9 — the `parse()` widening reaches a SECOND consumer nobody discussed
+
+**Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent, currently benign. **Measured.**
+
+`McpMessage::parse()` has TWO callers, not one: `StdioMcpServer::readResponse()` and
+`ClaudeCodeMcpClient::readMessages()`. Every artefact of this round — the commit messages, Eb55-1..8,
+and the round's report — discusses the `resultSet` change as though `StdioMcpServer` were the only
+consumer. A line such as `{"jsonrpc":"2.0","id":"1","result":null}` that `parse()` previously DROPPED now
+becomes a message in the array `readMessages()` returns, so that method's output grew a shape it has
+never seen.
+
+VERIFIED benign for now: `grep -n result src/ClaudeCodeMcpClient.php` returns NOTHING — the class never
+reads `->result` on a parsed message at all, so an extra null-result element changes no behaviour there.
+
+**STEP:** none required today. Record it so the next person to give `ClaudeCodeMcpClient` a
+result-reading path knows the null-result element already arrives, and does not re-derive the invariant
+from `StdioMcpServer` alone.
+
+### Eb55-10 — `McpMessage::toArray()` now emits a key that is not JSON-RPC
+
+**Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent.
+
+The `resultSet` sentinel is a field on the object, and `toArray()` includes it. The only `src/` consumer
+is `parseTools($listResponse->toArray())`, which reads `['result']['tools']` and is unaffected. But
+`toArray()` reads as a wire-shaped serialiser, and any consumer that ever re-serialises its output onto
+a socket would put a non-JSON-RPC `resultSet` key on the wire. `toJson()` is the method that actually
+frames outgoing messages and it does NOT emit the key, so the two have diverged in meaning.
+
+**STEP:** decide what `toArray()` is for — a debug/inspection view (fine as is, say so in a doc-block) or
+a wire serialiser (then drop `resultSet` from it and pin the absence). Do not "fix" it by copying
+`toJson()`'s shape without checking `parseTools()` still gets `result`.
+
+### Eb55-11 — `LspConnection::writeMessage()`'s null-deadline path is bounded only by the child's lifetime
+
+**Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: latent. **Measured.**
+
+`writeMessage(array $payload, ?float $deadline = null)` has a null default that NO production caller
+uses: `sendRequest()` and `sendNotification()` both pass `microtime(true) + $this->requestTimeout`. The
+`@param` says "null waits on the child's liveness alone", and MEASURED this round that is exactly right
+and is worse than it sounds — with no deadline, no signals, and a LIVE child that has stopped reading,
+`stream_select()` times out every `WRITE_POLL_MICROS`, `$ready === 0` continues, and NO liveness check is
+consulted on that path at all. `timeout 12 php probe.php` -> rc 124. The loop ends when the child dies
+and not before: against a 30s fixture it returned at 29.843s, against a 120s one it ran past a 45s bound.
+
+For a real language server, "when the child dies" is indefinite. The EINTR backstop does not help — it
+counts consecutive FAILURES and a timeout is not a failure.
+
+**STEP:** either drop the null default so the type system enforces a deadline, or keep it and document
+the unboundedness at the parameter rather than only in the pinning test. The dormancy itself is now
+pinned by `LspConnectionStdinWedgeTest::testAWriteWithNoDeadlineIsEndedByTheConsecutiveFailureBackstop()`.
+
+### Eb55-12 — `DuplicatedTestHelperDriftTest`'s alphabet cannot see duplicated TESTS or duplicated CONSTS
+
+**Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: real, instrument gap.
+
+The drift guard walks `T_PRIVATE` helper METHODS. `LspConnectionShutdownTest` and
+`StdioMcpServerWriteBoundsTest` currently share, near-verbatim, an `EOF_EXITING_SERVER` fixture, a
+`EOF_EXIT_BOUND_SECONDS = 0.5` constant, and a pair of public
+`testThatFixtureReallyDoesIgnoreSigterm*()` methods. None of those is a private method, so all of them
+are outside the guard's alphabet entirely — this is rule 11 about the guard itself: it reports zero
+because of what it cannot express, not because there is nothing there.
+
+**STEP:** widen the walk to `T_CONST` and to public test methods, or record in the guard's own doc-block
+that its scope is deliberately private helpers and that duplicated fixtures/consts are unpoliced. Prefer
+the first; the second at minimum, because the guard currently reads as though it covers duplication in
+general.
+
+### Eb55-13 — `Agents/TeamTest` asserts on the REAL `~/.sugar-crush`, so a concurrent lane reds it
+
+**Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: real (CI/multi-lane flake). **Measured.**
+
+`TeamTest::tearDown()` asserts `$this->realHomeFootprint` is unchanged across every test, to catch a Team
+that wrote outside its sandbox HOME. The footprint it snapshots is the ACTUAL `~/.sugar-crush/teams/`,
+which is shared by every process on the box. MEASURED at the round-55 baseline: a full-suite run at
+`a8acfcc9` went rc 1 on this file while a SIBLING LANE's suite was creating `throwing-*` team directories
+in that same real home — timestamps inside the failing run's window, and 3100 leftover entries
+accumulated there. The file is 26 tests / 78 assertions green when run alone.
+
+The assertion is correct in intent and catches a real class of bug; the defect is that its baseline is a
+process-global resource, so it fails on OTHER people's writes as readily as on its own.
+
+**STEP:** make the footprint diff SUBTRACTIVE rather than exact — assert that no entry present after the
+test is one this test could have produced (name prefix / recorded ids), instead of asserting the whole
+listing is byte-identical. Do NOT resolve this by deleting the shared directory: three lanes run at once
+and a glob-delete there is the `/tmp` prohibition one directory over.
+
+### Eb55-14 — deriving the deadline roster needs a TOKEN stream; a substring scan false-positives on prose
+
+**Recorded 2026-08-25 by round 55 lane b (fix stage).** Severity: instrument gap. **Measured.**
+
+`StdioMcpServerWriteBoundsTest::testTheHandshakeDeadlineReachesTheWriteAndNotOnlyTheRead()` enumerates
+`['request','notify','writeLine','readLine','readResponse']` as a hard-coded literal. A new private write
+path added later is invisible to it. The obvious derivation — walk the class's methods and roster every
+one whose body performs a stream primitive — was attempted this round and DOES NOT WORK naively:
+
+    start                  deadline=no     [stream_select(]
+    writeLine              deadline=YES    [stream_select( fwrite($this->pipes fflush($this->pipes]
+    readLine               deadline=YES    [stream_select( fread($this->pipes]
+    absorbStderr           deadline=no     [fread($this->pipes]
+
+`start()` is a FALSE POSITIVE: it never calls `stream_select()`, but its comments discuss it at length,
+and a substring scan over method source cannot tell the two apart. `absorbStderr()` is a TRUE positive
+that legitimately has no deadline (a bounded drain), so the check also needs an accounted-for mechanism.
+
+**STEP:** build it on `token_get_all()` with `T_COMMENT`/`T_DOC_COMMENT` discarded, give it an
+`ACCOUNTED_FOR` row for `absorbStderr` carrying the reason, and — per rule 15 — push a known-positive
+fixture method through the SAME scanner in the same test, since the assertion is "nothing unrostered"
+and that is what a dead scanner also returns.
