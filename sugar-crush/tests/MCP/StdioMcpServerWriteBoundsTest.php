@@ -242,23 +242,25 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
     // =========================================================================
 
     /**
-     * A PERSISTENTLY FAILING `select()` DOES NOT SPIN FOREVER WHEN THE CHILD IS
-     * ALREADY GONE. This is the liveness check, and it is the primary exit.
+     * A DEAD CHILD IS CAUGHT BY THE FAILED WRITE, NOT BY THE EINTR BRANCH — and
+     * this row exists because the fix originally claimed the opposite.
      *
-     * The only way to make `stream_select()` return `false` on demand is a signal
-     * storm — MEASURED on this host (PHP 8.3.6, Linux 6.8), a forked child sending
-     * SIGUSR1 every 300 µs produces about 2800 failures a second with ZERO
-     * successes interleaved; three consecutive takes gave 1407, 1406 and 1407 in
-     * 0.5 s. A closed pipe resource does NOT do it: `stream_select()` raises a
-     * `TypeError` there, which `@` does not suppress.
+     * The liveness check added to the EINTR branch was written as its primary
+     * exit. It is not, and it CANNOT BE: see
+     * {@see testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()} for the
+     * measured table. A dead child makes the write fd instantly ready in every
+     * pipe state, so `stream_select()` never blocks, so it can never be
+     * interrupted, so the EINTR branch is unreachable the moment the child is
+     * gone. The exit that actually fires is `$written === false`.
      *
-     * Run out of process, because the storm signals whatever process it runs in
-     * and PHPUnit is not a reasonable thing to signal 2800 times a second.
+     * MEASURED BY MUTATION: with the liveness check deleted, this row stayed
+     * green and the file stayed at its baseline runtime. That is what this
+     * doc-block records rather than the claim the fix shipped with.
      *
      * NO DEADLINE IS PASSED, deliberately — that is {@see StdioMcpServer::callTool()}'s
-     * shape, the one that had nothing at all to stop it.
+     * shape, the one with nothing else to stop it.
      */
-    public function testTheEintrBranchGivesUpPromptlyOnceTheChildIsGone(): void
+    public function testADeadChildIsCaughtByTheFailedWriteAndNotByTheEintrBranch(): void
     {
         [$rc, $out, $elapsed] = $this->runStormProbe('dead');
 
@@ -271,9 +273,9 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         $this->assertLessThan(
             2.0,
             $this->reportedFloat($out, 'ELAPSED'),
-            'writeLine() took seconds to notice a child that had already exited, so it is '
-            . 'walking the consecutive-failure backstop instead of checking liveness. Output: '
-            . trim($out),
+            'writeLine() took seconds to notice a child that had already exited — the failed '
+            . 'write is no longer the dead-child detector, and nothing else on this path is '
+            . 'fast. Output: ' . trim($out),
         );
     }
 
@@ -302,6 +304,12 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             ),
         );
         $this->assertStringContainsString('RESULT:false', $out, 'Output: ' . trim($out));
+        $this->assertGreaterThan(
+            1.0,
+            $this->reportedFloat($out, 'ELAPSED'),
+            'writeLine() returned too fast to have walked the backstop, so this row exited some '
+            . 'other way and is not measuring the backstop. Output: ' . trim($out),
+        );
     }
 
     /**
@@ -329,6 +337,114 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             . 'their failures to the storm. Output: ' . trim($out),
         );
     }
+
+    /**
+     * THE MECHANISM BEHIND BOTH ROWS ABOVE, AND THE TRIPWIRE UNDER THE LIVENESS
+     * CHECK'S DORMANCY.
+     *
+     * A write-set `stream_select()` can only be interrupted if it BLOCKS, and it
+     * only blocks when the pipe is full AND the child is alive. Every other state
+     * makes the fd instantly ready, so the storm has no window to land in.
+     * MEASURED on this host (PHP 8.3.6, Linux 6.8), 1s of a 300 µs SIGUSR1 storm
+     * per state, three consecutive takes, identical every time:
+     *
+     *     pipe   child   select false   select ok
+     *     empty  live            0        ~695000
+     *     FULL   LIVE        ~2815              0     <- the only interruptible state
+     *     empty  dead            0        ~660000
+     *     full   dead            0        ~692000
+     *
+     * TWO CONSEQUENCES, and the second is a correction to the fix this file
+     * guards:
+     *
+     *  1. The `alive` storm row is exercising the backstop for real, because its
+     *     oversized payload fills the pipe against a child that never reads.
+     *  2. {@see StdioMcpServer}'s EINTR liveness check IS DORMANT BY CONSTRUCTION.
+     *     It was added as that branch's primary exit; the table says a dead child
+     *     can never reach the branch at all, because its fd never blocks. It is
+     *     kept rather than deleted — it costs one `proc_get_status()` per EINTR,
+     *     it is correct, and it becomes live the moment the loop's shape changes
+     *     (an `except` set, a poll on an empty pipe, a child that dies between the
+     *     select and the check). THIS ROW IS THE PIN ON THAT DORMANCY: if a
+     *     platform ever stops making a dead child's fd instantly ready, the
+     *     `full/dead` figure moves, this reds, and the next reader is told the
+     *     check has become load-bearing.
+     */
+    public function testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect(): void
+    {
+        $probe = $this->tempDir . '/reach.php';
+        file_put_contents($probe, self::REACHABILITY_PROBE);
+
+        $interruptible = [];
+        foreach (['empty-live', 'full-live', 'empty-dead', 'full-dead'] as $state) {
+            [$rc, $out, ] = $this->runBounded([PHP_BINARY, $probe, $state], 20.0);
+            $this->assertSame(0, $rc, "the reachability probe failed for $state: " . trim($out));
+
+            $failures = $this->reportedInt($out, 'SELECTFAIL');
+            $successes = $this->reportedInt($out, 'SELECTOK');
+            $this->assertGreaterThan(
+                0,
+                $failures + $successes,
+                "the probe made no select() calls at all for $state, so its verdict is empty",
+            );
+            $interruptible[$state] = $failures > 0;
+        }
+
+        $this->assertSame(
+            ['empty-live' => false, 'full-live' => true, 'empty-dead' => false, 'full-dead' => false],
+            $interruptible,
+            'the set of interruptible pipe states has moved. If full/dead is now true, the '
+            . 'EINTR liveness check in writeLine() has stopped being dormant and needs a real '
+            . 'behavioural guard; if full/live is now false, the backstop row above is no longer '
+            . 'exercising the backstop and is passing vacuously',
+        );
+    }
+
+    /**
+     * argv[1] is one of `empty-live`, `full-live`, `empty-dead`, `full-dead`.
+     * Reports the two select() outcome counts for that state under a storm.
+     */
+    private const REACHABILITY_PROBE = <<<'PHP'
+        <?php
+        $state = $argv[1];
+        $script = tempnam(sys_get_temp_dir(), 'screach') . '.php';
+        file_put_contents($script, '<?php sleep(60);');   // never reads its stdin
+        $p = proc_open([PHP_BINARY, $script],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        stream_set_blocking($pipes[0], false);
+        usleep(200000);
+        if (str_starts_with($state, 'full')) {
+            $n = 0;
+            while (($w = @fwrite($pipes[0], str_repeat('x', 8192))) > 0) {
+                $n += $w;
+                if ($n > 300000) { break; }
+            }
+        }
+        if (str_ends_with($state, 'dead')) {
+            proc_terminate($p, 9);
+            for ($i = 0; $i < 200 && proc_get_status($p)['running']; $i++) { usleep(5000); }
+        }
+        pcntl_async_signals(false);
+        pcntl_signal(SIGUSR1, static function (): void {});
+        $parent = getmypid();
+        $kid = pcntl_fork();
+        if ($kid === 0) {
+            $t = microtime(true);
+            while (microtime(true) - $t < 3.0) { posix_kill($parent, SIGUSR1); usleep(300); }
+            exit(0);
+        }
+        usleep(50000);
+        $fail = 0; $ok = 0; $t0 = microtime(true);
+        while (microtime(true) - $t0 < 1.0) {
+            $w = [$pipes[0]]; $r = []; $e = [];
+            if (@stream_select($r, $w, $e, 1, 0) === false) { $fail++; } else { $ok++; }
+        }
+        echo 'SELECTFAIL:', $fail, PHP_EOL, 'SELECTOK:', $ok, PHP_EOL;
+        posix_kill($kid, 9); pcntl_waitpid($kid, $st);
+        if (proc_get_status($p)['running']) { proc_terminate($p, 9); }
+        foreach ($pipes as $q) { if (is_resource($q)) fclose($q); }
+        proc_close($p); unlink($script);
+        PHP;
 
     // =========================================================================
     // stop() closes the pipes before the escalation ladder
@@ -539,14 +655,33 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
         return (float) (new \ReflectionClass(StdioMcpServer::class))->getConstant('TERMINATE_GRACE_SECONDS');
     }
 
-    /** Reads nothing and says nothing, so the parent's stdin pipe fills and stays full. */
+    /**
+     * Reads nothing and says nothing, so the parent's stdin pipe fills and stays
+     * full.
+     *
+     * ⚠️ IT MUST OUTLIVE {@see STORM_BOUND_SECONDS}, AND IT DID NOT. The first
+     * version slept 30s against a 45s bound, so the `alive` storm row was
+     * terminated by the FIXTURE'S OWN EXIT rather than by anything in the loop
+     * under test — MEASURED by mutation: deleting the consecutive-failure
+     * backstop left the row green and merely slowed the file from 10.6s to
+     * 33.4s, which is the child's death arriving instead of the guard. The sleep
+     * is now comfortably past the bound, so a loop with no exit is reported as a
+     * timeout rather than rescued.
+     */
     private function deafServerScript(): string
     {
         $path = $this->tempDir . '/deaf.php';
-        file_put_contents($path, "<?php\nsleep(30);\n");
+        file_put_contents($path, "<?php\nsleep(" . self::DEAF_SERVER_LIFETIME_SECONDS . ");\n");
 
         return $path;
     }
+
+    /**
+     * Twice {@see STORM_BOUND_SECONDS}, so the fixture cannot be the thing that
+     * ends a storm row, and short enough that a probe killed by the bound leaves
+     * an orphan for a bounded time rather than for the session.
+     */
+    private const DEAF_SERVER_LIFETIME_SECONDS = 90;
 
     /** Traps SIGTERM and leaves only on stdin EOF — the shape a real server has. */
     private function eofExitingServerScript(): string
@@ -728,7 +863,7 @@ final class StdioMcpServerWriteBoundsTest extends TestCase
             $storm = pcntl_fork();
             if ($storm === 0) {
                 $t = microtime(true);
-                while (microtime(true) - $t < 60.0) { posix_kill($parent, SIGUSR1); usleep(300); }
+                while (microtime(true) - $t < 120.0) { posix_kill($parent, SIGUSR1); usleep(300); }
                 exit(0);
             }
         }

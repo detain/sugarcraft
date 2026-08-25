@@ -97,9 +97,18 @@ final class LspConnection implements LspConnectionInterface
      * tolerates before abandoning the write.
      *
      * `stream_select()` returns `false` for EINTR — a signal arrived — which is
-     * a retry and not an error. The count is a backstop for the other reason it
-     * can fail persistently: an fd that is structurally unusable, where retrying
-     * is an infinite loop. It is deliberately generous. MEASURED on this host
+     * a retry and not an error. THIS COUNT IS THE EXIT THAT FIRES; the
+     * {@see childIsRunning()} check beside it in that branch is DORMANT BY
+     * CONSTRUCTION, for the reason measured against
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s copy of the same loop: a
+     * write-set select can only be INTERRUPTED while it BLOCKS, and it only
+     * blocks with a full pipe and a LIVE child, so a dead child never reaches the
+     * branch at all — `$written === false` catches it first. The check is kept
+     * because it is cheap and correct and becomes live if the loop's shape
+     * changes; its dormancy is pinned by that class's
+     * `testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()`.
+     *
+     * It is deliberately generous. MEASURED on this host
      * (PHP 8.3.6, Linux 6.8), the densest signal storm this box can produce —
      * a forked child sending SIGUSR1 every 300 µs — makes `stream_select()`
      * fail about 2800 times per second with ZERO successes interleaved; three

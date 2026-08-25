@@ -117,10 +117,30 @@ final class StdioMcpServer implements McpServer
      * `stream_select()` answers `false` for EINTR — a signal arrived — which is a
      * retry and not an error, and that branch had no exit of ANY kind: a
      * persistently failing select spun at 1 ms forever on a path that
-     * {@see callTool()} deliberately leaves unbounded. The CHILD-LIVENESS check
-     * beside this count is what ends the ordinary case; the count is the backstop
-     * for a structurally unusable fd, where a live child and a broken select
-     * would otherwise loop for good.
+     * {@see callTool()} deliberately leaves unbounded. THIS COUNT IS THE EXIT
+     * THAT FIRES.
+     *
+     * ⚠️ THE LIVENESS HALF OF THE CONDITION IN THAT BRANCH IS DORMANT BY
+     * CONSTRUCTION, AND IT WAS WRITTEN AS THAT BRANCH'S PRIMARY EXIT. It is not. A write-set `stream_select()`
+     * can only be INTERRUPTED if it BLOCKS, and it only blocks when the pipe is
+     * full AND the child is alive — every other state makes the fd instantly
+     * ready. MEASURED on this host (PHP 8.3.6, Linux 6.8), 1s of a 300 µs SIGUSR1
+     * storm per state, three consecutive takes, identical every time:
+     *
+     *     pipe   child   select false   select ok
+     *     empty  live            0        ~695000
+     *     FULL   LIVE        ~2815              0     <- the only interruptible state
+     *     empty  dead            0        ~660000
+     *     full   dead            0        ~692000
+     *
+     * So a dead child can never reach this branch: its fd never blocks, the loop
+     * reaches `fwrite()`, and `$written === false` is what catches it — every
+     * time, on both pipe states. The check is KEPT rather than deleted because it
+     * costs one status call per EINTR, it is correct, and it becomes live the
+     * moment the loop's shape changes (an `except` set, a poll on an empty pipe,
+     * a child that dies between the select and the check). Its dormancy is pinned
+     * by `StdioMcpServerWriteBoundsTest::testOnlyAFullPipeWithALiveChildCanInterruptTheWriteSelect()`,
+     * which reds if the `full/dead` figure ever moves.
      *
      * ⚠️ `feof()` WOULD BE THE WRONG CHECK HERE, and {@see readLine()}'s EINTR
      * branch using it is not a precedent to copy — see the measurement in the
@@ -131,7 +151,9 @@ final class StdioMcpServer implements McpServer
      * densest signal storm this box can produce — a forked child sending SIGUSR1
      * every 300 µs — makes `stream_select()` fail about 2800 times a second with
      * ZERO successes interleaved; three consecutive takes gave 1407, 1406 and
-     * 1407 failures in 0.5 s. With this loop's 1 ms yield on the failure path
+     * 1407 failures in 0.5 s, and the `full/live` row of the table above is the
+     * same figure re-measured through a WRITE-set select rather than a read one.
+     * With this loop's 1 ms yield on the failure path
      * that is roughly 500–900 a second, so 10000 is on the order of ten seconds
      * of unbroken interruption.
      */
@@ -647,13 +669,12 @@ final class StdioMcpServer implements McpServer
             if ($ready === false) {
                 $consecutiveSelectFailures++;
 
-                // AN EINTR IS A RETRY; A DEAD CHILD IS NOT. This branch had no
+                // AN EINTR IS A RETRY; AN ENDLESS ONE IS NOT. This branch had no
                 // exit of any kind, so a persistently failing select spun here at
                 // 1 ms forever — on {@see callTool()}'s path, which has no
-                // deadline to stop it. The liveness question is the one that
-                // belongs here; see {@see MAX_CONSECUTIVE_SELECT_FAILURES} for
-                // why the count beside it is a backstop rather than the primary
-                // exit, and why `feof()` is not the instrument.
+                // deadline to stop it. See {@see MAX_CONSECUTIVE_SELECT_FAILURES}
+                // for why `feof()` is not the instrument, and for the dormancy of
+                // the liveness half of this condition.
                 if (!self::childIsRunning($this->process)
                     || $consecutiveSelectFailures >= self::MAX_CONSECUTIVE_SELECT_FAILURES) {
                     return false;
