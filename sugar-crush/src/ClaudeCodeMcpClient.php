@@ -107,9 +107,29 @@ final class ClaudeCodeMcpClient
      * a retry and not an error. Without a ceiling a persistently failing select
      * spins here forever. Same instrument and same count as
      * {@see \SugarCraft\Crush\MCP\StdioMcpServer::MAX_CONSECUTIVE_SELECT_FAILURES}
-     * and its `LspConnection` twin; see the former for the measurement of which
-     * half of the condition actually fires (the liveness check is dormant, the
-     * count is the exit).
+     * and its `LspConnection` twin.
+     *
+     * ⚠️ IN THIS CLASS THE WHOLE BRANCH IS DORMANT, WHICH IS MORE THAN THE
+     * SIBLING'S NOTE CLAIMS.
+     *
+     * WHAT THIS SAID: "see the former for the measurement of which half of the
+     * condition actually fires (the liveness check is dormant, the count is the
+     * exit)" — a statement about which of the two terms wins.
+     *
+     * WHAT IS TRUE NOW: here neither term is evaluated at all, because the
+     * `$ready === false` branch that holds them is never entered. MEASURED at
+     * this tree: replacing {@see childIsRunning()}'s body with a `throw` SURVIVES
+     * the covering suite, which it could not do if anything reached the branch.
+     * Reaching it needs a signal to land inside this loop's `stream_select()`,
+     * and nothing in the suite delivers one there.
+     *
+     * WHY BOTH STILL EARN THEIR PLACE: this is the class's only write path with
+     * no wall clock, so an EINTR storm is exactly the failure they exist for, and
+     * the branch becomes live the first time a real signal lands. Dormant is not
+     * the same as wrong — but it does mean fifty-five rounds of green say nothing
+     * about them, so {@see childIsRunning()} is measured directly instead, in
+     * both polarities, by
+     * `ClaudeCodeMcpClientStdinWedgeTest::testChildIsRunningAnswersBothPolaritiesEvenThoughItsCallerIsUnreached()`.
      */
     private const MAX_CONSECUTIVE_SELECT_FAILURES = 10000;
 

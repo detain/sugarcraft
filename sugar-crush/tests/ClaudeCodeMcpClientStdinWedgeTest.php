@@ -264,9 +264,21 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
     }
 
     /**
-     * And the buffer does not OUTLIVE the session it belongs to. A reconnect that
-     * inherited a half-line would put a stranger's bytes at the head of the next
-     * server's first message, which is the same desynchronisation one pipe over.
+     * And NEITHER PIECE OF PER-SESSION STREAM STATE outlives the session it
+     * belongs to. A reconnect that inherited a half-line would put a stranger's
+     * bytes at the head of the next server's first message, which is the same
+     * desynchronisation one pipe over; a reconnect that inherited a PENDING
+     * FRAGMENT would lead the new child's first message with a stray newline
+     * for a fragment that is not in its pipe.
+     *
+     * ⚠️ BOTH FIELDS, because `disconnect()` claims both and only one was
+     * asserted. MEASURED: deleting `$this->stdinFragmentPending = false;` from
+     * `disconnect()` left this row — the row named for that clearing — entirely
+     * green. The flag is armed by reflection here rather than by a real short
+     * write, for the reason
+     * {@see testAPendingFragmentIsTerminatedBeforeTheNextMessage()} gives: what
+     * is under test is what `disconnect()` does to the flag, not the timing that
+     * sets it.
      */
     public function testTheHalfLineDoesNotSurviveADisconnect(): void
     {
@@ -274,6 +286,7 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
 
         try {
             $buffer = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'readBuffer');
+            $fragment = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'stdinFragmentPending');
 
             // POLLED, not read once: the fixture's first write races `connect()`'s
             // own drain, so a single call proves nothing about either outcome.
@@ -290,9 +303,21 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
                 . 'is about disconnect() clearing it and not about it never being set',
             );
 
+            $fragment->setValue($client, true);
+            $this->assertTrue(
+                $fragment->getValue($client),
+                'the control: the flag is armed, so the assertion below is about disconnect() '
+                . 'clearing it and not about it never being set',
+            );
+
             $client->disconnect();
 
             $this->assertSame('', $buffer->getValue($client), 'disconnect() left a half-line behind');
+            $this->assertFalse(
+                $fragment->getValue($client),
+                'disconnect() left the resynchronisation armed, so the next session leads its '
+                . 'first message with a newline for a fragment in a pipe that no longer exists',
+            );
         } finally {
             $client->disconnect();
         }
@@ -566,6 +591,197 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
             );
         } finally {
             $client->disconnect();
+        }
+    }
+
+    // =========================================================================
+    // What the loop does when it never gets a byte out at all
+    // =========================================================================
+
+    /**
+     * A RESEND THAT GIVES UP BEFORE ITS FIRST BYTE MUST LEAVE THE FRAGMENT
+     * ARMED — the `|| $prefix !== ''` half of the flag, which nothing reached.
+     *
+     * {@see ClaudeCodeMcpClient::sendMessage()} clears the flag optimistically
+     * and sets it again from `$sent > 0 || $prefix !== ''`. The first term is
+     * pinned by
+     * {@see testAShortWriteReportsItselfAsPartialAndArmsTheResynchronisation()}.
+     * The second is the case the method's own comment calls out — "if it gives
+     * up before its first byte the fragment is still unterminated" — and
+     * MEASURED, dropping it left the suite entirely green.
+     *
+     * It matters because the two arms describe OPPOSITE repairs. `$sent > 0`
+     * means this write left a new fragment. `$prefix !== '' && $sent === 0`
+     * means this write left nothing and the OLD fragment is still sitting in the
+     * child's pipe unterminated: the newline that would have closed it was in a
+     * payload that never went out. Clearing the flag there would strand it
+     * forever, and the next message would be swallowed closing it — the exact
+     * two-messages-for-one cost this whole latch exists to avoid.
+     *
+     * `$sent === 0` is reached by closing fd 0 under the client, which
+     * {@see ClaudeCodeMcpClient::writeAll()} answers with an immediate `0`. That
+     * is a shortcut to the STATE, not a claim that production closes fd 0 alone;
+     * the alternative is a child that stops reading for fifteen seconds, which
+     * would make the idle clock the thing under test rather than the flag.
+     */
+    public function testAResendThatNeverGotAByteOutLeavesTheOldFragmentArmed(): void
+    {
+        $client = $this->connectedClientOver($this->deafServerScript(2.0));
+        $flag = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'stdinFragmentPending');
+        $pipesProp = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'pipes');
+
+        try {
+            $flag->setValue($client, true);
+
+            /** @var array<int, resource> $pipes */
+            $pipes = $pipesProp->getValue($client);
+            fclose($pipes[0]);
+            $this->assertFalse(is_resource($pipes[0]), 'fd 0 did not actually close');
+
+            try {
+                $client->sendMessage(McpMessage::request('1', 'ping', null));
+                $this->fail('a closed stdin accepted a message');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString(
+                    '0 of ',
+                    $e->getMessage(),
+                    'the control: this row is about a write that got NOTHING out, and this one '
+                    . 'got something: ' . $e->getMessage(),
+                );
+                $this->assertStringContainsString(
+                    'the message was lost',
+                    $e->getMessage(),
+                    'a total loss reported itself as a partial write: ' . $e->getMessage(),
+                );
+            }
+
+            $this->assertTrue(
+                $flag->getValue($client),
+                'a resend that never got a byte out disarmed the resynchronisation, so the '
+                . 'fragment already in the child pipe is stranded unterminated and the next '
+                . 'message will be swallowed closing it',
+            );
+        } finally {
+            $client->disconnect();
+        }
+    }
+
+    /**
+     * AND THE READ SIDE'S OWN CLOSED-PIPE GUARD, which had none.
+     *
+     * {@see ClaudeCodeMcpClient::readMessages()} guards its `fread()` with
+     * `is_resource($pipes[1])` and its comment claims "same guard and same
+     * measurement as {@see ClaudeCodeMcpClient::drainStderr()}". The sibling
+     * class gave its three equivalents a whole file
+     * ({@see \SugarCraft\Crush\Tests\MCP\StdioMcpServerClosedPipeGuardTest});
+     * this one got nothing, and MEASURED, deleting the guard outright left the
+     * covering suite green.
+     *
+     * Both polarities, because either alone is satisfiable by the wrong thing: a
+     * `readMessages()` that returned `[]` unconditionally would satisfy the
+     * closed arm, and the open arm is what stops it.
+     */
+    public function testReadMessagesReturnsRatherThanRaisingOnAClosedStdout(): void
+    {
+        $client = $this->connectedClientOver($this->splitWriterScript(false));
+        $pipesProp = new \ReflectionProperty(ClaudeCodeMcpClient::class, 'pipes');
+
+        try {
+            // THE OPEN ARM FIRST. Polled, because the fixture's write races
+            // connect()'s own drain exactly as the half-line row describes.
+            $seen = [];
+            $deadline = microtime(true) + 3.0;
+            while (microtime(true) < $deadline && $seen === []) {
+                $seen = $client->readMessages();
+                usleep(20000);
+            }
+            $this->assertNotSame(
+                [],
+                $seen,
+                'the control: readMessages() reads something from a healthy pipe, or the closed '
+                . 'arm below is satisfied by a method that never reads anything at all',
+            );
+
+            /** @var array<int, resource> $pipes */
+            $pipes = $pipesProp->getValue($client);
+            fclose($pipes[1]);
+            $this->assertFalse(is_resource($pipes[1]), 'fd 1 did not actually close');
+
+            $this->assertSame(
+                [],
+                $client->readMessages(),
+                'readMessages() must report "nothing more" for a closed stdout rather than '
+                . 'raising the TypeError that fread() on a closed pipe throws',
+            );
+        } finally {
+            $client->disconnect();
+        }
+    }
+
+    /**
+     * {@see ClaudeCodeMcpClient::childIsRunning()} ANSWERS CORRECTLY, WHICH IS A
+     * DIFFERENT AND SMALLER CLAIM THAN "IT IS EXERCISED".
+     *
+     * ⚠️ ITS ONE CALLER IS UNREACHED, AND SAYING SO IS THE POINT.
+     * {@see ClaudeCodeMcpClient::writeAll()} consults it only in the
+     * `$ready === false` branch, i.e. after `stream_select()` fails — an EINTR,
+     * in practice. MEASURED at this tree: replacing the whole method body with a
+     * `throw` SURVIVES the covering suite, so nothing calls it there. The
+     * dormancy note on
+     * {@see ClaudeCodeMcpClient::MAX_CONSECUTIVE_SELECT_FAILURES} says the
+     * LIVENESS HALF of that condition is dormant; the measurement says the whole
+     * BRANCH is.
+     *
+     * So this row does not pretend to exercise the branch. It measures the
+     * FUNCTION, directly, in both polarities — which is the thing a
+     * `method_exists()` or a bare `ReflectionMethod` poke would not do, and the
+     * shape that let an EINTR guard one library over sit permanently false for
+     * fifty-five rounds of green.
+     *
+     * Deliberately NOT closed by deleting the call: a liveness check is the right
+     * question for a loop with no deadline, and the branch becomes reachable the
+     * moment a signal lands mid-select. It is dormant, not wrong.
+     */
+    public function testChildIsRunningAnswersBothPolaritiesEvenThoughItsCallerIsUnreached(): void
+    {
+        $method = new \ReflectionMethod(ClaudeCodeMcpClient::class, 'childIsRunning');
+
+        $this->assertFalse($method->invoke(null, null), 'a null handle is not a running child');
+
+        $handle = proc_open(
+            [PHP_BINARY, '-r', 'usleep(2000000);'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($handle, 'could not spawn the probe child');
+
+        try {
+            $this->assertTrue(
+                $method->invoke(null, $handle),
+                'a live child reported as gone — writeAll() would abandon a write the moment a '
+                . 'signal interrupted its select',
+            );
+
+            proc_terminate($handle, 9);
+
+            $deadline = microtime(true) + 3.0;
+            while (microtime(true) < $deadline && $method->invoke(null, $handle)) {
+                usleep(20000);
+            }
+
+            $this->assertFalse(
+                $method->invoke(null, $handle),
+                'a reaped child still reported as running, so the EINTR branch would spin to its '
+                . 'failure ceiling instead of giving up on a child that is gone',
+            );
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            proc_terminate($handle, 9);
+            proc_close($handle);
         }
     }
 
