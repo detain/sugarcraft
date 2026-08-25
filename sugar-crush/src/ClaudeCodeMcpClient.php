@@ -216,8 +216,20 @@ final class ClaudeCodeMcpClient
      * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} no longer compares
      * literals that happen to match — it pins that every member DERIVES, over a
      * roster read off the `MAX_FRAME_BYTES` declarations in `src/`. A FOURTH
-     * framer that copies this doc-block and spells the arithmetic is the one
-     * way the family can still come apart, and it is reported.
+     * framer that copies this doc-block and spells the arithmetic is reported.
+     *
+     * WHAT THIS SAID FOR ONE ROUND: that such a framer was "the one way the
+     * family can still come apart". WHAT IS TRUE: that sentence was written
+     * into three files at once and was wrong in all three. The roster's own
+     * scanner could not read four of PHP 8.3's five `const` spellings — the
+     * typed one this tree already uses elsewhere among them — so a framer
+     * written that way left the family SILENTLY, and the whole suite came out
+     * rc 0 with one in place. WHY IT STILL EARNS ITS PLACE, REPHRASED: a
+     * copied literal is the way the family comes apart THAT ANYONE WOULD
+     * WRITE ON PURPOSE, and it is caught; the scanner's own blind spots are
+     * now held by a second instrument that decides membership without parsing
+     * anything, in
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest::testEveryFileDeclaringTheCapReachesTheRoster()}.
      *
      * ⚠️ AND A WORD ABOUT DORMANCY, BECAUSE THE OBVIOUS INFERENCE IS BACKWARDS.
      * WHAT AN EARLIER DRAFT OF THIS PARAGRAPH SAID: that nothing calls this
@@ -226,14 +238,24 @@ final class ClaudeCodeMcpClient
      *
      * WHAT IS TRUE: the first half is right and the second is inverted. This
      * class has no call site in `src/` — the class doc-block explains why — but
-     * its framing path is the BEST covered of the three.
+     * its framing path IS exercised end to end.
      * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest} drives the real
      * {@see readMessages()} against a real child process at `cap` and at
-     * `cap + 1`, so those rows cover the CALL SITE as well as the check; that
-     * file's own scope note says so, and contrasts it with
-     * {@see \SugarCraft\Crush\MCP\StdioMcpServer}, whose equivalent rows
+     * `cap + 1`, so those rows cover the CALL SITE as well as the check, unlike
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer}'s equivalent rows, which
      * reach a private method by reflection and deliberately do not kill a
      * mutation of the line that calls it.
+     *
+     * ⚠️ AND NOT "THE BEST COVERED OF THE THREE", WHICH IS WHAT AN EARLIER
+     * DRAFT OF THIS SENTENCE CLAIMED. Its evidence was that scope note, and
+     * the note compares this class with `StdioMcpServer` only — two of the
+     * three. MEASURED against the third:
+     * {@see \SugarCraft\Crush\Tests\LSP\LspConnectionFrameCapTest} carries
+     * seven test methods to this class's two, drives a real child of its own,
+     * and adds a dormancy pin this class has no counterpart for. A superlative
+     * needs the whole population; this one was read off a pairwise comparison,
+     * which is the same mistake one level down from the one the paragraph
+     * above corrects.
      *
      * WHY THE POINT SURVIVES THE CORRECTION: product dormancy and test coverage
      * are separate facts, and it is the FIRST that makes copying a number here

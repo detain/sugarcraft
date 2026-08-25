@@ -104,8 +104,14 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * corrupt/truncated header must never make the parent try to buffer an
      * arbitrary length before it notices the stream is garbage.
      *
-     * THIS IS THE ONLY PLACE THE NUMBER IS WRITTEN, AND THAT IS WHY IT IS
-     * PUBLIC. Three other classes frame a peer's output against the same bound
+     * THIS IS THE ONLY PLACE IN `src/` THE NUMBER IS WRITTEN, AND THAT IS WHY
+     * IT IS PUBLIC. The qualifier is not pedantry: two suites spell the
+     * arithmetic deliberately, in
+     * {@see \SugarCraft\Crush\Tests\MCP\McpFrameCapTest::testBothClassesDeclareTheSameCapAndItIsTheFrameCapNotTheStderrCap()}
+     * and
+     * {@see \SugarCraft\Crush\Tests\LSP\LspConnectionFrameCapTest::testTheCapIsTheOneTheClassDeclares()},
+     * which is what makes moving this number a deliberate-change signal rather
+     * than a silent one. Three other classes frame a peer's output against the same bound
      * for the same reason -- {@see \SugarCraft\Crush\LSP\LspConnection},
      * {@see \SugarCraft\Crush\MCP\StdioMcpServer} and
      * {@see \SugarCraft\Crush\ClaudeCodeMcpClient} -- and each now spells
@@ -134,11 +140,28 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
      * at load; it would surface inside a framing path the moment one checked
      * its bound, which is the worst place to find out.
      *
+     * ⚠️ AND THE DERIVATION BUYS AN AUTOLOAD EDGE, WHICH IS THE OBJECTION THIS
+     * REPO HAS RECORDED BEFORE. `Runtime` deliberately does NOT read
+     * `Chat::DENIED_ERROR_PREFIXES`, because that would autoload `Chat` on the
+     * first gated tool call of every run including the `-p` path that exists to
+     * avoid building one -- so the same question is owed an answer here.
+     * MEASURED on PHP 8.3.6 in a fresh process: `class_exists()` on
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer} declares two class-likes
+     * and does NOT touch this file; READING its cap then pulls in four more --
+     * this class, {@see \SugarCraft\Crush\Backend} and its two optional
+     * interfaces. Before the derivation it pulled in none.
+     *
+     * WHY THAT IS ACCEPTABLE HERE AND WAS NOT THERE: the read happens inside a
+     * framing path, which is reached only once a child process is already
+     * spawned and writing -- so the engine is being loaded on a path that has
+     * paid for a process, not on a path that exists to avoid one. The `-p`
+     * shape has no counterpart here. If a caller ever checks a frame cap
+     * WITHOUT a child, this paragraph is the one to re-measure.
+     *
      * ⚠️ PUBLIC HERE MEANS "READABLE BY THE FAMILY", NOT "TUNABLE". Moving this
      * number moves all four framers at once, which is the intent; the two
-     * suites that assert the concrete value
-     * (`tests/MCP/McpFrameCapTest.php`, `tests/LSP/LspConnectionFrameCapTest.php`)
-     * will red, and that is the deliberate-change signal, not an obstacle.
+     * suites named above will red, and that is the deliberate-change signal,
+     * not an obstacle.
      */
     public const MAX_FRAME_BYTES = 64 * 1024 * 1024;
 

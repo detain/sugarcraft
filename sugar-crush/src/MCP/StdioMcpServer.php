@@ -115,8 +115,21 @@ final class StdioMcpServer implements McpServer
      * compare four literals that happen to match; it exists to pin that every
      * member DERIVES. Its roster is read off the `MAX_FRAME_BYTES` declarations
      * in `src/`, so a FOURTH framer that copies this doc-block and spells the
-     * arithmetic joins the family and is reported — which is the only way the
-     * family can still come apart. There is no hand list to edit.
+     * arithmetic joins the family and is reported. There is no hand list to
+     * edit.
+     *
+     * WHAT THIS SAID FOR ONE ROUND: that such a framer was "the only way the
+     * family can still come apart". WHAT IS TRUE: that clause was written into
+     * three framing files at once and was wrong in all three, because the
+     * roster's own scanner could not read four of PHP 8.3's five `const`
+     * spellings — `private const int …` among them, which is a spelling this
+     * tree already uses. A framer written that way left the family SILENTLY,
+     * with the whole suite rc 0. WHY THE POINT SURVIVES THE CORRECTION: a
+     * copied literal remains the way the family comes apart that anyone would
+     * write on purpose, and it is caught. The scanner's own blind spots are now
+     * held separately, by a second instrument that decides membership without
+     * parsing anything, in
+     * {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest::testEveryFileDeclaringTheCapReachesTheRoster()}.
      *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION, AND THE DISTINCTION
      * IS THE WHOLE DESIGN. Silently cutting the buffer at the cap would hand
