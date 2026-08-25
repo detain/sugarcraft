@@ -791,6 +791,32 @@ final class FrameCapFamilyTest extends TestCase
             . 'class of the same file comes back unattributable and the roster loses a member '
             . 'it can see perfectly well',
         );
+
+        // 🔴 AND THE ROW THAT ACTUALLY HOLDS THE RELEASE: a constant declared
+        // AFTER a method body, INSIDE the same class, with an interpolated
+        // string in that method.
+        //
+        // The three rows above were each written with the declaration OUTSIDE
+        // the class, and MEASURED, that window cannot see the two ways this
+        // release goes wrong: dropping the T_CURLY_OPEN increment, and
+        // releasing on any `}` rather than the body's own. Both mutations left
+        // all three GREEN, because a name released too early is
+        // indistinguishable from a name released on time when nothing between
+        // the two points asks for it. This row puts something there.
+        $this->assertSame(
+            [['class' => 'Demo\\Framer', 'init' => '4']],
+            self::declarersIn(
+                "<?php\nnamespace Demo;\nfinal class Framer {\n"
+                . "    public function m(\$a): string { return \"{\$a}\"; }\n"
+                . "    private const " . $const . " = 4;\n}\n",
+            ),
+            'a declaration written after a method body in the SAME class is coming back '
+            . 'unattributable, so the class name was released at the method\'s closing brace '
+            . 'instead of the class\'s. Either the interpolation braces are not being counted '
+            . '(their opener is an array token and their closer is bare, so the depth goes '
+            . 'negative), or the release is not checking that the brace it is closing is the '
+            . 'class body\'s own',
+        );
     }
 
     /**
