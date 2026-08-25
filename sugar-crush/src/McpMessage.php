@@ -227,9 +227,36 @@ final class McpMessage
     }
 
     /**
-     * `resultSet` is carried too, because `result => null` in this array has the
-     * same ambiguity the sentinel exists to resolve and a consumer reading the
-     * array rather than the object would otherwise lose it.
+     * AN INSPECTION VIEW OF THE WHOLE OBJECT. NOT THE WIRE — {@see toJson()} is
+     * the wire, and the two have never been the same shape.
+     *
+     * THE QUESTION THIS ANSWERS, because it was asked and left open. E479
+     * recorded that this method "NOW emits a key that is not JSON-RPC", meaning
+     * the `resultSet` sentinel, and worried that a consumer re-serialising this
+     * array onto a socket would put it in front of a peer. The premise of the
+     * "now" does not survive contact with the tree: `git log -L` on this method
+     * shows `isNotification` — equally not a JSON-RPC key — present in the
+     * commit that CREATED the file, long before the sentinel existed. And the
+     * extra key is not even the strongest evidence: every field is emitted
+     * UNCONDITIONALLY, so a plain request comes out of here carrying a null
+     * `result` beside a null `error`, a pair JSON-RPC 2.0 does not permit in one
+     * message at all. This was an inspection view from its first line. The
+     * sentinel changed nothing about that, and `resultSet` is carried for the
+     * same reason every other field is: a consumer reading the array rather than
+     * the object would otherwise lose the one bit that tells `"result": null`
+     * from an absent `result`.
+     *
+     * ⚠️ DO NOT "FIX" THIS BY COPYING {@see toJson()}'s SHAPE.
+     * {@see \SugarCraft\Crush\MCP\StdioMcpServer::start()} ends with
+     * `parseTools($listResponse->toArray())`, which reaches for
+     * `['result']['tools']`; making the keys conditional takes the tool list with
+     * them, and a server with no tools looks exactly like a server that answered.
+     *
+     * The distinction is derived rather than restated in
+     * {@see \SugarCraft\Crush\Tests\McpMessageWireShapeTest}, which builds the
+     * JSON-RPC key set out of what `toJson()` actually emits instead of listing
+     * it — so it survives a legal addition to the protocol surface and reds on an
+     * illegal one.
      *
      * @return array{jsonrpc: string, id: string|null, method: string|null, params: array<string, mixed>|null, result: mixed|null, error: array<string, mixed>|null, isNotification: bool, resultSet: bool}
      */
