@@ -245,8 +245,13 @@ final class ToolsEnvRosterTest extends TestCase
             $unresolved,
             'These environment accesses have a name the scanner cannot resolve — a computed '
             . 'getenv() argument or a computed superglobal subscript. It refuses to guess '
-            . 'rather than scoring them zero (rule 14). Spell the variable as a literal, or '
-            . 'say deliberately in ToolsEnvRosterTest why this access rosters nothing.',
+            . 'rather than scoring them zero (rule 14). SPELL THE VARIABLE AS A LITERAL. There '
+            . 'is deliberately NO exemption row for this list and the earlier version of this '
+            . 'message was wrong to offer one: an exemption would have to be keyed on the '
+            . "placeholder name or on a file:line, and the first exempts EVERY unresolvable "
+            . 'access at once while the second rots on the next edit (rules 4 and 40). If an '
+            . 'access genuinely cannot be spelled literally, that is a change to the scanner '
+            . 'with a fixture, not a row.',
         );
 
         $this->assertSame(
@@ -420,9 +425,25 @@ final class ToolsEnvRosterTest extends TestCase
             . 'populations no longer partition tools/ and a file may be scanned by neither',
         );
 
+        // AN UNRESOLVABLE ACCESS IS ROUTED OUT BEFORE THE EXEMPTIONS, exactly as
+        // the roster above does it, and the asymmetry that used to be here was
+        // a real hole rather than an inconsistency of style. `<not a literal>`
+        // is not in NAMES_NOTHING and not in AMBIENT, so it fell through and
+        // reddened — fail-closed, and fine. But the ONLY way to silence it was
+        // an AMBIENT row keyed on the placeholder string, and that row would
+        // have exempted EVERY unresolvable access in this population at once,
+        // for ever, in a guard whose whole subject is a variable nobody was
+        // watching. An exemption bought with a magic name is rule 40 one level
+        // down. There is no exemption for this list; the answer is a literal.
         $local = [];
+        $localUnresolved = [];
         foreach ($files as $file) {
             foreach (self::envAccessesIn((string) \file_get_contents($file)) as $access) {
+                if ($access['name'] === self::UNRESOLVED) {
+                    $localUnresolved[] = \basename($file) . ':' . $access['line'];
+
+                    continue;
+                }
                 if (\in_array($access['name'], self::NAMES_NOTHING, true)
                     || isset(self::AMBIENT[$access['name']])
                 ) {
@@ -432,6 +453,36 @@ final class ToolsEnvRosterTest extends TestCase
             }
         }
         \sort($local);
+        \sort($localUnresolved);
+
+        // RULE 25, FOR THE ASSERTION DIRECTLY BELOW. `[]` is also what an
+        // envAccessesIn() that had stopped recognising an unresolvable argument
+        // returns, and "it is pinned by the fixture test further up this file"
+        // is a claim about a DIFFERENT test — which passes or fails on its own
+        // and cannot vouch for this one. One known positive, here, in the same
+        // method: a computed getenv() argument must still surface the
+        // placeholder.
+        $probe = [];
+        foreach (self::envAccessesIn('<?php $k = "A"; \getenv($k . "_B");') as $access) {
+            $probe[] = $access['name'];
+        }
+        $this->assertSame(
+            [self::UNRESOLVED],
+            $probe,
+            'the scanner no longer reports a computed getenv() argument as unresolvable, so the '
+            . 'empty list asserted below is the answer of an instrument that has stopped '
+            . 'looking rather than a statement about tools/',
+        );
+
+        $this->assertSame(
+            [],
+            $localUnresolved,
+            'A file under tools/ that is not a script reads an environment variable whose name '
+            . 'the scanner cannot resolve. Spell it as a literal. There is no exemption row for '
+            . 'this list, deliberately — see the assertion of the same shape in '
+            . 'testEveryVariableAToolsScriptReadsIsDocumentedInItsHelp() for why an exemption '
+            . 'keyed on the placeholder name would be worse than the red you are reading',
+        );
 
         $this->assertSame(
             [],
