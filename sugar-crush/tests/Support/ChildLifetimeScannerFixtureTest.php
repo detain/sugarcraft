@@ -1055,9 +1055,6 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
     }
 
     /**
-     * @return list<array{line:int,function:string,lifetime:string,reason:string,fds:list<int>|null,highFds:list<int>}>
-     */
-    /**
      * A closer inside `finally` runs on EVERY path out, so it is SHORT.
      *
      * THE POSITIVE CONTROL FOR THE `finally` RULE. Before this, the scanner
@@ -1286,6 +1283,9 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
         );
     }
 
+    /**
+     * @return list<array{line:int,function:string,lifetime:string,reason:string,fds:list<int>|null,highFds:list<int>}>
+     */
     private function sitesIn(string $source): array
     {
         return ChildLifetimeScanner::scan($source)['sites'];

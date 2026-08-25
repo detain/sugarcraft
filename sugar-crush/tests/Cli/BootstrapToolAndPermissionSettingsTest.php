@@ -1118,7 +1118,6 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         return $stderr;
     }
 
-    /** @param array<string, mixed> $data */
     // -------------------------------------------------------------------------
     // Provenance: which source the GATE remembers, for `/permissions`
     // -------------------------------------------------------------------------
@@ -1467,6 +1466,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         ];
     }
 
+    /** @param array<string, mixed> $data */
     private function writeUserConfigFile(array $data): void
     {
         file_put_contents($this->configDir . '/config.json', (string) json_encode($data));

@@ -295,11 +295,6 @@ final class LspConnectionShutdownTest extends TestCase
     }
 
     /**
-     * `disconnect()` on a connection that never connected, and twice over, are
-     * both no-ops — {@see LspConnection::__destruct()} calls into the same
-     * teardown after any explicit call, so a double teardown is the NORMAL path.
-     */
-    /**
      * A SERVER THAT LOGS MORE THAN ONE PIPE BUFFER STILL GETS ANSWERED.
      *
      * {@see LspConnection::connect()} gives the child fd 2 as a `['pipe','w']`,
@@ -416,6 +411,11 @@ final class LspConnectionShutdownTest extends TestCase
         return $connection;
     }
 
+    /**
+     * `disconnect()` on a connection that never connected, and twice over, are
+     * both no-ops — {@see LspConnection::__destruct()} calls into the same
+     * teardown after any explicit call, so a double teardown is the NORMAL path.
+     */
     public function testDisconnectIsIdempotentAndSafeUnconnected(): void
     {
         $never = new LspConnection('/nonexistent-lsp');
@@ -616,27 +616,6 @@ final class LspConnectionShutdownTest extends TestCase
         PHP;
 
     /**
-     * A COOPERATIVE server: it speaks enough LSP to answer `shutdown` and to
-     * leave on `exit`, and it does not touch SIGTERM.
-     *
-     * WHY IT HAS TO ANSWER, and what the first version of it measured instead.
-     * {@see LspConnection::disconnect()} sends a `shutdown` REQUEST before it
-     * reaches the teardown ladder, and that request is bounded by the
-     * connection's own `requestTimeout`. A fixture that merely sat there — which
-     * is what this constant used to be — made the "prompt" control take 2.01s,
-     * the whole request timeout, and the assertion was then measuring the
-     * PROTOCOL wait while claiming to measure the escalation budget. Two
-     * different clocks, one number.
-     *
-     * Answering makes the control say what it is for: against a server that
-     * behaves, `disconnect()` completes the handshake, the server exits on its
-     * own, and
-     * {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndClose()}
-     * finds a process that is already gone — so no signal is sent and NO part of
-     * the escalation budget is paid. That is the claim the bound below is
-     * allowed to make.
-     */
-    /**
      * Well-behaved on stdout, LOUD on stderr: writes `$argv[2]` bytes to fd 2
      * before serving a single request.
      *
@@ -684,6 +663,27 @@ final class LspConnectionShutdownTest extends TestCase
         }
         PHP;
 
+    /**
+     * A COOPERATIVE server: it speaks enough LSP to answer `shutdown` and to
+     * leave on `exit`, and it does not touch SIGTERM.
+     *
+     * WHY IT HAS TO ANSWER, and what the first version of it measured instead.
+     * {@see LspConnection::disconnect()} sends a `shutdown` REQUEST before it
+     * reaches the teardown ladder, and that request is bounded by the
+     * connection's own `requestTimeout`. A fixture that merely sat there — which
+     * is what this constant used to be — made the "prompt" control take 2.01s,
+     * the whole request timeout, and the assertion was then measuring the
+     * PROTOCOL wait while claiming to measure the escalation budget. Two
+     * different clocks, one number.
+     *
+     * Answering makes the control say what it is for: against a server that
+     * behaves, `disconnect()` completes the handshake, the server exits on its
+     * own, and
+     * {@see \SugarCraft\Crush\Support\ProcessReaper::terminateAndClose()}
+     * finds a process that is already gone — so no signal is sent and NO part of
+     * the escalation budget is paid. That is the claim the bound below is
+     * allowed to make.
+     */
     private const WELL_BEHAVED_SERVER = <<<'PHP'
         <?php
         file_put_contents($argv[1], (string) getmypid());

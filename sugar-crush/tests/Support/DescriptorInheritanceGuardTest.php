@@ -345,6 +345,26 @@ final class DescriptorInheritanceGuardTest extends TestCase
     ];
 
     /**
+     * The highest fd the child probe looks at, single-sourced.
+     *
+     * IT IS IN A CONSTANT BECAUSE IT APPEARS IN FOUR PLACES and one of them is
+     * a failure message. The child's loop, the "name every fd" spec, and the
+     * two messages that tell a reader what was and was not searched all have
+     * to mean the same number; spelled four times, the message is the one that
+     * rots, and a message naming the wrong window sends the next reader after
+     * the wrong cause. Rule 4's shape, one level down from line numbers.
+     *
+     * WHY 40 AND NOT MORE. The probe OPENS a descriptor per fd it tests, so
+     * the ceiling is also a cost. Sampled during a full suite run the process
+     * held nothing above the teens, so 40 is roughly double the observed high
+     * water mark - loose enough not to be luck, cheap enough to run per test.
+     * If the marker ever lands above it the first assertion below reds, which
+     * is why that message names the window rather than only the two causes it
+     * used to offer.
+     */
+    private const PROBE_FD_CEILING = 40;
+
+    /**
      * Exposed spawns in reachable SIBLING libraries. E418.
      *
      * WHY THE GUARD WIDENED. Round 53 built this instrument, rostered seven
@@ -409,26 +429,6 @@ final class DescriptorInheritanceGuardTest extends TestCase
      *
      * @var array<string, array{count:int, reason:string}>
      */
-    /**
-     * The highest fd the child probe looks at, single-sourced.
-     *
-     * IT IS IN A CONSTANT BECAUSE IT APPEARS IN FOUR PLACES and one of them is
-     * a failure message. The child's loop, the "name every fd" spec, and the
-     * two messages that tell a reader what was and was not searched all have
-     * to mean the same number; spelled four times, the message is the one that
-     * rots, and a message naming the wrong window sends the next reader after
-     * the wrong cause. Rule 4's shape, one level down from line numbers.
-     *
-     * WHY 40 AND NOT MORE. The probe OPENS a descriptor per fd it tests, so
-     * the ceiling is also a cost. Sampled during a full suite run the process
-     * held nothing above the teens, so 40 is roughly double the observed high
-     * water mark - loose enough not to be luck, cheap enough to run per test.
-     * If the marker ever lands above it the first assertion below reds, which
-     * is why that message names the window rather than only the two causes it
-     * used to offer.
-     */
-    private const PROBE_FD_CEILING = 40;
-
     private const ACCOUNTED_FOR_IN_LIBS = [
         'candy-core/WorkerPool.php::spawnWorker' => [
             'count' => 1,

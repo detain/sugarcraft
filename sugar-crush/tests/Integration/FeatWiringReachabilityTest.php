@@ -1090,10 +1090,6 @@ final class FeatWiringReachabilityTest extends TestCase
     }
 
     /**
-     * Every message body of a Chat's transcript, joined — what a user would be
-     * looking at after the turn.
-     */
-    /**
      * Submit a `/workflow run` and drive the loop until its reply lands.
      *
      * The run is asynchronous, so the Chat returned by `submit()` holds the
@@ -1109,6 +1105,10 @@ final class FeatWiringReachabilityTest extends TestCase
         return $after;
     }
 
+    /**
+     * Every message body of a Chat's transcript, joined — what a user would be
+     * looking at after the turn.
+     */
     private function transcript(Chat $chat): string
     {
         return implode("\n", array_map(static fn($m) => $m->content, $chat->history));

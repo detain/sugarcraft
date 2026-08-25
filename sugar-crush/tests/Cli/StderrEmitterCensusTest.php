@@ -2563,27 +2563,6 @@ final class StderrEmitterCensusTest extends TestCase
     }
 
     /**
-     * Whether the `warn` token at `$i` is `RuntimeNoticeSink::warn(` — in any of
-     * the three spellings PHP lexes differently — rather than a declaration or
-     * a first-class callable.
-     *
-     * THE CLASS TOKEN IS REQUIRED AND THAT IS THE POINT. `warn` is an ordinary
-     * method name: `src/Agents/ForeignAgentPresetRegistry.php` calls
-     * `$this->warn(` three times (MEASURED, PHP 8.3.6) and none of those is a
-     * write of this shape. A scanner keyed on the method name alone would
-     * credit channel 6 with them.
-     *
-     * THREE SPELLINGS, because PHP 8.3.6 lexes them as three different tokens
-     * and an alphabet that knows only the first is how a census goes blind:
-     * `RuntimeNoticeSink` is `T_STRING`, `Diagnostics\RuntimeNoticeSink` is
-     * `T_NAME_QUALIFIED`, `\SugarCraft\…\RuntimeNoticeSink` is
-     * `T_NAME_FULLY_QUALIFIED`. All three are matched on their last segment.
-     * An ALIASED import is not matched, and is named as this channel's known
-     * blind spot in the class doc-block.
-     *
-     * @param list<array{0: int, 1: string}|string> $significant
-     */
-    /**
      * Every CALL of a method named `$method` in `$source`, WHOEVER THE RECEIVER
      * IS — the deliberate complement of {@see isRuntimeNoticeSinkCall()}.
      *
@@ -2835,6 +2814,27 @@ final class StderrEmitterCensusTest extends TestCase
         );
     }
 
+    /**
+     * Whether the `warn` token at `$i` is `RuntimeNoticeSink::warn(` — in any of
+     * the three spellings PHP lexes differently — rather than a declaration or
+     * a first-class callable.
+     *
+     * THE CLASS TOKEN IS REQUIRED AND THAT IS THE POINT. `warn` is an ordinary
+     * method name: `src/Agents/ForeignAgentPresetRegistry.php` calls
+     * `$this->warn(` three times (MEASURED, PHP 8.3.6) and none of those is a
+     * write of this shape. A scanner keyed on the method name alone would
+     * credit channel 6 with them.
+     *
+     * THREE SPELLINGS, because PHP 8.3.6 lexes them as three different tokens
+     * and an alphabet that knows only the first is how a census goes blind:
+     * `RuntimeNoticeSink` is `T_STRING`, `Diagnostics\RuntimeNoticeSink` is
+     * `T_NAME_QUALIFIED`, `\SugarCraft\…\RuntimeNoticeSink` is
+     * `T_NAME_FULLY_QUALIFIED`. All three are matched on their last segment.
+     * An ALIASED import is not matched, and is named as this channel's known
+     * blind spot in the class doc-block.
+     *
+     * @param list<array{0: int, 1: string}|string> $significant
+     */
     private static function isRuntimeNoticeSinkCall(array $significant, int $i): bool
     {
         $operator = $significant[$i - 1] ?? null;

@@ -901,18 +901,6 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     }
 
     /**
-     * `reset()` TAKES THE WATCHER OFF THE LOOP BEFORE IT CLOSES THE STREAM.
-     *
-     * Not tidiness. `Loop::get()` is process-wide and this suite runs some nine
-     * thousand tests through it; a watcher left registered against a closed
-     * resource is one `stream_select()` will be handed on every iteration for
-     * the rest of the run, in every later test's loop. The ordering inside
-     * `reset()` is the fix and this is what pins it — a `reset()` that closed
-     * first and cancelled second would leave this assertion green while doing
-     * exactly the damage, so the assertion is on the watcher's own state and
-     * the ordering is argued at the call site.
-     */
-    /**
      * THE ONE-SHOT CANCELS ITSELF *BEFORE* IT NOTIFIES, asserted from inside
      * the notification rather than after it.
      *
@@ -976,6 +964,18 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         );
     }
 
+    /**
+     * `reset()` TAKES THE WATCHER OFF THE LOOP BEFORE IT CLOSES THE STREAM.
+     *
+     * Not tidiness. `Loop::get()` is process-wide and this suite runs some nine
+     * thousand tests through it; a watcher left registered against a closed
+     * resource is one `stream_select()` will be handed on every iteration for
+     * the rest of the run, in every later test's loop. The ordering inside
+     * `reset()` is the fix and this is what pins it — a `reset()` that closed
+     * first and cancelled second would leave this assertion green while doing
+     * exactly the damage, so the assertion is on the watcher's own state and
+     * the ordering is argued at the call site.
+     */
     public function testResetTakesTheReadWatcherBackOffTheLoop(): void
     {
         self::assertTrue(RuntimeNoticeSink::arm(), 'no cross-fork transport on this host');
@@ -1096,8 +1096,9 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     }
 
     /**
-     * NO FILE UNDER `src/`, AND NOT `bin/sugarcrush`, CARRIES A STACKED
-     * DOC-COMMENT — two doc-blocks in a row with no declaration between them.
+     * NO FILE UNDER `src/` OR `tests/`, AND NOT `bin/sugarcrush`, CARRIES A
+     * STACKED DOC-COMMENT — two doc-blocks in a row with no declaration
+     * between them.
      *
      * WHY THE SHAPE COSTS SOMETHING. PHP attaches only the LAST doc-comment in
      * such a run, so every earlier one stops documenting anything. E193's
@@ -1124,17 +1125,23 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
      * WHAT THIS DOC-BLOCK USED TO SAY, and why the sentence is gone (rule 7):
      * it said "SCOPED TO `Chat.php` DELIBERATELY … widening the guard would red
      * on work in flight rather than on this defect", and it was right when
-     * written — three sibling lanes were editing `src/` in the same round.
-     * WHAT IS TRUE NOW: those lanes merged, the four pairs the narrow scope
-     * deferred are fixed, and the roster below is the whole of `src/` plus the
-     * binary. WHY IT STILL EARNS ITS PLACE: the reason for the narrow scope was
-     * never that the shape is harmless outside `Chat.php` — it was concurrency,
-     * and a future round narrowing this again for the same reason should say so
-     * here rather than delete the guard.
+     * written — three sibling lanes were editing `src/` in the same round. It
+     * then said the roster was "the whole of `src/` plus the binary", which was
+     * true for exactly two rounds. WHAT IS TRUE NOW: the roster is `src/` AND
+     * `tests/` plus the binary, and the eighteen pairs that widening found were
+     * cleared in the same commit. WHY IT STILL EARNS ITS PLACE: the reason for
+     * every narrow scope this guard has had was never that the shape is
+     * harmless outside it — it was concurrency, and a future round narrowing
+     * this again for the same reason should say so here rather than delete the
+     * guard. Round 57 widened it WHILE two sibling lanes were editing `tests/`,
+     * and paid that price knowingly: the census had found four times as many
+     * offenders in the unwatched half as the watched one had ever held.
      *
      * A WIDENED GUARD IS A STANDING OBLIGATION ON EVERY OTHER LANE, and that is
      * the point: it reds on the next stacked pair anyone writes, in any file,
      * rather than only in the one file that happened to have the bug first.
+     * The obligation now covers the test suite, which is where the shape was
+     * four times more common than in the code it tests.
      */
     public function testNoSourceFileCarriesStackedDocComments(): void
     {
@@ -1148,6 +1155,11 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         // the moment any lane adds a file.
         self::assertContains($root . '/src/Chat.php', $files);
         self::assertContains($root . '/src/Runtime.php', $files);
+        // AND ONE FROM THE HALF THAT JOINED IN ROUND 57. Without this, dropping
+        // `tests/` back out of the roster leaves every assertion here green:
+        // the scan of a smaller roster still finds no stacked pair, and the
+        // three names above are all still in it.
+        self::assertContains(__FILE__, $files);
         // AND FOR THE BINARY, `assertContains` ALONE IS A TAUTOLOGY:
         // phpSourceRoster() appends that path unconditionally rather than
         // discovering it, so the roster would still "contain" it on a checkout
@@ -1403,8 +1415,23 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
         return $stacked;
     }
     /**
-     * Every PHP file the stacked-doc-comment guard speaks for: all of `src/`,
-     * plus the `bin/sugarcrush` entry point.
+     * Every PHP file the stacked-doc-comment guard speaks for: all of `src/`
+     * AND all of `tests/`, plus the `bin/sugarcrush` entry point.
+     *
+     * `tests/` JOINED IN ROUND 57, AND THE COUNT IS WHY. The guard had been
+     * scoped to `src/` on the argument that the shape costs something there;
+     * a census over `tests/` found EIGHTEEN stacked pairs in SIXTEEN files,
+     * against four the widening to all of `src/` had cleared. The cost is the
+     * same in both trees and the population was four times larger in the half
+     * nobody was looking at. Two of the eighteen were a fixture's `@param` and
+     * a scanner's `@return` — tags off their declarations, exactly the loss
+     * the `src/` half was widened for — and every other one was prose
+     * describing a helper, stranded above an unrelated method's block and
+     * attached to nothing.
+     *
+     * NO FIGURE FROM THAT CENSUS IS ASSERTED, and none is written into the
+     * guard: a count over `tests/` is stale the moment any lane adds a file
+     * (rule 18). The roster IS the figure, and the scan re-derives it.
      *
      * `bin/sugarcrush` is in the roster even though `token_get_all()` finds no
      * `T_DOC_COMMENT` in it at all as this is written, because the guard exists
@@ -1417,13 +1444,15 @@ final class RuntimeNoticeSinkDeliveryTest extends TestCase
     private static function phpSourceRoster(string $root): array
     {
         $files = [];
-        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
-            $root . '/src',
-            \FilesystemIterator::SKIP_DOTS,
-        ));
-        foreach ($walk as $entry) {
-            if ($entry->isFile() && $entry->getExtension() === 'php') {
-                $files[] = $entry->getPathname();
+        foreach (['/src', '/tests'] as $subdir) {
+            $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
+                $root . $subdir,
+                \FilesystemIterator::SKIP_DOTS,
+            ));
+            foreach ($walk as $entry) {
+                if ($entry->isFile() && $entry->getExtension() === 'php') {
+                    $files[] = $entry->getPathname();
+                }
             }
         }
         $files[] = $root . '/bin/sugarcrush';

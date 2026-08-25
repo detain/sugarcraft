@@ -1314,10 +1314,6 @@ final class KeyBindingDriftTest extends TestCase
     }
 
     /**
-     * A Chat over a real, throwaway {@see SessionStore} holding $count rows,
-     * pointed at the first of them.
-     */
-    /**
      * Park the draft's cursor at `$offset` by pressing Left, which is a real
      * keystroke through the real arm rather than a reach into the widget.
      *
@@ -1337,6 +1333,10 @@ final class KeyBindingDriftTest extends TestCase
         return $chat;
     }
 
+    /**
+     * A Chat over a real, throwaway {@see SessionStore} holding $count rows,
+     * pointed at the first of them.
+     */
     private function chatWithSessions(int $count): Chat
     {
         $store = new SessionStore($this->sandbox . '/sessions-' . (++$this->storeSeq) . '.db');
@@ -1670,14 +1670,6 @@ final class KeyBindingDriftTest extends TestCase
     }
 
     /**
-     * Rows whose label is prose or a range rather than a literal chord, and
-     * which therefore drive their own input. Held as an explicit list so that
-     * adding one is a decision: a new row that merely LOOKS unparseable (a
-     * typo, a chord spelled in a way the reference's readers would not
-     * recognise) lands in {@see testEveryLabelIsALiteralChordOrADeclaredException()}
-     * instead of quietly opting out of label coverage.
-     */
-    /**
      * The named keys a label may carry a `Ctrl+`/`Alt+` prefix on, mapped to
      * the KeyType a terminal reports for them.
      *
@@ -1708,6 +1700,14 @@ final class KeyBindingDriftTest extends TestCase
      */
     private const MODIFIABLE_RUNE = ['Space' => ' '];
 
+    /**
+     * Rows whose label is prose or a range rather than a literal chord, and
+     * which therefore drive their own input. Held as an explicit list so that
+     * adding one is a decision: a new row that merely LOOKS unparseable (a
+     * typo, a chord spelled in a way the reference's readers would not
+     * recognise) lands in {@see testEveryLabelIsALiteralChordOrADeclaredException()}
+     * instead of quietly opting out of label coverage.
+     */
     private const HAND_DRIVEN = [
         // "any text" — the palette filter answers every printable character,
         // so there is no single chord to press.
