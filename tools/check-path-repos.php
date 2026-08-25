@@ -144,6 +144,15 @@ manifest under `extra.sugarcraft.deferred-wiring.<package>`, prints with its
 reason and does not count as a finding. Pruning a dependency somebody
 deliberately kept, or deleting the CI step, were the only two exits before it.
 
+EVERY SUCH ROW IS ITSELF CHECKED, in every lib, and a row that is not
+suppressing anything is an `IDLE_DEFERRAL` finding. A row does work only when
+it names a production `sugarcraft/*` require of that manifest, that `src/` does
+not reach, whose namespace resolves, and that carries a reason. The commonest
+way a row goes idle is the happy one: the wiring landed and `src/` now
+references the dep, at which point the row must be deleted. This check is here
+rather than in a per-lib test suite because the hatch is honoured in all 58 libs
+and only one of them had a test guarding it.
+
 Each flagged require is annotated with `tests_uses: yes|no` (whether the lib's
 tests/ still reference the dep — a "yes" means the prune is a
 move-to-require-dev, not a delete). Findings are CANDIDATES:
@@ -539,6 +548,66 @@ if ($unused) {
 
             return \is_string($reason) && \trim($reason) !== '' ? \trim($reason) : null;
         };
+
+        // (0) EVERY deferred-wiring row is validated, in EVERY lib, before any
+        // of it is honoured.
+        //
+        // E488. THE HATCH APPLIES REPO-WIDE AND ITS VALIDATION DID NOT. The
+        // lookup above is consulted only for a dep this pass has ALREADY
+        // decided is dead, so a row naming something else is never looked at:
+        // measured, two rows added to `candy-shine` -- one for
+        // `sugarcraft/candy-core`, which its `src/` references on every page,
+        // and one for `sugarcraft/package-that-does-not-exist`, which is not
+        // even a require -- produced no output at all and exit 0.
+        //
+        // `sugar-crush` has a PHPUnit guard that catches exactly this
+        // (`tests/Support/ManifestDependencyReachTest`, which an attack rather
+        // than a reading found the hole in). No other lib has one, and there
+        // are 58. So the guarantee lived in one lib's test suite while the
+        // escape hatch it guards was honoured in all of them. It belongs here
+        // instead, because this is the thing CI actually gates on and it is
+        // the thing that reads the rows.
+        //
+        // A ROW IS DOING WORK when it names a production `sugarcraft/*`
+        // require of THIS manifest, that `src/` does not reach, and whose
+        // namespace resolves. Anything else is an exemption with no defect
+        // behind it, which is where the next real one hides -- so it is a
+        // FINDING and it says which of the three it failed.
+        $rows = $data['manifest']['extra']['sugarcraft']['deferred-wiring'] ?? null;
+        if (\is_array($rows)) {
+            foreach ($rows as $package => $reason) {
+                if (!\is_string($package)) {
+                    $lines[] = \sprintf(
+                        '  - %-23s a deferred-wiring key is not a string, so it names no package',
+                        'IDLE_DEFERRAL'
+                    );
+                    $unusedFindings++;
+                    continue;
+                }
+                $why = null;
+                if (!\is_string($reason) || \trim($reason) === '') {
+                    $why = 'the row carries no reason, so it records nothing';
+                } elseif (!\str_starts_with($package, 'sugarcraft/')) {
+                    $why = 'not a sugarcraft/* package, so this pass never looks at it';
+                } elseif (!\in_array(\substr($package, \strlen('sugarcraft/')), $directDeps, true)) {
+                    $why = 'not a production require of this manifest';
+                } else {
+                    $depSlug = \substr($package, \strlen('sugarcraft/'));
+                    $prefixes = $psr4PrefixesOf($depSlug);
+                    if ($prefixes === []) {
+                        $why = 'the dep declares no autoload.psr-4, so "unused" was never decided '
+                            . 'for it and the row suppresses nothing';
+                    } elseif ($namespaceHits($srcDir, $prefixes) !== []) {
+                        $why = 'src/ already references it - THE WIRING HAS LANDED, so delete '
+                            . 'the row; a deferral is a record, not an exemption';
+                    }
+                }
+                if ($why !== null) {
+                    $lines[] = \sprintf('  - %-23s %s  (%s)', 'IDLE_DEFERRAL', $package, $why);
+                    $unusedFindings++;
+                }
+            }
+        }
 
         // (1) Unused DIRECT (production) requires.
         foreach ($directDeps as $depSlug) {
