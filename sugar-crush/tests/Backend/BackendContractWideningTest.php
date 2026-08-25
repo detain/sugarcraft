@@ -164,15 +164,10 @@ final class BackendContractWideningTest extends TestCase
      */
     public function testAFourParameterBackendCLAIMINGToObserveReasoningCannotLoad(): void
     {
-        [$rc, $output] = $this->compileInFreshInterpreter(<<<'PROBE'
-            final class LiarBackend implements \SugarCraft\Crush\Backend\ObservesReasoning
-            {
-                public function complete(array $h, ?callable $t = null, ?callable $e = null, ?callable $r = null): \SugarCraft\Crush\Message
-                { throw new \LogicException('unreached'); }
-                public function completeAsync(array $h, ?callable $t = null, ?\SugarCraft\Crush\Backend\CancellationToken $c = null, ?callable $e = null): \React\Promise\PromiseInterface
-                { throw new \LogicException('unreached'); }
-            }
-            PROBE, autoload: true);
+        [$rc, $output] = $this->compileInFreshInterpreter(
+            self::fourParameterProbe('LiarBackend', ObservesReasoning::class),
+            autoload: true,
+        );
 
         $this->assertNotSame(
             0,
@@ -182,29 +177,78 @@ final class BackendContractWideningTest extends TestCase
                 . 'redeclaration precisely so this cannot happen; if it can, the reasoning sink '
                 . "would be dropped on the floor with no diagnostic. Probe output:\n{$output}",
         );
-        $this->assertStringContainsString('must be compatible with', $output, $output);
+
+        // WHICH DECLARATION THE FATAL IS ABOUT, and this is the half the first
+        // revision of this test did not measure. `must be compatible with`
+        // alone is satisfied by ANY incompatible member of the probe: MEASURED
+        // by giving the probe a CORRECT five-parameter completeAsync() and a
+        // narrow three-parameter complete(), at which point the fatal is
+        // entirely about complete(), the fifth parameter is present and right,
+        // and the test was green. Rule 2 - the window, not the mutation.
+        $this->assertStringContainsString(
+            'LiarBackend::completeAsync(',
+            $output,
+            'the probe did fatal, but not on completeAsync(). This test is about the FIFTH '
+                . "parameter; something else in the probe is now incompatible.\n{$output}",
+        );
+        $this->assertStringContainsString(
+            '$onReasoning',
+            $output,
+            'the fatal does not name the reasoning parameter, so it is not the widening this '
+                . "test is about. PHP " . PHP_VERSION . " said:\n{$output}",
+        );
     }
 
     /**
-     * And the control for it: the same class body against plain
-     * {@see Backend} loads, so the failure above is about the FIFTH parameter
-     * and not about the probe being malformed. This is also the fact that makes
-     * widening `Backend` unthinkable — four parameters is the shipped norm.
+     * And the control for it: THE SAME class body — literally the same, built
+     * by {@see fourParameterProbe()} rather than transcribed twice — against
+     * plain {@see Backend} loads, so the failure above is about the FIFTH
+     * parameter and not about the probe being malformed. This is also the fact
+     * that makes widening `Backend` unthinkable — four parameters is the
+     * shipped norm.
      */
     public function testTheSameFourParameterBodyLoadsFineAgainstBackendItself(): void
     {
-        [$rc, $output] = $this->compileInFreshInterpreter(<<<'PROBE'
-            final class HonestBackend implements \SugarCraft\Crush\Backend
-            {
-                public function complete(array $h, ?callable $t = null, ?callable $e = null): \SugarCraft\Crush\Message
-                { throw new \LogicException('unreached'); }
-                public function completeAsync(array $h, ?callable $t = null, ?\SugarCraft\Crush\Backend\CancellationToken $c = null, ?callable $e = null): \React\Promise\PromiseInterface
-                { throw new \LogicException('unreached'); }
-            }
-            PROBE, autoload: true);
+        [$rc, $output] = $this->compileInFreshInterpreter(
+            self::fourParameterProbe('HonestBackend', Backend::class),
+            autoload: true,
+        );
 
         $this->assertSame(0, $rc, "the four-parameter control did not load against Backend:\n{$output}");
         $this->assertStringContainsString(self::LOADED, $output);
+    }
+
+    /**
+     * The one probe body both cases compile, differing ONLY in the class name
+     * and the interface it implements.
+     *
+     * WHAT THE CONTROL'S DOCBLOCK SAID: "the same class body against plain
+     * Backend loads". WHAT WAS TRUE: the two heredocs were not the same body —
+     * the liar declared a four-parameter `complete()` and the control a
+     * three-parameter one, so the control varied the interface AND `complete()`
+     * at once and could not isolate the fifth parameter of `completeAsync()`.
+     * WHY THE CLAIM STILL EARNS ITS PLACE: it is the whole argument for the
+     * control existing, so rather than softening the sentence the body is now
+     * shared and the sentence is true by construction — a divergence cannot be
+     * introduced by editing one copy, because there is one copy.
+     *
+     * The four-parameter `complete()` is legal against `Backend`'s
+     * three-parameter one for the reason
+     * {@see testAnImplementationWithMOREOptionalParametersThanItsInterfaceLoadsFine()}
+     * measures, so this really is one body that loads in one case and cannot
+     * be compiled in the other.
+     */
+    private static function fourParameterProbe(string $class, string $interface): string
+    {
+        return <<<PROBE
+            final class {$class} implements \\{$interface}
+            {
+                public function complete(array \$h, ?callable \$t = null, ?callable \$e = null, ?callable \$r = null): \SugarCraft\Crush\Message
+                { throw new \LogicException('unreached'); }
+                public function completeAsync(array \$h, ?callable \$t = null, ?\SugarCraft\Crush\Backend\CancellationToken \$c = null, ?callable \$e = null): \React\Promise\PromiseInterface
+                { throw new \LogicException('unreached'); }
+            }
+            PROBE;
     }
 
     /**
