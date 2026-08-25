@@ -18161,3 +18161,50 @@ unverified.** Round 58's briefs asserted two and cited neither. Both survived to
 the lane's own scepticism caught them. **Rule 16 applies to the brief exactly as it applies to a review** —
 and a brief carries more authority, because nothing downstream is asked to falsify it.
 
+---
+
+## Round 59 — the campaign completes. E593, filed by the supervisor.
+
+### E593 — 🔴 E490: 240 CLEAN TAKES. THE PRIOR RATE IS NOW EXCLUDED AT 95%, AND BY 0.075 PERCENTAGE POINTS.
+
+**MEASURED by the supervisor across rounds 58–59, complete.** The campaign begun at round 58's recovery
+launch ran to its target while nine agents worked alongside it.
+
+**The data, which is on disk and should be read rather than taken from this paragraph:**
+`/tmp/.../scratchpad/r58campaign/takes.tsv` — 241 rows, 240 takes plus one instrument row.
+
+- **240 takes, every one `rc=0`**, and every one **byte-identical**:
+  `Tests: 630, Assertions: 1494, Warnings: 1, Skipped: 16`.
+- **`EVENTS.txt` is two lines long**, and both are the instrument check. **Zero hangs, zero non-zero
+  exits, zero anomalies of any kind** across the whole campaign.
+- No lane touched a `candy-*` file in either round, verified with `git diff --name-only`, so all 240 takes
+  measure the same code.
+
+**THE ARITHMETIC, STATED THE WAY RULE 45 DEMANDS:**
+
+| N clean takes | 95% one-sided upper bound on the per-take rate |
+|---|---|
+| 53 (round 57) | 5.50% |
+| 165 (round 58's close) | 1.80% |
+| **240 (final)** | **1.2405%** |
+
+**The prior estimate is 1 in 76 = 1.3158%.** So **240 clean takes excludes the prior rate at 95% — by
+0.075 percentage points.** That is the first thing this campaign has said that the previous four rounds
+could not, and it is a narrow result rather than a comfortable one.
+
+🔴 **WHAT THIS DOES NOT SAY: that E490 is fixed, or that the defect is gone.** 1.2405% is not zero. A hang
+at 1 in 500 is entirely consistent with 240 clean takes. What is excluded is the rate the ORIGINAL
+observation implied — one event in ~76 takes. Either the round-56 leaked-timer fix closed it, or the
+original rate estimate was high from a single observation. **240 takes cannot distinguish those two**, and
+nothing short of a reproducer will.
+
+**THE INSTRUMENT WAS PROVEN ALIVE BEFORE THE QUIET RUN WAS BELIEVED (rule 15).** Take zero runs at
+`CANDY_PTY_HANG_BUDGET=0.6`; the watchdog fired, SIGKILLed the runner at **`rc=137`**, and named the test.
+It is recorded in `EVENTS.txt` and **it is not a take**. Without it, 240 green runs and a dead watchdog are
+the same log.
+
+🔴 **AND THE PROCESS FINDING IS RULE 50 EARNING ITS PLACE ON ITS FIRST OUTING.** Round 58 gave this campaign
+to a lane as its first instruction, marked 🔴 and "before you do anything else"; it was never started, 0 of
+1 (E584). The supervisor ran it instead and it completed while nine agents worked. **A three-hour
+background measurement does not belong to an agent with a context limit and thirteen competing items.**
+
