@@ -608,7 +608,13 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
                 self::assertStringContainsString(
                     '::',
                     $helper,
-                    "a bare method name in {$name} would let any class of that name count: " . $helper,
+                    "a bare method name in {$name} would let any class of that name count: "
+                        . $helper . '. This row carries a SECOND load its name does not hint '
+                        . 'at, so do not weaken it to get a bare function rostered: it is what '
+                        . 'keeps every CLOSING_HELPERS key shaped like the callee that matches '
+                        . 'it, and the closedBy receipt is only distinguishable from the '
+                        . "callee's own spelling while that holds "
+                        . '(see testAnUnrosteredCloserBuysNoVerdictAndLeavesNoReceipt).',
                 );
                 self::assertNotSame(
                     '',
@@ -1050,9 +1056,31 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
      * tests, 130 assertions, rc 0. It survives because that mutant is
      * EQUIVALENT on today's roster: every CLOSING_HELPERS key contains `::`,
      * the only other thing that reaches the stamping line is a literal
-     * `proc_close()`, and a BEST_EFFORT row never reaches it at all. It stops
-     * being equivalent the day a bare function - not a `Class::method` - is
-     * rostered as a closer, and on that day the receipt goes wrong silently.
+     * `proc_close()`, and a BEST_EFFORT row never reaches it at all.
+     *
+     * AND THE ESCAPE CLAUSE THAT PARAGRAPH ENDED ON IS ITSELF WRONG, which is
+     * the same defect one turn later and is why it is corrected here rather
+     * than quietly dropped. WHAT IT SAID: the mutant "stops being equivalent
+     * the day a bare function - not a `Class::method` - is rostered as a
+     * closer, and on that day the receipt goes wrong silently". WHAT IS TRUE,
+     * MEASURED by rostering exactly that - a bare `r54c`-named key appended to
+     * {@see ChildLifetimeScanner::CLOSING_HELPERS} - and running this file:
+     * rc 1, 52 tests, TWO failures, neither of them quiet.
+     * {@see testTheClosingHelperRosterIsNotEmpty()} refuses the row outright
+     * ("a bare method name in CLOSING_HELPERS would let any class of that name
+     * count"), and {@see testEveryRosteredHelperProducesItsRostersVerdict()}
+     * reds a second time because the scanner gives the row no verdict. So the
+     * day the paragraph tells the reader to watch for cannot arrive: the
+     * roster cannot HOLD such a key without a red that names it.
+     *
+     * WHY THAT MATTERS MORE THAN A CORRECTED SENTENCE. The mutant is not
+     * equivalent by an accident of today's data that time will erode - it is
+     * equivalent under an invariant this file ENFORCES, and there is no future
+     * day to wait for. The receipt's correctness therefore rests on the `::`
+     * assertion in {@see testTheClosingHelperRosterIsNotEmpty()} as much as on
+     * the stamping line, which is not something its name would lead anyone to
+     * guess. Weaken that assertion and the stamping line becomes free to be
+     * wrong; that is the real dependency, and it is now written at both ends.
      *
      * WHERE THE ROSTER-TRACKING CHECK ACTUALLY LIVES, since it is not here:
      * {@see testEveryRosteredHelperProducesItsRostersVerdict()}, whose expected
