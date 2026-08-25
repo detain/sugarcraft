@@ -19170,3 +19170,71 @@ than a promise. It is where a future widening starts.
 not committed and not a policy breach. Recorded only because a per-lib lock makes CI's path-repo
 injection a no-op if anyone ever runs `composer install` in that directory: `composer install` would
 resolve from the lock and silently ignore the injected closure.
+
+### Eb60-1 — the sub-agent tool grant is wired through `AgentManager` but no production caller supplies a registry
+
+**DEFERRED, out of lane (`src/Cli/Bootstrap.php`).** Round 60 lane b made
+`AgentManager::executeSubAgent()` resolve `Agent::$tools` into the `CompleteRequest`'s `tools` field
+(§C7). The resolution is driven by a new optional `toolRegistry` constructor parameter, and
+`Bootstrap::agentManager()` does not pass one — so a LAUNCHED sub-agent still reaches its provider
+with `tools: null`, exactly as before. The change is a one-liner (`toolRegistry: self::tools($root,
+...)`), and it was not made because `Bootstrap.php` belongs to no lane this round. `null` was chosen
+as the parameter's default precisely so this state is the pre-existing behaviour rather than a
+refusal a launcher cannot act on, and `AgentManagerTest::testWithNoRegistryTheRequestKeepsItsPreExistingNullTools`
+pins it.
+
+### Eb60-2 — the sub-agent SKILL grant has the identical fail-open shape and was NOT fixed
+
+**DEFERRED. The FINDING, not the fix (rule 10).** `executeSubAgent()` applies skills with
+
+    $skill = $this->skillRegistry->get($skillName);
+    if ($skill !== null) { $systemPrompt .= $skill->systemPromptContribution(); }
+
+— a missing skill is SILENTLY SKIPPED. Meanwhile `AgentDefinitionTest::testEveryPresetNamesEverySkillItIsGranted`
+asserts that every preset prompt NAMES each skill it is granted, so `reviewer`'s prompt says "consult
+the php-best-practices and security-audit skills you have been granted". MEASURED on PHP 8.3.6 at
+this commit: a bare `new SkillRegistry()` resolves NONE of `php-best-practices`, `security-audit` or
+`phpunit-master` (they come from disk discovery). So on any launch where those files are absent, the
+prompt tells the model to consult skills whose bodies were never appended — the same "the prompt
+lies and nothing reds" defect §C7 was filed for, one field over.
+
+Not fixed here because refusing loudly would fail every `reviewer`/`tester` sub-agent launched
+without those skill files present, and that trade needs the launch path to be live first. The
+candidate fixes, in preference order: (a) refuse a preset whose granted skill does not resolve, at
+REGISTRATION rather than at execution; (b) strip the skill's name from the prompt when it does not
+resolve; (c) warn on stderr at construction. (b) is wrong on its own — it edits the model-facing
+prompt at runtime, which nothing else here does.
+
+### Eb60-3 — `AgentManager::executeAll()` — the LIVE parallel path — bypasses the grant entirely
+
+**DEFERRED, and the more consequential half of §C7.** `executeSubAgent()` has no production caller;
+`executeAll()` has TWO — `Chat::executeAgents()` and `WorkflowEngine`'s parallel stages. MEASURED at
+this commit: `executeAll()` registers the caller's `SubAgent[]` and forwards ONE caller-supplied
+`CompleteRequest` to `AgentWorkerPool::executeAll()`, calling neither `resolveGrantedTools()` nor
+`refuseCallOutsideGrant()`; the pool then forwards `$request->tools` verbatim
+(`AgentWorkerPool.php`, in `executeAll()`'s per-agent request build). So a sub-agent run in PARALLEL
+gets whatever tools the caller put in the shared request, with no per-agent resolution and no
+per-call grant or denylist enforcement — and `WorkflowEngine` builds that shared request from the
+FIRST task of the stage, so agents 2..n of a mixed stage are governed by agent 1's declaration.
+
+Not fixed in round 60 because the correct shape is a PER-AGENT request built inside the pool, and
+`src/Agents/AgentWorkerPool.php` was lane c's file that round. The seam to use is the one the pool
+already has: it builds a per-agent `CompleteRequest` from each agent's own `task`, so `tools` can be
+resolved there from `$agent->agent->tools` by the same method.
+
+### Eb60-4 — a foreign preset's `Bash(git:*)` is imported verbatim and is silently unmatchable
+
+**DEFERRED.** Round 60 lane b found `AgentDefinition::reviewer()` shipping `Bash(git:*)` — Claude
+Code's prefix dialect — where this project globs an argument half with `fnmatch()`. MEASURED on PHP
+8.3.6: `(new PermissionRule('Bash(git:*)', Allow))->matches(new ToolCall('Bash', ['command' => 'git
+status']))` is FALSE, and so is every other real git command. The built-in preset was corrected and
+`AgentDefinitionTest` now refuses any argument-scoped preset declaration that its own probe cannot
+satisfy.
+
+**That guard covers the six built-in presets and nothing else.** `ForeignAgentPresetRegistry` imports
+`.claude/agents` frontmatter through `toolList()`, which MEASURED is a pure trim-and-split with no
+dialect translation anywhere in `src/Agents/` or `src/Permissions/`. So a user's own Claude Code
+preset carrying `tools: Bash(git:*)` produces a declaration that is well-formed, passes every check,
+and matches nothing — which after §C7 means the sub-agent is granted the `Bash` tool by the NAME half
+and then has every `Bash` call refused by the argument half. The durable fixes are a translation at
+import (`(x:*)` → `(x *)`) or a stderr warning naming the dialect; neither was taken.
