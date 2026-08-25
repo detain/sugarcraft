@@ -57,6 +57,37 @@ verify no injected entries leaked in:
 php tools/check-path-repos.php --no-lib-path-repos   # must exit 0
 ```
 
+That is one of **five** gates the `path-repo-check` job in
+`.github/workflows/ci.yml` runs, and until now this file documented only two
+of them — so a contributor could pass everything CONTRIBUTING asked for and
+still be failed by CI on a check they had never been told about. Run the whole
+set before you push; each must exit 0, and none of them needs a
+`composer install`:
+
+```sh
+phpunit --no-configuration --colors=never tools/tests/  # the checker's own guards
+php tools/check-path-repos.php --no-lib-path-repos      # no sibling path-repos in a published manifest
+php tools/check-path-repos.php                          # the root closure is complete
+php tools/check-path-repos.php --unused                 # no path-repo dep nothing requires
+php tools/check-path-repos.php --fix --strict-closure \
+  && php tools/check-path-repos.php --strict-closure \
+  && git checkout -- '*/composer.json'                  # injection restores a full local closure
+```
+
+The last one is the only entry that writes to your tree, and the revert is
+narrowed on purpose: CI spells that line `git checkout -- .`, which is safe in
+a throwaway checkout and would eat your uncommitted work here. MEASURED on this
+tree: `--fix --strict-closure` dirties `*/composer.json` and nothing else — 52
+files, no root manifest, no lock — so the glob reverts all of it.
+
+The first line wants a PHPUnit 10 PHAR on `PATH` (CI installs one via
+`setup-php`'s `tools: phpunit:10`). Without one, borrow any lib's — MEASURED
+green here on PHP 8.3.6, 10 tests / 45 assertions:
+
+```sh
+candy-core/vendor/bin/phpunit --no-configuration tools/tests/
+```
+
 Do not commit a per-lib `composer.lock` (`/*/composer.lock` is gitignored;
 the root keeps its own). A committed lock makes `composer install` resolve
 from the lock and silently ignore the injection — it only warns.

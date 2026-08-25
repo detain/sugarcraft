@@ -162,7 +162,15 @@ jobs:
           # phpunit as a PHAR, for the tools/tests step below. This job does no
           # composer install (it reads manifests, it does not resolve them), so
           # there is no per-lib vendor/bin/phpunit to borrow.
-          tools: phpunit
+          #
+          # PINNED TO 10 DELIBERATELY. Bare `tools: phpunit` resolves to the
+          # newest major supporting the requested PHP, so this job would follow
+          # PHPUnit's release train on its own; tools/tests/ are PHPUnit 10
+          # files (their own doc-blocks say so), and the day the PHAR moves to a
+          # major that drops something they use, a job with nothing to do with
+          # the change goes red. See CONTRIBUTING.md, which documents the same
+          # pin for the local form of this command.
+          tools: phpunit:10
       # THE GUARD FOR THE SCRIPT THE REST OF THIS JOB GATES ON, and it existed
       # unrun for six months: tools/tests/CheckPathReposTest.php is referenced
       # by no phpunit.xml, no composer autoload and, until now, no workflow.
