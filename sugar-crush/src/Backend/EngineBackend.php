@@ -54,9 +54,34 @@ final class EngineBackend implements Backend, ReportsContextWindow
      * for the whole turn. It used to be a single wall-clock timer started
      * once for the entire fork, which SIGKILLed any turn whose legitimate
      * multi-step tool work ran past it ("Provider request timed out after
-     * 120s" mid-flight, crush_feat.md §1 E1). Now every frame the child
-     * streams resets it, so a turn that is making visible progress stays
-     * alive indefinitely while a genuinely hung provider still dies.
+     * 120s" mid-flight, crush_feat.md §1 E1). Every frame the child streams
+     * resets it, so a turn that is making visible progress stays alive
+     * indefinitely while a genuinely hung provider still dies.
+     *
+     * WHAT THIS SAID: "so a turn that is making visible progress stays alive
+     * indefinitely".
+     * WHAT IS TRUE NOW: that is the property this constant NEEDS, and until
+     * E456 the code did not have it. "Every frame resets it" was true; "every
+     * kind of progress writes a frame" was not. Only content deltas did.
+     * {@see \SugarCraft\Crush\Runtime::runStreaming()} gates its $onToken on
+     * `$response->content !== ''`, and $onToken was the only thing in the child
+     * that wrote to the socket between tool events - so a model that thought
+     * for over two minutes before its first content byte, or a provider whose
+     * chunks carried only tool-call structure or only usage figures, was killed
+     * as hung while it was in fact working. A user lost a turn to it mid-think.
+     * WHY THE CEILING STILL EARNS ITS PLACE: the timer was never the defect;
+     * its definition of PROGRESS was. Raising the ceiling only relocates the
+     * bug, and removing it resurrects the hang this constant exists to bound.
+     * The fix was to make every chunk off the wire write a frame - see the
+     * `reasoning` frame kind in {@see runCompleteInChild()}, whose `text` is
+     * empty for the chunks that have nothing to show and are purely a sign of
+     * life.
+     *
+     * STILL NOT COVERED, and stated so nobody reads the paragraph above as
+     * unconditional: a NON-streaming provider (`supportsStreaming() === false`)
+     * makes one blocking call per agentic step, so between two steps there is
+     * genuinely nothing to announce and a slow batch provider still dies here.
+     * Closing that needs a heartbeat raised on a timer rather than on a chunk.
      */
     private const COMPLETE_TIMEOUT_SECONDS = 120;
 
@@ -423,8 +448,19 @@ final class EngineBackend implements Backend, ReportsContextWindow
      *                           accumulation live are expected to reset it
      *                           when a {@see ToolStarted} arrives; see
      *                           {@see \SugarCraft\Crush\Chat::pumpLiveToolEvents()}.
+     *
+     * @param ?callable $onReasoning Optional live observer of the model's
+     *                           reasoning and of bare progress, signature
+     *                           `function(string $delta): void`. Threaded
+     *                           straight into {@see \SugarCraft\Crush\Runtime::run()}
+     *                           as its `$onProgress`, so a NON-empty delta is
+     *                           thinking to paint and the EMPTY string is a
+     *                           chunk that carried nothing showable. Kept out
+     *                           of $onToken on purpose - see E456 on
+     *                           {@see COMPLETE_TIMEOUT_SECONDS}, and the note
+     *                           beside `$progressSink` below.
      */
-    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null): Message
     {
         // Read once and hand to both resolvers, so a turn touches the config
         // file at most one time however many settings are resolved off it.
@@ -470,6 +506,16 @@ final class EngineBackend implements Backend, ReportsContextWindow
             $onToken($delta);
         };
 
+        // E456's channel, threaded whole rather than filtered here: the EMPTY
+        // delta is meaningful on this one (it is the heartbeat for a chunk with
+        // nothing to show - see {@see \SugarCraft\Crush\Runtime::run()}'s
+        // $onProgress), so the `$delta === ''` early return $tokenSink makes is
+        // exactly wrong for it. It deliberately does not touch $streamed
+        // either: $streamed suppresses the end-of-turn one-shot re-delivery of
+        // the assistant's TEXT, and a turn that thought but never spoke must
+        // still get that fallback.
+        $progressSink = $onReasoning;
+
         // Bounded agentic loop: keep running while the model asks for tools.
         // The Runtime resolves one assistant turn + its tool calls per run();
         // we feed the results back and re-run until the model answers without
@@ -479,7 +525,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
             $assistant = null;
             $toolResults = [];
 
-            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink) as $message) {
+            foreach ($runtime->run($app, $onEvent, $this->permissionApprover, $tokenSink, $progressSink) as $message) {
                 if ($message instanceof AssistantMessage) {
                     $assistant = $message;
                 } elseif ($message instanceof ToolResultMessage) {
@@ -690,9 +736,12 @@ final class EngineBackend implements Backend, ReportsContextWindow
      * The child does not batch: it writes each {@see ToolStarted}/{@see
      * ToolFinished} as its own length-prefixed frame the moment the event
      * fires, each chunk of assistant text as a `token` frame the moment the
-     * provider's stream produces it, and the final result as the last frame.
-     * The parent drains whatever whole frames have arrived on every readable
-     * edge and hands each straight to $onEvent/$onToken, so a turn running
+     * provider's stream produces it, every OTHER chunk off the wire as a
+     * `reasoning` frame (E456 - the model's thinking when the chunk carries
+     * any, an empty `text` when it carries only tool-call structure or only
+     * usage figures), and the final result as the last frame. The parent drains
+     * whatever whole frames have arrived on every readable edge and hands each
+     * straight to $onEvent/$onToken/$onReasoning, so a turn running
      * eight rounds of tools renders them as they happen instead of showing
      * nothing but a "thinking" spinner until the very end (crush_feat.md §1
      * E1), and the reply itself appears as it is written rather than all at
@@ -702,8 +751,18 @@ final class EngineBackend implements Backend, ReportsContextWindow
      * order is meaningful — it is the difference between "the model explained
      * itself and then ran a command" and "it ran a command and then explained"
      * — and two parallel channels could not preserve it.
+     *
+     * @param ?callable $onReasoning Optional live observer of the model's
+     *                           reasoning, signature
+     *                           `function(string $delta): void`. Purely
+     *                           additive: the timer fix E456 exists for does
+     *                           not depend on anyone passing one, because the
+     *                           frame is written by the child and the deadline
+     *                           is reset by the parent whether or not this is
+     *                           null. Pass one to PAINT the thinking; leave it
+     *                           null and the turn simply survives quietly.
      */
-    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
     {
         $deferred = new Deferred();
 
@@ -719,12 +778,12 @@ final class EngineBackend implements Backend, ReportsContextWindow
         }
 
         if (!function_exists('pcntl_fork') || !function_exists('pcntl_waitpid')) {
-            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning);
         }
 
         $sockets = @stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($sockets === false) {
-            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning);
         }
 
         [$parentSocket, $childSocket] = $sockets;
@@ -734,7 +793,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
             fclose($parentSocket);
             fclose($childSocket);
 
-            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent);
+            return $this->completeAsyncBlocking($history, $onToken, $deferred, $onEvent, $onReasoning);
         }
 
         if ($pid === 0) {
@@ -841,7 +900,7 @@ final class EngineBackend implements Backend, ReportsContextWindow
             }
         });
 
-        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$result, &$streamed, $onToken, $onEvent, $finalize, $resetTimeout): void {
+        $loop->addReadStream($parentSocket, function ($stream) use (&$buffer, &$result, &$streamed, $onToken, $onEvent, $onReasoning, $finalize, $resetTimeout): void {
             $chunk = fread($stream, 65536);
             if ($chunk === '' || $chunk === false) {
                 $finalize();
@@ -862,6 +921,27 @@ final class EngineBackend implements Backend, ReportsContextWindow
                     $finalize();
 
                     return;
+                }
+
+                // E456. The deadline is already pushed out by $resetTimeout()
+                // above - EVERY frame does that, which is why a bare heartbeat
+                // needs no branch of its own and carries an empty `text`. This
+                // branch exists for the other half: reasoning that has
+                // something to show has to reach the caller so it can be
+                // painted as it arrives.
+                //
+                // It deliberately does NOT set $streamed. That latch suppresses
+                // the result frame's one-shot re-delivery of the assistant's
+                // TEXT, and a turn that thought at length and then answered
+                // with a single un-streamed content block still needs that
+                // fallback.
+                if (($frame['kind'] ?? null) === 'reasoning') {
+                    $text = $frame['text'] ?? null;
+                    if ($onReasoning !== null && is_string($text) && $text !== '') {
+                        $onReasoning($text);
+                    }
+
+                    continue;
                 }
 
                 if (($frame['kind'] ?? null) === 'token') {
@@ -989,6 +1069,24 @@ final class EngineBackend implements Backend, ReportsContextWindow
                 },
                 static function (ToolStarted|ToolFinished $event) use ($childSocket): void {
                     self::writeFrame($childSocket, self::encodeEvent($event));
+                },
+                // E456. The child's third sink, and the one that exists for the
+                // PARENT'S TIMER as much as for the screen: the parent's idle
+                // ceiling measures silence on this socket, so a chunk that
+                // writes nothing here is indistinguishable from a hung
+                // provider. `$delta` is the model's reasoning when there is any
+                // and '' for a chunk with nothing to show (tool-call structure
+                // only, usage figures only); the frame is written either way,
+                // because both are progress and only one is paintable.
+                //
+                // A distinct frame kind, never a reused `token` frame:
+                // {@see \SugarCraft\Crush\Runtime::runStreaming()} accumulates
+                // $onToken's bytes into the AssistantMessage that is fed back to
+                // the model and checkpointed, so reasoning arriving on that
+                // channel would corrupt the conversation rather than merely the
+                // display.
+                static function (string $delta) use ($childSocket): void {
+                    self::writeFrame($childSocket, ['kind' => 'reasoning', 'text' => $delta]);
                 },
             );
             // imageBytes/imageProtocol survive this fork boundary too - PHP's
@@ -1214,12 +1312,12 @@ final class EngineBackend implements Backend, ReportsContextWindow
      * the duration of the request instead of freezing the whole program
      * silently - a real capability gap, not a bug to hide.
      */
-    private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null): PromiseInterface
+    private function completeAsyncBlocking(array $history, ?callable $onToken, Deferred $deferred, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
     {
         try {
             // No fork here, so tool events reach the caller LIVE on this path
             // (mid-turn, as each call starts/ends) rather than replayed.
-            $deferred->resolve($this->complete($history, $onToken, $onEvent));
+            $deferred->resolve($this->complete($history, $onToken, $onEvent, $onReasoning));
         } catch (\Throwable $e) {
             $deferred->reject($e);
         }
