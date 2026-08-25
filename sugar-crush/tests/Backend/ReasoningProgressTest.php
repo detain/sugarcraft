@@ -9,6 +9,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\Timer\Timer;
 use React\EventLoop\TimerInterface;
+use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Hooks\HookManager;
@@ -355,6 +356,76 @@ final class ReasoningProgressTest extends TestCase
 
         $this->assertSame(['the answer'], $tokens);
         $this->assertNotSame([], $messages);
+    }
+
+    // =====================================================================
+    // the two paths of one public contract
+    // =====================================================================
+
+    /**
+     * The SYNC path must deliver the empty heartbeat, because the child is its
+     * caller and the frame it writes for an empty delta is the only thing that
+     * moves the parent's idle deadline for a chunk with nothing to show.
+     * Dropping it here would silently un-fix E456 for exactly the two family
+     * members that have no reasoning text.
+     */
+    public function testTheSyncPathDeliversTheEmptyHeartbeatBecauseTheChildNeedsIt(): void
+    {
+        $seen = [];
+        EngineBackend::new(new StreamingDouble(3, 0, 'usage', 'the answer'), 'sync')->complete(
+            [Message::user('go')],
+            null,
+            null,
+            static function (string $delta) use (&$seen): void { $seen[] = $delta; },
+        );
+
+        $this->assertSame(['', '', ''], $seen, 'the heartbeat must reach the child sink or no frame is written');
+    }
+
+    /**
+     * ...and the pcntl-less fallback must NOT, because it is reached through
+     * {@see EngineBackend::completeAsync()} and its caller is a painter.
+     *
+     * On the forked path the parent drops an empty-`text` reasoning frame, so a
+     * `completeAsync()` caller is never invoked with ''. Before this was fixed,
+     * the same caller on a host without ext-pcntl WAS - the callback contract
+     * of one public method differed by extension, which is not a difference a
+     * consumer painting live thinking can be expected to know about.
+     */
+    public function testThePcntllessFallbackNeverInvokesThePainterWithAnEmptyDelta(): void
+    {
+        $this->assertSame([], $this->throughTheBlockingFallback('usage'));
+    }
+
+    /** The other polarity of the test above: real thinking still gets through. */
+    public function testThePcntllessFallbackStillPaintsRealThinking(): void
+    {
+        $this->assertSame(['think 0 ', 'think 1 ', 'think 2 '], $this->throughTheBlockingFallback('reasoning'));
+    }
+
+    /**
+     * Drives the private fallback directly. `completeAsync()` cannot be steered
+     * onto it from a test - it is selected by `function_exists('pcntl_fork')`,
+     * and MEASURED on this host (PHP 8.3.6) that is true, so a test that simply
+     * called `completeAsync()` would exercise the fork and assert nothing about
+     * this path at all.
+     *
+     * @return list<string>
+     */
+    private function throughTheBlockingFallback(string $shape): array
+    {
+        $seen = [];
+        $method = new \ReflectionMethod(EngineBackend::class, 'completeAsyncBlocking');
+        $method->invoke(
+            EngineBackend::new(new StreamingDouble(3, 0, $shape, 'the answer'), 'blocking'),
+            [Message::user('go')],
+            null,
+            new Deferred(),
+            null,
+            static function (string $delta) use (&$seen): void { $seen[] = $delta; },
+        );
+
+        return $seen;
     }
 
     // =====================================================================

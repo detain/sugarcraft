@@ -1317,7 +1317,22 @@ final class EngineBackend implements Backend, ReportsContextWindow
         try {
             // No fork here, so tool events reach the caller LIVE on this path
             // (mid-turn, as each call starts/ends) rather than replayed.
-            $deferred->resolve($this->complete($history, $onToken, $onEvent, $onReasoning));
+            //
+            // $onReasoning is the one callback that must NOT be handed
+            // through untouched. On the forked path the parent drops a frame
+            // whose `text` is empty (that frame exists for the idle timer, not
+            // for the screen), so a caller of completeAsync() is never invoked
+            // with ''. There is no socket here and therefore no timer, so the
+            // heartbeat has no job at all on this path - and passing it on
+            // would make completeAsync()'s callback contract depend on whether
+            // this host has ext-pcntl, which is not a difference a consumer
+            // painting live thinking can be expected to know about.
+            $paintable = $onReasoning === null ? null : static function (string $delta) use ($onReasoning): void {
+                if ($delta !== '') {
+                    $onReasoning($delta);
+                }
+            };
+            $deferred->resolve($this->complete($history, $onToken, $onEvent, $paintable));
         } catch (\Throwable $e) {
             $deferred->reject($e);
         }

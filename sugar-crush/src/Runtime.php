@@ -260,12 +260,24 @@ final class Runtime
      *
      * @param ?callable $onProgress Optional out-of-band progress observer,
      *                           signature `function(string $reasoningDelta):
-     *                           void`, called once for EVERY chunk off the
-     *                           wire that did not already reach $onToken.
-     *                           A non-empty argument is the model's reasoning
-     *                           text; the empty string is a bare heartbeat -
-     *                           a chunk that carried only tool-call structure,
-     *                           only usage figures, or nothing at all.
+     *                           void`. A non-empty argument is the model's
+     *                           reasoning text; the empty string is a bare
+     *                           heartbeat - a chunk that carried only
+     *                           tool-call structure, only usage figures, or
+     *                           nothing at all.
+     *
+     *                           WHEN IT FIRES, stated exactly because the
+     *                           first draft of this paragraph said "once for
+     *                           EVERY chunk that did not already reach
+     *                           $onToken" and the code beside it has always
+     *                           done something wider: a chunk that carries
+     *                           BOTH content and reasoning reaches $onToken
+     *                           AND this channel, because its thinking still
+     *                           has to be paintable. The one shape that skips
+     *                           this channel is a chunk that is pure content
+     *                           with no reasoning on it - which has already
+     *                           announced itself through $onToken, and has
+     *                           nothing left to say.
      *
      *                           E456, a user-reported bug: $onToken is gated on
      *                           `$response->content !== ''` and it is the ONLY
@@ -343,9 +355,15 @@ final class Runtime
      * $onToken's bytes become `$buffer`, which becomes the AssistantMessage the
      * agentic loop feeds back to the model and the transcript checkpoints - a
      * re-sent stream would duplicate the CONVERSATION. Reasoning is display
-     * only: `$reasoning` is reset per attempt like every other accumulator, it
-     * is never fed back to the model, and the consumer clears it at settle, so
-     * a re-sent think is a repaint. Latching `$emitted` on it would trade a
+     * only: `$reasoning` is reset per attempt like every other accumulator, and
+     * it is never fed back to the model. MEASURED at this commit, because the
+     * first draft of this paragraph asserted it of a consumer that does not
+     * exist yet: `AssistantMessage::reasoning()` has exactly ONE reader in
+     * `src/` - {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}
+     * folding it onto the returned {@see \SugarCraft\Crush\Message} for the
+     * transcript - and no provider serialises it into an outbound request, so
+     * a re-sent think is a repaint and never a duplicated turn. Latching
+     * `$emitted` on it would trade a
      * cosmetic repaint for the loss of retry coverage on every stream that
      * thinks before it fails, which is most of them - the wrong side of that
      * trade. Do not "fix" this by widening the latch; widen it only if
