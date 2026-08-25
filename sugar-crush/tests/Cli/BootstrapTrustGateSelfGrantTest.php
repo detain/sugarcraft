@@ -286,7 +286,7 @@ final class BootstrapTrustGateSelfGrantTest extends TestCase
         ));
 
         exec(sprintf(
-            'env -u HOME -u USERPROFILE TMPDIR=%s timeout -s KILL 60 %s -d %s %s >%s 2>&1',
+            'env -u HOME -u USERPROFILE TMPDIR=%s timeout -s KILL 20 %s -d %s %s >%s 2>&1',
             escapeshellarg($tmpDir),
             escapeshellarg(PHP_BINARY),
             escapeshellarg('disable_functions=posix_getpwuid,posix_geteuid'),

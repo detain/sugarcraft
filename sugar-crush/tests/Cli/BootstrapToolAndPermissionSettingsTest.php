@@ -888,7 +888,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         );
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >/dev/null 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s %s >/dev/null 2>%s',
             escapeshellarg($this->home),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
@@ -1100,7 +1100,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         );
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >/dev/null 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s %s >/dev/null 2>%s',
             escapeshellarg($this->home),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
@@ -1452,7 +1452,7 @@ final class BootstrapToolAndPermissionSettingsTest extends TestCase
         file_put_contents($script, "<?php\nrequire " . var_export($autoload, true) . ";\n" . $body);
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s %s >%s 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s %s >%s 2>%s',
             escapeshellarg($this->home),
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),

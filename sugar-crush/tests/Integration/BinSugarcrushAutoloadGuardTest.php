@@ -92,7 +92,7 @@ use SugarCraft\Crush\Cli\NonInteractive;
  * counts 100 `execve`, and they factor exactly: 33 `/bin/sh`, 33
  * `/usr/bin/timeout`, 33 `/usr/bin/php8.3`, 1 `/usr/bin/php`. So THIRTY-THREE
  * child interpreters — the lone `php` is phpunit itself — each reached through
- * the `/bin/sh -c` that `exec()` implies and the `timeout -s KILL 60` this file
+ * the `/bin/sh -c` that `exec()` implies and the `timeout -s KILL 20` this file
  * wraps every spawn in. Three processes per row, one of which is the
  * interpreter that costs.
  *
@@ -634,7 +634,7 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
         // which is the failure the assertion below actually has to diagnose.
         // {@see \SugarCraft\Crush\Tests\Support\ChildStderrCaptureScanner}.
         exec(sprintf(
-            'timeout -s KILL 60 %s %s >%s 2>%s',
+            'timeout -s KILL 20 %s %s >%s 2>%s',
             escapeshellarg(PHP_BINARY),
             escapeshellarg($script),
             escapeshellarg($outFile),
@@ -724,7 +724,7 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
      * parsed, so the argument is irrelevant when the test passes — but under a
      * mutation that makes the guard find an autoloader, an empty argv sends the
      * copied script into `Program::run()` and the alt screen, where it sits
-     * until `timeout -s KILL 60` reaps it. Measured while pinning this file:
+     * until `timeout -s KILL 20` reaps it. Measured while pinning this file:
      * that turned one mutation run into a >2-minute hang. `--version` makes the
      * same mutation fail in milliseconds with the wrong exit code, which is the
      * answer the assertion wanted anyway.
@@ -740,7 +740,7 @@ final class BinSugarcrushAutoloadGuardTest extends TestCase
         $errFile = $this->tmpDir . '/err.txt';
 
         exec(sprintf(
-            'timeout -s KILL 60 %s %s %s >%s 2>%s',
+            'timeout -s KILL 20 %s %s %s >%s 2>%s',
             escapeshellarg(PHP_BINARY),
             escapeshellarg($binary),
             $arguments,

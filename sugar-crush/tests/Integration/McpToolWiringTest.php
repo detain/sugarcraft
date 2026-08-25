@@ -1470,7 +1470,7 @@ final class McpToolWiringTest extends TestCase
             . 'echo json_encode(["rows" => $rows, "notices" => Bootstrap::launchNotices()]);' . "\n");
 
         exec(sprintf(
-            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 60 %s -d %s %s >%s 2>%s',
+            'HOME=%s SUGARCRUSH_PERMISSION_MODE= timeout -s KILL 20 %s -d %s %s >%s 2>%s',
             escapeshellarg($this->tempDir . '/home'),
             escapeshellarg(PHP_BINARY),
             // An EMPTY value, not an omitted flag: the box under test is one

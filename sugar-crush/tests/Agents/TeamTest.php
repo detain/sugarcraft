@@ -273,12 +273,21 @@ final class TeamTest extends TestCase
         $team = $this->createTeam('team-capped-count', maxTeammates: 1);
         $team->addTeammate($this->createTeammate('tm-only', 'team-capped-count', 'Only', AgentType::Coder));
 
+        // THE `fail()` IS OUTSIDE THE `try`, AND THAT IS THE WHOLE POINT (E510).
+        // It used to sit on the line after the call, under a
+        // `catch (\RuntimeException) { // expected }` — and MEASURED on PHP
+        // 8.3.6, PHPUnit 10.5.64, `AssertionFailedError` (what `fail()` throws)
+        // extends `PHPUnit\Framework\Exception` extends `\RuntimeException`.
+        // So the catch swallowed the refusal-to-throw it was written to report,
+        // into an EMPTY body, and this test's own diagnostic vanished. The
+        // assertions below happened to red anyway; that is luck, not coverage.
+        $refused = false;
         try {
             $team->addTeammate($this->createTeammate('tm-extra', 'team-capped-count', 'Extra', AgentType::Coder));
-            $this->fail('Expected addTeammate() to throw once at capacity.');
         } catch (\RuntimeException) {
-            // expected
+            $refused = true;
         }
+        $this->assertTrue($refused, 'Expected addTeammate() to throw once at capacity.');
 
         $this->assertCount(1, $team->getTeammates());
         $this->assertSame('tm-only', $team->getTeammates()[0]->id);
