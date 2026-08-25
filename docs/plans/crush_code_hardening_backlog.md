@@ -14116,7 +14116,9 @@ suspicious reading it always was rather than the expected one.
 
 ---
 
-### Ea54-1 — E396 refuted: closing E368 sites 2 and 4 is NOT a constructor change
+## Round 54 — lane a (candy-core descriptor census). E429-E435.
+
+### E429 — E396 refuted: closing E368 sites 2 and 4 is NOT a constructor change
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: prescription refuted (and the fix shipped).
 **Measured, PHP 8.3.6.**
@@ -14165,7 +14167,7 @@ open. The lowest match is preferred and that preference is pinned (mutation m5 s
 
 ---
 
-### Ea54-2 — E404's population is 28, not 20, and the eight-site gap is its own alphabet again
+### E430 — E404's population is 28, not 20, and the eight-site gap is its own alphabet again
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: measurement + instrument. **The generator is
 committed: `DescriptorSinkScanner::methodSinks()` / `sinksFromCdef()`.**
@@ -14208,7 +14210,7 @@ earning its keep for the second round running.
 
 ---
 
-### Ea54-3 — the descriptor walk needs `clearstatcache()`, and an in-process test of that is fragile
+### E431 — the descriptor walk needs `clearstatcache()`, and an in-process test of that is fragile
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: correctness (fixed) + harness. **Measured,
 PHP 8.3.6.**
@@ -14238,7 +14240,7 @@ its own preconditions, and "it kills under `--filter`" is not the same claim as 
 
 ---
 
-### Ea54-4 — `PosixBackendTest`'s stty-fallback test is skipped, by a gate built on the very defect
+### E432 — `PosixBackendTest`'s stty-fallback test is skipped, by a gate built on the very defect
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: dead guard. **DEFERRED — not fixed, see below.**
 
@@ -14279,7 +14281,7 @@ the next merge a flake. It needs a round that can watch it run twenty times.
 
 ---
 
-### Ea54-5 — the standing cross-lane census hazard is now wider than E400 recorded
+### E433 — the standing cross-lane census hazard is now wider than E400 recorded
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: merge hazard. **Stated, not fixable.**
 
@@ -14300,7 +14302,7 @@ resolving a merge and looking at a red package they never opened.
 
 ---
 
-### Ea54-6 — candy-pty's assertion count is not stable across takes
+### E434 — candy-pty's assertion count is not stable across takes
 
 **Recorded 2026-08-24 by round-54 lane a.** Severity: measurement hygiene.
 
@@ -14312,13 +14314,13 @@ The `+1` was not chased down; whichever test it is, it has an environment-depend
 
 ---
 
-### Ea54-7 — candy-pty's assertion wobble is ONE named test, and Ea54-6 understates it in two ways
+### E435 — candy-pty's assertion wobble is ONE named test, and E434 understates it in two ways
 
 **Recorded 2026-08-25 by the round-54 lane-a recovery run.** Severity: measurement hygiene / merge-floor
 correctness. candy-pty is **not** edited by this lane; it is read by candy-core's descriptor census, and
 its figures are quoted as a round floor, which is why this is worth a number.
 
-**Ea54-6 is refuted in both of its quantitative halves.** It says 1476 is "the usual value" and that the
+**E434 is refuted in both of its quantitative halves.** It says 1476 is "the usual value" and that the
 count "moves by ±1", from four takes. MEASURED at `5bef36cb`, PHP 8.3.6, this box, **20 consecutive
 takes**, `cd candy-pty && vendor/bin/phpunit`, tests/skips/warnings/rc identical throughout
 (`606 / 16 skipped / 1 warning / rc 0`):
@@ -14334,7 +14336,7 @@ So the mode is **1477, not 1476**, and the spread is four distinct values (1475�
 comparing a single take against a floor of 1476 can be off by ±2 in either direction while nothing at all
 is wrong.
 
-**The varying test is now identified, which Ea54-6 left open.** Generator: six further takes run with
+**The varying test is now identified, which E434 left open.** Generator: six further takes run with
 `--log-junit`, then the per-`<testcase assertions="…">` attribute compared across all six runs
 (`simplexml_load_file` + `//testcase`, comparing 606 keys). Of **606 tests, exactly one** has a
 non-constant count:
@@ -14366,9 +14368,9 @@ should suspect `ResizeRaceTest` first: it is the one test in the package already
 timing, and its `WALLCLOCK_BUDGET_SEC` assertion is exactly the shape that fails under load. **Note that
 three lanes share this box**, so a sibling lane's suite running concurrently is a plausible trigger and
 would not reproduce in a quiet tree — which is consistent with both failures to reproduce.
-## Round 54 — lane b (runtime bugs). Provisional ids, renumber at merge.
+## Round 54 — lane b (runtime bugs). E436-E444.
 
-### Eb54-1 — `McpClient::startServer()` catches `\RuntimeException`, so any other throw defeats its own stated purpose
+### E436 — `McpClient::startServer()` catches `\RuntimeException`, so any other throw defeats its own stated purpose
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: real. **Measured.** Out of lane b's file list
 (`sugar-crush/src/MCP/McpClient.php`).
@@ -14385,7 +14387,7 @@ doc-block says so.
 **STEP:** widen to `catch (\Throwable)` at that one site, and pin it with a server fixture that throws
 something that is not a `RuntimeException` during the handshake.
 
-### Eb54-2 — `McpMessage` has no `resultSet` sentinel, so a legal `"result": null` reply is unparseable
+### E437 — `McpMessage` has no `resultSet` sentinel, so a legal `"result": null` reply is unparseable
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor, graceful. **Measured.**
 
@@ -14402,7 +14404,7 @@ deliberately NOT bolted on inside E412's fix — a half-threaded sentinel is wor
 rejection — and the rejection is now pinned with both polarities in
 `tests/MCP/McpMessageResultTypeTest::testANullResultIsRejectedWhileTheAdjacentFalseIsNot()`.
 
-### Eb54-3 — the "exactly 1 skipped" invariant is a LINUX figure, is asserted nowhere, and rests on far more than one file
+### E438 — the "exactly 1 skipped" invariant is a LINUX figure, is asserted nowhere, and rests on far more than one file
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: plan-instrument defect. **Measured. This entry
 falsifies E413.**
@@ -14441,7 +14443,7 @@ in doc-block prose in `tests/bootstrap.php`, `tests/SuiteChildStdinIsolationTest
 `tests/SuiteChildStdinPrependResidualTest.php`. If it is load-bearing for the plan it should be derived
 (a PHPUnit extension counting skips, or a CI step asserting on the summary line), not restated.
 
-### Eb54-4 — `StdioMcpServer::writeLine()` is not covered by `start()`'s handshake deadline
+### E439 — `StdioMcpServer::writeLine()` is not covered by `start()`'s handshake deadline
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: latent, pre-existing.
 
@@ -14454,7 +14456,7 @@ forever too — but the loop is now the obvious place to accept the deadline the
 **STEP:** give `writeLine()` an optional `?float $deadline` and pass `start()`'s through; leave
 `callTool()`'s path deadline-less, matching `readLine()`.
 
-### Eb54-5 — stderr is only drained while the parent is inside an exchange
+### E440 — stderr is only drained while the parent is inside an exchange
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor, no longer a deadlock.
 
@@ -14468,7 +14470,7 @@ stopped for the whole gap.
 Recorded rather than done, because it is a shape change to a class that is currently synchronous by
 design.
 
-### Eb54-6 — `StdioMcpServer::stop()` does not `fclose()` the pipes before `proc_close()`
+### E441 — `StdioMcpServer::stop()` does not `fclose()` the pipes before `proc_close()`
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor.
 
@@ -14477,7 +14479,7 @@ child, so the documented ordering is to close the pipes first. The SIGTERM→sig
 means the child is gone by then in practice, which is why this has never bitten — but the ordering is the
 one `ProcessReaper` and `ClaudeCodeProvider::completeStream()`'s `finally` both use explicitly.
 
-### Eb54-7 — the stderr-drain loop now exists in two places
+### E442 — the stderr-drain loop now exists in two places
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: hygiene.
 
@@ -14488,7 +14490,7 @@ loop-terminator vs tracked flag, bounded vs unbounded caller) — so this is exp
 "deduplicate them" step. It is a note that a third site must read those differences before copying
 either one, the way this round had to.
 
-### Eb54-8 — the undrained blocking stdin write exists in two more classes, OUT OF LANE b
+### E443 — the undrained blocking stdin write exists in two more classes, OUT OF LANE b
 
 **Recorded 2026-08-24 by round 54 lane b (found by its reviewer).** Severity: `LspConnection` major,
 `ClaudeCodeMcpClient` minor. Neither file is in lane b's ownership list, so both are reported and not
@@ -14514,25 +14516,28 @@ Verified in the tree at the time of writing rather than inherited from prose:
 
 **STEP:** port `StdioMcpServer::writeLine()`'s select-driven, stderr-draining, partial-write loop to both
 sites, in the owning lane. Read `absorbStderr()`'s doc-block first: the three differences recorded in
-Eb54-7 apply, and `LspConnection`'s framing is `Content-Length`, not newline, so its resync story on a
+E442 apply, and `LspConnection`'s framing is `Content-Length`, not newline, so its resync story on a
 short write differs from both.
 
-### Eb54-9 — `writeLine()`'s EINTR branch has no liveness check
+### E444 — `writeLine()`'s EINTR branch has no liveness check
 
 **Recorded 2026-08-24 by round 54 lane b.** Severity: minor, not reachable via any current caller.
 
 When `@stream_select()` returns `false`, `writeLine()` does `usleep(1000); continue;` with no check of
 any kind. `readLine()`'s equivalent branch checks `feof($this->pipes[1])` before retrying. A
 persistently failing `select()` therefore spins at 1 ms in `writeLine()` with no exit, on a path that is
-already unbounded (see Eb54-4). The dead-child case is caught by `$written === false` further down —
+already unbounded (see E439). The dead-child case is caught by `$written === false` further down —
 measured this round, `feof()` on a write pipe does NOT report the reader's exit — so a `feof()` copy of
 `readLine()`'s check would be the WRONG fix here.
 
 **STEP:** bound the consecutive-`false` retries and return `false` past the bound, or thread the
-deadline from Eb54-4 through and let it terminate the loop. Pin with a fixture that makes `select()`
+deadline from E439 through and let it terminate the loop. Pin with a fixture that makes `select()`
 fail repeatedly; note that a coverage-only test here is very hard to write without a signal harness, so
 this may be a documented seam rather than a guarded one.
-### Ec54-1 — `ForkedChildExitConventionTest`'s licence is spent by the FILE, not the site it argues for
+
+## Round 54 — lane c (close the fd inheritance). E445-E449.
+
+### E445 — `ForkedChildExitConventionTest`'s licence is spent by the FILE, not the site it argues for
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: instrument granularity. **Measured, and it is NOT
 E423's shape.**
@@ -14563,7 +14568,7 @@ counts.
 **STEP:** re-key both rosters to `File.php::function` and keep the counts. Both files are outside lane
 c's ownership, which is why this is a step and not a commit.
 
-### Ec54-2 — the only spec-level fix for descriptor inheritance is a runtime enumeration, and it is worse than the disease
+### E446 — the only spec-level fix for descriptor inheritance is a runtime enumeration, and it is worse than the disease
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: finding, deliberately not implemented.
 
@@ -14589,7 +14594,7 @@ before each of the long-lived spawns. Against it, all measured or read off the c
 a socket pair open across a long-lived spawn — not at the seven spawn sites. Recorded so the next reader
 does not re-derive it.
 
-### Ec54-3 — `candy-core/src/Program.php::runExec`'s descriptor spec is unreadable to every instrument
+### E447 — `candy-core/src/Program.php::runExec`'s descriptor spec is unreadable to every instrument
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: blind spot, out of lane.
 
@@ -14607,7 +14612,7 @@ candy-core edit. Hence: not done, recorded.
 **STEP:** spell the spec where the call can see it, in candy-core, then widen
 `testNoDescriptorSpecInSrcIsUnreadable()` to `LIB_SCOPE` alongside the exposure arm.
 
-### Ec54-4 — three exposed spawns sit in libraries `sugar-crush` cannot reach
+### E448 — three exposed spawns sit in libraries `sugar-crush` cannot reach
 
 **Recorded 2026-08-24 by round 54 lane c.** Severity: finding. **Measured.**
 
@@ -14626,7 +14631,7 @@ Generator: `ChildLifetimeScanner::scan()` over every `<lib>/src/**/*.php`, PHP 8
 lib that does not depend on it. Either promote it into `candy-testing`, where every lib can reach it, or
 copy the guard into `sugar-dash` and `sugar-reel`. The first is the one that does not drift.
 
-### Ec54-5 — the sibling walk follows `autoload`, so code a library EXECS or ships as an example is invisible to it
+### E449 — the sibling walk follows `autoload`, so code a library EXECS or ships as an example is invisible to it
 
 **Recorded 2026-08-25 by round 54 lane c.** Severity: finding. **Measured.**
 
@@ -14656,6 +14661,6 @@ paths. Both re-run at `c54172f09`.
 **STEP:** decide, once, whether "reachable" for this guard means *loadable* (today's answer, derived and
 defensible) or *executable* (which would pull in `bin/` and every `examples/`). If the first, the two
 findings above are real and belong to the libraries that own them. If the second, the walk needs a second
-root list and `Ec54-4`'s promotion of the scanner into `candy-testing` is the cheaper way to get there.
+root list and `E448`'s promotion of the scanner into `candy-testing` is the cheaper way to get there.
 This is a scope decision, not a defect, and it should not be settled inside a guard's doc-block by
 whoever next touches it.
