@@ -25,12 +25,13 @@ use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
  *
  * WHAT THE COMMIT THAT ADDED THEM SAID: that the change was MEASURED. It was —
  * the diagnostic really does differ. WHAT WAS NOT TRUE: that anything pinned
- * it. MEASURED, by deleting all three arms (47 lines) and running the WHOLE
- * suite rather than a filter: rc 0, green, and the assertion total moved by
- * nine — a census somewhere counts these sites and asserts nothing about them.
- * Rule 1: a green suite is not a pinned invariant, and a mutation that reds a
- * test in BOTH states is a demonstration that the diagnostic differs, not a
- * kill of the guard that is supposed to keep the arm there.
+ * it. MEASURED HERE rather than inherited (rule 12): the pre-fix tree was
+ * reconstructed - all three arms deleted, the fourth site below returned to
+ * its original bare `catch`, and this file removed - and the WHOLE suite run
+ * rather than a filter. It comes back rc 0 and GREEN. Nothing anywhere pinned
+ * them. Rule 1: a green suite is not a pinned invariant, and a mutation that
+ * reds a test in BOTH states is a demonstration that the diagnostic differs,
+ * not a kill of the guard that is supposed to keep the arm there.
  *
  * ## The fourth site, which nobody had named
  *
