@@ -1325,6 +1325,18 @@ final class ChildWallClockBudgetTest extends TestCase
             . 'starts on rather than at its own',
         );
 
+        // AND THE PARAMETRISED BRANCH, WHICH IS A THIRD ARM AND WAS A THIRD
+        // SURVIVOR. There are three places a row's line is computed — literal,
+        // parametrised, unresolved — and a multi-line fixture for one of them
+        // says nothing about the other two. All three are covered here now,
+        // and each was verified by mutating ITS OWN line to a constant.
+        $this->assertSame(
+            ['4:parametrised:0:' . $w . ' -s KILL'],
+            $of("\$d = 'a\nb\n" . $w . " -s KILL %d z';"),
+            'a parametrised wrapper on the third line of a multi-line literal is reported at '
+            . "the literal's own line rather than at its own",
+        );
+
         // AND THE SAME CORRECTION ON THE OTHER ARM, which is where rule 41 sent
         // me: the two multi-line fixtures above pinned the WHOLE-MATCH arm and
         // the mutation ONE LINE AWAY — the unresolved arm's own offset — still
