@@ -22,7 +22,7 @@ final class EchoBackend implements Backend
      * has no {@see \SugarCraft\Crush\Events\ToolStarted}/{@see
      * \SugarCraft\Crush\Events\ToolFinished} lifecycle to report.
      */
-    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
         $lastUser = null;
         foreach (array_reverse($history) as $m) {
@@ -37,7 +37,7 @@ final class EchoBackend implements Backend
         return Message::assistant($body);
     }
 
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
         return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken, $cancellation): void {
             if ($cancellation?->isCancelled() === true) {

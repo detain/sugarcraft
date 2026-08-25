@@ -33,6 +33,18 @@ use SugarCraft\Crush\Backend\CancellationToken;
  * them are observable by the caller at all (crush_feat.md §1 E1).
  * A backend that never calls tools ignores it.
  *
+ * **Reasoning:** deliberately NOT a fifth parameter here. The model's thinking
+ * is a channel of its own — see {@see Events\ReasoningDelta} for why it must
+ * never arrive on `$onToken`, whose bytes become the assistant message that is
+ * fed back to the model and checkpointed — and a backend that can report it
+ * says so by implementing {@see Backend\ObservesReasoning}. Adding the
+ * parameter to THIS interface instead would be a load-time fatal for every
+ * four-parameter implementation, in this package and outside it, because PHP
+ * rejects an implementation with fewer parameters than its interface even when
+ * the extra one is optional (measured; see that interface's docblock, and
+ * {@see Backend\ReportsContextWindow}, which made the same call for the same
+ * reason).
+ *
  * @see Backend\EchoBackend  for the default offline / test impl
  */
 interface Backend
@@ -49,7 +61,7 @@ interface Backend
      *                                Signature:
      *                                `function(Events\ToolStarted|Events\ToolFinished $event): void`
      */
-    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message;
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message;
 
     /**
      * Async version of {@see complete()}. Returns a promise that
@@ -74,5 +86,5 @@ interface Backend
      *                                invoked inside a forked child reaches
      *                                nobody.
      */
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface;
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface;
 }

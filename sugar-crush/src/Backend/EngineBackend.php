@@ -46,7 +46,7 @@ use SugarCraft\Crush\Tools\ToolResult;
  * works in the typed {@see \SugarCraft\Crush\Messages\Message} hierarchy.
  * Conversion happens here at the seam.
  */
-final class EngineBackend implements Backend, ReportsContextWindow
+final class EngineBackend implements Backend, ReportsContextWindow, ObservesReasoning
 {
     /**
      * IDLE ceiling on a forked completion child in {@see completeAsync()} -

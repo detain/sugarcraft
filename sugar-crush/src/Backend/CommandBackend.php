@@ -104,7 +104,7 @@ final class CommandBackend implements Backend
      * use happens on its side and reports nothing back but final text, so this
      * backend has no tool lifecycle it can honestly emit.
      */
-    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+    public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null): Message
     {
         $payload = self::encodeHistory($history);
         if ($payload === null) {
@@ -268,7 +268,7 @@ final class CommandBackend implements Backend
      * so there is nothing to stream. {@see StreamingCommandBackend} is the half
      * of this tier that has tokens.
      */
-    public function completeAsync(array $history, callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+    public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
     {
         $deferred = new Deferred();
 
