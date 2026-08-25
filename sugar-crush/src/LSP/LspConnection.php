@@ -597,18 +597,42 @@ final class LspConnection implements LspConnectionInterface
      *     `StdioMcpServer::writeLine()` keeps `= null` because
      *     {@see \SugarCraft\Crush\MCP\StdioMcpServer::callTool()} genuinely
      *     wants it. No caller here does — both send paths pass
-     *     `microtime(true) + $this->requestTimeout` — and MEASURED this round the
-     *     null path is far worse than "waits on the child's liveness" suggests:
-     *     with no deadline, no signals and a LIVE child that has stopped reading,
+     *     `microtime(true) + $this->requestTimeout` — and the null path is far
+     *     worse than "waits on the child's liveness" suggests: with no deadline,
+     *     no signals and a LIVE child that has stopped reading,
      *     `stream_select()` times out every {@see WRITE_POLL_MICROS}, `$ready ===
      *     0` takes the `continue`, and NO liveness check is consulted on that
-     *     path at all. `timeout 12 php probe.php` -> rc 124; against a 30s
-     *     fixture the loop returned at 29.843s and against a 120s one it ran past
-     *     a 45s bound. The EINTR backstop does not help, because it counts
-     *     consecutive FAILURES and a timeout is not a failure. So the parameter
-     *     stays nullable — the backstop test drives it that way on purpose — but
-     *     every call site now has to SAY `null`, which is the difference between
-     *     choosing the unbounded path and inheriting it from a default.
+     *     path at all. The EINTR backstop does not help either, because it counts
+     *     consecutive FAILURES and a timeout is not a failure — so the ONLY exit
+     *     left is the child dying.
+     *
+     *     THE GENERATOR, because an earlier draft of this paragraph said
+     *     "MEASURED this round" over figures it had inherited from the finding
+     *     that prompted it rather than run. A `proc_open()`ed `php` child that
+     *     sleeps for L seconds and never reads its stdin; a parent that calls
+     *     this method through reflection with a 200000-byte payload — over both
+     *     the 65536-byte pipe capacity and this class's 131072-byte drain pass —
+     *     and an explicit `null` deadline; the clock OUTSIDE the process, because
+     *     the failure is a loop that does not return. PHP 8.3.6, Linux 6.8, three
+     *     consecutive takes each:
+     *
+     *         L=60, external `timeout 12`  ->  rc 124, rc 124, rc 124
+     *         L=8,  external `timeout 30`  ->  returned false at 8.056 / 8.051 /
+     *                                          8.054 seconds
+     *
+     *     The second row is the load-bearing one and it is the sharper
+     *     instrument: the write ends at the child's death to within 60 ms, three
+     *     times, so "bounded by the child's lifetime" is not a worst case, it is
+     *     the mechanism. For a real language server that lifetime is the editing
+     *     session. (Round 55's entry for this finding reports the same shape from
+     *     the other side — a run that returned at 29.843s against a 30s fixture —
+     *     but that figure was taken with the consecutive-failure backstop deleted
+     *     and belongs to that mutation, not to this loop as it ships.)
+     *
+     *     So the parameter stays nullable — the backstop test drives it that way
+     *     on purpose — but every call site now has to SAY `null`, which is the
+     *     difference between choosing the unbounded path and inheriting it from a
+     *     default.
      *
      * @param array<string, mixed> $payload
      * @param float|null $deadline `microtime(true)` value past which the write

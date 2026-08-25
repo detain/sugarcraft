@@ -432,7 +432,7 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * `[]` that a latched `sendRequest()` produces for a real answer and wrote it
      * into the cache, so one desynchronised write turned into a permanently empty
      * result for that uri+position. The consequence is pinned one file over, in
-     * `LspClientTest::testAConnectionThatReportsItselfDisconnectedIsNotCached()`.
+     * `LspClientTest::testAConnectionThatReportsItselfConnectedCachesItsEmptyAnswerForGood()`.
      *
      * BOTH POLARITIES ARE IN THIS ONE ROW ON PURPOSE. The `true` before the
      * oversized write is not decoration: without it, an `isConnected()` mutated
@@ -556,13 +556,22 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * `writeMessage(array $payload, ?float $deadline = null)` had a null DEFAULT
      * that no production caller used — both send paths pass
      * `microtime(true) + $this->requestTimeout`. The default was the whole risk:
-     * MEASURED this round, the null path is not "bounded by the child's
-     * liveness" the way its `@param` claimed. With no deadline, no signals and a
-     * LIVE child that has stopped reading, `stream_select()` times out every
-     * `WRITE_POLL_MICROS`, `$ready === 0` takes the `continue`, and no liveness
-     * check is consulted at all; `timeout 12 php probe.php` -> rc 124, and
-     * against a 30s fixture the loop returned at 29.843s. A caller could inherit
-     * that by writing nothing.
+     * the null path is not "bounded by the child's liveness" the way its
+     * `@param` claimed. With no deadline, no signals and a LIVE child that has
+     * stopped reading, `stream_select()` times out every `WRITE_POLL_MICROS`,
+     * `$ready === 0` takes the `continue`, and no liveness check is consulted at
+     * all. A caller could inherit that by writing nothing.
+     *
+     * THE MEASUREMENT AND ITS GENERATOR LIVE ON
+     * {@see \SugarCraft\Crush\LSP\LspConnection::writeMessage()}, point (d),
+     * and are named here rather than restated because an earlier draft of this
+     * doc-block restated them as "MEASURED this round" over figures it had
+     * inherited from the finding rather than run. The short form: a child that
+     * sleeps L seconds and never reads stdin, a 200000-byte payload, an explicit
+     * `null` deadline and the clock outside the process — L=60 under `timeout 12`
+     * gives rc 124 three times over, and L=8 under `timeout 30` returns false at
+     * 8.056 / 8.051 / 8.054s. The write ends at the child's death and at nothing
+     * else.
      *
      * ⚠️ WHAT THIS ROW PINS IS A SIGNATURE, NOT A BEHAVIOUR, and it is written
      * that way on purpose because there is no behaviour to pin: re-adding `=
