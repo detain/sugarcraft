@@ -469,6 +469,15 @@ final class Renderer
     private const TOOL_OUTPUT_MAX_CHARS = 2000;
 
     /**
+     * Characters of a model's thinking trace {@see renderReasoning()} keeps
+     * before it elides. One constant rather than a literal at each call site
+     * because the live paint and the settled transcript must agree on the cap
+     * while deliberately disagreeing on WHICH end they keep - see that
+     * method's `$keepTail`.
+     */
+    private const REASONING_MAX_CHARS = 120;
+
+    /**
      * Zone-id prefix every session tab carries (crush_feat.md §8 E2). Public
      * because {@see Chat::update()} parses it back off a click's zone id —
      * one literal, defined next to the code that writes it, rather than the
@@ -1065,7 +1074,7 @@ final class Renderer
             // this app watched a static "assistant is thinking..." while the
             // thinking was arriving and being discarded.
             //
-            // Through {@see renderReasoning()}, the SAME collapsed and dimmed
+            // Through {@see renderReasoning()}, the same collapsed and dimmed
             // treatment a settled Message's own `reasoning` gets in
             // {@see renderAssistantTurn()}, rather than a second style: a
             // MiniMax-M2.7 trace runs to thousands of tokens and painting it in
@@ -1073,13 +1082,19 @@ final class Renderer
             // the live thought and the settled one look different would read as
             // two different things rather than one thing before and after.
             //
+            // `keepTail` is the ONE way the two differ, and it is the
+            // difference between a progress indicator and a frozen line: this
+            // thought is still growing, so the elision has to eat the oldest
+            // characters rather than the newest. See that method for the
+            // measurement.
+            //
             // ABOVE the partial, not below it, and the order is load-bearing
             // rather than aesthetic: the model thinks and then speaks, so a
             // thought under the prose it produced would invert the causality
             // the transcript is meant to show.
-            $thinking = $chat->reasoningText();
-            if ($thinking !== '') {
-                $thought = self::renderReasoning($thinking, $theme);
+            $liveThought = $chat->reasoningText();
+            if ($liveThought !== '') {
+                $thought = self::renderReasoning($liveThought, $theme, keepTail: true);
                 $body = $body === '' ? $thought : $body . "\n\n" . $thought;
             }
             // The reply so far, when the model has started writing one
@@ -2482,12 +2497,39 @@ final class Renderer
      * model output that never passes through CandyShine's Markdown renderer,
      * so - like every other untrusted turn in this method - it goes through
      * {@see Sanitize::untrusted()} before display.
+     *
+     * ## Which end survives the elision is not cosmetic
+     *
+     * WHAT THIS SAID BEFORE: nothing - the method truncated from the head
+     * unconditionally, and the live paint added by E494 reused it as-is.
+     * WHAT IS TRUE NOW: a head-anchored elision makes the LIVE display freeze.
+     * The in-flight thought is an accumulation that only ever grows, so once it
+     * passes the cap every later frame renders the same first
+     * {@see REASONING_MAX_CHARS} characters - measured, the frame for a 340
+     * character accumulation and for a 3790 character one were byte-identical.
+     * For the very trace this doc-block names that is the first second of a
+     * two-minute turn followed by a static line, which is the exact symptom
+     * E494 exists to remove.
+     * WHY BOTH ANCHORS STILL EARN THEIR PLACE: a SETTLED turn's thought is a
+     * finished artefact being skimmed, and its opening is its summary, so the
+     * transcript keeps the head. A RUNNING turn's thought is a progress
+     * indicator, and the only part of it that carries new information is the
+     * part that just arrived, so the live paint keeps the tail. The cap is
+     * shared; the anchor is not.
+     *
+     * @param bool $keepTail elide from the FRONT (keeping the newest
+     *                       characters) instead of from the back. True for the
+     *                       in-flight paint in {@see renderView()}, false for
+     *                       the settled transcript in
+     *                       {@see renderAssistantTurn()}.
      */
-    private static function renderReasoning(string $reasoning, Theme $theme): string
+    private static function renderReasoning(string $reasoning, Theme $theme, bool $keepTail = false): string
     {
         $flat = trim(preg_replace('/\s+/', ' ', self::untrusted($reasoning)) ?? '');
-        if (mb_strlen($flat) > 120) {
-            $flat = mb_substr($flat, 0, 120) . '…';
+        if (mb_strlen($flat) > self::REASONING_MAX_CHARS) {
+            $flat = $keepTail
+                ? '…' . mb_substr($flat, -self::REASONING_MAX_CHARS)
+                : mb_substr($flat, 0, self::REASONING_MAX_CHARS) . '…';
         }
 
         return Style::new()->foreground($theme->systemLabel)->faint()->render('💭 ' . $flat);

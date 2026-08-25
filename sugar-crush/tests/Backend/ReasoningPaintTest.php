@@ -404,6 +404,101 @@ final class ReasoningPaintTest extends TestCase
     }
 
     /**
+     * **The live thought must keep ADVANCING once it passes the cap.**
+     *
+     * E494 painted the in-flight thought through the same head-anchored
+     * elision the settled transcript uses. An in-flight thought is an
+     * accumulation that only grows, so the moment it passed the cap every
+     * later frame rendered the same leading characters: measured before the
+     * fix, on this host at 100x30, the frame for a 340-character accumulation
+     * and the frame for a 3790-character one were byte-identical. For the
+     * MiniMax-scale trace the renderer's own doc-block names, that is the
+     * first second of a two-minute turn followed by a static line under a
+     * spinner still claiming work is happening - which is the exact symptom
+     * E494 exists to remove.
+     *
+     * Nothing caught it: with the elision flipped end-for-end the ENTIRE
+     * suite stayed green, assertion count unmoved. The neighbouring
+     * {@see testALongThoughtIsCollapsedRatherThanPaintedInFull()} looks like
+     * it covers this and does not - it checks the cap and the row budget, and
+     * never which end of the accumulation survives. So this asserts the
+     * property those two miss directly: two accumulations sharing a prefix
+     * longer than the cap must not render the same bytes.
+     *
+     * Single-word markers rather than phrases, deliberately: the collapsed
+     * line is word-wrapped to the pane afterwards, so a multi-word marker can
+     * be split across rows and a `assertStringContainsString` on it would fail
+     * for a reason that has nothing to do with the anchor.
+     */
+    public function testALiveThoughtKeepsAdvancingOnceItPassesTheCap(): void
+    {
+        $opening = 'OPENINGMARKER ' . str_repeat('and then a further consideration ', 8);
+        $this->assertGreaterThan(120, mb_strlen($opening), 'the fixture must exceed the cap or it proves nothing');
+
+        $early = $this->paintedThought($opening);
+        $later = $this->paintedThought($opening . ' TAILMARKER');
+
+        $this->assertNotSame(
+            $early,
+            $later,
+            'the live thought froze: two accumulations differing only in their newest text painted identical frames',
+        );
+        $this->assertStringContainsString(
+            'TAILMARKER',
+            $later,
+            'the newest thinking never reached the frame - the elision is keeping the wrong end',
+        );
+        $this->assertStringNotContainsString(
+            'TAILMARKER',
+            $early,
+            'known-negative: the marker must be absent from the accumulation that does not carry it',
+        );
+        $this->assertStringNotContainsString(
+            'OPENINGMARKER',
+            $later,
+            'the whole trace reached the frame - the cap is gone, which trades a frozen line for an evicted answer',
+        );
+        $this->assertStringContainsString('…', $later, 'an elided trace must still say it was elided');
+    }
+
+    /**
+     * The other polarity, in the same test file, because the two anchors are
+     * one decision: the cap is shared and the END that survives is not.
+     *
+     * A SETTLED turn's thought is a finished artefact being skimmed and its
+     * opening is its summary, so the transcript keeps the head. A RUNNING
+     * turn's thought is a progress indicator and only its newest bytes carry
+     * information, so the live paint keeps the tail. Asserted together so that
+     * "fixing" the freeze by flipping {@see \SugarCraft\Crush\Renderer}'s
+     * elision wholesale - rather than at the live call site - goes red here
+     * instead of silently rewriting how every past turn reads.
+     */
+    public function testTheSettledTranscriptKeepsTheOpeningTheLivePaintDrops(): void
+    {
+        $thought = 'OPENINGMARKER ' . str_repeat('and then a further consideration ', 8) . ' TAILMARKER';
+
+        $settled = $this->render(new Chat(history: [
+            Message::user('what time is it?'),
+            Message::assistant('Noon.', null, $thought),
+        ]));
+
+        $this->assertStringContainsString(
+            'OPENINGMARKER',
+            $settled,
+            'a settled turn must keep the opening of its thought - that is the half a reader skims',
+        );
+        $this->assertStringNotContainsString(
+            'TAILMARKER',
+            $settled,
+            'the settled transcript stopped collapsing, or adopted the live paint\'s anchor',
+        );
+
+        $live = $this->paintedThought($thought);
+        $this->assertStringContainsString('TAILMARKER', $live);
+        $this->assertStringNotContainsString('OPENINGMARKER', $live);
+    }
+
+    /**
      * Reasoning is raw model output that never passes a Markdown renderer, so
      * it must not be able to smuggle a control sequence into the frame.
      */
@@ -413,12 +508,25 @@ final class ReasoningPaintTest extends TestCase
 
         $frame = $this->render($chat);
         $this->assertStringNotContainsString("\x07", $frame, 'a BEL reached the frame');
+        // The title of this test says "a control sequence" and BEL alone did
+        // not earn it: an SGR the model wrote itself is the sequence that
+        // actually repaints the user's transcript in the model's colours.
+        $this->assertStringNotContainsString("\x1b[31m", $frame, 'a model-authored SGR reached the frame');
         $this->assertStringContainsString('red', $frame, 'sanitizing must not eat the text itself');
     }
 
     // =====================================================================
     // fixtures
     // =====================================================================
+
+    /**
+     * One in-flight frame carrying exactly `$thought` and nothing else, pumped
+     * to quiescence the way a real turn's inbox is drained.
+     */
+    private function paintedThought(string $thought): string
+    {
+        return $this->render($this->pumpToQuiescence($this->withThought(new Chat(inFlight: true), $thought)));
+    }
 
     private function withThought(Chat $chat, string $thought): Chat
     {
