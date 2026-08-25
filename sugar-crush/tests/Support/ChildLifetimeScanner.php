@@ -761,6 +761,26 @@ final class ChildLifetimeScanner
      */
     private static function keysOf(string $literal): ?array
     {
+        $arms = self::ternaryArms($literal);
+        if ($arms !== null) {
+            $first = self::keysOf($arms[0]);
+            $second = self::keysOf($arms[1]);
+
+            if ($first === null || $second === null) {
+                return null;
+            }
+
+            // AGREEMENT IS THE WHOLE CONDITION, and disagreement is a null
+            // rather than a union or a first-arm guess. If the branches name
+            // different fds then which fds the spec names is a RUNTIME fact,
+            // and a syntactic instrument saying otherwise is the confident
+            // wrong answer this class exists to avoid.
+            \sort($first);
+            \sort($second);
+
+            return $first === $second ? $first : null;
+        }
+
         $elements = self::topLevelArrayElements($literal);
         if ($elements === null) {
             return null;
@@ -803,6 +823,90 @@ final class ChildLifetimeScanner
         }
 
         return \range(0, $positional - 1);
+    }
+
+    /**
+     * The two arms of a top-level ternary, or null when the literal is not one.
+     *
+     * E447. `candy-core/src/Program.php::runExec()` spells its descriptor spec
+     * `$descriptors = $req->captureOutput ? [...] : [...]`, and until this
+     * method existed that was the ONE unreadable spec in the whole reachable
+     * closure - the local-variable path resolved the assignment perfectly and
+     * then handed {@see keysOf()} a conditional expression it could only
+     * refuse. The refusal was correct and the diagnosis "this spec cannot be
+     * read" was not: BOTH arms are array literals with the integer keys 0, 1
+     * and 2, so the fds the spec names do not depend on the condition at all.
+     *
+     * WHY THIS IS NOT AN EXPRESSION EVALUATOR, and where the line is. Exactly
+     * ONE top-level `?` and ONE top-level `:` qualify. A nested ternary, a
+     * short `?:`, a `match`, anything with more or fewer - null, which
+     * {@see specFds()}'s caller treats as a finding rather than as an absence
+     * of one. Rule 14: the guard goes red on what it cannot parse.
+     *
+     * `??` CANNOT BE MISTAKEN FOR A `?` HERE, measured on PHP 8.3.6 rather
+     * than assumed: the null-coalescing operator lexes as the single token
+     * T_COALESCE, and `?->` as T_NULLSAFE_OBJECT_OPERATOR, so neither ever
+     * appears as the bare `?` string token this counts. A `:` from a named
+     * argument or a return type is always inside parentheses and so is never
+     * at depth 0 of an expression.
+     *
+     * @return array{0:string,1:string}|null
+     */
+    private static function ternaryArms(string $literal): ?array
+    {
+        $tokens = \token_get_all('<?php ' . $literal . ';');
+        $depth = 0;
+        $question = null;
+        $colon = null;
+
+        foreach ($tokens as $i => $token) {
+            $text = self::tokenText($token);
+
+            if (\in_array($text, ['[', '(', '{'], true)) {
+                $depth++;
+
+                continue;
+            }
+            if (\in_array($text, [']', ')', '}'], true)) {
+                $depth--;
+
+                continue;
+            }
+            if ($depth !== 0 || !\is_string($token)) {
+                continue;
+            }
+
+            if ($text === '?') {
+                if ($question !== null) {
+                    return null;
+                }
+                $question = $i;
+            } elseif ($text === ':') {
+                if ($colon !== null || $question === null) {
+                    return null;
+                }
+                $colon = $i;
+            }
+        }
+
+        if ($question === null || $colon === null) {
+            return null;
+        }
+
+        $first = \trim(self::codeText($tokens, $question + 1, $colon - 1));
+        $second = \trim(self::codeText($tokens, $colon + 1, \count($tokens) - 1));
+
+        // The trailing `;` this method appended to make the source lexable.
+        $second = \rtrim($second);
+        if (\str_ends_with($second, ';')) {
+            $second = \rtrim(\substr($second, 0, -1));
+        }
+
+        if ($first === '' || $second === '') {
+            return null;
+        }
+
+        return [$first, $second];
     }
 
     /** Whether an array element's own top level carries a `=>`. */

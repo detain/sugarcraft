@@ -1444,6 +1444,136 @@ final class DescriptorInheritanceGuardTest extends TestCase
     }
 
     /**
+     * Unreadable descriptor specs in a REACHABLE SIBLING LIBRARY. E447.
+     *
+     * EMPTY, AND THE EMPTINESS IS THE ROUND'S RESULT RATHER THAN ITS
+     * PREMISE. When this arm was written there was exactly one member -
+     * `candy-core/Program.php::runExec`, whose spec is
+     * `$req->captureOutput ? [...] : [...]` - and E447 offered two ways out:
+     * make it readable, or make the unreadability explicit and rostered. It
+     * turned out to be the first: the refusal was correct and the DIAGNOSIS
+     * was not. Both arms of that ternary carry the integer keys 0, 1 and 2, so
+     * which fds the spec names never depended on the condition; only the
+     * VALUES did, and this instrument reads keys.
+     * {@see ChildLifetimeScanner::ternaryArms()} reads it now and
+     * `ChildLifetimeScannerFixtureTest::descriptorSpecs()` pins the shape in
+     * both polarities.
+     *
+     * SO WHY DOES THE ROSTER EXIST AT ALL. Because the src twin's advice -
+     * "spell the spec where the call can see it, or widen the scanner" - is
+     * advice sugar-crush can act on for its OWN files and cannot act on for a
+     * sibling's. A future unreadable spec in candy-pty is not this package's
+     * to rewrite, and a guard whose only resolution is an edit the reader
+     * cannot make gets weakened instead of used. A row here says: this spec is
+     * unreadable, a person looked at it, and widening the scanner was judged
+     * the wrong trade.
+     *
+     * A ROW IS NOT AN EXEMPTION FOR A HIGH FD. An unreadable spec is the one
+     * shape about which this guard can make NO statement at all, so a row is
+     * strictly a record that the blindness is known.
+     *
+     * @var array<string, string>
+     */
+    private const UNREADABLE_IN_LIBS = [];
+
+    /**
+     * No spawn in the reachable closure has a spec nothing can read.
+     *
+     * E447, AND THE ARM ROUND 54 DELIBERATELY DID NOT WIDEN. Its sugar-crush
+     * twin has existed for two rounds and stops at this package's `src/`,
+     * which left the unreadability question unasked over every sibling - and
+     * a sibling is exactly where it could not be answered by reading the diff,
+     * because the diff is in another package.
+     *
+     * SEPARATE FROM THE SRC TWIN rather than a widened loop inside it, for the
+     * reason all the lib arms here are separate: this one reds when SOMEBODY
+     * ELSE changes a file, and the reader deserves to be told that in the
+     * message instead of deducing it.
+     */
+    public function testNoDescriptorSpecInAReachableLibIsUnreadable(): void
+    {
+        // Rule 15, in THIS test. What follows asserts a set is empty, and a
+        // scanner that answered `fds => [0]` for everything would empty it
+        // just as convincingly as a closure with no unreadable spec in it.
+        $probe = ChildLifetimeScanner::scan(
+            "<?php\nclass F { private \$h; function m(\$p) { \$this->h = proc_open('x', \$this->spec(), \$p); } }\n",
+        )['sites'];
+        self::assertCount(1, $probe, 'the scanner found no site in the probe at all - it is dead.');
+        self::assertNull(
+            $probe[0]['fds'],
+            'a spec behind a method call must read as unreadable; if it does not, the absence '
+                . 'asserted below is what this scanner reports for every tree.',
+        );
+
+        $unreadable = [];
+        $scanned = 0;
+        foreach ($this->libSourceFiles() as $relative => $source) {
+            $scanned++;
+            foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
+                $key = $relative . '::' . $site['function'];
+                if ($site['fds'] === null && !isset(self::UNREADABLE_IN_LIBS[$key])) {
+                    $unreadable[] = $key;
+                }
+            }
+        }
+
+        $this->assertLibWalkIsLive($scanned);
+
+        self::assertSame([], $unreadable, <<<'TEXT'
+            A proc_open() in a SIBLING LIBRARY has a descriptor spec
+            ChildLifetimeScanner cannot read, so nothing anywhere is checking which
+            fds it names - and unlike an exposed spawn, this one cannot even be
+            reported accurately, because the instrument has no opinion to report.
+
+            YOU ARE PROBABLY RESOLVING A MERGE. This walk reads through
+            vendor/sugarcraft, so a change in candy-core or candy-pty reds THIS
+            suite and the diff in front of you is very likely not the cause.
+
+            THE RESOLUTIONS, best first:
+
+              1. WIDEN THE SCANNER, if the spec is readable in principle and this
+                 instrument simply cannot spell it yet. That is what E447 turned
+                 out to be: a ternary whose two arms name the same fds is not an
+                 unreadable spec, it is a shape nobody had taught it. Pin the new
+                 shape in ChildLifetimeScannerFixtureTest, in BOTH polarities.
+              2. A ROW IN UNREADABLE_IN_LIBS, when widening is the wrong trade.
+                 The row is a record that the blindness is known, never an
+                 exemption for what the spec might contain.
+
+            ASKING THE SIBLING TO REWRITE ITS SPEC IS RESOLUTION 3, not 1: it is a
+            real fix and it is an edit this package cannot make from here.
+            TEXT);
+
+        $stale = [];
+        foreach (self::UNREADABLE_IN_LIBS as $key => $reason) {
+            self::assertNotSame('', \trim($reason), $key . ' is recorded without a reason.');
+            $stale[] = $key;
+        }
+
+        // Vacuous while the roster is empty, and live the moment it is not:
+        // every row must still name a real site, or it is a licence outliving
+        // the thing it licensed.
+        $found = [];
+        if ($stale !== []) {
+            foreach ($this->libSourceFiles() as $relative => $source) {
+                foreach (ChildLifetimeScanner::scan($source)['sites'] as $site) {
+                    if ($site['fds'] === null) {
+                        $found[] = $relative . '::' . $site['function'];
+                    }
+                }
+            }
+        }
+
+        self::assertSame(
+            [],
+            \array_values(\array_diff($stale, $found)),
+            'a row in UNREADABLE_IN_LIBS matches nothing any more. Either the library made the '
+                . 'spec readable, or the scanner learned to read it - in both cases delete the '
+                . 'row and say which. A row that matches nothing is a licence outliving the '
+                . 'thing it licensed.',
+        );
+    }
+    /**
      * Naming a high fd replaces THAT fd and inherits every other one.
      *
      * THE ONE CLAIM IN THIS FILE THAT IS NOT ABOUT SOURCE TEXT. Everything

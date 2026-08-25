@@ -427,6 +427,62 @@ final class ChildLifetimeScannerFixtureTest extends TestCase
             [0, 1],
         ];
 
+        // E447. A TERNARY WHOSE ARMS AGREE. `candy-core/src/Program.php::runExec()`
+        // spells its spec `$req->captureOutput ? [0 => $in, 1 => ['pipe','w'],
+        // 2 => ['pipe','w']] : [0 => $in, 1 => $out, 2 => $err]`, and it was
+        // the ONE unreadable spec in the whole reachable closure. The refusal
+        // was correct and the diagnosis was not: both arms carry the integer
+        // keys 0, 1 and 2, so which fds the spec names does not depend on the
+        // condition at all. Only the VALUES do, and this instrument reads
+        // keys.
+        $ternary = static fn (string $a, string $b): string => "<?php\nclass C {\n    private \$h;\n"
+            . "    public function m(array \$pipes) {\n        \$d = \$c ? {$a} : {$b};\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n";
+
+        yield 'ternary whose arms name the same fds' => [
+            $ternary("[0 => \$in, 1 => ['pipe','w'], 2 => ['pipe','w']]", "[0 => \$in, 1 => \$out, 2 => \$err]"),
+            [0, 1, 2],
+        ];
+
+        // ORDER IS NOT PART OF THE ANSWER. The arms name a SET of fds; a
+        // branch that happens to spell them in a different order names the
+        // same set, and refusing it would red correct code.
+        yield 'ternary whose arms agree out of order' => [
+            $ternary("[1 => ['pipe','w'], 0 => ['pipe','r']]", "[0 => ['pipe','r'], 1 => ['pipe','w']]"),
+            [0, 1],
+        ];
+
+        // THE POLARITY THAT MATTERS MOST. If the branches name DIFFERENT fds
+        // then which fds the spec names is a runtime fact, and answering with
+        // either arm - or with their union - would be the confident wrong
+        // answer this instrument exists to avoid.
+        yield 'ternary whose arms disagree' => [
+            $ternary("[0 => ['pipe','r']]", "[0 => ['pipe','r'], 3 => ['pipe','w']]"),
+            null,
+        ];
+
+        // The line is drawn at exactly one top-level `?` and one top-level
+        // `:`; everything past that is an expression evaluator this is not.
+        yield 'nested ternary' => [$ternary("(\$e ? [0 => 1] : [0 => 1])", '[0 => 1]'), null];
+        yield 'ternary arm that is not an array' => [$ternary('$x', '[0 => 1]'), null];
+
+        // `?:` and `??` lex as their own tokens on PHP 8.3.6 (T_COALESCE, and
+        // a short ternary has no `?` followed by a separate `:` to pair), so
+        // neither is mistaken for the conditional this reads. Pinned rather
+        // than reasoned about: both are one character from the shape above.
+        yield 'short ternary' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = \$c ?: [0 => ['pipe','r']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+        yield 'null coalesce' => [
+            "<?php\nclass C {\n    private \$h;\n    public function m(array \$pipes) {\n"
+            . "        \$d = \$c ?? [0 => ['pipe','r'], 1 => ['pipe','w']];\n"
+            . "        \$this->h = @proc_open('x', \$d, \$pipes);\n    }\n}\n",
+            null,
+        ];
+
         // The scope floor: a spec assigned in an EARLIER method is not this
         // call's spec, and borrowing it would be an answer from another
         // function's body.
