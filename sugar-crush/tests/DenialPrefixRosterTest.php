@@ -168,8 +168,15 @@ final class DenialPrefixRosterTest extends TestCase
      * this scan. That is ungrammatical English for a refusal, no roster case
      * uses it, and `Task creation blocked: ` and every DenialKind prefix still
      * match. MEASURED on PHP 8.3.6: with the narrowed vocabulary this whole
-     * file is green, 16 tests / 114 assertions, and the whole-`src/` map names
-     * the same two files and the same four literals as before. The two
+     * file is green and the whole-`src/` map names the same two files and the
+     * same four literals as before.
+     *
+     * That sentence used to carry an assertion count for this file as well. It
+     * was WRONG at the commit that wrote it -- taken before the six fixture
+     * assertions the SAME commit added, and never re-measured -- and it was
+     * worthless even when right: a per-file cardinality has no generator and is
+     * invalidated by the next thing merged beside it. The claim the count was
+     * standing in for is the `src/` map, which IS asserted. The two
      * polarities are pinned as fixtures in
      * {@see self::testRuntimeSpellsNoDenialPrefixOutsideItsConstants()} rather
      * than left to this paragraph.

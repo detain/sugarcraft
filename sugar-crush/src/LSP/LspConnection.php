@@ -93,12 +93,23 @@ final class LspConnection implements LspConnectionInterface
      * inherited, but nothing DERIVED it — the engine's constant is `private`, so
      * PHP cannot name it here and this line spells `64 * 1024 * 1024` as its own
      * literal, exactly as the other two members of the family do. Raising the
-     * engine's cap would have desynchronised all four while every test stayed
-     * green. WHY THIS STILL EARNS ITS PLACE: the claim is now CHECKED rather than
+     * engine's cap would have desynchronised all four without any framing test
+     * noticing. That last clause used to read "while every test stayed green",
+     * which was broader than what was run: MEASURED on PHP 8.3.6 by raising the
+     * engine's constant to 128 MiB and running the two suites that exist to pin
+     * this bound, `tests/MCP/McpFrameCapTest.php` and
+     * `tests/LSP/LspConnectionFrameCapTest.php`, both stayed green. No
+     * whole-suite run was made under that mutation, and at this commit a
+     * whole-suite run under it would go RED, because the test named below now
+     * exists to catch exactly this.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the claim is now CHECKED rather than
      * asserted — {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} reads the
-     * engine's private constant by reflection and refuses any divergence. Move
-     * both, or drop the claim from this doc-block and from that test's roster in
-     * the same commit.
+     * engine's private constant by reflection and refuses any divergence. Its
+     * roster is DERIVED from the `MAX_FRAME_BYTES` declarations in `src/`, so
+     * there is no list to edit: move both caps, or drop the claim from this
+     * doc-block and stop this class declaring its own constant, in the same
+     * commit.
      *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. `Content-Length`
      * framing has no resynchronisation point at all — unlike NDJSON, there is no
