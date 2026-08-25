@@ -18514,3 +18514,73 @@ is legal and still unread — the loop skips only `T_WHITESPACE`. Census on PHP 
 unparseable (rule 14, safe), and implicitly-public it is silently dropped (unsafe, same as the by-ref
 case). One line in the skip list plus a fixture; left out to keep this diff to the population that
 exists.
+
+### Ea59-14 — 🔴 an argument walk that took an interpolation's closing brace and never took its opener
+
+**Round 59, lane a. FIXED.** `ChildWallClockBudgetTest::argumentSpans()` compared whole tokens —
+`in_array($token, ['(', '[', '{'], true)` — so an ARRAY token could never match an opener, while the `}`
+that CLOSES a string interpolation is a bare one-byte string and matched every time.
+
+**THE EFFECT IS NOT AN OFF-BY-ONE, WHICH IS WHY IT IS FILED.** The review described it as "depth goes one
+low". Measured on PHP 8.3.6 through the real method: `foo("{$a}", $b)` returned **ONE span holding
+`"{$a`** and lost `$b` entirely — depth reached zero at the interpolation's brace and the walk RETURNED
+there. A truncated argument list is a wrong answer wearing the shape of a right one, which is strictly
+worse than the `null` this function returns when it is honestly lost (rule 14). `${a}` and heredoc
+interpolation behave identically; `"$a"` with no braces was always fine.
+
+**THE FIX IS A ROSTER OF TOKEN IDS AND NOT A TEST ON TOKEN TEXT, and that is rule 49 being load-bearing
+rather than cited.** `T_CURLY_OPEN`'s text IS `{`, so a text test would fix the positive case — and would
+then count a `T_ENCAPSED_AND_WHITESPACE` whose text is exactly `{`, which `"$a{"` really does produce on
+this PHP. Mutation-checked: replacing the roster with the text test KILLS on the negative rows.
+
+**REACHABILITY, STATED HONESTLY.** 1493 interpolation openers sit inside an open `(` region across 224
+files under `tests/` + `src/`, so the population is large — but this guard's own assertions did not move
+when the walk was corrected. **This is a latent silent-wrong-answer closed, not a wrong answer
+corrected**, and the distinction is the whole reason the sentence is here rather than a claim that a bug
+was fixed.
+
+### Ea59-15 — a helper that failed OPEN under a call-site comment promising it failed closed
+
+**Round 59, lane a. FIXED.** `ChildWallClockBudgetTest::shadowedByAnArrowFunction()` had two silent
+`continue`s: an arrow whose parameter list it could not find, and one whose list never closes. A `false`
+from that helper is not a neutral outcome — it means "carry on and read the ENCLOSING named function's
+call sites", which is precisely the confident misattribution the helper was added to prevent (E566). The
+call site's own comment states the opposite policy in as many words: *"over-refusing costs an
+`unresolved` row a reader sees, where the alternative costs a wrong number nobody sees."*
+
+Both arms now refuse. Neither is reachable on a source that parses — after `fn` the grammar admits only
+`&` and then `(` — so they are untriggered rather than dead, and are pinned with truncated fixtures plus
+a rule-25 negative half so that a helper stuck at "yes" cannot satisfy them.
+
+**THE TRANSFERABLE HALF: a comment describing a POLICY does not bind the helpers the policy's decision
+depends on.** The rule-14 sentence sat on the `if`, and the `if`'s own argument was computed by a
+function that broke the rule three lines away.
+
+### Ea59-16 — DEFERRED: two private source walkers, in the package that extracted a trait to stop exactly this
+
+**Round 59, lane a. NOT DONE — out of lane, and recorded so it does not need re-investigating.**
+`DuplicatedDocBlockLineTest::everySourceFile()` (added this round) and
+`tests/Backend/BackendSignatureNullabilityTest::everySourceFile()` are two private copies of a source
+walker, in the package whose `TestFileWalkTrait` was extracted with the doc-block *"ONE COPY, because the
+guards that use it are the guards that hunt copies."*
+
+They diverge far past `DRIFT_BOUND`, so `DuplicatedTestHelperDriftTest` legitimately cannot see them —
+and this round widened the divergence further by giving one of them a shebang-aware file test. **That is
+the argument FOR extracting a `SourceFileWalkTrait`, not for tightening the drift bound:** the bound is
+correct and the duplication is real, and no instrument in the tree can hold both facts at once.
+
+Blocked only by ownership — `tests/Backend/` was not in this lane's file list, and rule 23 permits a
+forced out-of-lane edit only where a guard demands one. No guard demands this one.
+
+### Ea59-17 — DEFERRED: a comment between `function` and a method name is still unread
+
+**Round 59, lane a. MEASURED, NOT FIXED.** After Ea59-12 the name walk in
+`DuplicatedTestHelperDriftTest::declarationsIn()` skips whitespace, steps over `&` and accepts any
+identifier-shaped token. It does NOT skip comments, so `function /* x */ foo()` — legal PHP — still comes
+back unnamed.
+
+**Census on PHP 8.3.6 over `tests/`, `src/` and `bin/sugarcrush`: zero sites.** The failure mode is
+asymmetric and worth recording: with an explicit visibility keyword it reds as unparseable (rule 14,
+safe), and written implicitly-public it is **silently dropped** — the same unsafe half as the
+by-reference case in Ea59-12. One line in the skip list plus a fixture. Left out deliberately to keep
+that diff to the population that exists rather than to the population that could.
