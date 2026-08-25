@@ -466,13 +466,22 @@ final class LspClientTest extends TestCase
      * ABOUT THE FRAMING LATCH — the downstream cost, measured here rather than
      * argued in a doc-block.
      *
-     * Every query method in this class spells the same branch: consult the
-     * connection when `isConnected()`, otherwise grep — and `$cache->set()` on
-     * BOTH sides. So the predicate does not merely pick a source, it picks WHICH
-     * ANSWER BECOMES PERMANENT for that uri+position. A connection that reports
-     * itself usable while every send fails hands back `[]`, and this class writes
-     * that `[]` into the cache; the grep fallback that would have found the real
-     * hits is never reached, and never will be for that key.
+     * ⚠️ THE SCOPE OF THIS ROW, CORRECTED. An earlier draft opened "every query
+     * method in this class spells the same branch: consult the connection when
+     * `isConnected()`, otherwise grep". It is the branch of the `definitions`,
+     * `references` and `symbols` pairs only; `hover` and `codeActions` have no
+     * grep arm at all and cache an empty answer on BOTH sides. This row is about
+     * the fallback shape, and
+     * {@see testTheHoverAndCodeActionPairsHaveNoGrepArmToBeSentDownTo()} is about
+     * the other one.
+     *
+     * Within the fallback shape the branch is: consult the connection when
+     * `isConnected()`, otherwise grep — and `$cache->set()` on BOTH sides. So the
+     * predicate does not merely pick a source, it picks WHICH ANSWER BECOMES
+     * PERMANENT for that uri+position. A connection that reports itself usable
+     * while every send fails hands back `[]`, and this class writes that `[]`
+     * into the cache; the grep fallback that would have found the real hits is
+     * never reached, and never will be for that key.
      *
      * The two rows below are the same file and the same query, differing ONLY in
      * what the connection answers `isConnected()`:
@@ -530,6 +539,111 @@ final class LspClientTest extends TestCase
                 $hits,
                 'a connection reporting itself unusable must send the query to the grep '
                 . 'fallback, which is the degraded-but-real answer that path exists for',
+            );
+        } finally {
+            @unlink($path);
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * THE OTHER HALF OF THE BRANCH SPLIT: four of the sites that consult
+     * {@see \SugarCraft\Crush\LSP\LspConnection::isConnected()} have NO grep
+     * arm, and the predicate's answer changes nothing at them.
+     *
+     * `hover`/`hoverFor` and `codeActions`/`codeActionsFor` cache `null` / `[]`
+     * and return it when the predicate is false — this class says so in as many
+     * words at both ("No fallback for hover", "No meaningful fallback for code
+     * actions"). On a LATCHED connection the true arm lands on the same value:
+     * `LspConnection::hover()` returns `null` on `$response->isError` and
+     * `codeActions()` returns `[]`, so both arms cache the same empty answer.
+     * That is the claim, and it is the one the framing-latch doc-block used to
+     * get wrong by describing all ten sites as the fallback shape.
+     *
+     * ⚠️ WHY THE SYMBOLS ASSERTIONS ARE IN THIS ROW AND NOT A SEPARATE ONE. An
+     * "the two arms agree" assertion passes just as well when the grep path is
+     * broken for EVERYTHING — a fixture with no findable target, a temp file
+     * that never got written, a uri that resolves nowhere. The last block drives
+     * the SAME file and the SAME disconnected connection through `symbolsFor()`,
+     * which is the fallback shape, and requires the two arms to DISAGREE there.
+     * Without it this row would be an absence assertion with a dead instrument
+     * behind it.
+     */
+    public function testTheHoverAndCodeActionPairsHaveNoGrepArmToBeSentDownTo(): void
+    {
+        $dir = (string) realpath((string) sys_get_temp_dir()) . '/sc_lspc_split_' . bin2hex(random_bytes(6));
+        mkdir($dir, 0o777, true);
+        $path = $dir . '/Split.php';
+        file_put_contents($path, "<?php\nfinal class SplitProbe\n{\n    public function splitProbeMethod(): void\n    {\n    }\n}\n");
+        $uri = 'file://' . $path;
+
+        try {
+            // ---- hover: the latched TRUE arm. The connection says it is usable
+            // and answers nothing, which is what an ioError becomes upstream.
+            $this->assertTrue($this->connection->isConnected());
+            $this->connection->setHoverResult(null);
+
+            $connectedHover = $this->client->hoverFor('php', $uri, 3, 4);
+            $this->assertTrue(
+                $this->cache->has($uri, 'textDocument/hover@3:4'),
+                'the true arm did not cache, so the two arms cannot be compared on what they cached',
+            );
+            $connectedHoverCached = $this->cache->get($uri, 'textDocument/hover@3:4');
+
+            // ---- hover: the FALSE arm, same file, same position.
+            $this->cache->clear();
+            $this->connection->disconnect();
+
+            $disconnectedHover = $this->client->hoverFor('php', $uri, 3, 4);
+
+            $this->assertNull($connectedHover, 'a latched hover is null');
+            $this->assertNull($disconnectedHover, 'a disconnected hover is null too — there is no grep arm here');
+            $this->assertSame(
+                $connectedHoverCached,
+                $this->cache->get($uri, 'textDocument/hover@3:4'),
+                'the two arms cached different values for hover, so the predicate is NOT indifferent '
+                . 'here and the isConnected() doc-block is wrong again in the other direction',
+            );
+
+            // ---- codeActions: the same pair.
+            $this->cache->clear();
+            $this->connection->connect('php', [], null, 30.0);
+            $this->connection->setCodeActionsResult([]);
+
+            $connectedActions = $this->client->codeActionsFor('php', $uri, 3, 4);
+            $connectedActionsCached = $this->cache->get($uri, 'textDocument/codeAction@3:4');
+
+            $this->cache->clear();
+            $this->connection->disconnect();
+
+            $disconnectedActions = $this->client->codeActionsFor('php', $uri, 3, 4);
+
+            $this->assertSame([], $connectedActions);
+            $this->assertSame([], $disconnectedActions, 'a disconnected codeActions is [] too — no grep arm here either');
+            $this->assertSame(
+                $connectedActionsCached,
+                $this->cache->get($uri, 'textDocument/codeAction@3:4'),
+                'the two arms cached different values for codeActions',
+            );
+
+            // ---- THE POSITIVE CONTROL. Same file, same disconnected connection,
+            // a method in the FALLBACK shape: here the two arms must DISAGREE, or
+            // everything above passed because grep found nothing for anybody.
+            $this->cache->clear();
+            $this->connection->connect('php', [], null, 30.0);
+            $this->connection->setSymbolsResult([]);
+            $connectedSymbols = $this->client->symbolsFor('php', $uri);
+
+            $this->cache->clear();
+            $this->connection->disconnect();
+            $disconnectedSymbols = $this->client->symbolsFor('php', $uri);
+
+            $this->assertSame([], $connectedSymbols, 'the true arm takes the server at its word');
+            $this->assertNotSame(
+                [],
+                $disconnectedSymbols,
+                'the fallback shape produced nothing either, so this fixture cannot tell '
+                . '"hover has no grep arm" from "grep found nothing in this file at all"',
             );
         } finally {
             @unlink($path);

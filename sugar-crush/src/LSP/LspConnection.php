@@ -358,23 +358,49 @@ final class LspConnection implements LspConnectionInterface
      * difference is the {@see $framingBroken} latch.
      *
      * WHY THIS IS THE SESSION QUESTION AND NOT THE PROCESS QUESTION, measured
-     * rather than argued: {@see \SugarCraft\Crush\LSP\LspClient} is the only
-     * consumer of this predicate in `src/`, and every one of its ten call sites
-     * spells the same branch —
+     * rather than argued. {@see \SugarCraft\Crush\LSP\LspClient} is the only
+     * consumer of this predicate in `src/`, and what its branch sites do with
+     * the answer is the argument — but they do not all do the same thing, and
+     * an earlier draft of this paragraph said they did.
      *
-     *     if ($conn->isConnected()) { $r = $conn->definitions(...); $cache->set(...); return $r; }
-     *     $r = $this->fallbackGrep(...); $cache->set(...); return $r;
+     * WHAT THIS SAID: that "every one of its ten call sites spells the same
+     * branch", server on `true` and `fallbackGrep()` on `false`, so that
+     * "reporting `false` instead sends the same call down `fallbackGrep()`".
      *
-     * — so the answer chooses between the language server and the grep
-     * fallback. A latched session answers every request with
-     * `LspResponse::ioError()`, which {@see definitions()} and its siblings turn
-     * into `[]`; with `true` here the client takes that `[]` for an ANSWER and
-     * WRITES IT INTO THE CACHE, so the empty result outlives the failure and is
-     * served from cache on every later call for that uri+position. Reporting
-     * `false` instead sends the same call down `fallbackGrep()`, which is the
-     * degraded-but-real answer that path exists to provide. "The process is
-     * alive" is true of a latched session and is not a fact any caller in this
-     * tree acts on.
+     * WHAT IS TRUE NOW: that is the shape of the `definitions`, `references` and
+     * `symbols` pairs, and it is NOT the shape of the `hover` and `codeActions`
+     * pairs. Those four carry no fallback at all — `LspClient` says so in as many
+     * words at both of them ("No fallback for hover", "No meaningful fallback for
+     * code actions") — and their `false` arm caches `null` / `[]` and returns it.
+     * On those four, answering `false` does the very thing the old paragraph
+     * condemned answering `true` for.
+     *
+     * WHY THE LATCH STILL EARNS ITS PLACE, WHICH IS THE HALF THAT SURVIVES.
+     * Split the sites by what their `false` arm reaches:
+     *
+     *  - FALLBACK SHAPE (definitions, references, symbols, and their `*For`
+     *    twins). A latched session answers every request with
+     *    `LspResponse::ioError()`, which {@see definitions()} and its siblings
+     *    turn into `[]`. With `true` here the client takes that `[]` for an
+     *    ANSWER and WRITES IT INTO THE CACHE, so the empty result outlives the
+     *    failure and is served from cache on every later call for that
+     *    uri+position. With `false` the same call reaches `fallbackGrep()`,
+     *    which is the degraded-but-real answer that path exists to provide.
+     *    This is where the predicate is load-bearing.
+     *
+     *  - CACHE-EMPTY SHAPE (hover, codeActions, and their `*For` twins). Both
+     *    arms end at the same cached value on a latched session: `hover()`
+     *    returns `null` on `$response->isError`, `codeActions()` returns `[]`,
+     *    and the `false` arm caches exactly those. The predicate is therefore
+     *    INDIFFERENT here, not harmful — it saves a doomed round trip and
+     *    changes no answer. Pinned in both shapes by
+     *    `LspClientTest::testTheHoverAndCodeActionPairsHaveNoGrepArmToBeSentDownTo()`,
+     *    which asserts the two arms agree there and, in the same row, that the
+     *    fallback shape's two arms DISagree on the same file — so the row cannot
+     *    pass by the grep path being broken for everything.
+     *
+     * "The process is alive" is true of a latched session either way, and is not
+     * a fact any caller in this tree acts on.
      *
      * THE POLITE-SHUTDOWN CONCERN THIS USED TO BE HELD BACK BY DOES NOT ARISE.
      * {@see disconnect()} gates on `$this->initialized`, never on this method,
