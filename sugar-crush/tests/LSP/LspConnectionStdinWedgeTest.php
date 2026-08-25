@@ -39,9 +39,11 @@ use SugarCraft\Crush\LSP\LspConnection;
  *
  * Generator: a child that writes N bytes to stderr and then reads stdin forever;
  * a parent that performs one 16 × 8192 drain pass and then a BLOCKING write of M
- * bytes; 5s external bound (the failure is an `fwrite()` that never returns, so
- * nothing inside the process can observe it). PHP 8.3.6, Linux 6.8, three
- * consecutive takes, identical every time:
+ * bytes; a 5s external bound — THE GENERATOR'S OWN, not this file's
+ * {@see self::BOUND_SECONDS}, which is 8.0 and bounds the suite's probes
+ * instead (the failure is an `fwrite()` that never returns, so nothing inside
+ * the process can observe it and the clock has to be outside). PHP 8.3.6,
+ * Linux 6.8, three consecutive takes, identical every time:
  *
  *     N=100000  M=200000  -> drained 100000, wrote 200000, 0.00s  <- ONE PASS ATE IT
  *     N=200000  M=200000  -> WEDGED (bound hit)
@@ -228,7 +230,12 @@ final class LspConnectionStdinWedgeTest extends TestCase
      * ignoring its stdin, for the duration of that write.
      *
      * MEASURED, three consecutive takes, PHP 8.3.6 / Linux 6.8: B = 0 every time
-     * against a threshold of 34464.
+     * against a threshold of 334464. (An earlier revision of this line said
+     * 34464, which was `100000 - 65536` — correct while {@see WEDGE_BYTES} was
+     * 100000, and left behind when it was raised to 400000. The threshold is
+     * computed below from the two constants and was never wrong in code; only
+     * this sentence was. Re-measured at the current constant before the number
+     * was changed, rather than re-derived by arithmetic.)
      */
     public function testTheChildHadNotFinishedItsFloodWhenTheOversizedWriteBegan(): void
     {

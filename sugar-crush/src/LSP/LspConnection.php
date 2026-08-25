@@ -551,9 +551,18 @@ final class LspConnection implements LspConnectionInterface
         }
 
         // `is_resource()`, NOT `@` — see {@see drainStderr()} for the measurement.
-        // `stream_select()` on a CLOSED pipe resource raises a TypeError (PHP
-        // 8.3.6, measured), which `@` does not suppress because it is an
-        // exception and not a diagnostic.
+        // `stream_select()` on a CLOSED pipe resource THROWS, and `@` does not
+        // suppress a throw because it is an exception and not a diagnostic.
+        //
+        // WHICH throw depends on what else is in the arrays, and this method can
+        // produce either. MEASURED, PHP 8.3.6: with an open fd elsewhere in the
+        // call — the `stderrOpen` arm below, which adds fd 2 to the read set —
+        // it is `TypeError: stream_select(): supplied resource is not a valid
+        // stream resource`. With the closed fd 0 as the ONLY entry across all
+        // three arrays — the arm where stderr has already hit EOF — PHP drops the
+        // invalid resource first and then reports `ValueError: No stream arrays
+        // were passed`. The guard is the same either way; the class name is only
+        // recorded so nobody "corrects" one of them into the other.
         if (!is_resource($this->pipes[0])) {
             return false;
         }

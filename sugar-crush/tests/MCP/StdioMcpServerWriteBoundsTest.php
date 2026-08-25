@@ -44,7 +44,12 @@ use SugarCraft\Crush\McpMessage;
  * The second finding is real on the deadline-less path and is pinned below with a
  * signal storm, which is the only way to make `stream_select()` fail on demand:
  * MEASURED on this host, a CLOSED pipe resource does not make it return `false`,
- * it raises a `TypeError` that `@` does not suppress.
+ * it THROWS, and `@` does not suppress a throw. (Which throw depends on the
+ * call: `TypeError: stream_select(): supplied resource is not a valid stream
+ * resource` when some other array still holds an open fd, `ValueError: No
+ * stream arrays were passed` when the closed one was the only entry, because
+ * PHP drops it and then finds every array empty. Either way it is an exception,
+ * which is the half that matters here.)
  */
 final class StdioMcpServerWriteBoundsTest extends TestCase
 {

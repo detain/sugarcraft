@@ -14910,8 +14910,15 @@ done, because it is a shape change to a class that is synchronous by design.
 `LspConnection::drainStderr()` carries a doc-block explaining why it uses `is_resource()` and NOT `@`:
 `fread()` on a `proc_close()`d pipe raises a `TypeError`, which `@` does not suppress because it is an
 exception and not a diagnostic. MEASURED this round, the same is true one level up: `stream_select()`
-on a CLOSED pipe resource raises `TypeError: supplied resource is not a valid stream resource` (PHP
-8.3.6), and `@` does not suppress that either.
+on a CLOSED pipe resource THROWS, and `@` does not suppress that either.
+
+⚠️ WHICH exception depends on the call, and the first draft of this entry named only one of them.
+MEASURED, PHP 8.3.6: with an open fd still present in some array, it is `TypeError: stream_select():
+supplied resource is not a valid stream resource`. With the closed fd as the ONLY entry across all three
+arrays, PHP drops the invalid resource first and then reports `ValueError: No stream arrays were
+passed`. Whoever executes this step will meet both — `writeLine()` produces the first when `stderrOpen`
+is true and the second when it is false — so a guard written to catch one class by name would miss the
+other. The load-bearing half is that both are exceptions, not diagnostics.
 
 `StdioMcpServer::readLine()` and `writeLine()` both call `@stream_select()` on `$this->pipes[N]` behind
 only a `$this->pipes !== null` check. `stop()` nulls the field right after closing, so no current path
