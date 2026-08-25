@@ -17729,3 +17729,141 @@ rule 6 says it gets wired or documented rather than deleted. It is recorded rath
 `src/Workflows/` is in no lane's file list this round and lane a already made one forced out-of-lane
 edit to this exact file (Ea58-3's two characters). Whoever adds the first `withStopOnFirstFailure()`
 inherits the bug.
+
+
+### Eb58-1 — `src/ClaudeCodeMcpClient.php` still claims an inheritance nothing checks *for it*
+
+`FrameCapFamilyTest` (round 58) pins that all three `MAX_FRAME_BYTES` claimants agree with
+`EngineBackend::MAX_FRAME_BYTES`, and rewrote the doc-blocks in `src/LSP/LspConnection.php` and
+`src/MCP/StdioMcpServer.php` to cite the pin instead of asserting derivation. **`src/ClaudeCodeMcpClient.php`
+carries the same stale sentence — "SIXTY-FOUR MEBIBYTES, inherited rather than invented" — and was outside
+round 58 lane b's file list**, so it was left alone. The class IS in `claimants()`, so the VALUE is pinned;
+only its prose still overstates. One paragraph, same three-part form as the other two.
+
+### Eb58-2 — the same E541 defect one word over: `required` reads an HTTP 401 as a denial
+
+E541 was fixed by narrowing `block(?:ed)?` to the verb forms. **`required` has the identical shape and was
+deliberately NOT narrowed**, because `Permission required:` is a live `DenialKind` case and the term is
+load-bearing for it. MEASURED on PHP 8.3.6 against `DENIAL_SHAPE` + `DENIAL_TERMS` as they now stand, each
+of these is reported as a denial-shaped literal:
+
+| literal | frame matched |
+|---|---|
+| `Authorization Required:` | `Authorization Required:` |
+| `Proxy Authorization Required: yes` | `Proxy Authorization Required:` |
+| `Content-Length required: the header is mandatory` | `Length required:` |
+| `Content-Length is required:` | `Length is required:` |
+
+None occurs in `src/` today — the only `required` hit is the roster's own `Permission required:` — so this
+is latent, exactly as E541 was until `LspConnection` wrote the phrase. `src/LSP/` and `src/MCP/` are the
+files most likely to write one. There is no free narrowing here: the honest options are to key the term on
+a preceding permission noun, or to accept the false positive and make the guard's failure text name
+"reword, do not add a row" as the resolution.
+
+### Eb58-3 — `EngineBackend::MAX_FRAME_BYTES` is `private`, so the family cannot name it
+
+The reason `FrameCapFamilyTest` exists at all. PHP 8.3.6 cannot initialise a `const` from another class's
+private constant, so three classes spell `64 * 1024 * 1024` and a reflection-driven test holds them
+together. **Promoting the engine's constant to `public` collapses all of it**: each claimant writes
+`private const MAX_FRAME_BYTES = EngineBackend::MAX_FRAME_BYTES;` and the derivation becomes a language
+fact. `FrameCapFamilyTest` already asserts the constant IS still private, with a failure message saying to
+do exactly this when that stops being true. `src/Backend/EngineBackend.php` is not lane b's file.
+
+### Eb58-4 — the swallowing-catch census's two stated blind spots
+
+`SwallowingCatchCensusTest` refuses a general-purpose exception type caught around an asserting try, and
+says in its own doc-block what it cannot see. Both remain open:
+
+1. **An assertion reached indirectly.** The try body is judged by its own token stream, so a helper called
+   from inside the try whose body asserts — `$this->drainTheChild()` — is invisible, and a wide catch
+   around it is not reported. `StdioMcpServerHandshakeTest::timeStartOf()` was exactly this shape before
+   round 58 repaired it, and every caller inherited the swallow.
+2. **Swallowing that is not a catch at all.** `set_error_handler()` installed over an asserting region
+   intercepts the failure with no try/catch anywhere.
+
+Closing (1) needs a call-graph pass over test-local private methods, which is a real piece of work rather
+than a widening.
+
+### Eb58-5 — the round-58 ownership map names a lane-c file that does not exist
+
+The map's preamble states that every path in it "was verified to exist at `535d721ff` before this brief was
+written (E334)". `git ls-tree 535d721ff sugar-crush/tests/` has no `StackedDocCommentTest.php`, which the
+map lists among lane c's four test-root files. Round 57's map/brief disagreement was found by one lane of
+three; this round's was reconciled before launch and still carries one bad path. **The E334 check evidently
+does not cover the ownership block**, only the per-lane file lists.
+
+### Eb58-6 — the round-58 brief's E546 distribution was one short, in `Providers/`
+
+The brief states 22 sites: "test root ×4, `tests/Agents/` ×8, `tests/Cli/` ×2, `tests/MCP/` ×4,
+`tests/Providers/` ×3, `tests/Workflows/` ×1". Re-measured at `535d721ff` with round 57's own generator
+(`census_swallow.php`, PHP 8.3.6, alphabet unchanged): **23**, with `tests/Providers/` at **4** — the extra
+being `Providers/ToolSchemaEncodingTest.php:364 catch(\PHPUnit\Framework\AssertionFailedError)`, which is
+correct code and one of the four deliberate survivors. Every other bucket matched exactly. Harmless here
+because the missed row needed no fix, but a distribution used to decide "am I done" was wrong by one.
+
+### Eb58-7 — `AgentPresetRegistry`'s "Invalid YAML frontmatter in:" branch may be unreachable-in-practice
+
+`parsePresetFile()` throws `"Invalid YAML frontmatter in: {$filePath}"` when `Frontmatter::parse()` returns
+a non-array. MEASURED on PHP 8.3.6: malformed YAML never reaches it — `Frontmatter::parse()` raises
+Symfony's `ParseException` first, and that escapes `load()` uncaught (`getPrevious()` is null). The branch
+is reachable only for frontmatter that parses to a scalar, e.g. `---\nfoo\n---`. A round-58 draft assumed
+the wrong branch and asserted the filename appears in the message, which was red. Worth a test naming the
+scalar case, or a note saying which input reaches it.
+
+### Eb58-8 — `src/ClaudeCodeMcpClient.php`'s frame-cap prose was not corrected with the other two
+
+Round 58's fix stage narrowed an over-broad scope claim in `src/LSP/LspConnection.php` and
+`src/MCP/StdioMcpServer.php` — both said raising the engine's cap desynchronises the family "while every
+test stayed green", which was measured over two files rather than the suite, and which at HEAD is simply
+false because `FrameCapFamilyTest` now catches it. The third member of the family,
+`src/ClaudeCodeMcpClient.php`, carries the same "inherited rather than invented" doc-block and was left
+alone because it is outside the lane's `src/` file list.
+
+Nothing is unpinned: the constant's VALUE and the class's MEMBERSHIP of the family are both asserted, the
+latter now derived from the declaration rather than a hand list. Only the prose is stale, and it also still
+tells the reader to edit a roster that no longer exists. One paragraph, mechanical, no measurement needed
+beyond re-reading the other two.
+
+### Eb58-9 — a swallowing-catch row's `types` key is the AUTHOR's spelling, and reads like the resolved one
+
+`AssertionSwallowingCatchTest::swallowingCatchesIn()` resolves each caught type through the import map and
+the file's namespace in order to DECIDE whether the catch swallows, then records the type in the row as the
+author wrote it. The two are silently different, and round 58 found one assertion that had been keyed on
+the wrong one for a full round: a filter for rows whose type starts `PHPUnit\` matched only catches already
+spelled fully qualified — which need no resolution at all — while claiming in its own failure message to
+prove that the scan "resolves the caught name". MEASURED: with the import arm of `resolveCaughtType()`
+deleted, that assertion stayed GREEN in isolation; the fixture that replaced it goes red.
+
+The remaining consumer of `types` is a failure-message renderer, which is the correct use. The finding is
+that the key is DISPLAY-ONLY and nothing says so at its definition: any future decision keyed on it repeats
+the defect exactly. Either add the resolved FQN as a second key, or name the existing one for what it is.
+
+### Eb58-10 — the census's resolver is deliberately more permissive than PHP, and that is unpinned
+
+`SwallowingCatchCensusTest::resolve()` tries the file's own namespace and then falls back to the global
+name. PHP does neither: an unqualified class name in a namespaced file resolves to the current namespace
+with NO global fallback. The fallback is kept because this tree's convention is to spell a global type with
+a leading `\`, so a file that forgets the slash means the global one — and being permissive here can only
+turn an `[unclassified]` into a real verdict, never an offender into `safe`.
+
+That reasoning is written into the method's doc-block but nothing pins the direction it claims. A fixture
+asserting that the permissive fallback cannot produce a `safe` verdict for a type PHP would have failed to
+load would close it. MEASURED at round 58: zero bare-unimported catch types exist in `sugar-crush/tests`
+(463 files), so this is latent.
+
+### Eb58-11 — a duplicated line in `GlobFigureDriftTest`'s doc-block, present at the floor
+
+`sugar-crush/tests/Config/GlobFigureDriftTest.php`'s class doc-block repeats one line verbatim:
+
+    * derives the TOOL SET the glob leaves. It holds the glob as a class constant
+    * derives the TOOL SET the glob leaves. It holds the glob as a class constant
+
+Confirmed present at `535d721ff`, so it is not round-58 damage. Cosmetic on its own, but this file is the
+tree's designated authority on figures-without-generators and its prose is quoted elsewhere; a duplicated
+clause in it is the kind of thing a later reader "fixes" by deleting the wrong one. One-line change, and
+the file is not in any round-58 lane's list.
+
+Noticed while attributing an assertion delta: this class is a live consumer of `src/**.php` prose, and it
+gained exactly +2 assertions in round 58 (one per `src/` doc-block rewritten in lane b). That is the
+instrument working, and it is worth knowing that editing a `src/` doc-block anywhere moves this test's
+count — a figure someone will otherwise treat as unexplained noise.

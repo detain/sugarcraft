@@ -409,14 +409,24 @@ final class McpMessageResultTypeTest extends TestCase
             startTimeoutSeconds: 1.0,
         );
 
+        // `fail()` USED TO LIVE INSIDE THIS TRY. It throws
+        // PHPUnit\Framework\AssertionFailedError, which extends
+        // PHPUnit\Framework\Exception, which extends \RuntimeException — so the
+        // catch below caught the failure it was standing next to, and the
+        // "start() reported success" case was reported as a string mismatch on
+        // the fail() message rather than as the missing throw it is.
+        $caught = null;
+
         try {
             $mute->start();
-            $this->fail('a server that answered nothing at all was reported as started');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Failed to start MCP server: silent', $e->getMessage());
+            $caught = $e;
         } finally {
             $mute->stop();
         }
+
+        $this->assertNotNull($caught, 'a server that answered nothing at all was reported as started');
+        $this->assertStringContainsString('Failed to start MCP server: silent', $caught->getMessage());
     }
 
     /**

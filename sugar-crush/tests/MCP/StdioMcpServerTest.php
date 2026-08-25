@@ -425,15 +425,38 @@ final class StdioMcpServerTest extends TestCase
             env: [],
         );
 
+        // WHAT THIS SAID: "Protocol exchange with cat will fail, which is
+        // expected". WHAT IS TRUE NOW: that is correct, and MEASURED — `cat`
+        // echoes the initialize request back instead of answering it, so
+        // start() raises `Failed to start MCP server: cat-test` on every run
+        // (PHP 8.3.6). WHY THIS STILL EARNS ITS PLACE: the old shape accepted
+        // EITHER outcome, and worse, `assertIsArray()` sat inside a
+        // `catch (\RuntimeException)` — which catches ExpectationFailedException
+        // — so a failing assertion in the try was re-read as the expected
+        // protocol failure and checked for the substring 'MCP server'. Both
+        // arms passed. Now the throw is pinned, and listTools()'s dormancy on
+        // this path is pinned with it rather than left to be assumed.
+        $caught = null;
+        $tools = null;
+
         try {
             $server->start();
             $tools = $server->listTools();
-            $this->assertIsArray($tools);
         } catch (\RuntimeException $e) {
-            // Protocol exchange with cat will fail, which is expected
-            $this->assertStringContainsString('MCP server', $e->getMessage());
+            $caught = $e;
         } finally {
             $server->stop();
         }
+
+        $this->assertNotNull(
+            $caught,
+            'the handshake with `cat` completed, which it cannot: cat has no JSON-RPC in it',
+        );
+        $this->assertStringContainsString('MCP server', $caught->getMessage());
+        $this->assertNull(
+            $tools,
+            'listTools() ran, so start() no longer throws and the arm above is no longer the '
+            . 'one under test — re-derive which outcome is real before relaxing this',
+        );
     }
 }

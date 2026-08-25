@@ -681,58 +681,149 @@ final class AssertionSwallowingCatchTest extends TestCase
     }
 
     /**
-     * The wider population is still there, and the scanner can still see it.
+     * The scanner can still see the population, and the scan still works on
+     * real files.
      *
      * RULE 15, AND RULE 25 UNDER IT. The assertion above expects an empty list,
-     * which is also what a scanner that matches nothing returns. This is the
-     * population control: the swallowing-catch class is large in this tree and
-     * a run that finds almost none of it has a broken instrument rather than a
-     * clean suite. The floor is well under the measured population so ordinary
-     * work can move it; it is a liveness check, not a budget.
+     * which is also what a scanner that matches nothing returns, so something
+     * has to prove the instrument is alive.
+     *
+     * WHAT THIS SAID: that the floor was `>= 12` hits over the real tree, "well
+     * under the measured population so ordinary work can move it", plus a row
+     * requiring at least one `catch(\RuntimeException)` among them.
+     *
+     * WHAT IS TRUE NOW: round 58 repaired the population. Nineteen sites moved
+     * their `fail()` out of the try, and the real-tree count fell from 23 to 4
+     * — every survivor a DELIBERATE catch of an assertion-failure type, so not
+     * one of them is spelled `\RuntimeException`. MEASURED: with the floor
+     * dropped to zero, the `catch(\RuntimeException)` row below still failed.
+     * Both anchors were cardinalities of the tree, and the tree was the thing
+     * being fixed — a liveness check that dies when the defect it watches is
+     * cured is a budget wearing a liveness check's doc-block.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the reasoning was right and only its
+     * ANCHOR was wrong. The type-expressiveness claims are now driven through
+     * {@see self::swallowingCatchesIn()} on a fixture, which is the same
+     * scanner one level down and cannot be moved by anybody's sweep, and the
+     * real tree is asked only what a fixture genuinely cannot answer: that the
+     * whole-tree walk still reads files off disk and resolves their paths.
+     *
+     * @see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest for the guard
+     *      that now refuses the shape tree-wide, and for why the four survivors
+     *      are correct code rather than exemptions.
      */
     public function testTheWiderSwallowingPopulationIsStillVisible(): void
     {
         $all = $this->swallowingCatches();
 
-        $this->assertGreaterThanOrEqual(
-            12,
-            \count($all),
-            'the swallowing-catch scanner found almost nothing, so its verdict that none of them '
-            . 'is silent means nothing either',
+        // THE TYPE EXPRESSIVENESS, ON A FIXTURE. If the alphabet narrows back to
+        // `\Throwable` — the shape the original write-up had — the majority of
+        // the class becomes invisible, and that is true whatever the tree
+        // happens to contain this week.
+        $probe = $this->swallowingCatchesIn(
+            "<?php\nclass P {\n"
+            . "  function a() { try { \$this->assertSame(1, 1); } catch (\\RuntimeException) { } }\n"
+            . "  function b() { try { \$this->assertSame(1, 1); } catch (\\Throwable) { } }\n"
+            . "  function c() { try { \$this->assertSame(1, 1); } catch (\\Exception) { } }\n"
+            . "  function d() { try { \$this->assertSame(1, 1); } catch (\\PHPUnit\\Framework\\AssertionFailedError) { } }\n"
+            . "}\n",
         );
+        $this->assertCount(
+            4,
+            $probe,
+            'the scanner no longer reports one row per catch clause it is looking straight at, so '
+            . 'every emptiness claim in this file is worthless',
+        );
+        foreach (['RuntimeException', 'Throwable', 'Exception', 'PHPUnit\\Framework\\AssertionFailedError'] as $type) {
+            $this->assertNotSame(
+                [],
+                array_values(array_filter(
+                    $probe,
+                    static fn (array $r): bool => \in_array($type, $r['types'], true),
+                )),
+                'catch(' . $type . ') is not being reported, so the alphabet has narrowed and part '
+                . 'of the population is unseen',
+            );
+        }
 
-        // AND THE TYPE THAT MAKES THIS FINDING WHAT IT IS. If every hit is a
-        // `\Throwable`, the alphabet has quietly narrowed back to the shape the
-        // original write-up had, and the majority of the population is invisible.
-        $viaRuntimeException = array_filter(
-            $all,
-            static fn (array $r): bool => \in_array('RuntimeException', $r['types'], true),
-        );
+        // AND THE REAL TREE, ASKED ONLY WHAT THE FIXTURE CANNOT ANSWER: that the
+        // walk still reaches files on disk. NOT a floor — if a later round
+        // legitimately takes this to zero, delete this row and say so; do not
+        // weaken it to `>= 0`, which is what a dead walk also satisfies.
         $this->assertNotSame(
             [],
-            $viaRuntimeException,
-            'no catch(\\RuntimeException) is being reported, so the alphabet has narrowed back to '
-            . '\\Throwable and most of the population is unseen',
-        );
-
-        // AND THE SPELLING-INDEPENDENCE, IN THE REAL TREE. A PHPUnit type
-        // written FULLY QUALIFIED is the exact shape the string-matching
-        // alphabet could not express — five of eight PHPUnit-typed catches were
-        // invisible to it. If none is reported, the decision has gone back to
-        // comparing spellings, and it will be reporting a clean tree over the
-        // half it can read.
-        $viaFullyQualifiedPhpUnitType = array_filter(
             $all,
-            static fn (array $r): bool => array_filter(
-                $r['types'],
-                static fn (string $t): bool => str_starts_with($t, 'PHPUnit\\'),
-            ) !== [],
+            'the whole-tree walk reports nothing at all. A fixture cannot catch this: it drives '
+            . 'the scan over a string, so a walk that has stopped reading files, stopped '
+            . 'resolving paths or stopped being pointed at tests/ looks identical to a clean tree',
         );
-        $this->assertNotSame(
-            [],
-            $viaFullyQualifiedPhpUnitType,
-            'no catch on a fully-qualified PHPUnit type is being reported, so the scan is '
-            . 'matching spellings again rather than resolving the caught name',
+        foreach ($all as $row) {
+            // THE `.php` CHECK IS NOT DECORATION. `assertFileExists()` is
+            // satisfied by a DIRECTORY, so a row with no `file` key at all
+            // would resolve to the package root and pass — the row would then
+            // be asserting that sugar-crush/ exists.
+            $file = $row['file'] ?? '';
+            $this->assertNotSame('', $file, 'a reported row carries no file at all');
+            $this->assertStringEndsWith('.php', $file, 'a reported row does not name a PHP file');
+            $this->assertFileExists(
+                \dirname(__DIR__, 2) . '/' . $file,
+                'a reported row names a path that is not on disk, so the walk is reporting rows it '
+                . 'did not read',
+            );
+        }
+
+        // AND THE SPELLING-INDEPENDENCE, ON A FIXTURE.
+        //
+        // WHAT THIS WAS: a filter over the REAL TREE for rows whose type string
+        // starts `PHPUnit\`, asserting at least one, under a comment reading
+        // "five of eight PHPUnit-typed catches were invisible to it".
+        //
+        // WHAT IS TRUE NOW, and both halves were wrong:
+        //
+        //   - "five of eight" is not derivable at any tree. Re-derived with
+        //     this file's own generator, the population is 4 rows today and was
+        //     23 before this round's sweep; the `PHPUnit\`-spelled share is 3
+        //     of 4 now and was 3 of 23 then. The figure was inherited prose.
+        //   - The filter looked in the wrong place. `types` records the type as
+        //     the author WROTE it, not as this scanner RESOLVED it, so a row
+        //     only matched `PHPUnit\` when the author had already spelled it
+        //     fully qualified — which needs no import map and no namespace at
+        //     all. The one row in the tree that genuinely exercises resolution
+        //     is a BARE imported name, and the filter excluded it. The
+        //     assertion's message claimed it proved resolution; it could not
+        //     see resolution.
+        //
+        // WHY THIS STILL EARNS ITS PLACE: the claim was right and only its
+        // instrument was wrong. Resolution IS the thing worth pinning, and a
+        // fixture can state it exactly — a bare imported name and an ALIASED
+        // import are classes only if `resolveCaughtType()` consults the import
+        // map, so deleting that arm makes the first two rows vanish. It is also
+        // the shape a real-tree count cannot survive: this round's own sweep
+        // took the population from 23 to 4 and would have taken the old margin
+        // with it.
+        $resolved = $this->swallowingCatchesIn(
+            "<?php\n"
+            . "namespace Demo\\Deep;\n"
+            . 'use PHPUnit\Framework\AssertionFailedError;' . "\n"
+            . 'use PHPUnit\Framework\ExpectationFailedException as Boom;' . "\n"
+            . "class R {\n"
+            . "  function a() { try { \$this->assertSame(1, 1); } catch (AssertionFailedError) { } }\n"
+            . "  function b() { try { \$this->assertSame(1, 1); } catch (Boom) { } }\n"
+            . "  function c() { try { \$this->assertSame(1, 1); } catch (\\PHPUnit\\Framework\\AssertionFailedError) { } }\n"
+            . "  function d() { try { \$this->assertSame(1, 1); } catch (\\TypeError) { } }\n"
+            . "}\n",
+        );
+        $this->assertSame(
+            [
+                ['line' => 6, 'types' => ['AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 7, 'types' => ['Boom'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+                ['line' => 8, 'types' => ['PHPUnit\\Framework\\AssertionFailedError'], 'catchAsserts' => false, 'rethrows' => false, 'recordsForLater' => false],
+            ],
+            $resolved,
+            'the caught type is no longer being RESOLVED before it is judged. A bare imported '
+            . 'name and an aliased import are not classes on their own, so if either row is '
+            . 'missing the decision has gone back to comparing spellings; if the \TypeError row '
+            . 'has appeared, resolution has gone the other way and stopped discriminating',
         );
     }
 

@@ -103,22 +103,29 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
             exit(3);
             PHP);
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}.
+        $caught = null;
+
         try {
             iterator_to_array($provider->completeStream($this->request()));
-            $this->fail('a non-zero exit must throw');
         } catch (\TypeError $e) {
             $this->fail(
                 'completeStream() threw a TypeError rather than a RuntimeException: ' . $e->getMessage()
                 . ' — stderr is being read from a pipe that was already fclose()d'
             );
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('exited with code 3', $e->getMessage());
-            $this->assertStringContainsString(
-                'ENOENT: model unavailable',
-                $e->getMessage(),
-                "the child's stderr is the only diagnostic on this path and must reach the message",
-            );
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'a non-zero exit must throw');
+        $this->assertStringContainsString('exited with code 3', $caught->getMessage());
+        $this->assertStringContainsString(
+            'ENOENT: model unavailable',
+            $caught->getMessage(),
+            "the child's stderr is the only diagnostic on this path and must reach the message",
+        );
     }
 
     /**
@@ -137,12 +144,19 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
             exit(4);
             PHP);
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}.
+        $caught = null;
+
         try {
             iterator_to_array($provider->completeStream($this->request()));
-            $this->fail('a non-zero exit must throw');
         } catch (\RuntimeException $e) {
-            $this->assertSame('Claude Code exited with code 4: ', $e->getMessage());
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'a non-zero exit must throw');
+        $this->assertSame('Claude Code exited with code 4: ', $caught->getMessage());
     }
 
     /**
@@ -167,26 +181,33 @@ final class ClaudeCodeProviderStreamReapTest extends TestCase
             exit(7);
             PHP);
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}.
+        $caught = null;
+
         try {
             iterator_to_array($provider->completeStream($this->request()));
-            $this->fail('a non-zero exit must throw');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString(
-                'REASON-model-quota-exhausted',
-                $e->getMessage(),
-                'the LAST thing the child said is the reason it exited and must survive truncation',
-            );
-            $this->assertStringNotContainsString(
-                'BANNER-node-v22-experimental-warning',
-                $e->getMessage(),
-                'a head-keeping truncation preserves the banner and drops the error — the wrong half',
-            );
-            $this->assertLessThan(
-                200000,
-                strlen($e->getMessage()),
-                'a megabyte of stderr must not be carried whole into an exception message',
-            );
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'a non-zero exit must throw');
+        $this->assertStringContainsString(
+            'REASON-model-quota-exhausted',
+            $caught->getMessage(),
+            'the LAST thing the child said is the reason it exited and must survive truncation',
+        );
+        $this->assertStringNotContainsString(
+            'BANNER-node-v22-experimental-warning',
+            $caught->getMessage(),
+            'a head-keeping truncation preserves the banner and drops the error — the wrong half',
+        );
+        $this->assertLessThan(
+            200000,
+            strlen($caught->getMessage()),
+            'a megabyte of stderr must not be carried whole into an exception message',
+        );
     }
 
     /**

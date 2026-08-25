@@ -252,16 +252,25 @@ final class StdioMcpServerHandshakeTest extends TestCase
             startTimeoutSeconds: $budget,
         );
 
+        // THIS IS A HELPER, so the swallow it used to carry was inherited by
+        // every caller: `fail()` throws AssertionFailedError, which is-a
+        // \RuntimeException, so the catch below ate its own neighbour's
+        // failure. `$elapsed` is still taken as the first statement of the
+        // `finally`, before stop(), exactly as it was.
         $start = microtime(true);
+        $caught = null;
+
         try {
             $server->start();
-            $this->fail('start() must not report success for a server that never answered');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Failed to start MCP server: probe', $e->getMessage());
+            $caught = $e;
         } finally {
             $elapsed = microtime(true) - $start;
             $server->stop();
         }
+
+        $this->assertNotNull($caught, 'start() must not report success for a server that never answered');
+        $this->assertStringContainsString('Failed to start MCP server: probe', $caught->getMessage());
 
         return $elapsed;
     }

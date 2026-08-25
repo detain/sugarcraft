@@ -454,19 +454,26 @@ final class StdioMcpServerStderrDrainTest extends TestCase
             startTimeoutSeconds: 5.0,
         );
 
+        // `fail()` is-a \RuntimeException (AssertionFailedError ->
+        // PHPUnit\Framework\Exception -> \RuntimeException), so keeping it
+        // inside this try handed the catch below its own failure object.
+        $caught = null;
+
         try {
             $server->start();
-            $this->fail('start() must not report success for a server that never answered');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('Failed to start MCP server: dying', $e->getMessage());
-            $this->assertStringContainsString(
-                'Fatal: the widget backend is not configured',
-                $e->getMessage(),
-                "the child's own explanation is still being thrown away"
-            );
+            $caught = $e;
         } finally {
             $server->stop();
         }
+
+        $this->assertNotNull($caught, 'start() must not report success for a server that never answered');
+        $this->assertStringContainsString('Failed to start MCP server: dying', $caught->getMessage());
+        $this->assertStringContainsString(
+            'Fatal: the widget backend is not configured',
+            $caught->getMessage(),
+            "the child's own explanation is still being thrown away"
+        );
     }
 
     // =========================================================================

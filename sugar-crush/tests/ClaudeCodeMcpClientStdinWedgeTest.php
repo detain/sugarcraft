@@ -581,16 +581,23 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
         try {
             $this->assertFalse($flag->getValue($client), 'the control: nothing is pending on a fresh session');
 
+            // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+            // holding it inside this try handed the catch its own failure object. See
+            // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}.
+            $caught = null;
+
             try {
                 $client->sendMessage(McpMessage::request('1', 'tools/call', [
                     'name' => 'x',
                     'arguments' => ['t' => str_repeat('x', self::OVERSIZED_BYTES)],
                 ]));
-                $this->fail('a deaf child accepted an oversized message in full');
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString('resynchronise', $e->getMessage(), $e->getMessage());
-                $this->assertStringNotContainsString('0 of ', $e->getMessage(), 'a partial write reported itself as a total loss: ' . $e->getMessage());
+                $caught = $e;
             }
+
+            $this->assertNotNull($caught, 'a deaf child accepted an oversized message in full');
+            $this->assertStringContainsString('resynchronise', $caught->getMessage(), $caught->getMessage());
+            $this->assertStringNotContainsString('0 of ', $caught->getMessage(), 'a partial write reported itself as a total loss: ' . $caught->getMessage());
 
             $this->assertTrue(
                 $flag->getValue($client),
@@ -646,22 +653,29 @@ final class ClaudeCodeMcpClientStdinWedgeTest extends TestCase
             fclose($pipes[0]);
             $this->assertFalse(is_resource($pipes[0]), 'fd 0 did not actually close');
 
+            // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+            // holding it inside this try handed the catch its own failure object. See
+            // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}.
+            $caught = null;
+
             try {
                 $client->sendMessage(McpMessage::request('1', 'ping', null));
-                $this->fail('a closed stdin accepted a message');
             } catch (\RuntimeException $e) {
-                $this->assertStringContainsString(
-                    '0 of ',
-                    $e->getMessage(),
-                    'the control: this row is about a write that got NOTHING out, and this one '
-                    . 'got something: ' . $e->getMessage(),
-                );
-                $this->assertStringContainsString(
-                    'the message was lost',
-                    $e->getMessage(),
-                    'a total loss reported itself as a partial write: ' . $e->getMessage(),
-                );
+                $caught = $e;
             }
+
+            $this->assertNotNull($caught, 'a closed stdin accepted a message');
+            $this->assertStringContainsString(
+                '0 of ',
+                $caught->getMessage(),
+                'the control: this row is about a write that got NOTHING out, and this one '
+                . 'got something: ' . $caught->getMessage(),
+            );
+            $this->assertStringContainsString(
+                'the message was lost',
+                $caught->getMessage(),
+                'a total loss reported itself as a partial write: ' . $caught->getMessage(),
+            );
 
             $this->assertTrue(
                 $flag->getValue($client),

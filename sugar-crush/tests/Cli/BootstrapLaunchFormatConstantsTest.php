@@ -1098,12 +1098,19 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         $unreadable = self::flattenPages([
             'mojibake.md' => "\xC3\x28 the cache was 100% warm",
         ]);
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}.
+        $caught = null;
+
         try {
             self::pagesQuoting('was 100% warm', $unreadable);
-            self::fail('a page the matcher cannot parse was silently recorded as quoting nothing');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('mojibake.md', $e->getMessage());
+            $caught = $e;
         }
+
+        self::assertNotNull($caught, 'a page the matcher cannot parse was silently recorded as quoting nothing');
+        self::assertStringContainsString('mojibake.md', $caught->getMessage());
     }
 
     /**

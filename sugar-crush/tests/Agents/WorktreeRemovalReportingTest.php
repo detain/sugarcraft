@@ -365,13 +365,20 @@ final class WorktreeRemovalReportingTest extends TestCase
         self::assertTrue(chmod($path . '/pinned', 0555));
         self::assertFalse(is_writable($path . '/pinned'), 'the mode-bit denial did not take');
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest} for the family.
+        $caught = null;
+
         try {
             $this->manager->removeWorktree($agentId);
-            self::fail('removeWorktree() returned normally over a worktree still on disk');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('still on disk', $e->getMessage());
-            self::assertStringContainsString($agentId, $e->getMessage());
+            $caught = $e;
         }
+
+        self::assertNotNull($caught, 'removeWorktree() returned normally over a worktree still on disk');
+        self::assertStringContainsString('still on disk', $caught->getMessage());
+        self::assertStringContainsString($agentId, $caught->getMessage());
 
         self::assertDirectoryExists($path);
         self::assertArrayHasKey(

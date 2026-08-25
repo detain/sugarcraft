@@ -653,12 +653,19 @@ final class AgentManagerTest extends TestCase
         $this->provider->method('supportsStreaming')->willReturn(false);
         $this->provider->method('complete')->willThrowException(new \RuntimeException('provider down'));
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest} for the family.
+        $caught = null;
+
         try {
             iterator_to_array($this->agentManager->executeSubAgent($subAgent->id));
-            $this->fail('executeSubAgent() should rethrow the provider failure');
         } catch (\RuntimeException $e) {
-            $this->assertSame('provider down', $e->getMessage());
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'executeSubAgent() should rethrow the provider failure');
+        $this->assertSame('provider down', $caught->getMessage());
 
         $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
         $this->assertNotNull($subAgent->completedAt);
@@ -722,16 +729,23 @@ final class AgentManagerTest extends TestCase
         $this->provider->method('complete')
             ->willThrowException(new \RuntimeException('Provider error'));
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest} for the family.
+        $caught = null;
+
         try {
             foreach ($this->agentManager->executeSubAgent($subAgent->id) as $_) {
                 // No-op
             }
-            $this->fail('Expected exception was not thrown');
         } catch (\RuntimeException $e) {
-            $this->assertSame('Provider error', $e->getMessage());
-            $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
-            $this->assertSame('Provider error', $subAgent->error);
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'Expected exception was not thrown');
+        $this->assertSame('Provider error', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertSame('Provider error', $subAgent->error);
     }
 
     public function testExecuteSubAgentPermissionGateDenySetsFailedStatus(): void
@@ -760,16 +774,23 @@ final class AgentManagerTest extends TestCase
                 ],
             ));
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest} for the family.
+        $caught = null;
+
         try {
             foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
                 // No-op
             }
-            $this->fail('Expected RuntimeException was not thrown');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('denied by permission gate', $e->getMessage());
-            $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
-            $this->assertStringContainsString('denied by permission gate', $subAgent->error);
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
+        $this->assertStringContainsString('denied by permission gate', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertStringContainsString('denied by permission gate', $subAgent->error);
     }
 
     public function testExecuteSubAgentPermissionGateAskThrowsRuntimeException(): void
@@ -799,16 +820,23 @@ final class AgentManagerTest extends TestCase
                 ],
             ));
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest} for the family.
+        $caught = null;
+
         try {
             foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
                 // No-op
             }
-            $this->fail('Expected RuntimeException was not thrown');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('no approver is attached', $e->getMessage());
-            $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
-            $this->assertStringContainsString('no approver is attached', $subAgent->error);
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
+        $this->assertStringContainsString('no approver is attached', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+        $this->assertStringContainsString('no approver is attached', $subAgent->error);
     }
 
     /**
@@ -872,15 +900,22 @@ final class AgentManagerTest extends TestCase
                 toolCalls: [new ToolCall(name: 'Bash', arguments: ['command' => 'ls'])],
             ));
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest} for the family.
+        $caught = null;
+
         try {
             foreach ($customAgentManager->executeSubAgent($subAgent->id) as $_) {
                 // No-op
             }
-            $this->fail('Expected RuntimeException was not thrown');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('refused at the permission prompt', $e->getMessage());
-            $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'Expected RuntimeException was not thrown');
+        $this->assertStringContainsString('refused at the permission prompt', $caught->getMessage());
+        $this->assertSame(SubAgent::STATUS_FAILED, $subAgent->status);
     }
 
     /**

@@ -1955,12 +1955,19 @@ final class WorkflowEngineTest extends TestCase
 
         $second = new \Fiber(fn () => $this->engine->run('concurrent', []));
 
+        // `fail()` throws AssertionFailedError, which is-a \RuntimeException, so
+        // holding it inside this try handed the catch its own failure object. See
+        // {@see \SugarCraft\Crush\Tests\SwallowingCatchCensusTest}.
+        $caught = null;
+
         try {
             $second->start();
-            $this->fail('A second run started alongside a live one instead of being refused.');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('already running', $e->getMessage());
+            $caught = $e;
         }
+
+        $this->assertNotNull($caught, 'A second run started alongside a live one instead of being refused.');
+        $this->assertStringContainsString('already running', $caught->getMessage());
 
         // The refusal must not have consumed run #1's slot or its handler
         // frame — the live run has to be able to finish normally.

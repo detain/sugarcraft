@@ -89,6 +89,28 @@ final class LspConnection implements LspConnectionInterface
      * must never make the parent try to buffer an arbitrary length before it
      * notices the stream is garbage".
      *
+     * WHAT THIS SAID: "inherited rather than invented". WHAT IS TRUE NOW: it is
+     * inherited, but nothing DERIVED it — the engine's constant is `private`, so
+     * PHP cannot name it here and this line spells `64 * 1024 * 1024` as its own
+     * literal, exactly as the other two members of the family do. Raising the
+     * engine's cap would have desynchronised all four without any framing test
+     * noticing. That last clause used to read "while every test stayed green",
+     * which was broader than what was run: MEASURED on PHP 8.3.6 by raising the
+     * engine's constant to 128 MiB and running the two suites that exist to pin
+     * this bound, `tests/MCP/McpFrameCapTest.php` and
+     * `tests/LSP/LspConnectionFrameCapTest.php`, both stayed green. No
+     * whole-suite run was made under that mutation, and at this commit a
+     * whole-suite run under it would go RED, because the test named below now
+     * exists to catch exactly this.
+     *
+     * WHY THIS STILL EARNS ITS PLACE: the claim is now CHECKED rather than
+     * asserted — {@see \SugarCraft\Crush\Tests\FrameCapFamilyTest} reads the
+     * engine's private constant by reflection and refuses any divergence. Its
+     * roster is DERIVED from the `MAX_FRAME_BYTES` declarations in `src/`, so
+     * there is no list to edit: move both caps, or drop the claim from this
+     * doc-block and stop this class declaring its own constant, in the same
+     * commit.
+     *
      * ⚠️ EXCEEDING IT IS A NAMED FAILURE, NOT A TRUNCATION. `Content-Length`
      * framing has no resynchronisation point at all — unlike NDJSON, there is no
      * next-newline to pick the stream back up at — so quietly cutting a frame
@@ -1070,15 +1092,28 @@ final class LspConnection implements LspConnectionInterface
                 $this->pendingContentLength = null;
 
                 throw new LspProtocolException(sprintf(
-                    // ⚠️ "Header block: %s" HERE TRIPPED `DenialPrefixRosterTest`, and the
-                    // wording is the fix rather than an exemption. That guard reports any
-                    // capital-initial word-run ending in a colon that also carries one of its
-                    // denial vocabulary words, and "block" is in that vocabulary — so an HTTP
-                    // header block read as a permission denial. Both resolutions the guard's
-                    // own failure text offers fit badly: this is not a tool-result prefix, so
-                    // a roster row would be a licence, and its OFF_ROSTER exclusion is keyed
-                    // on the file BEING a Throwable class, which this one is not. Rewording is
-                    // the honest move from inside this lane; the classifier gap is reported.
+                    // ⚠️ WHAT THIS SAID: that "Header block: %s" tripped
+                    // `DenialPrefixRosterTest` — whose vocabulary carried the bare noun
+                    // "block", so an HTTP-style header block read as a permission denial —
+                    // and that "the wording is the fix rather than an exemption", because
+                    // both resolutions that guard's failure text offers fit badly: this is
+                    // not a tool-result prefix, so a roster row would be a licence, and the
+                    // OFF_ROSTER exclusion is keyed on the file BEING a Throwable class,
+                    // which this one is not.
+                    //
+                    // WHAT IS TRUE NOW: the classifier was the defect and the classifier was
+                    // fixed. Its vocabulary reads `block(?:ed|ing)` — the verb forms only —
+                    // so a header block, a code block and a memory block are no longer
+                    // denials, pinned in both polarities by fixtures in that file. Rewording
+                    // a correct message to satisfy a guard was always the second-best move;
+                    // it was the only one available from inside the lane that found it.
+                    //
+                    // WHY THIS STILL EARNS ITS PLACE: the wording below is STILL the reworded
+                    // one, so a reader who diffs it against the guard will find no reason for
+                    // it and is one step from "re-simplify this to `Header block: %s`". That
+                    // is now allowed. It is also no longer necessary, and the paragraph that
+                    // explains why a guard once forced a message to be phrased around it is
+                    // the only record that the guard could do that at all.
                     'LSP server declared Content-Length %d, which is outside 1..%d. The buffer '
                     . 'was dropped rather than truncated: Content-Length framing has no '
                     . 'resynchronisation point, so a partially-consumed frame desynchronises '
