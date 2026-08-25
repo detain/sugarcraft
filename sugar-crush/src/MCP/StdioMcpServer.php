@@ -1035,10 +1035,6 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
-     * @param array<mixed> $response
-     * @return array<McpTool>
-     */
-    /**
      * Turn a `tools/list` reply into {@see McpTool}s, SKIPPING the entries a
      * third party got wrong instead of failing the server over them.
      *
@@ -1077,6 +1073,7 @@ final class StdioMcpServer implements McpServer
      * that tool, and taking the other thirty-nine down with it is the behaviour
      * this whole path exists to avoid.
      *
+     * @param array<mixed> $response
      * @return array<McpTool>
      */
     private function parseTools(array $response): array
