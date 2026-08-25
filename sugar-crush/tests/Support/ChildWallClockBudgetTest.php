@@ -823,8 +823,123 @@ final class ChildWallClockBudgetTest extends TestCase
     }
 
     /**
+     * THE ARGUMENT WALK AGAINST A STRING INTERPOLATION, IN BOTH DIRECTIONS.
+     *
+     * An interpolation opens with an ARRAY token and closes with a bare `}`,
+     * so a walk comparing whole tokens takes the closer and never took the
+     * opener. Measured on PHP 8.3.6 before the fix, `foo("{$a}", $b)` came
+     * back as ONE span holding `"{$a` — depth reached zero at the
+     * interpolation's brace and the walk returned there, losing the second
+     * argument entirely. That is a wrong answer wearing the shape of a right
+     * one, which is worse than the `null` this function returns when it is
+     * honestly lost.
+     *
+     * AND THE NEGATIVE HALF, WHICH IS RULE 49 AND IS WHY THE FIX IS A ROSTER
+     * OF TOKEN IDS RATHER THAN A TEST ON TOKEN TEXT. Measured on this PHP,
+     * `"$a{"` produces a `T_ENCAPSED_AND_WHITESPACE` whose text is EXACTLY `{`
+     * and `"$a}"` one whose text is exactly `}`. A walk keying on text would
+     * count those, which is the same defect in the other polarity: braces
+     * invented inside string data. Both rows below run, so neither direction
+     * can be satisfied by an instrument that has stopped answering.
+     */
+    public function testTheArgumentWalkCountsAnInterpolationsBraceInNeitherDirection(): void
+    {
+        $call = static function (string $source): ?array {
+            $tokens = \token_get_all($source);
+            foreach ($tokens as $index => $token) {
+                if ($token === '(') {
+                    return self::argumentSpans($tokens, $index);
+                }
+            }
+
+            return null;
+        };
+        $render = static function (array $tokens, array $spans): array {
+            $out = [];
+            foreach ($spans as [$from, $to]) {
+                $text = '';
+                for ($k = $from; $k < $to; $k++) {
+                    $text .= \is_array($tokens[$k]) ? $tokens[$k][1] : $tokens[$k];
+                }
+                $out[] = trim($text);
+            }
+
+            return $out;
+        };
+
+        // THE CONTROL, so a walk that has stopped splitting at all cannot pass
+        // the rows beneath it by returning the same shape for everything.
+        $plain = '<?php f($a, $b);';
+        $this->assertSame(
+            ['$a', '$b'],
+            $render(\token_get_all($plain), (array) $call($plain)),
+            'the argument walk no longer splits an ordinary two-argument call, so nothing below '
+                . 'this line is a statement about interpolations',
+        );
+
+        // (1) THE OPENER IS TAKEN. Built by concatenation so the shape is
+        // never literal in a file this suite's own censuses walk (rule 26).
+        $open = '{' . '$a' . '}';
+        foreach (['"' . $open . '"', '"$' . '{a}"'] as $interpolated) {
+            $source = '<?php f(' . $interpolated . ', $b);';
+            $spans = $call($source);
+            $this->assertNotNull($spans, 'the argument walk lost the closing bracket of ' . $interpolated);
+            $this->assertCount(
+                2,
+                $spans,
+                'an argument list holding ' . $interpolated . ' was truncated at the '
+                    . "interpolation's closing brace, so the arguments after it are invisible. "
+                    . 'The brace that OPENS an interpolation is an array token and the one that '
+                    . 'closes it is a bare string; a walk that compares whole tokens takes the '
+                    . 'second and misses the first',
+            );
+            $this->assertSame(
+                '$b',
+                $render(\token_get_all($source), $spans)[1],
+                'the argument after ' . $interpolated . ' is not the one the walk reported',
+            );
+        }
+
+        // (2) AND A BRACE THAT IS STRING DATA IS NOT AN OPENER. Rule 49: on
+        // this PHP each of these is a T_ENCAPSED_AND_WHITESPACE whose text is
+        // one brace, and counting either would invent depth inside a literal.
+        foreach (['"$a' . '{"', '"$a' . '}"'] as $literal) {
+            $source = '<?php f(' . $literal . ', $b);';
+            $spans = $call($source);
+            $this->assertNotNull($spans, 'the argument walk lost the closing bracket of ' . $literal);
+            $this->assertCount(
+                2,
+                $spans,
+                'a brace sitting inside string DATA (' . $literal . ') changed the walk\'s depth. '
+                    . 'It is a T_ENCAPSED_AND_WHITESPACE whose text is that one byte, which is '
+                    . 'exactly why the openers are named by token id here and not by text',
+            );
+        }
+    }
+
+    /**
      * The `[from, to)` token spans of a bracketed argument list, or `null` when
      * the brackets never close.
+     *
+     * THE BRACE WALK NAMES THE ARRAY-TOKEN OPENERS, AND IT DID NOT USED TO.
+     * Every comparison here is `in_array($token, …, true)` against the WHOLE
+     * token, so an array token can never match one — while the `}` that CLOSES
+     * a string interpolation is a bare one-byte string and matches perfectly.
+     * The walk therefore took a closer it had never taken an opener for, and
+     * the effect is not an off-by-one in a diagnostic: measured on PHP 8.3.6,
+     * `foo("{$a}", $b)` returned ONE span holding `"{$a` and lost `$b`
+     * altogether, because depth hit zero at the interpolation's brace and the
+     * function returned there. A truncated list is a WRONG answer that looks
+     * like a right one — the shape rule 14 exists for, and the reason this is
+     * a defect rather than an inaccuracy. `"$a"` without braces was always
+     * fine: it opens no brace at all.
+     *
+     * THE OPENERS ARE A ROSTER AND NOT A TEXT TEST, deliberately.
+     * `T_CURLY_OPEN`'s text IS `{`, so keying on text would work for it and
+     * would ALSO count a `T_ENCAPSED_AND_WHITESPACE` whose text is exactly `{`
+     * or `}` — which `"$a{"` really does produce on this PHP. Naming the two
+     * tokens that genuinely open a brace answers both questions at once, and
+     * it is the same roster {@see InterpolationOpenerTokenTest} keeps.
      *
      * @return list<array{0: int, 1: int}>|null
      */
@@ -835,6 +950,16 @@ final class ChildWallClockBudgetTest extends TestCase
         $start = $open + 1;
         for ($i = $open, $count = \count($tokens); $i < $count; $i++) {
             $token = $tokens[$i];
+            if (\is_array($token)) {
+                if (\in_array($token[0], [\T_CURLY_OPEN, \T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                    $depth++;
+                }
+
+                // Every other array token is inert here, INCLUDING one whose
+                // text is a lone brace: inside a quoted string that byte is
+                // data, and the bare-string arms below never see it.
+                continue;
+            }
             if (\in_array($token, ['(', '[', '{'], true)) {
                 $depth++;
 
