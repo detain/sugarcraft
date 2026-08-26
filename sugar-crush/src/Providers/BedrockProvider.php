@@ -158,11 +158,12 @@ final readonly class BedrockProvider implements ProviderInterface
 
         $params = [
             'modelId' => $model,
-            'messages' => $this->formatMessages($request->messages),
+            'messages' => $this->formatMessages($this->withoutSystemMessages($request->messages)),
         ];
 
-        if ($request->systemPrompt !== null) {
-            $params['system'] = [['text' => $request->systemPrompt]];
+        $system = $this->systemBlocks($request);
+        if ($system !== []) {
+            $params['system'] = $system;
         }
 
         $inference = $this->inferenceConfig($request);
@@ -204,15 +205,16 @@ final readonly class BedrockProvider implements ProviderInterface
 
         $params = [
             'modelId' => $model,
-            'messages' => $this->formatMessages($request->messages),
+            'messages' => $this->formatMessages($this->withoutSystemMessages($request->messages)),
             'inferenceConfig' => $this->inferenceConfig($request) + [
                 'maxTokens' => self::DEFAULT_STREAM_MAX_TOKENS,
                 'temperature' => self::DEFAULT_TEMPERATURE,
             ],
         ];
 
-        if ($request->systemPrompt !== null) {
-            $params['system'] = [['text' => $request->systemPrompt]];
+        $system = $this->systemBlocks($request);
+        if ($system !== []) {
+            $params['system'] = $system;
         }
 
         try {
@@ -291,7 +293,7 @@ final readonly class BedrockProvider implements ProviderInterface
             $role = match (true) {
                 $msg instanceof UserMessage => 'user',
                 $msg instanceof AssistantMessage => 'assistant',
-                $msg instanceof SystemMessage => 'user', // System wrapped as user
+                $msg instanceof SystemMessage => 'user', // total over Message types; production hoists SystemMessages to `system` first (see $this->systemBlocks())
                 $msg instanceof ToolResultMessage => 'user',
                 default => 'user',
             };
@@ -301,6 +303,52 @@ final readonly class BedrockProvider implements ProviderInterface
                 'content' => [['text' => $msg->content()]],
             ];
         }, $messages);
+    }
+
+    /**
+     * Converse has no per-message `system` role: system text only exists in
+     * the request-level `system` block list, and `messages` must alternate
+     * user/assistant turns. formatMessages() keeps its total contract over
+     * Message types (a SystemMessage maps to user, and tests pin that), so a
+     * history SystemMessage would sit on the wire as a same-role neighbour
+     * of a real user turn - the consecutive-user shape backlog E19 measured.
+     * Production therefore filters SystemMessages out of the message list
+     * here and hoists their text into the `system` array instead.
+     *
+     * @param array<Message> $messages
+     * @return array<Message>
+     */
+    private function withoutSystemMessages(array $messages): array
+    {
+        return array_values(array_filter(
+            $messages,
+            static fn (Message $msg): bool => !$msg instanceof SystemMessage,
+        ));
+    }
+
+    /**
+     * Builds the Converse `system` block list: the assembled prompt first,
+     * then every history SystemMessage's text in message order. The stream
+     * path must build exactly the same list as the complete path, so both
+     * call sites share this helper.
+     *
+     * @return array<int, array{text: string}>
+     */
+    private function systemBlocks(CompleteRequest $request): array
+    {
+        $blocks = [];
+
+        if ($request->systemPrompt !== null) {
+            $blocks[] = ['text' => $request->systemPrompt];
+        }
+
+        foreach ($request->messages as $message) {
+            if ($message instanceof SystemMessage) {
+                $blocks[] = ['text' => $message->content()];
+            }
+        }
+
+        return $blocks;
     }
 
     /**
