@@ -13,7 +13,6 @@ use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Messages\AssistantMessage;
-use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\SglangProvider;
@@ -41,6 +40,23 @@ use SugarCraft\Crush\Tools\ToolResult;
  * Byte POSITION is asserted alongside byte equality wherever it matters: a
  * chunk that is identical but shifted forward by one byte is, to a prefix
  * cache, entirely uncached.
+ *
+ * WHY THE REQUESTS BELOW ARE BUILT THE WAY THEY ARE
+ * -------------------------------------------------
+ * The request shape this suite originally pinned — a SystemMessage instance
+ * inside $messages plus the 'MiniMax-M2.7' model-id literal — is a shape
+ * production NEVER sends. Runtime::run() carries the assembled prompt on
+ * CompleteRequest::$systemPrompt (buildMessages() emits plain Message
+ * instances only, never a SystemMessage), and SglangProvider::buildParams()
+ * prepends that field as the leading system message on both complete() and
+ * completeStream(). The old 'MiniMax-M2.7' literal additionally 404s against
+ * the deployed server, which serves SglangProvider::DEFAULT_MODEL. Every
+ * request below therefore mirrors Runtime::run() exactly — plain messages,
+ * the prompt on $systemPrompt, and SglangProvider::DEFAULT_MODEL wherever a
+ * model id is needed — so the suite guards the wire shape that actually
+ * reaches the cache. self::SYSTEM_PROMPT stands in for the assembled output
+ * of Runtime::buildSystemPrompt(); its exact content is irrelevant, only
+ * that it is byte-identical across the two turns being compared.
  */
 final class PromptStabilityTest extends TestCase
 {
@@ -80,7 +96,7 @@ final class PromptStabilityTest extends TestCase
 
         return new SglangProvider(
             'https://api.example.com',
-            'MiniMax-M2.7',
+            SglangProvider::DEFAULT_MODEL,
             null,
             new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
         );
@@ -128,7 +144,14 @@ final class PromptStabilityTest extends TestCase
             : substr($raw, $start, $end - $start);
     }
 
-    /** The exact bytes a `system` turn serializes to inside `messages`. */
+    /**
+     * The exact bytes a `system` turn serializes to inside `messages`.
+     *
+     * The same bytes whether the turn arrives as a SystemMessage instance or
+     * via buildParams()' prepend of CompleteRequest::$systemPrompt — both
+     * encode the same ordered role/content array — so the helper doubles as
+     * the expected leading chunk of the production-shaped wire body.
+     */
     private static function systemChunk(string $prompt): string
     {
         // buildParams() hands an ordered PHP array to Guzzle's `json` option,
@@ -145,16 +168,24 @@ final class PromptStabilityTest extends TestCase
     {
         $provider = $this->provider();
 
-        $turnOne = [new SystemMessage(self::SYSTEM_PROMPT), new UserMessage('First question')];
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: $turnOne));
+        $turnOne = [new UserMessage('First question')];
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: $turnOne,
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
 
         // Turn two of the SAME session: the history has grown, but everything
         // ahead of the new messages must be byte-for-byte where it was.
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: [
-            ...$turnOne,
-            new AssistantMessage('First answer'),
-            new UserMessage('Second question'),
-        ]));
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [
+                ...$turnOne,
+                new AssistantMessage('First answer'),
+                new UserMessage('Second question'),
+            ],
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
 
         $chunk = self::systemChunk(self::SYSTEM_PROMPT);
         $first = strpos($this->rawBody(0), $chunk);
@@ -171,31 +202,77 @@ final class PromptStabilityTest extends TestCase
     public function testSystemTurnLeadsTheMessageArraySoThereIsAPrefixToShare(): void
     {
         $provider = $this->provider(1);
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: [
-            new SystemMessage(self::SYSTEM_PROMPT),
-            new UserMessage('Hi'),
-        ]));
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
 
         // Anything ahead of the system turn is prompt the cache can never
         // reuse; anything after it only shares a prefix because the system
-        // turn itself did not move.
+        // turn itself did not move. The prepend in buildParams() is what puts
+        // the system turn first — a SystemMessage inside $messages would have
+        // been the OLD shape this suite no longer sends.
         $this->assertStringStartsWith(
             '"messages":[{"role":"system"',
             self::messagesBytes($this->rawBody(0)),
         );
     }
 
+    public function testSystemPromptIsOmittedWhenUnsetOrEmpty(): void
+    {
+        // Negative polarity of the prepend guard (§16.2: both polarities are
+        // pinned — the cases above prove the guard fires, this one proves it
+        // does NOT fire always). `null` and `''` both mean "unset", the same
+        // convention as the optional-knob filter and VertexProvider's
+        // systemPrompt hoist. If the guard ever flipped to fire
+        // unconditionally, every request would grow a spurious leading system
+        // turn and the prefix contract would silently change shape.
+        $provider = $this->provider(2);
+
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: null,
+        ));
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: '',
+        ));
+
+        foreach ([0, 1] as $turn) {
+            $bytes = self::messagesBytes($this->rawBody($turn));
+
+            // The leading turn is the user message itself — no prepended
+            // system chunk in either polarity.
+            $this->assertStringStartsWith('"messages":[{"role":"user"', $bytes);
+            $this->assertStringNotContainsString(self::systemChunk(self::SYSTEM_PROMPT), $bytes);
+        }
+
+        // `null` and `''` are equivalent: the two bodies must be byte-identical.
+        $this->assertSame($this->rawBody(0), $this->rawBody(1));
+    }
+
     public function testHistoryGrowsAsAStrictByteWisePrefixExtension(): void
     {
         $provider = $this->provider();
 
-        $turnOne = [new SystemMessage(self::SYSTEM_PROMPT), new UserMessage('First question')];
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: $turnOne));
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: [
-            ...$turnOne,
-            new AssistantMessage('First answer'),
-            new UserMessage('Second question'),
-        ]));
+        $turnOne = [new UserMessage('First question')];
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: $turnOne,
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [
+                ...$turnOne,
+                new AssistantMessage('First answer'),
+                new UserMessage('Second question'),
+            ],
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
 
         // Drop turn one's closing `]` — turn two must continue from exactly
         // there. This is the whole RadixAttention contract in one assertion:
@@ -210,8 +287,8 @@ final class PromptStabilityTest extends TestCase
         $tools = [new StablePrefixRealToolStub(), new StablePrefixEmptyToolStub()];
 
         $provider = $this->provider();
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: [new UserMessage('Hi')], tools: $tools));
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: [new UserMessage('Hi again')], tools: $tools));
+        $provider->complete(new CompleteRequest(model: SglangProvider::DEFAULT_MODEL, messages: [new UserMessage('Hi')], tools: $tools));
+        $provider->complete(new CompleteRequest(model: SglangProvider::DEFAULT_MODEL, messages: [new UserMessage('Hi again')], tools: $tools));
 
         $first = self::toolsBytes($this->rawBody(0));
 
@@ -234,12 +311,12 @@ final class PromptStabilityTest extends TestCase
         // that, this test is the record that the behaviour changed on purpose.
         $provider = $this->provider();
         $provider->complete(new CompleteRequest(
-            model: 'MiniMax-M2.7',
+            model: SglangProvider::DEFAULT_MODEL,
             messages: [new UserMessage('Hi')],
             tools: [new StablePrefixRealToolStub(), new StablePrefixEmptyToolStub()],
         ));
         $provider->complete(new CompleteRequest(
-            model: 'MiniMax-M2.7',
+            model: SglangProvider::DEFAULT_MODEL,
             messages: [new UserMessage('Hi')],
             tools: [new StablePrefixEmptyToolStub(), new StablePrefixRealToolStub()],
         ));
@@ -260,8 +337,9 @@ final class PromptStabilityTest extends TestCase
         // map, these two bodies would diverge and every turn would prefill from
         // scratch.
         $request = new CompleteRequest(
-            model: 'MiniMax-M2.7',
-            messages: [new SystemMessage(self::SYSTEM_PROMPT), new UserMessage('Hi')],
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: self::SYSTEM_PROMPT,
             temperature: 0.2,
             maxTokens: 256,
             tools: [new StablePrefixRealToolStub(), new StablePrefixEmptyToolStub()],
@@ -285,8 +363,9 @@ final class PromptStabilityTest extends TestCase
         // The live chat loop streams; a compaction/title call may not. Both go
         // through buildParams(), and `stream` is appended AFTER every prefix
         // key, so the two paths land on the same cached prefix instead of
-        // maintaining two near-identical ones.
-        $messages = [new SystemMessage(self::SYSTEM_PROMPT), new UserMessage('Hi')];
+        // maintaining two near-identical ones. The system prompt is part of
+        // that shared prefix, so it must ride $systemPrompt on BOTH paths.
+        $messages = [new UserMessage('Hi')];
         $tools = [new StablePrefixRealToolStub()];
 
         $this->history = [];
@@ -297,13 +376,23 @@ final class PromptStabilityTest extends TestCase
         $stack->push(Middleware::history($this->history));
         $provider = new SglangProvider(
             'https://api.example.com',
-            'MiniMax-M2.7',
+            SglangProvider::DEFAULT_MODEL,
             null,
             new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
         );
 
-        $provider->complete(new CompleteRequest(model: 'MiniMax-M2.7', messages: $messages, tools: $tools));
-        iterator_to_array($provider->completeStream(new CompleteRequest(model: 'MiniMax-M2.7', messages: $messages, tools: $tools)));
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: $messages,
+            tools: $tools,
+            systemPrompt: self::SYSTEM_PROMPT,
+        ));
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: $messages,
+            tools: $tools,
+            systemPrompt: self::SYSTEM_PROMPT,
+        )));
 
         $batch = $this->rawBody(0);
         $streamed = $this->rawBody(1);
@@ -326,7 +415,7 @@ final class PromptStabilityTest extends TestCase
         // property the whole prefix depends on — see the git case below for
         // where it stops holding.
         $dir = $this->tempDir();
-        $block = new EnvironmentBlock($dir, 'MiniMax-M2.7', new DateTimeImmutable('2026-08-10 12:00:00'));
+        $block = new EnvironmentBlock($dir, SglangProvider::DEFAULT_MODEL, new DateTimeImmutable('2026-08-10 12:00:00'));
 
         $this->assertSame($block->render(), $block->render());
         $this->assertStringContainsString('Current date: 2026-08-10', $block->render());
@@ -353,7 +442,7 @@ final class PromptStabilityTest extends TestCase
             $this->markTestSkipped('git is unavailable in this environment');
         }
 
-        $block = new EnvironmentBlock($dir, 'MiniMax-M2.7', new DateTimeImmutable('2026-08-10 12:00:00'));
+        $block = new EnvironmentBlock($dir, SglangProvider::DEFAULT_MODEL, new DateTimeImmutable('2026-08-10 12:00:00'));
         $before = $block->render();
 
         file_put_contents($dir . '/scratch.txt', 'written by the agent mid-session');
