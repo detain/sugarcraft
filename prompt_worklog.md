@@ -255,6 +255,53 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1.S7 — the transmission matrix test · 2026-08-26 15:4x · 843432e13
+**Status**: done
+**Worktree**: `/home/sites/prompt-step-P1.S7` — removed
+**Base**: 8064f27aa
+**Goal (restated)**: One test that walks EVERY provider `ProviderFactory` can build, hands each an identical `CompleteRequest` with a distinctive `systemPrompt` sentinel, and asserts the sentinel appears in the payload that provider would put on the wire — enumerating providers DYNAMICALLY (reflection over `src/Providers/`), not from a hand-written list; `EchoProvider` exempted with a named reason. A provider added later with no systemPrompt handling fails on day one.
+**What changed**
+- `sugar-crush/tests/Providers/SystemPromptTransmissionMatrixTest.php` NEW (619 lines, 15 tests/46 assertions, step commit `8a916b802`, +619): `TRANSMISSION_CONTRACT` const (Sglang/Custom/OpenAI → `messages[0]`, Bedrock → `system[0].text`, Vertex → `system`, ClaudeCode → `--system-prompt argv`; EchoProvider deliberately absent — test double, no wire, EchoProvider.php:18-23,84-91); sentinel `P1S7-SENTINEL-4f8a2c91` asserted via `substr_count(json_encode(...), SENTINEL) === 1` (rides the system slot and nowhere else); per-provider BOTH-paths transmission tests driven exactly as each provider's own suite drives it (Sglang/Custom Guzzle history `sentBody()`; OpenAI captured `create()`/`createStreamed()` params; Bedrock Aws MockHandler `getLastCommand()->toArray()`; Vertex injected predictor/streamer closure `body['system']`; ClaudeCode `printModeArgs()` `--system-prompt` argv, both json+stream-json); null-polarity per provider; deliberate `''`-polarity pins (OpenAI + Bedrock guards are `!== null` ONLY — `''` IS transmitted; Bedrock pinned via reflected `systemBlocks()` because AWS SDK Converse validator rejects zero-length text blocks, measured); roster test (dynamic via `providerImplementers()`, asserts exemption diff === `['EchoProvider']` WITH named reason + stale-entry reverse check).
+- `sugar-crush/tests/Providers/ProviderRequestResponseTest.php` +27/-4: P1.S5's derived-roster scan extracted into NEW `public static providerImplementers(): array` (glob `src/Providers/*.php` + `class_implements(ProviderInterface)`, sorted, docblock: born in P1.S5, shared with P1.S7 so the two contracts cannot drift). No other logic changed.
+- Fix commit `51f6b90f5` (+1/-1): `SSE_BODY` const at :107 made byte-identical to the `OpenAIProviderTest` fixture it claims to mirror (`"content":"hi"` → `"content":"Hello"`, `[DONE]\n` → `[DONE]\n\n`) — closes finding M1 (false provenance claim). Behavior-neutral: no assertion reads chunk content.
+**Tests added or changed**
+- `SystemPromptTransmissionMatrixTest::testEveryProviderImplementerHasATransmissionContract` — derived roster via `ProviderRequestResponseTest::providerImplementers()`; exemption diff === `['EchoProvider']` WITH named reason; stale-entry reverse `assertSame([])`.
+- Per-provider both-paths transmission tests (6): Sglang/Custom/OpenAI/Bedrock/Vertex/ClaudeCode — sentinel in each wire payload via `assertSame` + `substr_count === 1` (e.g. :162/:166 for Sglang complete+stream, :295/:306 Bedrock system block, :367/:378 Vertex body['system'], :413/:423 ClaudeCode argv).
+- Per-provider null-polarity tests (6): sentinel absent, exact shapes (`assertArrayNotHasKey('system')` Bedrock :321, Vertex :389; exact `['role'=>'user']` Sglang).
+- `''`-polarity pins (2): OpenAI `''` IS transmitted (guard `!== null` only :90/:127); Bedrock `''` IS shaped into a block (guard `!== null` only :341) — pinned via ReflectionMethod because SDK validator rejects zero-length blocks.
+**Deletion experiment**: mutated `SglangProvider.php:672` guard → `if (false && ...)`: FAILURES! Tests: 15, Assertions: 41, Failures: 1 — `testSglangTransmitsSystemPromptAsTheLeadingSystemMessageOnBothPaths` 'Failed asserting that two arrays are identical. - 'role' => 'system' + 'role' => 'user', - 'content' => 'P1S7-SENTINEL-4f8a2c91' + 'content' => 'Hi', SystemPromptTransmissionMatrixTest.php:162.' Restored → src/ byte-identical, green again (15/46). What it showed: guard kill drops the sentinel from the wire → matrix red on the first assertion of the first provider path — a provider added later with no handling fails on day one, exactly as the step demands. (45-not-46 note: failing test short-circuits its remaining assertions.)
+**MEASURED**
+```
+# worktree (base 8064f27aa) — agent, continuation agent, reviewer and orchestrator identical
+$ vendor/bin/phpunit tests/Providers/SystemPromptTransmissionMatrixTest.php
+OK (15 tests, 46 assertions), Time 00:00.053
+$ vendor/bin/phpunit tests/Providers/ProviderRequestResponseTest.php
+OK (32 tests, 72 assertions), Time 00:00.028
+$ vendor/bin/phpunit tests/Providers/
+OK (846 tests, 2047 assertions), Time 00:01.697
+$ vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9390 assertions), Time 00:12.408   # 9387→9390: DuplicatedTestHelperDriftTest fixed
+# main repo after merge
+$ vendor/bin/phpunit tests/Providers/
+OK (846 tests, 2047 assertions)   # was 831/2001 pre-merge (+15/+46)
+```
+**Suite result**: Providers dir green at every stage (831/2001 → 846/2047); census 103/9380 → 103/9390 (census interplay: `offlineRuntimeClient(MockHandler $handler)` parameter list textually identical to BedrockProviderTest.php:801 — NOTHING added to `ACCEPTED_SIGNATURE_DIVERGENCE`, alias strategy: `use Aws\MockHandler;` + `use GuzzleHttp\Handler\MockHandler as GuzzleMockHandler;`); no skips added.
+**Review loop** (RECONSTRUCTED — original step agent died at inner-coder wait):
+- Cycle 1 — original step agent (pty_966581c9) TIMED OUT at inner-Coder-Agent wait (5400s) with NO commits; inner coder's uncommitted implementation (both files) inspected + verified by me (target 15/46 + 32/72 + 846/2047 green; census 1 failure) → Rung 3 continuation agent (pty_59384184) completed: committed `8a916b802`, fixed census failure, ran all suites + deletion experiment, full 7-section report.
+- Cycle 1 — reviewer regulatory-brown-crane (delegate): **FINDINGS — 1× MINOR (M1)** — docblock :102-104 + `SSE_BODY` :107 claim 'byte-identical to the OpenAIProviderTest fixture' FALSE (delta `'hi'` vs `'Hello'`, `[DONE]\n` vs `[DONE]\n\n`; measured vs OpenAIProviderTest.php:642-648). 18/19 checks PASS/N-A; 19-check table otherwise clean (roster DYNAMICALLY derived via `providerImplementers()` not from TRANSMISSION_CONTRACT ✓; subtraction = only inline derivation relocated ✓; `''`-polarity pins honest ✓; deletion experiment corroborated ✓; done-when ledger ✓).
+- Cycle 1 fix — script(1) agent (pid 447341): commit `51f6b90f5` (+1/-1) made SSE_BODY byte-identical; verified by me (diff read, target 15/46 + Providers 846/2047 green, worktree clean).
+- Cycle 2 — reviewer hurt-cyan-dormouse (delegate): **APPROVE — 8/8 checks PASS, zero findings**; M1 closed; both fixtures compared byte-for-byte; behavior-neutrality structural + orchestrator-measured.
+- Total cycles: 2 (1 finding fixed).
+**Invariants touched**: (none — test-only change; no new src/ files so census cardinalities untouched; roster PASS; `BuiltInToolCorpusTest` implicit member not triggered). P1.S5 roster extraction shared → two contracts cannot drift.
+**Surprises / things the plan got wrong**: original step agent died at inner-coder wait (2nd occurrence of that pattern) → Rung 3 continuation completed fully; coder's uncommitted implementation verified by me before continuation; MY census-fix prescription had TWO errors caught by the continuation agent (aliasing `Aws\MockHandler as MockHandler` would FATAL against the existing `GuzzleHttp\Handler\MockHandler` import; FOUR Aws call sites not two) — the agent's corrected fix implemented; user spawn-mechanism directive 2026-08-26: NO more pty_spawn — use task tool with Coder subagent type; task tool NOT present in orchestrator toolset (delegate = read-only only) → delegate/script(1) used, noted to user; M1 (provenance-truth claim) caught by cycle-1 reviewer — same class as P1.S6 docblock overstatement.
+**Follow-ups created**: (none new — 3 standing carried: phase-1-close census-cell spot-check, P4.S2 cache-field re-probe, prompt_plan.md:1203 Goal-line over-claim correction).
+
+### BATCH P1.B2 CLOSE · 2026-08-26 15:4x
+**Merged in actual order**: P1.S6@070d1f5fb, P1.S7@843432e13 — one at a time, `tests/Providers/` run between merges.
+**Did not merge**: (none).
+**Suite after last merge**: tests/Providers/ OK (846 tests, 2047 assertions), Time 00:01.716, Memory 64.50 MB.
+**Spawn-mechanism history (P1.S7)**: pty_966581c9 (original, timed out at inner-coder wait) → Rung 3 continuation pty_59384184 (completed, committed 8a916b802) → reviewer regulatory-brown-crane (delegate) → fix via script(1) pid 447341 (51f6b90f5) → cycle-2 reviewer hurt-cyan-dormouse (delegate, APPROVE 8/8). User directive 2026-08-26: no more pty_spawn — task tool with Coder subagent type; task tool NOT in orchestrator toolset; delegate/script(1) used.
+
 ### P1.S6 — rebuild PromptStabilityTest against CompleteRequest::$systemPrompt, retire MiniMax-M2.7 literal · 2026-08-26 13:2x · 070d1f5fb
 **Status**: done
 **Worktree**: `/home/sites/prompt-step-P1.S6` — removed

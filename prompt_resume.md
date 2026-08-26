@@ -197,26 +197,23 @@ Next step:        P1.S7 — the transmission matrix test (NEW file
                    that provider's wire payload; providers enumerated DYNAMICALLY via
                    reflection over src/Providers/, NOT a hand-written list; EchoProvider may
                    be exempted WITH named reason; depends P1.S1-S4 — all merged)
-Steps done:       9 of 61
+Steps done:       10 of 61
 Phases done:      1 of 12
-Last commit:      b4c373523 — prompt: P1.S7 spawn bookkeeping — resume §8 + batch entry update
+Last commit:      843432e13 — sugar-crush prompt: P1.S7 the transmission matrix test
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
-                   P1.S6 merge: OK (831 tests, 2001 assertions)
-In-flight batch:  P1.B2 (serial) — P1.S6 → P1.S7. P1.S6 MERGED 070d1f5fb (step d4da63824 +
-                   fix 0df904a6; 2 review cycles; worktree removed). P1.S7 COMMIT 8a916b802
-                   VERIFIED BY ORCHESTRATOR (2 files +642/-4: SystemPromptTransmissionMatrixTest.php
-                   new 619 lines 15 tests + ProviderRequestResponseTest.php providerImplementers()
-                   extraction; all 4 suites green: 15/46 + 32/72 + 846/2047 + census 103/9390;
-                   deletion experiment RED 15/41/1 at :162; worktree clean) — AWAITING REVIEW:
-                   reviewer regulatory-brown-crane in flight via delegate tool. SPAWN MECHANISM
-                   (user directive 2026-08-26): NO MORE pty_spawn for agents — use task tool with
-                   Coder subagent type; task tool NOT present in orchestrator toolset (delegate =
-                   read-only only) — delegate used for this reviewer; pty_spawn retired. S7 history:
-                   pty_966581c9 timed out at inner-coder wait → Rung 3 continuation pty_59384184
-                   completed → 8a916b802. MERGE ORDER: P1.S6 then P1.S7, tests/Providers/ run
-                   between merges (S6 done).
-Live worktrees:   /home/sites/prompt-step-P1.S7 — P1.S7, awaiting review (regulatory-brown-crane)
+                   P1.S7 merge: OK (846 tests, 2047 assertions)
+In-flight batch:  P1.B2 CLOSED — S6 MERGED 070d1f5fb, S7 MERGED 843432e13 (step 8a916b802 +
+                   fix 51f6b90f5; 2 review cycles each; worktrees removed). ALL SEVEN PHASE-1
+                   STEPS ON MASTER: S1 2d4f738f2, S2 a27f60229, S3 99caad991, S4 0013e9730,
+                   S5 193317de1, S6 070d1f5fb, S7 843432e13. SPAWN MECHANISM (user directive
+                   2026-08-26): NO MORE pty_spawn for agents — use task tool with Coder subagent
+                   type; task tool NOT present in orchestrator toolset (delegate = read-only
+                   only) — delegate/script(1) wrapper used instead. Next: PHASE 1 CLOSE (phase
+                   review agent over git diff 19a46ac9f..HEAD; spot-check P0.S2 census cells;
+                   prompt_plan.md:1203 Goal-line over-claim correction; phase-close worklog
+                   entry + resume rewrite + ONE-LINE user report).
+Live worktrees:   none
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
