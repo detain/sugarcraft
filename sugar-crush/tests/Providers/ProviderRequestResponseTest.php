@@ -452,11 +452,20 @@ final class ProviderRequestResponseTest extends TestCase
     // STREAMED_USAGE_CONTRACT, whose completeness the roster test below derives
     // from src/Providers/ rather than hand-maintains.
 
-    public function testEveryProviderImplementerHasAStreamedUsageContractFixture(): void
+    /**
+     * The derived roster of ProviderInterface implementers: every class in
+     * src/Providers/ that implements the interface, short-named and sorted
+     * (rule 15: derive, never hand-maintain).
+     *
+     * Born in P1.S5 for the streamed-usage contract's fixture-completeness
+     * test. P1.S7's {@see SystemPromptTransmissionMatrixTest} consumes the
+     * SAME derivation for its transmission contract, so the two contracts
+     * share one roster and cannot drift apart.
+     *
+     * @return list<string>
+     */
+    public static function providerImplementers(): array
     {
-        // Derived roster (rule 15: derive, never hand-maintain): scan
-        // src/Providers/ for classes implementing ProviderInterface. A future
-        // provider with no fixture entry reds this test.
         $implementers = [];
         foreach (glob(dirname(__DIR__, 2) . '/src/Providers/*.php') as $file) {
             $short = basename($file, '.php');
@@ -466,6 +475,16 @@ final class ProviderRequestResponseTest extends TestCase
             }
         }
         sort($implementers);
+
+        return $implementers;
+    }
+
+    public function testEveryProviderImplementerHasAStreamedUsageContractFixture(): void
+    {
+        // Derived roster (rule 15: derive, never hand-maintain): scan
+        // src/Providers/ for classes implementing ProviderInterface. A future
+        // provider with no fixture entry reds this test.
+        $implementers = self::providerImplementers();
 
         $fixtured = array_map(
             static fn (string $fqcn): string => substr($fqcn, (int) strrpos($fqcn, '\\') + 1),
