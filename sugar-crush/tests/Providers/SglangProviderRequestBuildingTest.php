@@ -823,4 +823,95 @@ final class SglangProviderRequestBuildingTest extends TestCase
             reasoningEffort: '',
         ));
     }
+
+    // -------------------------------------------------------------------------
+    // P1.S1: CompleteRequest::$systemPrompt reaches the wire as the leading
+    // system message. Runtime::buildSystemPrompt() assembles the seven-layer
+    // prompt into that field, and this provider used to never read it - the
+    // assembled prompt silently dropped on the DEFAULT provider. Both paths
+    // share buildParams(), yet each is asserted independently: "complete()
+    // passes" was exactly the conflation that hid the same bug in
+    // OpenAIProvider::completeStream().
+    // -------------------------------------------------------------------------
+
+    public function testSystemPromptIsPrependedToTheCompletePayload(): void
+    {
+        // Multi-line with quotes and a leading blank line, so byte-identity
+        // actually means something (assertSame on the content).
+        $prompt = "\nYou are a coding assistant.\nRules:\n1. Never invent facts.\n2. Reply with \"done\" when finished.\n";
+
+        $provider = $this->providerForModel(SglangProvider::DEFAULT_MODEL);
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: $prompt,
+        ));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame('system', $sent['messages'][0]['role']);
+        $this->assertSame($prompt, $sent['messages'][0]['content']);
+        // Prepended, not replacing: the original message still follows.
+        $this->assertSame([['role' => 'user', 'content' => 'Hi']], array_slice($sent['messages'], 1));
+    }
+
+    public function testSystemPromptIsPrependedToTheStreamingPayload(): void
+    {
+        $prompt = "You are a streaming assistant.\nDo not stall.\n";
+
+        // completeStream() needs an SSE body; providerForModel()'s fixed body
+        // is a non-stream JSON response, so build the harness inline.
+        $this->history = [];
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, [], "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n"),
+        ]));
+        $stack->push(Middleware::history($this->history));
+
+        $provider = new SglangProvider(
+            'https://api.example.com',
+            SglangProvider::DEFAULT_MODEL,
+            null,
+            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
+        );
+
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: $prompt,
+        )));
+
+        $sent = $this->sentBody();
+
+        $this->assertSame('system', $sent['messages'][0]['role']);
+        $this->assertSame($prompt, $sent['messages'][0]['content']);
+        $this->assertSame([['role' => 'user', 'content' => 'Hi']], array_slice($sent['messages'], 1));
+    }
+
+    public function testNullSystemPromptPrependsNothing(): void
+    {
+        $provider = $this->providerForModel(SglangProvider::DEFAULT_MODEL);
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: null,
+        ));
+
+        // Exact shape: no system element may appear, empty or otherwise.
+        $this->assertSame([['role' => 'user', 'content' => 'Hi']], $this->sentBody()['messages']);
+    }
+
+    public function testEmptyStringSystemPromptPrependsNothing(): void
+    {
+        // '' is "unset" for this provider, matching the optional-knob filter
+        // and VertexProvider's hoist: an empty system message is not an
+        // instruction, so it must not be manufactured onto the wire.
+        $provider = $this->providerForModel(SglangProvider::DEFAULT_MODEL);
+        $provider->complete(new CompleteRequest(
+            model: SglangProvider::DEFAULT_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: '',
+        ));
+
+        $this->assertSame([['role' => 'user', 'content' => 'Hi']], $this->sentBody()['messages']);
+    }
 }
