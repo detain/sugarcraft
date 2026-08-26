@@ -149,6 +149,16 @@ final readonly class CustomProvider implements ProviderInterface
             $params['tools'] = $this->formatTools($request->tools);
         }
 
+        // Only a non-blank assembled prompt earns a wire turn: an empty
+        // system message would hand the backend an empty `system` role to
+        // reconcile against the real history, so '' is treated like null.
+        if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
+            $params['messages'] = array_merge(
+                [['role' => 'system', 'content' => $request->systemPrompt]],
+                $params['messages']
+            );
+        }
+
         try {
             $response = $this->httpClient->post('chat/completions', [
                 'json' => $params,
@@ -192,6 +202,16 @@ final readonly class CustomProvider implements ProviderInterface
 
         if ($request->tools !== null && $this->supportsFunctionCalling) {
             $params['tools'] = $this->formatTools($request->tools);
+        }
+
+        // Only a non-blank assembled prompt earns a wire turn: an empty
+        // system message would hand the backend an empty `system` role to
+        // reconcile against the real history, so '' is treated like null.
+        if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
+            $params['messages'] = array_merge(
+                [['role' => 'system', 'content' => $request->systemPrompt]],
+                $params['messages']
+            );
         }
 
         try {
