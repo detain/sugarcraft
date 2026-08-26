@@ -255,6 +255,65 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1.S5 — state the streamed-Usage delta contract with discriminating per-provider tests · 2026-08-26 08:00 · 193317de1
+**Status**: done
+**Worktree**: /home/sites/prompt-step-P1.S5 — removed
+**Base**: 19a46ac9f · **Step commit**: a0b8bdf30 · **Merge**: 193317de1 (--no-ff, message /tmp/opencode/p1s5-merge.msg)
+**Goal (restated in one sentence)**: E24 — ProviderInterface states whether streamed `tokensUsed`/`costUsd` are cumulative or per-delta, and a contract test goes red if any provider sums a cumulative wire total per chunk.
+**What changed**
+- `src/Providers/ProviderInterface.php`: `completeStream()` docblock added — streamed usage is per-delta, not cumulative; consumers sum across the stream (`Runtime::runStreaming()` then `Usage::sum()`); implementers whose wire reports cumulative totals must emit each total exactly once (terminal chunk, or disjoint bucket events as VertexProvider does); all-zero chunks compliant when the wire carried no usage; `@return \Generator<int, CompleteResponse>`.
+- `tests/Providers/ProviderRequestResponseTest.php` (+353): `STREAMED_USAGE_CONTRACT` roster const (Sglang/Custom/OpenAI/Bedrock/Vertex = 30, ClaudeCode = 0) with three-family provenance docblock; derived-roster test `testEveryProviderImplementerHasAStreamedUsageContractFixture` (glob `src/Providers/*.php` + `class_implements`, EchoProvider exempt WITH named reason, stale-entry assertion); six per-provider tests. Sglang/Custom/OpenAI fixtures deliberately E24-hostile (cumulative usage 10/20/30 on EVERY chunk) asserting `assertContains($sum, [0, 30])` — current hardcoded-0 sums to 0, compliant terminal-once sums to 30, E24 per-chunk sums to 60 → red. Bedrock asserts terminal-metadata-once (30); Vertex asserts disjoint-bucket split (30); ClaudeCode asserts 0 (stream-json wire carries no usage).
+**Tests added or changed**
+- `tests/Providers/ProviderRequestResponseTest.php::testEveryProviderImplementerHasAStreamedUsageContractFixture` — derived roster, known-answer `['EchoProvider']` exemption, red on stale entry.
+- `::testSglangStreamedUsageIsPerDeltaNotCumulative` (:495-530) — full `completeStream()`, SSE fixture 10/20/30 every chunk, `assertContains($sum, [0, 30])`; red if a provider reads the wire's cumulative total per chunk (60).
+- `::testCustomStreamedUsageIsPerDeltaNotCumulative` (:532-567) — same shape.
+- `::testOpenAiStreamedUsageIsPerDeltaNotCumulative` (:569-628) — real `ChatCreateStreamedResponse::from()` chunks, `parseChunk` via reflection, same discrimination.
+- `::testBedrockStreamedUsageLandsOnceOnTheTerminalMetadataEvent` (:630-663) — ConverseStream event arrays as Aws EventParsingIterator yields, `assertSame(30)`.
+- `::testVertexStreamedUsageIsSplitAcrossDisjointBucketEvents` (:665-699) — message_start 20 + message_delta 10 via injected closure, `assertSame(30)`.
+- `::testClaudeCodeStreamedUsageIsPerDeltaNotCumulative` (:701-731) — `assertSame(0)`; wire carries no usage; proc_open child not unit-drivable, reflection justified and documented.
+**Deletion experiment**
+- (a) Docblock removal only (git apply -R src hunk): target STAYED GREEN (32/72) — as the plan predicts, "a docblock alone is documentation, not a contract"; not a finding, the guard is the tests.
+- (b) THE REAL GUARD — E24 mutation, three one-line edits (SglangProvider.php:1152, CustomProvider.php:389, OpenAIProvider.php:257: `tokensUsed: 0` → read wire's cumulative total per chunk), applied by ORCHESTRATOR via python3 line-targeted edits:
+  ```
+  FAILURES!
+  Tests: 32, Assertions: 72, Failures: 3
+  Failed asserting that an array contains 60.  (at :524/:561/:622)
+  ```
+  Restored via `git restore`; `git diff --stat -- src/` empty (byte-identical); target green again 32/72. Identical 3-red result reproduced by the agent before commit and corroborated by the reviewer.
+**MEASURED**
+```
+$ vendor/bin/phpunit tests/Providers/ProviderRequestResponseTest.php      (worktree)
+OK (32 tests, 72 assertions)
+$ vendor/bin/phpunit tests/Providers/                                     (worktree)
+OK (811 tests, 1960 assertions)
+$ vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9380 assertions)
+$ vendor/bin/phpunit tests/Providers/                                     (MAIN repo, after merge 193317de1)
+OK (830 tests, 1992 assertions)
+$ vendor/bin/phpunit tests/Providers/ProviderRequestResponseTest.php tests/Tools/BuiltInToolCorpusTest.php tests/SymbolCitationDriftTest.php tests/Config/EnvRosterDriftTest.php   (reviewer's own runs, exit 0)
+OK (32 tests, 72 assertions)
+OK (80 tests, 5888 assertions)
+```
+Baseline: Tests 10351, Assertions 160648, Skipped 1 — delta vs baseline not re-measured this step (Providers dir +7 tests/+8 assertions vs 823/1984 after P1.S4).
+**Suite result**: full suite not re-run this step; Providers dir green at every stage (agent, orchestrator, reviewer). No skips added.
+**Review loop** (RECONSTRUCTED — original agent timed out at fix-spawn point; continuation agent completed fully with 7-section report)
+- Cycle 1 — inner-session CodeReviewer (lost with the dead session): 1 MEDIUM finding — initial `assertSame(0)` tests with "0 IS THE CONTRACT-CONSISTENT ANSWER HERE" comments pinned the non-compliant behaviour and would red the correct fix; fixture could not distinguish E24 propagation from compliant terminal-once emission.
+- Cycle 1 fix — orchestrator-directed trap-fixture redesign applied by continuation agent (pty_a4a07129), commit a0b8bdf30: `assertContains($sum, [0, 30])` + cumulative-10/20/30-every-chunk fixtures + misleading comments rewritten with provenance.
+- Cycle 2 — fresh reviewer (pty-fallback process, delegate tool degraded): APPROVE, 19/19 checks pass, zero findings (reviewer ran its own suites: 32/72 target + 80/5888 census subset, both exit 0, byte-identical to mine).
+- Total cycles: 2.
+**Invariants touched**: (none). No new src/ files; no env vars/settings keys/commands added (roster PASS); census unchanged (103/9380).
+**Surprises / things the plan got wrong**
+- The `delegate` tool degraded mid-plan: 4 consecutive zero-message timeouts (3 concurrent at 05:50 + juicy-copper-gibbon 07:53) after 6 early successes (05:12-07:19). Pty-fallback reviewer pattern validated as replacement: `opencode run --dir <worktree>` with explicit READ-ONLY brief; this reviewer even ran its own suites via inner pty_spawn.
+- Docblock-removal experiment staying green is expected and correctly NOT a finding (plan's own Done-when predicts it).
+- DsmlToolCallParser stdout diagnostic = pre-existing parser-test log line, not a PHPUnit warning.
+- 'gpt-4' literal in Sglang fixture construction matches the file's own established pattern and is inert (wire mocked).
+**Follow-ups created**: (none).
+
+### BATCH P1.B1 CLOSE · 2026-08-26 08:01
+Merged, in this actual order: P1.S1@2d4f738f2, P1.S2@a27f60229, P1.S3@99caad991, P1.S4@0013e9730, P1.S5@193317de1
+Did not merge: (none)
+Suite after the last merge: Tests: 830, Assertions: 1992, Skipped: 0 (tests/Providers/ only)
+
 ### P1.S4 — hoist history SystemMessages into Bedrock Converse system array (E19) · 2026-08-26 07:25 · 0013e9730
 
 **Status** done

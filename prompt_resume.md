@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 1 batch 1 in flight — P1.S1–S3 merged to master; P1.S4 and P1.S5 in flight (review + fix queues).**
+**Current state: Phase 1 batch 1 CLOSED — all five steps (P1.S1–S5) merged to master; batch 2 (P1.S6 → P1.S7, serial) is next.**
 
 ---
 
@@ -188,35 +188,36 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 1 (Transmission) in flight — batch 1 of 2
-Next step:        P1.S5 — E24 streamed-Usage contract (fix continuation agent pty_a4a07129
-                  in flight in worktree /home/sites/prompt-step-P1.S5; on exit: verify,
-                  fresh reviewer, merge)
-Steps done:       7 of 61
+Phase:            Phase 1 (Transmission) in flight — batch 1 of 2 CLOSED, batch 2 next
+Next step:        P1.S6 — rebuild PromptStabilityTest against the assembled systemPrompt
+                   (byte equality AND byte position across two turns; fails if SglangProvider
+                   stops transmitting; SglangProvider::DEFAULT_MODEL at :62, never spell the
+                   model id, never a second constant; extend class docblock; depends P1.S1;
+                   batch 2 is SERIAL: P1.S6 then P1.S7)
+Steps done:       8 of 61
 Phases done:      1 of 12
-Last commit:      0013e9730 — sugar-crush prompt: P1.S4 hoist history SystemMessages into
-                  Bedrock Converse system array (E19)
+Last commit:      193317de1 — sugar-crush prompt: P1.S5 state the streamed-Usage delta
+                   contract with discriminating per-provider tests
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
-                  P1.S4 merge: OK (823 tests, 1984 assertions)
-In-flight batch:  P1.B1 — P1.S1 (MERGED 2d4f738f2), P1.S2 (MERGED a27f60229), P1.S3 (MERGED
-                  99caad991), P1.S4 (MERGED 0013e9730, incl. fix 54aece70a), P1.S5 (fix
-                  continuation agent pty_a4a07129 in flight, no commit yet; uncommitted
-                  in-scope work: ProviderInterface.php +17, ProviderRequestResponseTest.php
-                  +313; trap-fixture design for MEDIUM finding: assertContains($sum,[0,30])
-                  with usage 10/20/30 per chunk for Sglang/Custom/OpenAI). Declared MERGE
-                  ORDER: P1.S1 → P1.S2 → P1.S3 → P1.S4 → P1.S5, one at a time,
-                  tests/Providers/ run between merges. Worktree /home/sites/prompt-step-P1.S5
-                  (branch prompt/P1.S5, base 19a46ac9f). REVIEWERS: orchestrator-delegated
-                  ONLY, ONE AT A TIME (3 concurrent launches race and receive zero input —
-                  see P1.S2 worklog entry).
-Live worktrees:   /home/sites/prompt-step-P1.S5 (in flight)
+                   P1.S5 merge: OK (830 tests, 1992 assertions)
+In-flight batch:  P1.B1 CLOSED — all five merged in declared order:
+                   P1.S1@2d4f738f2, P1.S2@a27f60229, P1.S3@99caad991, P1.S4@0013e9730
+                   (incl. fix 54aece70a), P1.S5@193317de1 (incl. fix a0b8bdf30).
+                   Suite after last merge: tests/Providers/ OK (830 tests, 1992 assertions).
+                   Worktrees all removed, branches deleted. BATCH 2 (P1.S6 → P1.S7) is
+                   SERIAL — one worktree at a time, spawn P1.S6 next.
+                   REVIEWERS: pty-fallback 'opencode run --dir <worktree>' read-only process
+                   (delegate tool degraded 07:53+: 4 consecutive zero-message timeouts; the
+                   pty-fallback reviewer for P1.S5 ran its own suites via inner pty_spawn —
+                   that is the current pattern, see P1.S5 worklog entry).
+Live worktrees:   none
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
-                  P4.S2: re-probe usage payload for cache fields before fixing fixture shape
+                   P4.S2: re-probe usage payload for cache fields before fixing fixture shape
 Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
-                  (collision rows still live, see §5)
+                   (collision rows still live, see §5)
 ```
 
 ---
