@@ -540,6 +540,216 @@ final class CustomProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // 12b. complete() prepends systemPrompt as the leading system message
+    // -------------------------------------------------------------------------
+
+    public function testCompletePrependsSystemPromptToThePayload(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => 'Hello! How can I help you?',
+                        ],
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 10,
+                    'completion_tokens' => 15,
+                    'total_tokens' => 25,
+                ],
+            ])),
+        ]);
+
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
+
+        $provider = new CustomProvider(
+            'custom',
+            'https://api.example.com',
+            'gpt-4',
+            null,
+            $client,
+            true,
+            true
+        );
+
+        $request = new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+            systemPrompt: 'You are a helpful assistant.',
+        );
+
+        $provider->complete($request);
+
+        $payload = json_decode((string) $mock->getLastRequest()->getBody(), true);
+
+        $this->assertSame(
+            [
+                ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+                ['role' => 'user', 'content' => 'Hello'],
+            ],
+            $payload['messages']
+        );
+    }
+
+    public function testCompleteDoesNotPrependSystemPromptWhenNull(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => 'Hello! How can I help you?',
+                        ],
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 10,
+                    'completion_tokens' => 15,
+                    'total_tokens' => 25,
+                ],
+            ])),
+        ]);
+
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
+
+        $provider = new CustomProvider(
+            'custom',
+            'https://api.example.com',
+            'gpt-4',
+            null,
+            $client,
+            true,
+            true
+        );
+
+        $request = new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+            systemPrompt: null,
+        );
+
+        $provider->complete($request);
+
+        $payload = json_decode((string) $mock->getLastRequest()->getBody(), true);
+
+        $this->assertSame(
+            [
+                ['role' => 'user', 'content' => 'Hello'],
+            ],
+            $payload['messages']
+        );
+    }
+
+    public function testCompleteDoesNotPrependEmptySystemPrompt(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => 'Hello! How can I help you?',
+                        ],
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 10,
+                    'completion_tokens' => 15,
+                    'total_tokens' => 25,
+                ],
+            ])),
+        ]);
+
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
+
+        $provider = new CustomProvider(
+            'custom',
+            'https://api.example.com',
+            'gpt-4',
+            null,
+            $client,
+            true,
+            true
+        );
+
+        $request = new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+            systemPrompt: '',
+        );
+
+        $provider->complete($request);
+
+        $payload = json_decode((string) $mock->getLastRequest()->getBody(), true);
+
+        $this->assertSame(
+            [
+                ['role' => 'user', 'content' => 'Hello'],
+            ],
+            $payload['messages']
+        );
+    }
+
+    public function testCompleteKeepsHistoricalSystemMessageInPlaceWhenPromptIsPrepended(): void
+    {
+        $mock = new MockHandler([
+            new Response(200, [], json_encode([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => 'Hello! How can I help you?',
+                        ],
+                    ],
+                ],
+                'usage' => [
+                    'prompt_tokens' => 10,
+                    'completion_tokens' => 15,
+                    'total_tokens' => 25,
+                ],
+            ])),
+        ]);
+
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
+
+        $provider = new CustomProvider(
+            'custom',
+            'https://api.example.com',
+            'gpt-4',
+            null,
+            $client,
+            true,
+            true
+        );
+
+        $request = new CompleteRequest(
+            model: 'gpt-4',
+            messages: [
+                new SystemMessage('historical system message'),
+                new UserMessage('hi'),
+            ],
+            systemPrompt: 'assembled prompt',
+        );
+
+        $provider->complete($request);
+
+        $payload = json_decode((string) $mock->getLastRequest()->getBody(), true);
+
+        $this->assertSame(
+            [
+                ['role' => 'system', 'content' => 'assembled prompt'],
+                ['role' => 'system', 'content' => 'historical system message'],
+                ['role' => 'user', 'content' => 'hi'],
+            ],
+            $payload['messages']
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // 13. completeStream() yields Generator when streaming enabled
     // -------------------------------------------------------------------------
 

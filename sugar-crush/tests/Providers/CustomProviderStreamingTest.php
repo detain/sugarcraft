@@ -188,4 +188,99 @@ final class CustomProviderStreamingTest extends TestCase
         $this->assertSame('search', $toolCallChunks[0]->toolCalls[0]->name());
         $this->assertSame(['q' => 'php'], $toolCallChunks[0]->toolCalls[0]->arguments());
     }
+
+    // -------------------------------------------------------------------------
+    // completeStream() must transmit systemPrompt on the streaming wire too -
+    // same prepend as complete(), inside the streaming branch only, so the
+    // non-streaming fallback (which delegates to complete()) never double-
+    // prepends.
+    // -------------------------------------------------------------------------
+
+    public function testCompleteStreamPrependsSystemPromptToThePayload(): void
+    {
+        $sse = 'data: {"choices":[{"delta":{"content":"Hello"}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"content":" world"}}],"finish_reason":"stop"}' . "\n"
+            . 'data: [DONE]' . "\n";
+
+        $mock = new MockHandler([new Response(200, [], $sse)]);
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack]);
+
+        $provider = $this->makeProvider($client);
+        $request = new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+            systemPrompt: 'You are a helpful assistant.',
+        );
+
+        iterator_to_array($provider->completeStream($request));
+
+        $payload = json_decode((string) $mock->getLastRequest()->getBody(), true);
+
+        $this->assertSame(
+            [
+                ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+                ['role' => 'user', 'content' => 'Hello'],
+            ],
+            $payload['messages']
+        );
+    }
+
+    public function testCompleteStreamDoesNotPrependSystemPromptWhenNull(): void
+    {
+        $sse = 'data: {"choices":[{"delta":{"content":"Hello"}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"content":" world"}}],"finish_reason":"stop"}' . "\n"
+            . 'data: [DONE]' . "\n";
+
+        $mock = new MockHandler([new Response(200, [], $sse)]);
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack]);
+
+        $provider = $this->makeProvider($client);
+        $request = new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+            systemPrompt: null,
+        );
+
+        iterator_to_array($provider->completeStream($request));
+
+        $payload = json_decode((string) $mock->getLastRequest()->getBody(), true);
+
+        $this->assertSame(
+            [
+                ['role' => 'user', 'content' => 'Hello'],
+            ],
+            $payload['messages']
+        );
+    }
+
+    public function testCompleteStreamDoesNotPrependEmptySystemPrompt(): void
+    {
+        $sse = 'data: {"choices":[{"delta":{"content":"Hello"}}]}' . "\n"
+            . 'data: {"choices":[{"delta":{"content":" world"}}],"finish_reason":"stop"}' . "\n"
+            . 'data: [DONE]' . "\n";
+
+        $mock = new MockHandler([new Response(200, [], $sse)]);
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack]);
+
+        $provider = $this->makeProvider($client);
+        $request = new CompleteRequest(
+            model: 'gpt-4',
+            messages: [new UserMessage('Hello')],
+            systemPrompt: '',
+        );
+
+        iterator_to_array($provider->completeStream($request));
+
+        $payload = json_decode((string) $mock->getLastRequest()->getBody(), true);
+
+        $this->assertSame(
+            [
+                ['role' => 'user', 'content' => 'Hello'],
+            ],
+            $payload['messages']
+        );
+    }
 }
