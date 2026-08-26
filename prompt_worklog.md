@@ -255,7 +255,7 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
-### P0 CLOSE — Phase 0 complete: baseline, census, probe · 2026-08-26 04:35 · <pending sha>
+### P0 CLOSE — Phase 0 complete: baseline, census, probe · 2026-08-26 04:35 · 832f9ec0a
 
 **Status** done
 
@@ -298,7 +298,7 @@ Suite status unchanged since P0.S1 baseline (no production or test file touched 
 
 ---
 
-### P0.S3 — provider probe: models endpoint + system-message honouring · 2026-08-26 04:30 · <pending sha>
+### P0.S3 — provider probe: models endpoint + system-message honouring · 2026-08-26 04:30 · 832f9ec0a
 
 **Status** done
 
@@ -357,7 +357,7 @@ CURL_EXIT 0. **Plain `{"role":"system"}` IS honoured**: the model followed the s
 
 ---
 
-### P0.S2 — census: which CompleteRequest properties each provider reads · 2026-08-26 04:30 · <pending sha>
+### P0.S2 — census: which CompleteRequest properties each provider reads · 2026-08-26 04:30 · 832f9ec0a
 
 **Status** done
 
