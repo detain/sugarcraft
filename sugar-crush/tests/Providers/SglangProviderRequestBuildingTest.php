@@ -859,20 +859,7 @@ final class SglangProviderRequestBuildingTest extends TestCase
     {
         $prompt = "You are a streaming assistant.\nDo not stall.\n";
 
-        // completeStream() needs an SSE body; providerForModel()'s fixed body
-        // is a non-stream JSON response, so build the harness inline.
-        $this->history = [];
-        $stack = HandlerStack::create(new MockHandler([
-            new Response(200, [], "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n"),
-        ]));
-        $stack->push(Middleware::history($this->history));
-
-        $provider = new SglangProvider(
-            'https://api.example.com',
-            SglangProvider::DEFAULT_MODEL,
-            null,
-            new Client(['base_uri' => 'https://api.example.com/', 'handler' => $stack]),
-        );
+        $provider = $this->provider("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n");
 
         iterator_to_array($provider->completeStream(new CompleteRequest(
             model: SglangProvider::DEFAULT_MODEL,
