@@ -255,6 +255,63 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1.S4 — hoist history SystemMessages into Bedrock Converse system array (E19) · 2026-08-26 07:25 · 0013e9730
+
+**Status** done
+
+**Worktree** /home/sites/prompt-step-P1.S4 (removed after merge)
+
+**Base** `19a46ac9f`
+
+**Goal (restated in one sentence)** Bedrock Converse receives the assembled system prompt AND every history `SystemMessage` as request-level `system` blocks on both `complete()` and `completeStream()` — never embedded as user-role messages — with the `system` key absent when neither is present.
+
+**What changed**
+- `sugar-crush/src/Providers/BedrockProvider.php`: both `complete()` and `completeStream()` now call `formatMessages($this->withoutSystemMessages($request->messages))` and set `$params['system'] = $system` from a new shared `systemBlocks(CompleteRequest)` when non-empty (`$system !== []` guard preserves the no-key wire shape). `systemBlocks()` emits the request `systemPrompt` block first, then each history `SystemMessage`'s text in history order. New private `withoutSystemMessages()` filters history (`array_values` + `array_filter` on `!instanceof SystemMessage`); the `formatMessages()` SystemMessage→`'user'` mapping is kept as total contract (only its trailing comment changed). Old inline paths genuinely replaced by the shared builder.
+- `sugar-crush/tests/Providers/BedrockProviderTest.php`: +5 tests (section 15) asserting the BUILT payload via `$mock->getLastCommand()->toArray()` with real `BedrockRuntimeClient` + `Aws\MockHandler` (`offlineRuntimeClient()` :782-790 — deliberately not a PHPUnit double): complete/stream hoisting (history blocks in order), system-from-history-alone when no systemPrompt, no-`system`-key when neither present, and the measured `system user system system` adjacent-blocks collapse case. Then the fix cycle added the stream-path twin: `testCompleteStreamKeepsSystemAbsentWithoutPromptOrSystemMessages` (:742-759, `assertArrayNotHasKey('system', $sent)` :754 + exact `$sent['messages']` literal :755-758).
+
+**Deletion experiment**
+- Step agent's (verbatim): reverting the src hunk → `BedrockProviderTest` 4 failures (`system` array missing hoisted history blocks at `:668/:691/:713/:761`); `DELTEST_EXIT=1`; restored, tree byte-identical to baseline capture.
+- Fix agent's (guard mutation): stream-path guard `:215-218` changed to unconditional `$params['system'] = $system;` (complete()'s block `:164` untouched) → filtered run `FAILURES! Tests: 1, Assertions: 1, Failures: 1` — `'Failed asserting that an array does not have the key "system".'` at `:754`; restored via `git restore` → SRC-CLEAN, guard byte-identical `:216-218`.
+
+**MEASURED**
+```
+$ cd /home/sites/prompt-step-P1.S4/sugar-crush && vendor/bin/phpunit tests/Providers/BedrockProviderTest.php
+OK (52 tests, 78 assertions)          # pre-fix
+OK (53 tests, 80 assertions)          # post-fix (orchestrator re-ran: identical)
+
+$ cd /home/sites/prompt-step-P1.S4/sugar-crush && vendor/bin/phpunit tests/Providers/
+OK (809 tests, 1962 assertions)       # pre-fix
+OK (810 tests, 1964 assertions)       # post-fix (orchestrator re-ran: identical)
+# [DsmlToolCallParser fixture notice = pre-existing expected stderr, not a failure]
+
+$ cd /home/sites/prompt-step-P1.S4/sugar-crush && vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9380 assertions)
+
+$ cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/Providers/   # main repo, after merge
+OK (823 tests, 1984 assertions)
+```
+Environment: NO AWS credentials anywhere (no env vars, no `~/.aws`) — a real Bedrock call was impossible; the payload tests confirm the BUILT REQUEST SHAPE, not AWS-side API behaviour. The Converse 400 from E19 remains unconfirmed (Chat.php:8514-8525 documents the measured `system user system system` history tail).
+
+**Suite result** Full suite not re-run this step; Providers dir in main repo after merge: 823/1984 OK (was 817/1972 after P1.S3). Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +6 tests / +12 assertions in Providers dir; census unchanged (297 files — no new `src/` file).
+
+**Review loop** `RECONSTRUCTED` — the step agent exited without its 7-section report; the loop below was orchestrated directly by the orchestrator.
+- Cycle 1 — reviewer exact-purple-ox (orchestrator delegate, single-sequential): APPROVE with 1 MINOR finding (95% confidence). All 19 checks PASS/N/A; reachability `Bootstrap:1962 → ProviderFactory:584 'bedrock' → :882 → Runtime:589/460`; deletion polarity corroborated (4 red, first assert each; absent-key test correctly green on revert); value-not-shape throughout. FINDING: the 'no system key' polarity was pinned only on `complete()` (`:723-740`); the identical duplicated guard on the stream path (`BedrockProvider.php:216-218`) was UNPINNED — deleting it would emit `'system' => []` on the wire with no red test.
+- Cycle 1 fix — agent pty_3ca4faa9 (completed fully, first agent to do so): test-only fix, commit `54aece70a` 'prompt/P1.S4: pin stream-path absent-system guard with twin test' (+19, only `BedrockProviderTest.php`). Guard NOT moved into `systemBlocks()` (minimal edit, src/ untouched).
+- Cycle 2 — reviewer scary-azure-raccoon (new, single-sequential): APPROVE — 19/19 PASS/N/A, 0 findings. Polarity proven (`assertArrayNotHasKey` at :754 fails iff the payload carries the key; guard defeat ⇒ `'system' => []` ⇒ red, same MockHandler pipeline as :691-694); purely additive (+19/-0); scope clean. Reviewer noted: wholesale deletion of all 3 guard lines (no assignment) would pass the test but is CORRECT wire behaviour — the unconditional-assignment mutation is the faithful operationalization.
+- Total cycles: 2.
+
+**Invariants touched** (none — no new `src/` file, census unchanged; no new env var / settings key / command.)
+
+**Surprises / things the plan got wrong**
+- No real Bedrock call was made (no AWS credentials on this host) — stated explicitly per step text requirement; the payload tests are request-shape proof only.
+- The P1.S4 fix agent was the FIRST step agent to complete with a full 7-section report — it followed the CRITICAL WARNING (synchronous coder, blocked on it, no dangling delegate).
+- `.opencode/package.json` runtime artifact (same as S1/S2/S3) reverted before merge.
+- `DsmlToolCallParser` fixture stderr line during `tests/Providers/` runs is pre-existing expected output, not a failure.
+
+**Follow-ups created** (none)
+
+---
+
 ### P1.S3 — OpenAIProvider::completeStream() transmits assembled systemPrompt · 2026-08-26 06:55 · 99caad991
 
 **Status** done

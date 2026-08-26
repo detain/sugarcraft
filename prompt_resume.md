@@ -189,27 +189,28 @@ Full detail in `prompt_plan.md` §1. The short form:
 
 ```
 Phase:            Phase 1 (Transmission) in flight — batch 1 of 2
-Next step:        P1.S4 — E19 BedrockProvider hoists history SystemMessages into Converse
-                  system: array (reviewer next in single-sequential queue, then merge in
-                  declared order)
-Steps done:       6 of 61
+Next step:        P1.S5 — E24 streamed-Usage contract (fix continuation agent pty_a4a07129
+                  in flight in worktree /home/sites/prompt-step-P1.S5; on exit: verify,
+                  fresh reviewer, merge)
+Steps done:       7 of 61
 Phases done:      1 of 12
-Last commit:      99caad991 — sugar-crush prompt: P1.S3 OpenAIProvider::completeStream()
-                  transmits assembled systemPrompt
+Last commit:      0013e9730 — sugar-crush prompt: P1.S4 hoist history SystemMessages into
+                  Bedrock Converse system array (E19)
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
-                  P1.S3 merge: OK (817 tests, 1972 assertions)
+                  P1.S4 merge: OK (823 tests, 1984 assertions)
 In-flight batch:  P1.B1 — P1.S1 (MERGED 2d4f738f2), P1.S2 (MERGED a27f60229), P1.S3 (MERGED
-                  99caad991), P1.S4 (commit 53fda44ea, reviewer queued), P1.S5 (no commit;
-                  uncommitted in-scope work: ProviderInterface.php +17,
-                  ProviderRequestResponseTest.php +313; agent died at fix-spawn; review +
-                  fix continuation queued). Declared MERGE ORDER: P1.S1 → P1.S2 → P1.S3 →
-                  P1.S4 → P1.S5, one at a time, tests/Providers/ run between merges.
-                  Worktrees /home/sites/prompt-step-P1.S{4,5} (branches prompt/P1.S*).
-                  REVIEWERS: orchestrator-delegated ONLY, ONE AT A TIME (3 concurrent
-                  launches race and receive zero input — see P1.S2 worklog entry).
-Live worktrees:   /home/sites/prompt-step-P1.S4 (in flight), /home/sites/prompt-step-P1.S5
-                  (in flight)
+                  99caad991), P1.S4 (MERGED 0013e9730, incl. fix 54aece70a), P1.S5 (fix
+                  continuation agent pty_a4a07129 in flight, no commit yet; uncommitted
+                  in-scope work: ProviderInterface.php +17, ProviderRequestResponseTest.php
+                  +313; trap-fixture design for MEDIUM finding: assertContains($sum,[0,30])
+                  with usage 10/20/30 per chunk for Sglang/Custom/OpenAI). Declared MERGE
+                  ORDER: P1.S1 → P1.S2 → P1.S3 → P1.S4 → P1.S5, one at a time,
+                  tests/Providers/ run between merges. Worktree /home/sites/prompt-step-P1.S5
+                  (branch prompt/P1.S5, base 19a46ac9f). REVIEWERS: orchestrator-delegated
+                  ONLY, ONE AT A TIME (3 concurrent launches race and receive zero input —
+                  see P1.S2 worklog entry).
+Live worktrees:   /home/sites/prompt-step-P1.S5 (in flight)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
