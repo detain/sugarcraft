@@ -255,6 +255,80 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1.S1 — SglangProvider transmits assembled systemPrompt on both request paths · 2026-08-26 06:10 · 2d4f738f2
+
+**Status** done
+
+**Worktree** /home/sites/prompt-step-P1.S1 (removed after merge)
+
+**Base** `19a46ac9f`
+
+**Goal (restated in one sentence)** SglangProvider's wire payload leads with the assembled system prompt on both `complete()` and `completeStream()` when one is supplied, and nothing changes when it is null or empty.
+
+**What changed**
+- `sugar-crush/src/Providers/SglangProvider.php`: `buildParams()` (shared by `complete()` + `completeStream()`) prepends `[['role' => 'system', 'content' => $request->systemPrompt]]` to `$params['messages']` when systemPrompt is non-null **and** non-empty — same non-empty convention as `VertexProvider.php:495`; WHY comment cites prompt_expand.md §1.1. Placement after the separate_reasoning knob, before the optional-knob foreach.
+- `sugar-crush/tests/Providers/SglangProviderRequestBuildingTest.php`: +4 tests (below). Nit-fix commit `cc808f1e9` replaced an inline mock-client harness with the file's established `provider($body)` helper (`:35-47`).
+
+**Tests added or changed**
+- `SglangProviderRequestBuildingTest::testSystemPromptIsPrependedToTheCompletePayload` — complete payload `messages[0]` is `['role' => 'system']` with byte-identical content; `assertSame` on exact messages array. Red on revert.
+- `SglangProviderRequestBuildingTest::testSystemPromptIsPrependedToTheStreamingPayload` — SSE stream path, same assertions via `sentBody()`.
+- `SglangProviderRequestBuildingTest::testNullSystemPromptPrependsNothing` — exact `[['role' => 'user', 'content' => 'Hi']]` shape when null. Stays green on revert (by design).
+- `SglangProviderRequestBuildingTest::testEmptyStringSystemPromptPrependsNothing` — same, empty string treated as absent.
+
+**Deletion experiment**: `git apply -R` of the src hunk (run by orchestrator): `FAILURES! Tests: 4, Assertions: 4, Failures: 2` — both prepend tests red (expected 'system', got 'user'); null/empty stayed green. Guard restored; tree clean.
+
+**MEASURED**
+```
+$ cd /home/sites/prompt-step-P1.S1/sugar-crush && vendor/bin/phpunit tests/Providers/SglangProviderRequestBuildingTest.php tests/Providers/SglangProviderTest.php
+OK (99 tests, 236 assertions)
+
+$ cd /home/sites/prompt-step-P1.S1/sugar-crush && vendor/bin/phpunit tests/Providers/
+OK (808 tests, 1960 assertions)
+
+$ cd /home/sites/prompt-step-P1.S1/sugar-crush && vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9380 assertions)
+
+$ cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/Providers/   # main repo, after merge
+OK (808 tests, 1960 assertions)
+```
+
+**Suite result** Full suite not re-run this step; Providers dir in main repo after merge: 808/1960 OK. Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +4 tests / +0 assertions measured in Providers dir only; census unchanged (297 files — no new `src/` file).
+
+**Review loop** `RECONSTRUCTED` — the step agent exited without its 7-section report (see Surprises); the review loop below was orchestrated directly by the orchestrator.
+- Cycle 1 — reviewer wandering-amethyst-albatross: APPROVE, 1 nit — streaming test duplicated the mock-client harness inline (~11 lines) instead of reusing the file's `provider($body)` helper (`:35-47`); its justifying comment was false (`provider($sseBody)` would serve; `buildParams()` keys off `$request->model`). Remaining 18 checks PASS (reachability, deletion experiment, value-vs-shape, no subtraction, §1.11, conventions, roster).
+- Cycle 1 fix — fix agent (pty_c89b4e3d) commit `cc808f1e9`: inline harness replaced by `$provider($sseBody)` call, assertion substance unchanged (+1/-14), tests re-run green (99/236, Providers 808/1960).
+- Cycle 2 — reviewer linguistic-blue-deer (brand-new): NO FINDINGS. Checks performed: assertion survival at `:872-874` (assertSame role/content/tail), helper-model nuance (MiniMax-M2.7 vs `SglangProvider::DEFAULT_MODEL`) examined and dismissed as inert — `buildParams()` keys wire params on `$request->model` (`:647/:653/:684/:881`), `$this->model` used only by `contextWindow()` (`:432-437`) which is not on the complete/stream path; 19-check table all PASS/N/A. Reviewer UNVERIFIED on the suite (read-only env) — used orchestrator's numbers, high-confidence transfer (assertions byte-unchanged from cycle-1 measured commit).
+- Total cycles: 2.
+
+**Invariants touched** (none — no new `src/` file, census unchanged; no new env var / settings key / command.)
+
+**Surprises / things the plan got wrong**
+- The step agent exited without its final report — twice in a row across batch 1. Pattern: the inner agent delegates its own reviewer, then ends its turn while that review is in flight; the inner-session delegate artifacts complete empty ("No text parts found" in `background-agents-debug.log`). All reviews must be delegated by the orchestrator, never left to step agents; step briefs now carry a CRITICAL WARNING never to end a turn with async work pending.
+- `.opencode/package.json` runtime artifact (a `@opencode-ai/plugin` version bump) appears dirty in every step worktree — opencode itself writes it during runs; reverted before each merge. Not step work.
+
+**Follow-ups created**
+- Phase 1 close: spot-check P0.S2 census cells (carried from P0 CLOSE).
+- P4.S2: re-probe usage payload for cache fields (carried from P0 CLOSE).
+
+---
+
+### BATCH P1.B1 OPEN · 2026-08-26 04:50
+
+**Steps** P1.S1, P1.S2, P1.S3, P1.S4, P1.S5 (five concurrent, disjoint files)
+
+**Merge order** (declared at spawn): P1.S1 → P1.S2 → P1.S3 → P1.S4 → P1.S5, one at a time, `vendor/bin/phpunit tests/Providers/` between merges.
+
+**Worktrees**
+- `/home/sites/prompt-step-P1.S1` (branch `prompt/P1.S1`)
+- `/home/sites/prompt-step-P1.S2` (branch `prompt/P1.S2`)
+- `/home/sites/prompt-step-P1.S3` (branch `prompt/P1.S3`)
+- `/home/sites/prompt-step-P1.S4` (branch `prompt/P1.S4`)
+- `/home/sites/prompt-step-P1.S5` (branch `prompt/P1.S5`)
+
+**Base** `19a46ac9f` (master at spawn). Vendor materialised via `cp -al` in all five; PSR-4 root verified to resolve to each worktree's own `src/`.
+
+---
+
 ### P0 CLOSE — Phase 0 complete: baseline, census, probe · 2026-08-26 04:35 · 832f9ec0a
 
 **Status** done
