@@ -255,6 +255,67 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1.S2 — CustomProvider transmits assembled systemPrompt on both request paths · 2026-08-26 06:35 · a27f60229
+
+**Status** done
+
+**Worktree** /home/sites/prompt-step-P1.S2 (removed after merge)
+
+**Base** `19a46ac9f`
+
+**Goal (restated in one sentence)** CustomProvider's wire payload leads with the assembled system prompt on both `complete()` and `completeStream()` — including the `type:anthropic` path that rides the OpenAI chat/completions wire — when one is supplied, and nothing changes when it is null or empty.
+
+**What changed**
+- `sugar-crush/src/Providers/CustomProvider.php`: both `complete()` (`:155-160`) and `completeStream()` (`:210-215`) now prepend `[['role' => 'system', 'content' => $request->systemPrompt]]` via `array_merge` when systemPrompt is non-null **and** non-empty. Guard is stricter than OpenAIProvider's null-only check; the WHY comment explains an empty `''` on the wire would hand the backend an empty system role to reconcile against real history. The anthropic path is covered by construction — `ProviderFactory::createAnthropic()` returns a `CustomProvider` named `'anthropic'` over the OpenAI wire (`ProviderFactory.php:625-657`).
+- `sugar-crush/tests/Providers/CustomProviderTest.php`: +4 tests (below).
+- `sugar-crush/tests/Providers/CustomProviderStreamingTest.php`: +3 tests (below), incl. the streaming `''` polarity test (`:258-285`) added by the continuation agent — the step text requires the non-empty guard on BOTH paths, and only `complete()` had an `''` test before.
+
+**Tests added or changed**
+- `CustomProviderTest::testCompletePrependsSystemPromptToThePayload` — decoded wire `messages[0]` is `['role' => 'system']`, byte-identical content; `assertSame` exact array. Red on revert.
+- `CustomProviderTest::testCompleteDoesNotPrependSystemPromptWhenNull` — exact `[['role' => 'user', 'content' => 'hi']]` shape. Green on revert (by design).
+- `CustomProviderTest::testCompleteDoesNotPrependEmptySystemPrompt` — same, `''` treated as absent.
+- `CustomProviderTest::testCompleteKeepsHistoricalSystemMessageInPlaceWhenPromptIsPrepended` — exact 3-element array: assembled prompt LEADS, historical `SystemMessage` stays in place, user message retained; neither dropped. Red on revert.
+- `CustomProviderStreamingTest` ×3 — streaming prepend / null / `''`, `assertSame` on the full decoded wire messages array through the file's established MockHandler + SSE-body pattern (`makeProvider($client)` helper `:27`).
+
+**Deletion experiment** (run by orchestrator): `git apply -R` of the src hunk, filtered run: `FAILURES! Tests: 3, Assertions: 3, Failures: 3` — complete-prepend, history-interaction and streaming-prepend all red; null/empty polarity tests stayed green (correct — they assert absence). Restored; tree byte-identical.
+
+**MEASURED**
+```
+$ cd /home/sites/prompt-step-P1.S2/sugar-crush && vendor/bin/phpunit tests/Providers/CustomProviderTest.php tests/Providers/CustomProviderStreamingTest.php
+OK (48 tests, 96 assertions)
+
+$ cd /home/sites/prompt-step-P1.S2/sugar-crush && vendor/bin/phpunit tests/Providers/
+OK (811 tests, 1959 assertions)
+
+$ cd /home/sites/prompt-step-P1.S2/sugar-crush && vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9380 assertions)
+
+$ cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/Providers/   # main repo, after merge
+OK (815 tests, 1967 assertions)
+```
+
+**Suite result** Full suite not re-run this step; Providers dir in main repo after merge: 815/1967 OK (was 808/1960 after P1.S1). Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +7 tests / +7 assertions in Providers dir; census unchanged (297 files — no new `src/` file).
+
+**Review loop** `RECONSTRUCTED` — the step agent (and its continuation) exited without a 7-section report (see Surprises); the review loop below was orchestrated directly by the orchestrator.
+- Cycle 1 — inner-session reviewer exotic-beige-panda: empty artifact (agent died at delegation; artifact confirms "No text parts found").
+- Cycle 2 — reviewer valuable-blush-tern: infrastructure failure — zero-message timeout at 900s (session created, prompt never arrived; see Surprises). Relaunched.
+- Cycle 3 — reviewer neutral-fuchsia-jay (orchestrator delegate, single-sequential): APPROVE. All 19 checks PASS/N/A; done-when ledger complete (both-path prepend at `:152-161`/`:207-216`; guard both sites; exact-literal prepend; payload-shape assertion per path; interaction test = 3-element exact array). Reachability traced `bin/sugarcrush → Bootstrap → ProviderFactory:648,905-907 → complete()/completeStream()` via live hot paths (`Runtime.php:460,589` etc.). 2 non-blocking nits below the ≥80% reporting bar: history-interaction test only on `complete()` (optional symmetry); the three streaming tests triplicate the 3-line SSE fixture consistent with the file's pre-existing pattern. Reviewer UNVERIFIED on the suite (read-only env) — used orchestrator's numbers.
+- Total cycles: 3.
+
+**Invariants touched** (none — no new `src/` file, census unchanged; no new env var / settings key / command.)
+
+**Surprises / things the plan got wrong**
+- The P1.S2 continuation agent died at the SAME delegation point despite the CRITICAL WARNING (last line: "Reviewer exotic-beige-panda is in flight. Per the critical constraint, I will not end my turn — blocking until the result notification arrives." then the session ended). Blocking on an inner delegate apparently itself ends the session in this environment.
+- **Three concurrent delegate launches race and receive ZERO input**: valuable-blush-tern, male-lime-ocelot and rival-rose-partridge (launched 05:50:20 together) all timed out at 900s with "getResult: No messages found" — sessions created, prompt never delivered. Single sequential delegates work (linguistic-blue-deer, neutral-fuchsia-jay both completed). Rule going forward: reviewers one at a time, wait for the notification before launching the next.
+- Continuation agent's addition of the streaming `''` test was a real gap closure not in my earlier verification — the step text requires non-empty guard on both paths; only `complete()` had the polarity test initially.
+- `.opencode/package.json` runtime artifact appears dirty in every step worktree (opencode writes it during runs); reverted before each merge. Not step work.
+
+**Follow-ups created**
+- Phase 1 close: spot-check P0.S2 census cells (carried).
+- P4.S2: re-probe usage payload for cache fields (carried).
+
+---
+
 ### P1.S1 — SglangProvider transmits assembled systemPrompt on both request paths · 2026-08-26 06:10 · 2d4f738f2
 
 **Status** done

@@ -189,25 +189,26 @@ Full detail in `prompt_plan.md` §1. The short form:
 
 ```
 Phase:            Phase 1 (Transmission) in flight — batch 1 of 2
-Next step:        P1.S2 — CustomProvider transmits systemPrompt on both paths (next in
-                  declared merge order after P1.S1 merged)
-Steps done:       4 of 61
+Next step:        P1.S3 — OpenAIProvider::completeStream() transmits systemPrompt (reviewer
+                  next in single-sequential queue, then merge in declared order)
+Steps done:       5 of 61
 Phases done:      1 of 12
-Last commit:      2d4f738f2 — sugar-crush prompt: P1.S1 SglangProvider transmits assembled
+Last commit:      a27f60229 — sugar-crush prompt: P1.S2 CustomProvider transmits assembled
                   systemPrompt on both request paths
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
-                  P1.S1 merge: OK (808 tests, 1960 assertions)
-In-flight batch:  P1.B1 — P1.S1 (MERGED 2d4f738f2), P1.S2 (commit 909b9085e, reviewer
-                  valuable-blush-tern in flight), P1.S3 (commit 0d812ed82, reviewer
-                  male-lime-ocelot in flight), P1.S4 (commit 53fda44ea, reviewer
-                  rival-rose-partridge in flight), P1.S5 (agent running, no commit yet).
-                  Declared MERGE ORDER: P1.S1 → P1.S2 → P1.S3 → P1.S4 → P1.S5, one at a
-                  time, tests/Providers/ run between merges. Worktrees
-                  /home/sites/prompt-step-P1.S{2,3,4,5} (branches prompt/P1.S*).
-Live worktrees:   /home/sites/prompt-step-P1.S2 (in flight), /home/sites/prompt-step-P1.S3
-                  (in flight), /home/sites/prompt-step-P1.S4 (in flight),
-                  /home/sites/prompt-step-P1.S5 (in flight)
+                  P1.S2 merge: OK (815 tests, 1967 assertions)
+In-flight batch:  P1.B1 — P1.S1 (MERGED 2d4f738f2), P1.S2 (MERGED a27f60229), P1.S3 (commit
+                  0d812ed82, reviewer queued), P1.S4 (commit 53fda44ea, reviewer queued),
+                  P1.S5 (no commit; uncommitted in-scope work: ProviderInterface.php +17,
+                  ProviderRequestResponseTest.php +313; agent died at fix-spawn; review +
+                  fix continuation queued). Declared MERGE ORDER: P1.S1 → P1.S2 → P1.S3 →
+                  P1.S4 → P1.S5, one at a time, tests/Providers/ run between merges.
+                  Worktrees /home/sites/prompt-step-P1.S{3,4,5} (branches prompt/P1.S*).
+                  REVIEWERS: orchestrator-delegated ONLY, ONE AT A TIME (3 concurrent
+                  launches race and receive zero input — see P1.S2 worklog entry).
+Live worktrees:   /home/sites/prompt-step-P1.S3 (in flight), /home/sites/prompt-step-P1.S4
+                  (in flight), /home/sites/prompt-step-P1.S5 (in flight)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
