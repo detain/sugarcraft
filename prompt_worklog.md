@@ -255,6 +255,61 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1.S3 — OpenAIProvider::completeStream() transmits assembled systemPrompt · 2026-08-26 06:55 · 99caad991
+
+**Status** done
+
+**Worktree** /home/sites/prompt-step-P1.S3 (removed after merge)
+
+**Base** `19a46ac9f`
+
+**Goal (restated in one sentence)** The interactive-turn path `OpenAIProvider::completeStream()` leads the wire payload with the assembled system prompt when one is supplied, and sends nothing extra when it is null.
+
+**What changed**
+- `sugar-crush/src/Providers/OpenAIProvider.php`: `completeStream()` now prepends `[['role' => 'system', 'content' => $request->systemPrompt]]` after the tools block, before the client call (`:127-130`) — mirrors the `complete()` block (`:90-95`) exactly: same condition, same `array_merge` shape, same position. The guard is null-only (matching `complete()`), unlike Sglang/Custom's stricter non-empty check.
+- `sugar-crush/tests/Providers/OpenAIProviderTest.php`: +2 tests (below), driving real `StreamResponse`/`CreateStreamedResponse` machinery so the exact `$params` array handed to `createStreamed()` is captured and asserted. Existing `complete()` tests untouched.
+
+**Tests added or changed**
+- `OpenAIProviderTest::testCompleteStreamPayloadLeadsWithSystemPrompt` — `assertSame` on the exact captured messages array (system prompt first, then user message) plus model + stream flag + chunk count (`:666-669`); red on revert.
+- `OpenAIProviderTest::testCompleteStreamWithNullSystemPromptPrependsNothing` — exact shape when null; stays green on revert (by design).
+
+**Deletion experiment** (run by orchestrator): `git apply -R` of the src hunk, filtered run: `FAILURES! Tests: 1, Assertions: 1, Failures: 1` — `testCompleteStreamPayloadLeadsWithSystemPrompt` red (expected `['role' => 'system']` at index 0, got user-first payload); null test stayed green (correct — it asserts absence). Restored; tree clean except runtime artifact.
+
+**MEASURED**
+```
+$ cd /home/sites/prompt-step-P1.S3/sugar-crush && vendor/bin/phpunit tests/Providers/OpenAIProviderTest.php
+OK (37 tests, 57 assertions)
+
+$ cd /home/sites/prompt-step-P1.S3/sugar-crush && vendor/bin/phpunit tests/Providers/
+OK (806 tests, 1957 assertions)
+
+$ cd /home/sites/prompt-step-P1.S3/sugar-crush && vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9380 assertions)
+
+$ cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/Providers/   # main repo, after merge
+OK (817 tests, 1972 assertions)
+```
+
+**Suite result** Full suite not re-run this step; Providers dir in main repo after merge: 817/1972 OK (was 815/1967 after P1.S2). Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +2 tests / +5 assertions in Providers dir; census unchanged (297 files — no new `src/` file).
+
+**Review loop** `RECONSTRUCTED` — the step agent exited without its 7-section report (see Surprises); the review loop below was orchestrated directly by the orchestrator.
+- Cycle 1 — inner-session reviewer final-salmon-cardinal: empty artifact ("No text parts found" in the background-agents debug log).
+- Cycle 2 — reviewer remaining-aquamarine-ladybug (orchestrator delegate, single-sequential): APPROVE. All 19 checks PASS/N/A. Guard mirrors `complete()`'s block (`:90-95`) exactly; reachability `Runtime.php:315 → runStreaming():323-324 (supportsStreaming true :34-37) → completeStream():460`; 0 deletions — all 35 pre-existing tests untouched; 1 nit below the ≥80% reporting bar: 130-char `array_merge` line at src:128 (PSR-12 soft limit, no enforcing fixer rule — reviewer declined a churn-only fix). Reviewer UNVERIFIED on the suite (read-only env) — used orchestrator's numbers.
+- Total cycles: 2.
+
+**Invariants touched** (none — no new `src/` file, census unchanged; no new env var / settings key / command.)
+
+**Surprises / things the plan got wrong**
+- The tree is **+91 total (+4 src, +87 tests)**, not +126 as first reported — the count in the continuation brief was a transcription slip; the tree is the authority.
+- The step agent died at the same delegation point as its batch siblings (delegated final-salmon-cardinal, never got the result, session ended). Third occurrence in batch 1; rule stands: orchestrator-delegated reviews only.
+- `.opencode/package.json` runtime artifact (same as P1.S1/S2) reverted before merge.
+
+**Follow-ups created**
+- Phase 1 close: spot-check P0.S2 census cells (carried).
+- P4.S2: re-probe usage payload for cache fields (carried).
+
+---
+
 ### P1.S2 — CustomProvider transmits assembled systemPrompt on both request paths · 2026-08-26 06:35 · a27f60229
 
 **Status** done
