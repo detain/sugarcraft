@@ -204,14 +204,17 @@ Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, nev
 Latest suite:     FULL suite @ e513409c5 (phase-1 checkpoint): OK but skipped!
                    Tests: 10393, Assertions: 160779, Skipped: 1, EXIT 0 (delta vs baseline
                    +42 tests / +131 assertions, same 1 skip). Providers: 846/2047; census: 103/9390.
-In-flight batch:  none (P1.B1 + P1.B2 both CLOSED — all seven steps merged in declared order:
-                   S1 2d4f738f2, S2 a27f60229, S3 99caad991, S4 0013e9730, S5 193317de1,
-                   S6 070d1f5fb, S7 843432e13; worktrees removed, branches deleted). SPAWN
-                   MECHANISM (user directive 2026-08-26): NO MORE pty_spawn for agents — use
-                   task tool with Coder subagent type; task tool NOT present in orchestrator
-                   toolset (delegate = read-only only) — delegate/script(1) wrapper used
-                   instead. REVIEWERS: delegate (agent=reviewer) primary, script(1) fallback.
-Live worktrees:   none
+In-flight batch:  P2.B1 — P2.S1 + P2.S3 CONCURRENT (file-disjoint). MERGE ORDER declared
+                   at spawn: P2.S1 → P2.S3, tests/Providers/ run between merges. P2.S1:
+                   injectable clock/platform/cwd — worktree /home/sites/prompt-step-P2.S1
+                   (branch prompt/P2.S1); P2.S3: golden agent prompt — worktree
+                   /home/sites/prompt-step-P2.S3 (branch prompt/P2.S3); both base 0f3bf202f,
+                   vendor cp -al + PSR-4 verified, agents in flight via script(1) wrapper
+                   pids 1953095 (P2.S1) + 1953096 (P2.S3) per user directive 2026-08-26
+                   (no pty_spawn; task tool NOT in toolset). REVIEWERS: delegate
+                   (agent=reviewer) primary, script(1) fallback.
+Live worktrees:   /home/sites/prompt-step-P2.S1 — P2.S1, in flight (pid 1953095);
+                   /home/sites/prompt-step-P2.S3 — P2.S3, in flight (pid 1953096)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;

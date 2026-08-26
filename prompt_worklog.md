@@ -255,6 +255,14 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### BATCH P2.B1 OPEN · 2026-08-26 16:2x
+
+**Steps**: P2.S1 + P2.S3 CONCURRENT, file-disjoint. P2.S1 — injectable clock/platform/cwd for prompt assembly (sugar-crush/src/Runtime.php + sugar-crush/src/Context/EnvironmentBlock.php + sugar-crush/tests/RuntimeTest.php; HARD: `__construct(ProviderInterface, HookManager, ?EnvironmentBlock)` third positional slot taken (RuntimeTest.php:1701); `buildSystemPrompt(App): string` stays a private instance method, 18 reflection sites; done: two calls with same injected values byte-identical, assertSame). P2.S3 — golden agent prompt (sugar-crush/src/Agents/Agent.php + sugar-crush/tests/Agents/AgentTest.php + sugar-crush/tests/fixtures/prompt/golden-agent-prompt.txt new; HARD: do NOT unify `Agent::systemPrompt()` with `Runtime::buildSystemPrompt()` — two assemblers deliberately, AgentTest.php:251 vs BaseSystemPromptTest.php:135; done: agent golden exists + test comment states opposite order + names the two colliding assertions).
+**Merge order declared at spawn**: P2.S1 → P2.S3, `tests/Providers/` run between merges.
+**Worktrees**: /home/sites/prompt-step-P2.S1 (branch prompt/P2.S1) + /home/sites/prompt-step-P2.S3 (branch prompt/P2.S3), both base 0f3bf202f, vendor cp -al + PSR-4 verified.
+**Spawn mechanism**: script(1) wrapper pids 1953095 (P2.S1) + 1953096 (P2.S3), per user directive 2026-08-26 (no pty_spawn; `task` tool NOT in orchestrator toolset — delegate/script(1) used).
+**Reviewers**: delegate (agent=reviewer) primary, else script(1) wrapper.
+
 ### P1 CLOSE — Phase 1 (Transmission) closed · 2026-08-26 16:1x · e513409c5
 
 **Status**: done · **Worktree**: (none — phase review ran in main repo) · **Base**: 19a46ac9f (phase start) → e513409c5
