@@ -38,6 +38,23 @@ interface ProviderInterface
 
     public function complete(CompleteRequest $request): CompleteResponse;
 
+    /**
+     * Stream the completion as a generator of per-chunk deltas.
+     *
+     * STREAMED USAGE IS PER-DELTA, NOT CUMULATIVE. Each yielded
+     * CompleteResponse's `tokensUsed`/`costUsd` is that chunk's own increment;
+     * consumers sum the values across the whole stream to obtain the turn's
+     * total ({@see \SugarCraft\Crush\Runtime::runStreaming()} then
+     * {@see \SugarCraft\Crush\Usage::sum()}). Implementers whose wire protocol
+     * reports cumulative totals must emit each total exactly once — on the
+     * terminal chunk, or split across disjoint bucket events as
+     * {@see \SugarCraft\Crush\Providers\VertexProvider} does — never repeated on
+     * every chunk, because a repeated cumulative total is summed N times.
+     * All-zero chunks are compliant when the wire carried no usage: they sum to
+     * the true "nothing reported" answer.
+     *
+     * @return \Generator<int, CompleteResponse>
+     */
     public function completeStream(CompleteRequest $request): \Generator;
 
     public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse;
