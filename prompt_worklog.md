@@ -299,6 +299,7 @@ OK (831 tests, 2001 assertions)   # was 830/1992 pre-merge (830-9+10, 1992-37+46
 **Base**: 2550caf1a (master HEAD at spawn; P1.S7 branches from master after P1.S6 merges).
 **Spawn mechanism**: P1.S6 agent FIRST launched via `createBackgroundProcess` (task-omxo3ds, pid 633865) — the `pty_spawn` tool degraded at ~08:38 (3 consecutive failures incl. minimal command after session cleanup), `delegate` remains degraded since 07:53. **RECOVERED 2026-08-26 11:1x**: task-omxo3ds WEDGED AT INIT (run id b4010f47 — 13 log lines 08:38:19-24, then 3h07m silence; session.id never created, LLM runtime never selected, agent never read its brief; killed via targeted pids + orphaned snapshot git pid 1807237). createBackgroundProcess does NOT work for step agents (no TTY). `pty_spawn` RECOVERED ~11:1x — agent RESPAWNED as pty_3360ff67 (pid 1822271, notifyOnExit, timeout 5400). Fallback if pty_spawn breaks again: bash `script(1)` wrap (provides PTY).
 **Reviewers**: pty-fallback `opencode run --dir <worktree>` read-only reviewer process (see P1.S5 entry); delegate tool still not trusted.
+**Spawn mechanism (P1.S7)**: `pty_spawn` used directly (recovered — worked for P1.S6 cycle-2 reviewer) → **pty_966581c9** (pid 3462585, notifyOnExit, timeout 5400) in worktree `/home/sites/prompt-step-P1.S7` (branch `prompt/P1.S7`, base 8064f27aa, vendor cp -al + PSR-4 root verified). Fallback if it breaks again: bash `script(1)` wrap.
 
 ### P1.S5 — state the streamed-Usage delta contract with discriminating per-provider tests · 2026-08-26 08:00 · 193317de1
 **Status**: done

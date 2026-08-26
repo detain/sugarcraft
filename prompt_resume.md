@@ -199,22 +199,23 @@ Next step:        P1.S7 — the transmission matrix test (NEW file
                    be exempted WITH named reason; depends P1.S1-S4 — all merged)
 Steps done:       9 of 61
 Phases done:      1 of 12
-Last commit:      070d1f5fb — sugar-crush prompt: P1.S6 rebuild PromptStabilityTest
-                   against CompleteRequest::$systemPrompt, retire MiniMax-M2.7 literal
+Last commit:      8064f27aa — prompt: P1.S6 bookkeeping — worklog entry + resume rewrite
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
                    P1.S6 merge: OK (831 tests, 2001 assertions)
 In-flight batch:  P1.B2 (serial) — P1.S6 → P1.S7. P1.S6 MERGED 070d1f5fb (step d4da63824 +
-                   fix 0df904a6; 2 review cycles; worktree removed). P1.S7 next: fresh
-                   worktree /home/sites/prompt-step-P1.S7 -b prompt/P1.S7 master (base
-                   070d1f5fb) + cp -al vendor + PSR-4 probe; read step text at
-                   prompt_plan.md:1225-1240; brief /tmp/opencode/p1s7-brief.md; spawn via
-                   pty_spawn (recovered) else bash script(1) wrap. MERGE ORDER: P1.S6 then
-                   P1.S7, tests/Providers/ run between merges (S6 done). REVIEWERS:
-                   pty/script(1)-fallback 'opencode run --dir <worktree>' read-only process;
-                   delegate tool degraded 07:53+ (4 zero-message timeouts) but delegate
-                   (explore) WORKED for P1.S6's cycle-2 reviewer — test once before relying.
-Live worktrees:   none
+                   fix 0df904a6; 2 review cycles; worktree removed). P1.S7 IN FLIGHT: step
+                   agent spawned via pty_spawn (pty_966581c9, pid 3462585, notifyOnExit,
+                   timeout 5400) in worktree /home/sites/prompt-step-P1.S7 (branch
+                   prompt/P1.S7, base 8064f27aa, vendor cp -al + PSR-4 root verified);
+                   brief /tmp/opencode/p1s7-brief.md; declared files ONLY
+                   SystemPromptTransmissionMatrixTest.php (new) + ProviderRequestResponseTest.php.
+                   MERGE ORDER: P1.S6 then P1.S7, tests/Providers/ run between merges (S6
+                   done). REVIEWERS: pty/script(1)-fallback 'opencode run --dir <worktree>'
+                   read-only process; delegate tool degraded 07:53+ (4 zero-message timeouts)
+                   but delegate (explore) WORKED for P1.S6's cycle-2 reviewer — test once
+                   before relying.
+Live worktrees:   /home/sites/prompt-step-P1.S7 — P1.S7, in flight (pty_966581c9)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
