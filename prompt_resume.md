@@ -202,18 +202,21 @@ Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, nev
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
                    P1.S5 merge: OK (830 tests, 1992 assertions)
 In-flight batch:  P1.B2 (serial) — P1.S6 → P1.S7, in this order, one at a time.
-                   P1.S6: worktree /home/sites/prompt-step-P1.S6 (branch prompt/P1.S6,
-                   base 2550caf1a), agent launched 08:38 via createBackgroundProcess
-                   (task-omxo3ds, pid 633865) — the pty_spawn tool degraded ~08:38
-                   (3 failures incl. minimal command even after session cleanup), delegate
-                   tool still degraded since 07:53. Fallback if opencode run needs a TTY:
-                   bash nohup/script(1) wrap. MERGE ORDER: P1.S6 then P1.S7, tests/Providers/
-                   run between merges. P1.S7 spawns a fresh worktree off master after P1.S6.
-                   REVIEWERS: pty-fallback 'opencode run --dir <worktree>' read-only process
-                   (delegate tool degraded 07:53+: 4 consecutive zero-message timeouts; the
-                   pty-fallback reviewer for P1.S5 ran its own suites via inner pty_spawn —
-                   that is the current pattern, see P1.S5 worklog entry).
-Live worktrees:   /home/sites/prompt-step-P1.S6 — P1.S6, in flight (task-omxo3ds)
+                    P1.S6: worktree /home/sites/prompt-step-P1.S6 (branch prompt/P1.S6,
+                    base 2550caf1a), agent RESPONDED 11:1x as pty_3360ff67 (pid 1822271,
+                    notifyOnExit, timeout 5400). History: first launch 08:38 via
+                    createBackgroundProcess (task-omxo3ds, pid 633865) WEDGED AT INIT —
+                    run id b4010f47, 13 log lines then 3h07m silence, session.id never
+                    created, LLM runtime never selected; killed (targeted pids + orphaned
+                    snapshot git 1807237). createBackgroundProcess does NOT work for step
+                    agents (no TTY). pty_spawn recovered ~11:1x; if it breaks again:
+                    bash script(1) wrap. MERGE ORDER: P1.S6 then P1.S7, tests/Providers/
+                    run between merges. P1.S7 spawns a fresh worktree off master after P1.S6.
+                    REVIEWERS: pty-fallback 'opencode run --dir <worktree>' read-only process
+                    (delegate tool degraded 07:53+: 4 consecutive zero-message timeouts; the
+                    pty-fallback reviewer for P1.S5 ran its own suites via inner pty_spawn —
+                    that is the current pattern, see P1.S5 worklog entry).
+Live worktrees:   /home/sites/prompt-step-P1.S6 — P1.S6, in flight (pty_3360ff67)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
