@@ -662,6 +662,20 @@ final readonly class SglangProvider implements ProviderInterface
             'separate_reasoning' => true,
         ];
 
+        // The assembled prompt (Runtime::buildSystemPrompt()'s seven layers)
+        // arrives on CompleteRequest::$systemPrompt, and this provider used to
+        // never read the field - the whole prompt silently dropped on the
+        // DEFAULT provider, every turn (prompt_expand.md §1.1). Prepended as
+        // the leading system message, OpenAI chat/completions order. '' means
+        // "unset" here, the same convention as the optional-knob filter below
+        // and VertexProvider's systemPrompt hoist.
+        if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
+            $params['messages'] = array_merge(
+                [['role' => 'system', 'content' => $request->systemPrompt]],
+                $params['messages']
+            );
+        }
+
         foreach ([
             // The ONE knob in this list with a non-null default, and only for
             // one model family - see defaultTopP(). Everything else below
