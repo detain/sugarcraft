@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 0 — P0.S1 complete (baseline recorded, tracking rails up); P0.S2 + P0.S3 are next and run concurrently with each other.**
+**Current state: Phase 0 closed (baseline, census, provider probe all recorded); Phase 1 batch 1 — P1.S1–S5 — is next.**
 
 ---
 
@@ -188,19 +188,21 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 0 — Bootstrap, baseline, measurement rails
-Next step:        P0.S2 — census: which CompleteRequest public properties each provider
-                  actually reads (runs CONCURRENTLY with P0.S3; both read-only)
-Steps done:       1 of 61
-Phases done:      0 of 12
-Last commit:      19533373e — sugar-crush prompt: P0.S1 baseline rails
+Phase:            Phase 0 closed — next: Phase 1 (Transmission)
+Next step:        P1.S1 — SglangProvider transmits CompleteRequest::$systemPrompt on
+                  complete AND stream (Phase 1 batch 1 = P1.S1,S2,S3,S4,S5 concurrent,
+                  file-disjoint; batch 2 = P1.S6 then P1.S7, serial)
+Steps done:       3 of 61
+Phases done:      1 of 12
+Last commit:      e98684167 — prompt: P0.S1 bookkeeping — worklog baseline entry + resume rewrite
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1 baseline run, 2026-08-26)
+Latest suite:     not re-run since P0.S1 baseline (10351/160648/1) — no code changed in Phase 0
 In-flight batch:  none
 Live worktrees:   none
 Blocked on:       nothing
 Awaiting user decision: nothing
-Open follow-ups:  none
+Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
+                  P4.S2: re-probe usage payload for cache fields before fixing fixture shape
 Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
                   (collision rows still live, see §5)
 ```

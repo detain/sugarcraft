@@ -255,6 +255,190 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P0 CLOSE — Phase 0 complete: baseline, census, probe · 2026-08-26 04:35 · <pending sha>
+
+**Status** done
+
+**Worktree** (none — all three steps were orchestrator-executed read-only measurements)
+
+**Base** `59411203c` → `19533373e` → `e98684167` (P0.S1's two commits; P0.S2/S3 added no commits of their own until this close entry)
+
+**Goal (restated in one sentence)** Close Phase 0 with all three steps landed and the plan's measurement rails in place.
+
+**What changed**
+- `prompt_worklog.md`: P0.S2 + P0.S3 entries above (P0.S1 entry already in place).
+- `.sugar-crush-prompt/progress.json`: P0.S2/S3 → done; baseline sha recorded (`59411203c`).
+- `prompt_resume.md`: §8 rewritten for the Phase 1 start.
+
+**Tests added or changed**
+(none.)
+
+**Deletion experiment**
+(none.)
+
+**MEASURED**
+Suite status unchanged since P0.S1 baseline (no production or test file touched in Phase 0): 10351/160648/1. Phase commits contain only `.gitignore`, `prompt_worklog.md`, `prompt_resume.md`, and the gitignored progress.json.
+
+**Suite result** Not re-run this phase (nothing in the phase changes the suite). Last measured at P0.S1: 10351/160648/1. Delta: 0.
+
+**Phase review** None — deliberate: Phase 0's commits contain no `sugar-crush/src/` or `sugar-crush/tests/` change, so §1.7's cross-step seam review has no code to walk, and the one load-bearing deliverable (the P0.S2 census) was self-corrected during the phase (bare-variable pattern → arrow-access pattern, see P0.S2 entry). Follow-up: Phase 1's phase review agent should spot-check the P0.S2 census cells against the provider sources.
+
+**Cross-step problems found**
+- None within the phase; the census pattern correction is recorded in P0.S2's entry.
+
+**Invariants touched** (none.)
+
+**Surprises / things the plan got wrong**
+- Phase 0 required no step agents at all: all three steps are measurement/bookkeeping and were executed directly by the orchestrator. This is consistent with §3.2 (bookkeeping is the orchestrator's) and with "you run the tests yourself" — noted for the record since the general loop implies agents.
+- The Phase 0 "phase review agent" step of §1.7 was judged not applicable (no code); recorded here so a later reader knows it was a decision, not an omission.
+
+**Follow-ups created**
+- Phase 1 close: spot-check P0.S2 census cells.
+- P4.S2: re-probe for usage payload with cache fields before fixing the fixture shape.
+
+---
+
+### P0.S3 — provider probe: models endpoint + system-message honouring · 2026-08-26 04:30 · <pending sha>
+
+**Status** done
+
+**Worktree** (none — read-only network probe, executed by the orchestrator)
+
+**Base** `19533373e`
+
+**Goal (restated in one sentence)** Confirm the default provider endpoint is reachable and that a plain `{"role":"system"}` message is honoured, and record the actual responses.
+
+**What changed**
+(none — read-only probe; no file touched.)
+
+**Tests added or changed**
+(none.)
+
+**Deletion experiment**
+(none.)
+
+**MEASURED**
+```sh
+curl -sS --max-time 25 https://skynet2.interserver.net/v1/models
+```
+```
+{"object":"list","data":[{"id":"deepseek-ai/DeepSeek-V4-Flash-0731","object":"model","owned_by":"local"}]}
+```
+CURL_EXIT 0. **`max_model_len` is NOT reported** — the `/v1/models` payload carries no such field. The plan asked to "confirm max_model_len reported": answer is it is absent; there is no advertised context limit to rely on from the endpoint.
+
+```sh
+curl -sS --max-time 60 -X POST https://skynet2.interserver.net/v1/chat/completions \
+  -H 'Content-Type: application/json' -d '{"model":"deepseek-ai/DeepSeek-V4-Flash-0731","max_tokens":20,
+  "messages":[{"role":"system","content":"Respond with exactly the single word BANANA and nothing else, no punctuation."},
+  {"role":"user","content":"What fruit am I thinking of?"}]}'
+```
+```
+{"id":"190d476a40834a02ab4a2252d7f17a9e","object":"chat.completion","created":1787717848,
+"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"message":{"role":"assistant",
+"content":"BANANA","reasoning_content":null,"tool_calls":null},"logprobs":null,
+"finish_reason":"stop","matched_stop":1}],"usage":{"prompt_tokens":27,"total_tokens":31,
+"completion_tokens":4,"prompt_tokens_details":null,"reasoning_tokens":0},
+"metadata":{"weight_version":"default"}}
+```
+CURL_EXIT 0. **Plain `{"role":"system"}` IS honoured**: the model followed the system instruction exactly ("BANANA", stop). Also recorded: usage shape has `prompt_tokens`/`completion_tokens`/`total_tokens`/`reasoning_tokens`, `prompt_tokens_details: null`, no cache fields — relevant to P4.S1 (Usage buckets) and P10 (cache breakpoints).
+
+**Suite result** Not re-run this step (read-only). Last measured at P0.S1: 10351/160648/1.
+
+**Review loop** (none — no agent work.)
+
+**Invariants touched** (none.)
+
+**Surprises / things the plan got wrong**
+- `max_model_len` is not reported by this server, so "confirm max_model_len" resolves to "absent — record that", not to a number.
+- The probe is the first live evidence for P4.S2's "REAL-shaped usage payload" requirement: the actual response has no cache token fields, so P4.S2 will need to copy the usage shape from a real cached response or state why the fixture differs.
+
+**Follow-ups created**
+- P4.S2 should re-probe for a usage payload with cache fields (`prompt_tokens_details` was null here) before deciding the fixture shape.
+
+---
+
+### P0.S2 — census: which CompleteRequest properties each provider reads · 2026-08-26 04:30 · <pending sha>
+
+**Status** done
+
+**Worktree** (none — read-only census, executed by the orchestrator)
+
+**Base** `19533373e`
+
+**Goal (restated in one sentence)** For all 7 providers × all 14 public properties of `CompleteRequest`, measure line-level read counts so the plan's transmission work starts from a verified table.
+
+**What changed**
+(none — read-only census; no file touched.)
+
+**Tests added or changed**
+(none.)
+
+**Deletion experiment**
+(none.)
+
+**MEASURED**
+Methodology correction (see Surprises): the plan's "grep -c the property name" pattern was first run as `\$<prop>\b`, which matches **bare local variables** (`$model = ...`) and misses property reads (`$request->systemPrompt`). That first run reported systemPrompt=0 for every provider including OpenAIProvider, contradicting the dossier's known read at OpenAIProvider.php:90-92. The census below uses the arrow-access pattern `-><prop>\b` (quoted command):
+
+```sh
+cd /home/sites/sugarcraft/sugar-crush/src/Providers && for prop in model messages tools systemPrompt \
+  temperature maxTokens jsonSchema topP topK minP repetitionPenalty stop extraTemplateKwargs \
+  reasoningEffort; do for prov in SglangProvider CustomProvider OpenAIProvider BedrockProvider \
+  ClaudeCodeProvider EchoProvider VertexProvider; do /usr/bin/grep -c "\->$prop\b" "$prov.php"; done; done
+```
+
+| property | Sglang | Custom | OpenAI | Bedrock | ClaudeCode | Echo | Vertex |
+|---|---|---|---|---|---|---|---|
+| model | 10 | 3 | 3 | 1 | 0 | 0 | 1 |
+| messages | 2 | 2 | 2 | 2 | 2 | 2 | 3 |
+| tools | 5 | 4 | 4 | 0 | 4 | 0 | 2 |
+| **systemPrompt** | **0** | **0** | **2** | **4** | **2** | **0** | **2** |
+| temperature | 1 | 2 | 2 | 2 | 0 | 0 | 2 |
+| maxTokens | 1 | 2 | 2 | 2 | 0 | 0 | 2 |
+| jsonSchema | 4 | 0 | 0 | 0 | 0 | 0 | 0 |
+| topP | 1 | 0 | 0 | 2 | 0 | 0 | 2 |
+| topK | 1 | 0 | 0 | 0 | 0 | 0 | 2 |
+| minP | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| repetitionPenalty | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| stop | 1 | 0 | 0 | 4 | 0 | 0 | 4 |
+| extraTemplateKwargs | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| reasoningEffort | 4 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Read sites for systemPrompt (grep -n, verbatim):
+```
+OpenAIProvider.php:90   if ($request->systemPrompt !== null) {
+OpenAIProvider.php:92       [['role' => 'system', 'content' => $request->systemPrompt]],
+BedrockProvider.php:164  if ($request->systemPrompt !== null) {            (complete path)
+BedrockProvider.php:165  $params['system'] = [['text' => $request->systemPrompt]];
+BedrockProvider.php:214  if ($request->systemPrompt !== null) {            (stream path)
+BedrockProvider.php:215  $params['system'] = [['text' => $request->systemPrompt]];
+ClaudeCodeProvider.php:80   'systemPrompt' => $request->systemPrompt,     (JSON payload key)
+ClaudeCodeProvider.php:105  'systemPrompt' => $request->systemPrompt,
+VertexProvider.php:489  * therefore hoisted here and joined onto the request's own systemPrompt.  (docblock)
+VertexProvider.php:495  if ($request->systemPrompt !== null && $request->systemPrompt !== '') {
+VertexProvider.php:496  $parts[] = $request->systemPrompt;
+SglangProvider.php:0  CustomProvider.php:0  EchoProvider.php:0
+```
+ClaudeCodeProvider also carries 2 array-style `'systemPrompt'` occurrences (payload keys, included in the 2 above).
+
+**Not-read cells** (grep returned 0, file named): systemPrompt — SglangProvider.php, CustomProvider.php, EchoProvider.php (Echo is a stub, n/a); temperature/maxTokens — ClaudeCodeProvider.php, EchoProvider.php; jsonSchema — all except SglangProvider.php; topP — Custom, OpenAI, ClaudeCode, Echo; topK — Custom, OpenAI, Bedrock, ClaudeCode, Echo; minP/repetitionPenalty/extraTemplateKwargs/reasoningEffort — all except SglangProvider.php; stop — Custom, OpenAI, ClaudeCode, Echo; tools — Bedrock, Echo; model — ClaudeCode, Echo.
+
+**Headline** (confirms the lead finding at line level): the **default** provider (Sglang, 0 reads) and CustomProvider (0) never read `systemPrompt`; OpenAI reads it in `complete()` only (both occurrences are at :90-92; `completeStream()` has none — the interactive path drops it); Bedrock, ClaudeCode, Vertex read it.
+
+**Suite result** Not re-run this step (read-only). Last measured at P0.S1: 10351/160648/1.
+
+**Review loop** (none — no agent work.)
+
+**Invariants touched** (none.)
+
+**Surprises / things the plan got wrong**
+- The plan's P0.S2 wording ("grep -c quoted" of property names) is ambiguous in a way that produces a wrong census: the bare-name pattern counts locals, not reads. Arrow-access `->prop` is the correct pattern. Recorded here so P0.S2-style audits elsewhere use it.
+- Bedrock reads systemPrompt on BOTH paths (dossier's "E19" concern about hoisting history SystemMessages is a different matter and remains P1.S4).
+
+**Follow-ups created**
+(none.)
+
+---
+
 ### P0.S1 — baseline suite + tracking rails · 2026-08-26 04:16 · `19533373e`
 
 **Status** done
