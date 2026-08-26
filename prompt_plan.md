@@ -1200,9 +1200,12 @@ contract.
 
 ### P1.S6 — Rebuild `PromptStabilityTest`
 
-**Goal** The repo's only prefix-cache guard currently tests a request shape production never sends:
-it puts the system text inside `messages` and never uses the `systemPrompt:` named argument. Rebuild
-it against `CompleteRequest::$systemPrompt`, and retire the stale `MiniMax-M2.7` model id.
+**Goal** The repo's only prefix-cache guard now tests the request shape production actually sends:
+it builds its request the way `Runtime::run()` does — the system text rides `CompleteRequest::$systemPrompt`,
+never inside `messages` — and asserts byte equality **and byte position** of the prefix across two turns,
+failing if `SglangProvider` stops transmitting. The stale `MiniMax-M2.7` model id was retired for
+`SglangProvider::DEFAULT_MODEL`. (History: the pre-P1.S6 guard tested a request shape production never
+sent — system text inside `messages`, no `systemPrompt:` named argument.)
 **Source** §3.2, §9.1, §15.
 **Files**
 - `sugar-crush/tests/Providers/PromptStabilityTest.php`

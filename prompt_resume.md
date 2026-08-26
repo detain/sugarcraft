@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 1 batch 2 (serial) in flight — P1.S6 merged to master (070d1f5fb); P1.S7 (transmission matrix test) is next.**
+**Current state: Phase 1 CLOSED — all 7 steps (P1.S1–S7) merged; Phase 2 batch 1 (P2.S1 + P2.S3, concurrent) is next.**
 
 ---
 
@@ -188,38 +188,39 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 1 (Transmission) — batch 2 (serial) in flight: P1.S6 DONE, P1.S7 next
-Next step:        P1.S7 — the transmission matrix test (NEW file
-                   tests/Providers/SystemPromptTransmissionMatrixTest.php +
-                   tests/Providers/ProviderRequestResponseTest.php; one test walks EVERY
-                   provider ProviderFactory can build, hands each an identical CompleteRequest
-                   with a distinctive systemPrompt sentinel, asserts the sentinel appears in
-                   that provider's wire payload; providers enumerated DYNAMICALLY via
-                   reflection over src/Providers/, NOT a hand-written list; EchoProvider may
-                   be exempted WITH named reason; depends P1.S1-S4 — all merged)
+Phase:            Phase 1 (Transmission) CLOSED — all 7 steps (P1.S1–S7) merged to master
+Next step:        Phase 2 batch 1 — P2.S1 + P2.S3 CONCURRENT (per prompt_plan.md §4):
+                   P2.S1 injectable clock/platform/cwd (Runtime.php + Context/EnvironmentBlock.php
+                   + tests/RuntimeTest.php); P2.S3 golden agent prompt for Agent::systemPrompt()
+                   (Agent.php + AgentTest.php + fixtures/prompt/golden-agent-prompt.txt new) —
+                   OPPOSITE order to the Runtime builder; do NOT unify: two assemblers
+                   deliberately separate (AgentTest.php:251 vs BaseSystemPromptTest.php:135).
+                   ~11 src/ files start in Phase 5 — census collision ahead; re-check the
+                   sequencing gate before Phase 5/6.
 Steps done:       10 of 61
-Phases done:      1 of 12
-Last commit:      843432e13 — sugar-crush prompt: P1.S7 the transmission matrix test
+Phases done:      2 of 12
+Last commit:      e513409c5 — prompt: P1.S7 bookkeeping — worklog entry + resume rewrite
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
-                   P1.S7 merge: OK (846 tests, 2047 assertions)
-In-flight batch:  P1.B2 CLOSED — S6 MERGED 070d1f5fb, S7 MERGED 843432e13 (step 8a916b802 +
-                   fix 51f6b90f5; 2 review cycles each; worktrees removed). ALL SEVEN PHASE-1
-                   STEPS ON MASTER: S1 2d4f738f2, S2 a27f60229, S3 99caad991, S4 0013e9730,
-                   S5 193317de1, S6 070d1f5fb, S7 843432e13. SPAWN MECHANISM (user directive
-                   2026-08-26): NO MORE pty_spawn for agents — use task tool with Coder subagent
-                   type; task tool NOT present in orchestrator toolset (delegate = read-only
-                   only) — delegate/script(1) wrapper used instead. Next: PHASE 1 CLOSE (phase
-                   review agent over git diff 19a46ac9f..HEAD; spot-check P0.S2 census cells;
-                   prompt_plan.md:1203 Goal-line over-claim correction; phase-close worklog
-                   entry + resume rewrite + ONE-LINE user report).
+Latest suite:     FULL suite @ e513409c5 (phase-1 checkpoint): OK but skipped!
+                   Tests: 10393, Assertions: 160779, Skipped: 1, EXIT 0 (delta vs baseline
+                   +42 tests / +131 assertions, same 1 skip). Providers: 846/2047; census: 103/9390.
+In-flight batch:  none (P1.B1 + P1.B2 both CLOSED — all seven steps merged in declared order:
+                   S1 2d4f738f2, S2 a27f60229, S3 99caad991, S4 0013e9730, S5 193317de1,
+                   S6 070d1f5fb, S7 843432e13; worktrees removed, branches deleted). SPAWN
+                   MECHANISM (user directive 2026-08-26): NO MORE pty_spawn for agents — use
+                   task tool with Coder subagent type; task tool NOT present in orchestrator
+                   toolset (delegate = read-only only) — delegate/script(1) wrapper used
+                   instead. REVIEWERS: delegate (agent=reviewer) primary, script(1) fallback.
 Live worktrees:   none
 Blocked on:       nothing
 Awaiting user decision: nothing
-Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
-                   P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
-                   NEW: prompt_plan.md:1203 Goal line retains the retired over-claim
-                   ('tests a request shape production never sends') — correct at phase close
+Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
+                   (2) F1: SSE-fixture byte-identity comment-claimed not structural — fold
+                   shared-const/assertion into Phase 2 planning;
+                   (3) F2: three distinct ''-semantics pinned (OpenAI transmits empty system,
+                   Bedrock SDK-validator hard-fails, Sglang/Custom/Vertex omit) — unification
+                   into Phase 2 planning;
+                   (4) sequencing gate re-check before Phase 5/6 (collision rows still live, §5)
 Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
                    (collision rows still live, see §5)
 ```

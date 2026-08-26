@@ -255,6 +255,31 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1 CLOSE — Phase 1 (Transmission) closed · 2026-08-26 16:1x · e513409c5
+
+**Status**: done · **Worktree**: (none — phase review ran in main repo) · **Base**: 19a46ac9f (phase start) → e513409c5
+
+**Goal (restated)**: The model request built like `Runtime::run()` must carry the assembled seven-layer system prompt on the wire, in every provider's protocol field, on both batch and streaming paths.
+
+**What changed**: All 7 steps merged to master in declared order: P1.S1 SglangProvider both paths (2d4f738f2), P1.S2 CustomProvider both paths (a27f60229), P1.S3 OpenAIProvider completeStream (99caad991), P1.S4 Bedrock Converse system array / E19 (0013e9730), P1.S5 streamed-Usage per-delta contract / E24 (193317de1), P1.S6 PromptStabilityTest rebuilt production-shaped (070d1f5fb), P1.S7 SystemPromptTransmissionMatrixTest + shared `providerImplementers()` roster (843432e13). Plus per-step fix commits and bookkeeping commits to e513409c5.
+
+**Phase review**: Cycle 1 — phase reviewer sharp-blue-swordtail (delegate, read-only): APPROVE 19/19 checks, 0 blocking findings; P0.S2 census spot-check PASS (every provider that CAN transmit now reads `->systemPrompt`: Sglang 0→2, Custom 0→4, OpenAI 2→4, Bedrock 4→2 consolidated into systemBlocks(), ClaudeCode 2→2, Vertex 2→2, Echo 0→0 exempt). Cross-step problems found (non-blocking, folded into Phase 2 planning): F1 SSE-fixture byte-identity is comment-claimed not structural (was false once, fixed 51f6b90f5; shared constant or comparing assertion recommended); F2 three distinct `''`-semantics now permanently pinned (OpenAI transmits empty, Bedrock hard-fails at SDK validator, Sglang/Custom/Vertex omit) — latent today, unify when Phase 2 makes assembly deterministic. Reviewer sandbox denied phpunit — its suite numbers OBSERVED from worklog, not MEASURED. Total phase review cycles: 1.
+
+**MEASURED**
+```
+$ vendor/bin/phpunit            # §1.7c full-suite checkpoint, main repo @e513409c5
+OK, but some tests were skipped!
+Tests: 10393, Assertions: 160779, Skipped: 1.
+Time: 06:35.276, Memory: 344.05 MB
+```
+Delta vs P0.S1 baseline (10351/160648/1, never edited): **+42 tests, +131 assertions, same 1 skip, EXIT 0**. Tests/Providers/: OK 846/2047 (progression 808/1960 at phase start → 846/2047 at close). Census set: OK 103/9390.
+
+**Deletion experiment** (phase-level, from step evidence): per-step deletion experiments all red-on-revert and restored byte-identical (P1.S1 2 red, P1.S2 3 red, P1.S3 1 red, P1.S4 4+1 red, P1.S5 3 red, P1.S6 2 red, P1.S7 1 red at :162). Phase removed nothing net (only superseded Bedrock inline blocks replaced by shared helper; old-shape PromptStability assertions adapted, none dropped).
+
+**Surprises / things the plan got wrong**: Step agents died at inner-delegate waits repeatedly (P1.S1/S2/S3/S4 originals, P1.S7) — Rung 3 continuations recovered all; delegate tool degraded 07:53+ (4 zero-message timeouts) then recovered for later reviewers; pty_spawn degraded/recovered cycles, finally retired per user directive 2026-08-26 (no pty_spawn — use task tool with Coder subagent type; task tool NOT in orchestrator toolset, delegate/script(1) used); script(1) wrapper validated as TTY fallback; DsmlToolCallParser.php:230 pre-existing stdout diagnostic; P1.S6 fix agent's comment-only deletion-experiment waiver accepted; docblock-truth findings (P1.S6) and M1 (P1.S7) caught by reviewers.
+
+**Follow-ups created**: (1) P4.S2 re-probe usage payload for cache fields before fixing fixture shape; (2) F1 SSE-fixture shared-const/assertion fold into Phase 2; (3) F2 `''`-semantics unification fold into Phase 2; (4) sequencing gate re-check before Phase 5/6 (census collision ahead — ~11 src/ files).
+
 ### P1.S7 — the transmission matrix test · 2026-08-26 15:4x · 843432e13
 **Status**: done
 **Worktree**: `/home/sites/prompt-step-P1.S7` — removed
