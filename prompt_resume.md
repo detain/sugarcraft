@@ -199,23 +199,24 @@ Next step:        P1.S7 — the transmission matrix test (NEW file
                    be exempted WITH named reason; depends P1.S1-S4 — all merged)
 Steps done:       9 of 61
 Phases done:      1 of 12
-Last commit:      8064f27aa — prompt: P1.S6 bookkeeping — worklog entry + resume rewrite
+Last commit:      b4c373523 — prompt: P1.S7 spawn bookkeeping — resume §8 + batch entry update
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
                    P1.S6 merge: OK (831 tests, 2001 assertions)
 In-flight batch:  P1.B2 (serial) — P1.S6 → P1.S7. P1.S6 MERGED 070d1f5fb (step d4da63824 +
-                   fix 0df904a6; 2 review cycles; worktree removed). P1.S7 IN FLIGHT: step
-                   agent spawned via pty_spawn (pty_966581c9, pid 3462585, notifyOnExit,
-                   timeout 5400) in worktree /home/sites/prompt-step-P1.S7 (branch
-                   prompt/P1.S7, base 8064f27aa, vendor cp -al + PSR-4 root verified);
-                   brief /tmp/opencode/p1s7-brief.md; declared files ONLY
-                   SystemPromptTransmissionMatrixTest.php (new) + ProviderRequestResponseTest.php.
-                   MERGE ORDER: P1.S6 then P1.S7, tests/Providers/ run between merges (S6
-                   done). REVIEWERS: pty/script(1)-fallback 'opencode run --dir <worktree>'
-                   read-only process; delegate tool degraded 07:53+ (4 zero-message timeouts)
-                   but delegate (explore) WORKED for P1.S6's cycle-2 reviewer — test once
-                   before relying.
-Live worktrees:   /home/sites/prompt-step-P1.S7 — P1.S7, in flight (pty_966581c9)
+                   fix 0df904a6; 2 review cycles; worktree removed). P1.S7 COMMIT 8a916b802
+                   VERIFIED BY ORCHESTRATOR (2 files +642/-4: SystemPromptTransmissionMatrixTest.php
+                   new 619 lines 15 tests + ProviderRequestResponseTest.php providerImplementers()
+                   extraction; all 4 suites green: 15/46 + 32/72 + 846/2047 + census 103/9390;
+                   deletion experiment RED 15/41/1 at :162; worktree clean) — AWAITING REVIEW:
+                   reviewer regulatory-brown-crane in flight via delegate tool. SPAWN MECHANISM
+                   (user directive 2026-08-26): NO MORE pty_spawn for agents — use task tool with
+                   Coder subagent type; task tool NOT present in orchestrator toolset (delegate =
+                   read-only only) — delegate used for this reviewer; pty_spawn retired. S7 history:
+                   pty_966581c9 timed out at inner-coder wait → Rung 3 continuation pty_59384184
+                   completed → 8a916b802. MERGE ORDER: P1.S6 then P1.S7, tests/Providers/ run
+                   between merges (S6 done).
+Live worktrees:   /home/sites/prompt-step-P1.S7 — P1.S7, awaiting review (regulatory-brown-crane)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
