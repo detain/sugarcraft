@@ -256,10 +256,24 @@ final readonly class EnvironmentBlock
      */
     private const NO_PROCESS_REASON = 'unavailable (proc_open is disabled on this build)';
 
+    /**
+     * @param string             $cwd       Working directory rendered on the first line.
+     * @param string             $modelName Model name rendered on the sixth line.
+     * @param ?DateTimeImmutable $now       Injected timestamp; null falls back to capture time.
+     * @param ?string            $platform  Injected platform string, or null to use the build's own
+     *                                      PHP_OS_FAMILY at render time. Mirrors
+     *                                      charmbracelet/crush.WithPlatform: the platform is
+     *                                      injectable so prompt assembly is golden-testable on any
+     *                                      host — the date and working directory are already
+     *                                      injectable via $now/$cwd, and upstream crush exposes
+     *                                      WithTimeFunc/WithPlatform/WithWorkingDir purely so the
+     *                                      prompt is golden-testable.
+     */
     public function __construct(
         private string $cwd,
         private string $modelName,
         private ?DateTimeImmutable $now = null,
+        private ?string $platform = null,
     ) {}
 
     /** Returns the captured working directory. */
@@ -278,6 +292,12 @@ final readonly class EnvironmentBlock
     public function now(): ?DateTimeImmutable
     {
         return $this->now;
+    }
+
+    /** Returns the injected platform string, or null when the build's own PHP_OS_FAMILY is used at render time. */
+    public function platform(): ?string
+    {
+        return $this->platform;
     }
 
     /**
@@ -316,7 +336,7 @@ final readonly class EnvironmentBlock
         $lines = [
             'Working directory: ' . $this->cwd,
             'Is directory a git repo: ' . ($this->isGitRepo() ? 'Yes' : 'No'),
-            'Platform: ' . strtolower(PHP_OS_FAMILY),
+            'Platform: ' . ($this->platform ?? strtolower(PHP_OS_FAMILY)),
             // Distinct from `Platform:` above, which is PHP_OS_FAMILY - a
             // four-value bucket ("Linux"/"Darwin"/"Windows"/"BSD") that answers
             // "which family of syscalls" and nothing about the release. This

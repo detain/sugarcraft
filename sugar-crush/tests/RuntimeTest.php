@@ -1711,6 +1711,48 @@ final class RuntimeTest extends TestCase
         $this->assertStringContainsString('Current date: 2026-01-02', $result);
     }
 
+    public function testBuildSystemPromptWithSameInjectedClockPlatformAndCwdIsByteIdenticalAcrossRuntimes(): void
+    {
+        // Two separately-constructed runtimes with identical injected
+        // clock/platform/cwd must render byte-identical prompts — that is the
+        // determinism a Phase-3 golden test will rely on; a differing injected
+        // platform must change the bytes, proving the injected value is what
+        // drives the output.
+        $root = $this->makeTempRepo();
+        $app = App::new($this->provider, 'gpt-4');
+
+        $first = new Runtime($this->provider, $this->hookManager, new EnvironmentBlock($root, 'injected-model', new DateTimeImmutable('2026-01-02 03:04:05'), 'windows'));
+        $second = new Runtime($this->provider, $this->hookManager, new EnvironmentBlock($root, 'injected-model', new DateTimeImmutable('2026-01-02 03:04:05'), 'windows'));
+
+        $this->assertSame(
+            $this->invokePrivateMethod($first, 'buildSystemPrompt', [$app]),
+            $this->invokePrivateMethod($second, 'buildSystemPrompt', [$app]),
+        );
+
+        $different = new Runtime($this->provider, $this->hookManager, new EnvironmentBlock($root, 'injected-model', new DateTimeImmutable('2026-01-02 03:04:05'), 'darwin'));
+        $this->assertNotSame(
+            $this->invokePrivateMethod($first, 'buildSystemPrompt', [$app]),
+            $this->invokePrivateMethod($different, 'buildSystemPrompt', [$app]),
+        );
+    }
+
+    public function testBuildSystemPromptPlatformIsInjectedNotPolledFromTheBuild(): void
+    {
+        // On a Linux build the injected 'windows' must win over
+        // strtolower(PHP_OS_FAMILY) — this is what makes the prompt
+        // golden-testable on any host; the accessor exposes the raw injected
+        // value exactly like now().
+        $root = $this->makeTempRepo();
+        $block = new EnvironmentBlock($root, 'injected-model', new DateTimeImmutable('2026-01-02 03:04:05'), 'windows');
+        $runtime = new Runtime($this->provider, $this->hookManager, $block);
+
+        $prompt = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [App::new($this->provider, 'gpt-4')]);
+
+        $this->assertStringContainsString('Platform: windows', $prompt);
+        $this->assertStringNotContainsString('Platform: ' . strtolower(PHP_OS_FAMILY), $prompt);
+        $this->assertSame('windows', $block->platform());
+    }
+
     public function testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns(): void
     {
         // The block documents itself as a point-in-time snapshot and shells out
