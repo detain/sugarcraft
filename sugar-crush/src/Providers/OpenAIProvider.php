@@ -124,6 +124,10 @@ final readonly class OpenAIProvider implements ProviderInterface
             $params['tools'] = $this->formatTools($request->tools);
         }
 
+        if ($request->systemPrompt !== null) {
+            $params['messages'] = array_merge([['role' => 'system', 'content' => $request->systemPrompt]], $params['messages']);
+        }
+
         $stream = $this->client->chat()->createStreamed($params);
 
         foreach ($stream as $chunk) {
