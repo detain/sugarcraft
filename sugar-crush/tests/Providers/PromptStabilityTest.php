@@ -43,20 +43,23 @@ use SugarCraft\Crush\Tools\ToolResult;
  *
  * WHY THE REQUESTS BELOW ARE BUILT THE WAY THEY ARE
  * -------------------------------------------------
- * The request shape this suite originally pinned — a SystemMessage instance
- * inside $messages plus the 'MiniMax-M2.7' model-id literal — is a shape
- * production NEVER sends. Runtime::run() carries the assembled prompt on
- * CompleteRequest::$systemPrompt (buildMessages() emits plain Message
- * instances only, never a SystemMessage), and SglangProvider::buildParams()
- * prepends that field as the leading system message on both complete() and
- * completeStream(). The old 'MiniMax-M2.7' literal additionally 404s against
- * the deployed server, which serves SglangProvider::DEFAULT_MODEL. Every
- * request below therefore mirrors Runtime::run() exactly — plain messages,
- * the prompt on $systemPrompt, and SglangProvider::DEFAULT_MODEL wherever a
- * model id is needed — so the suite guards the wire shape that actually
- * reaches the cache. self::SYSTEM_PROMPT stands in for the assembled output
- * of Runtime::buildSystemPrompt(); its exact content is irrelevant, only
- * that it is byte-identical across the two turns being compared.
+ * The assembled system prompt never rides inside $messages: its leading
+ * system turn is always the prepend buildParams() makes from
+ * CompleteRequest::$systemPrompt on both complete() and completeStream().
+ * Transcript Role::System notices (park / compaction / tier reminders) DO
+ * flow as SystemMessage instances inside history — EngineBackend::
+ * toTypedMessages() maps Role::System to SystemMessage, and SglangProvider
+ * encodes those as ['role' => 'system', ...] inside the messages array — so
+ * a SystemMessage in $messages is a legal live shape, just not one this
+ * suite exercises. The tests below deliberately build $messages free of
+ * SystemMessage — plain messages with the prompt on $systemPrompt, and
+ * SglangProvider::DEFAULT_MODEL wherever a model id is needed (the old
+ * 'MiniMax-M2.7' literal additionally 404s against the deployed server) —
+ * to pin the shape Runtime::run() actually sends, so the suite guards the
+ * wire shape that reaches the cache. self::SYSTEM_PROMPT stands in for the
+ * assembled output of Runtime::buildSystemPrompt(); its exact content is
+ * irrelevant, only that it is byte-identical across the two turns being
+ * compared.
  */
 final class PromptStabilityTest extends TestCase
 {
