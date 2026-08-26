@@ -640,6 +640,154 @@ final class BedrockProviderTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // 15. History SystemMessages are hoisted into the Converse `system` array
+    //
+    // Converse has no per-message `system` role: system text lives in the
+    // top-level `system` block list, and `messages` must alternate
+    // user/assistant turns. formatMessages() maps a SystemMessage to `user`
+    // (a total contract the tests in section 11 pin), so without hoisting a
+    // history SystemMessage would sit on the wire as a same-role neighbour
+    // of a real user turn - the consecutive-user shape backlog E19 measured.
+    // These tests assert the BUILT PAYLOAD directly, through the real SDK
+    // serialisation pipeline (offlineRuntimeClient + MockHandler).
+    // -------------------------------------------------------------------------
+
+    public function testCompleteHoistsHistorySystemMessagesIntoTheSystemArray(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new SystemMessage('notice: verify the change'), new UserMessage('hi')],
+            systemPrompt: 'be brief',
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertSame(
+            [['text' => 'be brief'], ['text' => 'notice: verify the change']],
+            $sent['system'],
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['text' => 'hi']]]],
+            $sent['messages'],
+        );
+    }
+
+    public function testCompleteStreamHoistsHistorySystemMessagesIntoTheSystemArray(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['stream' => new \ArrayIterator([])]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new SystemMessage('notice: verify the change'), new UserMessage('hi')],
+            systemPrompt: 'be brief',
+        )));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertSame(
+            [['text' => 'be brief'], ['text' => 'notice: verify the change']],
+            $sent['system'],
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['text' => 'hi']]]],
+            $sent['messages'],
+        );
+    }
+
+    public function testCompleteSetsSystemFromHistoryAloneWhenNoSystemPrompt(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new SystemMessage('notice: verify the change'), new UserMessage('hi')],
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertSame(
+            [['text' => 'notice: verify the change']],
+            $sent['system'],
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['text' => 'hi']]]],
+            $sent['messages'],
+        );
+    }
+
+    public function testCompleteKeepsSystemAbsentWithoutPromptOrSystemMessages(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertArrayNotHasKey('system', $sent);
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['text' => 'hi']]]],
+            $sent['messages'],
+        );
+    }
+
+    public function testCompleteStreamKeepsSystemAbsentWithoutPromptOrSystemMessages(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['stream' => new \ArrayIterator([])]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertArrayNotHasKey('system', $sent);
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['text' => 'hi']]]],
+            $sent['messages'],
+        );
+    }
+
+    public function testCompleteHoistsAdjacentSystemMessagesInHistoryOrder(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]]]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [
+                new SystemMessage('park notice'),
+                new UserMessage('the prompt'),
+                new SystemMessage('70% reminder'),
+                new SystemMessage('compact report'),
+            ],
+        ));
+
+        $sent = $mock->getLastCommand()->toArray();
+        // The measured tail `system user system system` collapses to one user
+        // turn; all three SystemMessages ride in `system` in history order.
+        $this->assertSame(
+            [['text' => 'park notice'], ['text' => '70% reminder'], ['text' => 'compact report']],
+            $sent['system'],
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['text' => 'the prompt']]]],
+            $sent['messages'],
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // Helper: a real runtime client that cannot reach the network
     //
     // Deliberately NOT a mock of the client: a PHPUnit double answers
