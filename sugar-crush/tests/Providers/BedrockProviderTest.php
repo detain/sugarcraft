@@ -739,6 +739,25 @@ final class BedrockProviderTest extends TestCase
         );
     }
 
+    public function testCompleteStreamKeepsSystemAbsentWithoutPromptOrSystemMessages(): void
+    {
+        $mock = new MockHandler();
+        $mock->append(new Result(['stream' => new \ArrayIterator([])]));
+
+        $provider = new BedrockProvider($this->offlineRuntimeClient($mock));
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $sent = $mock->getLastCommand()->toArray();
+        $this->assertArrayNotHasKey('system', $sent);
+        $this->assertSame(
+            [['role' => 'user', 'content' => [['text' => 'hi']]]],
+            $sent['messages'],
+        );
+    }
+
     public function testCompleteHoistsAdjacentSystemMessagesInHistoryOrder(): void
     {
         $mock = new MockHandler();
