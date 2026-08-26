@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 1 batch 2 (serial) in flight — P1.S6 agent running in worktree prompt-step-P1.S6; batch 1 (P1.S1–S5) all merged to master.**
+**Current state: Phase 1 batch 2 (serial) in flight — P1.S6 merged to master (070d1f5fb); P1.S7 (transmission matrix test) is next.**
 
 ---
 
@@ -188,39 +188,39 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 1 (Transmission) in flight — batch 1 CLOSED, batch 2 (serial) in flight
-Next step:        P1.S6 — rebuild PromptStabilityTest against the assembled systemPrompt
-                   (byte equality AND byte position across two turns; fails if SglangProvider
-                   stops transmitting; SglangProvider::DEFAULT_MODEL at :62, never spell the
-                   model id, never a second constant; extend class docblock; depends P1.S1;
-                   batch 2 is SERIAL: P1.S6 then P1.S7)
-Steps done:       8 of 61
+Phase:            Phase 1 (Transmission) — batch 2 (serial) in flight: P1.S6 DONE, P1.S7 next
+Next step:        P1.S7 — the transmission matrix test (NEW file
+                   tests/Providers/SystemPromptTransmissionMatrixTest.php +
+                   tests/Providers/ProviderRequestResponseTest.php; one test walks EVERY
+                   provider ProviderFactory can build, hands each an identical CompleteRequest
+                   with a distinctive systemPrompt sentinel, asserts the sentinel appears in
+                   that provider's wire payload; providers enumerated DYNAMICALLY via
+                   reflection over src/Providers/, NOT a hand-written list; EchoProvider may
+                   be exempted WITH named reason; depends P1.S1-S4 — all merged)
+Steps done:       9 of 61
 Phases done:      1 of 12
-Last commit:      193317de1 — sugar-crush prompt: P1.S5 state the streamed-Usage delta
-                   contract with discriminating per-provider tests
+Last commit:      070d1f5fb — sugar-crush prompt: P1.S6 rebuild PromptStabilityTest
+                   against CompleteRequest::$systemPrompt, retire MiniMax-M2.7 literal
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
-                   P1.S5 merge: OK (830 tests, 1992 assertions)
-In-flight batch:  P1.B2 (serial) — P1.S6 → P1.S7, in this order, one at a time.
-                    P1.S6: worktree /home/sites/prompt-step-P1.S6 (branch prompt/P1.S6,
-                    base 2550caf1a), agent RESPONDED 11:1x as pty_3360ff67 (pid 1822271,
-                    notifyOnExit, timeout 5400). History: first launch 08:38 via
-                    createBackgroundProcess (task-omxo3ds, pid 633865) WEDGED AT INIT —
-                    run id b4010f47, 13 log lines then 3h07m silence, session.id never
-                    created, LLM runtime never selected; killed (targeted pids + orphaned
-                    snapshot git 1807237). createBackgroundProcess does NOT work for step
-                    agents (no TTY). pty_spawn recovered ~11:1x; if it breaks again:
-                    bash script(1) wrap. MERGE ORDER: P1.S6 then P1.S7, tests/Providers/
-                    run between merges. P1.S7 spawns a fresh worktree off master after P1.S6.
-                    REVIEWERS: pty-fallback 'opencode run --dir <worktree>' read-only process
-                    (delegate tool degraded 07:53+: 4 consecutive zero-message timeouts; the
-                    pty-fallback reviewer for P1.S5 ran its own suites via inner pty_spawn —
-                    that is the current pattern, see P1.S5 worklog entry).
-Live worktrees:   /home/sites/prompt-step-P1.S6 — P1.S6, in flight (pty_3360ff67)
+                   P1.S6 merge: OK (831 tests, 2001 assertions)
+In-flight batch:  P1.B2 (serial) — P1.S6 → P1.S7. P1.S6 MERGED 070d1f5fb (step d4da63824 +
+                   fix 0df904a6; 2 review cycles; worktree removed). P1.S7 next: fresh
+                   worktree /home/sites/prompt-step-P1.S7 -b prompt/P1.S7 master (base
+                   070d1f5fb) + cp -al vendor + PSR-4 probe; read step text at
+                   prompt_plan.md:1225-1240; brief /tmp/opencode/p1s7-brief.md; spawn via
+                   pty_spawn (recovered) else bash script(1) wrap. MERGE ORDER: P1.S6 then
+                   P1.S7, tests/Providers/ run between merges (S6 done). REVIEWERS:
+                   pty/script(1)-fallback 'opencode run --dir <worktree>' read-only process;
+                   delegate tool degraded 07:53+ (4 zero-message timeouts) but delegate
+                   (explore) WORKED for P1.S6's cycle-2 reviewer — test once before relying.
+Live worktrees:   none
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;
-                   P4.S2: re-probe usage payload for cache fields before fixing fixture shape
+                   P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
+                   NEW: prompt_plan.md:1203 Goal line retains the retired over-claim
+                   ('tests a request shape production never sends') — correct at phase close
 Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
                    (collision rows still live, see §5)
 ```

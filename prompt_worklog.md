@@ -255,6 +255,43 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P1.S6 — rebuild PromptStabilityTest against CompleteRequest::$systemPrompt, retire MiniMax-M2.7 literal · 2026-08-26 13:2x · 070d1f5fb
+**Status**: done
+**Worktree**: `/home/sites/prompt-step-P1.S6` — removed
+**Base**: 2550caf1a
+**Goal (restated)**: Rebuild the repo's only prefix-cache guard against `CompleteRequest::$systemPrompt` — the shape production actually sends — asserting byte equality AND byte position of the prefix across two turns, retiring the stale MiniMax-M2.7 literal for `SglangProvider::DEFAULT_MODEL` (no second constant, no spelled id).
+**What changed**
+- `sugar-crush/tests/Providers/PromptStabilityTest.php` rebuilt 9 tests/37 assertions → 10/46 (step commit `d4da63824`, +125/-36): requests built like `Runtime::run()` (`systemPrompt:` named arg only, no `SystemMessage` inside `$messages`, model from `SglangProvider::DEFAULT_MODEL`); byte equality + byte position across two turns; net-new negative-polarity test (null AND `''` both mean unset); tool-schema byte stability; streaming-vs-batch prefix identity; EnvironmentBlock determinism tests kept; five old-shape `SystemMessage` constructions + import + MiniMax literals deleted — every old assertion survives adapted, none dropped/weakened; class docblock brief preserved verbatim + WHY block extended.
+- Fix commit `0df904a6` (+18/-15): docblock WHY block reworded to the true claim (SystemMessage inside `$messages` IS a legal live shape via transcript Role::System notices → `EngineBackend::toTypedMessages()` :1510, encoded SglangProvider.php:973 — tests deliberately pin the Runtime::run() shape) + EOF trailing newline restored (PSR-12 §2.3).
+**Tests added or changed**
+- `PromptStabilityTest::testSystemPromptBytesAndOffsetAreIdenticalAcrossTurns` — byte equality AND byte position (strpos offsets) across two turns; red on revert (`assertIsInt($first)` fails, chunk absent) :194.
+- `PromptStabilityTest::testSystemTurnLeadsTheMessageArraySoThereIsAPrefixToShare` — `"messages":[{"role":"system"` leads; red on revert :216.
+- `PromptStabilityTest::testSystemPromptIsOmittedWhenUnsetOrEmpty` (NEW) — null AND `''` both unset, no system chunk, bodies byte-identical.
+- Tool-schema byte stability, tool-order non-normalization, full-featured byte-identical bodies, streaming/batch prefix identity, EnvironmentBlock determinism + git-snapshot liveness (5 adapted tests).
+**Deletion experiment**: mutated `SglangProvider.php:672` guard → `if (false && ...)`: FAILURES! Tests: 10, Assertions: 45, Failures: 2 — `testSystemPromptBytesAndOffsetAreIdenticalAcrossTurns` ('Failed asserting that false is of type int.' :194) + `testSystemTurnLeadsTheMessageArraySoThereIsAPrefixToShare` (starts-with :216). Restored → src/ byte-identical, target green again. (45 not 46 assertions: failing test short-circuits.) Fix commit: comment-only change — deletion-experiment waiver accepted (no behaviour to delete; suites green at exact counts).
+**MEASURED**
+```
+# worktree (base 2550caf1a) — agent and orchestrator identical
+$ vendor/bin/phpunit tests/Providers/PromptStabilityTest.php
+OK (10 tests, 46 assertions), Time 00:00.047
+$ vendor/bin/phpunit tests/Providers/
+OK (831 tests, 2001 assertions), Time 00:01.716
+$ vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9380 assertions)
+# main repo after merge
+$ vendor/bin/phpunit tests/Providers/
+OK (831 tests, 2001 assertions)   # was 830/1992 pre-merge (830-9+10, 1992-37+46)
+```
+**Suite result**: target delta +1 test/+9 assertions vs old 9/37 file; Providers dir green at every stage (830/1992 → 831/2001); census unchanged 103/9380; no skips added.
+**Review loop** (RECONSTRUCTED — cycle 1 reviewer died on its own compress-retry loop after writing its verdict to its bg log; verdict read from log):
+- Cycle 1 — pty/script(1)-fallback reviewer (pid 2234225): **FINDINGS — 2 × MINOR** (A: docblock :46-59 blanket claim 'a SystemMessage instance inside $messages is a shape production NEVER sends' overstated — live path carries Role::System notices as SystemMessage via EngineBackend.php:1510, encoded SglangProvider.php:973; essential claim holds. B: missing EOF trailing newline, PSR-12 §2.3). 19/19 otherwise PASS/N-A; both suites + deletion experiment matched orchestrator.
+- Cycle 1 fix — script(1) agent (pid 2729239): commit `0df904a6` reworded docblock + restored newline; verified by me (diff read in full, target 10/46 green, worktree clean).
+- Cycle 2 — pty_spawn reviewer (pty_c3797ee2): **APPROVE — 19/19, findings A+B closed**; every reworded claim verified vs production file:line; EOF newline verified 3 ways; live run 10/46 @00:00.047 byte-for-byte orchestrator numbers.
+- Total cycles: 2.
+**Invariants touched**: (none). Roster PASS (test-only change). Census unchanged. `prompt_plan.md:1203` Goal line retains the retired over-claim — out of scope for the step (plan file not in declared list); follow-up created.
+**Surprises / things the plan got wrong**: spawn-mechanism saga (createBackgroundProcess wedged at init → respawn via recovered pty_spawn); pty_spawn degraded/recovered cycles; script(1) wrapper validated for both agents and reviewers; cycle-1 reviewer died on compress-retry loop after writing verdict; cycle-2 reviewer used delegate(explore) + Coder-Agent (task tool) adaptations — delegate may be viable again (test once before relying); fix agent's comment-only deletion-experiment waiver accepted; DsmlToolCallParser.php:230 pre-existing stdout line; step-commit body title-only (observation — detailed message on merge commit).
+**Follow-ups created**: (1) prompt_plan.md:1203 Goal line over-claim correction at phase 1 close; (2) standing: phase-1-close spot-check of P0.S2 census cells; (3) standing: P4.S2 re-probe usage payload for cache fields.
+
 ### BATCH P1.B2 OPEN · 2026-08-26 08:41
 **Steps**: P1.S6 (rebuild PromptStabilityTest against `systemPrompt`) → P1.S7 (SystemPromptTransmissionMatrixTest) — SERIAL, in this order, one at a time.
 **Merge order**: P1.S6, then P1.S7 — one at a time with `tests/Providers/` run between merges.
