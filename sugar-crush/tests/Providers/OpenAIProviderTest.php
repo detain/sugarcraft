@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Providers;
 
+use GuzzleHttp\Psr7\Response;
+use GuzzleHttp\Psr7\Utils;
 use OpenAI\Contracts\ClientContract;
 use OpenAI\Contracts\Resources\ChatContract;
 use OpenAI\Contracts\Resources\EmbeddingsContract;
 use OpenAI\Responses\Chat\CreateResponse as ChatCreateResponse;
+use OpenAI\Responses\Chat\CreateStreamedResponse;
 use OpenAI\Responses\Embeddings\CreateResponse as EmbeddingsCreateResponse;
 use OpenAI\Responses\Meta\MetaInformation;
+use OpenAI\Responses\StreamResponse;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message;
@@ -622,6 +626,89 @@ final class OpenAIProviderTest extends TestCase
         // Verify the parameters were passed correctly
         // We can't directly inspect the call, but the test verifies it doesn't throw
         $this->assertTrue(true);
+    }
+
+    public function testCompleteStreamPayloadLeadsWithSystemPrompt(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+
+        $chatMock = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chatMock);
+
+        $captured = null;
+        $chatMock->method('createStreamed')->willReturnCallback(function (array $params) use (&$captured) {
+            $captured = $params;
+
+            $body = "data: " . json_encode([
+                'id' => 'chatcmpl-1',
+                'object' => 'chat.completion.chunk',
+                'created' => 1,
+                'model' => 'gpt-4o',
+                'choices' => [['index' => 0, 'delta' => ['content' => 'Hello']]],
+            ]) . "\n\ndata: [DONE]\n\n";
+
+            return new StreamResponse(
+                CreateStreamedResponse::class,
+                new Response(200, [], Utils::streamFor($body)),
+            );
+        });
+
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+
+        $request = new CompleteRequest(
+            model: 'gpt-4o',
+            messages: [new UserMessage('Hello')],
+            systemPrompt: 'You are a helpful assistant.',
+        );
+
+        $chunks = iterator_to_array($provider->completeStream($request));
+
+        $this->assertSame([
+            ['role' => 'system', 'content' => 'You are a helpful assistant.'],
+            ['role' => 'user', 'content' => 'Hello'],
+        ], $captured['messages']);
+        $this->assertSame('gpt-4o', $captured['model']);
+        $this->assertTrue($captured['stream']);
+        $this->assertCount(1, $chunks);
+    }
+
+    public function testCompleteStreamWithNullSystemPromptPrependsNothing(): void
+    {
+        $client = $this->createMock(ClientContract::class);
+
+        $chatMock = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chatMock);
+
+        $captured = null;
+        $chatMock->method('createStreamed')->willReturnCallback(function (array $params) use (&$captured) {
+            $captured = $params;
+
+            $body = "data: " . json_encode([
+                'id' => 'chatcmpl-1',
+                'object' => 'chat.completion.chunk',
+                'created' => 1,
+                'model' => 'gpt-4o',
+                'choices' => [['index' => 0, 'delta' => ['content' => 'Hello']]],
+            ]) . "\n\ndata: [DONE]\n\n";
+
+            return new StreamResponse(
+                CreateStreamedResponse::class,
+                new Response(200, [], Utils::streamFor($body)),
+            );
+        });
+
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+
+        $request = new CompleteRequest(
+            model: 'gpt-4o',
+            messages: [new UserMessage('Hello')],
+        );
+
+        iterator_to_array($provider->completeStream($request));
+
+        $this->assertSame([
+            ['role' => 'user', 'content' => 'Hello'],
+        ], $captured['messages']);
     }
 
     // -------------------------------------------------------------------------
