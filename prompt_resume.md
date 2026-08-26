@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 1 batch 1 CLOSED — all five steps (P1.S1–S5) merged to master; batch 2 (P1.S6 → P1.S7, serial) is next.**
+**Current state: Phase 1 batch 2 (serial) in flight — P1.S6 agent running in worktree prompt-step-P1.S6; batch 1 (P1.S1–S5) all merged to master.**
 
 ---
 
@@ -188,7 +188,7 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 1 (Transmission) in flight — batch 1 of 2 CLOSED, batch 2 next
+Phase:            Phase 1 (Transmission) in flight — batch 1 CLOSED, batch 2 (serial) in flight
 Next step:        P1.S6 — rebuild PromptStabilityTest against the assembled systemPrompt
                    (byte equality AND byte position across two turns; fails if SglangProvider
                    stops transmitting; SglangProvider::DEFAULT_MODEL at :62, never spell the
@@ -201,17 +201,19 @@ Last commit:      193317de1 — sugar-crush prompt: P1.S5 state the streamed-Usa
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite not re-run this step; tests/Providers/ in main repo after
                    P1.S5 merge: OK (830 tests, 1992 assertions)
-In-flight batch:  P1.B1 CLOSED — all five merged in declared order:
-                   P1.S1@2d4f738f2, P1.S2@a27f60229, P1.S3@99caad991, P1.S4@0013e9730
-                   (incl. fix 54aece70a), P1.S5@193317de1 (incl. fix a0b8bdf30).
-                   Suite after last merge: tests/Providers/ OK (830 tests, 1992 assertions).
-                   Worktrees all removed, branches deleted. BATCH 2 (P1.S6 → P1.S7) is
-                   SERIAL — one worktree at a time, spawn P1.S6 next.
+In-flight batch:  P1.B2 (serial) — P1.S6 → P1.S7, in this order, one at a time.
+                   P1.S6: worktree /home/sites/prompt-step-P1.S6 (branch prompt/P1.S6,
+                   base 2550caf1a), agent launched 08:38 via createBackgroundProcess
+                   (task-omxo3ds, pid 633865) — the pty_spawn tool degraded ~08:38
+                   (3 failures incl. minimal command even after session cleanup), delegate
+                   tool still degraded since 07:53. Fallback if opencode run needs a TTY:
+                   bash nohup/script(1) wrap. MERGE ORDER: P1.S6 then P1.S7, tests/Providers/
+                   run between merges. P1.S7 spawns a fresh worktree off master after P1.S6.
                    REVIEWERS: pty-fallback 'opencode run --dir <worktree>' read-only process
                    (delegate tool degraded 07:53+: 4 consecutive zero-message timeouts; the
                    pty-fallback reviewer for P1.S5 ran its own suites via inner pty_spawn —
                    that is the current pattern, see P1.S5 worklog entry).
-Live worktrees:   none
+Live worktrees:   /home/sites/prompt-step-P1.S6 — P1.S6, in flight (task-omxo3ds)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  Phase 1 close: spot-check P0.S2 census cells;

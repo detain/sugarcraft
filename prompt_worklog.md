@@ -255,6 +255,14 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### BATCH P1.B2 OPEN · 2026-08-26 08:41
+**Steps**: P1.S6 (rebuild PromptStabilityTest against `systemPrompt`) → P1.S7 (SystemPromptTransmissionMatrixTest) — SERIAL, in this order, one at a time.
+**Merge order**: P1.S6, then P1.S7 — one at a time with `tests/Providers/` run between merges.
+**Worktrees**: `/home/sites/prompt-step-P1.S6` (branch `prompt/P1.S6`) for P1.S6; fresh worktree for P1.S7 after P1.S6 merges.
+**Base**: 2550caf1a (master HEAD at spawn; P1.S7 branches from master after P1.S6 merges).
+**Spawn mechanism**: P1.S6 agent launched via `createBackgroundProcess` (task-omxo3ds, pid 633865) — the `pty_spawn` tool degraded at ~08:38 (3 consecutive failures incl. minimal command after session cleanup), `delegate` remains degraded since 07:53. Fallback if opencode run needs a TTY: bash `nohup`/`script(1)` wrap.
+**Reviewers**: pty-fallback `opencode run --dir <worktree>` read-only reviewer process (see P1.S5 entry); delegate tool still not trusted.
+
 ### P1.S5 — state the streamed-Usage delta contract with discriminating per-provider tests · 2026-08-26 08:00 · 193317de1
 **Status**: done
 **Worktree**: /home/sites/prompt-step-P1.S5 — removed
