@@ -11,8 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: NOT STARTED.** Nothing in this plan has been executed. The sections below are the
-start prompt.
+**Current state: Phase 0 — P0.S1 complete (baseline recorded, tracking rails up); P0.S2 + P0.S3 are next and run concurrently with each other.**
 
 ---
 
@@ -33,16 +32,16 @@ changes that feel too small to be worth spawning for.
    §4 onward are the phases, §16 is the lessons every agent you spawn must be given, §17 is the
    invariants, §18 is what not to build. Inside §1, **§1.10 (removal is not an available outcome)**
    and **§1.11 (what counts as a test)** go to every agent you spawn, alongside §16 and §17.
-2. **`/home/sites/sugarcraft/prompt_worklog.md`** — the record. Currently it holds the conventions,
-   the required entry format, and one worked example. Read the format; you will be writing in it
-   after every step.
+2. **`/home/sites/sugarcraft/prompt_worklog.md`** — the record. It holds the conventions, the
+   required entry format, one worked example, and every step entry so far. Read the format; you will
+   be writing in it after every step.
 3. **`/home/sites/sugarcraft/prompt_expand.md`** — the 4,063-line research dossier the plan
    executes. Do **not** read it end to end now. Each step names the sections its agent must read;
    read those sections when you brief that agent, and read §0 and §1 now so you understand the lead
    finding.
 4. `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md` — repo conventions.
 
-## 3. The lead finding, so you understand why the order matters
+## 3. Why the order matters — the lead finding
 
 `sugar-crush` assembles a seven-layer system prompt in `Runtime::buildSystemPrompt()`
 (`sugar-crush/src/Runtime.php:1673`) and then discards it. `SglangProvider` — the default provider —
@@ -56,69 +55,51 @@ tool results and message history still work.
 **Nothing else in this plan is observable until Phase 1 lands.** Do not reorder the phases to get to
 the interesting content first.
 
-## 4. Your first actions
+## 4. How to resume (replaces "Your first actions" once the plan has started)
 
 1. Confirm you are in `/home/sites/sugarcraft` on `master` with a clean tree
-   (`git status --porcelain` — the three `prompt_*.md` files may be untracked or committed; nothing
-   else should be dirty).
-2. Confirm the three forbidden trees are untouched and stay that way:
-   `/home/sites/crush-lane-a`, `/home/sites/crush-lane-b`, `/home/sites/crush-lane-c`. **Do not read
-   them, do not write to them.** A different plan is running in them right now.
-3. Confirm you will not modify `docs/plans/crush_code_*.md` or `left_steps.md`. They are read-only to
-   you, in both directions: you take knowledge out, you put nothing in.
-4. **Confirm the commit identity.** Nothing checks it automatically and a wrong author is silent:
+   (`git status --porcelain` — nothing should be dirty; untracked files outside the plan's own
+   bookkeeping are possible, inspect before trusting).
+2. Confirm the last step entry in `prompt_worklog.md` (under `## ENTRIES`, newest first) matches the
+   plan's last commit in `git log`. If it does not — a step is missing its entry, or an entry has no
+   commit — **reconstruct the missing entry before doing anything else** (`prompt_plan.md` §3.3).
+   Note: a step's bookkeeping commit (this file + the worklog entry) can sit on top of the step's
+   own commit; both belong to the same step. P0.S1's step commit is `19533373e`; its bookkeeping
+   commit carries the worklog entry and this resume.
+3. Confirm the commit identity (silent failure otherwise):
    ```sh
    git -C /home/sites/sugarcraft config user.name    # must print: Joe Huss
    git -C /home/sites/sugarcraft config user.email   # must print: detain@interserver.net
    ```
-   If either is wrong, `git -C /home/sites/sugarcraft config user.name 'Joe Huss'` (and the matching
-   `user.email`) **before** you commit anything. Worktrees inherit this, so setting it once is enough.
-5. **Audit for stale worktrees, before you spawn anything.** An orchestrator that died mid-batch
-   leaves worktrees behind, and they can hold unmerged commits or uncommitted work that exists
-   nowhere else. Deleting one blind destroys it.
-   ```sh
-   git -C /home/sites/sugarcraft worktree list
-   ```
-   For every `/home/sites/prompt-step-<ID>` this lists, run both of:
-   ```sh
-   git -C /home/sites/prompt-step-<ID> status --porcelain            # uncommitted work?
-   git -C /home/sites/sugarcraft log --oneline master..prompt/<ID>   # unmerged commits?
-   ```
-   Then follow `prompt_plan.md` §1.12 for what to do with each. **A worktree listed here that is not
-   a step you spawned in this session is stale by definition** — you are a fresh agent; you spawned
-   nothing yet. Do not assume it is safe to remove because the worklog looks complete.
-   `/home/sites/crush-lane-{a,b,c}` will also appear in that listing if they are worktrees — they
-   belong to the other plan. Leave them completely alone.
-6. **Check the sequencing gate.** See §5 below. This is a real decision and it comes before P0.S1.
-7. Start at **P0.S1** (`prompt_plan.md`, Phase 0). It is the only step in Phase 0 that runs alone;
-   P0.S2 and P0.S3 are concurrent with each other afterwards.
+4. **Audit for stale worktrees before you spawn anything.** `git -C /home/sites/sugarcraft worktree
+   list`. For every `/home/sites/prompt-step-<ID>` listed, run the status/log checks of
+   `prompt_plan.md` §1.12. **A worktree listed here that is not a step you spawned in this session
+   is stale by definition.** `/home/sites/crush-lane-{a,b,c}` will also appear if they are
+   worktrees — they belong to the other plan. Leave them completely alone.
+5. Confirm you will not modify `docs/plans/crush_code_*.md` or `left_steps.md`. They are read-only to
+   you, in both directions: you take knowledge out, you put nothing in.
+6. Then read §8 below and do exactly what `Next step` says.
 
-## 5. The sequencing gate — check before you start
+## 5. The sequencing gate — checked
 
-Another long-running plan (`docs/plans/crush_code_*.md`) is active in this repo, with three agent
-worktrees currently in flight. It and this plan **collide**, mechanically and unavoidably, in these
-places:
+**CHECKED 2026-08-26 — decision: proceed.** Phases 0–4 are safe to run alongside the other plan
+(`docs/plans/crush_code_*.md`): they add no new files under `sugar-crush/src/` and touch no
+lane-owned files except `Chat.php`/`ContextCompactor.php` in Phase 4. **Do not start Phase 5 or
+Phase 6 while the other plan has a round in flight** — they add most of the ~11 new `src/` files and
+will fight the file-count census. Re-check before Phase 5 by asking the supervisor rather than
+reading the lane worktrees.
+
+Collisions still live (re-check before the named phases):
 
 | Collision | Detail |
 |---|---|
-| `sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` + `sugar-crush/src/Context/RepoMapBlock.php` | The census asserts exact `src/` cardinalities — measured today `assertSame(297, $files)`, `assertSame(316, $declarations)` — **and** asserts that `RepoMapBlock.php`'s doc-block (line 273, *"`src/` here is 297 files"*) restates two of them. Adding one file to `src/` reds four assertions across two files, one of them production source. This plan adds **~11** files under `sugar-crush/src/`. That test has been held by an in-flight lane of the other plan. **This is the hardest collision and it is unavoidable.** |
+| `sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` + `sugar-crush/src/Context/RepoMapBlock.php` | The census asserts exact `src/` cardinalities — `assertSame(297, $files)`, `assertSame(316, $declarations)` — **and** asserts that `RepoMapBlock.php`'s doc-block (line 273, *"`src/` here is 297 files"*) restates two of them. Adding one file to `src/` reds four assertions across two files, one of them production source. This plan adds **~11** files under `sugar-crush/src/`. **Hardest collision; unavoidable. Phases 5+.** |
 | `sugar-crush/src/Backend/EngineBackend.php` | Held by an in-flight lane; wanted by this plan's P7.S3. |
 | `sugar-crush/src/Chat.php` + `sugar-crush/src/Context/ContextCompactor.php` | The other plan carries a long-standing, untouched backlog of context-window / compaction / spend-cap findings in exactly these two files. This plan's Phases 4 and 8 rewrite them. |
-| `sugar-crush/src/Tools/BuiltIn/Bash.php` | The other plan has two open items rewriting its **behaviour** (always detach the controlling terminal; PTY as an optional parameter). This plan's P9.S3 rewrites its **description**. |
-| `sugar-crush/src/Agents/AgentDefinition.php` | The other plan's `C7` — `$defaultTools` is inert end to end, and a sub-agent's `CompleteRequest` carries no `tools` argument at all — gates what this plan's P7.S5 preset prompts are allowed to claim. |
-| `sugar-crush/tests/Support/` (whole directory) | Assigned wholesale to an in-flight lane of the other plan. This plan's P2.S4 wants to add `PromptFixture.php` there; P2.S4 carries the workaround. |
-| `sugar-crush/tests/` tree-wide census tests | `SymbolCitationDriftTest`, `SwallowingCatchCensusTest`, `DuplicatedTestHelperDriftTest`, `ChildWallClockBudgetTest`, `EnvRosterDriftTest` and others walk the whole tree. **Every test file this plan adds can red one of them** — four minutes into a full run, in a file you have never opened. Several are owned by in-flight lanes. |
-
-**Phases 0–4 are safe to run alongside the other plan.** They add **no** new file under
-`sugar-crush/src/`, and they touch `src/Providers/*`, `src/Usage.php`, `src/Runtime.php`,
-`src/Context/EnvironmentBlock.php` and the status-line renderer — none of which any in-flight lane
-owns. Phase 4's `Chat.php`/`ContextCompactor.php` work is the one to watch.
-
-**Do not start Phase 5 or Phase 6 while the other plan has a round in flight.** They add most of the
-new `src/` files and will fight the census.
-
-If you are unsure whether the other round is closed, **ask the supervisor rather than reading its
-lane worktrees.**
+| `sugar-crush/src/Tools/BuiltIn/Bash.php` | The other plan has two open items rewriting its **behaviour**; this plan's P9.S3 rewrites its **description**. |
+| `sugar-crush/src/Agents/AgentDefinition.php` | The other plan's `C7` — `$defaultTools` is inert — gates what this plan's P7.S5 preset prompts are allowed to claim. |
+| `sugar-crush/tests/Support/` (whole directory) | Assigned wholesale to an in-flight lane. This plan's P2.S4 wants `PromptFixture.php` there; P2.S4 carries the workaround. |
+| `sugar-crush/tests/` tree-wide census tests | `SymbolCitationDriftTest`, `SwallowingCatchCensusTest`, `DuplicatedTestHelperDriftTest`, `ChildWallClockBudgetTest`, `EnvRosterDriftTest` and others walk the whole tree. **Every test file this plan adds can red one of them.** Several are owned by in-flight lanes. |
 
 ## 6. The loop you run, in short
 
@@ -194,7 +175,7 @@ Full detail in `prompt_plan.md` §1. The short form:
   (`prompt_plan.md` §1.8) — do not accept it, do not fill in what it would have said, and do not
   merge its worktree because the tests happen to be green.
 - Never commit before confirming `user.name` / `user.email` are `Joe Huss` /
-  `detain@interserver.net` (§4 action 4). A wrong author is silent and cannot be fixed afterwards
+  `detain@interserver.net` (§4). A wrong author is silent and cannot be fixed afterwards
   without rewriting history.
 - Never `ln -s` a worktree's `vendor/`. Use `cp -al` and verify the PSR-4 root (§6). A symlinked
   `vendor/` silently runs every test against the main repo's `src/`.
@@ -207,17 +188,21 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:          not started
-Next step:      P0.S1 — bootstrap tracking, baseline the suite
-Steps done:     0 of 61
-Phases done:    0 of 12
-Last commit:    (none from this plan)
-In-flight batch: (none)
-Live worktrees: (none — verify with `git -C /home/sites/sugarcraft worktree list`)
-Blocked on:     nothing
-Awaiting user decision: (none)
-Open follow-ups: (none)
-Sequencing gate: UNCHECKED — see §5
+Phase:            Phase 0 — Bootstrap, baseline, measurement rails
+Next step:        P0.S2 — census: which CompleteRequest public properties each provider
+                  actually reads (runs CONCURRENTLY with P0.S3; both read-only)
+Steps done:       1 of 61
+Phases done:      0 of 12
+Last commit:      19533373e — sugar-crush prompt: P0.S1 baseline rails
+Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
+Latest suite:     Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1 baseline run, 2026-08-26)
+In-flight batch:  none
+Live worktrees:   none
+Blocked on:       nothing
+Awaiting user decision: nothing
+Open follow-ups:  none
+Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
+                  (collision rows still live, see §5)
 ```
 
 ---

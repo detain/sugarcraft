@@ -255,3 +255,62 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P0.S1 — baseline suite + tracking rails · 2026-08-26 04:16 · `19533373e`
+
+**Status** done
+
+**Worktree** (none — bookkeeping + measurement step, executed directly by the orchestrator in the main repo; no `sugar-crush/src/` or `sugar-crush/tests/` file was touched, so no step agent was spawned)
+
+**Base** `59411203c` (master, clean tree before this entry)
+
+**Goal (restated in one sentence)** Record a dated, verbatim baseline of the full sugar-crush suite and stand up the plan's tracking files, so every later delta has a fixed reference point.
+
+**What changed**
+- `.gitignore`: added `/.sugar-crush-prompt/` — the tracking dir is local orchestrator state, never committed.
+- `.sugar-crush-prompt/progress.json` (new, gitignored): phase/step status map covering all 12 phases and 61 steps (`not_started` except P0.S1), plus the baseline figures below.
+- `prompt_worklog.md`: this entry.
+- `prompt_resume.md`: rewritten per §R — banner (`Current state: Phase 0, step P0.S1 complete`), §4 → "how to resume", §5 → gate decision line, §8 state block.
+
+**Tests added or changed**
+(none — this step adds no tests; the suite was run, not modified.)
+
+**Deletion experiment**
+(none — no guard added this step.)
+
+**MEASURED**
+Full suite, main repo, no worktree, no `composer install` first:
+
+```sh
+cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit
+```
+
+```
+PHPUnit 10.5.64 by Sebastian Bergmann and contributors.
+Runtime:       PHP 8.3.6
+Configuration: /home/sites/sugarcraft/sugar-crush/phpunit.xml
+...
+Time: 06:27.985, Memory: 344.04 MB
+
+OK, but some tests were skipped!
+Tests: 10351, Assertions: 160648, Skipped: 1.
+```
+
+EXIT 0. (Stderr noise during the run — WorktreeManager refusals, provider-unavailable notices, hook refusals — is deliberate test-expected output from the suite itself.)
+
+Consistency check: `git log -1` subject on the base commit reads "plan: close round 60 - floor 10351/160648" — the other plan's floor matches this baseline exactly.
+
+**Suite result** Verbatim summary above. This is the **Baseline** figure: Tests 10351, Assertions 160648, Skipped 1. Delta: n/a (first measurement). Any later skip added must be called out against this.
+
+**Review loop** (none — no agent work this step.)
+
+**Invariants touched** (none — no production or test file touched.)
+
+**Surprises / things the plan got wrong**
+- No caliber pre-commit hook is installed (`grep -q caliber .git/hooks/pre-commit` → no-hook). AGENTS.md would have me run `caliber refresh` manually before committing, but prompt_plan.md §1.9 and §7 forbid running caliber. Commits proceed with the hook absent; nothing is suppressed (`--no-verify` never used).
+- The three `crush-lane-{a,b,c}` trees are NOT worktrees of this repo (absent from `git worktree list`) — they are separate checkouts, so their in-flight state is unobservable without reading them, which is forbidden. The sequencing gate therefore rests on the plan's own phase-safety analysis (§5): phases 0–4 add no `src/` files and touch no lane-owned files except `Chat.php`/`ContextCompactor.php` in Phase 4; phases 5+ add ~11 `src/` files and will fight the file-count census. Re-check before Phase 5.
+
+**Follow-ups created**
+- P0.S2 census and P0.S3 provider probe are next; they run concurrently and are read-only.
+
+---
+
