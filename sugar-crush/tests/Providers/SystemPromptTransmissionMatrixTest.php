@@ -104,7 +104,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * feeds createStreamed(). Sglang/Custom parse only `choices[0].delta`,
      * so the extra keys are harmless to them.
      */
-    private const SSE_BODY = "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n";
+    private const SSE_BODY = "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: [DONE]\n\n";
 
     // =========================================================================
     // Derived roster
