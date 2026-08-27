@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests;
 
+use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Cli\Bootstrap;
-use SugarCraft\Crush\Providers\ProviderInterface;
-use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Memory\MemoryStore;
+use SugarCraft\Crush\Providers\EchoProvider;
+use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\BuiltIn\Grep;
 use SugarCraft\Crush\Tools\Tool;
 
@@ -498,5 +505,351 @@ final class BaseSystemPromptTest extends TestCase
             $words[strtolower($stated[1])] ?? (int) $stated[1],
             'the prompt states a different annotation depth than the one just measured',
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // Golden system-prompt pin - committed byte golden + host-path leak scan
+    // -------------------------------------------------------------------------
+
+    /**
+     * Byte-golden pin for Runtime::buildSystemPrompt().
+     *
+     * Everything above this test asserts the base literal's structure and
+     * truthfulness, deliberately never its wording. This test is the other
+     * half of that bargain: the FULL ASSEMBLED prompt — the seven layers
+     * buildSystemPrompt() concatenates, in order:
+     *
+     *   1. the base heredoc (the four guidance sections the tests above check)
+     *   2. the <env> block
+     *   3. the <repo-map> block, when the root has anything to map
+     *   4. the <project-instructions> documents (loadRoot(), then loadForced())
+     *   5. the <project-memory> block, when the app has a memory store
+     *   6. each enabled skill's systemPromptContribution()
+     *   7. the SkillMatcher listing of every auto-invocable discovered skill
+     *
+     * — is pinned byte-for-byte against a committed golden. A one-byte change
+     * to any layer's prose, separators, ordering or git-section wording fails
+     * this test, which is the regression class the structural tests above are
+     * deliberately blind to.
+     *
+     * The golden is generated from the SAME fixture context this test builds
+     * ({@see goldenContext()}): a deterministic fixture repo materialised at
+     * test time under vendor/prompt-fixture/system-repo, a pinned clock, a
+     * fixed model, an injected platform ('linux' — P2.S1 made the platform
+     * injectable, so it is pinned in the golden rather than normalized), and
+     * RELATIVE paths (cwd, repo root and memory store) so the committed golden
+     * contains no host path. The two host-property lines render() reads from
+     * the runtime — OS version and PHP version, which are php_uname()/
+     * PHP_VERSION constants of the HOST and not injectable — are normalized
+     * before the comparison ({@see pinHostLines()}), which keeps the golden
+     * byte-stable across machines while still failing on any one-byte change
+     * to anything the prompt builder actually controls.
+     *
+     * REGENERATION DISCIPLINE: regenerate the golden ONLY when the rendered
+     * output legitimately changes (prose change, new prompt layer, env-field
+     * or git-section wording). Regenerate with a recorded human-readable
+     * reason in the commit message, and the regenerating step MUST diff
+     * old-vs-new and paste the diff into the worklog. NEVER regenerate to
+     * silence a failing test — a red here means the prompt changed under the
+     * golden, and that change has to be argued, not smoothed over.
+     */
+    public function testSystemPromptMatchesCommittedGolden(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        self::assertDirectoryExists(
+            $repo,
+            'Fixture repo was not materialised - run phpunit from sugar-crush/ so the relative '
+            . 'cwd vendor/prompt-fixture/system-repo resolves against the phpunit working directory.',
+        );
+
+        [$runtime, $app] = self::goldenContext();
+
+        $build = new \ReflectionMethod($runtime, 'buildSystemPrompt');
+        $build->setAccessible(true);
+
+        self::assertSame(
+            self::pinHostLines(self::readSystemPromptGolden()),
+            self::pinHostLines((string) $build->invoke($runtime, $app)),
+            'Runtime::buildSystemPrompt() drifted from the committed golden - see the regeneration discipline note.',
+        );
+    }
+
+    /**
+     * Host-path leak scan over the committed golden.
+     *
+     * THE ROO BUG CLASS: a production agent shipped a hardcoded '/test/path'
+     * in its prompt prose because a fixture path leaked into a golden and no
+     * test ever looked at the file again. An agent prompt must not carry its
+     * generator's host paths. The fixture cwd, repo root and memory store are
+     * deliberately RELATIVE (vendor/prompt-fixture/system-repo,
+     * tests/fixtures/prompt/memory), so the golden contains no absolute path
+     * at all; this test pins that absence deliberately — no line may start
+     * with '/', and the literal host-path fragments below must not appear
+     * anywhere in the file. The fixture author identity is scanned for too:
+     * a golden that leaked 'Fixture Author' or the fixture email would be
+     * leaking the test harness's own environment, the same class of leak one
+     * step closer to home.
+     */
+    public function testGoldenSystemPromptLeaksNoHostPaths(): void
+    {
+        $golden = self::readSystemPromptGolden();
+
+        self::assertStringNotContainsString('/tmp/', $golden, 'golden leaks a /tmp/ host path');
+        self::assertStringNotContainsString('/home/', $golden, 'golden leaks a /home/ host path');
+        self::assertStringNotContainsString('/Users/', $golden, 'golden leaks a macOS /Users/ host path');
+        self::assertStringNotContainsString('C:\\Users\\', $golden, 'golden leaks a Windows host path');
+        self::assertStringNotContainsString('/my/', $golden, 'golden leaks the author username as a path segment');
+        self::assertStringNotContainsString('Joe Huss', $golden, 'golden leaks the author identity');
+        self::assertStringNotContainsString('Fixture Author', $golden, 'golden leaks the fixture commit author identity');
+        self::assertStringNotContainsString('fixture@example.invalid', $golden, 'golden leaks the fixture commit author email');
+        self::assertDoesNotMatchRegularExpression(
+            '/^\//m',
+            $golden,
+            'a golden line starts with an absolute path - the fixture cwd must stay relative',
+        );
+    }
+
+    /**
+     * The exact fixture context the golden is generated from.
+     *
+     * Shared by the golden test and the regeneration procedure (a /tmp script
+     * that reflects this method through BaseSystemPromptTest), so the
+     * committed golden can never drift from what the test renders. The cwd,
+     * the repo root and the memory-store path are deliberately RELATIVE so
+     * the golden contains no host path; they resolve against the phpunit
+     * working directory (sugar-crush/), exactly as AgentTest's golden fixture
+     * documents.
+     *
+     * A real {@see EchoProvider} rather than a PHPUnit mock, so the same
+     * reflection a /tmp regeneration script uses works outside a test
+     * context. The provider is never called during buildSystemPrompt() — the
+     * environment block is injected through the Runtime constructor — which is
+     * also what pins the platform and the clock, leaving only the OS-version
+     * and PHP-version lines host-derived ({@see pinHostLines()}).
+     *
+     * @return array{0: Runtime, 1: App}
+     */
+    private static function goldenContext(): array
+    {
+        $provider = new EchoProvider();
+
+        $block = new EnvironmentBlock(
+            'vendor/prompt-fixture/system-repo',
+            'claude-sonnet-4-6',
+            new DateTimeImmutable('2026-08-26 00:00:00'),
+            'linux',
+        );
+
+        $runtime = new Runtime($provider, new HookManager(new HookRegistry()), $block);
+
+        $skill = Skill::parse(
+            "---\ndescription: Fixture skill for the golden prompt\n---\nWork only inside the fixture workspace.",
+            'fixture-helper',
+        );
+        $registry = new SkillRegistry();
+        $registry->register([$skill]);
+
+        $app = App::new($provider, 'claude-sonnet-4-6')
+            ->withRoot('vendor/prompt-fixture/system-repo')
+            ->withInstructionLoader(new InstructionFileLoader('vendor/prompt-fixture/system-repo'))
+            ->withMemoryStore(new MemoryStore('tests/fixtures/prompt/memory'))
+            ->withEnabledSkills([$skill])
+            ->withAvailableSkills($registry);
+
+        return [$runtime, $app];
+    }
+
+    /**
+     * Reads the committed golden, failing loudly when it is missing rather
+     * than comparing against an empty string.
+     *
+     * Named readSystemPromptGolden() rather than readGolden() on purpose: the
+     * drift census (tests/Support/DuplicatedTestHelperDriftTest) pairs private
+     * helpers BY NAME across test files, and AgentTest already has a
+     * readGolden() whose body is this one's except for the golden filename —
+     * the one token that MUST differ. A same-name pair one token apart is the
+     * census's exact subject, so the name is kept distinct and the deliberate
+     * divergence never looks like a drifted copy.
+     */
+    private static function readSystemPromptGolden(): string
+    {
+        $goldenPath = __DIR__ . '/fixtures/prompt/golden-system-prompt.txt';
+        $golden = file_get_contents($goldenPath);
+        if ($golden === false) {
+            self::fail('Golden file missing: ' . $goldenPath . ' - regenerate per the discipline note above.');
+        }
+
+        return $golden;
+    }
+
+    /**
+     * Materialises the deterministic fixture repo the golden renders.
+     *
+     * Built under vendor/prompt-fixture/system-repo - gitignored via the root
+     * vendor/ ignore rule, so the outer tree stays clean and the fixture
+     * never shows up in `git status`. The committed tree under
+     * tests/fixtures/prompt/tree is copied in (umask-proof chmod 0644 after
+     * every write), then the repo is rebuilt from scratch whenever the .git
+     * directory is missing, with every step pinned: host git config is
+     * neutralized (GIT_CONFIG_GLOBAL/SYSTEM), the commit author/committer
+     * dates are fixed (deterministic commit hash), and every file is chmod
+     * 0644 AFTER writing so a mode change cannot leak `old mode`/`new mode`
+     * lines into the pinned diffs.
+     *
+     * The final state exercises every git field the <env> block renders:
+     * branch (main), a three-line --porcelain status (one staged add, one
+     * unstaged edit, one untracked file), one recent commit, a staged diff
+     * and an unstaged diff. The memory fixture is deliberately NOT inside
+     * the repo (it lives at tests/fixtures/prompt/memory), so the porcelain
+     * stays exactly those three lines.
+     */
+    private static function ensureFixtureRepo(): string
+    {
+        $repo = __DIR__ . '/../vendor/prompt-fixture/system-repo';
+
+        if (is_dir($repo . '/.git')) {
+            return $repo;
+        }
+
+        if (is_dir($repo)) {
+            self::removeTree($repo);
+        }
+
+        self::copyTree(__DIR__ . '/fixtures/prompt/tree', $repo);
+
+        self::gitRun($repo, ['init', '-q', '-b', 'main']);
+        self::gitRun($repo, ['config', 'user.name', 'Fixture Author']);
+        self::gitRun($repo, ['config', 'user.email', 'fixture@example.invalid']);
+        self::gitRun($repo, ['config', 'core.abbrev', '7']);
+        self::gitRun($repo, ['config', 'commit.gpgsign', 'false']);
+
+        self::gitRun($repo, ['add', '.']);
+        self::gitRun($repo, ['commit', '-m', 'fixture: initial import'], [
+            'GIT_AUTHOR_NAME' => 'Fixture Author',
+            'GIT_AUTHOR_EMAIL' => 'fixture@example.invalid',
+            'GIT_AUTHOR_DATE' => '2026-08-26T00:00:00+0000',
+            'GIT_COMMITTER_NAME' => 'Fixture Author',
+            'GIT_COMMITTER_EMAIL' => 'fixture@example.invalid',
+            'GIT_COMMITTER_DATE' => '2026-08-26T00:00:00+0000',
+        ]);
+
+        // Unstaged edit: src/Lib.php gains a line after the commit.
+        self::writeFixtureFile(
+            $repo . '/src/Lib.php',
+            "<?php\n\ndeclare(strict_types=1);\n\nnamespace Fixture\\Lib;\n\nfinal class Lib\n{\n"
+                . "    // touched after the initial import\n}\n",
+        );
+        // Staged add: docs/notes.md is added but not committed.
+        mkdir($repo . '/docs', 0777, true);
+        self::writeFixtureFile($repo . '/docs/notes.md', "# Notes\n");
+        self::gitRun($repo, ['add', 'docs/notes.md']);
+        // Untracked: scratch.txt is never added.
+        self::writeFixtureFile($repo . '/scratch.txt', "scratch\n");
+
+        return $repo;
+    }
+
+    /**
+     * Recursively copies a fixture tree, pinning the mode of every file to
+     * 0644 AFTER the copy so umask cannot leak a mode change into the
+     * golden's diffs.
+     */
+    private static function copyTree(string $source, string $destination): void
+    {
+        mkdir($destination, 0777, true);
+
+        foreach (scandir($source) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $from = $source . '/' . $entry;
+            $to = $destination . '/' . $entry;
+
+            if (is_dir($from)) {
+                self::copyTree($from, $to);
+            } else {
+                $contents = file_get_contents($from);
+                self::writeFixtureFile($to, $contents === false ? '' : $contents);
+            }
+        }
+    }
+
+    /**
+     * Runs one git command inside the fixture repo, host config neutralized.
+     */
+    private static function gitRun(string $repo, array $args, array $env = []): void
+    {
+        $command = 'git -C ' . escapeshellarg($repo);
+        foreach ($args as $arg) {
+            $command .= ' ' . escapeshellarg($arg);
+        }
+
+        $process = proc_open(
+            $command,
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $repo,
+            array_merge(getenv() ?: [], ['GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_SYSTEM' => '/dev/null'], $env),
+        );
+        self::assertIsResource($process, 'proc_open failed for: ' . $command);
+
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($process);
+
+        self::assertSame(0, $exit, 'git ' . implode(' ', $args) . " failed (exit {$exit}): {$stderr}");
+    }
+
+    /**
+     * Writes a fixture file, pinning the mode AFTER the write so umask cannot
+     * leak a mode change into the golden's diffs.
+     */
+    private static function writeFixtureFile(string $path, string $contents): void
+    {
+        file_put_contents($path, $contents);
+        chmod($path, 0644);
+    }
+
+    /**
+     * Recursively removes a directory tree (fixture rebuild).
+     */
+    private static function removeTree(string $dir): void
+    {
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($iterator as $item) {
+            if ($item->isDir()) {
+                rmdir($item->getPathname());
+            } else {
+                unlink($item->getPathname());
+            }
+        }
+        rmdir($dir);
+    }
+
+    /**
+     * Normalizes the two host-property lines render() reads from the runtime,
+     * so the committed golden is byte-stable across machines.
+     *
+     * EnvironmentBlock's own docblock calls php_uname() and PHP_VERSION
+     * "read AT RENDER TIME" — constants of the HOST, not behaviour of the
+     * prompt builder — and EnvironmentBlockTest interpolates them dynamically
+     * for the same reason. A golden that pinned the generator's kernel would
+     * red on every other machine. Platform is deliberately NOT normalized:
+     * P2.S1 made it injectable, {@see goldenContext()} pins it to 'linux', and
+     * an un-normalized Platform line is what keeps the injectable seam honest
+     * in the golden.
+     */
+    private static function pinHostLines(string $block): string
+    {
+        $block = preg_replace('/^OS version: .*$/m', 'OS version: <host>', $block);
+        $block = preg_replace('/^PHP version: .*$/m', 'PHP version: <host>', $block);
+
+        return $block;
     }
 }
