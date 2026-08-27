@@ -255,6 +255,21 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P2.S3 — the golden agent prompt · 2026-08-26 16:5x · 6a6df4ddc
+**Status**: done · **Worktree**: /home/sites/prompt-step-P2.S3 removed · **Base**: 0f3bf202f · **Commits**: 8fa2721d9 (step) + 6a6df4ddc (merge)
+**Goal (restated)**: `Agent::systemPrompt()` golden-pinned — assembles in the OPPOSITE ORDER (agent text, then `<env>`); two assemblers deliberately separate; test comment names the two colliding assertions (AgentTest.php:251 vs BaseSystemPromptTest.php:135).
+**What changed**: AgentTest.php +270 — testSystemPromptMatchesCommittedGolden (assertSame byte pin :355-359; deliberate-opposite-order docblock :315-326 naming both colliding assertions; regeneration discipline note :338-342; pinHostLines() normalization :332-336; deterministic fixture repo materialised at test time under vendor/prompt-fixture/agent-repo — nested .git impossible in git 2.43, 3 bypass attempts failed; GIT_CONFIG_GLOBAL/SYSTEM neutralized, pinned dates, core.abbrev 7, chmod 0644 umask-proof) + testGoldenAgentPromptLeaksNoHostPaths (Roo bug-class leak scan: no /tmp/ /home/ /Users/ C:\Users\ /my/ 'Joe Huss', no golden line starting '/'); golden-agent-prompt.txt +45 new (983B, 45 lines, agent-text-first); Agent.php UNTOUCHED.
+**Tests added or changed**: 2 tests (golden byte-pin, red on any one-byte golden change; leak scan).
+**Deletion experiment**: `focused`→`focusedx` one-byte golden mutation → FAILURES! Tests: 23, Assertions: 108, Failures: 1 ('Agent::systemPrompt() drifted from the committed golden' at AgentTest.php:355) → restored byte-identical → green.
+**MEASURED**: AgentTest OK (23 tests, 108 assertions) @00:00.035 — agent's claimed 23/124 was WRONG, tree is authority; tests/Providers/ OK (846 tests, 2047 assertions) @00:01.722; census OK (103 tests, 9390 assertions) @00:12.139; main repo after merge OK (846 tests, 2047 assertions) @00:01.703.
+**Review loop**: 1 cycle — top-magenta-gecko APPROVE 19/19, 3 nitpicks no-action (hard line-number citations :320/:323; absolute-vs-relative cwd in ensureFixtureRepo :346-351; /my/ derived from author home :382 — all belt-and-braces).
+**Invariants touched**: none — no src/ files (census 297/316 held); Agent.php untouched.
+**Surprises**: nested .git impossibility → test-time fixture materialization; AgentTest claim discrepancy 23/124 vs measured 108; GIT_CONFIG neutralization + pinned dates + core.abbrev 7 for determinism; chmod 0644 umask-proof.
+**Follow-ups created**: pinHostLines() drop once P2.S1 injectability lands (noted in code).
+
+### BATCH P2.B1 CLOSE · 2026-08-26 16:5x
+Merged in actual order: P2.S1@e60a083d2, P2.S3@6a6df4ddc with tests/Providers/ between; Did not merge: (none); Suite after last merge: tests/Providers/ OK (846 tests, 2047 assertions) @00:01.703 Memory 64.50 MB.
+
 ### P2.S1 — injectable clock, platform, and cwd for prompt assembly · 2026-08-26 16:3x · e60a083d2
 **Status**: done · **Worktree**: /home/sites/prompt-step-P2.S1 (removed) · **Base**: 0f3bf202f
 **Goal (restated)**: two `buildSystemPrompt()` calls with the same injected clock/platform/cwd produce byte-identical output (assertSame), the 18 reflection sites still pass, and the third positional constructor slot stays `?EnvironmentBlock`.
