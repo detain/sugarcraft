@@ -255,6 +255,51 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P2.S1 — injectable clock, platform, and cwd for prompt assembly · 2026-08-26 16:3x · e60a083d2
+**Status**: done · **Worktree**: /home/sites/prompt-step-P2.S1 (removed) · **Base**: 0f3bf202f
+**Goal (restated)**: two `buildSystemPrompt()` calls with the same injected clock/platform/cwd produce byte-identical output (assertSame), the 18 reflection sites still pass, and the third positional constructor slot stays `?EnvironmentBlock`.
+
+**What changed**
+- `sugar-crush/src/Context/EnvironmentBlock.php` (+22): constructor 4th param `?string $platform = null`; new bare `platform()` accessor; render line now `($this->platform ?? strtolower(PHP_OS_FAMILY))`; constructor docblock added (the ctor previously had none) citing `charmbracelet/crush.WithPlatform` — the platform is injectable so prompt assembly is golden-testable on any host.
+- `sugar-crush/tests/RuntimeTest.php` (+42): two new tests — byte-identical prompt across two runtimes with same injected values, and platform-injected-not-polled (assertNotSame `darwin` + containment). `Runtime.php` deliberately untouched (injected block already wins via `??=`).
+
+**Tests added or changed**
+- `testBuildSystemPromptWithSameInjectedClockPlatformAndCwdIsByteIdenticalAcrossRuntimes` — assertSame across two runtimes + assertNotSame for `darwin`; red on revert.
+- `testBuildSystemPromptPlatformIsInjectedNotPolledFromTheBuild` — contains/not-contains + accessor; red on revert.
+
+**Deletion experiment** — replaced `($this->platform ?? strtolower(PHP_OS_FAMILY))` with `(strtolower(PHP_OS_FAMILY))` in EnvironmentBlock.php:
+```
+FAILURES! Tests: 87, Assertions: 254, Failures: 2   (both new tests red, at RuntimeTest.php:1751)
+```
+Restored via `git checkout --`; tree byte-identical; green again 87/256.
+
+**MEASURED**
+```sh
+vendor/bin/phpunit tests/RuntimeTest.php
+# OK (87 tests, 256 assertions) Time 00:00.132
+
+vendor/bin/phpunit tests/Providers/
+# OK (846 tests, 2047 assertions) Time 00:01.718
+
+# census 6-file set (SymbolCitationDrift + SwallowingCatchCensus + DuplicatedTestHelperDrift + ChildWallClockBudget + EnvRosterDrift + BuiltInToolCorpus)
+# OK (103 tests, 9390 assertions) Time 00:12.456
+
+vendor/bin/phpunit tests/BaseSystemPromptTest.php tests/Context/RepoMapBlockTest.php
+# OK (72 tests, 238 assertions) Time 00:00.264
+
+# main repo after merge
+vendor/bin/phpunit tests/Providers/
+# OK (846 tests, 2047 assertions) Time 00:01.712
+```
+
+**Review loop** — Cycle 1 — reviewer `disturbing-azure-stork` (orchestrator-delegated): APPROVE, 19/19 checks PASS/N-A, 1 nitpick (no action): the not-contains polarity at :1752 would red on a Windows build host; irrelevant for Linux CI. Total cycles: 1.
+
+**Invariants touched**: (none) — no `src/` files added (BuiltInToolCorpus census held 297); `__construct` third positional slot intact (RuntimeTest.php:1701); `buildSystemPrompt()` private one-App, 18/18 reflection sites green.
+
+**Surprises / things the plan got wrong**: EnvironmentBlock's constructor had NO docblock at all — added one as part of this step. `RepoMapBlockTest` lives in `tests/Context/`, not `tests/`. Platform-injection edge on Windows hosts documented in test comment.
+
+**Follow-ups created**: Phase 3 golden can rely on full byte-determinism (date + platform + cwd injectable); OS-version / PHP-version lines remain build-derived (out of scope).
+
 ### BATCH P2.B1 OPEN · 2026-08-26 16:2x
 
 **Steps**: P2.S1 + P2.S3 CONCURRENT, file-disjoint. P2.S1 — injectable clock/platform/cwd for prompt assembly (sugar-crush/src/Runtime.php + sugar-crush/src/Context/EnvironmentBlock.php + sugar-crush/tests/RuntimeTest.php; HARD: `__construct(ProviderInterface, HookManager, ?EnvironmentBlock)` third positional slot taken (RuntimeTest.php:1701); `buildSystemPrompt(App): string` stays a private instance method, 18 reflection sites; done: two calls with same injected values byte-identical, assertSame). P2.S3 — golden agent prompt (sugar-crush/src/Agents/Agent.php + sugar-crush/tests/Agents/AgentTest.php + sugar-crush/tests/fixtures/prompt/golden-agent-prompt.txt new; HARD: do NOT unify `Agent::systemPrompt()` with `Runtime::buildSystemPrompt()` — two assemblers deliberately, AgentTest.php:251 vs BaseSystemPromptTest.php:135; done: agent golden exists + test comment states opposite order + names the two colliding assertions).

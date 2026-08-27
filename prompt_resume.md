@@ -197,24 +197,20 @@ Next step:        Phase 2 batch 1 — P2.S1 + P2.S3 CONCURRENT (per prompt_plan.
                    deliberately separate (AgentTest.php:251 vs BaseSystemPromptTest.php:135).
                    ~11 src/ files start in Phase 5 — census collision ahead; re-check the
                    sequencing gate before Phase 5/6.
-Steps done:       10 of 61
+Steps done:       11 of 61
 Phases done:      2 of 12
-Last commit:      e513409c5 — prompt: P1.S7 bookkeeping — worklog entry + resume rewrite
+Last commit:      e60a083d2 — sugar-crush prompt: P2.S1 injectable clock, platform, and cwd for prompt assembly
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     FULL suite @ e513409c5 (phase-1 checkpoint): OK but skipped!
                    Tests: 10393, Assertions: 160779, Skipped: 1, EXIT 0 (delta vs baseline
                    +42 tests / +131 assertions, same 1 skip). Providers: 846/2047; census: 103/9390.
-In-flight batch:  P2.B1 — P2.S1 + P2.S3 CONCURRENT (file-disjoint). MERGE ORDER declared
-                   at spawn: P2.S1 → P2.S3, tests/Providers/ run between merges. P2.S1:
-                   injectable clock/platform/cwd — worktree /home/sites/prompt-step-P2.S1
-                   (branch prompt/P2.S1); P2.S3: golden agent prompt — worktree
-                   /home/sites/prompt-step-P2.S3 (branch prompt/P2.S3); both base 0f3bf202f,
-                   vendor cp -al + PSR-4 verified, agents in flight via script(1) wrapper
-                   pids 1953095 (P2.S1) + 1953096 (P2.S3) per user directive 2026-08-26
-                   (no pty_spawn; task tool NOT in toolset). REVIEWERS: delegate
-                   (agent=reviewer) primary, script(1) fallback.
-Live worktrees:   /home/sites/prompt-step-P2.S1 — P2.S1, in flight (pid 1953095);
-                   /home/sites/prompt-step-P2.S3 — P2.S3, in flight (pid 1953096)
+In-flight batch:  P2.B1 — P2.S1 MERGED e60a083d2 (c3a536077 step + e60a083d2 merge, 1 review
+                    cycle APPROVE, worktree removed); P2.S3 next per declared order P2.S1→P2.S3.
+                    P2.S3: golden agent prompt — worktree /home/sites/prompt-step-P2.S3 (branch
+                    prompt/P2.S3, commit 8fa2721d9 verified by orchestrator, base 0f3bf202f);
+                    verification suites + fresh reviewer (delegate primary else script(1))
+                    pending. REVIEWERS: delegate (agent=reviewer) primary, script(1) fallback.
+Live worktrees:   /home/sites/prompt-step-P2.S3 — P2.S3, awaiting verification+review (commit 8fa2721d9)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
