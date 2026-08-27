@@ -255,6 +255,18 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### BATCH P2.B2 OPEN · 2026-08-26 17:2x
+
+**Steps**: P2.S2 + P2.S4 CONCURRENT (file-disjoint). P2.S2 — golden system prompt (tests/BaseSystemPromptTest.php + tests/fixtures/prompt/golden-system-prompt.txt new + fixture tree new; depends P2.S1 merged; done = golden + one-byte-change red + leak scan /tmp/ /home/ author username + regeneration discipline comment). P2.S4 — prompt-composition harness (tests/Prompt/PromptFixture.php NEW — NOT tests/Support/ due to cross-plan lane collision, docblock must state why — + tests/Integration/SystemPromptWiringTest.php + ≥3 migrated prompt tests with character-identical assertions; depends P2.S1).
+
+**Merge order declared at spawn**: P2.S2 → P2.S4 with tests/Providers/ between.
+
+**Worktrees**: /home/sites/prompt-step-P2.S2 (branch prompt/P2.S2) + /home/sites/prompt-step-P2.S4 (branch prompt/P2.S4), both base 687e442a9, vendor cp -al + PSR-4 verified.
+
+**Spawn mechanism**: script(1) wrapper pids 1484560 (P2.S2) + 1484561 (P2.S4) per user directive 2026-08-26 (no pty_spawn; task tool NOT in orchestrator toolset).
+
+**Reviewers**: delegate (agent=reviewer) primary else script(1).
+
 ### P2.S3 — the golden agent prompt · 2026-08-26 16:5x · 6a6df4ddc
 **Status**: done · **Worktree**: /home/sites/prompt-step-P2.S3 removed · **Base**: 0f3bf202f · **Commits**: 8fa2721d9 (step) + 6a6df4ddc (merge)
 **Goal (restated)**: `Agent::systemPrompt()` golden-pinned — assembles in the OPPOSITE ORDER (agent text, then `<env>`); two assemblers deliberately separate; test comment names the two colliding assertions (AgentTest.php:251 vs BaseSystemPromptTest.php:135).

@@ -204,14 +204,16 @@ Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, nev
 Latest suite:     FULL suite @ e513409c5 (phase-1 checkpoint): OK but skipped!
                    Tests: 10393, Assertions: 160779, Skipped: 1, EXIT 0 (delta vs baseline
                    +42 tests / +131 assertions, same 1 skip). Providers: 846/2047; census: 103/9390.
-In-flight batch:  P2.B1 CLOSED — P2.S1 MERGED e60a083d2, P2.S3 MERGED 6a6df4ddc (8fa2721d9 step;
-                   1 review cycle each, APPROVE; worktrees removed, branches deleted).
-                   BATCH 2 (P2.S2 → P2.S4 per §4) next: P2.S2 golden system prompt (depends
-                   P2.S1; BaseSystemPromptTest.php + fixtures/prompt/golden-system-prompt.txt
-                   new + fixture tree) + P2.S4 harness (tests/Prompt/PromptFixture.php due to
-                   Support/ lane collision + SystemPromptWiringTest.php; depends P2.S1).
-                   REVIEWERS: delegate (agent=reviewer) primary, script(1) fallback.
-Live worktrees:   none
+In-flight batch:  P2.B2 — P2.S2 + P2.S4 CONCURRENT (file-disjoint). MERGE ORDER declared at spawn:
+                    P2.S2 → P2.S4, tests/Providers/ run between merges. P2.S2: golden system prompt —
+                    worktree /home/sites/prompt-step-P2.S2 (branch prompt/P2.S2); P2.S4: prompt-composition
+                    harness — worktree /home/sites/prompt-step-P2.S4 (branch prompt/P2.S4, fixture at
+                    tests/Prompt/PromptFixture.php NOT tests/Support/ — cross-plan lane collision); both
+                    base 687e442a9, vendor cp -al + PSR-4 verified, agents in flight via script(1)
+                    wrapper pids 1484560 (P2.S2) + 1484561 (P2.S4) per user directive 2026-08-26
+                    (no pty_spawn; task tool NOT in toolset). REVIEWERS: delegate (agent=reviewer)
+                    primary, script(1) fallback.
+Live worktrees:   /home/sites/prompt-step-P2.S2 — P2.S2, in flight (pid 1484560); /home/sites/prompt-step-P2.S4 — P2.S4, in flight (pid 1484561)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
