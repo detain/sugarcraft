@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tests\Integration;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Cli\Bootstrap;
@@ -16,9 +17,11 @@ use SugarCraft\Crush\Providers\CompleteResponse;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillLoader;
 use SugarCraft\Crush\Skills\SkillManager;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tests\Prompt\PromptFixture;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 
@@ -48,6 +51,9 @@ final class SystemPromptWiringTest extends TestCase
 
     private string $tempDir;
 
+    /** @var list<PromptFixture> */
+    private array $fixtures = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -67,6 +73,11 @@ final class SystemPromptWiringTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->fixtures as $fixture) {
+            $fixture->destroy();
+        }
+        $this->fixtures = [];
+
         $this->restoreHomeSandbox();
 
         $this->removeDirectory($this->tempDir);
@@ -248,6 +259,106 @@ final class SystemPromptWiringTest extends TestCase
         $provider = $this->completeOneTurn();
 
         $this->assertStringNotContainsString('Available skills', $this->soleSystemPrompt($provider));
+    }
+
+    /**
+     * The fixture's own reason to exist, asserted end-to-end: one fixture
+     * instance controls EVERY context half the real assembly reads — root
+     * instruction files, project memory, a composer-manifest workspace and a
+     * registered skill — and the assembled prompt carries each in the order
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} documents, with
+     * no mocks anywhere in the chain (real EnvironmentBlock, MemoryBlock,
+     * RepoMapBlock, InstructionFileLoader and SkillMatcher).
+     */
+    public function testTheFixtureAssemblesEveryControlledHalfInTheRealOrder(): void
+    {
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+        $fixture->write('AGENTS.md', 'FIXTURE AGENTS MARKER');
+        $fixture->memoryStore()->add('FIXTURE MEMORY MARKER', MemoryScope::Project);
+        $fixture->writeJson('composer.json', ['name' => 'acme/fixture-lib', 'autoload' => ['psr-4' => ['Acme\\Fixture\\' => 'src/']]]);
+        $fixture->write('src/One.php', '<?php');
+        $fixture->addSkill(new Skill(
+            name: 'fixture-demo-skill',
+            description: 'Fixture skill for the harness test.',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'low',
+            context: 'thread',
+            paths: [],
+            content: 'FIXTURE SKILL BODY',
+            sourcePath: '/fixture/SKILL.md',
+        ));
+
+        $prompt = $fixture->systemPrompt();
+
+        $envAt = strpos($prompt, '<env>');
+        $mapAt = strpos($prompt, '<repo-map>');
+        $instructionsAt = strpos($prompt, '<project-instructions>');
+        $memoryAt = strpos($prompt, '<project-memory>');
+        $skillAt = strpos($prompt, '## Skill: fixture-demo-skill');
+        $listingAt = strpos($prompt, 'Available skills (invoke via Skill tool):');
+
+        foreach ([$envAt, $mapAt, $instructionsAt, $memoryAt, $skillAt, $listingAt] as $at) {
+            $this->assertIsInt($at, 'one of the six prompt halves never reached the assembled prompt');
+        }
+        $this->assertLessThan($mapAt, $envAt);
+        $this->assertLessThan($instructionsAt, $mapAt);
+        $this->assertLessThan($memoryAt, $instructionsAt);
+        $this->assertLessThan($skillAt, $memoryAt);
+        $this->assertLessThan($listingAt, $skillAt);
+
+        $this->assertStringContainsString('FIXTURE AGENTS MARKER', $prompt);
+        $this->assertStringContainsString('FIXTURE MEMORY MARKER', $prompt);
+        $this->assertStringContainsString('- src/  ->  Acme\\Fixture\\  (1 files)', $prompt);
+        $this->assertStringContainsString('## Skill: fixture-demo-skill', $prompt);
+        $this->assertStringContainsString('FIXTURE SKILL BODY', $prompt);
+        $this->assertStringContainsString(
+            '- fixture-demo-skill: Fixture skill for the harness test.',
+            $prompt,
+        );
+    }
+
+    /**
+     * P2.S1's injectability, pinned through the fixture: the assembled prompt
+     * names the fixture's own directory, a fixed platform and a fixed date,
+     * so later phases can assert on prompt content without a single
+     * host-dependent byte.
+     */
+    public function testTheFixturePinsDatePlatformAndRootIntoThePrompt(): void
+    {
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+
+        $prompt = $fixture->systemPrompt();
+
+        $this->assertStringContainsString('Working directory: ' . $fixture->root(), $prompt);
+        $this->assertStringContainsString('Platform: linux', $prompt);
+        $this->assertStringContainsString('Current date: 2026-01-15', $prompt);
+        $this->assertStringContainsString('Is directory a git repo: No', $prompt);
+    }
+
+    /**
+     * The empty side of the fixture: an instance given nothing to control
+     * must assemble the same prompt shape a bare Runtime does — base +
+     * environment only — with no empty containers the model has to
+     * interpret.
+     */
+    public function testAFixtureWithoutMemoryOrSkillsAddsNeitherBlock(): void
+    {
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+
+        $prompt = $fixture->systemPrompt();
+
+        $this->assertStringContainsString('<env>', $prompt);
+        $this->assertStringNotContainsString('<repo-map>', $prompt);
+        $this->assertStringNotContainsString('<project-instructions>', $prompt);
+        $this->assertStringNotContainsString('<project-memory>', $prompt);
+        $this->assertStringNotContainsString('Available skills', $prompt);
     }
 
     /**

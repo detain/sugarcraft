@@ -26,6 +26,7 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Tests\Prompt\PromptFixture;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -1595,14 +1596,15 @@ final class RuntimeTest extends TestCase
         // Without de-duplication AGENTS.md lands twice on every single turn --
         // once inlined into the CLAUDE.md document by ImportResolver, once
         // again as loadRoot()'s own second document.
-        $root = $this->makeTempRepo();
-        file_put_contents($root . '/CLAUDE.md', "# Root\n@./AGENTS.md\n");
-        file_put_contents($root . '/AGENTS.md', 'DISTINCTIVE AGENTS BODY MARKER');
+        $fixture = new PromptFixture();
+        $fixture->write('CLAUDE.md', "# Root\n@./AGENTS.md\n");
+        $fixture->write('AGENTS.md', 'DISTINCTIVE AGENTS BODY MARKER');
+        $this->tempRepos[] = $fixture->root();
 
         $app = App::new($this->provider, 'gpt-4')
-            ->withInstructionLoader(new InstructionFileLoader($root));
+            ->withInstructionLoader(new InstructionFileLoader($fixture->root()));
 
-        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+        $result = $fixture->systemPrompt($app);
 
         $this->assertSame(1, substr_count($result, 'DISTINCTIVE AGENTS BODY MARKER'));
         // The import is expanded in place, not left as a literal reference.
@@ -1615,13 +1617,14 @@ final class RuntimeTest extends TestCase
         // A forced pattern that happens to cover a root file must not buy a
         // second copy of it either -- loadRoot() drains first, loadForced()
         // sees the file as already emitted.
-        $root = $this->makeTempRepo();
-        file_put_contents($root . '/AGENTS.md', 'ROOT AND FORCED BODY MARKER');
+        $fixture = new PromptFixture();
+        $fixture->write('AGENTS.md', 'ROOT AND FORCED BODY MARKER');
+        $this->tempRepos[] = $fixture->root();
 
         $app = App::new($this->provider, 'gpt-4')
-            ->withInstructionLoader(new InstructionFileLoader($root, ['AGENTS.md']));
+            ->withInstructionLoader(new InstructionFileLoader($fixture->root(), ['AGENTS.md']));
 
-        $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
+        $result = $fixture->systemPrompt($app);
 
         $this->assertSame(1, substr_count($result, 'ROOT AND FORCED BODY MARKER'));
     }
