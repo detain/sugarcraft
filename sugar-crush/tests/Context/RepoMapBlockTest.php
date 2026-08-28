@@ -11,6 +11,7 @@ use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Tests\Prompt\PromptFixture;
 
 /**
  * @see RepoMapBlock
@@ -25,6 +26,9 @@ final class RepoMapBlockTest extends TestCase
 {
     /** @var list<string> */
     private array $temp = [];
+
+    /** The fixture backing {@see systemPrompt()} for the runtime-wiring tests. */
+    private ?PromptFixture $fixture = null;
 
     protected function tearDown(): void
     {
@@ -1112,10 +1116,11 @@ final class RepoMapBlockTest extends TestCase
 
     public function testTheBlockReachesTheSystemPromptBetweenEnvAndTheProjectInstructions(): void
     {
-        $root = $this->workspace([
-            'composer.json' => ['name' => 'acme/lib', 'autoload' => ['psr-4' => ['Acme\\Lib\\' => 'src/']]],
-            'src/One.php' => '<?php',
-        ]);
+        $this->fixture = new PromptFixture();
+        $this->temp[] = $this->fixture->root();
+        $root = $this->fixture->root();
+        $this->fixture->writeJson('composer.json', ['name' => 'acme/lib', 'autoload' => ['psr-4' => ['Acme\\Lib\\' => 'src/']]]);
+        $this->fixture->write('src/One.php', '<?php');
 
         $prompt = $this->systemPrompt($root);
 
@@ -1130,16 +1135,20 @@ final class RepoMapBlockTest extends TestCase
 
     public function testAWorkspaceWithNothingToMapAddsNothingToTheSystemPrompt(): void
     {
-        $root = $this->workspace(['README.md' => 'no manifests here']);
+        $this->fixture = new PromptFixture();
+        $this->temp[] = $this->fixture->root();
+        $root = $this->fixture->root();
+        $this->fixture->write('README.md', 'no manifests here');
 
         $this->assertStringNotContainsString('repo-map', $this->systemPrompt($root));
     }
 
     public function testTheMapIsCapturedAtTheConfiguredRootAndNotAtTheProcessDirectory(): void
     {
-        $root = $this->workspace([
-            'only-here/composer.json' => ['name' => 'acme/only-here', 'description' => 'unique to the configured root'],
-        ]);
+        $this->fixture = new PromptFixture();
+        $this->temp[] = $this->fixture->root();
+        $root = $this->fixture->root();
+        $this->fixture->writeJson('only-here/composer.json', ['name' => 'acme/only-here', 'description' => 'unique to the configured root']);
 
         $prompt = $this->systemPrompt($root);
 
@@ -1151,24 +1160,21 @@ final class RepoMapBlockTest extends TestCase
 
     public function testTheSnapshotIsMemoizedSoARepositoryChangedMidTurnDoesNotAlterAlaterStep(): void
     {
-        $root = $this->workspace([
-            'alpha/composer.json' => ['name' => 'acme/alpha', 'description' => 'present at capture'],
-        ]);
+        $fixture = new PromptFixture();
+        $fixture->writeJson('alpha/composer.json', ['name' => 'acme/alpha', 'description' => 'present at capture']);
+        $this->temp[] = $fixture->root();
 
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('name')->willReturn('test-provider');
         $runtime = new Runtime($provider, new HookManager(new HookRegistry()));
-        $app = App::new($provider, 'test-model')->withRoot($root);
+        $app = App::new($provider, 'test-model')->withRoot($fixture->root());
 
-        $build = new \ReflectionMethod($runtime, 'buildSystemPrompt');
-        $build->setAccessible(true);
+        $first = $fixture->systemPrompt($app, $runtime);
 
-        $first = (string) $build->invoke($runtime, $app);
+        mkdir($fixture->root() . '/beta');
+        file_put_contents($fixture->root() . '/beta/composer.json', json_encode(['name' => 'acme/beta', 'description' => 'added between steps']));
 
-        mkdir($root . '/beta');
-        file_put_contents($root . '/beta/composer.json', json_encode(['name' => 'acme/beta', 'description' => 'added between steps']));
-
-        $second = (string) $build->invoke($runtime, $app);
+        $second = $fixture->systemPrompt($app, $runtime);
 
         $this->assertStringContainsString('present at capture', $first);
         $this->assertStringNotContainsString('added between steps', $second);
@@ -1306,11 +1312,7 @@ final class RepoMapBlockTest extends TestCase
         $provider = $this->createMock(ProviderInterface::class);
         $provider->method('name')->willReturn('test-provider');
 
-        $runtime = new Runtime($provider, new HookManager(new HookRegistry()));
-        $method = new \ReflectionMethod($runtime, 'buildSystemPrompt');
-        $method->setAccessible(true);
-
-        return (string) $method->invoke($runtime, App::new($provider, 'test-model')->withRoot($root));
+        return $this->fixture->systemPrompt(App::new($provider, 'test-model')->withRoot($root));
     }
 
     /**

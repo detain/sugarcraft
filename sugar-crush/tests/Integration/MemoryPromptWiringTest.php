@@ -23,6 +23,7 @@ use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Runtime;
+use SugarCraft\Crush\Tests\Prompt\PromptFixture;
 use SugarCraft\Crush\Tests\Support\BackendSelectionEnvSandboxTrait;
 
 /**
@@ -51,6 +52,9 @@ final class MemoryPromptWiringTest extends TestCase
 
     private MemoryStore $store;
 
+    /** @var list<PromptFixture> */
+    private array $fixtures = [];
+
     protected function setUp(): void
     {
         $this->dir = sys_get_temp_dir() . '/crush_mempromptwire_' . bin2hex(random_bytes(6));
@@ -61,6 +65,11 @@ final class MemoryPromptWiringTest extends TestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->fixtures as $fixture) {
+            $fixture->destroy();
+        }
+        $this->fixtures = [];
+
         $this->restoreBackendSelectionEnv();
 
         // Restore write permission first, or rmrf() cannot unlink inside the
@@ -103,13 +112,13 @@ final class MemoryPromptWiringTest extends TestCase
 
     public function testAProjectScopeNoteReachesTheSystemPrompt(): void
     {
-        $this->store->add('Never commit a per-lib composer.lock.', MemoryScope::Project);
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+        $fixture->memoryStore()->add('Never commit a per-lib composer.lock.', MemoryScope::Project);
 
         $provider = new PromptCapturingProvider();
         $prompt = $this->promptFor(
-            App::new($provider, 'test-model')
-                ->withMessages([new UserMessage('hi')])
-                ->withMemoryStore($this->store),
+            $fixture->app()->withMessages([new UserMessage('hi')]),
             $provider,
         );
 
@@ -130,11 +139,13 @@ final class MemoryPromptWiringTest extends TestCase
 
     public function testAnAppWithAnEmptyStoreAddsNothing(): void
     {
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+        $fixture->memoryStore();
+
         $provider = new PromptCapturingProvider();
         $prompt = $this->promptFor(
-            App::new($provider, 'test-model')
-                ->withMessages([new UserMessage('hi')])
-                ->withMemoryStore($this->store),
+            $fixture->app()->withMessages([new UserMessage('hi')]),
             $provider,
         );
 
@@ -146,13 +157,13 @@ final class MemoryPromptWiringTest extends TestCase
         // The deliberate boundary, asserted rather than only documented: user
         // memory follows the operator across every project, so leaking it into a
         // work repository's prompt has to be a separate decision.
-        $this->store->add('my personal preference', MemoryScope::User);
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+        $fixture->memoryStore()->add('my personal preference', MemoryScope::User);
 
         $provider = new PromptCapturingProvider();
         $prompt = $this->promptFor(
-            App::new($provider, 'test-model')
-                ->withMessages([new UserMessage('hi')])
-                ->withMemoryStore($this->store),
+            $fixture->app()->withMessages([new UserMessage('hi')]),
             $provider,
         );
 
