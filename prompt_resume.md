@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 in progress — P3.S1 DONE (merged 379ecc7d6). Next: P3.S2 (fully serial). See §8.**
+**Current state: Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 implemented on branch prompt/P3.S2 (8a31f239c + d05728826, in review); P3.S5 added to the plan (62 steps). See §8.**
 
 ---
 
@@ -188,13 +188,14 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            3 in progress — P3.S1 DONE (merged 379ecc7d6; step commits 9a1c6fa5e + 0571d1c48).
-                   Phase 3 NOT closed — P3.S2, P3.S3, P3.S4 remain (fully serial).
-Next step:        P3.S2 (fully serial S1→S2→S3→S4); read prompt_plan.md Phase 3 section +
+Phase:            3 in progress — P3.S1 merged 379ecc7d6 (step commits 9a1c6fa5e + 0571d1c48);
+                   P3.S2 implemented on branch prompt/P3.S2 (8a31f239c + d05728826, in review).
+                   Phase 3 NOT closed — P3.S2 review close, then P3.S3, P3.S4, P3.S5 remain (fully serial).
+Next step:        P3.S2 (fully serial S1→S2→S3→S4→S5); read prompt_plan.md Phase 3 section +
                    prompt_expand.md P3 section before starting. Step texts prompt_plan.md §4;
                    review bar §1.4; merge format §1.6. Sequencing gate re-check before Phase
                    5/6 (collision rows still live, §5/§8 field below).
-Steps done:       15 of 61
+Steps done:       15 of 62
 Phases done:      3 of 12
 Last commit:      379ecc7d6 — prompt: P3.S1 — move <env> to the end of the system prompt
                    (step commits 9a1c6fa5e + 0571d1c48)
@@ -234,7 +235,9 @@ Open follow-ups:  (1) P4.S2: usage-payload cache fields re-probe before fixing f
                    (10) NEW (P3.S1) F4: tests/Agents/AgentTest.php:312-327 docblock claims Runtime
                    seats <env> EARLY (layer 2 of 7) and the two assemblers are 'deliberately
                    opposite' — both false post-P3.S1; also references the retired base-prompt slice
-                   semantics.
+                   semantics;
+                   (11) F1 resolved by P3.S5 (wiring the write-signal into the engine loop — step
+                   added to the plan, not yet executed);
 Sequencing gate:  CHECKED 2026-08-28 — Phase 3 fully serial S1→S2→S3→S4, P3.S1 done, next P3.S2;
                    RE-CHECK before Phase 5/6 (collision rows still live, §5):
                    BuiltInToolCorpusTest assertSame(297, $files) + assertSame(316, $declarations) + RepoMapBlock.php:273
@@ -280,7 +283,7 @@ say so in the worklog entry for the step that fixed it.
 ```
 Phase:            <current phase id and title, or "between phases">
 Next step:        <STEP_ID> — <one-line goal>
-Steps done:       <N> of 61
+Steps done:       <N> of 62
 Phases done:      <N> of 12
 Last commit:      <sha> — <subject line>
 Baseline:         Tests: <N>, Assertions: <N>, Skipped: <N>  (from P0.S1, never edited)

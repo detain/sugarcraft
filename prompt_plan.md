@@ -8,7 +8,7 @@ Where they disagree about *how* the work is run, this document wins.
 subsystem, the compaction path, the tool-description surface, and the rules/skills/hooks/memory
 channels that feed them.
 
-**Status** Status: Phase 3 in progress — P3.S1 done (merged 379ecc7d6; step commits 9a1c6fa5e + 0571d1c48). Next: P3.S2 (fully serial). See prompt_resume.md §8.
+**Status** Status: Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 implemented on branch prompt/P3.S2 (8a31f239c + d05728826, in review); P3.S5 added to the plan (62 steps). See prompt_resume.md §8.
 
 **Companion files**
 - `prompt_worklog.md` — append-only, one entry per step, newest at the top.
@@ -57,7 +57,7 @@ exists to carry — a rules tier, the dormant hook/skill/memory channels, a real
 per-tool prompt fragments. Phase 10 adds cache breakpoints, which are only meaningful once Phase 3
 has landed. Phase 11 documents it.
 
-**61 steps across 12 phases.** Nothing in phases 2–11 is observable until Phase 1 lands.
+**62 steps across 12 phases.** Nothing in phases 2–11 is observable until Phase 1 lands.
 
 ---
 
@@ -546,7 +546,7 @@ After the last step of a phase merges:
    blocked and reported.
 4. Commit and merge the phase-review fixes the same way as any step.
 5. Append a phase-close entry to the worklog and rewrite `prompt_resume.md`.
-6. **Tell the user, in one line.** This plan runs 61 steps and otherwise speaks to the user only
+6. **Tell the user, in one line.** This plan runs 62 steps and otherwise speaks to the user only
    when something blocks. A phase close is the natural checkpoint: post a single line to the user
    naming the phase, the steps that landed, the suite delta against the baseline, and anything
    parked. Do not wait for a reply — this is a report, not a question, and the plan continues. It
@@ -910,23 +910,23 @@ $rev = [];
 foreach ($map as $s => $fs) foreach ($fs as $f) $rev[$f][] = $s;
 uasort($rev, fn($a, $b) => count($b) - count($a));
 foreach ($rev as $f => $ss) if (count($ss) >= 3) printf("| `%s` | %s |\n", $f, implode(", ", $ss));
-printf("(%d steps parsed — must be 61)\n", count($map));
+printf("(%d steps parsed — must be 62)\n", count($map));
 '
 ```
 
-MEASURED output of that command on this document, 2026-08-25 (61 steps parsed). Files wanted by
+MEASURED output of that command on this document, 2026-08-28 (62 steps parsed). Files wanted by
 **three or more** steps:
 
 | File | Wanted by |
 |---|---|
-| `sugar-crush/src/Runtime.php` | P2.S1, P3.S1, P5.S1, P5.S2, P5.S4, P5.S5, P9.S5, P9.S7, P10.S1 |
+| `sugar-crush/src/Runtime.php` | P2.S1, P3.S1, P3.S5, P5.S1, P5.S2, P5.S4, P5.S5, P9.S5, P9.S7, P10.S1 |
 | `sugar-crush/tests/fixtures/prompt/golden-system-prompt.txt` | P2.S2, P3.S1, P5.S4, P5.S5, P5.S6, P9.S5 |
 | `sugar-crush/src/Chat.php` | P4.S4, P7.S2, P8.S1, P8.S2, P8.S3, P8.S5 |
 | `prompt_worklog.md` | P0.S1, P0.S2, P0.S3, P3.S4, P11.S5 — **not a serialisation point; see below** |
+| `sugar-crush/tests/RuntimeTest.php` | P2.S1, P3.S1, P3.S5, P5.S1, P5.S2 |
 | `sugar-crush/tests/BaseSystemPromptTest.php` | P2.S2, P3.S1, P5.S4, P5.S6, P9.S5 |
 | `sugar-crush/src/Cli/Bootstrap.php` | P6.S4, P7.S3, P7.S6, P9.S2, P10.S3 |
 | `sugar-crush/src/Context/EnvironmentBlock.php` | P2.S1, P3.S2, P3.S3, P5.S2 |
-| `sugar-crush/tests/RuntimeTest.php` | P2.S1, P3.S1, P5.S1, P5.S2 |
 | `sugar-crush/tests/Integration/SystemPromptWiringTest.php` | P2.S4, P3.S1, P7.S3, P11.S4 |
 | `sugar-crush/src/Context/ContextCompactor.php` | P4.S4, P4.S5, P8.S3, P8.S4 |
 | `sugar-crush/src/Providers/SglangProvider.php` | P1.S1, P4.S2, P10.S4 |
@@ -938,7 +938,7 @@ MEASURED output of that command on this document, 2026-08-25 (61 steps parsed). 
 | `sugar-crush/tests/Chat/` | P8.S1, P8.S2, P8.S5 |
 
 Files wanted by exactly **two** steps are also serialisation points and are **not** listed here —
-MEASURED, there are **fourteen** more (the `>= 2` form of the command emits 31 rows; this table is
+MEASURED, there are **fifteen** more (the `>= 2` form of the command emits 32 rows; this table is
 its 17). Lower the `>= 3` in the command above to `>= 2` to see them. Do not treat
 absence from this table as evidence that two steps are disjoint; §2.1 is the rule, and the rule is
 **intersect the two declared lists**, not "look it up here".
@@ -1432,7 +1432,32 @@ bytes**, where N is the measured value on the fixture, and the worklog entry sho
 after numbers side by side. A reorder that did not move the first-difference position is a reorder
 that did nothing — and the number is how you know.
 
-**Concurrency (Phase 3)** — **fully serial**: S1 → S2 → S3 → S4. Every step touches a file the
+### P3.S5 — Wire the write-signal into the engine loop
+
+**Goal** Make the P3.S2 lever live: the per-step engine loop derives the signal, so the assembled
+prompt after a step whose tool calls wrote files carries the working diff, and the prompt after a
+no-write step suppresses it. The Runtime path is the one that must flip: the EnvironmentBlock is
+private to the memoized `Runtime::environmentSnapshot()`, so this step must expose a way to flip
+`writeSinceLastRender` (e.g. a mark-write method or a `buildSystemPrompt` parameter) and call it
+from the per-step loop.
+**Source** prompt_expand.md §3.4, §9.2; the EnvironmentBlock docblock lever + cross-turn-semantics
+paragraphs (sugar-crush/src/Context/EnvironmentBlock.php).
+**Files**
+- `sugar-crush/src/Runtime.php`
+- `sugar-crush/src/Backend/EngineBackend.php`
+- `sugar-crush/tests/RuntimeTest.php`
+
+**Depends on** P3.S2 (the lever API), P3.S4 (the measurement baseline is recorded before the
+behaviour goes live).
+**Done when** an engine-loop-level test drives consecutive no-write steps and asserts the second
+assembled prompt's env block carries no diff section; a step after a write tool ran produces a
+prompt whose env block carries the diff; PromptStabilityTest (live-poll + deterministic) and
+testNoAdditionalWorkingDirectoriesLineIsEmitted stay green; the golden-system-prompt.txt fixture
+stays byte-identical; the full suite is green; if any seam remains reachable only from tests, that
+is stated in the worklog per §16.1; the worklog records the measured byte delta of a suppressed
+no-write step on a dirty tree.
+
+**Concurrency (Phase 3)** — **fully serial**: S1 → S2 → S3 → S4 → S5. Every step touches a file the
 previous one touched, and S4 measures the result of the other three. Do not batch this phase.
 
 **Do not merge S2 and S3 into one step.** It is the obvious saving — same two files, serial anyway,
@@ -3198,7 +3223,7 @@ php /home/sites/sugarcraft/tools/check-path-repos.php --no-lib-path-repos
 ### Regenerating §2.2
 
 The command is inside §2.2 itself. Run it after any edit to a step's `**Files**` list; it prints
-`(61 steps parsed — must be 61)` as its own sanity check, and a different number means the parser
+`(62 steps parsed — must be 62)` as its own sanity check, and a different number means the parser
 missed a step heading and the table it just printed is wrong.
 
 ---
