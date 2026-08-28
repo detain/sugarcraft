@@ -173,6 +173,12 @@ final class MemoryPromptWiringTest extends TestCase
 
     public function testTheMemoryBlockSitsAfterTheEnvironmentBlockInThePrompt(): void
     {
+        // P3.S1 inverted this pin, deliberately, with the env block's move to
+        // the END of the assembly (stable layers first, volatile <env> last —
+        // prompt_expand.md §9.2): the memory block now precedes the
+        // environment block instead of following it. An inverted assertion
+        // still pins an order — a reorder that put <env> back ahead of the
+        // memory block reds this.
         $this->store->add('a project convention', MemoryScope::Project);
 
         $provider = new PromptCapturingProvider();
@@ -189,9 +195,9 @@ final class MemoryPromptWiringTest extends TestCase
         $this->assertNotFalse($env);
         $this->assertNotFalse($memory);
         $this->assertLessThan(
-            $memory,
             $env,
-            'the model must know where it is before it reads notes about paths relative to that cwd',
+            $memory,
+            'the memory block must precede the volatile environment block in the assembled prompt',
         );
     }
 

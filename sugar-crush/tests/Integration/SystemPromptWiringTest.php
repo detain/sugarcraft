@@ -140,10 +140,12 @@ final class SystemPromptWiringTest extends TestCase
     }
 
     /**
-     * Both features must land in the SAME prompt, environment first: a model
-     * has to know which directory it is in before it reads conventions phrased
-     * relative to that directory. A wiring that let one half displace the other
-     * would still pass both single-feature tests above.
+     * Both features must land in the SAME prompt. P3.S1 moved <env> to the
+     * END of the assembly (stable layers first, volatile last — prompt_expand.md
+     * §9.2), so this pin is inverted, not deleted: an inverted assertion still
+     * pins an order, and a future reorder that put <env> back ahead of the
+     * project instructions would red it. The model still receives the same
+     * orientation facts; only their position changed.
      */
     public function testBothHalvesLandInOneSystemPromptWithEnvironmentFirst(): void
     {
@@ -155,8 +157,9 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertStringContainsString('<env>', $prompt);
         $this->assertStringContainsString('BOTH HALVES INTEGRATION MARKER', $prompt);
         $this->assertLessThan(
-            strpos($prompt, '<project-instructions>'),
             strpos($prompt, '<env>'),
+            strpos($prompt, '<project-instructions>'),
+            'the environment block must follow the project instructions in the assembled prompt',
         );
     }
 
@@ -269,6 +272,11 @@ final class SystemPromptWiringTest extends TestCase
      * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} documents, with
      * no mocks anywhere in the chain (real EnvironmentBlock, MemoryBlock,
      * RepoMapBlock, InstructionFileLoader and SkillMatcher).
+     *
+     * P3.S1 moved <env> to the END of that order (stable layers first,
+     * volatile last), so the first chain link is inverted, not deleted: the
+     * repo map must now precede the environment block, and a reorder that
+     * put <env> back ahead of it reds this assertion.
      */
     public function testTheFixtureAssemblesEveryControlledHalfInTheRealOrder(): void
     {
@@ -305,7 +313,7 @@ final class SystemPromptWiringTest extends TestCase
         foreach ([$envAt, $mapAt, $instructionsAt, $memoryAt, $skillAt, $listingAt] as $at) {
             $this->assertIsInt($at, 'one of the six prompt halves never reached the assembled prompt');
         }
-        $this->assertLessThan($mapAt, $envAt);
+        $this->assertLessThan($envAt, $mapAt);
         $this->assertLessThan($instructionsAt, $mapAt);
         $this->assertLessThan($memoryAt, $instructionsAt);
         $this->assertLessThan($skillAt, $memoryAt);

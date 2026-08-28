@@ -595,9 +595,12 @@ final class FeatWiringReachabilityTest extends TestCase
 
     /**
      * Gap item 4 — the environment half, which "does not exist anywhere"
-     * before this wave. The `<env>` block must also precede the project
-     * instructions: conventions talk about paths relative to a cwd the model
-     * has to have been told about first.
+     * before this wave. P3.S1 moved <env> to the end of the assembly
+     * (stable layers first, volatile last — prompt_expand.md §9.2), so this
+     * pin is inverted, not deleted: an inverted assertion still pins an
+     * order, and a reorder that put <env> back ahead of the project
+     * instructions would red it. The block must still reach a real launch;
+     * only its position changed.
      */
     public function testARealLaunchDeliversTheEnvironmentBlockAheadOfProjectInstructions(): void
     {
@@ -610,9 +613,9 @@ final class FeatWiringReachabilityTest extends TestCase
         $this->assertStringContainsString('Platform: ', $prompt);
         $this->assertStringContainsString('Current date: ', $prompt);
         $this->assertLessThan(
-            strpos($prompt, '<project-instructions>'),
             strpos($prompt, '<env>'),
-            'the environment snapshot must reach the model before project conventions',
+            strpos($prompt, '<project-instructions>'),
+            'the environment snapshot must follow the project conventions in the assembled prompt',
         );
     }
 

@@ -1772,6 +1772,11 @@ final class RuntimeTest extends TestCase
 
     public function testBuildSystemPromptOrdersEnvironmentBlockBeforeProjectInstructions(): void
     {
+        // P3.S1 inverted this pin, deliberately, with the env block's move to
+        // the END of the assembly (stable layers first, volatile <env> last —
+        // prompt_expand.md §9.2). An inverted assertion still pins an order:
+        // the env block must now follow the project instructions, and if a
+        // future reorder puts it back ahead of them this assertion reds.
         $root = $this->makeTempRepo();
         file_put_contents($root . '/AGENTS.md', 'ROOT AGENTS CONVENTION TEXT');
 
@@ -1781,9 +1786,9 @@ final class RuntimeTest extends TestCase
         $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
 
         $this->assertLessThan(
-            strpos($result, '<project-instructions>'),
             strpos($result, '<env>'),
-            'the model must learn where it is before it reads path-relative conventions',
+            strpos($result, '<project-instructions>'),
+            'the environment block must reach the model after the project conventions it could invalidate',
         );
     }
 

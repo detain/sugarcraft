@@ -1116,6 +1116,11 @@ final class RepoMapBlockTest extends TestCase
 
     public function testTheBlockReachesTheSystemPromptBetweenEnvAndTheProjectInstructions(): void
     {
+        // P3.S1 inverted this pin, deliberately, with the env block's move to
+        // the END of the assembly (stable layers first, volatile <env> last —
+        // prompt_expand.md §9.2): the repo map now precedes the environment
+        // block instead of following it. An inverted assertion still pins an
+        // order — a reorder that put <env> back ahead of the map reds this.
         $this->fixture = new PromptFixture();
         $this->temp[] = $this->fixture->root();
         $root = $this->fixture->root();
@@ -1129,7 +1134,7 @@ final class RepoMapBlockTest extends TestCase
 
         $this->assertIsInt($envEnd);
         $this->assertIsInt($mapAt, 'the repo map never reached the prompt');
-        $this->assertGreaterThan($envEnd, $mapAt, 'the map must follow the block that names the cwd its paths are relative to');
+        $this->assertLessThan($envEnd, $mapAt, 'the map must precede the block that names the cwd its paths are relative to');
         $this->assertStringContainsString('- src/  ->  Acme\\Lib\\  (1 files)', $prompt);
     }
 

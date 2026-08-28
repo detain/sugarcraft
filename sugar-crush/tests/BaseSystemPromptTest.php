@@ -53,6 +53,20 @@ final class BaseSystemPromptTest extends TestCase
         '# Security',
     ];
 
+    /**
+     * The final line of the base heredoc in
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()}.
+     *
+     * The base prompt used to be *defined* as "everything before the first
+     * <env>", which worked while <env> was layer 2 of the assembly. P3.S1
+     * moved <env> to the very end (stable layers first, volatile last), so
+     * that slice would now return the whole prompt; the base is instead
+     * delimited by this marker, the sentence its heredoc closes with. A
+     * reword of that closing sentence reds {@see basePrompt()} until the
+     * marker moves with it — the deliberate cost of an explicit boundary.
+     */
+    private const BASE_END_MARKER = 'commands to follow.';
+
     private function basePrompt(): string
     {
         $provider = $this->createMock(ProviderInterface::class);
@@ -64,13 +78,23 @@ final class BaseSystemPromptTest extends TestCase
 
         $whole = (string) $method->invoke($runtime, App::new($provider, 'echo'));
 
-        // Everything from the <env> block onward is the DATA half. Cutting
-        // there is what keeps these assertions about the base literal rather
-        // than about whatever a project's AGENTS.md happens to say.
-        $envAt = strpos($whole, '<env>');
-        self::assertNotFalse($envAt, 'the environment block must still follow the base prompt');
+        // The base prompt is delimited by its own explicit end-of-base
+        // marker, the final line of the base heredoc — NOT by the first
+        // <env>, which P3.S1 moved from layer 2 to the very end of the
+        // assembly (stable layers first, volatile last — prompt_expand.md
+        // §9.2). "Everything before the first <env>" would now be the whole
+        // prompt, so the slice cuts at the marker instead; cutting there is
+        // what keeps these assertions about the base literal rather than
+        // about the repo-map and <env> data half that now follows it. If the
+        // heredoc's closing line is ever reworded, this marker must move with
+        // it — the assertion below says so out loud.
+        $markerAt = strpos($whole, self::BASE_END_MARKER);
+        self::assertNotFalse(
+            $markerAt,
+            'the base prompt no longer ends with its end-of-base marker "' . self::BASE_END_MARKER . '"',
+        );
 
-        return substr($whole, 0, $envAt);
+        return substr($whole, 0, $markerAt + strlen(self::BASE_END_MARKER));
     }
 
     /**
