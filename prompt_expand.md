@@ -3717,10 +3717,16 @@ Twenty test files touch prompt construction. Eleven hard constraints:
    this and all nine tests in that file red at once.
 5. **Exactly four `# ` headings, level 1, whole-line, in order, each body >40 chars**
    (`:42-47, 151-166, 173-204`). `##` or `<section>` wrapping breaks it.
-6. **Three ordering invariants, six assertion sites**: `<env>` before `<project-instructions>`
-   (`RuntimeTest.php:1736`, `SystemPromptWiringTest.php:146`, `FeatWiringReachabilityTest.php:612`);
-   `</env>` before `<repo-map>` (`RepoMapBlockTest.php:1127`); `<env>` before `<project-memory>`
-   (`MemoryPromptWiringTest.php:180`).
+6. **Three ordering invariants, six assertion sites** — ALL INVERTED by P3.S1, deliberately (the
+   step moved `<env>` to the END of the assembly — stable layers first, volatile last —
+   `Runtime.php`, merged 379ecc7d6). Each pin now asserts the opposite polarity and would red if
+   `<env>` returned to second place: `<env>` AFTER `<project-instructions>`
+   (`RuntimeTest.php:1788-1792`, `SystemPromptWiringTest.php:159-163`,
+   `FeatWiringReachabilityTest.php:615-619`); `<repo-map>` BEFORE `</env>` (`RepoMapBlockTest.php:1137`,
+   `SystemPromptWiringTest.php:316` — the fixture-order chain, sixth site); `<project-memory>` BEFORE
+   `<env>` (`MemoryPromptWiringTest.php:197-198`). Note: the base prompt is now marker-delimited —
+   `BASE_END_MARKER = 'commands to follow.'` (`BaseSystemPromptTest.php:68`, slice at :91-97) — no
+   longer "everything before the first `<env>`", which would now return the whole prompt.
 7. **Exact fence spellings** — 20+ assertions across 8 files.
 8. **Exact leading-whitespace contracts.** `listForPrompt()` must start `"\n\nAvailable skills…"`;
    `systemPromptContribution()` must start `"\n\n## Skill: "`; `EnvironmentBlock::render()` must

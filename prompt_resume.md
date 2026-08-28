@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 2 CLOSED (P2.S1..P2.S4 merged; close review cleared — 1 LOW diff --check fixed via .gitattributes). Next: Phase 3 P3.S1 fully serial. See §8.**
+**Current state: Phase 3 in progress — P3.S1 DONE (merged 379ecc7d6). Next: P3.S2 (fully serial). See §8.**
 
 ---
 
@@ -188,27 +188,23 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            2 CLOSED — P2.S1..P2.S4 merged (e60a083d2, 6a6df4ddc, 74148433d, dfb618f16);
-                   close review cleared (1 LOW diff --check fixed via .gitattributes); close
-                   commit 3d7c7e420
-Next step:        Phase 3 — P3.S1 fully serial (no concurrency) per plan; read prompt_plan.md
-                   Phase 3 section + prompt_expand.md P3 section before starting. Step texts
-                   prompt_plan.md §4; review bar §1.4; merge format §1.6. Sequencing gate
-                   re-check before Phase 5/6 (collision rows still live, §5/§8 field below).
-Steps done:       14 of 61
+Phase:            3 in progress — P3.S1 DONE (merged 379ecc7d6; step commits 9a1c6fa5e + 0571d1c48).
+                   Phase 3 NOT closed — P3.S2, P3.S3, P3.S4 remain (fully serial).
+Next step:        P3.S2 (fully serial S1→S2→S3→S4); read prompt_plan.md Phase 3 section +
+                   prompt_expand.md P3 section before starting. Step texts prompt_plan.md §4;
+                   review bar §1.4; merge format §1.6. Sequencing gate re-check before Phase
+                   5/6 (collision rows still live, §5/§8 field below).
+Steps done:       15 of 61
 Phases done:      3 of 12
-Last commit:      3d7c7e420 — prompt: phase 2 close — status #6 — .gitattributes golden-whitespace
-                   exemption; resume/worklog/plan handoff updated
+Last commit:      379ecc7d6 — prompt: P3.S1 — move <env> to the end of the system prompt
+                   (step commits 9a1c6fa5e + 0571d1c48)
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     BaseSystemPromptTest 12 tests/87 assertions OK; census 6-file set 103/9420 OK;
-                   tests/Providers/ 846/2047 OK (main repo @master, phase close). Phase suites
-                   174/520 (SystemPromptWiring 11/65, MemoryPromptWiring 14/36, RepoMapBlock 62/163,
-                   Runtime 87/256); check-path-repos exit 0. Oldest full-suite checkpoint:
-                   10393/160779/1 EXIT 0 @ e513409c5. Baseline 10351/160648/1 (P0.S1, never edited).
-In-flight batch:  none (Phase 2 CLOSED — all four steps merged in declared order: P2.S1 -> e60a083d2,
-                   P2.S3 -> 6a6df4ddc, P2.S2 -> 74148433d, P2.S4 -> dfb618f16; worktrees removed,
-                   branches prompt/P2.S1 + prompt/P2.S2 + prompt/P2.S3 + prompt/P2.S4 deleted;
-                   none remain on master now or at close).
+Latest suite:     full suite Tests: 10402, Assertions: 160893, Skipped: 1 (main repo @master,
+                   at P3.S1 close); six P3.S1 suites 221/740 OK; census 6-file set 103/9420 OK;
+                   tests/Providers/ 846/2047 OK; check-path-repos exit 0. Oldest full-suite
+                   checkpoint: 10393/160779/1 EXIT 0 @ e513409c5. Baseline 10351/160648/1
+                   (P0.S1, never edited).
+In-flight batch:  none
 Live worktrees:   none (main repo only)
 Blocked on:       nothing
 Awaiting user decision: nothing
@@ -224,16 +220,22 @@ Open follow-ups:  (1) P4.S2: usage-payload cache fields re-probe before fixing f
                    normalizes Platform line, BaseSystemPromptTest golden injects 'linux' (P2.S1 landed);
                    (5) observation C AgentTest.php:569-570 stale TODO (future step);
                    (6) observation A ensureFixtureRepo() staleness hardening recommended for later
-                   golden-touching steps (P3.S1/P5.S4-P5.S6/P9.S5) — re-raised at phase close;
-                   (7) NEW (phase close, awareness only, not drift): census on master reads 103/9420 —
-                   census instruments derive counts from the tree; +20 vs the P2.S4-review figure
-                   is a pre-final-tree expectation, not drift, verified consistent post-merge.
-                   (8) NEW (phase close, awareness only): BaseSystemPromptTest once printed 12/103
-                   then stable 12/87 on re-run — observed anomaly, not reproducible, flagged for
-                   awareness;
-                   (9) NEW (phase close, bookkeeping): prompt_plan.md status banner updated to Phase 2 CLOSED
-                   (was stale 'batch 2 in flight'); worklog entry records the close; §8 carries the gate state.
-Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4 (P0/P1/P2 CLOSED, P3 next P3.S1 fully serial);
+                   golden-touching steps (P3.S2/S3/S4, P5.S4-P5.S6, P9.S5) — re-raised at phase close;
+                   (7) NEW (P3.S1) F1: src/Context/EnvironmentBlock.php:66-75 docblock ('WHAT IT
+                   COSTS IN PROMPT CACHE') argues the opposite of the new assembly — rewrite when
+                   P3.S2/S3 touch the file (P3.S2's goal quotes it; Agent::systemPrompt() tail claim
+                   at :72-73 remains true);
+                   (8) NEW (P3.S1) F2: src/Context/MemoryBlock.php:52-54 docblock premise
+                   ('EnvironmentBlock::render() sits AHEAD of this block') is false post-P3.S1 —
+                   revisit in Phase 6 (Context & Memory);
+                   (9) NEW (P3.S1) F3: tests/Providers/PromptStabilityTest.php:411,435 stale position
+                   comments ('environment block at the very front of the prefix') — prose only, test
+                   green and position-free;
+                   (10) NEW (P3.S1) F4: tests/Agents/AgentTest.php:312-327 docblock claims Runtime
+                   seats <env> EARLY (layer 2 of 7) and the two assemblers are 'deliberately
+                   opposite' — both false post-P3.S1; also references the retired base-prompt slice
+                   semantics.
+Sequencing gate:  CHECKED 2026-08-28 — Phase 3 fully serial S1→S2→S3→S4, P3.S1 done, next P3.S2;
                    RE-CHECK before Phase 5/6 (collision rows still live, §5):
                    BuiltInToolCorpusTest assertSame(297, $files) + assertSame(316, $declarations) + RepoMapBlock.php:273
                    doc-line restating them (this plan adds ~11 src/ files — hardest collision);

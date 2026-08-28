@@ -8,7 +8,7 @@ Where they disagree about *how* the work is run, this document wins.
 subsystem, the compaction path, the tool-description surface, and the rules/skills/hooks/memory
 channels that feed them.
 
-**Status** Status: Phase 2 CLOSED (P2.S1..P2.S4 merged; phase-close review cleared — 1 LOW diff --check fixed via .gitattributes). Next: Phase 3 P3.S1 (fully serial). See prompt_resume.md §8.
+**Status** Status: Phase 3 in progress — P3.S1 done (merged 379ecc7d6; step commits 9a1c6fa5e + 0571d1c48). Next: P3.S2 (fully serial). See prompt_resume.md §8.
 
 **Companion files**
 - `prompt_worklog.md` — append-only, one entry per step, newest at the top.

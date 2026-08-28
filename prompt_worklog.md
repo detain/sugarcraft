@@ -255,6 +255,102 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P3.S1 — Move <env> to the end of the system prompt   ·   2026-08-28   ·   9a1c6fa5e, 0571d1c48 → merged 379ecc7d6
+
+**Status** `done`
+**Worktree** /home/sites/prompt-step-P3.S1 (removed after merge)
+**Base** 924c71a0d (Phase 2 close)
+
+**Goal (restated in one sentence)**
+Reorder buildSystemPrompt()'s layers by mutation frequency — stable first (base heredoc, repo map, project instructions, memory, skills), volatile <env> (git status + diffs) last, matching Claude Code's placement of its git block — with every old ordering pin inverted rather than deleted, and the golden regenerated showing a pure block move.
+
+**What changed**
+- `sugar-crush/src/Runtime.php`: moved the <env> append (`$base .= "\n\n" . $this->environmentSnapshot($app)->render();`, byte-identical) from directly after the base heredoc to the end of `buildSystemPrompt()`, after the SkillMatcher listing. Constructor signature, per-Runtime memoisation and all three snapshot accessors untouched (§17.2 constraints 2, 9). Rewrote the ordering-rationale docblock and both assembly comments to the new WHY (mutation-frequency ordering, cache-prefix argument, prompt_expand.md §4.4/§9.2).
+- `sugar-crush/tests/RuntimeTest.php`: inverted the pin (env now asserted AFTER `<project-instructions>`) and renamed the test to `testBuildSystemPromptOrdersProjectInstructionsBeforeEnvironmentBlock`.
+- `sugar-crush/tests/Integration/SystemPromptWiringTest.php`: inverted two pins — `testBothHalvesLandInOneSystemPromptWithEnvironmentLast` (renamed from …EnvironmentFirst) and the first chain link of `testTheFixtureAssemblesEveryControlledHalfInTheRealOrder` (`assertLessThan($mapAt, $envAt)` → `assertLessThan($envAt, $mapAt)`; the other four chain links unchanged) — with docblocks explaining the inversion.
+- `sugar-crush/tests/Integration/FeatWiringReachabilityTest.php`: inverted the pin and renamed the test to `testARealLaunchDeliversTheEnvironmentBlockAfterProjectInstructions`.
+- `sugar-crush/tests/Context/RepoMapBlockTest.php`: inverted the pin (`assertGreaterThan($envEnd, $mapAt)` → `assertLessThan($envEnd, $mapAt)`) and renamed the test to `testTheBlockReachesTheSystemPromptBeforeTheEnvironmentBlock`.
+- `sugar-crush/tests/Integration/MemoryPromptWiringTest.php`: inverted the pin (`assertLessThan($memory, $env)` → `assertLessThan($env, $memory)`) and renamed the test to `testTheMemoryBlockSitsBeforeTheEnvironmentBlockInThePrompt`.
+- `sugar-crush/tests/BaseSystemPromptTest.php`: base prompt no longer defined as "everything before the first `<env>`" (that slice is now the whole prompt); added `BASE_END_MARKER = 'commands to follow.'` — the final line of the base heredoc, unique in the assembly — and `basePrompt()` slices at it, with docblock stating the delimiter change and the assertNotFalse message naming the marker. Nine test methods consume `basePrompt()`. Also refreshed the seven-layer docblock of `testSystemPromptMatchesCommittedGolden` to the new order (1 base → 2 repo-map → 3 project-instructions → 4 project-memory → 5 skill contributions → 6 SkillMatcher listing → 7 `<env>` block).
+- `sugar-crush/tests/fixtures/prompt/golden-system-prompt.txt`: REGENERATED (reason below). `<env>` moved from layer 2 to the final position; nothing else changed.
+
+**Tests added or changed**
+No test methods added or removed — six ordering assertions inverted in place (§16.2 "Invert, do not delete"), one slice mechanism replaced, five names realigned with their inverted bodies. Each would red if `<env>` returned to second place or the marker were reverted:
+- `RuntimeTest::testBuildSystemPromptOrdersProjectInstructionsBeforeEnvironmentBlock` — `assertLessThan(strpos($result, '<env>'), strpos($result, '<project-instructions>'))`.
+- `SystemPromptWiringTest::testBothHalvesLandInOneSystemPromptWithEnvironmentLast` — same polarity via `soleSystemPrompt()`.
+- `FeatWiringReachabilityTest::testARealLaunchDeliversTheEnvironmentBlockAfterProjectInstructions` — same polarity via a real launch.
+- `SystemPromptWiringTest::testTheFixtureAssemblesEveryControlledHalfInTheRealOrder` — chain now ends with env; `assertLessThan($envAt, $mapAt)`.
+- `RepoMapBlockTest::testTheBlockReachesTheSystemPromptBeforeTheEnvironmentBlock` — `assertLessThan($envEnd, $mapAt)`.
+- `MemoryPromptWiringTest::testTheMemoryBlockSitsBeforeTheEnvironmentBlockInThePrompt` — `assertLessThan($env, $memory)`.
+- `BaseSystemPromptTest::basePrompt()` (feeds nine tests) — `assertNotFalse($markerAt, '…no longer ends with its end-of-base marker…')`.
+
+**Deletion experiment**: two parts, both RED→restored→GREEN. (A) Temporarily moved the env append back to position 2 in Runtime.php → 7 failures: the golden pin + all six inverted assertions; Restore → green. (B) Mutated `BASE_END_MARKER` to 'commands to follow, or else.' → all nine marker-fed BaseSystemPromptTest tests red with the explicit marker message; Restore → green. Review cycle 2 independently repeated the revert mutation (scratch copy, tree md5-verified restored): same 7 failures.
+
+**MEASURED**
+```
+$ cd /home/sites/prompt-step-P3.S1/sugar-crush && vendor/bin/phpunit tests/BaseSystemPromptTest.php tests/RuntimeTest.php tests/Integration/SystemPromptWiringTest.php tests/Integration/MemoryPromptWiringTest.php tests/Integration/FeatWiringReachabilityTest.php tests/Context/RepoMapBlockTest.php
+OK (221 tests, 740 assertions)      # identical to pre-change baseline
+$ vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9420 assertions)
+$ vendor/bin/phpunit
+OK, but some tests were skipped!
+Tests: 10402, Assertions: 160893, Skipped: 1.
+# post-merge on master: tests/Providers OK (846 tests, 2047 assertions); check-path-repos: no sibling path-repos (58 libs)
+$ md5sum <old golden>    # pre-regeneration golden = P2.S2's committed bytes
+e89d98c72975ca8c22914d7f6796ec7a
+$ wc -c tests/fixtures/prompt/golden-system-prompt.txt   # old and new both 5099 bytes
+5099
+```
+Golden old→new diff (block moved, nothing else changed — env body byte-identical, same 5099-byte total):
+```
+45a46,83
+> <repo-map> … (stable block, moved before env) … </repo-map>
+> <project-instructions> … </project-instructions>
+> <project-instructions> … </project-instructions>
+> <project-memory> … </project-memory>
+> ## Skill: fixture-helper … - fixture-helper: Fixture skill for the golden prompt
+89,127c127
+< </env>
+< <repo-map> … (the same stable block, in its old position after </env>)
+< </project-memory>
+< ## Skill: fixture-helper …
+---
+> </env>
+```
+Human-legible reason the new bytes are correct: the seven layers now appear in exactly the order the plan mandates — base heredoc (44 lines, unchanged), `<repo-map>`, two `<project-instructions>` documents, `<project-memory>`, skill body + listing, then `<env>` LAST. The env body is byte-identical to the old golden's env body (verified by extraction + exact reconstruction: old == base + ENV + B, new == base + B + ENV, reconstruction equality exact); the pinned fixture git state (Platform linux, Model claude-sonnet-4-6, date 2026-08-26, branch main, `A docs/notes.md` / `M src/Lib.php` / `?? scratch.txt`, commit 7be5249) is unchanged. Total length 5099 → 5099 bytes, which only a pure relocation produces; the pre-regeneration file's md5 (e89d98c7…) matches P2.S2's recorded golden md5. Regeneration procedure: /tmp script replicating `BaseSystemPromptTest::ensureFixtureRepo()` + `::goldenContext()` (pinned clock 2026-08-26, model claude-sonnet-4-6, injected 'linux').
+
+**Suite result**
+```
+$ cd sugar-crush && vendor/bin/phpunit
+OK, but some tests were skipped!
+Tests: 10402, Assertions: 160893, Skipped: 1.
+```
+Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +51 tests, +245 assertions, 0 new skips (cumulative across Phases 1-2; this step itself added no tests — the six target suites are byte-identical to their pre-change counts, 221/740).
+
+**Review loop**
+- Cycle 1 (fresh reviewer): verdict — core change correct, byte-pure, precisely scoped; all six pins + golden red under its own revert mutation; golden pure move verified by construction; production reachability confirmed (Runtime::run() → buildSystemPrompt() → EngineBackend.php:606 → Cli/Bootstrap → bin/sugarcrush). Findings: F1 [MODERATE, out-of-scope] EnvironmentBlock.php:68-71 'WHAT IT COSTS IN PROMPT CACHE' docblock now argues the opposite of the new assembly → deferred to P3.S2/S3 (file in their declared lists). F2 [MODERATE, out-of-scope] MemoryBlock.php:50-52 docblock premise false ('EnvironmentBlock::render() sits AHEAD of this block') → deferred to a later phase (Phase 6). F3 [MINOR, in-scope] BaseSystemPromptTest.php:543-556 seven-layer docblock stale → FIXED. F4 [MINOR, in-scope] five test names contradicting their inverted bodies → FIXED via renames (commit 0571d1c48). F5 [MINOR, out-of-scope doc] prompt_expand.md §11 constraint 6 ledger still states pre-step order → fixed in this bookkeeping commit. F6 [PROCESS] worklog entry absent → this entry.
+- Cycle 2 (fresh reviewer, never saw cycle 1): **NO FINDINGS in scope**. Re-ran everything (all counts identical incl. full suite 10402/160893/1); repeated the revert mutation (same 7 red); golden verified byte-exact by extraction + reconstruction; 19/19 checks. Four non-blocking stale position-claim docblocks in out-of-scope files, reported not prescribed: EnvironmentBlock.php:66-75 (same as c1 F1), MemoryBlock.php:52-54 (same as c1 F2), tests/Providers/PromptStabilityTest.php:411+435 (section banners claim env 'sits at the very front of the prefix' — test itself position-free and green), tests/Agents/AgentTest.php:312-327 (docblock claims Runtime seats env EARLY 'layer 2 of 7' and the two assemblers are 'deliberately opposite' — now false; also references the old base-prompt slice semantics). All four → follow-ups below.
+- Total cycles: 2.
+
+**Invariants touched**
+- §17.2 constraint 4 — deliberately CHANGED, as P3.S1 mandates: base prompt is now delimited by the explicit end-of-base marker, not "everything before the first `<env>`"; BaseSystemPromptTest docblock states it.
+- §17.2 constraint 6 — deliberately CHANGED: the three ordering invariants' six assertion sites inverted, not deleted (env-after-instructions ×3, env-after-repo-map ×2, env-after-memory ×1); deletion experiment proved all six bite. The sixth site (SystemPromptWiringTest fixture-order chain) was not named in the step text — noted in Surprises.
+- §17.2 constraints 1, 2, 3, 5, 7, 8, 9, 10, 11 — KEPT: `buildSystemPrompt(App): string` private shape (18 reflection sites untouched), constructor third-positional EnvironmentBlock untouched, `environmentSnapshot()` reflectable + `assertSame`-stable, exactly four `# ` headings intact, fence spellings unchanged, leading-whitespace contracts unchanged (`EnvironmentBlock::render()` still starts `<env>\n` and ends `\n</env>`; separators still `"\n\n"`), memoisation still per-Runtime, `substr_count` de-duplication pins untouched, empty-layer suppression untouched. `Agent::systemPrompt()` (opposite-order assembler) untouched — AppSkillDispatchTest/AgentTest pins unaffected.
+- §16.2 golden discipline — followed: regeneration with stated reason, old→new diff pasted above, human-legible correctness argument; leak scan (`testGoldenSystemPromptLeaksNoHostPaths`) still green.
+
+**Surprises**
+- The plan text names five assertion sites but §17.2 item 6 says six: the sixth is SystemPromptWiringTest.php:316, the first chain link of `testTheFixtureAssemblesEveryControlledHalfInTheRealOrder` (added by P2.S4), which pins the same env-before-repo-map invariant as RepoMapBlockTest. It was inverted with the other five and its bite proven.
+- Plan line numbers were stale by ~5 lines (pre-P2.S4 measurements); test names matched exactly.
+- The regenerated golden has the same byte count as the old one (5099 → 5099), making the pure-move verification trivial and rigorous.
+- Step text says "nine assertions … depend on it" — it is nine test *methods* (each carrying multiple assertions); count matches, wording imprecise (non-material).
+
+**Follow-ups created**
+- F1: `src/Context/EnvironmentBlock.php:66-75` docblock must be rewritten when P3.S2/S3 touch the file (env is now LAST on the buildSystemPrompt path; Agent::systemPrompt() tail claim at :72-73 remains true). P3.S2's goal quotes this docblock.
+- F2: `src/Context/MemoryBlock.php:52-54` docblock premise ('EnvironmentBlock::render() sits AHEAD of this block') is false post-P3.S1 — revisit in Phase 6 (Context & Memory).
+- F3: `tests/Providers/PromptStabilityTest.php:411,435` stale position comments ('environment block at the very front of the prefix') — prose only, test green and position-free.
+- F4: `tests/Agents/AgentTest.php:312-327` docblock claims Runtime seats `<env>` EARLY (layer 2 of 7) and the two assemblers are 'deliberately opposite' — both false post-P3.S1; also references the retired base-prompt slice semantics.
+- Standing obs A: `ensureFixtureRepo()` staleness hardening — recommended for later golden-touching steps (P3.S2/S3/S4, P5.S4-S5.S6, P9.S5).
+
 ## Phase 2 — close (P2.S1..P2.S4)
 Phase-close review over whole diff 0f3bf202f..HEAD (18 commits) VERDICT FINDINGS — 1 LOW gate-level: git diff --check exit 2 on intentional trailing-space bytes at golden-agent-prompt.txt:42 + golden-system-prompt.txt:84 (whitespace-only lines inside pinned sample-diff sections; byte-goldens pass). Fixed: repo-root .gitattributes `sugar-crush/tests/fixtures/prompt/** whitespace=-trailing-space` → diff --check exit 0. Suites on master: BaseSystemPromptTest 12/87, census 6-file 103/9420, Providers 846/2047, phase suites 174/520, check-path-repos exit 0. F1 fold PASS (SSE_BODY byte-identical, 155 bytes, verified structurally); F2 fold PASS (three distinct ''-semantics pinned in SystemPromptTransmissionMatrixTest). Phase-level 19-check: all PASS. Bookkeeping verified (af1e6079f touches only resume+worklog; §8 batch cleared). Master clean; no worktrees; no prompt/* branches. Steps done 14 of 61; phases done 3 of 12. Close commit 3d7c7e420.
 
