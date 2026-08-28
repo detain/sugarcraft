@@ -255,6 +255,9 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+## P2.S2 — golden system prompt (merged 74148433d)
+d19f06665 (9 files +533/-2) pinned Runtime::buildSystemPrompt() output to tests/fixtures/prompt/golden-system-prompt.txt (assertSame) + 10-fragment host-path leak scan with /^\//m guard + deterministic fixture-repo builder + regeneration-discipline docblock; 30a32a49b added the '/test/' leak fragment (cycle-1 LOW finding). Review: c1 FINDINGS (1 LOW) → fixed; c2 fresh reviewer APPROVE 19/19 (mutations measured: golden 't'→'x' RED at BaseSystemPromptTest.php:570; mid-file '/test/path/leak' RED at :602; restored byte-identical md5 e89d98c72975ca8c22914d7f6796ec7a). Suites: BaseSystemPromptTest 12 tests/87 assertions; census 6-file set 103/9410; Providers 846/2047 (post-merge); check-path-repos exit 0. Observations A/B/C non-blocking (A: stale ensureFixtureRepo hardening recommended for later golden-touching steps P3.S1/P5.S4-P5.S6/P9.S5; B: gitRun env gaps; C: AgentTest.php:571-578 pinHostLines comment stale-in-spirit — recorded follow-up). Merged --no-ff 74148433d; worktree removed; branch prompt/P2.S2 deleted. Orchestrator: coder-executed merge + Providers run.
+
 ### P2.B2 session status #3 · 2026-08-28 · reviewer delegate died (timeout, no output) → respawned via script(1)
 
 **P2.S2 REVIEWER DELEGATE DIED** 2026-08-28 03:51:10: delegate `salty-rose-opossum` (agent=reviewer) hit the infrastructure's 900s delegation timeout with NO output — artifact is 384 bytes, no verdict, no partial review (started 03:36:05). Same failure class as the step agents today. No review ever produced → cycle 1 still counts as cycle 1; cap 5 unchanged.
