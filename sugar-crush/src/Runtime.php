@@ -1663,12 +1663,17 @@ final class Runtime
      * Each document is fenced in <project-instructions> so the model can tell
      * project convention from the assistant's own base prompt.
      *
-     * The <env> block goes first, ahead of any project instruction, so the
-     * model knows where it is (cwd, git state, platform, model, date) before
-     * it reads conventions that talk about paths relative to that cwd, and
-     * <repo-map> goes immediately after it for the same reason one step out:
-     * it is a list of paths relative to that cwd, so it has to follow the
-     * block that names the cwd and precede the prose that assumes both.
+     * Layers are ordered by mutation frequency, stable first: the base
+     * heredoc, <repo-map>, the <project-instructions> documents,
+     * <project-memory>, the enabled skills and the skill listing are all
+     * content that does not change between the steps of a turn, so they sit
+     * in the cacheable prefix. <env> — whose git status and diff bodies
+     * change on every file write — is emitted LAST, the position Claude Code
+     * gives its own git block (prompt_expand.md §4.4, §9.2): a volatile
+     * block earlier in the prompt voids the prefix for everything after it
+     * from the first edit of a session (§3.4). The model still receives the
+     * same orientation facts (cwd, git state, platform, model, date); only
+     * their position changed.
      */
     private function buildSystemPrompt(App $app): string
     {
@@ -1757,15 +1762,14 @@ final class Runtime
             commands to follow.
             PROMPT;
 
-        $base .= "\n\n" . $this->environmentSnapshot($app)->render();
-
-        // Immediately after <env> and BEFORE the instruction documents,
-        // because it is the same KIND of thing <env> is - fact derived from
-        // the repository, not convention an author wrote down - and because
-        // every line in it is a path relative to the cwd <env> just named.
-        // The ordering argument that puts <env> first therefore puts this
-        // second: read where you are, then what is where you are, then the
-        // conventions that talk about both.
+        // Directly after the base heredoc and BEFORE the instruction
+        // documents: it is the same KIND of thing the base is - fact derived
+        // from the repository, not convention an author wrote down - and
+        // every line in it is a path the model resolves against the working
+        // directory the <env> block names. Read who you are and what is
+        // where you are before the conventions that talk about both; the
+        // volatile <env> block itself sits at the very end (see the assembly
+        // note above).
         $repoMap = $this->repoMapSnapshot($app)->render();
         if ($repoMap !== '') {
             $base .= "\n\n" . $repoMap;
@@ -1813,6 +1817,15 @@ final class Runtime
         // Empty registry => empty string, so nothing changes for a session
         // that discovered no skills.
         $base .= (new SkillMatcher())->listForPrompt($app->availableSkills);
+
+        // Volatile content LAST, ordered by mutation frequency
+        // (prompt_expand.md §9.2): the git status and diff bodies render()
+        // shells out for change on every file write, so a block earlier in
+        // the prompt would void the cache prefix for every layer after it
+        // from the first edit of a session. Claude Code places its git block
+        // "at the very end of the system prompt" (§4.4); this is the same
+        // decision.
+        $base .= "\n\n" . $this->environmentSnapshot($app)->render();
 
         return $base;
     }
