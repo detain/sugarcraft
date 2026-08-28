@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 2 batch 2 (P2.B2) in flight — P2.S2 review cycle 1 running (reviewer salty-rose-opossum), P2.S4 run 3 respawned (setsid) and in flight. See §8.**
+**Current state: Phase 2 batch 2 (P2.B2) in flight — P2.S2 review cycle 1 running (script respawn, delegate died), P2.S4 run 3 in flight. See §8.**
 
 ---
 
@@ -189,13 +189,14 @@ Full detail in `prompt_plan.md` §1. The short form:
 
 ```
 Phase:            Phase 2 (Prompt Transmission) — batch 2 (P2.B2) IN FLIGHT
-Next step:        P2.S2 review cycle 1 RUNNING (reviewer delegate salty-rose-opossum, 19-check bar
-                   §1.4). On APPROVE -> merge per declared order (P2.S2 -> P2.S4, tests/Providers/
-                   between, then worktree remove + branch -d). P2.S4 run 3 in flight (setsid respawn,
-                   pids below). Step texts prompt_plan.md §4; review bar §1.4; merge format §1.6.
+Next step:        P2.S2 review cycle 1 RUNNING (script(1) respawn — delegate reviewer died w/ no
+                   output; script pid 3844012, opencode pid 3844014). On APPROVE -> merge per
+                   declared order (P2.S2 -> P2.S4, tests/Providers/ between, then worktree remove +
+                   branch -d). P2.S4 run 3 in flight (setsid pids 3772627/3772629). Step texts
+                   prompt_plan.md §4; review bar §1.4; merge format §1.6.
 Steps done:       12 of 61
 Phases done:      2 of 12
-Last commit:      96dc9a00b — prompt: session status bookkeeping — P2.S2 done awaiting review, P2.S4 respawned
+Last commit:      c4ab685ac — prompt: P2.B2 session status #2 — P2.S2 review cycle 1 started, P2.S4 run 3 respawned (setsid)
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     P2.S2 verification run 2026-08-28 (worktree /home/sites/prompt-step-P2.S2,
                    commit d19f06665): BaseSystemPromptTest 12/86 OK; tests/Providers/ 846/2047 OK
@@ -209,8 +210,14 @@ In-flight batch:  P2.B2 — P2.S2 + P2.S4 CONCURRENT (file-disjoint). MERGE ORDE
                     prompt/P2.S2, base 687e442a9). AGENT COMPLETE — single squashed commit d19f06665
                     "prompt/P2.S2: pin the full assembled system prompt to a committed golden"
                     (author Joe Huss, NOT pushed; .opencode/package.json modified — runtime artifact,
-                    revert at merge). VERIFIED by orchestrator (suites above). REVIEW CYCLE 1 RUNNING:
-                    delegate agent=reviewer salty-rose-opossum, fresh reviewer, 19-check bar §1.4
+                    revert at merge). VERIFIED by orchestrator (suites above). REVIEW CYCLE 1 RUNNING: delegate
+                    agent=reviewer salty-rose-opossum DIED 2026-08-28 03:51 (900s delegation timeout,
+                    no output, no verdict — artifact 384 bytes; no review produced, cycle count
+                    unchanged). RESPAWNED via script(1)+setsid: script pid 3844012, opencode pid
+                    3844014, brief /tmp/opencode/p2s2-reviewer-brief.md (§1.4 verbatim 19 checks +
+                    step text + diff position + verify-don't-trust numbers + READ-ONLY rules + final
+                    message = complete report with VERDICT line), logs
+                    /tmp/opencode/p2s2-reviewer-{bg,script}.log. 19-check bar §1.4
                     (prompt_plan.md:332). On APPROVE -> merge per declared order; on FINDINGS -> fix
                     agent -> NEW reviewer (cap 5 cycles, never reuse). Deviations (in-scope,
                     agent-documented): fixture path depth fix (sugar-crush/vendor not monorepo vendor);
@@ -235,7 +242,7 @@ In-flight batch:  P2.B2 — P2.S2 + P2.S4 CONCURRENT (file-disjoint). MERGE ORDE
                     Death ladder §1.8: commits -> verify; uncommitted -> continuation brief;
                     pristine -> respawn same brief.
 Live worktrees:   /home/sites/prompt-step-P2.S2 — P2.S2, DONE-unmerged (agent complete, verified,
-                    review cycle 1 running, reviewer salty-rose-opossum);
+                    review cycle 1 running via script(1), reviewer pids 3844012/3844014);
                     /home/sites/prompt-step-P2.S4 — P2.S4, in flight (run 3, setsid pids 3772627/3772629)
 Blocked on:       nothing
 Awaiting user decision: nothing

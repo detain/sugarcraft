@@ -255,6 +255,16 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P2.B2 session status #3 · 2026-08-28 · reviewer delegate died (timeout, no output) → respawned via script(1)
+
+**P2.S2 REVIEWER DELEGATE DIED** 2026-08-28 03:51:10: delegate `salty-rose-opossum` (agent=reviewer) hit the infrastructure's 900s delegation timeout with NO output — artifact is 384 bytes, no verdict, no partial review (started 03:36:05). Same failure class as the step agents today. No review ever produced → cycle 1 still counts as cycle 1; cap 5 unchanged.
+
+**REVIEWER RESPAWNED via script(1)+setsid** (proven method from P2.S4 run 3): `setsid script -qec 'opencode run --dir /home/sites/prompt-step-P2.S2 --title "P2.S2 reviewer cycle 1 (script)" ...'` → script pid **3844012**, opencode pid **3844014**, RUNNING with brief loaded. Brief `/tmp/opencode/p2s2-reviewer-brief.md` = §1.4 verbatim (19 checks + run-the-code + report rules, prompt_plan.md:346-447) + P2.S2 step text verbatim (prompt_plan.md:1279-1299) + diff position (d19f06665 vs base 687e442a9, 9 files +533/-2) + agent-reported numbers (verify-don't-trust) + READ-ONLY hard rules (no Edit/Write/git-writes; phpunit allowed) + CRITICAL WARNING (final message = complete report; VERDICT: APPROVE | VERDICT: FINDINGS last line). Logs `/tmp/opencode/p2s2-reviewer-{bg,script}.log`. Monitor: short pgrep + ANSI-stripped tail; verdict = report completion.
+
+**P2.S4 run 3** (setsid pids 3772627/3772629): still ALIVE 03:56, exploring migration candidates (SystemPromptWiringTest, MemoryPromptWiringTest, RepoMapBlockTest:1075+).
+
+**Master HEAD**: c4ab685ac (status #2 bookkeeping), tree clean. Identity Joe Huss <detain@interserver.net>.
+
 ### P2.B2 session status #2 · 2026-08-28 · P2.S2 review cycle 1 started + P2.S4 run 2 died, run 3 respawned (setsid)
 
 **P2.S2 REVIEW CYCLE 1 STARTED** 2026-08-28: delegate agent=reviewer, ID **salty-rose-opossum**, RUNNING. Fresh reviewer, 19-check bar (§1.4, prompt_plan.md:332). Prompt = §1.4 verbatim + P2.S2 step text + diff file list (9 files +533/-2) + orchestrator-measured numbers (BaseSystemPromptTest 12/86, Providers 846/2047, census 103/9410, deletion experiment t→x red/green). Read-only: cannot run git/phpunit; reads files in worktree, compares against base at main repo. On APPROVE → merge per declared order (P2.S2 → P2.S4, tests/Providers/ between, then worktree remove + branch -d). On FINDINGS → fix agent → NEW reviewer. Never reuse a reviewer; never tell a reviewer a previous review happened.
