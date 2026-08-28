@@ -602,7 +602,7 @@ final class FeatWiringReachabilityTest extends TestCase
      * instructions would red it. The block must still reach a real launch;
      * only its position changed.
      */
-    public function testARealLaunchDeliversTheEnvironmentBlockAheadOfProjectInstructions(): void
+    public function testARealLaunchDeliversTheEnvironmentBlockAfterProjectInstructions(): void
     {
         file_put_contents($this->tempDir . '/repo/AGENTS.md', 'ENV ORDER MARKER');
 

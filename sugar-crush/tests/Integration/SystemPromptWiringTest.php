@@ -147,7 +147,7 @@ final class SystemPromptWiringTest extends TestCase
      * project instructions would red it. The model still receives the same
      * orientation facts; only their position changed.
      */
-    public function testBothHalvesLandInOneSystemPromptWithEnvironmentFirst(): void
+    public function testBothHalvesLandInOneSystemPromptWithEnvironmentLast(): void
     {
         file_put_contents($this->tempDir . '/AGENTS.md', 'BOTH HALVES INTEGRATION MARKER');
 

@@ -171,7 +171,7 @@ final class MemoryPromptWiringTest extends TestCase
         $this->assertStringNotContainsString('<project-memory>', $prompt);
     }
 
-    public function testTheMemoryBlockSitsAfterTheEnvironmentBlockInThePrompt(): void
+    public function testTheMemoryBlockSitsBeforeTheEnvironmentBlockInThePrompt(): void
     {
         // P3.S1 inverted this pin, deliberately, with the env block's move to
         // the END of the assembly (stable layers first, volatile <env> last —

@@ -544,12 +544,12 @@ final class BaseSystemPromptTest extends TestCase
      * buildSystemPrompt() concatenates, in order:
      *
      *   1. the base heredoc (the four guidance sections the tests above check)
-     *   2. the <env> block
-     *   3. the <repo-map> block, when the root has anything to map
-     *   4. the <project-instructions> documents (loadRoot(), then loadForced())
-     *   5. the <project-memory> block, when the app has a memory store
-     *   6. each enabled skill's systemPromptContribution()
-     *   7. the SkillMatcher listing of every auto-invocable discovered skill
+     *   2. the <repo-map> block, when the root has anything to map
+     *   3. the <project-instructions> documents (loadRoot(), then loadForced())
+     *   4. the <project-memory> block, when the app has a memory store
+     *   5. each enabled skill's systemPromptContribution()
+     *   6. the SkillMatcher listing of every auto-invocable discovered skill
+     *   7. the <env> block
      *
      * — is pinned byte-for-byte against a committed golden. A one-byte change
      * to any layer's prose, separators, ordering or git-section wording fails

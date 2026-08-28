@@ -1114,7 +1114,7 @@ final class RepoMapBlockTest extends TestCase
     // Runtime wiring
     // =========================================================================
 
-    public function testTheBlockReachesTheSystemPromptBetweenEnvAndTheProjectInstructions(): void
+    public function testTheBlockReachesTheSystemPromptBeforeTheEnvironmentBlock(): void
     {
         // P3.S1 inverted this pin, deliberately, with the env block's move to
         // the END of the assembly (stable layers first, volatile <env> last —

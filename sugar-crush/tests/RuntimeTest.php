@@ -1770,7 +1770,7 @@ final class RuntimeTest extends TestCase
         $this->assertSame($first, $second);
     }
 
-    public function testBuildSystemPromptOrdersEnvironmentBlockBeforeProjectInstructions(): void
+    public function testBuildSystemPromptOrdersProjectInstructionsBeforeEnvironmentBlock(): void
     {
         // P3.S1 inverted this pin, deliberately, with the env block's move to
         // the END of the assembly (stable layers first, volatile <env> last —
