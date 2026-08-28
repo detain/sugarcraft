@@ -599,6 +599,7 @@ final class BaseSystemPromptTest extends TestCase
         self::assertStringNotContainsString('/Users/', $golden, 'golden leaks a macOS /Users/ host path');
         self::assertStringNotContainsString('C:\\Users\\', $golden, 'golden leaks a Windows host path');
         self::assertStringNotContainsString('/my/', $golden, 'golden leaks the author username as a path segment');
+        self::assertStringNotContainsString('/test/', $golden, 'golden leaks a /test/ path fragment');
         self::assertStringNotContainsString('Joe Huss', $golden, 'golden leaks the author identity');
         self::assertStringNotContainsString('Fixture Author', $golden, 'golden leaks the fixture commit author identity');
         self::assertStringNotContainsString('fixture@example.invalid', $golden, 'golden leaks the fixture commit author email');
