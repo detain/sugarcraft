@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 2 batch 2 (P2.B2) in flight — P2.S2 review cycle 1 running (script respawn, delegate died), P2.S4 run 3 in flight. See §8.**
+**Current state: Phase 2 CLOSED (P2.S1..P2.S4 merged; close review cleared — 1 LOW diff --check fixed via .gitattributes). Next: Phase 3 P3.S1 fully serial. See §8.**
 
 ---
 
@@ -188,40 +188,58 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 2 (Prompt Transmission) — batch 2 (P2.B2) CLOSED — P2.S2 + P2.S4
-                   merged to master
-Next step:        Phase 2 close — diff 0f3bf202f..HEAD; F1/F2 fold spot-check; then Phase 3
-                   P3.S1 fully serial; sequencing gate re-check before Phase 5/6. Step texts
-                   prompt_plan.md §4; review bar §1.4; merge format §1.6.
+Phase:            2 CLOSED — P2.S1..P2.S4 merged (e60a083d2, 6a6df4ddc, 74148433d, dfb618f16);
+                   close review cleared (1 LOW diff --check fixed via .gitattributes); close
+                   commit <YOUR_SHA>
+Next step:        Phase 3 — P3.S1 fully serial (no concurrency) per plan; read prompt_plan.md
+                   Phase 3 section + prompt_expand.md P3 section before starting. Step texts
+                   prompt_plan.md §4; review bar §1.4; merge format §1.6. Sequencing gate
+                   re-check before Phase 5/6 (collision rows still live, §5/§8 field below).
 Steps done:       14 of 61
-Phases done:      2 of 12
-Last commit:      dfb618f16 — sugar-crush prompt: P2.S4 prompt-composition fixture + migrated prompt tests
+Phases done:      3 of 12
+Last commit:      <YOUR_SHA> — prompt: phase 2 close — status #6 — .gitattributes golden-whitespace
+                   exemption; resume/worklog/plan handoff updated
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     tests/Providers/ 846/2047 OK (main repo @dfb618f16, post-P2.S4-merge).
-                   P2.S4 verification (worktree, commit 1aa8677e2): SystemPromptWiring 11/65,
-                   MemoryPromptWiring 14/36, RepoMapBlock 62/163, Runtime 87/256; census 103/9400;
-                   check-path-repos exit 0. P2.S2 verification (worktree, commit d19f06665):
-                   BaseSystemPromptTest 12/86 OK; census 6-file set 103/9410 OK. Oldest full-suite
-                   checkpoint: 10393/160779/1 EXIT 0 @ e513409c5.
-In-flight batch:  none (P2.B2 CLOSED — both steps merged in declared order: P2.S2 -> 74148433d,
-                   P2.S4 -> dfb618f16; tests/Providers/ 846/2047 run between merges; worktrees
-                   removed, branches prompt/P2.S2 + prompt/P2.S4 deleted).
+Latest suite:     BaseSystemPromptTest 12 tests/87 assertions OK; census 6-file set 103/9420 OK;
+                   tests/Providers/ 846/2047 OK (main repo @master, phase close). Phase suites
+                   174/520 (SystemPromptWiring 11/65, MemoryPromptWiring 14/36, RepoMapBlock 62/163,
+                   Runtime 87/256); check-path-repos exit 0. Oldest full-suite checkpoint:
+                   10393/160779/1 EXIT 0 @ e513409c5. Baseline 10351/160648/1 (P0.S1, never edited).
+In-flight batch:  none (Phase 2 CLOSED — all four steps merged in declared order: P2.S1 -> e60a083d2,
+                   P2.S3 -> 6a6df4ddc, P2.S2 -> 74148433d, P2.S4 -> dfb618f16; worktrees removed,
+                   branches prompt/P2.S1 + prompt/P2.S2 + prompt/P2.S3 + prompt/P2.S4 deleted;
+                   none remain on master now or at close).
 Live worktrees:   none (main repo only)
 Blocked on:       nothing
 Awaiting user decision: nothing
-Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
-                   (2) F1: SSE-fixture byte-identity comment-claimed not structural — fold
-                   shared-const/assertion into Phase 2 planning;
-                   (3) F2: three distinct ''-semantics pinned (OpenAI transmits empty system,
-                   Bedrock SDK-validator hard-fails, Sglang/Custom/Vertex omit) — unification
-                   into Phase 2 planning;
-                   (4) sequencing gate re-check before Phase 5/6 (collision rows still live, §5);
-                   (5) P2.S3 pinHostLines() drop once P2.S1 injectability lands;
-                   (6) observation C AgentTest.php:569-570 stale TODO (future step);
-                   (7) observation A ensureFixtureRepo staleness hardening recommended for later
-                   golden-touching steps (P3.S1/P5.S4-P5.S6/P9.S5)
-Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
-                   (collision rows still live, see §5)
+Open follow-ups:  (1) P4.S2: usage-payload cache fields re-probe before fixing fixture shape;
+                   (2) F1 SSE byte-identity — VERIFIED structurally at phase close (SSE_BODY
+                   byte-identical, 155 bytes) — residual: SSE_BODY literal duplicated at
+                   SystemPromptTransmissionMatrixTest.php:107 + OpenAIProviderTest.php:644; consider
+                   shared const, drift guard in a later phase;
+                   (3) F2 three ''-semantics — VERIFIED distinct + pinned (OpenAI transmits empty
+                   system `!== null` guard, Bedrock SDK-validator hard-fails zero-length blocks,
+                   Sglang/Custom/Vertex omit);
+                   (4) pinHostLines drop — still open, carried forward: AgentTest golden still
+                   normalizes Platform line, BaseSystemPromptTest golden injects 'linux' (P2.S1 landed);
+                   (5) observation C AgentTest.php:569-570 stale TODO (future step);
+                   (6) observation A ensureFixtureRepo() staleness hardening recommended for later
+                   golden-touching steps (P3.S1/P5.S4-P5.S6/P9.S5) — re-raised at phase close;
+                   (7) NEW (phase close, awareness only, not drift): census on master reads 103/9420 —
+                   census instruments derive counts from the tree; +20 vs the P2.S4-review figure
+                   is a pre-final-tree expectation, not drift, verified consistent post-merge.
+                   (8) NEW (phase close, awareness only): BaseSystemPromptTest once printed 12/103
+                   then stable 12/87 on re-run — observed anomaly, not reproducible, flagged for
+                   awareness;
+                   (9) NEW (phase close, bookkeeping): prompt_plan.md status banner updated to Phase 2 CLOSED
+                   (was stale 'batch 2 in flight'); worklog entry records the close; §8 carries the gate state.
+Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4 (P0/P1/P2 CLOSED, P3 next P3.S1 fully serial);
+                   RE-CHECK before Phase 5/6 (collision rows still live, §5):
+                   BuiltInToolCorpusTest assertSame(297, $files) + assertSame(316, $declarations) + RepoMapBlock.php:273
+                   doc-line restating them (this plan adds ~11 src/ files — hardest collision);
+                   EngineBackend.php held by a lane, wanted by P7.S3; Chat.php + ContextCompactor.php for P4/P8;
+                   Bash.php behaviour vs P9.S3 description; AgentDefinition C7 for P7.S5; tests/Support/ wholesale;
+                   tree-wide census tests (SymbolCitationDriftTest, SwallowingCatchCensusTest & co. walk the tree).
 ```
 
 ---
