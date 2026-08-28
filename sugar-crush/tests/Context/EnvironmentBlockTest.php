@@ -691,7 +691,8 @@ final class EnvironmentBlockTest extends TestCase
      *
      * Deletion experiments, both run: removing the gate (always emit) reddens
      * the second-render assertions; inverting it (never emit) reddens the
-     * third-render one.
+     * first-render assertions — the third-render ones would go red too, but
+     * the first failure is the one PHPUnit reports.
      */
     public function testTheDiffIsEmittedOnlyOnTheStepAfterAWrite(): void
     {
