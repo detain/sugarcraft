@@ -190,14 +190,14 @@ Full detail in `prompt_plan.md` §1. The short form:
 ```
 Phase:            2 CLOSED — P2.S1..P2.S4 merged (e60a083d2, 6a6df4ddc, 74148433d, dfb618f16);
                    close review cleared (1 LOW diff --check fixed via .gitattributes); close
-                   commit <YOUR_SHA>
+                   commit 3d7c7e420
 Next step:        Phase 3 — P3.S1 fully serial (no concurrency) per plan; read prompt_plan.md
                    Phase 3 section + prompt_expand.md P3 section before starting. Step texts
                    prompt_plan.md §4; review bar §1.4; merge format §1.6. Sequencing gate
                    re-check before Phase 5/6 (collision rows still live, §5/§8 field below).
 Steps done:       14 of 61
 Phases done:      3 of 12
-Last commit:      <YOUR_SHA> — prompt: phase 2 close — status #6 — .gitattributes golden-whitespace
+Last commit:      3d7c7e420 — prompt: phase 2 close — status #6 — .gitattributes golden-whitespace
                    exemption; resume/worklog/plan handoff updated
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     BaseSystemPromptTest 12 tests/87 assertions OK; census 6-file set 103/9420 OK;
