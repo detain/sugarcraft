@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 1 CLOSED — all 7 steps (P1.S1–S7) merged; Phase 2 batch 1 (P2.S1 + P2.S3, concurrent) is next.**
+**Current state: Phase 2 batch 2 (P2.B2) in flight — P2.S2 done + verified awaiting review/merge; P2.S4 respawned and in flight. See §8.**
 
 ---
 
@@ -188,32 +188,41 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 1 (Transmission) CLOSED — all 7 steps (P1.S1–S7) merged to master
-Next step:        Phase 2 batch 1 — P2.S1 + P2.S3 CONCURRENT (per prompt_plan.md §4):
-                   P2.S1 injectable clock/platform/cwd (Runtime.php + Context/EnvironmentBlock.php
-                   + tests/RuntimeTest.php); P2.S3 golden agent prompt for Agent::systemPrompt()
-                   (Agent.php + AgentTest.php + fixtures/prompt/golden-agent-prompt.txt new) —
-                   OPPOSITE order to the Runtime builder; do NOT unify: two assemblers
-                   deliberately separate (AgentTest.php:251 vs BaseSystemPromptTest.php:135).
-                   ~11 src/ files start in Phase 5 — census collision ahead; re-check the
-                   sequencing gate before Phase 5/6.
+Phase:            Phase 2 (Prompt Transmission) — batch 2 (P2.B2) IN FLIGHT
+Next step:        P2.S2 is DONE + verified, awaiting review -> merge (declared order P2.S2 -> P2.S4,
+                   tests/Providers/ between, then worktree remove + branch -d), then verify/review/
+                   merge P2.S4. Step texts prompt_plan.md §4; review bar §1.4; merge format §1.6.
 Steps done:       12 of 61
 Phases done:      2 of 12
-Last commit:      6a6df4ddc — sugar-crush prompt: P2.S3 the golden agent prompt
+Last commit:      9f531b566 — prompt: P2.B2 spawn bookkeeping (worklog BATCH OPEN + resume §8)
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     FULL suite @ e513409c5 (phase-1 checkpoint): OK but skipped!
-                   Tests: 10393, Assertions: 160779, Skipped: 1, EXIT 0 (delta vs baseline
-                   +42 tests / +131 assertions, same 1 skip). Providers: 846/2047; census: 103/9390.
+Latest suite:     P2.S2 verification run 2026-08-28 (worktree /home/sites/prompt-step-P2.S2,
+                   commit d19f06665): BaseSystemPromptTest 12/86 OK; tests/Providers/ 846/2047 OK
+                   (exact baseline). Agent-reported: census set 103/9410 vs 9390 baseline (+20, all
+                   green — +20 fixture files, +10 test file, parent tree 10 below snapshot, measured
+                   by experiment); check-path-repos exit 0; deletion experiment one-byte t->x -> red,
+                   restored -> green. Oldest full-suite checkpoint: 10393/160779/1 EXIT 0 @ e513409c5.
 In-flight batch:  P2.B2 — P2.S2 + P2.S4 CONCURRENT (file-disjoint). MERGE ORDER declared at spawn:
-                    P2.S2 → P2.S4, tests/Providers/ run between merges. P2.S2: golden system prompt —
-                    worktree /home/sites/prompt-step-P2.S2 (branch prompt/P2.S2); P2.S4: prompt-composition
-                    harness — worktree /home/sites/prompt-step-P2.S4 (branch prompt/P2.S4, fixture at
-                    tests/Prompt/PromptFixture.php NOT tests/Support/ — cross-plan lane collision); both
-                    base 687e442a9, vendor cp -al + PSR-4 verified, agents in flight via script(1)
-                    wrapper pids 1484560 (P2.S2) + 1484561 (P2.S4) per user directive 2026-08-26
-                    (no pty_spawn; task tool NOT in toolset). REVIEWERS: delegate (agent=reviewer)
-                    primary, script(1) fallback.
-Live worktrees:   /home/sites/prompt-step-P2.S2 — P2.S2, in flight (pid 1484560); /home/sites/prompt-step-P2.S4 — P2.S4, in flight (pid 1484561)
+                    P2.S2 -> P2.S4, tests/Providers/ run between merges.
+                    P2.S2 (golden system prompt): worktree /home/sites/prompt-step-P2.S2 (branch
+                    prompt/P2.S2, base 687e442a9). AGENT COMPLETE — single squashed commit d19f06665
+                    "prompt/P2.S2: pin the full assembled system prompt to a committed golden"
+                    (author Joe Huss, NOT pushed; .opencode/package.json modified — runtime artifact,
+                    revert at merge). VERIFIED by orchestrator (suites above). AWAITING REVIEW -> merge.
+                    Deviations (in-scope, agent-documented): fixture path depth fix (sugar-crush/vendor
+                    not monorepo vendor); readGolden->readSystemPromptGolden rename for drift census.
+                    P2.S4 (prompt-composition harness): worktree /home/sites/prompt-step-P2.S4 (branch
+                    prompt/P2.S4, base 687e442a9, fixture at tests/Prompt/PromptFixture.php NOT
+                    tests/Support/ — cross-plan lane collision; >=3 existing prompt tests migrated
+                    char-identical). First attempt DIED mid-flight 2026-08-28 10:20:49 (script exit 0;
+                    agent ended turn while exploration + pty_read pending; worktree pristine, no
+                    commits; logs rotated to /tmp/opencode/p2s4-{bg,script}-run1.log). RESPAWNED
+                    2026-08-28, script(1) pid 3253714, same brief + RESPAWN AMENDMENT (never end turn
+                    with async pending; sync bash only; final message = 7-section report); logs
+                    /tmp/opencode/p2s4-{bg,script}.log. REVIEWERS: delegate (agent=reviewer) primary,
+                    script(1) fallback; fresh reviewer each cycle; cap 5.
+Live worktrees:   /home/sites/prompt-step-P2.S2 — P2.S2, DONE-unmerged (agent complete, verified,
+                    awaiting review); /home/sites/prompt-step-P2.S4 — P2.S4, in flight (respawn pid 3253714)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
@@ -222,7 +231,8 @@ Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixi
                    (3) F2: three distinct ''-semantics pinned (OpenAI transmits empty system,
                    Bedrock SDK-validator hard-fails, Sglang/Custom/Vertex omit) — unification
                    into Phase 2 planning;
-                   (4) sequencing gate re-check before Phase 5/6 (collision rows still live, §5)
+                   (4) sequencing gate re-check before Phase 5/6 (collision rows still live, §5);
+                   (5) P2.S3 pinHostLines() drop once P2.S1 injectability lands
 Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
                    (collision rows still live, see §5)
 ```

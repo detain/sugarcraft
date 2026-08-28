@@ -8,7 +8,7 @@ Where they disagree about *how* the work is run, this document wins.
 subsystem, the compaction path, the tool-description surface, and the rules/skills/hooks/memory
 channels that feed them.
 
-**Status** Not started. Written 2026-08-25 against `master`.
+**Status** In progress — Phase 2 batch 2 in flight (P2.S2 done + verified awaiting review/merge; P2.S4 respawned in flight). Authoritative state: `prompt_resume.md` §8 (rewritten 2026-08-28).
 
 **Companion files**
 - `prompt_worklog.md` — append-only, one entry per step, newest at the top.

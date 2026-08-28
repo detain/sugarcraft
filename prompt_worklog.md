@@ -255,6 +255,16 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 *(newest first — the first real entry goes directly below this line)*
 
+### P2.B2 session status · 2026-08-28 · liveness check + P2.S2 done + P2.S4 respawned
+
+**Liveness check 2026-08-28** (user ask "check if its still going if not retry"): P2.S2 agent COMPLETE — full 7-section report, commit **d19f06665** `prompt/P2.S2: pin the full assembled system prompt to a committed golden` (single squashed commit, author Joe Huss, not pushed). Suites per agent: BaseSystemPromptTest 12/86 green; Providers 846/2047 exact baseline; census set 103/9410 vs 9390 baseline (+20, all green: +20 fixture files, +10 test file, parent tree 10 below snapshot — measured by experiment); check-path-repos exit 0. Deletion experiment: one byte `t→x` in git-log subject → red, exact divergence named, restored → green. Deviations (in-scope, declared files only): fixture path depth fix (sugar-crush/vendor not monorepo vendor); `readGolden`→`readSystemPromptGolden` rename for the drift census. Orchestrator verification 2026-08-28: re-ran in worktree — BaseSystemPromptTest **12/86 OK**, Providers **846/2047 OK**. → AWAITING REVIEW (delegate agent=reviewer, 19-check bar) then merge per declared order.
+
+**P2.S4 FIRST ATTEMPT DIED**: script(1) run exited cleanly 2026-08-28 10:20:49 (COMMAND_EXIT_CODE=0) with NO completion report — agent ended its turn while an exploration delegation + pty_read were pending ("Waiting on the exploration report now"). Worktree pristine (no commits; only `.opencode/package.json` runtime artifact). Logs rotated to `/tmp/opencode/p2s4-{bg,script}-run1.log`.
+
+**P2.S4 RESPAWNED** 2026-08-28: same brief + **RESPAWN AMENDMENT** appended (never end turn with async pending — sync bash/Read/Grep only; if a tool result does not arrive in-turn treat as failed and re-run synchronously; final message MUST be the complete 7-section report). script(1) pid **3253714**, logs `/tmp/opencode/p2s4-{bg,script}.log`, worktree `/home/sites/prompt-step-P2.S4`.
+
+**Master HEAD**: 9f531b566 (spawn bookkeeping), tree clean. Merge order unchanged: P2.S2 → P2.S4 with tests/Providers/ between; then worktree remove + `git branch -d` both; BATCH P2.B2 CLOSE + Phase 2 close (phase review over `git diff 0f3bf202f..HEAD`; F1/F2 fold spot-check) → Phase 3 P3.S1 fully serial.
+
 ### BATCH P2.B2 OPEN · 2026-08-26 17:2x
 
 **Steps**: P2.S2 + P2.S4 CONCURRENT (file-disjoint). P2.S2 — golden system prompt (tests/BaseSystemPromptTest.php + tests/fixtures/prompt/golden-system-prompt.txt new + fixture tree new; depends P2.S1 merged; done = golden + one-byte-change red + leak scan /tmp/ /home/ author username + regeneration discipline comment). P2.S4 — prompt-composition harness (tests/Prompt/PromptFixture.php NEW — NOT tests/Support/ due to cross-plan lane collision, docblock must state why — + tests/Integration/SystemPromptWiringTest.php + ≥3 migrated prompt tests with character-identical assertions; depends P2.S1).
