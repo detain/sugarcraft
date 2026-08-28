@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 2 batch 2 (P2.B2) in flight — P2.S2 done + verified awaiting review/merge; P2.S4 respawned and in flight. See §8.**
+**Current state: Phase 2 batch 2 (P2.B2) in flight — P2.S2 review cycle 1 running (reviewer salty-rose-opossum), P2.S4 run 3 respawned (setsid) and in flight. See §8.**
 
 ---
 
@@ -189,12 +189,13 @@ Full detail in `prompt_plan.md` §1. The short form:
 
 ```
 Phase:            Phase 2 (Prompt Transmission) — batch 2 (P2.B2) IN FLIGHT
-Next step:        P2.S2 is DONE + verified, awaiting review -> merge (declared order P2.S2 -> P2.S4,
-                   tests/Providers/ between, then worktree remove + branch -d), then verify/review/
-                   merge P2.S4. Step texts prompt_plan.md §4; review bar §1.4; merge format §1.6.
+Next step:        P2.S2 review cycle 1 RUNNING (reviewer delegate salty-rose-opossum, 19-check bar
+                   §1.4). On APPROVE -> merge per declared order (P2.S2 -> P2.S4, tests/Providers/
+                   between, then worktree remove + branch -d). P2.S4 run 3 in flight (setsid respawn,
+                   pids below). Step texts prompt_plan.md §4; review bar §1.4; merge format §1.6.
 Steps done:       12 of 61
 Phases done:      2 of 12
-Last commit:      9f531b566 — prompt: P2.B2 spawn bookkeeping (worklog BATCH OPEN + resume §8)
+Last commit:      96dc9a00b — prompt: session status bookkeeping — P2.S2 done awaiting review, P2.S4 respawned
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     P2.S2 verification run 2026-08-28 (worktree /home/sites/prompt-step-P2.S2,
                    commit d19f06665): BaseSystemPromptTest 12/86 OK; tests/Providers/ 846/2047 OK
@@ -208,21 +209,34 @@ In-flight batch:  P2.B2 — P2.S2 + P2.S4 CONCURRENT (file-disjoint). MERGE ORDE
                     prompt/P2.S2, base 687e442a9). AGENT COMPLETE — single squashed commit d19f06665
                     "prompt/P2.S2: pin the full assembled system prompt to a committed golden"
                     (author Joe Huss, NOT pushed; .opencode/package.json modified — runtime artifact,
-                    revert at merge). VERIFIED by orchestrator (suites above). AWAITING REVIEW -> merge.
-                    Deviations (in-scope, agent-documented): fixture path depth fix (sugar-crush/vendor
-                    not monorepo vendor); readGolden->readSystemPromptGolden rename for drift census.
+                    revert at merge). VERIFIED by orchestrator (suites above). REVIEW CYCLE 1 RUNNING:
+                    delegate agent=reviewer salty-rose-opossum, fresh reviewer, 19-check bar §1.4
+                    (prompt_plan.md:332). On APPROVE -> merge per declared order; on FINDINGS -> fix
+                    agent -> NEW reviewer (cap 5 cycles, never reuse). Deviations (in-scope,
+                    agent-documented): fixture path depth fix (sugar-crush/vendor not monorepo vendor);
+                    readGolden->readSystemPromptGolden rename for drift census.
                     P2.S4 (prompt-composition harness): worktree /home/sites/prompt-step-P2.S4 (branch
                     prompt/P2.S4, base 687e442a9, fixture at tests/Prompt/PromptFixture.php NOT
                     tests/Support/ — cross-plan lane collision; >=3 existing prompt tests migrated
-                    char-identical). First attempt DIED mid-flight 2026-08-28 10:20:49 (script exit 0;
-                    agent ended turn while exploration + pty_read pending; worktree pristine, no
-                    commits; logs rotated to /tmp/opencode/p2s4-{bg,script}-run1.log). RESPAWNED
-                    2026-08-28, script(1) pid 3253714, same brief + RESPAWN AMENDMENT (never end turn
-                    with async pending; sync bash only; final message = 7-section report); logs
-                    /tmp/opencode/p2s4-{bg,script}.log. REVIEWERS: delegate (agent=reviewer) primary,
-                    script(1) fallback; fresh reviewer each cycle; cap 5.
+                    char-identical). Run 1 DIED 2026-08-28 10:20:49 (agent ended turn with exploration
+                    + pty_read pending; worktree pristine; logs /tmp/opencode/p2s4-{bg,script}-run1.log).
+                    Run 2 DIED 2026-08-28 ("Error: Bad Gateway" mid-turn; script exit 1; worktree
+                    pristine; logs rotated to /tmp/opencode/p2s4-{bg,script}-run2.log — script log
+                    holds run 2's COMPRESSED EXPLORATION SUMMARY = PRIOR ART: buildSystemPrompt
+                    assembly order, EnvironmentBlock/MemoryBlock/RepoMapBlock/InstructionFileLoader/
+                    App/Skill/SkillMatcher/MemoryStore APIs, PromptFixture design state,
+                    migration candidates RepoMapBlockTest.php:1113-1222 + helper :1304 +
+                    MemoryPromptWiringTest.php content tests, tests/Prompt/ non-existent,
+                    BaseSystemPromptTest.php OFF-LIMITS). RUN 3 RESPAWNED (setsid) 2026-08-28:
+                    script pid 3772627, opencode pid 3772629, RUNNING, brief = original + RESPAWN
+                    AMENDMENT (never end turn with async pending) + AMENDMENT 2 (strict sync-only,
+                    no pty/delegate; read run2 log first; BaseSystemPromptTest.php off-limits;
+                    worktree verified pristine — start fresh); logs /tmp/opencode/p2s4-{bg,script}.log.
+                    Death ladder §1.8: commits -> verify; uncommitted -> continuation brief;
+                    pristine -> respawn same brief.
 Live worktrees:   /home/sites/prompt-step-P2.S2 — P2.S2, DONE-unmerged (agent complete, verified,
-                    awaiting review); /home/sites/prompt-step-P2.S4 — P2.S4, in flight (respawn pid 3253714)
+                    review cycle 1 running, reviewer salty-rose-opossum);
+                    /home/sites/prompt-step-P2.S4 — P2.S4, in flight (run 3, setsid pids 3772627/3772629)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
