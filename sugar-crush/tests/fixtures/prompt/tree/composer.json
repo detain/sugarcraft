@@ -1,0 +1,9 @@
+{
+    "name": "fixture/system-repo",
+    "description": "Deterministic fixture workspace for the system-prompt golden",
+    "autoload": {
+        "psr-4": {
+            "Fixture\\Lib\\": "src/"
+        }
+    }
+}
