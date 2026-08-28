@@ -673,6 +673,80 @@ final class EnvironmentBlockTest extends TestCase
         $this->assertLessThan(EnvironmentBlock::SUMMARY_MAX_BYTES, strlen($status));
     }
 
+    // ─── P3.S2: the diff is emitted only on the step after a write ──
+
+    /**
+     * The Done-when test for plan step P3.S2: the class docblock used to name
+     * "emit the diff only on the step AFTER a write tool actually ran" as a
+     * lever it never pulled — this drives the pulled lever through the public
+     * API.
+     *
+     * Three renders, one block lineage: (1) the FIRST render shows the diff —
+     * the default, which is the state a fresh turn opens on; (2) the SECOND,
+     * with NO write in between and the caller deriving the quiet signal,
+     * carries NO diff section at all — but the git section survives, so the
+     * model still sees branch/status/log, and the status still shows the
+     * edit; (3) a write, the caller re-arming, and the THIRD render carries
+     * the diff again, body included — not just a label.
+     *
+     * Deletion experiments, both run: removing the gate (always emit) reddens
+     * the second-render assertions; inverting it (never emit) reddens the
+     * third-render one.
+     */
+    public function testTheDiffIsEmittedOnlyOnTheStepAfterAWrite(): void
+    {
+        $this->initGitRepo();
+        file_put_contents($this->tempDir . '/tracked.txt', "original\n");
+        $this->gitCommitAll('seed');
+        file_put_contents($this->tempDir . '/tracked.txt', "rewritten\n");
+
+        $block = EnvironmentBlock::capture($this->tempDir, 'model');
+
+        // Render 1: the default emits — a fresh turn opens on the working diff.
+        $first = $block->render();
+        $this->assertStringContainsString('Unstaged changes (git diff,', $first);
+        $this->assertStringContainsString('+rewritten', $first);
+
+        // Render 2: no write between the renders; the caller says so.
+        $quiet = $block->withWriteSinceLastRender(false);
+        $second = $quiet->render();
+        $this->assertStringNotContainsString('Staged changes (git diff', $second);
+        $this->assertStringNotContainsString('Unstaged changes (git diff', $second);
+        // The git section itself survives the suppression — still live-polled.
+        $this->assertStringContainsString('Current branch:', $second);
+        $this->assertStringContainsString('Status:', $second);
+        $this->assertStringContainsString(' M tracked.txt', $second);
+
+        // A write, then the caller re-arms: render 3 carries the diff again.
+        file_put_contents($this->tempDir . '/tracked.txt', "rewritten-after-the-write\n");
+        $armed = $quiet->withWriteSinceLastRender(true);
+        $third = $armed->render();
+        $this->assertStringContainsString('+rewritten-after-the-write', $third);
+        $this->assertStringContainsString('Staged changes (git diff', $third);
+    }
+
+    /**
+     * The signal is a constructor value like every other field: bare
+     * construction defaults to emitting (the pre-P3.S2 behaviour every
+     * existing caller and the golden prompt depend on), and the setter is
+     * immutable — the caller's state machine is explicit, never implicit.
+     */
+    public function testWriteSinceLastRenderDefaultsToTrueAndIsAnImmutableSetter(): void
+    {
+        $block = EnvironmentBlock::capture($this->tempDir, 'model');
+        $this->assertTrue($block->writeSinceLastRender());
+
+        $quiet = $block->withWriteSinceLastRender(false);
+        $this->assertFalse($quiet->writeSinceLastRender());
+        $this->assertTrue($block->writeSinceLastRender(), 'the source block must be unchanged');
+
+        $this->assertTrue($quiet->withWriteSinceLastRender(true)->writeSinceLastRender());
+
+        // The constructor accepts the signal directly, not only via the setter.
+        $direct = new EnvironmentBlock($this->tempDir, 'model', null, null, false);
+        $this->assertFalse($direct->writeSinceLastRender());
+    }
+
     // ─── the block's own encoding invariant ─────────────────────────
 
     /**

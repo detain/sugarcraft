@@ -22,10 +22,14 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * `log`, and one `diff` for each of the staged and unstaged views), and the
  * block's git section reflects the repository as the agent has already changed
  * it rather than as it was at session start. FIVE is the count WHEN THE PROCESS
- * HELPERS EXIST: four of them go through `proc_open` and one through
- * `shell_exec`, and a build where either is in `disable_functions` runs fewer —
- * see {@see gitStatusSnapshot()} for what it emits instead, and why a hard
- * failure there would have taken the whole session down rather than one line.
+ * HELPERS EXIST AND THE DIFF IS EMITTED: four of them go through `proc_open`
+ * and one through `shell_exec`, and a build where either is in
+ * `disable_functions` runs fewer — see {@see gitStatusSnapshot()} for what it
+ * emits instead, and why a hard failure there would have taken the whole
+ * session down rather than one line. When the caller has suppressed the diff
+ * via {@see withWriteSinceLastRender()} the count is THREE — the two `diff`
+ * calls are the expensive half, which is the point of the suppression (see the
+ * WHAT IT COSTS IN PROMPT CACHE paragraph below).
  *
  * WHAT THAT COSTS, measured rather than estimated, and PAIRED — each before/
  * after figure taken on the SAME tree, because the first draft of this note
@@ -63,23 +67,51 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * `$now` pinned so the date line cannot account for it: the three-command block
  * rendered BYTE-IDENTICAL both times (327 B, no differing byte at all), this one
  * rendered 598 B then 615 B and first differs at byte **524**. Those four
- * figures are of that one two-edit fixture, not of this repository. The
- * consequence is not local to the block: on
- * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} it precedes the repo
- * map, the instruction documents, the memory block and the skill listing —
- * {@see RepoMapBlock} was inserted DIRECTLY after this block and is now the
- * first thing this paragraph's argument re-prefills, so it is named first —
- * and on
- * {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()} it is the TAIL of the
- * system message with the entire conversation behind it — so on either path a
- * step that touched one file re-prefills everything downstream.
- * `tests/Providers/PromptStabilityTest` exists because "the cache hit survives
- * only as far as the first byte that differs", which is what makes this a bill
- * rather than a theory. It is spent knowingly: a model shown a stale diff of its
- * own edits is the exact failure this feature exists to prevent. The lever, if
- * it ever has to be pulled, is to emit the diff only on the step AFTER a write
- * tool actually ran — which needs a signal this class does not receive today,
- * and is why it is named here rather than implemented.
+ * figures are of that one two-edit fixture, not of this repository. WHERE THE
+ * BLOCK SITS DECIDES HOW FAR THAT DIFFERING BYTE REACHES: on
+ * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} it is now the LAST
+ * layer — P3.S1 moved it there, so a step that touched one file re-prefills
+ * only the `<env>` tail, and the repo map, the instruction documents, the
+ * memory block and the skill listing that PRECEDE it keep their cache hit — and
+ * on {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()} it is still the TAIL
+ * of the system message with the entire conversation behind it, so the move
+ * bounded the blast radius on the Runtime path and left the Agent path where it
+ * was. `tests/Providers/PromptStabilityTest` exists because "the cache hit
+ * survives only as far as the first byte that differs", which is what makes
+ * this a bill rather than a theory.
+ *
+ * THE LEVER, NOW PULLED — that bill used to end by naming a fix this class
+ * never took: emit the diff only on the step AFTER a write tool actually ran,
+ * "which needs a signal this class does not receive today". It receives it now,
+ * as {@see withWriteSinceLastRender()}, and the default keeps the old
+ * behaviour: a bare {@see capture()} or constructor emits both diff sections,
+ * so every pre-existing caller and a fresh Runtime's first prompt render
+ * exactly as they always did — the golden system prompt keeps its diff. The
+ * caller flips the signal: after a step in which a write tool ran it derives
+ * `withWriteSinceLastRender(true)` and the next prompt shows the working diff;
+ * after a step in which none ran it derives `withWriteSinceLastRender(false)`
+ * and the next prompt skips BOTH diff subprocesses and sections, leaving
+ * branch, status and log in place. That removes the bill for the common case —
+ * two consecutive no-write steps rendering byte-different prompts for a diff
+ * the model has already seen — and the runtime cost with it: the two `diff`
+ * calls are the expensive half of the five (373 ms of the 399 ms worst case
+ * measured above was `git diff` itself).
+ *
+ * CROSS-TURN SEMANTICS, STATED — the signal lives on the block, the block
+ * lives on the Runtime, and {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}
+ * builds a FRESH Runtime per user turn. A write on the LAST step of a turn is
+ * therefore not lost: the next turn's first prompt starts in the default emit
+ * state and shows the diff of that write, which is exactly the state the new
+ * turn should open on. The honest asymmetry is the quiet case: a fresh turn
+ * whose predecessor ended without a write still shows the diff ONCE, because
+ * the default cannot tell "first step of a turn" from "step after a write",
+ * and showing beats hiding — showing a diff twice costs bytes, hiding one
+ * saves the bytes but also withholds the state the new turn opens on, and the
+ * second loss is the worse one. Refining the first prompt of a
+ * turn to start suppressed after a quiet turn belongs to the caller that wires
+ * this signal into the engine loop, and that caller does not exist yet; the
+ * signal existing with a truthful default is what this step ships, and the
+ * wiring step decides whether a quiet turn earns a quiet opening.
  *
  * The live-rather-than-frozen choice is deliberate — a model reading a stale
  * `git status` after its own edits is worse than either cost — and it is pinned
@@ -257,23 +289,31 @@ final readonly class EnvironmentBlock
     private const NO_PROCESS_REASON = 'unavailable (proc_open is disabled on this build)';
 
     /**
-     * @param string             $cwd       Working directory rendered on the first line.
-     * @param string             $modelName Model name rendered on the sixth line.
-     * @param ?DateTimeImmutable $now       Injected timestamp; null falls back to capture time.
-     * @param ?string            $platform  Injected platform string, or null to use the build's own
-     *                                      PHP_OS_FAMILY at render time. Mirrors
-     *                                      charmbracelet/crush.WithPlatform: the platform is
-     *                                      injectable so prompt assembly is golden-testable on any
-     *                                      host — the date and working directory are already
-     *                                      injectable via $now/$cwd, and upstream crush exposes
-     *                                      WithTimeFunc/WithPlatform/WithWorkingDir purely so the
-     *                                      prompt is golden-testable.
+     * @param string             $cwd                Working directory rendered on the first line.
+     * @param string             $modelName          Model name rendered on the sixth line.
+     * @param ?DateTimeImmutable $now                Injected timestamp; null falls back to capture time.
+     * @param ?string            $platform           Injected platform string, or null to use the build's own
+     *                                               PHP_OS_FAMILY at render time. Mirrors
+     *                                               charmbracelet/crush.WithPlatform: the platform is
+     *                                               injectable so prompt assembly is golden-testable on any
+     *                                               host — the date and working directory are already
+     *                                               injectable via $now/$cwd, and upstream crush exposes
+     *                                               WithTimeFunc/WithPlatform/WithWorkingDir purely so the
+     *                                               prompt is golden-testable.
+     * @param bool               $writeSinceLastRender Whether {@see render()} emits the two git diff
+     *                                               sections. Defaults to TRUE — the pre-P3.S2
+     *                                               behaviour every existing caller and the golden
+     *                                               prompt depend on; suppression happens only when a
+     *                                               caller explicitly derives FALSE. The signal and
+     *                                               the caller's state machine are documented on
+     *                                               {@see withWriteSinceLastRender()}.
      */
     public function __construct(
         private string $cwd,
         private string $modelName,
         private ?DateTimeImmutable $now = null,
         private ?string $platform = null,
+        private bool $writeSinceLastRender = true,
     ) {}
 
     /** Returns the captured working directory. */
@@ -301,6 +341,48 @@ final readonly class EnvironmentBlock
     }
 
     /**
+     * Returns whether {@see render()} will emit the two git diff sections.
+     *
+     * TRUE means "a write tool ran since the last render — or nobody has said
+     * anything either way", which is the default: a bare {@see capture()} and a
+     * fresh Runtime's first prompt both emit, exactly as they always did.
+     */
+    public function writeSinceLastRender(): bool
+    {
+        return $this->writeSinceLastRender;
+    }
+
+    /**
+     * Returns a copy that shows (TRUE) or withholds (FALSE) the two git diff
+     * sections on its next render.
+     *
+     * The signal the class docblock named as missing is now this: the caller —
+     * the engine loop that observes tool results between prompt builds — flips
+     * it per step. After a step in which a write tool ran, derive TRUE and the
+     * next prompt shows the working diff, which is what the model must see to
+     * continue; after a step in which none ran, derive FALSE and the next
+     * prompt skips BOTH diff subprocesses and sections, leaving branch, status
+     * and log in place. That is the cache lever: two consecutive no-write steps
+     * would otherwise render byte-different prompts for a diff the model has
+     * already seen.
+     *
+     * The default is TRUE and stays TRUE until a caller says otherwise — the
+     * suppression must be explicit, because the golden prompt and every
+     * existing caller construct the block bare and depend on the diff being
+     * there. Cross-turn behaviour follows from the default: a fresh Runtime
+     * (EngineBackend::complete() builds one per user turn) starts in the emit
+     * state, so a write on the LAST step of a turn shows its diff on the next
+     * turn's first prompt — which is the state the new turn should open on.
+     *
+     * Immutable: the source block is untouched, so a caller holding one block
+     * can derive both polarities for two different steps.
+     */
+    public function withWriteSinceLastRender(bool $writeSinceLastRender): self
+    {
+        return new self($this->cwd, $this->modelName, $this->now, $this->platform, $writeSinceLastRender);
+    }
+
+    /**
      * Factory that captures the current working directory and model name with a
      * fresh timestamp.
      *
@@ -322,7 +404,10 @@ final readonly class EnvironmentBlock
      * PHP version, model name, current date. When the cwd is a git repository, a
      * git section (branch, --porcelain status, recent log, staged diff, unstaged
      * diff) is appended — polled here, on every call, not frozen at capture
-     * time. Every field of that section except the branch name is size-capped;
+     * time. The two diff sections are conditional: they render only when
+     * {@see withWriteSinceLastRender()} says a write happened (or says nothing
+     * — the default emits, which is the pre-P3.S2 behaviour). Every field of
+     * that section except the branch name is size-capped;
      * see {@see DIFF_MAX_BYTES} and {@see SUMMARY_MAX_BYTES} for the bounds and
      * for why the branch is the one exception.
      *
@@ -472,7 +557,9 @@ final readonly class EnvironmentBlock
      *
      * Called from {@see render()}, so it re-runs on every render — FIVE
      * subprocesses per call (branch, status, log, staged diff, unstaged diff),
-     * and `buildSystemPrompt()` renders once per step of the agentic loop. Live rather than frozen on purpose: a model that has just
+     * or THREE when the caller has suppressed the diff via
+     * {@see withWriteSinceLastRender()} — and `buildSystemPrompt()` renders
+     * once per step of the agentic loop. Live rather than frozen on purpose: a model that has just
      * edited files must not be shown the status those files had at session start.
      * Pinned by
      * `tests/Providers/PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
@@ -512,9 +599,20 @@ final readonly class EnvironmentBlock
         $status = $this->gitField(['status', '--porcelain'], self::SUMMARY_MAX_BYTES);
         $log = $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES);
 
-        return "Current branch: {$branch}\n\nStatus:\n{$status}\n\nRecent commits:\n{$log}"
-            . "\n\n" . $this->gitDiffSection('Staged changes (git diff --cached, index vs HEAD)', '--cached')
-            . "\n\n" . $this->gitDiffSection('Unstaged changes (git diff, working tree vs index)', null);
+        $section = "Current branch: {$branch}\n\nStatus:\n{$status}\n\nRecent commits:\n{$log}";
+
+        // The P3.S2 gate: the two diff sections render only on the step after
+        // a write — or when nobody has said anything either way (the default,
+        // which is what keeps every pre-existing caller and the golden prompt
+        // emitting). Withholding them also withholds their two subprocesses,
+        // which is the expensive half of the five: the worst case measured in
+        // the class docblock spent 373 of its 399 ms inside `git diff`.
+        if ($this->writeSinceLastRender) {
+            $section .= "\n\n" . $this->gitDiffSection('Staged changes (git diff --cached, index vs HEAD)', '--cached')
+                . "\n\n" . $this->gitDiffSection('Unstaged changes (git diff, working tree vs index)', null);
+        }
+
+        return $section;
     }
 
     /**
