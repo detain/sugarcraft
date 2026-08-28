@@ -188,50 +188,25 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            Phase 2 (Prompt Transmission) — batch 2 (P2.B2) IN FLIGHT
-Next step:        P2.S4 fix verify (EOF trailing newline in tests/Prompt/PromptFixture.php) ->
-                   fresh reviewer cycle 2 -> merge per declared order (P2.S2 already merged;
-                   tests/Providers/ 846/2047 already run post-P2.S2) -> BATCH P2.B2 CLOSE (worklog
-                   entries + this §8 rewrite again, In-flight batch cleared) -> Phase 2 close (diff
-                   0f3bf202f..HEAD, F1/F2 fold spot-check) -> Phase 3 P3.S1 fully serial -> gate
-                   re-check before Phase 5/6. Step texts prompt_plan.md §4; review bar §1.4;
-                   merge format §1.6.
-Steps done:       13 of 61
+Phase:            Phase 2 (Prompt Transmission) — batch 2 (P2.B2) CLOSED — P2.S2 + P2.S4
+                   merged to master
+Next step:        Phase 2 close — diff 0f3bf202f..HEAD; F1/F2 fold spot-check; then Phase 3
+                   P3.S1 fully serial; sequencing gate re-check before Phase 5/6. Step texts
+                   prompt_plan.md §4; review bar §1.4; merge format §1.6.
+Steps done:       14 of 61
 Phases done:      2 of 12
-Last commit:      74148433d — sugar-crush prompt: P2.S2 pin full assembled system prompt to committed golden
+Last commit:      dfb618f16 — sugar-crush prompt: P2.S4 prompt-composition fixture + migrated prompt tests
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     tests/Providers/ 846/2047 OK (main repo @74148433d, post-P2.S2-merge).
-                   P2.S2 verification (worktree, commit d19f06665): BaseSystemPromptTest 12/86 OK;
-                   census 6-file set 103/9410 OK; check-path-repos exit 0. Oldest full-suite
+Latest suite:     tests/Providers/ 846/2047 OK (main repo @dfb618f16, post-P2.S4-merge).
+                   P2.S4 verification (worktree, commit 1aa8677e2): SystemPromptWiring 11/65,
+                   MemoryPromptWiring 14/36, RepoMapBlock 62/163, Runtime 87/256; census 103/9400;
+                   check-path-repos exit 0. P2.S2 verification (worktree, commit d19f06665):
+                   BaseSystemPromptTest 12/86 OK; census 6-file set 103/9410 OK. Oldest full-suite
                    checkpoint: 10393/160779/1 EXIT 0 @ e513409c5.
-In-flight batch:  P2.B2 — P2.S2 + P2.S4 CONCURRENT (file-disjoint). MERGE ORDER declared at spawn:
-                   P2.S2 -> P2.S4, tests/Providers/ run between merges.
-                   P2.S2 (golden system prompt): DONE — MERGED. Step commit d19f06665 (9 files
-                   +533/-2: Runtime::buildSystemPrompt() output pinned to
-                   tests/fixtures/prompt/golden-system-prompt.txt via assertSame + 10-fragment
-                   host-path leak scan with /^\//m guard + deterministic fixture-repo builder +
-                   regeneration-discipline docblock) + fix commit 30a32a49b ('/test/' leak fragment,
-                   cycle-1 LOW finding) -> merge 74148433d (--no-ff). Review: c1 FINDINGS (1 LOW) ->
-                   fixed; c2 fresh reviewer APPROVE 19/19 (mutations measured: golden 't'->'x' RED
-                   at BaseSystemPromptTest.php:570; mid-file '/test/path/leak' RED at :602; restored
-                   byte-identical md5 e89d98c72975ca8c22914d7f6796ec7a). Suites: BaseSystemPromptTest
-                   12 tests/87 assertions; census 6-file set 103/9410; Providers 846/2047
-                   (post-merge); check-path-repos exit 0. Observations A/B/C non-blocking (A: stale
-                   ensureFixtureRepo hardening recommended for later golden-touching steps
-                   P3.S1/P5.S4-P5.S6/P9.S5; B: gitRun env gaps; C: AgentTest.php:571-578
-                   pinHostLines comment stale-in-spirit — recorded follow-up). Worktree
-                   /home/sites/prompt-step-P2.S2 removed; branch prompt/P2.S2 deleted.
-                   P2.S4 (prompt-composition harness): worktree /home/sites/prompt-step-P2.S4
-                   (branch prompt/P2.S4, base 687e442a9, fixture at tests/Prompt/PromptFixture.php
-                   NOT tests/Support/ — cross-plan lane collision; >=3 existing prompt tests
-                   migrated char-identical). STEP COMMIT 1aa8677e2 (prompt-composition fixture +
-                   3 migrated suites). Cycle-1 review FINDINGS (1 LOW: missing EOF trailing newline
-                   in tests/Prompt/PromptFixture.php, PSR-12 §2.3). Fix agent working: append
-                   newline + re-verify suites + separate fix commit. Next: fresh reviewer cycle 2 ->
-                   merge after P2.S2 per declared order (tests/Providers/ between — already run
-                   post-P2.S2).
-Live worktrees:   /home/sites/prompt-step-P2.S4 — P2.S4, in flight (step commit 1aa8677e2,
-                   cycle-1 fix agent working)
+In-flight batch:  none (P2.B2 CLOSED — both steps merged in declared order: P2.S2 -> 74148433d,
+                   P2.S4 -> dfb618f16; tests/Providers/ 846/2047 run between merges; worktrees
+                   removed, branches prompt/P2.S2 + prompt/P2.S4 deleted).
+Live worktrees:   none (main repo only)
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixing fixture shape;
@@ -242,7 +217,9 @@ Open follow-ups:  (1) P4.S2: re-probe usage payload for cache fields before fixi
                    into Phase 2 planning;
                    (4) sequencing gate re-check before Phase 5/6 (collision rows still live, §5);
                    (5) P2.S3 pinHostLines() drop once P2.S1 injectability lands;
-                   (6) observation C AgentTest.php:569-570 stale TODO (future step)
+                   (6) observation C AgentTest.php:569-570 stale TODO (future step);
+                   (7) observation A ensureFixtureRepo staleness hardening recommended for later
+                   golden-touching steps (P3.S1/P5.S4-P5.S6/P9.S5)
 Sequencing gate:  CHECKED 2026-08-26 — proceed through phases 0-4; re-check before Phase 5/6
                    (collision rows still live, see §5)
 ```
