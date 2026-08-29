@@ -83,8 +83,22 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * (anthropicBody($request, stream:), VertexProvider.php:431, called from
      * :240 and :314); Vertex `#google` is reached on the stream path only by
      * delegation (completeStream() yields complete(),
-     * VertexProvider.php:290-298). So the headline now holds for 6 of 6
-     * body-shaped rows, where it held for 3 of 6 before.
+     * VertexProvider.php:290-298). So the headline now holds for 9 of 9
+     * body-shaped rows.
+     *
+     * THE "BEFORE" FIGURE IS 3 OF 6, AND ITS ANCHOR IS LOAD-BEARING: those 6
+     * are the body-shaped rows at `d34ce0297`, the commit BEFORE the split
+     * landed (named by SHA on purpose - it was `HEAD~1` when the split was
+     * written and is `HEAD~2` by the next commit), not at `master`. Splitting three rows in two moved the denominator from
+     * 6 to 9, so a bare "of 6" would be a figure whose base silently changed
+     * underneath it. (At `master` the map is one row per class with no
+     * discriminators at all - 6 rows, 5 of them body-shaped - and
+     * NON_BODY_CONTRACT_ROWS does not exist there yet, so `master` cannot be
+     * the anchor for either half.) An earlier revision of this paragraph said
+     * "6 of 6", which was simply wrong: it counted the pre-split denominator
+     * against the post-split numerator. Rule 42, corrected not deleted - and
+     * it is recorded because it is the same failure G2 fixed, reintroduced by
+     * the commit that fixed G2.
      *
      * BOTH HALVES OF THAT FIGURE ARE RE-DERIVABLE, which is the only reason
      * it is allowed to stand (16.2: a figure without a generator rots). The
@@ -95,8 +109,11 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * re-derived by opening the builder citations enumerated in the two
      * paragraphs above - every one names a file and a line range - and
      * counting how many rows have one builder each; the `3 of 6` half is the
-     * same count taken against `git show HEAD~1`'s map, whose rows are gone
-     * but whose builders are all still in the tree at the same citations.
+     * same count taken against `git show d34ce0297:<this file>`'s map, whose
+     * rows are gone but whose builders are all still in the tree at the same
+     * citations. The anchor is spelled as a SHA, not as `HEAD~1`: a relative
+     * ref renames itself on the next commit, and this paragraph's first
+     * draft said `HEAD~1` and was stale within one commit of being written.
      * Neither half is a count this file measures at runtime, so if you change
      * a provider's path structure you must re-walk those citations rather
      * than trust this sentence.
@@ -211,6 +228,34 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * hold. Rule 17: `''`/`null`/`[]` are also what a dead instrument returns.
      */
     private const SLOT_NOT_FOUND = 'P1S7-SLOT-NOT-FOUND-1d0e77bc';
+
+    /**
+     * Why every split row proves WHICH builder it drove.
+     *
+     * A `#complete`/`#stream` pair lands the sentinel in the SAME slot -
+     * `messages[0]` for Custom and OpenAI, `system[0].text` for Bedrock - so
+     * the slot assertion alone cannot tell the two builders apart. MEASURED
+     * 2026-08-29: re-pointing the `#stream` drive for Bedrock at `complete()`
+     * left this whole file green at `OK (18 tests, 86 assertions)`. That is
+     * the "complete() passes, therefore completeStream() passes" conflation
+     * this map was built to break, reproduced INSIDE the instrument meant to
+     * break it - so each split drive now asserts a marker only its own
+     * builder emits: `stream: true` in the OpenAI-chat body (absent on the
+     * unary path), and the AWS command name `Converse` vs `ConverseStream`.
+     *
+     * MEASURED for Bedrock, driving both seams against a MockHandler: unary
+     * is `Converse` with NO `inferenceConfig` for a request that supplies
+     * neither temperature nor maxTokens; streamed is `ConverseStream` with
+     * `{"maxTokens":4096,"temperature":0.7}`, because ConverseStream rejects
+     * an absent maxTokens (BedrockProvider.php:50-55, :206-212).
+     *
+     * The single-builder rows (Sglang, both Vertex arms) need no such guard:
+     * they have only one builder to resolve, which is what their
+     * undiscriminated key SAYS.
+     */
+    private const WRONG_BUILDER = 'this drive resolved the WRONG builder for its contract row: a '
+        . '`#complete`/`#stream` pair lands the sentinel in the same slot, so the row is only '
+        . 'evidence about its own path if the captured body is that path\'s body';
 
     /**
      * The distinctive, FIXED marker every covered provider must put on the
@@ -500,7 +545,10 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             case CustomProvider::class . '#complete':
                 $this->customProvider()->complete($this->request());
 
-                return $this->sentBody();
+                $customUnary = $this->sentBody();
+                $this->assertArrayNotHasKey('stream', $customUnary, self::WRONG_BUILDER);
+
+                return $customUnary;
 
             case CustomProvider::class . '#stream':
                 // The SSE body is what makes the streamed builder reachable:
@@ -509,11 +557,15 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                 // be read back off the history middleware.
                 iterator_to_array($this->customProvider(self::SSE_BODY)->completeStream($this->request()));
 
-                return $this->sentBody();
+                $customStreamed = $this->sentBody();
+                $this->assertTrue($customStreamed['stream'] ?? false, self::WRONG_BUILDER);
+
+                return $customStreamed;
 
             case OpenAIProvider::class . '#complete':
                 $captured = [];
                 $this->openAiProviderWithCapture($captured)->complete($this->request());
+                $this->assertArrayNotHasKey('stream', $captured, self::WRONG_BUILDER);
 
                 return $captured;
 
@@ -522,6 +574,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                 iterator_to_array(
                     $this->openAiProviderWithCapture($streamCaptured)->completeStream($this->request()),
                 );
+                $this->assertTrue($streamCaptured['stream'] ?? false, self::WRONG_BUILDER);
 
                 return $streamCaptured;
 
@@ -536,6 +589,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                     'anthropic.claude-sonnet-4-6',
                 );
                 $provider->complete($this->request());
+                $this->assertSame('Converse', $mock->getLastCommand()->getName(), self::WRONG_BUILDER);
 
                 return $mock->getLastCommand()->toArray();
 
@@ -551,6 +605,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                     'anthropic.claude-sonnet-4-6',
                 );
                 iterator_to_array($streamProvider->completeStream($this->request()));
+                $this->assertSame('ConverseStream', $streamMock->getLastCommand()->getName(), self::WRONG_BUILDER);
 
                 return $streamMock->getLastCommand()->toArray();
 
@@ -887,7 +942,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $this->assertSame(1, substr_count((string) json_encode($captured['body']), self::SENTINEL));
 
         // NOT the streamer seam: completeStream() yields complete() for a
-        // non-Anthropic model (VertexProvider.php:290-297), so the streaming
+        // non-Anthropic model (VertexProvider.php:290-298), so the streaming
         // path is captured on the PREDICTOR. Asserting it separately is still
         // the point — complete() passing is not evidence about
         // completeStream(), which is exactly how the OpenAI arm hid this same
