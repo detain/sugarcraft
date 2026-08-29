@@ -237,7 +237,7 @@ final readonly class EnvironmentBlock
      *
      * THE WHOLE BLOCK, therefore: 2 * {@see DIFF_MAX_BYTES} + 2 * this = 24,576 B
      * of capped FIELD text, plus the branch line, the seven fixed lines, the
-     * four field labels, the 100-byte {@see GIT_STATE_CAVEAT} caption and the
+     * four field labels, the 91-byte {@see GIT_STATE_CAVEAT} caption and the
      * `<env>` fence. Each field's truncation marker is
      * reserved INSIDE its own cap by
      * {@see TruncatesOutput::truncateMerged()} rather than added on top, so the
@@ -247,18 +247,35 @@ final readonly class EnvironmentBlock
      * {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest::testTheWholeGitSectionStaysBoundedHoweverDirtyTheTreeIs()}
      * derives the same 25,600 from the two constants, so a change to either cap
      * moves the test with the code instead of leaving a stale number here.
-     * MEASURED against it on a fixture with ALL FOUR capped fields clipped at
-     * once — 60 rewritten tracked files (30 staged, 30 not), 60 untracked ones
-     * and five 1,500-byte commit subjects — the block came to **21,804 B**, i.e.
-     * 3,796 B of headroom under the derived ceiling. That figure is of THAT
+     * MEASURED against it on a fixture built to clip the capped fields — 60
+     * rewritten tracked files (30 staged, 30 not), 60 untracked ones and five
+     * 1,500-byte commit subjects — the block came to **21,793 B**, i.e. 3,807 B
+     * of headroom under the derived ceiling. THREE of the four capped fields
+     * clip on it, not four: `log` (4,528 of 7,545 B omitted), the staged diff
+     * (85,289 of 93,288) and the unstaged diff (85,330 of 93,328) carry a
+     * `truncated:` marker, and `substr_count($block, 'truncated:')` on that
+     * render is 3. `Status:` does NOT reach its cap and cannot on this fixture:
+     * 120 porcelain lines at ~15 B is a 1,779 B body against
+     * SUMMARY_MAX_BYTES = 4096, and clipping it would take about 277 such
+     * lines, more than twice this fixture's 120 — which is what
+     * {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest::testTheStatusFieldIsCappedAndAnnouncesItsOwnClip()}
+     * builds separately. This sentence used to claim "ALL FOUR capped fields
+     * clipped at once" of this same fixture; that was never true of it, and is
+     * corrected here rather than dropped so the corrected count is attached to
+     * the fixture description it is a fact about. The ceiling claim is
+     * unaffected either way — a field that does not clip is a field below its
+     * cap. That absolute is of THAT
      * fixture — it moves with the fixture's own directory and file names, which
      * this description does not pin — so the ceiling is the claim and the
-     * absolute is only an illustration. (The SAME fixture rendered 21,702 B
+     * absolute is only an illustration. (The SAME fixture rendered 21,700 B
      * against master, MEASURED by rebuilding it once and rendering it twice
      * with the same script, changing only which `EnvironmentBlock.php` was
-     * loaded. The delta is +102 B — the 100-byte caption plus its blank line —
-     * and being fixed-part text it is the same +102 B on any fixture, which is
-     * the part of this parenthesis that reproduces.)
+     * loaded. The delta is +93 B — the 91-byte caption plus its blank line —
+     * and being fixed-part text it is the same +93 B on any fixture, which is
+     * the part of this parenthesis that reproduces. An earlier revision
+     * recorded 21,804 / 21,702 / +102 B here; those are of the 100-byte caption
+     * this constant no longer carries, and all three are re-measured above at
+     * the shipped 91-byte one rather than adjusted on paper.)
      * `branch --show-current` is deliberately left uncapped — a ref
      * name is bounded by the filesystem's own 255-byte name limit, and its empty
      * value is MEANINGFUL (a detached HEAD reports empty and exits 0), so
@@ -312,11 +329,18 @@ final readonly class EnvironmentBlock
      * `branch`/`status`/`log` — and the two diffs when they are not suppressed
      * — are re-run on EVERY render, and `Runtime::buildSystemPrompt()` renders
      * once per step of the agentic loop. MEASURED through that production path
-     * rather than through a bare block: two `buildSystemPrompt()` calls on ONE
-     * memoized Runtime, with a tracked edit and a new untracked file written
-     * between them, differed — the second prompt was **206 B** longer, the
-     * first difference landing inside the `Status:` field, and only the second
-     * named the new file. NO ABSOLUTE LENGTHS ARE RECORDED HERE, and the two
+     * rather than through a bare block, and now DRIVEN there by
+     * {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest::testTheGitSectionCarriesTheHonestCaveatAndNotUpstreamsSnapshotLabel()}
+     * rather than only recorded here: two `buildSystemPrompt()` calls on ONE
+     * memoized Runtime over a clean tree, with a tracked edit and a new
+     * untracked file written between them, differ — the second prompt is
+     * **227 B** longer, the first difference landing at the first byte of the
+     * `Status:` body, and only the second names the new file. This figure was
+     * **206 B** until that test existed, when the experiment was run by hand
+     * and pinned by nothing; 227 is the re-measurement on the fixture the test
+     * now builds, and the two differ because the new untracked path is echoed
+     * into `Status:` verbatim, so the delta moves with the fixture's file NAMES
+     * as well as its shape. NO ABSOLUTE LENGTHS ARE RECORDED HERE, and the two
      * that used to be (with a first-difference offset beside them) are dropped
      * rather than corrected: the fixture repo's path is interpolated into the
      * prompt, so all three move with the temp directory's name and no two runs
@@ -360,6 +384,22 @@ final readonly class EnvironmentBlock
      * same defect as copying upstream's, only pointing the other way — and it
      * was reaching them: the sentence rendered into `golden-agent-prompt.txt`.
      *
+     * AND ON ONE OF THOSE PATHS THE CAPTION IS TRUE BUT UNINFORMATIVE — the
+     * honest limit of a cadence-free caption, recorded here because this is
+     * where the cadences are enumerated.
+     * {@see \SugarCraft\Crush\Agents\ProcessExecutor} renders the
+     * block in the PARENT and ships it as the JSON `prompt` field of the
+     * child's startup message, after which the forked child may run long. The
+     * caption travels with it and there denies "snapshot from conversation
+     * start" while describing something the child experiences precisely as a
+     * conversation-start snapshot: the state is as of the PARENT's render,
+     * which for the child is the start of its conversation. Literally true —
+     * the render it names did happen when it says — and operationally
+     * uninformative. It is left standing rather than qualified for the same
+     * reason the per-step half came out: any sentence that fixed it would be
+     * false on the Runtime path, and the fix is the same conditional variant
+     * WHAT IT WOULD TAKE TO SAY MORE costs out below.
+     *
      * The caption therefore states unconditionally only what holds on EVERY
      * path — the state is as of THIS prompt's render, never carried forward
      * from session start — and stops there. That is true for the Agent
@@ -376,7 +416,8 @@ final readonly class EnvironmentBlock
      * than approximated here by a sentence true on one renderer and false on
      * the other.
      *
-     * WHY IT CLAIMS THE READ AND NOT THE CONTENT. "Reflects your edits" is not
+     * WHY IT CLAIMS CURRENCY AND NOT THE CONTENT — NOR THE READ. "Reflects
+     * your edits" is not
      * true in every mode this class can render in: on a build with `proc_open`
      * in `disable_functions` the capped fields report {@see NO_PROCESS_REASON}
      * and reflect nothing, and a field whose git exited non-zero reports that
@@ -385,10 +426,33 @@ final readonly class EnvironmentBlock
      * the mechanism and lets each field state its own availability, which they
      * already do.
      *
+     * AND THE CONSTANT USED TO CONTRADICT THAT PARAGRAPH. It read *"Note: this
+     * git state was read when this prompt was rendered, not a snapshot from
+     * conversation start."* — 100 B — which asserts a successful READ, the one
+     * thing the paragraph above had just finished arguing the caption must not
+     * assert. In the degraded mode this class documents and TESTS, that made it
+     * a false label of its own. MEASURED with
+     * `php -d disable_functions=proc_open,shell_exec` against a real repo: the
+     * old caption rendered above `Current branch: unavailable (shell_exec is
+     * disabled on this build)` and three fields reading
+     * {@see NO_PROCESS_REASON}. Nothing had been read; the caption said it had
+     * — a caption that exists to displace upstream's false label, false itself
+     * one mode over. The shipped wording claims CURRENCY instead: the state is
+     * as of THIS render. That is true with all four fields unavailable, because
+     * "as of this render" dates the section rather than claiming the dating
+     * succeeded, and each field still states its own availability on its own
+     * line. It is also the wording WHY THE CAPTION MAKES NO PER-STEP CLAIM AT
+     * ALL above already settled on — "the state is as of THIS prompt's render,
+     * never carried forward from session start" — so the constant and the
+     * reasoning that justifies it now agree, where they did not. 91 B
+     * against the old 100 — every fixed-part byte figure in this file is
+     * re-measured at 91 rather than adjusted from 100 on paper.
+     *
      * WHY IT IS EMITTED IN BOTH DIFF MODES. {@see withWriteSinceLastRender()}
      * suppresses the two diff sections, never branch/status/log, so the
-     * re-read claim holds with the diffs gone; a caption that appeared and
-     * disappeared with them would read as a property of the diff.
+     * currency claim holds with the diffs gone — what is shown is still as of
+     * this render; a caption that appeared and disappeared with them would
+     * read as a property of the diff.
      *
      * WHY AT THE HEAD OF THE SECTION. It is a claim about every line below it,
      * the branch line included, and a caption after the first field does not
@@ -410,7 +474,7 @@ final readonly class EnvironmentBlock
      * the fence boundary, "one place, not per call site", and P5.S3 ("E25:
      * fence escaping in one place") is the step that owns it.
      */
-    private const GIT_STATE_CAVEAT = 'Note: this git state was read when this prompt was rendered, not a snapshot from conversation start.';
+    private const GIT_STATE_CAVEAT = 'Note: this git state is as of this prompt\'s render, not a snapshot from conversation start.';
 
     /**
      * @param string             $cwd                Working directory rendered on the first line.
