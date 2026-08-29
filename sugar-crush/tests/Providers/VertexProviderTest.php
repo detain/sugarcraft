@@ -786,6 +786,134 @@ final class VertexProviderTest extends TestCase
         $this->assertArrayNotHasKey('anthropic_version', $captured['body']);
     }
 
+    // -------------------------------------------------------------------------
+    // The Google `instances` envelope carries the assembled system prompt in
+    // `instances[0].context`. Until this was fixed, googleBody() never read
+    // CompleteRequest::$systemPrompt at all, so every publishers/google model
+    // was answered a prompt-less turn - on the unary path and, because
+    // completeStream() delegates to complete() for a non-Anthropic model, on
+    // the streaming path too.
+    // -------------------------------------------------------------------------
+
+    public function testCompleteHoistsTheAssembledSystemPromptIntoTheGoogleInstanceContext(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [new SystemMessage('be terse'), new UserMessage('Hi')],
+            systemPrompt: 'you are a bot',
+        ));
+
+        $this->assertSame(
+            [[
+                'messages' => [['role' => 'user', 'content' => 'Hi']],
+                'context' => "you are a bot\n\nbe terse",
+            ]],
+            $captured['body']['instances'],
+            'the Google predict envelope carries the system instruction in '
+            . 'instances[0].context; leaving it in messages renders it as a user turn',
+        );
+    }
+
+    public function testTheGooglePromptRidesContextAndNowhereElseInTheBody(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [new SystemMessage('SENTINEL-be-terse'), new UserMessage('Hi')],
+        ));
+
+        // A hoist that forgets to drop the SystemMessage from `messages`
+        // transmits it twice - once as context, once as a `user` turn, which
+        // is exactly what formatMessages()'s `default => 'user'` arm does.
+        $this->assertSame(
+            1,
+            substr_count((string) json_encode($captured['body']), 'SENTINEL-be-terse'),
+        );
+    }
+
+    public function testCompleteStreamHoistsTheAssembledSystemPromptIntoTheGoogleInstanceContext(): void
+    {
+        // completeStream() yields complete() for a Google model, so the
+        // capture happens on the PREDICTOR seam, not the streamer - which is
+        // the whole reason the unary path passing is not evidence here.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [new UserMessage('Hi')],
+            systemPrompt: 'you are a bot',
+        )), false);
+
+        $this->assertCount(1, $chunks);
+        $this->assertSame('predict', $captured['method']);
+        $this->assertSame('you are a bot', $captured['body']['instances'][0]['context']);
+    }
+
+    public function testGoogleInstanceHasNoContextKeyWithoutASystemPrompt(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertArrayNotHasKey('context', $captured['body']['instances'][0]);
+    }
+
+    public function testGoogleInstanceHasNoContextKeyForAnEmptySystemPrompt(): void
+    {
+        // The empty string is the pathological input the `!== null` guard the
+        // OpenAI and Bedrock arms use would let through as an empty context.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [new UserMessage('Hi'), new SystemMessage('')],
+            systemPrompt: '',
+        ));
+
+        $this->assertArrayNotHasKey('context', $captured['body']['instances'][0]);
+        $this->assertSame(
+            [['role' => 'user', 'content' => 'Hi']],
+            $captured['body']['instances'][0]['messages'],
+        );
+    }
+
+    public function testGoogleInstanceContextJoinsEveryHistorySystemMessageInMessageOrder(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [
+                new SystemMessage('first'),
+                new SystemMessage('second'),
+                new UserMessage('Hi'),
+                new SystemMessage('third'),
+            ],
+        ));
+
+        $this->assertSame(
+            "first\n\nsecond\n\nthird",
+            $captured['body']['instances'][0]['context'],
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => 'Hi']],
+            $captured['body']['instances'][0]['messages'],
+            'every hoisted SystemMessage must leave `messages`, or each one returns as a user turn',
+        );
+    }
+
     public function testCompleteParsesTheLegacyGooglePredictionShape(): void
     {
         $provider = $this->providerWithPredictor(

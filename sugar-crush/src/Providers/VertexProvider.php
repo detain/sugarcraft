@@ -436,7 +436,7 @@ final readonly class VertexProvider implements ProviderInterface
             // `messages` must hold at least one turn - an empty list is a
             // server-side 400 with no useful detail. The condition is entirely
             // local (an empty transcript, or one that is nothing but
-            // SystemMessages, which anthropicSystem() hoists out), so say so
+            // SystemMessages, which systemInstruction() hoists out), so say so
             // here instead of burning a round trip on an opaque error.
             throw new \InvalidArgumentException(
                 'Vertex rawPredict: the Anthropic Messages API requires at least one user or '
@@ -452,7 +452,7 @@ final readonly class VertexProvider implements ProviderInterface
             'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
         ];
 
-        $system = $this->anthropicSystem($request);
+        $system = $this->systemInstruction($request);
         if ($system !== null) {
             $body['system'] = $system;
         }
@@ -484,11 +484,28 @@ final readonly class VertexProvider implements ProviderInterface
     }
 
     /**
+     * The assembled system instruction for EITHER envelope this class builds.
+     *
      * Anthropic takes the system prompt as a TOP-LEVEL field - a `system`
-     * role inside `messages` is a 400. Any SystemMessage in the transcript is
-     * therefore hoisted here and joined onto the request's own systemPrompt.
+     * role inside `messages` is a 400. Google's `instances` envelope has no
+     * system role at all and carries the instruction in `instances[0].context`
+     * ({@see googleBody()}). Both hoist, both join the same way, so there is
+     * ONE joiner: any SystemMessage in the transcript is lifted out here and
+     * joined onto the request's own systemPrompt, assembled prompt first, in
+     * message order.
+     *
+     * WAS NAMED `anthropicSystem()` until the Google arm was fixed to
+     * transmit at all - the prefix described the only caller it then had, not
+     * what it computes.
+     *
+     * An empty-string systemPrompt and an empty-content SystemMessage each
+     * contribute nothing, so a request carrying only those yields `null` and
+     * neither envelope grows an empty system field. That guard
+     * (`!== null && !== ''`) is the one Sglang, Custom and this class already
+     * use; OpenAI and Bedrock check only `!== null`. This method keeps the
+     * stricter of the two rather than inventing a third.
      */
-    private function anthropicSystem(CompleteRequest $request): ?string
+    private function systemInstruction(CompleteRequest $request): ?string
     {
         $parts = [];
 
@@ -525,7 +542,7 @@ final readonly class VertexProvider implements ProviderInterface
      * Renders the transcript as Anthropic content-block turns.
      *
      * Two rules the Google `instances` shape never had to honour:
-     *   - SystemMessage is dropped here (hoisted by {@see anthropicSystem()}).
+     *   - SystemMessage is dropped here (hoisted by {@see systemInstruction()}).
      *   - Consecutive same-role turns are merged. Anthropic rejects two user
      *     turns in a row, and a tool-calling loop produces exactly that
      *     (assistant tool_use, then one ToolResultMessage per call, all of
@@ -971,21 +988,67 @@ final readonly class VertexProvider implements ProviderInterface
      * The Google-shaped `:predict` envelope. Retained for `publishers/google`
      * models, which really do take `instances`/`parameters`.
      *
+     * THE ASSEMBLED SYSTEM PROMPT RIDES `instances[0].context`. This envelope
+     * has no per-message `system` role, and {@see formatMessages()} maps every
+     * message it does not recognise - SystemMessage included - to `user`, so
+     * before this method read {@see systemInstruction()} the whole assembled
+     * prompt was dropped outright for every `publishers/google` model, on the
+     * unary path AND on {@see completeStream()}, which delegates here. A
+     * history SystemMessage fared no better: it reached the model as an
+     * ordinary user turn.
+     *
+     * `context` is the field Google's own chat-prompt documentation for this
+     * `instances` envelope describes as carrying the model's standing
+     * instructions ("Design chat prompts",
+     * https://cloud.google.com/vertex-ai/generative-ai/docs/chat/chat-prompts).
+     * That is DOCUMENTED, not measured on the wire - nothing here has Vertex
+     * credentials, so no live call confirms this deployment honours it.
+     *
      * @return array{instances: array<int, array<string, mixed>>, parameters: array<string, mixed>}
      */
     private function googleBody(CompleteRequest $request): array
     {
+        $instance = [
+            'messages' => $this->formatMessages($this->withoutSystemMessages($request->messages)),
+        ];
+
+        $context = $this->systemInstruction($request);
+        if ($context !== null) {
+            $instance['context'] = $context;
+        }
+
         return [
-            'instances' => [
-                [
-                    'messages' => $this->formatMessages($request->messages),
-                ],
-            ],
+            'instances' => [$instance],
             'parameters' => [
                 'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
                 'maxOutputTokens' => $request->maxTokens ?? self::DEFAULT_MAX_TOKENS,
             ],
         ];
+    }
+
+    /**
+     * A SystemMessage hoisted into `context` must not ALSO stay in
+     * `messages`, where {@see formatMessages()}'s `default => 'user'` arm
+     * would render it a second time as a user turn.
+     *
+     * Deliberately a second copy of {@see BedrockProvider::withoutSystemMessages()}
+     * rather than a shared trait: the only honest home for one copy is a new
+     * file under `src/Providers/Concerns/`, and adding a file to `src/` reds
+     * four exact-cardinality assertions in BuiltInToolCorpusTest plus a
+     * doc-block in RepoMapBlock.php - out of this step's declared scope. The
+     * two bodies are byte-identical today; nothing in the suite would notice
+     * if they drifted, because DuplicatedTestHelperDriftTest reads `tests/`
+     * only and no census compares two `src/` files.
+     *
+     * @param array<Message> $messages
+     * @return array<Message>
+     */
+    private function withoutSystemMessages(array $messages): array
+    {
+        return array_values(array_filter(
+            $messages,
+            static fn (Message $msg): bool => !$msg instanceof SystemMessage,
+        ));
     }
 
     /**

@@ -56,9 +56,26 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 {
     /**
      * The wire location each covered provider's protocol uses for
-     * CompleteRequest::$systemPrompt, keyed by provider class.
+     * CompleteRequest::$systemPrompt.
      *
-     * Three families:
+     * ONE ROW PER REQUEST-BODY BUILDER, NOT PER PROVIDER CLASS, and that is a
+     * correction rather than a refinement. This map was
+     * `array<class-string, string>` — a single wire slot per class — and
+     * VertexProvider builds TWO bodies, chosen at call time by
+     * isAnthropicModel() (VertexProvider.php:231, :397-400). The row
+     * `VertexProvider::class => 'system'` was true of the Anthropic arm alone,
+     * every Vertex test in this file drove that arm by hardcoding a `claude-*`
+     * model, and the Google arm dropped the assembled prompt outright for the
+     * whole of Phase 1 — the exact defect this file was written to make
+     * impossible. An alphabet is coverage; this one could not SAY that a class
+     * has two builders, so nothing here could notice that only one of them
+     * transmitted.
+     *
+     * A class with more than one builder therefore contributes several rows,
+     * keyed `<FQCN>#<discriminator>`. The class half stays a `::class`
+     * reference so a class rename still breaks this file at compile time.
+     *
+     * Four families:
      * - Sglang/Custom/OpenAI prepend an OpenAI-chat-shaped leading system
      *   message into `messages` (SglangProvider.php:672-677,
      *   CustomProvider.php:155-160 / :210-215, OpenAIProvider.php:90-95 /
@@ -66,7 +83,9 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * - Bedrock hoists it into the Converse top-level `system` block list
      *   (BedrockProvider.php:164-166 / :215-217 via systemBlocks() :337-343);
      * - Vertex hoists it into the Anthropic body's top-level `system` string
-     *   (VertexProvider.php:455-458 via anthropicSystem() :495-496);
+     *   (VertexProvider.php:455-458) or, for a `publishers/google` model, into
+     *   `instances[0].context` (VertexProvider.php:1015-1017) — both through
+     *   the one joiner, systemInstruction() :508;
      * - ClaudeCode turns it into a `--system-prompt` CLI argv pair
      *   (ClaudeCodeProvider.php:80 / :105 ->
      *   ClaudeCodeInvocation.php:75-78).
@@ -77,14 +96,15 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * {@see testEveryProviderImplementerHasATransmissionContract} for the
      * derived-roster assertion that names this exemption.
      *
-     * @var array<class-string, string>
+     * @var array<string, string>
      */
     private const TRANSMISSION_CONTRACT = [
         SglangProvider::class => 'messages[0]',
         CustomProvider::class => 'messages[0]',
         OpenAIProvider::class => 'messages[0]',
         BedrockProvider::class => 'system[0].text',
-        VertexProvider::class => 'system',
+        VertexProvider::class . '#anthropic' => 'system',
+        VertexProvider::class . '#google' => 'instances[0].context',
         ClaudeCodeProvider::class => '--system-prompt argv',
     ];
 
@@ -95,6 +115,16 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * sentinel rides the protocol's system slot and nowhere else.
      */
     private const SENTINEL = 'P1S7-SENTINEL-4f8a2c91';
+
+    /**
+     * A `publishers/google` model id, which is what selects VertexProvider's
+     * SECOND body builder: isAnthropicModel() is
+     * `str_contains(strtolower($model), 'claude')` (VertexProvider.php:397-400)
+     * and modelId() prefers the REQUEST's model over the provider's own
+     * default (:412-415), so this id on the request routes there whatever the
+     * helper below constructs the provider with.
+     */
+    private const VERTEX_GOOGLE_MODEL = 'gemini-1.5-pro-002';
 
     /**
      * One OpenAI-compatible streamed chunk plus the terminal marker, carrying
@@ -119,10 +149,17 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         // test on day one.
         $implementers = ProviderRequestResponseTest::providerImplementers();
 
-        $contracted = array_map(
-            static fn (string $fqcn): string => substr($fqcn, (int) strrpos($fqcn, '\\') + 1),
+        // A multi-body provider contributes several rows under one class, and
+        // the roster diff is about CLASS coverage, so drop the
+        // `#<discriminator>` suffix and de-duplicate before comparing.
+        $contracted = array_values(array_unique(array_map(
+            static function (string $key): string {
+                $fqcn = explode('#', $key)[0];
+
+                return substr($fqcn, (int) strrpos($fqcn, '\\') + 1);
+            },
             array_keys(self::TRANSMISSION_CONTRACT),
-        );
+        )));
 
         $this->assertSame(
             ['EchoProvider'],
@@ -347,9 +384,16 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     }
 
     // =========================================================================
-    // Vertex — Anthropic body's top-level `system` string
-    // (VertexProvider.php:455-458 via anthropicSystem() :495-496). A `system`
-    // role inside messages is a 400 on the Anthropic API.
+    // Vertex — TWO body builders, selected by isAnthropicModel()
+    // (VertexProvider.php:231). The Anthropic arm hoists into the body's
+    // top-level `system` string (VertexProvider.php:455-458): a `system` role
+    // inside messages is a 400 on the Anthropic API. The Google arm hoists
+    // into `instances[0].context` (VertexProvider.php:1015-1017): that
+    // envelope has no system role at all, and formatMessages()'s
+    // `default => 'user'` arm would otherwise deliver the prompt as an
+    // ordinary user turn. Both arms go through the one joiner,
+    // systemInstruction() :508. Driving only the Anthropic arm is how the
+    // Google arm's silence survived the whole of Phase 1.
     // =========================================================================
 
     public function testVertexTransmitsSystemPromptInTheAnthropicTopLevelSystemFieldOnBothPaths(): void
@@ -384,9 +428,52 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $provider = $this->vertexProvider([], $captured);
         $provider->complete($this->request(null, 'claude-3-sonnet@20240229'));
 
-        // anthropicSystem() returns null when no part exists, and anthropicBody()
+        // systemInstruction() returns null when no part exists, and anthropicBody()
         // only sets the key for a non-null value (VertexProvider.php:455-458).
         $this->assertArrayNotHasKey('system', $captured['body']);
+    }
+
+    public function testVertexTransmitsSystemPromptInTheGoogleInstanceContextOnBothPaths(): void
+    {
+        $captured = null;
+        $provider = $this->vertexProvider([], $captured);
+        $provider->complete($this->request(model: self::VERTEX_GOOGLE_MODEL));
+
+        $this->assertSame('predict', $captured['method']);
+        $this->assertSame(self::SENTINEL, $captured['body']['instances'][0]['context']);
+        $this->assertSame(
+            [['role' => 'user', 'content' => 'Hi']],
+            $captured['body']['instances'][0]['messages'],
+            'the Google `instances` envelope has no system role; a prompt left in '
+            . '`messages` reaches the model as an ordinary user turn',
+        );
+        $this->assertSame(1, substr_count((string) json_encode($captured['body']), self::SENTINEL));
+
+        // NOT the streamer seam: completeStream() yields complete() for a
+        // non-Anthropic model (VertexProvider.php:290-297), so the streaming
+        // path is captured on the PREDICTOR. Asserting it separately is still
+        // the point — complete() passing is not evidence about
+        // completeStream(), which is exactly how the OpenAI arm hid this same
+        // defect until P1.S3.
+        $streamed = null;
+        $streamProvider = $this->vertexProvider([], $streamed);
+        iterator_to_array(
+            $streamProvider->completeStream($this->request(model: self::VERTEX_GOOGLE_MODEL)),
+            false,
+        );
+
+        $this->assertSame('predict', $streamed['method']);
+        $this->assertSame(self::SENTINEL, $streamed['body']['instances'][0]['context']);
+        $this->assertSame(1, substr_count((string) json_encode($streamed['body']), self::SENTINEL));
+    }
+
+    public function testVertexGoogleArmNullSystemPromptTransmitsNothing(): void
+    {
+        $captured = null;
+        $provider = $this->vertexProvider([], $captured);
+        $provider->complete($this->request(null, self::VERTEX_GOOGLE_MODEL));
+
+        $this->assertArrayNotHasKey('context', $captured['body']['instances'][0]);
     }
 
     // =========================================================================
