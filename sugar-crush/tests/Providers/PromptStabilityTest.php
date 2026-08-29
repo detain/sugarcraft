@@ -505,57 +505,75 @@ final class PromptStabilityTest extends TestCase
      * {@see dirtyRepoFixtureWithEveryStableLayer()} builds, in bytes.
      *
      * MEASURED 2026-08-29, PHP 8.3.6, Linux 6.8.0-138-generic, three takes per
-     * side and identical on all three, by assembling two consecutive prompts
+     * row and identical on all three, by assembling two consecutive prompts
      * through the real private
      * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} over that fixture
-     * and counting bytes to the first one that differs:
+     * and counting bytes to the first one that differs. The rows are the
+     * different SHAPES a between-step change can take, because the shape is
+     * what decides which field of `<env>` moves first:
      *
-     *   - `<env>` LAST, the order P3.S1 shipped: **4,670** of 4,844 bytes.
-     *   - `<env>` back at layer 2, the pre-P3.S1 order, reproduced by moving
-     *     the single `$base .= "\n\n" . $this->environmentSnapshot($app)->render();`
-     *     statement in `Runtime::buildSystemPrompt()` back above the repo map
-     *     and restoring it afterwards: **3,095** of 4,844.
+     *   | what changed between the two renders     | prompt | prefix | diverges at |
+     *   |------------------------------------------|--------|--------|-------------|
+     *   | the same file edited again (the nice one) |  4,844 |  4,670 | blob hash   |
+     *   | 400-line rewrite, both revs same size     | 12,751 |  4,673 | blob hash   |
+     *   | 400 vs 405 lines, diff over the 8,192 B cap | 12,751 | 4,583 | `--shortstat` |
+     *   | a SECOND tracked file dirtied             |  5,083 |  4,403 | `Status:`   |
+     *   | an untracked file appears                 |  4,856 |  4,403 | `Status:`   |
+     *   | pre-P3.S1 order, the same file edited     |  4,844 |  3,095 | blob hash   |
      *
-     * Both figures are OF THAT FIXTURE and of nothing else: a different
-     * repository, a different instruction set or a different edit moves them,
-     * and §3.4's own pair (598 B then 615 B, first differing at 524) is of a
-     * two-edit `<env>` in isolation rather than of an assembled prompt. The
-     * prompt is the same 4,844 bytes in both orders - this was a reorder, not
-     * an addition - and the reorder moved 1,575 of them from behind the first
-     * differing byte to in front of it.
+     * `<env>` opens at byte 4,056 on this fixture, so EVERY post-reorder row
+     * above keeps the whole stable region — base heredoc, repo map, instruction
+     * documents, memory, both skill layers — inside the shared prefix, and the
+     * last row does not. The prompt is the same 4,844 bytes in the first and
+     * last rows: this was a reorder, not an addition, and it moved 1,575 of
+     * them from behind the first differing byte to in front of it.
      *
-     * WHY THE FLOOR IS 4,096 AND NOT 4,670. The exact value moves with bytes
-     * this file does not own: `OS version:` and `PHP version:` are read off
-     * the host at render time, and the base heredoc is prose four later steps
-     * are licensed to edit. Pinning 4,670 would red on a host with a shorter
-     * kernel string, which is a fact about the host and not about the layer
-     * order. 4,096 sits 1,001 B ABOVE the pre-reorder measurement - that is
-     * what makes it discriminating, because the old assembly cannot reach it
-     * on this fixture - and 574 B BELOW the post-reorder one, which is the
-     * headroom those host lines need.
+     * Both `<env>` figures are OF THIS FIXTURE and of nothing else. §3.4's own
+     * pair — 598 B then 615 B, first differing at 524 — is of a two-edit
+     * `<env>` block in isolation, not of an assembled prompt, and does not
+     * compare.
      *
-     * It is a MAGNITUDE floor and nothing more. The ORDERING decision is
-     * pinned by the marker assertions beside it and by the old-order control,
-     * neither of which depends on a literal; the SIZE OF THE WIN is pinned by
-     * {@see MIN_PREFIX_GAIN_BYTES}, which is invariant to both host lines and
-     * base-heredoc edits because those bytes cancel between the two orders. So
-     * if a deliberate prose cut ever reds this number, re-measure it and move
-     * it, and expect everything around it to stay green - they are assertions
-     * about different properties.
+     * WHY THE FLOOR IS 4,096 AND NOT 4,670, AND WHY THAT IS A DEVIATION FROM
+     * THE STEP TEXT. P3.S4 says the assertion pins "at least N bytes, where N
+     * is the measured value on the fixture". Taken literally that is 4,670, and
+     * this constant is deliberately NOT that. Two reasons, both measured.
+     * First, 4,670 is the value for ONE shape; the worst shape above is 4,403,
+     * and a floor that only the nicest edit can clear pins the fixture's luck
+     * rather than the layer order. Second, some bytes inside the prefix are
+     * read off the host and this file does not own them — `OS version:` and
+     * `PHP version:` are 28 B of it here — while the base heredoc ahead of them
+     * is 2,481 B of prose four later steps are licensed to edit. 4,096 sits
+     * 1,001 B ABOVE the pre-reorder measurement, which is what makes it
+     * discriminating — the old assembly cannot reach it on this fixture, and
+     * the deletion experiment in the worklog shows it reporting exactly 3,095 —
+     * and 307 B below the WORST post-reorder row, which is the slack. The
+     * dominant consumer of that slack is the editable base heredoc, not the
+     * host lines.
+     *
+     * It is a MAGNITUDE floor and nothing more. The ORDERING decision is pinned
+     * by the marker assertions beside it and by the old-order control, neither
+     * of which depends on a literal; the SIZE OF THE WIN is pinned by
+     * {@see MIN_PREFIX_GAIN_BYTES}, which is invariant to both the host lines
+     * and the base heredoc because those bytes cancel between the two orders.
+     * So if a deliberate prose cut ever reds this number, re-measure it and
+     * move it, and expect everything around it to stay green — they are
+     * assertions about different properties.
      */
     private const MIN_STABLE_PREFIX_BYTES = 4096;
 
     /**
      * The floor on how much the reorder must move the first differing byte, in
-     * bytes, on the same fixture.
+     * bytes, on the same fixture and for the same-file-edited-again shape.
      *
      * MEASURED 4,670 - 3,095 = **1,575** by the same runs. This delta is the
-     * combined size of the four layers the reorder lifted over `<env>` - the
-     * repo map, the project instructions, the project memory and the two skill
-     * layers - so unlike {@see MIN_STABLE_PREFIX_BYTES} it is unaffected by the
-     * length of the base heredoc or of the host lines, which shift both sides
-     * equally and cancel. It moves only when this file's own fixture content
-     * moves, which is why it carries the tighter margin of the two.
+     * combined size of the FIVE layers the reorder lifted over `<env>` — the
+     * repo map, the project instructions, the project memory, the enabled
+     * skill's body and the skill listing — and MEASURED it is exactly
+     * `strpos($prompt, "\n\n<env>") - strpos($prompt, "\n\n<repo-map>")`,
+     * 4,056 - 2,481. Unlike {@see MIN_STABLE_PREFIX_BYTES} it is unaffected by
+     * the length of the base heredoc or of the host lines, which shift both
+     * orders equally and cancel; it moves only when this file's own fixture
+     * content moves, which is why it carries the tighter margin of the two.
      */
     private const MIN_PREFIX_GAIN_BYTES = 1500;
 
@@ -696,7 +714,14 @@ final class PromptStabilityTest extends TestCase
         // ---- the control: the same counter, the pre-P3.S1 order ------------
         $oldFirst = self::reassembledWithEnvAtLayerTwo($first);
         $oldSecond = self::reassembledWithEnvAtLayerTwo($second);
+
+        // A guard on the SPLICE HELPER, not on the code under test: three
+        // complementary substr() ranges of one string cannot change its length,
+        // so this cannot fire against today's helper — it fires against a
+        // future edit to it. MEASURED: dropping the third `substr` from
+        // reassembledWithEnvAtLayerTwo() reds exactly this pair.
         $this->assertSame(\strlen($first), \strlen($oldFirst), 'the re-splice lost or duplicated bytes');
+        $this->assertSame(\strlen($second), \strlen($oldSecond), 'the re-splice lost or duplicated bytes');
 
         $oldPrefix = self::commonPrefixLength($oldFirst, $oldSecond);
         $oldMapAt = strpos($oldFirst, '<repo-map>');
@@ -715,6 +740,129 @@ final class PromptStabilityTest extends TestCase
     }
 
     /**
+     * The floor is a floor across the SHAPES of a between-step change, not a
+     * property of one lucky edit.
+     *
+     * The test above drives the nicest shape there is: the same file edited
+     * again, so `git status --porcelain` is byte-identical across the two
+     * renders and the first difference is an abbreviated blob hash deep inside
+     * the diff body. Two harsher shapes exist in an ordinary session and both
+     * move the divergence EARLIER, because `<env>` emits the caveat, the branch,
+     * the status and the log AHEAD of the diff:
+     *
+     *   - a working diff LARGER than {@see EnvironmentBlock::DIFF_MAX_BYTES}
+     *     whose two revisions differ in size, so the `--shortstat` line that
+     *     leads the diff section changes before any patch byte does;
+     *   - a SECOND file dirtied between the steps, so the `Status:` field
+     *     itself changes — the earliest field of `<env>` that a write can move.
+     *
+     * MEASURED on this fixture: 4,583 and 4,403 against the nice shape's 4,670,
+     * with `<env>` opening at 4,056. Every one of them still carries the whole
+     * stable region, and every one still clears
+     * {@see MIN_STABLE_PREFIX_BYTES}. That is the property worth pinning — the
+     * worst case is bounded by WHERE `<env>` starts, not by how big the diff
+     * gets, which is exactly what putting the block last buys.
+     *
+     * The three prefixes are also asserted to be DISTINCT and ordered. Three
+     * scenarios that silently produced the same number would be three copies of
+     * one test, and the ordering is the derived statement that each one bit
+     * where it was supposed to.
+     */
+    public function testTheFloorHoldsForEveryShapeOfBetweenStepChange(): void
+    {
+        // Shape 1 — the nice one, repeated here so the three numbers come from
+        // one run and are directly comparable.
+        $nice = $this->dirtyRepoFixtureWithEveryStableLayer();
+        $niceFirst = $nice->systemPrompt();
+        $nice->write('src/Alpha.php', self::ALPHA_SECOND_EDIT);
+        $nicePrefix = self::commonPrefixLength($niceFirst, $nice->systemPrompt());
+
+        // Shape 2 — a working diff over the cap whose two revisions differ in
+        // size. The cap firing is a KNOWN-POSITIVE CONTROL: without it this is
+        // just a bigger version of shape 1.
+        $capped = $this->dirtyRepoFixtureWithEveryStableLayer();
+        $capped->write('src/Alpha.php', self::generatedLines(400, 'A'));
+        $cappedFirst = $capped->systemPrompt();
+        $capped->write('src/Alpha.php', self::generatedLines(405, 'B'));
+        $cappedSecond = $capped->systemPrompt();
+
+        // The cap FIRED — asserted through the marker the block itself emits,
+        // not through the prompt's length, which is capped and therefore cannot
+        // grow past the bound however big the diff gets. That was the first
+        // version of this assertion and it was measuring the cap with a ruler
+        // the cap had already shortened: `strlen($cappedFirst) - strlen($niceFirst)`
+        // came back 7,907 against a DIFF_MAX_BYTES of 8,192 for a diff of tens
+        // of kilobytes.
+        foreach ([$cappedFirst, $cappedSecond] as $rendered) {
+            $this->assertStringContainsString(
+                '... [truncated: ',
+                $rendered,
+                'the generated revision is too small to reach the diff cap; this shape is not the pathological one',
+            );
+            $this->assertStringContainsString(
+                'insertions(+)',
+                $rendered,
+                'the diff section did not render a --shortstat line to diverge on',
+            );
+        }
+        $cappedPrefix = self::commonPrefixLength($cappedFirst, $cappedSecond);
+
+        // Shape 3 — a second tracked file dirtied, so `Status:` moves. This is
+        // the earliest field of <env> an ordinary write can reach.
+        $status = $this->dirtyRepoFixtureWithEveryStableLayer();
+        $statusFirst = $status->systemPrompt();
+        $status->write('src/Beta.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Beta { public int \$two = 2; }\n");
+        $statusSecond = $status->systemPrompt();
+        $this->assertStringContainsString(' M src/Beta.php', $statusSecond, 'the second write did not reach `git status`');
+        $statusPrefix = self::commonPrefixLength($statusFirst, $statusSecond);
+
+        $envAt = strpos($niceFirst, "\n\n<env>\n");
+        $this->assertIsInt($envAt);
+
+        foreach ([
+            'same file edited again' => $nicePrefix,
+            'diff over the cap, revisions of different size' => $cappedPrefix,
+            'a second file dirtied' => $statusPrefix,
+        ] as $shape => $prefix) {
+            $this->assertGreaterThanOrEqual(
+                self::MIN_STABLE_PREFIX_BYTES,
+                $prefix,
+                'shape "' . $shape . '" left only ' . $prefix . ' bytes of shared prefix',
+            );
+            $this->assertGreaterThan(
+                $envAt,
+                $prefix,
+                'shape "' . $shape . '" diverged before <env> began, so a stable layer is volatile',
+            );
+        }
+
+        // Each shape bit somewhere different, and in the order the layout
+        // predicts: `Status:` is ahead of `--shortstat`, which is ahead of the
+        // patch body. If two of these ever collapse onto one number, one of the
+        // three fixtures has stopped exercising what it claims to.
+        $this->assertLessThan($cappedPrefix, $statusPrefix, 'the `Status:` shape must diverge earliest');
+        $this->assertLessThan($nicePrefix, $cappedPrefix, 'the `--shortstat` shape must diverge before the patch body');
+    }
+
+    /**
+     * `$count` identical-shaped comment lines under the fixture's namespace,
+     * tagged `$revision` so two calls of the same count differ on every line.
+     *
+     * The line body is fixed-width on purpose: the diff's size is then a
+     * function of `$count` alone, which is what lets the caller assert it
+     * cleared {@see EnvironmentBlock::DIFF_MAX_BYTES}.
+     */
+    private static function generatedLines(int $count, string $revision): string
+    {
+        $body = "<?php\n\nnamespace Fixture\\Prefix;\n\n";
+        for ($i = 0; $i < $count; ++$i) {
+            $body .= '// generated line ' . $i . ' rev ' . $revision . " padding padding padding padding\n";
+        }
+
+        return $body;
+    }
+
+    /**
      * A fixture repository that renders EVERY layer of the assembled prompt,
      * inside a real git repository with one commit and a dirty working tree.
      *
@@ -724,19 +872,36 @@ final class PromptStabilityTest extends TestCase
      * transition, where `git status` itself changes and the divergence starts
      * much earlier.
      *
-     * Host-independence is a property of the fixture, not an accident. `git
-     * init` runs BEFORE any prompt is assembled, and
+     * WHAT IS PINNED, AND WHAT IS STILL READ OFF THE HOST — stated as two
+     * lists rather than as the sentence this used to carry, *"nothing outside
+     * this directory can reach the prompt"*, which was false: the git
+     * subprocesses honour the developer's own `~/.gitconfig`, and MEASURED,
+     * `core.abbrev=20` and `diff.context=10` each move the byte count. What is
+     * pinned: instruction-file discovery (`git init` runs BEFORE any prompt is
+     * assembled, and
      * {@see \SugarCraft\Crush\Context\InstructionFileLoader::ancestorRoot()}
      * returns null the moment `$root/.git` exists, so the ancestor walk that
-     * would otherwise read `CLAUDE.md` from `/tmp` and `/` never starts and
-     * nothing outside this directory can reach the prompt. The date and
-     * platform are injected by {@see PromptFixture}; the branch is forced to
-     * `master` so a host defaulting to `main` does not move the byte count.
+     * would otherwise read `CLAUDE.md` from `/tmp` and `/` never starts);
+     * `forcedInstructions`, which defaults to `[]`; the date and platform,
+     * injected by {@see PromptFixture}; the branch name; and the four git
+     * config knobs listed at the `foreach` below. What is NOT: the
+     * `Working directory:` path (`sys_get_temp_dir()`), `OS version:` and
+     * `PHP version:`. MEASURED on this host those three contribute 33 + 23 + 5
+     * = 61 B inside the shared prefix, and only the last two can SHRINK on
+     * another host — `/tmp` is already the shortest plausible temp root — which
+     * is why {@see MIN_STABLE_PREFIX_BYTES} needs tens of bytes of headroom for
+     * them and not hundreds.
      */
     private function dirtyRepoFixtureWithEveryStableLayer(): PromptFixture
     {
+        // The captured output goes INTO the message: a `git` that exists but
+        // exits nonzero — a broken wrapper, a hostile GIT_* in the environment
+        // — would otherwise skip under a sentence naming the wrong cause while
+        // its stderr sat unread in $probe. (`exec()` itself being disabled
+        // raises an Error rather than returning nonzero, so that build fails
+        // loudly instead of skipping quietly.)
         if (self::git(null, ['--version'], $probe) !== 0) {
-            $this->markTestSkipped('git is unavailable in this environment');
+            $this->markTestSkipped('git is unusable in this environment: ' . implode("\n", $probe));
         }
 
         $fixture = new PromptFixture();
@@ -778,12 +943,32 @@ final class PromptStabilityTest extends TestCase
         // this on a passphrase prompt. Every exit code is asserted: a silently
         // failed `commit` leaves an empty `Recent commits:` field that reads
         // exactly like a repository with no history.
+        //
+        // THE FOUR `diff`/`core` KNOBS ARE NOT DECORATION. `EnvironmentBlock`
+        // shells out to plain `git`, so the developer's own `~/.gitconfig`
+        // reaches the assembled prompt, and REPOSITORY-local config is the only
+        // lever a test has over that (it outranks global without touching the
+        // environment of any other test). MEASURED on this host, each set
+        // globally and the shipped test run against it:
+        //   `diff.noprefix=true`       reds the `diff --git a/… b/…` assertion
+        //   `diff.mnemonicPrefix=true` reds the same assertion
+        //   `core.abbrev=20`           prompt 4,844 -> 4,883 B, prefix -> 4,696
+        //   `diff.context=10`          prompt 4,844 -> 4,851 B
+        // and MEASURED with these four pinned, on a host with none of them set,
+        // the numbers are unchanged at 4,844/4,670 — so the pin costs nothing
+        // here and is what makes the figures reproducible anywhere.
+        // (`log.date`, `format.pretty` and `status.showUntrackedFiles` were
+        // measured INERT: the block passes its own explicit flags for those.)
         foreach ([
             ['init', '-q'],
             ['symbolic-ref', 'HEAD', 'refs/heads/master'],
             ['config', 'user.email', 'fixture@example.invalid'],
             ['config', 'user.name', 'Prefix Fixture'],
             ['config', 'commit.gpgsign', 'false'],
+            ['config', 'diff.noprefix', 'false'],
+            ['config', 'diff.mnemonicPrefix', 'false'],
+            ['config', 'core.abbrev', '7'],
+            ['config', 'diff.context', '3'],
             ['add', '-A'],
             ['commit', '-q', '-m', 'fixture: initial import'],
         ] as $argv) {
@@ -854,6 +1039,17 @@ final class PromptStabilityTest extends TestCase
         $envAt = strpos($prompt, "\n\n<env>\n");
         self::assertIsInt($mapAt, 'the fixture prompt carries no <repo-map> layer to splice around');
         self::assertIsInt($envAt, 'the fixture prompt carries no <env> layer to splice');
+
+        // The same one-occurrence precondition the marker loop applies, and for
+        // the same reason: strpos() takes the FIRST hit, so a prompt carrying
+        // two "\n\n<env>\n" runs — an instruction document or a memory note
+        // quoting the fence — would splice around the wrong one and still come
+        // out the right LENGTH, because the length guard below is structural.
+        self::assertSame(
+            1,
+            substr_count($prompt, "\n\n<env>\n"),
+            'the splice needs exactly one <env> fence to be unambiguous',
+        );
         self::assertGreaterThan(
             $mapAt,
             $envAt,
