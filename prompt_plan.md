@@ -1447,6 +1447,46 @@ paragraphs (sugar-crush/src/Context/EnvironmentBlock.php).
 - `sugar-crush/src/Backend/EngineBackend.php`
 - `sugar-crush/tests/RuntimeTest.php`
 
+**THE SECOND ASSEMBLER — added 2026-08-29 after a retrospective review measured this step's file
+list against the family it has to reach.** `EnvironmentBlock` has **four** production construction
+sites, not one, and the list above reaches only the first:
+
+| Site | Feeds |
+|---|---|
+| `src/Runtime.php:1850` | `Runtime::buildSystemPrompt()` — **this step's target** |
+| `src/Cli/Bootstrap.php:1462` | `Agent::systemPrompt()` (per-agent roster capture) |
+| `src/App/App.php:553` | `Agent::systemPrompt()` (skill-fork capture) |
+| `src/Agents/Agent.php:417` | `Agent::systemPrompt()` (last-resort fallback) |
+
+MEASURED: there is **no fifth** site (`/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/` and
+`'new EnvironmentBlock('` → the four above and zero direct constructions). The other three all feed
+the **Agent** assembler — the one §17.2 keeps deliberately separate from `Runtime`'s — whose
+`systemPrompt()` is consumed at nine live sites: `App/App.php:569`, `Agents/ProcessExecutor.php:473`,
+`Agents/AgentManager.php:433`, and `Workflows/WorkflowEngine.php:1042/1152/1252/1294/1397`. That path
+is live in production today: `bin/sugarcrush` → `Bootstrap::chat()` → `Bootstrap.php:1044`
+`agentManager()` → `Bootstrap.php:1462` capture-per-agent → `AgentManager.php:433`.
+
+**And it is the path that pays the most for the diff.** `Bootstrap.php:1458-1460` records that
+`render()` is **not** memoised there, so its git shell-out happens once per `systemPrompt()` call —
+MEASURED with a logging `git` shim on `PATH`: **five** subprocesses when the diff is emitted
+(branch, status, log, `diff --cached`, `diff`), **three** when it is suppressed.
+
+**So: this step deliberately flips only the Runtime path.** That is the right scope — it is one
+change, and the Agent assembler is a different seam with a different lifetime. But the gap must not
+close silently. This step's worklog entry **must** state, per §16.1, that the three Agent-assembler
+sites keep the default-emit behaviour and its five-subprocess cost, and the orchestrator must then
+do exactly one of: schedule a **P3.S6** for the Agent assembler, or add a row to §18 saying why the
+Agent path deliberately keeps the diff. **Do not close Phase 3 with this gap unrecorded.**
+
+**A second constraint the implementer must not discover late** (INFERRED from the code, not
+measured, and stated as a judgement): `EngineBackend::completeAsync()` forks (`pcntl_fork`), and the
+child calls `$this->complete()` at `EngineBackend.php:1166`, where `new Runtime(` sits at `:547`. On
+that path the `Runtime` and its memoised block live in a **child that exits at end of turn**, so a
+signal cannot carry across turns without being sent back over the socket. This step's Done-when only
+requires *within-turn* behaviour, which is reachable — but `EnvironmentBlock.php:110-114`'s promise
+that "the wiring step decides whether a quiet turn earns a quiet opening" is **cross-turn** and this
+file list cannot deliver it. Say so rather than quietly satisfying the narrower clause.
+
 **Depends on** P3.S2 (the lever API), P3.S4 (the measurement baseline is recorded before the
 behaviour goes live).
 **Done when** an engine-loop-level test drives consecutive no-write steps and asserts the second
