@@ -229,92 +229,61 @@ Phase:            3 in progress. P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7.
                    Phase 3 NOT closed — P3.S3, P3.S4, P3.S5 remain (fully serial).
                    A RETROSPECTIVE REVIEW TRACK over all 16 merged steps has reported in full and
                    its fixes are running alongside the plan. See "Retro-review track" below.
-Next step:        Merge P3.audit-fix-1, then P1.audit-fix-1 (both in flight), then P3.S4, then P3.S5, then the
-                   Phase 3 close (§1.7). Phase 3 is fully serial — do not batch it.
-Steps done:       17 of 62 merged, + 1 retro-fix landed (RETRO-FIX-1). P3.S3 MERGED (74cabae7f).
+Next step:        P3.S4 (measure the prefix win), then P3.S5 (wire the write-signal), then the
+                   Phase 3 close review (§1.7). Phase 3 is fully serial — do not batch it.
+                   P3.S5's brief must carry TWO things this round produced: (a) its declared file
+                   list reaches only 1 of the 4 EnvironmentBlock construction sites (9d7fbbdb4),
+                   and (b) P3.S3's Surprise 1 — the `bool $perStepRerender` conditional, which
+                   belongs to P3.S5 because it already declares Runtime.php + EngineBackend.php.
+Steps done:       19 of 62 merged, + 1 retro-fix (RETRO-FIX-1) + 1 orchestration rule
+                   (ORCHESTRATION-RULE-1). Phase 3 at 3 of 5.
 Phases done:      3 of 12
-Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`. The last STEP commit on
-                   master is dabcd27f7 (P3.S2); everything after it is bookkeeping and retro-audit
-                   work, and a mismatch there is NOT the §3.3 gap §4 step 2 tells you to reconstruct.
-Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     MASTER, measured by the orchestrator after the P3.S3 merge, stdin from /dev/null:
-                   Tests: 10407, Assertions: 160968, Skipped: 1, Failures: 0   <- CURRENT BASELINE
-                   census 6-file set: 103 tests / 9420 assertions
-                   tests/Providers/:  846 tests / 2047 assertions
-                   P0.S1 original baseline, never edited: 10351 / 160648 / 1.
+Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`.
+Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
+Latest suite:     MASTER after all three merges, measured by the orchestrator, stdin from /dev/null:
+                   Tests: 10418, Assertions: 161098, Skipped: 1, Failures: 0   <- CURRENT BASELINE
+                   census 6-file set: 103 tests / 9448 assertions
+                   tests/Providers/:  857 tests / 2113 assertions
+                   find sugar-crush/src -name '*.php' | wc -l  ->  297
+                   All three path-repo gates exit 0 (--no-lib-path-repos, root closure, --unused).
                    Two tests fail ONLY under a pty with a live terminal
-                   (Chat\CompactModelSummaryTest, MouseModalGuardTest) — environment artifact, not
-                   a regression. ALWAYS run the suite with stdin redirected from /dev/null.
+                   (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect stdin
+                   from /dev/null.
 
-                   CAUTION ON ASSERTION COUNTS: a COMMENT-ONLY commit moves the suite total.
-                   MEASURED on the P3.S3 branch, same tree, only src/Context/EnvironmentBlock.php
-                   docblock prose differing: 160968 with a7513cc0e, 160967 with it reverted —
-                   deterministic, reproduced by full-suite runs both ways. The reacting test is NOT
-                   SymbolCitationDriftTest (2924 either way), NOT DuplicatedDocBlockLineTest (23),
-                   NOT DescriptorInheritanceGuardTest (3738), and does not move when run in
-                   isolation. So the suite assertion TOTAL is not a stable baseline for a
-                   prose-only change; compare per-file counts, or a --log-junit diff, before
-                   calling an assertion delta real. Naming the culprit is UNFINISHED — the commands
-                   are below under UNFINISHED MEASUREMENT.
+                   ASSERTION-TOTAL INSTABILITY — MECHANISM NOW IDENTIFIED. A COMMENT-ONLY commit
+                   moves the suite total. The culprit is `Config/GlobFigureDriftTest`, a
+                   PER-PARAGRAPH stale-figure census: P1.audit-fix-1 bisected an unexplained +5 to
+                   it, VertexProvider.php having grown 224 -> 229 paragraphs. That also explains the
+                   earlier unresolved P3.S3 case (160968 vs 160967 on a comment-only commit).
+                   CONSEQUENCE: the suite assertion TOTAL is not a stable baseline for a prose-only
+                   change. Compare per-file counts, or diff `--log-junit` per-testcase `assertions=`
+                   attributes, before calling an assertion delta real.
 
-In-flight batch:  RESUMED 2026-08-29. The pause's agents did NOT survive the interrupt — all three
-                   were respawned fresh from their worktrees, which were intact. Each new agent was
-                   pointed at its predecessor's JSONL transcript under
-                   /tmp/claude-1000/-home-sites-sugarcraft/<session>/tasks/<agentId>.output to
-                   recover its findings list, and told to treat what it finds there as a starting
-                   point to re-verify rather than as fact (§16.5).
+In-flight batch:  NOTHING RUNNING. All three steps merged, master clean and green. PAUSED at user
+                   request.
+                     P3.S3            merged 74cabae7f  (golden regeneration 9d4176a3a)
+                     P3.audit-fix-1   merged 6aff0bad1
+                     P1.audit-fix-1   merged 03d8fed37
+                   Each was verified by the ORCHESTRATOR on a COMBINED tree — master merged INTO the
+                   branch first, then the full suite run — because the branches predated each
+                   other's merges and touched overlapping golden-path files. Do this again next
+                   time; a clean `git merge` is not evidence the combination passes.
 
-                   P3.S3 is MERGED (74cabae7f) — its golden regeneration landed as 9d4176a3a
-                   and the orchestrator verified master green afterwards. Its worktree
-                   /home/sites/prompt-step-P3.S3 is now removable.
-                   2. P3.audit-fix-1   /home/sites/prompt-step-P3.audit-fix-1  from 3a24e233f
-                                       2 commits stand. Files: tests/Integration/SystemPromptWiringTest.php,
-                                       tests/BaseSystemPromptTest.php, src/Runtime.php.
-                   3. P1.audit-fix-1   /home/sites/prompt-step-P1.audit-fix-1  from d34ce0297
-                                       2 commits stand, 2 of 5 review cycles used, resuming at the
-                                       G1-G6 fix plan. Files: src/Providers/VertexProvider.php,
-                                       tests/Providers/VertexProviderTest.php,
-                                       tests/Providers/SystemPromptTransmissionMatrixTest.php.
-
-                   A KILLED AGENT LEFT A DELETION-EXPERIMENT MUTATION UNCOMMITTED, AND IT WOULD
-                   HAVE REGRESSED AN EARLIER STEP. P3.audit-fix-1 was killed mid-experiment twice
-                   over; at the kill its worktree held, uncommitted in src/Runtime.php:
-                     (a) $base = "PREPENDED LAYER ZERO\n\n" . $base;
-                     (b) $base .= "\n\n" . $this->environmentSnapshot($app)->render();
-                         MOVED from after the skills loop to before it
-                   (b) is P3.S1's decision undone — <env> back off the end of the prompt — with the
-                   "at the very end of the system prompt" comment left stranded above it, so the
-                   file read as if env-last still held. Neither was work; both were mutations meant
-                   to prove a test bites. Committing either would have silently reverted a merged
-                   step. The orchestrator reverted both and re-verified env is last at
-                   Runtime.php:1828. RULE: after EVERY deletion experiment, restore and confirm
-                   `git status --porcelain` is empty (§16.8 rule 51) — and an orchestrator who
-                   finds a dirty step worktree must DIFF IT before assuming it is work in progress.
-                   The rescued patches are kept at
-                   .sugar-crush-prompt/rescued-P3.audit-fix-1-uncommitted.patch (mutation (a)) —
-                   retained as evidence, NOT as work to reapply.
-
-                   DECLARED MERGE ORDER: P3.audit-fix-1 -> P1.audit-fix-1 (P3.S3 done). Run tests/Providers/ + the census 6-file set between merges
-                   (§1.3). P3.S3's base is 84899c6e7 and master has moved, but only by bookkeeping
-                   commits, so the merge is clean.
-                   CONFLICT WARNING: P3.audit-fix-1 and P3.S3 both bear on the <env> golden path,
-                   and the queued P2.audit-fix-1 also touches tests/BaseSystemPromptTest.php.
-                   Re-run the goldens after each merge rather than trusting a clean git merge.
-
-Live worktrees:   /home/sites/prompt-step-P3.S3            — a7513cc0e, clean, agent running.
-                  /home/sites/prompt-step-P3.audit-fix-1   — 3a24e233f, clean, agent running.
-                  /home/sites/prompt-step-P1.audit-fix-1   — d34ce0297, clean, agent running.
-                  /home/sites/prompt-review-RR1 .. RR5     — five retro-review sandboxes, branches
-                    review/RR1..RR5, all reported. Read-only, no uncommitted work, NOT step
-                    worktrees — do not §1.12 them. SAFE TO REMOVE:
-                      for id in RR1 RR2 RR3 RR4 RR5; do
-                        git -C /home/sites/sugarcraft worktree remove /home/sites/prompt-review-$id
-                        git -C /home/sites/sugarcraft branch -D review/$id
-                      done
+Live worktrees:   All three step worktrees are MERGED and removable:
+                     git worktree remove /home/sites/prompt-step-P3.S3
+                     git worktree remove /home/sites/prompt-step-P3.audit-fix-1
+                     git worktree remove /home/sites/prompt-step-P1.audit-fix-1
+                   /home/sites/prompt-review-RR1 .. RR5 — five retro-review sandboxes, all
+                   reported, read-only, NOT step worktrees (do not §1.12 them). Removable:
+                     for id in RR1 RR2 RR3 RR4 RR5; do
+                       git -C /home/sites/sugarcraft worktree remove /home/sites/prompt-review-$id
+                       git -C /home/sites/sugarcraft branch -D review/$id
+                     done
 
 Blocked on:       nothing
-Awaiting user decision: TWO, both from P1.audit-fix-1 (VertexProvider). Neither blocks the rest of
-                   the plan — the step is parked per §1.2 action 6 and everything else continues.
+Awaiting user decision: TWO, both from P1.audit-fix-1 (VertexProvider). The step MERGED (03d8fed37)
+                   with both honoured and untouched — verified by two reviewers independently. The
+                   decisions remain open and block nothing.
 
                    (1) THE GOOGLE ARM TARGETS AN ENVELOPE ITS OWN PINNED TEST MODEL IS NOT SERVED BY.
                    `VertexProvider::googleBody()` builds the PaLM 2 `chat-bison` `:predict` shape —
