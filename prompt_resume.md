@@ -262,75 +262,62 @@ Latest suite:     master: 10404 / 160919 / 1 skipped — measured INDEPENDENTLY 
                    prose-only change; compare per-file counts, or a --log-junit diff, before
                    calling an assertion delta a real one.
 
-In-flight batch:  ALL AGENTS PAUSED 2026-08-29 by user instruction (user hit their session limit).
-                   NOTHING IS RUNNING. Nothing is merged. Master is clean at c9dd79ab8.
-                   Each paused agent was told: commit WIP, report a handoff, then stay idle and
-                   resume ONLY on an explicit "RESUME" message from the orchestrator.
-                   To restart, send each one RESUME with SendMessage (ids below); if an id no
-                   longer resolves, respawn it from its worktree + findings brief instead.
+In-flight batch:  RESUMED 2026-08-29. The pause's agents did NOT survive the interrupt — all three
+                   were respawned fresh from their worktrees, which were intact. Each new agent was
+                   pointed at its predecessor's JSONL transcript under
+                   /tmp/claude-1000/-home-sites-sugarcraft/<session>/tasks/<agentId>.output to
+                   recover its findings list, and told to treat what it finds there as a starting
+                   point to re-verify rather than as fact (§16.5).
 
-                   1. P3.S3            COMPLETE, UNMERGED. /home/sites/prompt-step-P3.S3
-                                       HEAD a7513cc0e, 6 commits, tree CLEAN.
-                                       Suite 10407/160968/1 skipped and ONE failure — the second
-                                       golden it was forbidden to touch. Decision taken, see
-                                       "Next step". Its agent has exited; do not message it.
-                   2. P3.audit-fix-1   PAUSED. /home/sites/prompt-step-P3.audit-fix-1
-                                       HEAD 3a24e233f, 2 step commits, tree DIRTY: 1 file,
-                                       sugar-crush/src/Runtime.php, +2 lines, UNCOMMITTED.
-                                       RESCUED to .sugar-crush-prompt/rescued-P3.audit-fix-1-uncommitted.patch
-                                       (551 B) — the agent exited without committing it, so treat
-                                       the worktree as authoritative but verify against the patch
-                                       before building on it (§1.8.4 rung 3).
-                                       agentId a4351a157c957e3e2 (already exited).
-                   3. P1.audit-fix-1   PAUSED. /home/sites/prompt-step-P1.audit-fix-1
-                                       HEAD d34ce0297, 2 step commits, tree CLEAN. Was in its
-                                       review loop (cycle 1 fixes landed).
-                                       agentId a8d0cbaf6516e3e39 — pause message delivered.
-                   4. a6bf97ef6880e86cc  PAUSED. A review agent spawned ~9m before the pause;
-                                       pause message delivered, handoff not yet read. Identify it
-                                       from its output file before assuming what it was reviewing.
+                   1. P3.S3-golden     /home/sites/prompt-step-P3.S3         from a7513cc0e
+                                       ONE file: tests/fixtures/prompt/golden-agent-prompt.txt.
+                                       Mechanical regeneration, no review loop — the generator
+                                       already spent five cycles.
+                   2. P3.audit-fix-1   /home/sites/prompt-step-P3.audit-fix-1  from 3a24e233f
+                                       2 commits stand. Files: tests/Integration/SystemPromptWiringTest.php,
+                                       tests/BaseSystemPromptTest.php, src/Runtime.php.
+                   3. P1.audit-fix-1   /home/sites/prompt-step-P1.audit-fix-1  from d34ce0297
+                                       2 commits stand, 2 of 5 review cycles used, resuming at the
+                                       G1-G6 fix plan. Files: src/Providers/VertexProvider.php,
+                                       tests/Providers/VertexProviderTest.php,
+                                       tests/Providers/SystemPromptTransmissionMatrixTest.php.
 
-                   DECLARED MERGE ORDER when work resumes: P3.S3 (after the golden regeneration)
-                   -> P3.audit-fix-1 -> P1.audit-fix-1. Run tests/Providers/ + the census 6-file
-                   set between merges (§1.3). P3.S3's base is 84899c6e7 and master has moved, but
-                   only by bookkeeping commits, so the merge is clean.
-                   File ownership, verified disjoint:
-                     P3.S3          -> src/Context/EnvironmentBlock.php,
-                                      tests/Context/EnvironmentBlockTest.php,
-                                      tests/fixtures/prompt/golden-system-prompt.txt,
-                                      + tests/fixtures/prompt/golden-agent-prompt.txt (2nd widening)
-                     P3.audit-fix-1 -> tests/Integration/SystemPromptWiringTest.php,
-                                      tests/BaseSystemPromptTest.php, src/Runtime.php
-                     P1.audit-fix-1 -> src/Providers/VertexProvider.php,
-                                      tests/Providers/VertexProviderTest.php,
-                                      tests/Providers/SystemPromptTransmissionMatrixTest.php
+                   A KILLED AGENT LEFT A DELETION-EXPERIMENT MUTATION UNCOMMITTED, AND IT WOULD
+                   HAVE REGRESSED AN EARLIER STEP. P3.audit-fix-1 was killed mid-experiment twice
+                   over; at the kill its worktree held, uncommitted in src/Runtime.php:
+                     (a) $base = "PREPENDED LAYER ZERO\n\n" . $base;
+                     (b) $base .= "\n\n" . $this->environmentSnapshot($app)->render();
+                         MOVED from after the skills loop to before it
+                   (b) is P3.S1's decision undone — <env> back off the end of the prompt — with the
+                   "at the very end of the system prompt" comment left stranded above it, so the
+                   file read as if env-last still held. Neither was work; both were mutations meant
+                   to prove a test bites. Committing either would have silently reverted a merged
+                   step. The orchestrator reverted both and re-verified env is last at
+                   Runtime.php:1828. RULE: after EVERY deletion experiment, restore and confirm
+                   `git status --porcelain` is empty (§16.8 rule 51) — and an orchestrator who
+                   finds a dirty step worktree must DIFF IT before assuming it is work in progress.
+                   The rescued patches are kept at
+                   .sugar-crush-prompt/rescued-P3.audit-fix-1-uncommitted.patch (mutation (a)) —
+                   retained as evidence, NOT as work to reapply.
+
+                   DECLARED MERGE ORDER: P3.S3 (once its golden lands) -> P3.audit-fix-1 ->
+                   P1.audit-fix-1. Run tests/Providers/ + the census 6-file set between merges
+                   (§1.3). P3.S3's base is 84899c6e7 and master has moved, but only by bookkeeping
+                   commits, so the merge is clean.
                    CONFLICT WARNING: P3.audit-fix-1 and P3.S3 both bear on the <env> golden path,
                    and the queued P2.audit-fix-1 also touches tests/BaseSystemPromptTest.php.
                    Re-run the goldens after each merge rather than trusting a clean git merge.
 
-Live worktrees:   /home/sites/prompt-step-P3.S3            — COMPLETE at a7513cc0e, clean.
-                  /home/sites/prompt-step-P3.audit-fix-1   — PAUSED at 3a24e233f, 1 dirty file.
-                  /home/sites/prompt-step-P1.audit-fix-1   — PAUSED at d34ce0297, clean.
+Live worktrees:   /home/sites/prompt-step-P3.S3            — a7513cc0e, clean, agent running.
+                  /home/sites/prompt-step-P3.audit-fix-1   — 3a24e233f, clean, agent running.
+                  /home/sites/prompt-step-P1.audit-fix-1   — d34ce0297, clean, agent running.
                   /home/sites/prompt-review-RR1 .. RR5     — five retro-review sandboxes, branches
-                    review/RR1..RR5. ALL FIVE REPORTED. Read-only, no uncommitted work, NOT step
+                    review/RR1..RR5, all reported. Read-only, no uncommitted work, NOT step
                     worktrees — do not §1.12 them. SAFE TO REMOVE:
                       for id in RR1 RR2 RR3 RR4 RR5; do
                         git -C /home/sites/sugarcraft worktree remove /home/sites/prompt-review-$id
                         git -C /home/sites/sugarcraft branch -D review/$id
                       done
-
-UNFINISHED MEASUREMENT (not a blocker, do not let it block a merge):
-                   naming the test whose assertion count reacts to a COMMENT-ONLY change. A
-                   --log-junit diff of the two trees was started and CANCELLED at the pause, so
-                   that the P3.S3 worktree would not be left with a reverted file. The worktree was
-                   verified clean afterwards. The finding itself is already MEASURED and stands
-                   (see "Latest suite"); only the culprit's name is missing. To finish it:
-                     cd /home/sites/prompt-step-P3.S3/sugar-crush
-                     vendor/bin/phpunit --log-junit /tmp/junit-head.xml
-                     cd .. && git checkout 0aba1a706 -- sugar-crush/src/Context/EnvironmentBlock.php
-                     (cd sugar-crush && vendor/bin/phpunit --log-junit /tmp/junit-rev.xml)
-                     git checkout HEAD -- sugar-crush/src/Context/EnvironmentBlock.php   # ALWAYS
-                   then diff the per-testcase `assertions=` attributes between the two XMLs.
 
 Blocked on:       nothing
 Awaiting user decision: TWO, both from P1.audit-fix-1 (VertexProvider). Neither blocks the rest of
