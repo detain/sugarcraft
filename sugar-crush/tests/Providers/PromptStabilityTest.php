@@ -13,10 +13,13 @@ use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Skills\SkillSource;
 use SugarCraft\Crush\Tests\Prompt\PromptFixture;
@@ -482,6 +485,19 @@ final class PromptStabilityTest extends TestCase
             $this->markTestSkipped('git is unavailable in this environment');
         }
 
+        // The write below is an UNTRACKED file, and `status.showUntrackedFiles`
+        // decides whether `git status --porcelain` can see one — this block
+        // runs `status --porcelain` with no untracked flag of its own. MEASURED:
+        // with `status.showUntrackedFiles=no` in a global gitconfig, this test
+        // reds on master too (the two renders come out byte-identical and the
+        // assertion below reads as "D7 got fixed"). Pinned repo-locally rather
+        // than left to the developer's own config.
+        $this->assertSame(
+            0,
+            self::git($dir, ['config', 'status.showUntrackedFiles', 'normal'], $configured),
+            'could not pin status.showUntrackedFiles on the scratch repository: ' . implode("\n", $configured),
+        );
+
         $block = new EnvironmentBlock($dir, SglangProvider::DEFAULT_MODEL, new DateTimeImmutable('2026-08-10 12:00:00'));
         $before = $block->render();
 
@@ -502,31 +518,41 @@ final class PromptStabilityTest extends TestCase
 
     /**
      * The floor the assembled prompt's shared prefix must clear on the fixture
-     * {@see dirtyRepoFixtureWithEveryStableLayer()} builds, in bytes.
+     * {@see dirtyRepoFixtureWithEveryStableLayer()} builds, in bytes, for a
+     * change that moves `<env>` AND NOTHING ELSE.
      *
      * MEASURED 2026-08-29, PHP 8.3.6, Linux 6.8.0-138-generic, three takes per
      * row and identical on all three, by assembling two consecutive prompts
      * through the real private
      * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} over that fixture
-     * and counting bytes to the first one that differs. The rows are the
-     * different SHAPES a between-step change can take, because the shape is
-     * what decides which field of `<env>` moves first:
+     * and counting bytes to the first one that differs. Every row is driven by
+     * a test in this file — the generator is the test, not this table, and the
+     * two prompt lengths are given separately because they are two different
+     * strings:
      *
-     *   | what changed between the two renders     | prompt | prefix | diverges at |
-     *   |------------------------------------------|--------|--------|-------------|
-     *   | the same file edited again (the nice one) |  4,844 |  4,670 | blob hash   |
-     *   | 400-line rewrite, both revs same size     | 12,751 |  4,673 | blob hash   |
-     *   | 400 vs 405 lines, diff over the 8,192 B cap | 12,751 | 4,583 | `--shortstat` |
-     *   | a SECOND tracked file dirtied             |  5,083 |  4,403 | `Status:`   |
-     *   | an untracked file appears                 |  4,856 |  4,403 | `Status:`   |
-     *   | pre-P3.S1 order, the same file edited     |  4,844 |  3,095 | blob hash   |
+     *   | between the two renders            | prompt 1 | prompt 2 | prefix | diverges at   | driven by |
+     *   |------------------------------------|---------:|---------:|-------:|---------------|-----------|
+     *   | the same file edited again         |    4,844 |    4,844 |  4,670 | blob hash     | {@see testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree()} |
+     *   | 400 vs 405 lines, over the 8,192 B cap | 12,751 | 12,751 |  4,583 | `--shortstat` | {@see testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock()} |
+     *   | a SECOND tracked file dirtied      |    4,844 |    5,083 |  4,403 | `Status:`     | {@see testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock()} |
+     *   | pre-P3.S1 order, same file edited  |    4,844 |    4,844 |  3,095 | blob hash     | the old-order control inside the first test |
      *
-     * `<env>` opens at byte 4,056 on this fixture, so EVERY post-reorder row
+     * `<env>` opens at byte 4,056 on this fixture, so every post-reorder row
      * above keeps the whole stable region — base heredoc, repo map, instruction
      * documents, memory, both skill layers — inside the shared prefix, and the
      * last row does not. The prompt is the same 4,844 bytes in the first and
      * last rows: this was a reorder, not an addition, and it moved 1,575 of
      * them from behind the first differing byte to in front of it.
+     *
+     * THE CLASS OF CHANGE MATTERS, AND AN EARLIER REVISION OF THIS BLOCK DID
+     * NOT SAY SO. It claimed the worst case was "bounded by WHERE `<env>`
+     * starts, not by how big the diff gets". That is true only for a change
+     * that leaves the layers ahead of `<env>` alone. It is FALSE for a turn
+     * that creates a source file: `<repo-map>` carries a per-directory `.php`
+     * COUNT, so `(2 files)` becomes `(3 files)` at byte 3,188 — ahead of
+     * everything P3.S1 moved, and below this floor.
+     * {@see testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne()} pins
+     * that limit, and the lifetime that saves it.
      *
      * Both `<env>` figures are OF THIS FIXTURE and of nothing else. §3.4's own
      * pair — 598 B then 615 B, first differing at 524 — is of a two-edit
@@ -537,18 +563,18 @@ final class PromptStabilityTest extends TestCase
      * THE STEP TEXT. P3.S4 says the assertion pins "at least N bytes, where N
      * is the measured value on the fixture". Taken literally that is 4,670, and
      * this constant is deliberately NOT that. Two reasons, both measured.
-     * First, 4,670 is the value for ONE shape; the worst shape above is 4,403,
-     * and a floor that only the nicest edit can clear pins the fixture's luck
-     * rather than the layer order. Second, some bytes inside the prefix are
-     * read off the host and this file does not own them — `OS version:` and
-     * `PHP version:` are 28 B of it here — while the base heredoc ahead of them
-     * is 2,481 B of prose four later steps are licensed to edit. 4,096 sits
-     * 1,001 B ABOVE the pre-reorder measurement, which is what makes it
-     * discriminating — the old assembly cannot reach it on this fixture, and
-     * the deletion experiment in the worklog shows it reporting exactly 3,095 —
-     * and 307 B below the WORST post-reorder row, which is the slack. The
-     * dominant consumer of that slack is the editable base heredoc, not the
-     * host lines.
+     * First, 4,670 is the value for ONE shape; the worst shape in the class
+     * this floor governs is 4,403, and a floor that only the nicest edit can
+     * clear pins the fixture's luck rather than the layer order. Second, some
+     * bytes inside the prefix are read off the host and this file does not own
+     * them — `OS version:` and `PHP version:` are 28 B of it here — while the
+     * base heredoc ahead of them is 2,481 B of prose four later steps are
+     * licensed to edit. 4,096 sits 1,001 B ABOVE the pre-reorder measurement,
+     * which is what makes it discriminating — the old assembly cannot reach it
+     * on this fixture, and the deletion experiment in the worklog shows it
+     * reporting exactly 3,095 — and 307 B below the worst row of the class it
+     * governs, which is the slack. The dominant consumer of that slack is the
+     * editable base heredoc, not the host lines.
      *
      * It is a MAGNITUDE floor and nothing more. The ORDERING decision is pinned
      * by the marker assertions beside it and by the old-order control, neither
@@ -592,6 +618,19 @@ final class PromptStabilityTest extends TestCase
         '## Skill: prefix-demo',
         'Available skills (invoke via Skill tool):',
     ];
+
+    /**
+     * {@see PromptFixture}'s own defaults, restated so a Runtime built by hand
+     * here renders the same bytes the fixture's default one does.
+     *
+     * Restating them is a liability the fixture does not otherwise impose, so
+     * the one test that needs them asserts byte equality against
+     * `PromptFixture::systemPrompt()` rather than trusting the copy.
+     */
+    private const FIXTURE_PLATFORM = 'linux';
+
+    /** @see self::FIXTURE_PLATFORM */
+    private const FIXTURE_NOW = '2026-01-15 12:00:00 UTC';
 
     /** The committed body of the fixture's one edited file. */
     private const ALPHA_COMMITTED = "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Alpha {}\n";
@@ -740,35 +779,46 @@ final class PromptStabilityTest extends TestCase
     }
 
     /**
-     * The floor is a floor across the SHAPES of a between-step change, not a
-     * property of one lucky edit.
+     * The floor is a floor across the shapes of a change that moves `<env>` and
+     * nothing ahead of it — not a property of one lucky edit.
      *
-     * The test above drives the nicest shape there is: the same file edited
-     * again, so `git status --porcelain` is byte-identical across the two
-     * renders and the first difference is an abbreviated blob hash deep inside
-     * the diff body. Two harsher shapes exist in an ordinary session and both
-     * move the divergence EARLIER, because `<env>` emits the caveat, the branch,
-     * the status and the log AHEAD of the diff:
+     * READ THE NAME AS A SCOPE, NOT AS A BOAST. An earlier revision of this
+     * test was called `…ForEveryShapeOfBetweenStepChange` and its docblock
+     * claimed the worst case was "bounded by WHERE `<env>` starts, not by how
+     * big the diff gets". A review found the counterexample in one command: a
+     * turn that CREATES a `.php` file moves `<repo-map>`'s per-directory file
+     * count, which sits at byte 3,188 — ahead of `<env>` and below the floor.
+     * That shape is out of scope here and has its own test,
+     * {@see testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne()}.
+     *
+     * The test above drives the nicest in-scope shape there is: the same file
+     * edited again, so `git status --porcelain` is byte-identical across the
+     * two renders and the first difference is an abbreviated blob hash deep
+     * inside the diff body. Two harsher in-scope shapes exist in an ordinary
+     * session and both move the divergence EARLIER, because `<env>` emits the
+     * caveat, the branch, the status and the log AHEAD of the diff:
      *
      *   - a working diff LARGER than {@see EnvironmentBlock::DIFF_MAX_BYTES}
      *     whose two revisions differ in size, so the `--shortstat` line that
      *     leads the diff section changes before any patch byte does;
      *   - a SECOND file dirtied between the steps, so the `Status:` field
-     *     itself changes — the earliest field of `<env>` that a write can move.
+     *     itself changes — the earliest field OF `<env>` a write can move,
+     *     which is not the same claim as the earliest byte of the PROMPT a
+     *     write can move.
      *
      * MEASURED on this fixture: 4,583 and 4,403 against the nice shape's 4,670,
      * with `<env>` opening at 4,056. Every one of them still carries the whole
      * stable region, and every one still clears
-     * {@see MIN_STABLE_PREFIX_BYTES}. That is the property worth pinning — the
-     * worst case is bounded by WHERE `<env>` starts, not by how big the diff
-     * gets, which is exactly what putting the block last buys.
+     * {@see MIN_STABLE_PREFIX_BYTES} — inside this class, the worst case IS
+     * bounded by where `<env>` starts however big the diff gets, which is what
+     * putting the block last buys.
      *
      * The three prefixes are also asserted to be DISTINCT and ordered. Three
      * scenarios that silently produced the same number would be three copies of
      * one test, and the ordering is the derived statement that each one bit
      * where it was supposed to.
      */
-    public function testTheFloorHoldsForEveryShapeOfBetweenStepChange(): void
+    public function testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock(): void
     {
         // Shape 1 — the nice one, repeated here so the three numbers come from
         // one run and are directly comparable.
@@ -842,6 +892,132 @@ final class PromptStabilityTest extends TestCase
         // three fixtures has stopped exercising what it claims to.
         $this->assertLessThan($cappedPrefix, $statusPrefix, 'the `Status:` shape must diverge earliest');
         $this->assertLessThan($nicePrefix, $cappedPrefix, 'the `--shortstat` shape must diverge before the patch body');
+    }
+
+    /**
+     * THE LIMIT OF WHAT P3.S1 BOUGHT, pinned rather than left to be
+     * rediscovered: moving `<env>` last does not make everything ahead of it
+     * stable, because `<repo-map>` is derived from the working tree too.
+     *
+     * {@see \SugarCraft\Crush\Context\RepoMapBlock} emits a per-directory count
+     * of `.php` files. Create one and `- src/  ->  Fixture\Prefix\  (2 files)`
+     * becomes `(3 files)` — MEASURED at byte 3,188 on this fixture, which is
+     * ahead of `<env>` (4,056), ahead of the instruction documents, the memory
+     * block and both skill layers, and BELOW
+     * {@see MIN_STABLE_PREFIX_BYTES}. A turn that adds a source file therefore
+     * re-prefills almost everything, and no amount of moving `<env>` changes
+     * that.
+     *
+     * WHAT SAVES IT IS A LIFETIME, AND THE TWO ARE WORTH TELLING APART.
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} runs once per STEP
+     * of the agentic loop and reads a repo map memoised on the Runtime, while
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()} builds a FRESH
+     * Runtime per user TURN. So:
+     *
+     *   - within one turn, the map is frozen and a new file moves only `<env>`
+     *     — MEASURED prefix 4,403, the same figure as any other `Status:`
+     *     change;
+     *   - across turns, the map is re-captured and the prefix collapses to
+     *     3,188.
+     *
+     * Both are asserted below, from ONE fixture in ONE test, because the pair
+     * is the finding: the within-turn number alone reads as "the reorder
+     * worked" and the across-turn number alone reads as "the reorder did
+     * nothing", and neither sentence is true on its own.
+     *
+     * This is a PIN ON A MEASURED LIMIT, not an endorsement. If a later step
+     * makes the repo map stable across turns — capturing it per session, or
+     * dropping the file counts — the across-turn assertion here is expected to
+     * flip, and it should be rewritten deliberately rather than deleted
+     * quietly. The finding itself lives in `src/Context/RepoMapBlock.php` and
+     * `src/Backend/EngineBackend.php`, both outside this step's declared file
+     * list, so it is reported in the worklog and pinned here rather than fixed.
+     */
+    public function testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne(): void
+    {
+        $fixture = $this->dirtyRepoFixtureWithEveryStableLayer();
+        $app = $fixture->app();
+
+        // ACROSS TURNS: each systemPrompt() call without an explicit Runtime
+        // gets a fresh one, which is what EngineBackend::complete() does per
+        // user turn.
+        $before = $fixture->systemPrompt($app);
+        $this->assertStringContainsString(
+            '- src/  ->  Fixture\Prefix\  (2 files)',
+            $before,
+            'the repo map does not carry the per-directory file count this test is about',
+        );
+
+        $fixture->write('src/Gamma.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Gamma {}\n");
+        $after = $fixture->systemPrompt($app);
+        $this->assertStringContainsString('- src/  ->  Fixture\Prefix\  (3 files)', $after);
+
+        $acrossTurns = self::commonPrefixLength($before, $after);
+        $mapAt = strpos($before, "\n\n<repo-map>");
+        $envAt = strpos($before, "\n\n<env>\n");
+        $this->assertIsInt($mapAt);
+        $this->assertIsInt($envAt);
+
+        $this->assertGreaterThan(
+            $mapAt,
+            $acrossTurns,
+            'the divergence should be INSIDE <repo-map>, not ahead of it',
+        );
+        $this->assertLessThan(
+            $envAt,
+            $acrossTurns,
+            'if a new source file no longer voids the prefix ahead of <env>, the repo map became stable — '
+                . 'rewrite this test deliberately, do not delete it',
+        );
+        $this->assertLessThan(
+            self::MIN_STABLE_PREFIX_BYTES,
+            $acrossTurns,
+            'the across-turn prefix now clears the floor; the limit this test pins is gone',
+        );
+
+        // WITHIN ONE TURN: the same two writes, one Runtime. buildSystemPrompt()
+        // reads the memoised repoMapSnapshot(), so the map cannot move and the
+        // only thing left to diverge is <env>.
+        $sameTurn = $this->dirtyRepoFixtureWithEveryStableLayer();
+        $sameTurnApp = $sameTurn->app();
+        $runtime = new Runtime(
+            $sameTurnApp->provider,
+            new HookManager(new HookRegistry()),
+            new EnvironmentBlock($sameTurn->root(), $sameTurnApp->model, new DateTimeImmutable(self::FIXTURE_NOW), self::FIXTURE_PLATFORM),
+        );
+
+        // The hand-built Runtime must be the one PromptFixture would have made,
+        // or this half is measuring a different prompt from the half above.
+        // Byte equality against the fixture's own default is what says so.
+        $this->assertSame(
+            $sameTurn->systemPrompt($sameTurnApp),
+            $sameTurn->systemPrompt($sameTurnApp, $runtime),
+            'PromptFixture no longer builds its Runtime the way this test does',
+        );
+
+        $stepOne = $sameTurn->systemPrompt($sameTurnApp, $runtime);
+        $sameTurn->write('src/Gamma.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Gamma {}\n");
+        $stepTwo = $sameTurn->systemPrompt($sameTurnApp, $runtime);
+
+        $this->assertStringContainsString(
+            '- src/  ->  Fixture\Prefix\  (2 files)',
+            $stepTwo,
+            'the memoised repo map moved inside a single turn',
+        );
+
+        $withinTurn = self::commonPrefixLength($stepOne, $stepTwo);
+        $this->assertNotSame($stepOne, $stepTwo, '<env> must still track the new file within the turn');
+        $this->assertGreaterThanOrEqual(self::MIN_STABLE_PREFIX_BYTES, $withinTurn);
+        $this->assertGreaterThan(
+            $envAt,
+            $withinTurn,
+            'within one turn the memoised layers must all stay inside the shared prefix',
+        );
+        $this->assertGreaterThan(
+            $acrossTurns,
+            $withinTurn,
+            'the two lifetimes must differ, or this test is measuring one thing twice',
+        );
     }
 
     /**
@@ -950,15 +1126,34 @@ final class PromptStabilityTest extends TestCase
         // lever a test has over that (it outranks global without touching the
         // environment of any other test). MEASURED on this host, each set
         // globally and the shipped test run against it:
-        //   `diff.noprefix=true`       reds the `diff --git a/… b/…` assertion
-        //   `diff.mnemonicPrefix=true` reds the same assertion
-        //   `core.abbrev=20`           prompt 4,844 -> 4,883 B, prefix -> 4,696
-        //   `diff.context=10`          prompt 4,844 -> 4,851 B
-        // and MEASURED with these four pinned, on a host with none of them set,
+        //   `diff.noprefix=true`            reds the `diff --git a/… b/…` assertion
+        //   `diff.mnemonicPrefix=true`      reds the same assertion
+        //   `core.abbrev=20`                prompt 4,844 -> 4,883 B, prefix -> 4,696
+        //   `diff.context=10`               prompt 4,844 -> 4,851 B
+        //   `color.ui=always`               prompt 4,844 -> 4,921 B, prefix -> 4,689
+        //   `diff.suppressBlankEmpty=true`  prompt 4,844 -> 4,842 B
+        //   `status.showUntrackedFiles=no`  makes an untracked file invisible,
+        //                                   so two renders come out IDENTICAL
+        //                                   and any measurement over them is
+        //                                   vacuous
+        // and MEASURED with all seven pinned, on a host with none of them set,
         // the numbers are unchanged at 4,844/4,670 — so the pin costs nothing
         // here and is what makes the figures reproducible anywhere.
-        // (`log.date`, `format.pretty` and `status.showUntrackedFiles` were
-        // measured INERT: the block passes its own explicit flags for those.)
+        //
+        // `log.date` and `format.pretty` ARE inert, because `--oneline`
+        // overrides both. An earlier revision of this comment put
+        // `status.showUntrackedFiles` in that same sentence under that same
+        // reason, and the reason does not apply to it:
+        // {@see EnvironmentBlock} runs `status --porcelain` with no untracked
+        // flag at all, so the knob decides what that field contains. It is
+        // pinned above rather than explained away.
+        //
+        // THIS LIST IS NOT CLAIMED TO BE COMPLETE. It is the set that was
+        // measured to bite, out of the ten candidates tried; `diff.external`,
+        // `core.quotePath` and `init.templateDir` were reasoned about and NOT
+        // measured. A knob that moves the byte count without reddening
+        // anything is the failure mode this paragraph exists to make visible,
+        // so the honest statement is "seven found" and not "seven exist".
         foreach ([
             ['init', '-q'],
             ['symbolic-ref', 'HEAD', 'refs/heads/master'],
@@ -969,6 +1164,9 @@ final class PromptStabilityTest extends TestCase
             ['config', 'diff.mnemonicPrefix', 'false'],
             ['config', 'core.abbrev', '7'],
             ['config', 'diff.context', '3'],
+            ['config', 'color.ui', 'false'],
+            ['config', 'diff.suppressBlankEmpty', 'false'],
+            ['config', 'status.showUntrackedFiles', 'normal'],
             ['add', '-A'],
             ['commit', '-q', '-m', 'fixture: initial import'],
         ] as $argv) {
