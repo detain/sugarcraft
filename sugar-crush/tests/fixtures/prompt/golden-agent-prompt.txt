@@ -9,6 +9,8 @@ PHP version: 8.3.6
 Model: claude-sonnet-4-6
 Current date: 2026-08-26
 
+Note: this git state is as of this prompt's render, not a snapshot from conversation start.
+
 Current branch: main
 
 Status:
