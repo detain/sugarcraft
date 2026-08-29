@@ -1000,39 +1000,65 @@ final readonly class VertexProvider implements ProviderInterface
      * `context` IS THE STANDING-INSTRUCTION FIELD - OF THE PaLM 2 `chat-bison`
      * ENVELOPE, WHICH IS THE ONE THIS METHOD BUILDS, and naming the model
      * family is the part that used to be missing. The instance shape is
-     * `{"context": ..., "examples": [...], "messages": [{"author": ...,
-     * "content": ...}]}`. CORROBORATED at code level by an independent
+     * `{"content": ..., "context": ..., "examples": [...], "messages":
+     * [{"author": ..., "content": ...}]}`. The leading instance-level
+     * `content` is NOT the per-message one and was omitted from this summary
+     * until a second reader re-derived the struct; it is unused by this
+     * method, which sends `context` + `messages`. CORROBORATED at code level
+     * by an independent
      * raw-REST Go implementation of this same `:predict` endpoint,
      * uber/go-vertex-ai `types.go` (MEASURED 2026-08-29 from
      * https://raw.githubusercontent.com/uber/go-vertex-ai/main/types.go): its
-     * `inputInstances` struct carries the JSON tags `json:"context"`,
-     * `json:"examples,omitempty"` and `json:"messages"`, its `payload`
+     * `inputInstances` struct carries the JSON tags `json:"content"`,
+     * `json:"context"`, `json:"examples,omitempty"` and `json:"messages"`
+     * (RE-MEASURED 2026-08-29 by a third reader: `Content string` is the
+     * struct's FIRST field and was missing from this list), its `payload`
      * struct is `{instances, parameters}` - this envelope exactly - and its
      * README names the model: "chat-bison is a large language model ... The
      * PaLM 2 for chat".
      *
-     * WHAT THIS PARAGRAPH USED TO SAY, WHAT IS TRUE NOW, AND WHY THE CLAIM
-     * STILL STANDS (rule 42). It used to cite "Design chat prompts" at
+     * WHAT THIS PARAGRAPH USED TO SAY, AND WHY THE CITATION MOVED (rule 42).
+     * It used to cite "Design chat prompts" at
      * https://cloud.google.com/vertex-ai/generative-ai/docs/chat/chat-prompts
-     * and name no model family at all. MEASURED 2026-08-29: that URL
-     * 301-redirects to
-     * https://docs.cloud.google.com/vertex-ai/generative-ai/docs/chat/chat-prompts.
-     * A review reported the destination as "a navigation index with none of
-     * the described content" and the page as retired; RE-MEASURED, THAT IS
-     * FALSE and is recorded here so it is not propagated - the destination is
-     * a live 200 content page still titled "Design chat prompts", still
-     * listing Messages / Context / Examples as the chat-prompt components,
-     * still describing `context` as what you "use ... to customize the
-     * behavior of the chat model", and still carrying a worked
-     * `"context": "You are captain Barktholomew ..."` example. What HAS
-     * moved is the envelope it documents: its message example is now
-     * Gemini-shaped (`"contents": [{"role": ..., "parts": {"text": ...}}]`)
-     * and the strings `chat-bison` and `PaLM` no longer appear on it at all.
-     * So that page still supports the CLAIM about `context` but no longer
-     * identifies the WIRE SHAPE this method sends, which is why the Go
-     * implementation above - not that page - is now the citation. Either way
-     * this is DOCUMENTED, not measured on the wire: nothing here has Vertex
-     * credentials, so no live call confirms this deployment honours it.
+     * and name no model family at all. That page is NO LONGER THE
+     * LOAD-BEARING CITATION for anything in this doc-block - the Go
+     * implementation above is - and the reason is epistemic, not editorial.
+     *
+     * WHAT IS AGREED, ACROSS THREE INDEPENDENT READERS. The old URL
+     * 301-redirects. All three measured that.
+     *
+     * WHAT IS UNVERIFIED (16.3). What the destination RENDERS is disputed and
+     * this doc-block must not pretend otherwise. A review reported it as "a
+     * navigation index with none of the described content"; a re-measurement
+     * reported a live 200 article; a third reader (2026-08-29) also got an
+     * article body, containing "Design chat prompts", a "Context
+     * (recommended)" section describing `context` as what you "use ... to
+     * customize the behavior of the chat model", and a
+     * "You are Captain Barktholomew ..." example - though as a
+     * best-practices TABLE ROW, not as the worked `"context": ...` JSON
+     * snippet an earlier revision of this paragraph described. That third
+     * reader also measured a SECOND hop the earlier note did not record: the
+     * `docs.cloud.google.com/vertex-ai/...` URL itself redirects again, to
+     * https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/chat/chat-prompts,
+     * which is a plausible mechanism for two fetchers landing on different
+     * documents. Two of three readers reproduce the article; one does not.
+     * Under 16.3 a claim two readers cannot both reproduce is NOT MEASURED,
+     * so the page's current content is recorded here as UNVERIFIED. An
+     * earlier revision of this paragraph called the navigation-index report
+     * FALSE; that verdict is WITHDRAWN - it was one reader's fetch asserted
+     * over another's, which is not a measurement.
+     *
+     * WHY IT DOES NOT MATTER TO THE CLAIM. Where the readers who did see an
+     * article agree, the page describes `context` but shows a Gemini-shaped
+     * message example (`"contents": [{"role": ..., "parts": {"text": ...}}]`)
+     * and carries neither `chat-bison` nor `PaLM`. So even on the reading
+     * MOST favourable to it, that page does not identify the WIRE SHAPE this
+     * method sends. The `instances`/`context` envelope is established by the
+     * Go struct above, which every reader can re-derive from a single raw
+     * file, and nothing in this doc-block now rests on the disputed page.
+     * Either way this is DOCUMENTED, not measured on the wire: nothing here
+     * has Vertex credentials, so no live call confirms this deployment
+     * honours it.
      *
      * OBSERVED, PRE-EXISTING, AND DELIBERATELY NOT FIXED: that same authority
      * spells the message key `author` - its `ChatMessage` struct is
@@ -1080,6 +1106,26 @@ final readonly class VertexProvider implements ProviderInterface
      * system-only route is pinned by
      * `VertexProviderTest::testAGoogleSystemMessageOnlyTranscriptYieldsAnEmptyMessagesList`.
      *
+     * HALF OF THE BODY THIS METHOD BUILDS NEVER REACHES THE WIRE. OBSERVED,
+     * PRE-EXISTING, AND DELIBERATELY NOT FIXED HERE. The `parameters` map
+     * below (`temperature`, `maxOutputTokens`) is DISCARDED:
+     * {@see defaultPredictor()}'s non-`rawPredict` branch builds its
+     * `PredictRequest` with `->setEndpoint()` and
+     * `->setInstances(...)` only and never calls `setParameters()`
+     * (VertexProvider.php:1221-1227), so the sampling knobs are dropped
+     * before the request is sent. This is a SEPARATE defect from the one this
+     * method's `context` hoist fixes, it predates that fix, and repairing it
+     * is a different step (1.10: reported, not repaired).
+     *
+     * THE `context` HOIST IS UNAFFECTED, and that is why this note is a note
+     * and not a blocker: `context` lives INSIDE `instances`, and
+     * {@see toProtobufValues()} (VertexProvider.php:1499-1508) merges each
+     * instance from arbitrary JSON via `mergeFromJsonString()`, so any key
+     * added to the instance - `context` included - does survive to the wire.
+     * Epistemic status: the `setParameters()` absence is MEASURED by reading
+     * the seam; that the deployed service would honour `parameters` if it
+     * were sent is UNVERIFIED, since nothing here has Vertex credentials.
+     *
      * @return array{instances: array<int, array<string, mixed>>, parameters: array<string, mixed>}
      */
     private function googleBody(CompleteRequest $request): array
@@ -1118,8 +1164,17 @@ final readonly class VertexProvider implements ProviderInterface
      * That claim was "`DuplicatedTestHelperDriftTest` reads `tests/` only";
      * true, but not the binding limit. MEASURED 2026-08-29: replacing
      * `BedrockProvider::withoutSystemMessages()` above with a method name that
-     * does not exist leaves `SymbolCitationDriftTest` green at
-     * `OK (7 tests, 2924 assertions)`, because that census only validates a
+     * does not exist leaves `SymbolCitationDriftTest` GREEN. Reproduce with
+     * `vendor/bin/phpunit tests/SymbolCitationDriftTest.php`, mutated and
+     * unmutated; the VERDICT is the durable fact and the command is how you
+     * re-derive it. (A literal `OK (7 tests, 2924 assertions)` used to stand
+     * here. Rule 42, corrected not deleted: that figure was already stale when
+     * written - it is the count at `master` and at this branch's first commit,
+     * taken before the second commit added citations to the matrix test, and
+     * the count at this commit is different again. Per 16.2 a number no test
+     * derives rots, so the figure is dropped rather than re-pinned at a value
+     * that would rot the same way.) The census stays green either way because
+     * it only validates a
      * citation whose target contains `SugarCraft\Crush\Tests\` or whose class
      * short-name ends in `Test` (`SymbolCitationDriftTest.php:343-354`, the
      * `looksLikeATestSymbol()` alphabet) - and every `{@see}` in this

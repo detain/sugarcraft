@@ -60,6 +60,42 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      *
      * ONE ROW PER REQUEST-BODY BUILDER, NOT PER PROVIDER CLASS.
      *
+     * THAT HEADLINE WAS FALSE OF THIS MAP WHEN IT WAS WRITTEN, AND IS NOW
+     * TRUE (rule 42: corrected, not deleted). MEASURED: OpenAI, Custom and
+     * Bedrock each assemble their request body TWICE, inline, once per path -
+     * OpenAIProvider.php:79-95 and :115-129, CustomProvider.php:155-160 and
+     * :210-215, BedrockProvider.php:159-172 and :206-218 (Bedrock shares
+     * systemBlocks() for the hoist but not the surrounding body, and its two
+     * `inferenceConfig` blocks genuinely differ) - yet each held ONE row. The
+     * consequence was not cosmetic: {@see capturedBodyFor()} drives what the
+     * map says, so it drove only the UNARY builder for those three, and the
+     * coverage assertion in
+     * {@see testTheContractSlotSpellingsAreLoadBearing()} was satisfied
+     * without any STREAMING builder ever being resolved through the contract.
+     * The instrument did not close, for three providers, the exact defect
+     * class it was built to close for Vertex - which is the same conflation
+     * ("complete() passes") that hid the Vertex Google defect in the first
+     * place. Those three rows are now split `#complete`/`#stream`, with a
+     * drive each. The remaining three body-shaped rows are genuinely
+     * single-builder and stay undiscriminated: Sglang shares buildParams()
+     * (SglangProvider.php:642, called from :447 and :464); Vertex
+     * `#anthropic` is one method serving both paths
+     * (anthropicBody($request, stream:), VertexProvider.php:431, called from
+     * :240 and :314); Vertex `#google` is reached on the stream path only by
+     * delegation (completeStream() yields complete(),
+     * VertexProvider.php:290-298). So the headline now holds for 6 of 6
+     * body-shaped rows, where it held for 3 of 6 before.
+     *
+     * WHAT THIS ALPHABET STILL CANNOT EXPRESS (rule 31). A row says WHICH
+     * slot a builder writes; it does not say the two builders under one class
+     * agree, nor that a path exists at all. A provider that silently stopped
+     * having a streaming path would drop its `#stream` drive, and the
+     * coverage assertion would red - but only because the ROW is still there.
+     * Delete both the row and the drive together and nothing here notices;
+     * that is what the derived-roster test
+     * {@see testEveryProviderImplementerHasATransmissionContract()} covers at
+     * CLASS granularity, and nothing covers at PATH granularity.
+     *
      * WHAT THIS PARAGRAPH USED TO SAY. It said the row-per-class shape was
      * WHY the Vertex Google defect survived Phase 1: the map was
      * `array<class-string, string>`, VertexProvider builds TWO bodies chosen
@@ -97,7 +133,8 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * EVERY VALUE HERE IS A BODY PATH READ BY {@see resolveContractSlot()},
      * except the one row named in {@see NON_BODY_CONTRACT_ROWS}.
      *
-     * Four families:
+     * Four families (the `/` in a citation pair separates the `#complete`
+     * builder from the `#stream` one):
      * - Sglang/Custom/OpenAI prepend an OpenAI-chat-shaped leading system
      *   message into `messages` (SglangProvider.php:672-677,
      *   CustomProvider.php:155-160 / :210-215, OpenAIProvider.php:90-95 /
@@ -122,9 +159,12 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      */
     private const TRANSMISSION_CONTRACT = [
         SglangProvider::class => 'messages[0]',
-        CustomProvider::class => 'messages[0]',
-        OpenAIProvider::class => 'messages[0]',
-        BedrockProvider::class => 'system[0].text',
+        CustomProvider::class . '#complete' => 'messages[0]',
+        CustomProvider::class . '#stream' => 'messages[0]',
+        OpenAIProvider::class . '#complete' => 'messages[0]',
+        OpenAIProvider::class . '#stream' => 'messages[0]',
+        BedrockProvider::class . '#complete' => 'system[0].text',
+        BedrockProvider::class . '#stream' => 'system[0].text',
         VertexProvider::class . '#anthropic' => 'system',
         VertexProvider::class . '#google' => 'instances[0].context',
         ClaudeCodeProvider::class => '--system-prompt argv',
@@ -269,9 +309,12 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         // of it).
         $expectedAtSlot = [
             SglangProvider::class => ['role' => 'system', 'content' => self::SENTINEL],
-            CustomProvider::class => ['role' => 'system', 'content' => self::SENTINEL],
-            OpenAIProvider::class => ['role' => 'system', 'content' => self::SENTINEL],
-            BedrockProvider::class => self::SENTINEL,
+            CustomProvider::class . '#complete' => ['role' => 'system', 'content' => self::SENTINEL],
+            CustomProvider::class . '#stream' => ['role' => 'system', 'content' => self::SENTINEL],
+            OpenAIProvider::class . '#complete' => ['role' => 'system', 'content' => self::SENTINEL],
+            OpenAIProvider::class . '#stream' => ['role' => 'system', 'content' => self::SENTINEL],
+            BedrockProvider::class . '#complete' => self::SENTINEL,
+            BedrockProvider::class . '#stream' => self::SENTINEL,
             VertexProvider::class . '#anthropic' => self::SENTINEL,
             VertexProvider::class . '#google' => self::SENTINEL,
         ];
@@ -439,18 +482,35 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 
                 return $this->sentBody();
 
-            case CustomProvider::class:
+            case CustomProvider::class . '#complete':
                 $this->customProvider()->complete($this->request());
 
                 return $this->sentBody();
 
-            case OpenAIProvider::class:
+            case CustomProvider::class . '#stream':
+                // The SSE body is what makes the streamed builder reachable:
+                // completeStream() parses the response before returning, so
+                // the unary fixture would throw before the request body could
+                // be read back off the history middleware.
+                iterator_to_array($this->customProvider(self::SSE_BODY)->completeStream($this->request()));
+
+                return $this->sentBody();
+
+            case OpenAIProvider::class . '#complete':
                 $captured = [];
                 $this->openAiProviderWithCapture($captured)->complete($this->request());
 
                 return $captured;
 
-            case BedrockProvider::class:
+            case OpenAIProvider::class . '#stream':
+                $streamCaptured = [];
+                iterator_to_array(
+                    $this->openAiProviderWithCapture($streamCaptured)->completeStream($this->request()),
+                );
+
+                return $streamCaptured;
+
+            case BedrockProvider::class . '#complete':
                 $mock = new MockHandler();
                 $mock->append(new Result([
                     'output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]],
@@ -463,6 +523,21 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                 $provider->complete($this->request());
 
                 return $mock->getLastCommand()->toArray();
+
+            case BedrockProvider::class . '#stream':
+                // ConverseStream answers an event stream; an empty one is
+                // enough, because the assertion is about the REQUEST the
+                // command carries, not the response.
+                $streamMock = new MockHandler();
+                $streamMock->append(new Result(['stream' => new \ArrayIterator([])]));
+                $streamProvider = new BedrockProvider(
+                    $this->offlineRuntimeClient($streamMock),
+                    'us-east-1',
+                    'anthropic.claude-sonnet-4-6',
+                );
+                iterator_to_array($streamProvider->completeStream($this->request()));
+
+                return $streamMock->getLastCommand()->toArray();
 
             case VertexProvider::class . '#anthropic':
                 $vertexCaptured = null;

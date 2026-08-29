@@ -827,6 +827,15 @@ final class VertexProviderTest extends TestCase
             messages: [new SystemMessage('SENTINEL-be-terse'), new UserMessage('Hi')],
         ));
 
+        // The name's promise, asserted: the sentinel is IN `context`. Without
+        // this line the only assertion below is a COUNT, and master's unfixed
+        // body satisfies that count too - formatMessages()'s
+        // `default => 'user'` arm renders the SystemMessage as exactly one
+        // user turn, so the sentinel still appears exactly once. MEASURED: on
+        // a full revert of googleBody() to the master body this line reds and
+        // the count below does not.
+        $this->assertSame('SENTINEL-be-terse', $captured['body']['instances'][0]['context']);
+
         // A hoist that forgets to drop the SystemMessage from `messages`
         // transmits it twice - once as context, once as a `user` turn, which
         // is exactly what formatMessages()'s `default => 'user'` arm does.
@@ -866,6 +875,36 @@ final class VertexProviderTest extends TestCase
         ));
 
         $this->assertArrayNotHasKey('context', $captured['body']['instances'][0]);
+    }
+
+    public function testCompleteStreamGoogleInstanceHasNoContextKeyWithoutASystemPrompt(): void
+    {
+        // The NEGATIVE polarity on the STREAMING path. Its sibling above
+        // drives complete(); this whole change exists because "complete()
+        // passing" is not evidence about completeStream(), so the absent-prompt
+        // case is pinned independently on both paths rather than once.
+        //
+        // The method assertion is not decoration: completeStream() reaches
+        // this body only by delegating to complete() for a non-Anthropic model
+        // (VertexProvider.php:290-298). Without it, a regression that stopped
+        // delegating would leave $captured untouched from a seam that was
+        // never called, and an assertArrayNotHasKey on a body nobody built
+        // would pass for the wrong reason.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [new UserMessage('Hi')],
+        )), false);
+
+        $this->assertCount(1, $chunks);
+        $this->assertSame('predict', $captured['method']);
+        $this->assertArrayNotHasKey('context', $captured['body']['instances'][0]);
+        $this->assertSame(
+            [['role' => 'user', 'content' => 'Hi']],
+            $captured['body']['instances'][0]['messages'],
+        );
     }
 
     public function testGoogleInstanceHasNoContextKeyForAnEmptySystemPrompt(): void
