@@ -253,6 +253,148 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### RETRO-RR1 — retrospective review of P1.S1-P1.S4 (the four provider-transmission steps)   ·   2026-08-29   ·   reviewed at `397a6983a`
+
+**Status** `done` (review complete; its findings are scheduled, see below)
+**Worktree** /home/sites/prompt-review-RR1 (read-only; left in place while the retro-review track runs)
+**Base** master `397a6983a`, porcelain empty at start and at end
+
+**Goal (restated in one sentence)**
+Re-review the four merged provider-transmission steps on axes a per-step review structurally could
+not run — does the worklog claim survive the tree, did a later step make an earlier test vacuous,
+does each deletion experiment still bite TODAY, was the whole family swept, is it reachable now,
+does every figure re-derive — and report without fixing anything.
+
+**What changed**
+Nothing in `sugar-crush/`. This is a review entry. Two corrections to this file were applied by the
+orchestrator (below); the code findings are scheduled as `P1.audit-fix-1`.
+
+**Tests added or changed** (none — read-only review)
+**Deletion experiment**: six, re-run by the reviewer on the MERGED tree, all red, all restored to an
+empty porcelain. P1.S1 (delete the Sglang prepend at :672-677) → 2 failures in
+SglangProviderRequestBuildingTest + 1 in SystemPromptTransmissionMatrixTest + 2 in
+PromptStabilityTest. P1.S2 mutated in two independent halves — `complete()` only (:155-160) → 3
+failures; `completeStream()` only (:210-215) → 2 failures — proving the two paths are separately
+pinned, which is the exact conflation §16.1 says hid this defect in OpenAIProvider. P1.S3 (delete
+:127-130, leaving :90-95) → 2 failures. P1.S4 in two parts: the E19 hoist reverted → 4 failures; the
+stream guard defeated → 1 failure. **All four steps' guards still bite.**
+
+**MEASURED** (reviewer's figures; orchestrator re-derived the ones the corrections rest on)
+```
+$ cd sugar-crush && vendor/bin/phpunit tests/Providers/
+OK (846 tests, 2047 assertions)
+$ vendor/bin/phpunit tests/Integration/
+OK (723 tests, 4080 assertions)
+$ vendor/bin/phpunit <the six-file census set>
+OK (103 tests, 9420 assertions)
+$ find sugar-crush/src -name '*.php' | wc -l
+297
+```
+Per-provider transmission census, rebuilt at METHOD level rather than file level — the axis change
+that produced the lead finding. Family enumerated two ways (`/usr/bin/grep -rn 'implements
+ProviderInterface'` → 7 concrete classes; cross-checked against `ProviderFactory::instantiateProvider()`'s
+7-arm `match` at :577-588, plus `'anthropic'` as an 8th NAME returning a CustomProvider):
+Sglang ✅✅ · Custom ✅✅ · OpenAI ✅✅ · Bedrock ✅✅ · ClaudeCode ✅✅ · Echo n/a (exempt with a named
+reason in the derived roster) · **Vertex PARTIAL — Anthropic arm ✅, Google arm ✗ on both paths.**
+
+Orchestrator's own re-derivation of the two figures the corrections rest on, main repo @bd3a9baf4:
+```
+$ cd sugar-crush && vendor/bin/phpunit tests/Providers/SglangProviderRequestBuildingTest.php --filter '<the 4 P1.S1 tests>'
+OK (4 tests, 8 assertions)
+$ /usr/bin/grep -c 'systemPrompt' src/Providers/SglangProvider.php ; /usr/bin/grep -c -- '->systemPrompt\b' src/Providers/SglangProvider.php
+4 ; 2
+$ /usr/bin/grep -c 'systemPrompt' src/Providers/VertexProvider.php ; /usr/bin/grep -c -- '->systemPrompt\b' src/Providers/VertexProvider.php
+3 ; 2
+```
+
+**Suite result** Full suite not re-run for this review. Reviewer's rationale, accepted:
+`git log --oneline e513409c5..HEAD -- sugar-crush/src/Providers/ sugar-crush/tests/Providers/` is
+**empty**, so nothing in scope has moved since the Phase 1 close, and three later phase closes have
+run the full suite. **The full suite MUST be run when `P1.audit-fix-1` lands** — it adds production
+code to `VertexProvider.php`.
+
+**Review loop** n/a — this IS a review. One agent, one pass, no cycles.
+
+**Findings (6) and their disposition**
+- **F1 BLOCKING — `VertexProvider::googleBody()` (VertexProvider.php:976-988) drops the entire
+  assembled system prompt for every Google publisher model, on BOTH paths.** `complete():231-241`
+  branches on `isAnthropicModel()` (`str_contains(strtolower($model), 'claude')`); the true arm
+  hoists the prompt into the top-level `system` string via `anthropicSystem():493-505`; the false
+  arm calls `googleBody()`, which never reads `$request->systemPrompt`. `completeStream():290-296`
+  yields `complete()` for non-Anthropic models, so the stream path drops it too. Compounding:
+  `formatMessages():995-1010` maps every non-User/non-Assistant message to `'user'` via `default`,
+  so a history SystemMessage silently becomes a user turn — E19's shape, in the provider E19 was
+  never checked against. Reachable: `ProviderFactory` passes `$config['model']` straight through and
+  `modelId()` prefers `$request->model`, so any config naming `gemini-*` or `text-bison@*` routes
+  here (both already first-class in VertexProviderTest.php:268-269). **This is byte-for-byte the
+  lead finding of this entire plan, still live in the seventh provider.** INDEPENDENTLY REPRODUCED
+  by the orchestrator (read of :976-988, :995-1010, :231-241, :288-297). → **scheduled as
+  `P1.audit-fix-1`**. The reviewer's proposed target field, `instances[0].context`, is marked
+  INFERRED not measured; the fix step is required to confirm it against Google's REST documentation
+  and to ESCALATE rather than guess, and is forbidden from rewriting the path to Gemini's modern
+  `:generateContent`/`systemInstruction` shape (a redesign, §1.10 option 3).
+- **F3 MODERATE — `SystemPromptTransmissionMatrixTest.php:82-89`'s `TRANSMISSION_CONTRACT` has one
+  row per provider CLASS, so it cannot express a provider with two body builders — which is how F1
+  survived a test written to prevent exactly this.** The roster half is genuinely derived and
+  exemplary; the alphabet is the defect (§16.8 rule 31: "an alphabet is coverage"). The Vertex rows
+  drive only `'claude-3-sonnet@20240229'` (:363, :370, :384, and both helpers at :565/:591), so the
+  Google arm was never exercised. → **scheduled with F1 in `P1.audit-fix-1`** (its fix depends on
+  F1's landing). The step must prove the widened matrix BITES by reverting F1's fix and watching it
+  go red where it previously stayed green.
+- **F2 MODERATE — `src/Chat.php:8514-8523` and `:12145-12149` still describe the Bedrock E19 defect
+  in the present tense**, as the live justification for where the park-notice sits, when P1.S4
+  (`0013e9730`) fixed it: both Bedrock paths now filter history SystemMessages through
+  `withoutSystemMessages()` and hoist them via `systemBlocks()`, so no SystemMessage reaches
+  `formatMessages()` and the measured `system user system system` tail the paragraph argues about
+  cannot occur. `:8516` also asserts "which Converse rejects" as fact while the step text and
+  `prompt_expand.md` E19 both record the Converse 400 as suspected-never-confirmed. Out of P1.S4's
+  declared list, so reported not prescribed. → **DEFERRED, not yet scheduled** — `src/Chat.php` is a
+  cross-plan contended file (`prompt_plan.md` §2.6) and Phase 4 already rewrites it.
+- **F4 MODERATE — the `P1 CLOSE` census spot-check states seven figures with no command, and its
+  conclusion is false.** → **CORRECTED IN PLACE** in this file (the `P1 CLOSE` entry's Phase review
+  paragraph): the command is now stated, both greps' answers are recorded with the orchestrator's
+  own re-derivation, and the per-FILE-not-per-PATH axis gap is written down with F1 named as its
+  consequence.
+- **F5 MODERATE — P1.S1's entry says "+0 assertions"; it is +8.** A transcription slip in a derived
+  line — the entry's own MEASURED block already implied +8. → **CORRECTED IN PLACE** with a
+  `CORRECTED:` marker and the re-derivation command.
+- **F6 MINOR — `tests/Providers/OpenAIProviderTest.php:626-628`** holds `assertTrue(true)` under a
+  comment claiming "we can't directly inspect the call", which P1.S3's own test disproves 5 lines
+  later by capturing `$params` through `willReturnCallback`. Pre-dates P1.S3 (`git log -L` →
+  `2a92068be`); P1.S3 is what made the comment false. → **not yet scheduled**; queued for a later
+  audit-fix step.
+
+**Invariants touched** (none — read-only). §17.1's `src/` census confirmed unmoved at 297 files.
+
+**Surprises / things the plan got wrong**
+- **The plan's own §19 cheat sheet and P0.S2's census use DIFFERENT commands** for the same
+  question — `grep -c 'systemPrompt'` vs `grep -c -- '->systemPrompt\b'` — and they disagree by
+  provider (Sglang 4 vs 2, Vertex 3 vs 2). §19 exists precisely so "a measurement is comparable
+  across agents"; here it is not. Neither is wrong; nothing said which was in force.
+- **`tests/Integration/` stayed GREEN at 723/4080 with the default provider's transmission
+  deleted**, including `SystemPromptWiringTest::testARealChatKeystrokeTurnDeliversBothHalves`, the
+  §17.2 "DO NOT TOUCH" test. That test pins assembly and DTO delivery and cannot see a transmission
+  regression — which is correct for what it was written to do, but it means `tests/Providers/` is
+  the ONLY thing standing between a future transmission regression and production.
+- **`prompt_expand.md` §1.2's provider table row for Vertex** ("Anthropic `:rawPredict` | `system`
+  as a plain string") is true of one of Vertex's two envelopes and reads as true of the provider.
+  That row is why no Phase 1 step named Vertex. A dossier defect, per §1.4 check 14.
+- **The orchestrator's own spawn brief was defective**: it pointed all five reviewers at
+  `<worktree>/.sugar-crush-prompt/retro-review-brief.md`, but `/.sugar-crush-prompt/` is gitignored
+  (P0.S1), so no git worktree contains it. RR1 found and worked around it; the file has since been
+  copied into all five review worktrees and the other four reviewers were messaged. Recorded because
+  a brief defect that four agents silently work around is indistinguishable from four incompetent
+  agents (§1.8.5).
+
+**Follow-ups created**
+- `P1.audit-fix-1` — F1 + F3. IN FLIGHT.
+- F2 (`src/Chat.php` stale E19 docblocks ×2) — deferred; cross-plan contended file, Phase 4 territory.
+- F6 (`OpenAIProviderTest.php:626-628` tautology + false comment) — queued for a later audit-fix step.
+- Reconcile §19's census command with P0.S2's, or state in §19 which is authoritative for which
+  question. Currently two commands answer the same question differently and the plan endorses both.
+- `prompt_expand.md` §1.2's Vertex row needs the two-envelope split. Dossier edit; no step owns it.
+
+
 ### P3.S2 — Emit the working diff only on the step after a write   ·   2026-08-28   ·   8a31f239c (merged dabcd27f7)
 
 **Status** `done`
@@ -542,7 +684,7 @@ vendor/bin/phpunit tests/Providers/
 
 **What changed**: All 7 steps merged to master in declared order: P1.S1 SglangProvider both paths (2d4f738f2), P1.S2 CustomProvider both paths (a27f60229), P1.S3 OpenAIProvider completeStream (99caad991), P1.S4 Bedrock Converse system array / E19 (0013e9730), P1.S5 streamed-Usage per-delta contract / E24 (193317de1), P1.S6 PromptStabilityTest rebuilt production-shaped (070d1f5fb), P1.S7 SystemPromptTransmissionMatrixTest + shared `providerImplementers()` roster (843432e13). Plus per-step fix commits and bookkeeping commits to e513409c5.
 
-**Phase review**: Cycle 1 — phase reviewer sharp-blue-swordtail (delegate, read-only): APPROVE 19/19 checks, 0 blocking findings; P0.S2 census spot-check PASS (every provider that CAN transmit now reads `->systemPrompt`: Sglang 0→2, Custom 0→4, OpenAI 2→4, Bedrock 4→2 consolidated into systemBlocks(), ClaudeCode 2→2, Vertex 2→2, Echo 0→0 exempt). Cross-step problems found (non-blocking, folded into Phase 2 planning): F1 SSE-fixture byte-identity is comment-claimed not structural (was false once, fixed 51f6b90f5; shared constant or comparing assertion recommended); F2 three distinct `''`-semantics now permanently pinned (OpenAI transmits empty, Bedrock hard-fails at SDK validator, Sglang/Custom/Vertex omit) — latent today, unify when Phase 2 makes assembly deterministic. Reviewer sandbox denied phpunit — its suite numbers OBSERVED from worklog, not MEASURED. Total phase review cycles: 1.
+**Phase review**: Cycle 1 — phase reviewer sharp-blue-swordtail (delegate, read-only): APPROVE 19/19 checks, 0 blocking findings; P0.S2 census spot-check — **CORRECTED 2026-08-29 to PARTIAL**, and the axis is recorded because the axis is the whole point. Command (now stated, as §16.8 rule 3 requires): `/usr/bin/grep -c -- '->systemPrompt\b' src/Providers/<P>.php` — P0.S2's arrow-access form, NOT §19's canonical `/usr/bin/grep -c 'systemPrompt' <file>`, which also counts docblock and comment mentions and answers Sglang 4 and Vertex 3 (orchestrator-measured in the main repo at bd3a9baf4: `SglangProvider plain=4 arrow=2`, `VertexProvider plain=3 arrow=2`). Under the arrow form, per FILE: Sglang 0→2, Custom 0→4, OpenAI 2→4, Bedrock 4→2 (consolidated into systemBlocks()), ClaudeCode 2→2, Vertex 2→2, Echo 0→0 exempt — those figures are right, and were recorded without their generator. **THE AXIS THIS SWEEP DOES NOT COVER**: it counts reads per FILE, not per REQUEST-BUILDING PATH, so a provider that branches into two body builders scores clean when only one of them transmits. RR1 (retrospective review, 2026-08-29) measured exactly that: `VertexProvider::googleBody()` (VertexProvider.php:976-988), reached from `complete()` at :241 and from `completeStream()` at :290-296 for every non-`claude` model id, never reads `$request->systemPrompt` — the assembled prompt is dropped on BOTH paths for Google publisher models, and `formatMessages()`'s `default => 'user'` arm additionally flattens a history SystemMessage to a user turn there (E19's shape, in the provider E19 was never checked against). Independently reproduced by the orchestrator. Phase 1's transmission claim is therefore true for six of seven providers and for one of Vertex's two envelopes; the remaining one is being fixed as step P1.audit-fix-1. This is §16.1's own corollary — 'write down what axis you swept on, so the next person can see what you did not look at' — going unapplied to the closing sweep, so the closing sweep reproduced the methodology error the plan exists to correct. Cross-step problems found (non-blocking, folded into Phase 2 planning): F1 SSE-fixture byte-identity is comment-claimed not structural (was false once, fixed 51f6b90f5; shared constant or comparing assertion recommended); F2 three distinct `''`-semantics now permanently pinned (OpenAI transmits empty, Bedrock hard-fails at SDK validator, Sglang/Custom/Vertex omit) — latent today, unify when Phase 2 makes assembly deterministic. Reviewer sandbox denied phpunit — its suite numbers OBSERVED from worklog, not MEASURED. Total phase review cycles: 1.
 
 **MEASURED**
 ```
@@ -921,7 +1063,7 @@ $ cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit tests/Providers/  
 OK (808 tests, 1960 assertions)
 ```
 
-**Suite result** Full suite not re-run this step; Providers dir in main repo after merge: 808/1960 OK. Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +4 tests / +0 assertions measured in Providers dir only; census unchanged (297 files — no new `src/` file).
+**Suite result** Full suite not re-run this step; Providers dir in main repo after merge: 808/1960 OK. Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +4 tests / +8 assertions measured in Providers dir only. **CORRECTED: 2026-08-29** — this line first read "+0 assertions", which was a transcription slip in a derived figure, not a bad measurement: the entry's own MEASURED block already implied +8 (Providers at 808/1960 here against an 804/1952 base). Re-derived by the orchestrator in the main repo at bd3a9baf4 on RR1's finding 5 — `cd sugar-crush && vendor/bin/phpunit tests/Providers/SglangProviderRequestBuildingTest.php --filter 'testSystemPromptIsPrependedToTheCompletePayload|testSystemPromptIsPrependedToTheStreamingPayload|testNullSystemPromptPrependsNothing|testEmptyStringSystemPromptPrependsNothing'` → `OK (4 tests, 8 assertions)`. The other three P1 steps' deltas reproduce exactly (P1.S2 +7/+7, P1.S3 +2/+5, P1.S4 +6/+12). Census unchanged (297 files — no new `src/` file).
 
 **Review loop** `RECONSTRUCTED` — the step agent exited without its 7-section report (see Surprises); the review loop below was orchestrated directly by the orchestrator.
 - Cycle 1 — reviewer wandering-amethyst-albatross: APPROVE, 1 nit — streaming test duplicated the mock-client harness inline (~11 lines) instead of reusing the file's `provider($body)` helper (`:35-47`); its justifying comment was false (`provider($sseBody)` would serve; `buildParams()` keys off `$request->model`). Remaining 18 checks PASS (reachability, deletion experiment, value-vs-shape, no subtraction, §1.11, conventions, roster).

@@ -265,6 +265,12 @@ Retro-review track: RUNNING, 5 read-only agents, spawned 2026-08-29 01:5x on use
                      RR5 → CROSS-PHASE seams over 19533373e^..HEAD + the bookkeeping audit
                            (entry-format compliance, batch bracketing, resume accuracy, §2.2 hot-file
                            table regeneration, .sugar-crush-prompt/progress.json staleness)
+                   NOTE — a defect in the orchestrator's own spawn brief, fixed 2026-08-29: all five
+                   reviewers were pointed at <their-worktree>/.sugar-crush-prompt/retro-review-brief.md,
+                   but /.sugar-crush-prompt/ is gitignored (P0.S1), so NO git worktree contains it. The
+                   file has been copied into all five review worktrees and RR2-RR5 were messaged with the
+                   correction. Any future worktree that must carry a brief needs the same explicit copy —
+                   `git worktree add` checks out COMMITTED files only.
                    Findings are NOT fixed by the reviewer. They come back to the orchestrator, which
                    schedules fix agents BETWEEN plan steps, each in its own worktree with a declared
                    file list checked disjoint against whatever plan step is then in flight. A
