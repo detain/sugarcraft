@@ -11,11 +11,15 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Agents\MemoryScope;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillSource;
+use SugarCraft\Crush\Tests\Prompt\PromptFixture;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
 
@@ -71,6 +75,9 @@ final class PromptStabilityTest extends TestCase
     /** @var list<string> Temp dirs created by the environment-block cases. */
     private array $tempDirs = [];
 
+    /** @var list<PromptFixture> Fixture repositories created by the prefix-win case. */
+    private array $fixtures = [];
+
     protected function tearDown(): void
     {
         foreach ($this->tempDirs as $dir) {
@@ -78,6 +85,14 @@ final class PromptStabilityTest extends TestCase
         }
 
         $this->tempDirs = [];
+
+        // Destroyed here rather than at the end of the test body so a FAILING
+        // run cleans up exactly like a passing one.
+        foreach ($this->fixtures as $fixture) {
+            $fixture->destroy();
+        }
+
+        $this->fixtures = [];
     }
 
     // -------------------------------------------------------------------------
@@ -457,6 +472,375 @@ final class PromptStabilityTest extends TestCase
             'expected the <env> git snapshot to track the working tree; if it no longer does, D7 got fixed',
         );
         $this->assertStringContainsString('scratch.txt', $after);
+    }
+
+    // -------------------------------------------------------------------------
+    // What the P3.S1 reorder bought: how far into the prompt the hit survives.
+    // -------------------------------------------------------------------------
+
+    /**
+     * The floor the assembled prompt's shared prefix must clear on the fixture
+     * {@see dirtyRepoFixtureWithEveryStableLayer()} builds, in bytes.
+     *
+     * MEASURED 2026-08-29, PHP 8.3.6, Linux 6.8.0-138-generic, three takes per
+     * side and identical on all three, by assembling two consecutive prompts
+     * through the real private
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} over that fixture
+     * and counting bytes to the first one that differs:
+     *
+     *   - `<env>` LAST, the order P3.S1 shipped: **4,670** of 4,844 bytes.
+     *   - `<env>` back at layer 2, the pre-P3.S1 order, reproduced by moving
+     *     the single `$base .= "\n\n" . $this->environmentSnapshot($app)->render();`
+     *     statement in `Runtime::buildSystemPrompt()` back above the repo map
+     *     and restoring it afterwards: **3,095** of 4,844.
+     *
+     * Both figures are OF THAT FIXTURE and of nothing else: a different
+     * repository, a different instruction set or a different edit moves them,
+     * and §3.4's own pair (598 B then 615 B, first differing at 524) is of a
+     * two-edit `<env>` in isolation rather than of an assembled prompt. The
+     * prompt is the same 4,844 bytes in both orders - this was a reorder, not
+     * an addition - and the reorder moved 1,575 of them from behind the first
+     * differing byte to in front of it.
+     *
+     * WHY THE FLOOR IS 4,096 AND NOT 4,670. The exact value moves with bytes
+     * this file does not own: `OS version:` and `PHP version:` are read off
+     * the host at render time, and the base heredoc is prose four later steps
+     * are licensed to edit. Pinning 4,670 would red on a host with a shorter
+     * kernel string, which is a fact about the host and not about the layer
+     * order. 4,096 sits 1,001 B ABOVE the pre-reorder measurement - that is
+     * what makes it discriminating, because the old assembly cannot reach it
+     * on this fixture - and 574 B BELOW the post-reorder one, which is the
+     * headroom those host lines need.
+     *
+     * It is a MAGNITUDE floor and nothing more. The ORDERING decision is
+     * pinned by the marker assertions beside it and by the old-order control,
+     * neither of which depends on a literal; the SIZE OF THE WIN is pinned by
+     * {@see MIN_PREFIX_GAIN_BYTES}, which is invariant to both host lines and
+     * base-heredoc edits because those bytes cancel between the two orders. So
+     * if a deliberate prose cut ever reds this number, re-measure it and move
+     * it, and expect everything around it to stay green - they are assertions
+     * about different properties.
+     */
+    private const MIN_STABLE_PREFIX_BYTES = 4096;
+
+    /**
+     * The floor on how much the reorder must move the first differing byte, in
+     * bytes, on the same fixture.
+     *
+     * MEASURED 4,670 - 3,095 = **1,575** by the same runs. This delta is the
+     * combined size of the four layers the reorder lifted over `<env>` - the
+     * repo map, the project instructions, the project memory and the two skill
+     * layers - so unlike {@see MIN_STABLE_PREFIX_BYTES} it is unaffected by the
+     * length of the base heredoc or of the host lines, which shift both sides
+     * equally and cancel. It moves only when this file's own fixture content
+     * moves, which is why it carries the tighter margin of the two.
+     */
+    private const MIN_PREFIX_GAIN_BYTES = 1500;
+
+    /**
+     * One marker per layer the reorder lifted into the cacheable prefix.
+     *
+     * Read, never written - these are the fence spellings the assembler
+     * already emits, and every one of them is asserted to appear exactly once
+     * before its offset is compared against anything, because an absent marker
+     * makes `strpos()` return false and `false < $prefix` is silently true.
+     */
+    private const STABLE_LAYER_MARKERS = [
+        '<repo-map>',
+        '<project-instructions>',
+        '<project-memory>',
+        '## Skill: prefix-demo',
+        'Available skills (invoke via Skill tool):',
+    ];
+
+    /** The committed body of the fixture's one edited file. */
+    private const ALPHA_COMMITTED = "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Alpha {}\n";
+
+    /** Its body after the edit that dirties the tree BEFORE the first render. */
+    private const ALPHA_FIRST_EDIT = "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Alpha { public int \$one = 1; }\n";
+
+    /** And after the edit BETWEEN the two renders - one line, same length. */
+    private const ALPHA_SECOND_EDIT = "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Alpha { public int \$one = 2; }\n";
+
+    /**
+     * P3.S4. A reorder that did not move the first differing byte is a reorder
+     * that did nothing, and this is the assertion that says how far it moved.
+     *
+     * Two consecutive assembled prompts on a DIRTY working tree, one ordinary
+     * edit apart - the shape §3.4 priced when it measured the `<env>` block
+     * alone at "598 B then 615 B and first differs at byte 524". A
+     * RadixAttention hit survives only as far as the first byte that differs,
+     * so the shared-prefix length IS the win: every layer behind that byte is
+     * re-prefilled on every step of every turn for the rest of the session.
+     * Before P3.S1 the repo map, the instruction documents, the memory block
+     * and both skill layers all sat behind it. They now sit in front.
+     *
+     * THE OLD-ORDER CONTROL AT THE END IS NOT DECORATION. "The shared prefix
+     * is long" is an assertion of ABSENCE - no differing byte yet - and an
+     * unfired instrument and a dead one produce identical silence. So the same
+     * counter is run, in this same test, over the same two prompts re-spliced
+     * into the pre-P3.S1 order, and it must come back SHORT and must stop
+     * before the FIRST layer that used to follow `<env>`. Replace
+     * {@see commonPrefixLength()} with `return strlen($a);` and that control
+     * is what reds.
+     *
+     * WHAT IT DOES NOT COVER. This drives the assembler, not the wire; the
+     * transmitted-prompt pins live in
+     * `tests/Integration/SystemPromptWiringTest.php`. And it says nothing
+     * about `Agents\Agent::systemPrompt()`, the second assembler §17.2 keeps
+     * deliberately separate, where the block is still the tail of the system
+     * message.
+     */
+    public function testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree(): void
+    {
+        $fixture = $this->dirtyRepoFixtureWithEveryStableLayer();
+
+        $first = $fixture->systemPrompt();
+        $fixture->write('src/Alpha.php', self::ALPHA_SECOND_EDIT);
+        $second = $fixture->systemPrompt();
+
+        // The instrument fired, and for the right reason. Two prompts that are
+        // byte-identical would make every assertion below vacuously true, and
+        // a git that could not run renders its own failure text into the
+        // status field instead of a status - which is why the diff header is
+        // checked for rather than assumed.
+        $this->assertNotSame(
+            $first,
+            $second,
+            'the two prompts must differ, or there is no first differing byte to measure',
+        );
+        $this->assertSame(
+            \strlen($first),
+            \strlen($second),
+            'the fixture edit is one line for one line; a length change means the fixture, not the assembler, moved',
+        );
+        $this->assertStringContainsString('Unstaged changes (git diff, working tree vs index):', $first);
+        $this->assertStringContainsString('diff --git a/src/Alpha.php b/src/Alpha.php', $first);
+
+        foreach (self::STABLE_LAYER_MARKERS as $marker) {
+            $this->assertSame(
+                1,
+                substr_count($first, $marker),
+                'the fixture must render exactly one "' . $marker . '" layer for its offset to mean anything',
+            );
+        }
+
+        $prefix = self::commonPrefixLength($first, $second);
+
+        // THE STEP'S HEADLINE ASSERTION.
+        $this->assertGreaterThanOrEqual(
+            self::MIN_STABLE_PREFIX_BYTES,
+            $prefix,
+            'the shared prefix collapsed to ' . $prefix . ' bytes of ' . \strlen($first)
+                . ' - something volatile moved back ahead of the stable layers (P3.S1)',
+        );
+
+        // …and it does not merely clear a number: it runs past every stable
+        // layer and into <env> itself, which is the shape of the decision.
+        $envAt = strpos($first, "\n\n<env>\n");
+        $this->assertIsInt($envAt, '<env> is not where the assembler emits it');
+        $this->assertGreaterThan(
+            $envAt,
+            $prefix,
+            'the first differing byte landed before <env> began, so a layer other than <env> is now volatile',
+        );
+        $this->assertStringEndsWith(
+            "\n</env>",
+            $first,
+            '<env> must be the LAST layer of the assembled prompt (P3.S1)',
+        );
+
+        foreach (self::STABLE_LAYER_MARKERS as $marker) {
+            $endsAt = (int) strpos($first, $marker) + \strlen($marker);
+            $this->assertLessThan(
+                $prefix,
+                $endsAt,
+                'the "' . $marker . '" layer ends at byte ' . $endsAt . ', behind the shared prefix at '
+                    . $prefix . ' - it is re-prefilled on every step',
+            );
+        }
+
+        // The divergence is not just inside <env>; it is inside the diff BODY,
+        // past the caveat, the branch, the status and the log. Those four are
+        // cached too.
+        $diffAt = strpos($first, 'Unstaged changes (git diff, working tree vs index):');
+        $this->assertIsInt($diffAt);
+        $this->assertGreaterThan(
+            $diffAt,
+            $prefix,
+            'the git status or log diverged before the diff body did',
+        );
+
+        // ---- the control: the same counter, the pre-P3.S1 order ------------
+        $oldFirst = self::reassembledWithEnvAtLayerTwo($first);
+        $oldSecond = self::reassembledWithEnvAtLayerTwo($second);
+        $this->assertSame(\strlen($first), \strlen($oldFirst), 'the re-splice lost or duplicated bytes');
+
+        $oldPrefix = self::commonPrefixLength($oldFirst, $oldSecond);
+        $oldMapAt = strpos($oldFirst, '<repo-map>');
+        $this->assertIsInt($oldMapAt);
+        $this->assertLessThan(
+            $oldMapAt,
+            $oldPrefix,
+            'the counter reported a prefix reaching past <repo-map> with <env> AHEAD of it, which cannot be true '
+                . '- the instrument is broken, not the code',
+        );
+        $this->assertGreaterThanOrEqual(
+            self::MIN_PREFIX_GAIN_BYTES,
+            $prefix - $oldPrefix,
+            'the reorder moved the first differing byte by only ' . ($prefix - $oldPrefix) . ' bytes',
+        );
+    }
+
+    /**
+     * A fixture repository that renders EVERY layer of the assembled prompt,
+     * inside a real git repository with one commit and a dirty working tree.
+     *
+     * Dirty BEFORE the caller's first render, on purpose: the step measures two
+     * consecutive prompts on a tree that is ALREADY dirty, which is the state a
+     * session is in from its first write onwards - not the clean-to-dirty
+     * transition, where `git status` itself changes and the divergence starts
+     * much earlier.
+     *
+     * Host-independence is a property of the fixture, not an accident. `git
+     * init` runs BEFORE any prompt is assembled, and
+     * {@see \SugarCraft\Crush\Context\InstructionFileLoader::ancestorRoot()}
+     * returns null the moment `$root/.git` exists, so the ancestor walk that
+     * would otherwise read `CLAUDE.md` from `/tmp` and `/` never starts and
+     * nothing outside this directory can reach the prompt. The date and
+     * platform are injected by {@see PromptFixture}; the branch is forced to
+     * `master` so a host defaulting to `main` does not move the byte count.
+     */
+    private function dirtyRepoFixtureWithEveryStableLayer(): PromptFixture
+    {
+        if (self::git(null, ['--version'], $probe) !== 0) {
+            $this->markTestSkipped('git is unavailable in this environment');
+        }
+
+        $fixture = new PromptFixture();
+        $this->fixtures[] = $fixture;
+        $root = $fixture->root();
+
+        $fixture->writeJson('composer.json', [
+            'name' => 'fixture/prefix-win',
+            'description' => 'Fixture repository for the P3.S4 prefix measurement.',
+            'autoload' => ['psr-4' => ['Fixture\\Prefix\\' => 'src/']],
+        ]);
+        $fixture->write('src/Alpha.php', self::ALPHA_COMMITTED);
+        $fixture->write('src/Beta.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Beta {}\n");
+        $fixture->write(
+            'AGENTS.md',
+            "# Fixture conventions\n\nRun the suite before you push.\nNever edit generated files by hand.\n",
+        );
+
+        $fixture->memoryStore()->add('The fixture repository pins the prefix measurement.', MemoryScope::Project);
+
+        $fixture->addSkill(new Skill(
+            name: 'prefix-demo',
+            description: 'A skill body that occupies the stable region of the prompt.',
+            userInvocable: true,
+            disableModelInvocation: false,
+            allowedTools: null,
+            disallowedTools: null,
+            model: null,
+            effort: 'medium',
+            context: '',
+            paths: [],
+            content: "Use this skill when measuring the cache prefix.\n",
+            sourcePath: $root . '/.sugar-crush/skills/prefix-demo/SKILL.md',
+            source: SkillSource::Native,
+        ));
+
+        // `symbolic-ref` rather than `init -b`, which needs git 2.28; and
+        // gpgsign forced off because a host that signs by default would hang
+        // this on a passphrase prompt. Every exit code is asserted: a silently
+        // failed `commit` leaves an empty `Recent commits:` field that reads
+        // exactly like a repository with no history.
+        foreach ([
+            ['init', '-q'],
+            ['symbolic-ref', 'HEAD', 'refs/heads/master'],
+            ['config', 'user.email', 'fixture@example.invalid'],
+            ['config', 'user.name', 'Prefix Fixture'],
+            ['config', 'commit.gpgsign', 'false'],
+            ['add', '-A'],
+            ['commit', '-q', '-m', 'fixture: initial import'],
+        ] as $argv) {
+            $this->assertSame(
+                0,
+                self::git($root, $argv, $output),
+                'git ' . implode(' ', $argv) . ' failed: ' . implode("\n", $output),
+            );
+        }
+
+        $fixture->write('src/Alpha.php', self::ALPHA_FIRST_EDIT);
+
+        return $fixture;
+    }
+
+    /**
+     * Run one git command under `$root` (or nowhere, for `--version`),
+     * returning its exit code and handing back its combined output.
+     *
+     * @param list<string>  $argv   Subcommand and flags, each escaped separately
+     * @param list<string> &$output Combined stdout/stderr, for the failure message
+     */
+    private static function git(?string $root, array $argv, ?array &$output = null): int
+    {
+        $command = 'git';
+        if ($root !== null) {
+            $command .= ' -C ' . escapeshellarg($root);
+        }
+        foreach ($argv as $arg) {
+            $command .= ' ' . escapeshellarg($arg);
+        }
+
+        $output = [];
+        exec($command . ' 2>&1', $output, $exitCode);
+
+        return $exitCode;
+    }
+
+    /** Bytes the two strings share from the front - the whole cache contract. */
+    private static function commonPrefixLength(string $a, string $b): int
+    {
+        $limit = min(\strlen($a), \strlen($b));
+        $i = 0;
+        while ($i < $limit && $a[$i] === $b[$i]) {
+            ++$i;
+        }
+
+        return $i;
+    }
+
+    /**
+     * The same prompt, re-spliced into the pre-P3.S1 layer order.
+     *
+     * The old assembly was base heredoc, `<env>`, repo map, instruction
+     * documents, memory, skills - so lifting the `<env>` tail back to
+     * immediately after the heredoc reproduces it exactly, and by construction
+     * loses no byte. The split is taken at the two structural fences rather
+     * than at the base prompt's prose end-marker: prose is what a later step
+     * edits.
+     *
+     * It asserts the shipped order first, so a tree where `<env>` is NOT last
+     * fails here with that sentence instead of silently producing a
+     * meaningless splice.
+     */
+    private static function reassembledWithEnvAtLayerTwo(string $prompt): string
+    {
+        $mapAt = strpos($prompt, "\n\n<repo-map>");
+        $envAt = strpos($prompt, "\n\n<env>\n");
+        self::assertIsInt($mapAt, 'the fixture prompt carries no <repo-map> layer to splice around');
+        self::assertIsInt($envAt, 'the fixture prompt carries no <env> layer to splice');
+        self::assertGreaterThan(
+            $mapAt,
+            $envAt,
+            'this re-splice assumes the shipped order, repo map ahead of <env>; that is no longer true',
+        );
+
+        return substr($prompt, 0, $mapAt)                   // the base heredoc
+            . substr($prompt, $envAt)                       // <env>, back at layer 2
+            . substr($prompt, $mapAt, $envAt - $mapAt);     // repo map … skill listing
     }
 
     // -------------------------------------------------------------------------
