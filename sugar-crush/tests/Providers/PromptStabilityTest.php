@@ -548,10 +548,22 @@ final class PromptStabilityTest extends TestCase
      * BYTE COUNTS. What the tests pin is deliberately weaker: the floor
      * {@see MIN_STABLE_PREFIX_BYTES}, the gain floor
      * {@see MIN_PREFIX_GAIN_BYTES}, `prefix > $envAt` per fixture, each stable
-     * marker ending before the prefix does, and the three-way ordering of the
-     * three post-reorder rows. So the prefix column could regress from 4,670 to
-     * anywhere down to 4,404 with this whole file green and this table still
-     * reading 4,670.
+     * marker ending before the prefix does, `prefix > $diffAt` on the nice
+     * shape, the five-layer width {@see STABLE_LAYERS_BYTES}, and the three-way
+     * ordering of the three post-reorder rows.
+     *
+     * HOW FAR EACH ROW CAN ROT WHILE THE FILE STAYS GREEN, and an earlier
+     * revision of this paragraph got it wrong in BOTH directions by leaving
+     * `$diffAt` out of that list. It said "down to 4,404". MEASURED, by making
+     * `Recent commits:` volatile with a four-byte counter in
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock}: a prefix of 4,421 —
+     * 17 B ABOVE that supposedly-green floor — already reds, at
+     * `the git status or log diverged before the diff body did`. The nice row
+     * is pinned far tighter than the constant suggests, by
+     * `$diffAt = 4,512`; the capped and status rows, which have no `$diffAt`
+     * assertion of their own, are the ones bounded only at
+     * {@see MIN_STABLE_PREFIX_BYTES}. So: the nice row cannot fall below 4,513
+     * green, and the other two can fall to 4,096.
      *
      * That rot risk is taken ON PURPOSE, and the alternative is worse: these
      * absolutes contain bytes this file does not own — `OS version:` and `PHP
@@ -630,6 +642,28 @@ final class PromptStabilityTest extends TestCase
      * content moves, which is why it carries the tighter margin of the two.
      */
     private const MIN_PREFIX_GAIN_BYTES = 1500;
+
+    /**
+     * The combined size of the five layers P3.S1 lifted over `<env>`, in bytes,
+     * on the fixture {@see dirtyRepoFixtureWithEveryStableLayer()} builds:
+     * everything between the `<repo-map>` fence and the `<env>` fence.
+     *
+     * MEASURED **1,575** = `strpos($p, "\n\n<env>\n") - strpos($p, "\n\n<repo-map>")`
+     * = 4,056 - 2,481, three takes, and it is ALSO the gain the reorder bought,
+     * 4,670 - 3,095. Those are the same number for a reason given at the
+     * assertion site, not by coincidence.
+     *
+     * PINNED BY EQUALITY, unlike every other figure in this file, because it is
+     * the only one that is host-independent. MEASURED by re-running the fixture
+     * under a `TMPDIR` ten bytes longer: the prompt goes 4,844 -> 4,854 and the
+     * prefix 4,670 -> 4,680, and this constant does not move — the fixture
+     * root's path lives inside `<env>`, past both fences, and so do
+     * `OS version:` and `PHP version:`. What it DOES move with is this file's
+     * own fixture content, which this file owns. If a later step edits the
+     * instruction documents, the memory store or the skill body the fixture
+     * writes, re-measure this and move it; that is the assertion working.
+     */
+    private const STABLE_LAYERS_BYTES = 1575;
 
     /**
      * One marker per layer the reorder lifted into the cacheable prefix.
@@ -734,7 +768,20 @@ final class PromptStabilityTest extends TestCase
 
         $prefix = self::commonPrefixLength($first, $second);
 
-        // THE STEP'S HEADLINE ASSERTION.
+        // THE STEP'S HEADLINE ASSERTION — and inside THIS test it is subsumed,
+        // which is worth knowing before anyone edits it. `$diffAt` is 4,512 on
+        // this fixture and the assertion 40 lines below demands
+        // `$prefix > $diffAt`, so every prefix that reds this floor reds that
+        // one too: deleting these five lines would change this test's verdict
+        // for no input, only its failure message. MEASURED — at a prefix of
+        // 4,421 this floor passes and the `$diffAt` assertion is what fires.
+        //
+        // The floor is NOT dead, because the shape that binds it is in the
+        // other test: {@see testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock()}
+        // has no `$diffAt` pin and its status shape sits at 4,403, 307 B of
+        // slack. It is kept here because this is the test the step text points
+        // at, and a reader who finds only a `> 4512` here would not find the
+        // step's number at all.
         $this->assertGreaterThanOrEqual(
             self::MIN_STABLE_PREFIX_BYTES,
             $prefix,
@@ -799,35 +846,64 @@ final class PromptStabilityTest extends TestCase
             'the counter reported a prefix reaching past <repo-map> with <env> AHEAD of it, which cannot be true '
                 . '- the instrument is broken, not the code',
         );
+        $mapAt = strpos($first, "\n\n<repo-map>");
+        $this->assertIsInt($mapAt, 'the assembled prompt carries no <repo-map> layer to have lifted');
+
+        // WHAT MOVED, AND HOW MUCH IT MOVED, ARE THREE DIFFERENT STATEMENTS.
+        // They are asserted here strongest-first, because the coarser two are
+        // implied by this one and would otherwise be what a reader sees red.
+        //
+        // 1. THIS ONE BINDS THE ASSEMBLER: the region between the two fences is
+        //    exactly the five layers P3.S1 lifted, not four and not six.
+        //    MEASURED, by demoting `<repo-map>` in `Runtime::buildSystemPrompt()`
+        //    so only one layer sits between the fences, it reds with 727
+        //    against 1,575.
+        $this->assertSame(
+            self::STABLE_LAYERS_BYTES,
+            $envAt - $mapAt,
+            'the region between <repo-map> and <env> is ' . ($envAt - $mapAt) . ' bytes, not '
+                . self::STABLE_LAYERS_BYTES . ' - either a layer moved out from between the fences, or this '
+                . "file's own fixture content changed size and the constant needs re-measuring",
+        );
+
+        // 2. THE GAIN FLOOR, in the units the step text uses ("the reorder moved
+        //    the first-difference position by N bytes"). Given 1 and 3 it is
+        //    now arithmetically implied and cannot be the assertion that reds
+        //    first — it is kept because it is the claim the step makes, stated
+        //    where a reader looking for the step's number will find it, and
+        //    because it survives edits to this file's fixture content that
+        //    would force 1 to be re-measured.
         $this->assertGreaterThanOrEqual(
             self::MIN_PREFIX_GAIN_BYTES,
             $prefix - $oldPrefix,
             'the reorder moved the first differing byte by only ' . ($prefix - $oldPrefix) . ' bytes',
         );
 
-        // AND THE GAIN IS EXACTLY THE BLOCK THAT MOVED. The floor above cannot
-        // catch a reorder that lifts only SOME of the five layers over `<env>`;
-        // this identity can, because the splice is a pure rotation: whatever
-        // byte inside `<env>` differs, it sits at `$envAt + d` in the shipped
-        // order and at `$mapAt + d` in the old one, so the gain is `$envAt -
-        // $mapAt` and nothing else.
+        // 3. AND THE GAIN IS THAT SAME NUMBER — but read this for what it is.
+        // The equality is FORCED by three assertions already made above, so it
+        // can never be the assertion that catches a defect in the assembler:
+        // `assertNotSame($first, $second)` plus equal lengths plus
+        // `$prefix > $envAt` give that the two prompts share every byte up to
+        // `$envAt` and first differ at some offset `d` inside `<env>`; the
+        // splice is the rotation `B·R·E -> B·E·R`, so the shipped order
+        // diverges at `|B| + |R| + d` and the old one at `|B| + d`, and the
+        // difference is `|R|` identically, for every possible input.
         //
-        // It is also the ONLY figure in this file's tables that is
-        // host-independent — both offsets are read off the same string, and the
-        // base heredoc, the `OS version:`/`PHP version:` lines and the fixture
-        // root's path length shift the two orders equally and cancel. That is
-        // why it is pinned by EQUALITY here while the absolute byte counts are
-        // pinned only by floors: an equality assertion on those would red on
-        // the next developer's host for no defect. MEASURED 4,056 - 2,481 =
-        // **1,575** = 4,670 - 3,095.
-        $mapAt = strpos($first, "\n\n<repo-map>");
-        $this->assertIsInt($mapAt, 'the assembled prompt carries no <repo-map> layer to have lifted');
+        // It is therefore a GUARD ON THE SPLICE HELPER, exactly like the
+        // length check above it, and an earlier revision of this comment
+        // claimed the opposite — that it catches a reorder lifting only some of
+        // the layers, which "the floor above cannot". MEASURED, that is
+        // inverted: the demotion mutation described above leaves this identity
+        // holding exactly (727 = 727), and what reds is assertion 1 (or, before
+        // assertion 1 existed, the floor). Kept because a helper guard is worth
+        // having and this one is free; labelled correctly because a guard
+        // advertised as something stronger is how a test file stops being read.
         $this->assertSame(
             $envAt - $mapAt,
             $prefix - $oldPrefix,
-            'the reorder moved the first differing byte by ' . ($prefix - $oldPrefix) . ' bytes, but the region '
-                . 'it lifted over <env> is ' . ($envAt - $mapAt) . ' bytes - so what moved is not exactly the '
-                . 'five layers between <repo-map> and <env>',
+            'the re-splice moved the first differing byte by ' . ($prefix - $oldPrefix) . ' bytes while rotating '
+                . 'a ' . ($envAt - $mapAt) . '-byte region - reassembledWithEnvAtLayerTwo() is not a pure '
+                . 'rotation any more',
         );
     }
 
@@ -864,7 +940,11 @@ final class PromptStabilityTest extends TestCase
      * stable region, and every one still clears
      * {@see MIN_STABLE_PREFIX_BYTES}.
      *
-     * THE BOUND AND THE FLOOR ARE 61 BYTES APART, AND SAYING SO IS THE POINT.
+     * THE BOUND AND THE FLOOR ARE 40 BYTES APART, AND SAYING SO IS THE POINT.
+     * (An earlier revision of this heading said 61. That is a third quantity —
+     * the length of the frozen region the body derives below, 4,117 - 4,056 —
+     * and putting it in a heading whose whole subject is two numbers being
+     * confused was the same mistake one level up.)
      * An earlier revision of this paragraph read "the worst case IS bounded by
      * where `<env>` starts however big the diff gets" and offered that as the
      * justification for the floor. It is not one: "bounded by where `<env>`
@@ -1154,7 +1234,12 @@ final class PromptStabilityTest extends TestCase
      * The lines are NOT fixed-width, and an earlier revision of this docblock
      * said they were: the loop interpolates a bare `$i`, so MEASURED at
      * `$count = 400` the comment lines are 57 B (×10), 58 B (×90) and 59 B
-     * (×300). Nothing depends on the width — that same revision said the width
+     * (×300) EXCLUDING the newline — 58/59/60 including it, which is the
+     * reading under which these widths reconcile with the 23,924 B above:
+     * `34 + 10·58 + 90·59 + 300·60 = 23,924`, the 34 being the file header.
+     * (The domain used to be unstated, and the two figures then contradicted
+     * each other on their face by exactly 400 B, one per line.)
+     * Nothing depends on the width — that same revision said the width
      * was "what lets the caller assert it cleared
      * {@see EnvironmentBlock::DIFF_MAX_BYTES}", and by then the caller had
      * already abandoned the length-arithmetic form of that assertion as
@@ -1192,7 +1277,7 @@ final class PromptStabilityTest extends TestCase
      * returns null the moment `$root/.git` exists, so the ancestor walk that
      * would otherwise read `CLAUDE.md` from `/tmp` and `/` never starts);
      * `forcedInstructions`, which defaults to `[]`; the date and platform,
-     * injected by {@see PromptFixture}; the branch name; and the eight git
+     * injected by {@see PromptFixture}; the branch name; and the eleven git
      * config knobs listed at the `foreach` below — a list that is "found", not
      * "exhaustive", and has grown at every review so far. What is NOT: the
      * `Working directory:` path (`sys_get_temp_dir()`), `OS version:` and
@@ -1254,17 +1339,37 @@ final class PromptStabilityTest extends TestCase
         // failed `commit` leaves an empty `Recent commits:` field that reads
         // exactly like a repository with no history.
         //
-        // THE EIGHT CONFIG KNOBS BELOW ARE NOT DECORATION. `EnvironmentBlock`
+        // THE ELEVEN CONFIG KNOBS BELOW ARE NOT DECORATION. `EnvironmentBlock`
         // shells out to plain `git`, so the developer's own `~/.gitconfig`
         // reaches the assembled prompt, and REPOSITORY-local config is the only
         // lever a test has over that (it outranks global without touching the
-        // environment of any other test). MEASURED on this host, each set
-        // globally and the shipped test run against it:
+        // environment of any other test). Only over `~/.gitconfig`, though:
+        // MEASURED, `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.abbrev
+        // GIT_CONFIG_VALUE_0=20` beats every pin below and takes the prompt to
+        // 4,883/4,696. No ordinary shell sets it, and no repo-local key can
+        // outrank it, so it is recorded as the boundary of this mechanism
+        // rather than defended against.
+        //
+        // MEASURED on this host, each knob set in a `GIT_CONFIG_GLOBAL` with
+        // THAT KNOB'S OWN PIN REMOVED and the rest still in force — which is
+        // the only reading under which each row is a fact about its own knob,
+        // and NOT the reading an earlier revision of this list used (see the
+        // `color.ui` row for what that cost):
         //   `diff.noprefix=true`            reds the `diff --git a/… b/…` assertion
         //   `diff.mnemonicPrefix=true`      reds the same assertion
         //   `core.abbrev=20`                prompt 4,844 -> 4,883 B, prefix -> 4,696
         //   `diff.context=10`               prompt 4,844 -> 4,851 B
         //   `color.ui=always`               prompt 4,844 -> 4,921 B, prefix -> 4,689
+        //                                   ONLY WITH THE `color.diff` PIN ALSO
+        //                                   REMOVED. With `color.diff=false` in
+        //                                   force this knob moves NOTHING —
+        //                                   MEASURED 4,844/4,670, unchanged —
+        //                                   because the slot key outranks it.
+        //                                   The figure was measured before
+        //                                   `color.diff` was pinned and is kept
+        //                                   with its domain rather than dropped,
+        //                                   since it is what the colour hazard
+        //                                   costs when nothing covers it.
         //   `color.diff=always`             prompt 4,844 -> 4,921 B, prefix -> 4,689,
         //                                   and 21 raw ESC bytes in the prompt EVEN
         //                                   WITH `color.ui=false` pinned below it:
@@ -1273,10 +1378,17 @@ final class PromptStabilityTest extends TestCase
         //                                   alone does NOT cover the colour hazard it
         //                                   appears to name. Both are pinned.
         //   `diff.suppressBlankEmpty=true`  prompt 4,844 -> 4,842 B
-        //   `status.showUntrackedFiles=no`  makes an untracked file invisible,
-        //                                   so two renders come out IDENTICAL
-        //                                   and any measurement over them is
-        //                                   vacuous
+        //   `status.showUntrackedFiles=no`  moves NOTHING on this fixture —
+        //                                   MEASURED 4,844/4,670, unchanged,
+        //                                   because every file it dirties is
+        //                                   TRACKED. It is in this list for the
+        //                                   OTHER repository in this file: it
+        //                                   makes an untracked file invisible,
+        //                                   so the two renders in
+        //                                   {@see testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()}
+        //                                   come out IDENTICAL and that test's
+        //                                   measurement goes vacuous. That
+        //                                   repository carries its own pin
         //   `log.decorate=full`             prompt 4,844 -> 4,872 B, prefix -> 4,698
         //   `i18n.logOutputEncoding=UTF-16` prompt 4,844 -> 4,821 B, prefix -> 4,647.
         //                                   `--oneline` does NOT override it, and the
@@ -1284,7 +1396,19 @@ final class PromptStabilityTest extends TestCase
         //                                   DELETION: the commit SUBJECT disappears
         //                                   from `Recent commits:` entirely, leaving
         //                                   the bare sha (-23 B, the subject's length)
-        // and MEASURED with all ten pinned, on a host with none of them set,
+        //   `i18n.commitEncoding=UTF-16`    prompt 4,844 -> 4,821 B, prefix -> 4,647:
+        //                                   byte-identical damage to the row above,
+        //                                   and pinning that row does NOT cover it.
+        //                                   git converts FROM the declared commit
+        //                                   encoding, so declaring UTF-16 mangles a
+        //                                   UTF-8 commit whatever the OUTPUT encoding
+        //                                   says. Found by the fifth review, in the
+        //                                   same `foreach` the fourth had just fixed
+        //                                   for `color.ui`/`color.diff`, and by the
+        //                                   same mechanism: the pinned key names the
+        //                                   hazard family, the unpinned sibling in
+        //                                   that family wins
+        // and MEASURED with all eleven pinned, on a host with none of them set,
         // the numbers are unchanged at 4,844/4,670 — so the pin costs nothing
         // here, and it is what makes the figures reproducible on a host whose
         // git config this list covers. NOT "anywhere": see the paragraph on
@@ -1294,15 +1418,18 @@ final class PromptStabilityTest extends TestCase
         // `log.date` and `format.pretty` ARE inert, because `--oneline`
         // overrides both — but `log.decorate` is in that same `log.*` family
         // and `--oneline` does NOT override it, and neither does it override
-        // `i18n.logOutputEncoding`. `log.decorate`'s default is `auto`, which
+        // either `i18n.*` key. `log.decorate`'s default is `auto`, which
         // decorates only to a tty, so a piped `proc_open` sees nothing and the
-        // knob is invisible until a developer sets it. All three of
-        // `log.decorate`, `color.diff` and `i18n.logOutputEncoding` were found
-        // by a review, not by this list, AFTER the list had already claimed to
-        // make the figures portable — which is exactly the shape the
-        // completeness paragraph below is about, and the `color.ui` case is the
-        // worst of them, because the list did not merely omit the colour hazard,
-        // it named it and then failed to cover it. An earlier revision of this comment put
+        // knob is invisible until a developer sets it. All four of
+        // `log.decorate`, `color.diff`, `i18n.logOutputEncoding` and
+        // `i18n.commitEncoding` were found by a review, not by this list, AFTER
+        // the list had already claimed to make the figures portable — which is
+        // exactly the shape the completeness paragraph below is about. Two of
+        // them share the worst version of it: the list did not merely omit the
+        // colour hazard and then the commit-encoding hazard, it NAMED each one
+        // and pinned a sibling key that does not cover it. If a twelfth is ever
+        // wanted, look there first — at a family this list already claims.
+        // An earlier revision of this comment put
         // `status.showUntrackedFiles` in that same sentence under that same
         // reason, and the reason does not apply to it:
         // {@see EnvironmentBlock} runs `status --porcelain` with no untracked
@@ -1310,13 +1437,15 @@ final class PromptStabilityTest extends TestCase
         // pinned above rather than explained away.
         //
         // THIS LIST IS NOT CLAIMED TO BE COMPLETE, and the evidence that the
-        // caveat is load-bearing is that the list has already grown at every
-        // review that looked for more: four after the first, seven after the
-        // second, eight after the third, ten after the fourth. A knob that
-        // moves the byte count WITHOUT reddening anything is the failure mode
-        // this paragraph exists to make visible — `core.abbrev`, `color.ui`,
-        // `color.diff`, `log.decorate` and `i18n.logOutputEncoding` are all of
-        // that kind — so the honest statement is "ten found" and not "ten
+        // caveat is load-bearing is that the list has grown at EVERY review
+        // that looked for more, without exception: four after the first, seven
+        // after the second, eight after the third, ten after the fourth, eleven
+        // after the fifth. Five reviews, five more knobs; the reasonable
+        // prediction is that a sixth would find a twelfth. A knob that moves the
+        // byte count WITHOUT reddening anything is the failure mode this
+        // paragraph exists to make visible — `core.abbrev`, `color.ui`,
+        // `color.diff`, `log.decorate` and both `i18n.*` keys are all of that
+        // kind — so the honest statement is "eleven found" and not "eleven
         // exist". Measured-and-inert, recorded so the next reader does not
         // re-measure them: `log.date`, `format.pretty`, `core.quotePath`,
         // `init.templateDir`, `diff.algorithm`, `diff.indentHeuristic`,
@@ -1343,6 +1472,7 @@ final class PromptStabilityTest extends TestCase
             ['config', 'status.showUntrackedFiles', 'normal'],
             ['config', 'log.decorate', 'no'],
             ['config', 'i18n.logOutputEncoding', 'UTF-8'],
+            ['config', 'i18n.commitEncoding', 'UTF-8'],
             ['add', '-A'],
             ['commit', '-q', '-m', 'fixture: initial import'],
         ] as $argv) {
