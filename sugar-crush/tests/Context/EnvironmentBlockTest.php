@@ -30,7 +30,7 @@ final class EnvironmentBlockTest extends TestCase
      * conversation start — may be outdated". An independent literal reddens on
      * both a removal and a respelling.
      */
-    private const EXPECTED_CAVEAT = 'Note: this git state is re-read from the working tree on every step, not a snapshot taken at the start of the conversation, so it updates as you work.';
+    private const EXPECTED_CAVEAT = 'Note: this git state was read when this prompt was rendered, not a snapshot from conversation start. The main agent loop rebuilds this prompt, and re-reads the state, on every step.';
 
     private string $tempDir;
 
@@ -779,7 +779,13 @@ final class EnvironmentBlockTest extends TestCase
         // non-git render has no git section — so it must carry no caption.
         $noRepo = EnvironmentBlock::capture($this->tempDir, 'model')->render();
         $this->assertStringNotContainsString(self::EXPECTED_CAVEAT, $noRepo);
-        $this->assertStringNotContainsString('Note:', $noRepo);
+        // Scoped to THIS caption's opening words, not to the whole `Note:`
+        // vocabulary: the byte-exact assertion above cannot see a RESPELLED
+        // caption leaking into the non-git block, which is the thing worth
+        // catching here. Forbidding every future `Note:` line in the non-git
+        // block would be a decision about the block's vocabulary that this
+        // step has no basis to take as a side effect.
+        $this->assertStringNotContainsString('Note: this git state', $noRepo);
 
         $this->initGitRepo();
         file_put_contents($this->tempDir . '/tracked.txt', "original\n");
@@ -816,14 +822,109 @@ final class EnvironmentBlockTest extends TestCase
         $this->assertSame(1, substr_count($suppressed, self::EXPECTED_CAVEAT));
 
         // And the claim itself, driven: a file written between two renders of
-        // the SAME block shows up in the second, which is what "re-read from
-        // the working tree on every step" means. The caption is byte-stable
-        // across the pair; the status is not.
+        // the SAME block shows up in the second, which is what "re-read ...
+        // every step" means. The caption is byte-stable across the pair; the
+        // status is not.
+        //
+        // ACCOUNTING, so the assertion count is not over-read: the two
+        // `?? fresh.txt` assertions below pass on master too — live polling
+        // predates this step and is already pinned by
+        // `tests/Providers/PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
+        // They are here because they DRIVE the claim the caption makes, not
+        // because they are new pinning; the new pinning in this method is the
+        // caption's presence, count, position and the upstream-absence trio.
         file_put_contents($this->tempDir . '/fresh.txt', 'written between renders');
         $second = $block->render();
         $this->assertStringNotContainsString('?? fresh.txt', $first);
         $this->assertStringContainsString('?? fresh.txt', $second);
         $this->assertSame(1, substr_count($second, self::EXPECTED_CAVEAT));
+    }
+
+    /**
+     * The WHOLE git-section line set, in order — the sibling
+     * {@see testTheCompleteLineSetAndItsOrder()} could not be.
+     *
+     * That roster renders on a NON-git temp dir, so it enumerates the seven
+     * fixed lines and stops; the git section has never had a whole-line-set pin
+     * of its own, and its only line-set coverage was the two committed goldens.
+     * So a line could be inserted between `Recent commits:` and the staged-diff
+     * label — or the caption dropped — and nothing in this class would notice.
+     * `testTheGitSectionCarriesTheHonestCaveatAndNotUpstreamsSnapshotLabel()`
+     * pins ONE adjacency (caption above the branch line), which is not the set.
+     *
+     * The field BODIES cannot be pinned byte-exactly — commit hashes, diff index
+     * lines and the branch name all vary — so a body line is compared as
+     * `<body>` rather than as itself. The BLANK LINES are compared as
+     * themselves, which is what makes this a roster rather than a label list: an
+     * extra line anywhere outside a diff interior moves the array. The one
+     * region collapsed wholesale is the interior of each diff section, which
+     * carries its own internal blank line between the shortstat and the patch
+     * and whose length is a property of the fixture, not of this class.
+     */
+    public function testTheCompleteGitSectionLineSetAndItsOrder(): void
+    {
+        $this->initGitRepo();
+        file_put_contents($this->tempDir . '/tracked.txt', "original\n");
+        $this->gitCommitAll('seed');
+        // Staged AND unstaged edits to the same file, so both diff sections
+        // have a body and neither collapses to the `(none)` shape.
+        file_put_contents($this->tempDir . '/tracked.txt', "staged\n");
+        shell_exec('git -C ' . escapeshellarg($this->tempDir) . ' add tracked.txt 2>/dev/null');
+        file_put_contents($this->tempDir . '/tracked.txt', "unstaged\n");
+
+        $output = EnvironmentBlock::capture($this->tempDir, 'model')->render();
+
+        $body = substr($output, strlen("<env>\n"), -strlen("\n</env>"));
+        $gitStart = strpos($body, self::EXPECTED_CAVEAT);
+        $this->assertNotFalse($gitStart, 'the git section must start at the caption');
+
+        $structural = [];
+        $inDiffBody = false;
+        foreach (explode("\n", substr($body, $gitStart)) as $line) {
+            if (str_starts_with($line, 'Staged changes (git diff --cached, index vs HEAD)')) {
+                $structural[] = 'Staged changes:';
+                $structural[] = '<diff body>';
+                $inDiffBody = true;
+                continue;
+            }
+
+            if (str_starts_with($line, 'Unstaged changes (git diff, working tree vs index)')) {
+                $structural[] = 'Unstaged changes:';
+                $structural[] = '<diff body>';
+                $inDiffBody = true;
+                continue;
+            }
+
+            if ($inDiffBody) {
+                continue;
+            }
+
+            $structural[] = match (true) {
+                $line === self::EXPECTED_CAVEAT => '<caption>',
+                $line === '' => '',
+                str_starts_with($line, 'Current branch: ') => 'Current branch:',
+                $line === 'Status:' => 'Status:',
+                $line === 'Recent commits:' => 'Recent commits:',
+                default => '<body>',
+            };
+        }
+
+        $this->assertSame([
+            '<caption>',
+            '',
+            'Current branch:',
+            '',
+            'Status:',
+            '<body>',
+            '',
+            'Recent commits:',
+            '<body>',
+            '',
+            'Staged changes:',
+            '<diff body>',
+            'Unstaged changes:',
+            '<diff body>',
+        ], $structural);
     }
 
     /**

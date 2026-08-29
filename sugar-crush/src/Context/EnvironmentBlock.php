@@ -237,7 +237,7 @@ final readonly class EnvironmentBlock
      *
      * THE WHOLE BLOCK, therefore: 2 * {@see DIFF_MAX_BYTES} + 2 * this = 24,576 B
      * of capped FIELD text, plus the branch line, the seven fixed lines, the
-     * four field labels, the 150-byte {@see GIT_STATE_CAVEAT} caption and the
+     * four field labels, the 181-byte {@see GIT_STATE_CAVEAT} caption and the
      * `<env>` fence. Each field's truncation marker is
      * reserved INSIDE its own cap by
      * {@see TruncatesOutput::truncateMerged()} rather than added on top, so the
@@ -249,9 +249,16 @@ final readonly class EnvironmentBlock
      * moves the test with the code instead of leaving a stale number here.
      * MEASURED against it on a fixture with ALL FOUR capped fields clipped at
      * once — 60 rewritten tracked files (30 staged, 30 not), 60 untracked ones
-     * and five 1,500-byte commit subjects — the block came to **21,774 B**, i.e.
-     * 3.8 KiB of headroom under the derived ceiling. That figure is of THAT
-     * fixture; the ceiling is the claim.
+     * and five 1,500-byte commit subjects — the block came to **21,957 B**, i.e.
+     * 3.6 KiB of headroom under the derived ceiling. That figure is of THAT
+     * fixture; the ceiling is the claim. (It read 21,774 B before the caption
+     * existed; the delta is +183 B — the 181-byte caption plus its blank line —
+     * MEASURED by rebuilding that fixture and rendering it twice with the same
+     * script, changing only which `EnvironmentBlock.php` was loaded: 21,711 B
+     * against master, 21,894 B against this file. Those absolutes sit 63 B
+     * below the ones recorded here because this description does not pin the
+     * fixture's file names; the DELTA is the part that reproduces, and being
+     * fixed-part text it is the same 183 B on any fixture.)
      * `branch --show-current` is deliberately left uncapped — a ref
      * name is bounded by the filesystem's own 255-byte name limit, and its empty
      * value is MEANINGFUL (a detached HEAD reports empty and exits 0), so
@@ -307,11 +314,13 @@ final readonly class EnvironmentBlock
      * once per step of the agentic loop. MEASURED through that production path
      * rather than through a bare block: two `buildSystemPrompt()` calls on ONE
      * memoized Runtime, with a tracked edit and a new untracked file written
-     * between them, returned 5,723 B and 5,908 B differing first at byte 5,567,
+     * between them, returned 5,754 B and 5,939 B differing first at byte 5,598,
      * and only the second named the new file. Upstream can say "snapshot"
      * because crush builds its prompt ONCE at coordinator construction
-     * (§5.5); this class is re-rendered per step, which is the whole
-     * difference.
+     * (§5.5); on the Runtime path this class is re-rendered per step, which is
+     * the whole difference — and the caption keeps the word "snapshot" so the
+     * sentence a reader already carries from upstream is the one it displaces,
+     * rather than a claim it merely sits beside.
      *
      * WHY THE CAPTION IS SCOPED TO THE GIT STATE and not to the block. The
      * block is genuinely MIXED: {@see capture()} freezes the cwd, the model
@@ -320,14 +329,33 @@ final readonly class EnvironmentBlock
      * label in the other direction, so this one says "this git state" and is
      * emitted inside the git section only.
      *
-     * WHY IT SAYS "updates as you work" AND NOT "reflects your edits". The
-     * second is not true in every mode this class can render in: on a build
-     * with `proc_open` in `disable_functions` the capped fields report
-     * {@see NO_PROCESS_REASON} and reflect nothing, and a field whose git
-     * exited non-zero reports that instead. What holds in EVERY mode is the
-     * mechanism — the section is re-derived per step rather than carried
-     * forward from session start — so the caption claims the mechanism and
-     * lets each field state its own availability, which they already do.
+     * WHY THE UNCONDITIONAL HALF IS "when this prompt was rendered" AND THE
+     * PER-STEP HALF IS ATTRIBUTED TO THE MAIN LOOP. "Re-read on every step"
+     * flat is true only where a step exists to re-read on, and that is the
+     * Runtime path alone: `EngineBackend::complete()` builds one Runtime per
+     * turn and loops `Runtime::run()` over it, so `buildSystemPrompt()` — and
+     * this render with it — runs once per step. The OTHER renderer of this
+     * block, {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()}, is called
+     * once per run by every one of its call sites — `AgentManager` (before,
+     * not inside, its transient-failure retry), `App`'s skill fork,
+     * `WorkflowEngine`'s five stage builders and `ProcessExecutor` — each
+     * building a single `CompleteRequest` with no agentic loop behind it. On
+     * those paths the block is rendered exactly ONCE for the whole run, so a
+     * flat per-step claim would be a false caption handed to a subagent, which
+     * is the same defect as copying upstream's, only pointing the other way.
+     * The caption therefore states unconditionally only what holds on every
+     * path — the state is as of THIS prompt's render, never carried forward
+     * from session start — and names the main agent loop when it claims the
+     * per-step cadence.
+     *
+     * WHY IT CLAIMS THE READ AND NOT THE CONTENT. "Reflects your edits" is not
+     * true in every mode this class can render in: on a build with `proc_open`
+     * in `disable_functions` the capped fields report {@see NO_PROCESS_REASON}
+     * and reflect nothing, and a field whose git exited non-zero reports that
+     * instead. What holds in EVERY mode is the mechanism — the section is
+     * re-derived at render rather than carried forward — so the caption claims
+     * the mechanism and lets each field state its own availability, which they
+     * already do.
      *
      * WHY IT IS EMITTED IN BOTH DIFF MODES. {@see withWriteSinceLastRender()}
      * suppresses the two diff sections, never branch/status/log, so the
@@ -339,7 +367,7 @@ final readonly class EnvironmentBlock
      * label that field. It also puts constant bytes ahead of the first
      * volatile one, which is the direction P3.S1 moved the whole block in.
      */
-    private const GIT_STATE_CAVEAT = 'Note: this git state is re-read from the working tree on every step, not a snapshot taken at the start of the conversation, so it updates as you work.';
+    private const GIT_STATE_CAVEAT = 'Note: this git state was read when this prompt was rendered, not a snapshot from conversation start. The main agent loop rebuilds this prompt, and re-reads the state, on every step.';
 
     /**
      * @param string             $cwd                Working directory rendered on the first line.
