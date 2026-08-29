@@ -229,52 +229,72 @@ Phase:            3 in progress. P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7.
                    Phase 3 NOT closed — P3.S3, P3.S4, P3.S5 remain (fully serial).
                    A RETROSPECTIVE REVIEW TRACK over all 16 merged steps has reported in full and
                    its fixes are running alongside the plan. See "Retro-review track" below.
-Next step:        Two things are in flight and must be merged before Phase 3 continues (order below).
-                   After they merge: P3.S4 (measure the prefix win), then P3.S5 (wire the
-                   write-signal), then the Phase 3 close review (§1.7). Phase 3 is fully serial —
-                   do not batch it.
-Steps done:       16 of 62 plan steps, + 1 retro-fix landed (RETRO-FIX-1).
+Next step:        MERGE P3.S3 — it is DONE but red on one file it was forbidden to touch. The
+                   decision is taken and recorded (worklog P3.S3 "DISPOSITION"): widen its declared
+                   list to include sugar-crush/tests/fixtures/prompt/golden-agent-prompt.txt and
+                   regenerate it, +91 B caption + a blank line after `Current date: 2026-08-26`.
+                   That is a mechanical snapshot regeneration whose generator has been reviewed five
+                   times — spawn a small agent for it, do NOT hand-edit and do NOT merge red.
+                   Then: P3.audit-fix-1, then P1.audit-fix-1, then P3.S4, then P3.S5, then the
+                   Phase 3 close (§1.7). Phase 3 is fully serial — do not batch it.
+Steps done:       16 of 62 merged, + 1 retro-fix landed (RETRO-FIX-1). P3.S3 complete but UNMERGED.
 Phases done:      3 of 12
-Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`. The last STEP commit is
-                   dabcd27f7 (P3.S2); everything after it is bookkeeping and retro-audit work, and a
-                   mismatch there is NOT the §3.3 gap §4 step 2 tells you to reconstruct.
+Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`. The last STEP commit on
+                   master is dabcd27f7 (P3.S2); everything after it is bookkeeping and retro-audit
+                   work, and a mismatch there is NOT the §3.3 gap §4 step 2 tells you to reconstruct.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     Tests: 10404, Assertions: 160919, Skipped: 1 — measured INDEPENDENTLY by three
-                   retrospective reviewers on master, all three identical. Census 6-file set:
-                   103 tests / 9420 assertions. tests/Providers/: 846/2047.
-                   Note: two tests fail ONLY under a pty with a live terminal
+Latest suite:     master: 10404 / 160919 / 1 skipped — measured INDEPENDENTLY by three retrospective
+                   reviewers, all three identical. Census 6-file set: 103 tests / 9420 assertions.
+                   tests/Providers/: 846/2047.
+                   P3.S3 branch a7513cc0e: 10407 / 160968 / 1 FAILURE / 1 skipped — the failure is
+                   the golden above, and it is the ONLY one. MEASURED BY THE ORCHESTRATOR.
+                   Two tests fail ONLY under a pty with a live terminal
                    (Chat\CompactModelSummaryTest, MouseModalGuardTest) — environment artifact,
-                   documented in the P3.S2 entry, not a regression.
+                   not a regression. Run the suite with stdin redirected from /dev/null.
 
-In-flight batch:  Three agents, file-disjoint by construction. DECLARED MERGE ORDER:
-                   1. P3.S3            /home/sites/prompt-step-P3.S3            (plan step — first,
-                                       because Phase 3 is serial and must not wait on an audit fix)
-                   2. P3.audit-fix-1   /home/sites/prompt-step-P3.audit-fix-1
-                   3. P1.audit-fix-1   /home/sites/prompt-step-P1.audit-fix-1
-                   Run tests/Providers/ + the census 6-file set between each merge (§1.3).
+                   CAUTION ON ASSERTION COUNTS: a COMMENT-ONLY commit moves the suite total.
+                   MEASURED on the P3.S3 branch, same tree, only src/Context/EnvironmentBlock.php
+                   docblock prose differing: 160968 with a7513cc0e, 160967 with it reverted —
+                   deterministic, reproduced by full-suite runs both ways. The reacting test is NOT
+                   SymbolCitationDriftTest (2924 either way), NOT DuplicatedDocBlockLineTest (23),
+                   NOT DescriptorInheritanceGuardTest (3738), and does not move when run in
+                   isolation. So the suite assertion TOTAL is not a stable baseline for a
+                   prose-only change; compare per-file counts, or a --log-junit diff, before
+                   calling an assertion delta a real one.
+
+In-flight batch:  P3.S3 is FINISHED (see Next step). Two agents still running, file-disjoint:
+                   1. P3.audit-fix-1   /home/sites/prompt-step-P3.audit-fix-1   (1 commit + 3 dirty)
+                   2. P1.audit-fix-1   /home/sites/prompt-step-P1.audit-fix-1   (2 commits, clean,
+                                       in its review loop)
+                   DECLARED MERGE ORDER: P3.S3 (after the golden lands) -> P3.audit-fix-1 ->
+                   P1.audit-fix-1. Run tests/Providers/ + the census 6-file set between merges
+                   (§1.3). Note P3.S3's base is 84899c6e7 and master has moved; the intervening
+                   commits are bookkeeping only, so the merge is clean.
                    File ownership, verified disjoint:
-                     P3.S3          → src/Context/EnvironmentBlock.php,
+                     P3.S3          -> src/Context/EnvironmentBlock.php,
                                       tests/Context/EnvironmentBlockTest.php,
-                                      tests/fixtures/prompt/golden-system-prompt.txt
-                                      (the golden is an APPROVED widening — changing the rendered
-                                      <env> text necessarily changes it)
-                     P3.audit-fix-1 → tests/Integration/SystemPromptWiringTest.php,
+                                      tests/fixtures/prompt/golden-system-prompt.txt,
+                                      + tests/fixtures/prompt/golden-agent-prompt.txt (2nd widening)
+                     P3.audit-fix-1 -> tests/Integration/SystemPromptWiringTest.php,
                                       tests/BaseSystemPromptTest.php, src/Runtime.php
-                     P1.audit-fix-1 → src/Providers/VertexProvider.php,
+                     P1.audit-fix-1 -> src/Providers/VertexProvider.php,
                                       tests/Providers/VertexProviderTest.php,
                                       tests/Providers/SystemPromptTransmissionMatrixTest.php
+                   CONFLICT WARNING: P3.audit-fix-1 and P3.S3 BOTH bear on the <env> golden path,
+                   and P2.audit-fix-1 (queued) touches tests/BaseSystemPromptTest.php too. Re-run
+                   the goldens after each merge rather than trusting a clean git merge.
 
-Live worktrees:   /home/sites/prompt-step-P3.S3            — P3.S3, IN FLIGHT. Recovered from a
-                    stale worktree at session start (§1.8.3 rung 3); rescued diff saved at
+Live worktrees:   /home/sites/prompt-step-P3.S3            — COMPLETE at a7513cc0e, 6 commits, tree
+                    clean, suite red ONLY on golden-agent-prompt.txt. Left in place per §1.2
+                    action 6. Rescued diff from the earlier dead agent:
                     .sugar-crush-prompt/rescued-P3.S3.patch.
                   /home/sites/prompt-step-P3.audit-fix-1   — IN FLIGHT. Findings brief at
                     <worktree>/.sugar-crush-prompt/findings.md.
                   /home/sites/prompt-step-P1.audit-fix-1   — IN FLIGHT. Findings brief at
                     <worktree>/.sugar-crush-prompt/RR1-findings.md.
                   /home/sites/prompt-review-RR1 .. RR5     — the five retro-review sandboxes,
-                    branches review/RR1..RR5. ALL FIVE HAVE REPORTED. They are read-only, they hold
-                    no uncommitted work, and they are NOT step worktrees — do not §1.12 them.
-                    SAFE TO REMOVE now that all five have reported:
+                    branches review/RR1..RR5. ALL FIVE REPORTED. Read-only, no uncommitted work,
+                    NOT step worktrees — do not §1.12 them. SAFE TO REMOVE:
                       for id in RR1 RR2 RR3 RR4 RR5; do
                         git -C /home/sites/sugarcraft worktree remove /home/sites/prompt-review-$id
                         git -C /home/sites/sugarcraft branch -D review/$id
