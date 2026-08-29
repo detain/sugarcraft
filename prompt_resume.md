@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 implemented on branch prompt/P3.S2 (8a31f239c + d05728826, in review); P3.S5 added to the plan (62 steps). See §8.**
+**Current state: Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7; P3.S5 scheduled (62 steps). Next: P3.S3 (fully serial). See §8.**
 
 ---
 
@@ -188,21 +188,22 @@ Full detail in `prompt_plan.md` §1. The short form:
 ## 8. Where you are right now
 
 ```
-Phase:            3 in progress — P3.S1 merged 379ecc7d6 (step commits 9a1c6fa5e + 0571d1c48);
-                   P3.S2 implemented on branch prompt/P3.S2 (8a31f239c + d05728826, in review).
-                   Phase 3 NOT closed — P3.S2 review close, then P3.S3, P3.S4, P3.S5 remain (fully serial).
-Next step:        P3.S2 (fully serial S1→S2→S3→S4→S5); read prompt_plan.md Phase 3 section +
+Phase:            3 in progress — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7 (step commits
+                   8a31f239c + d05728826); P3.S5 scheduled (62 steps).
+                   Phase 3 NOT closed — P3.S3, P3.S4, P3.S5 remain (fully serial).
+Next step:        P3.S3 (fully serial S1→S2→S3→S4→S5); read prompt_plan.md Phase 3 section +
                    prompt_expand.md P3 section before starting. Step texts prompt_plan.md §4;
                    review bar §1.4; merge format §1.6. Sequencing gate re-check before Phase
                    5/6 (collision rows still live, §5/§8 field below).
-Steps done:       15 of 62
+Steps done:       16 of 62
 Phases done:      3 of 12
-Last commit:      379ecc7d6 — prompt: P3.S1 — move <env> to the end of the system prompt
-                   (step commits 9a1c6fa5e + 0571d1c48)
+Last commit:      dabcd27f7 — prompt/P3.S2: emit the working diff only on the step after a write
+                   (merge; step commits 8a31f239c + d05728826)
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     full suite Tests: 10402, Assertions: 160893, Skipped: 1 (main repo @master,
-                   at P3.S1 close); six P3.S1 suites 221/740 OK; census 6-file set 103/9420 OK;
-                   tests/Providers/ 846/2047 OK; check-path-repos exit 0. Oldest full-suite
+Latest suite:     full suite Tests: 10404, Assertions: 160919, Skipped: 1 (non-tty verified at
+                   P3.S2 close; note the two pty-only env-dependent tests documented in the
+                   worklog); tests/Providers/ 846/2047 OK; census 6-file set 103/9420 OK;
+                   check-path-repos exit 0. Oldest full-suite
                    checkpoint: 10393/160779/1 EXIT 0 @ e513409c5. Baseline 10351/160648/1
                    (P0.S1, never edited).
 In-flight batch:  none
@@ -222,10 +223,12 @@ Open follow-ups:  (1) P4.S2: usage-payload cache fields re-probe before fixing f
                    (5) observation C AgentTest.php:569-570 stale TODO (future step);
                    (6) observation A ensureFixtureRepo() staleness hardening recommended for later
                    golden-touching steps (P3.S2/S3/S4, P5.S4-P5.S6, P9.S5) — re-raised at phase close;
-                   (7) NEW (P3.S1) F1: src/Context/EnvironmentBlock.php:66-75 docblock ('WHAT IT
-                   COSTS IN PROMPT CACHE') argues the opposite of the new assembly — rewrite when
-                   P3.S2/S3 touch the file (P3.S2's goal quotes it; Agent::systemPrompt() tail claim
-                   at :72-73 remains true);
+                   (7) RESOLVED by P3.S2 merge dabcd27f7 — the EnvironmentBlock.php:66-75 docblock
+                   ('WHAT IT COSTS IN PROMPT CACHE') was rewritten as part of the P3.S2 diff: it now
+                   states env is emitted LAST on Runtime::buildSystemPrompt() (the RepoMapBlock
+                   re-prefill argument gone; Agent::systemPrompt() tail claim preserved; the
+                   replacement 'lever' paragraph quoted verbatim at EnvironmentBlock.php:110-114 in
+                   the P3.S2 worklog entry);
                    (8) NEW (P3.S1) F2: src/Context/MemoryBlock.php:52-54 docblock premise
                    ('EnvironmentBlock::render() sits AHEAD of this block') is false post-P3.S1 —
                    revisit in Phase 6 (Context & Memory);

@@ -3712,8 +3712,9 @@ Twenty test files touch prompt construction. Eleven hard constraints:
    not take that slot.
 3. **`environmentSnapshot(App)` must stay privately reflectable** — `RuntimeTest.php:1721` asserts
    `assertSame` across two calls.
-4. **Base must start `'You are SugarCrush'`**, and everything before the first `<env>` is *defined*
-   as the base prompt — `BaseSystemPromptTest.php:63-66` slices on `strpos($whole, '<env>')`. Break
+4. **Base must start `'You are SugarCrush'`**, and the base prompt is *defined* as everything up to
+   and including its end-of-base marker — `BASE_END_MARKER = 'commands to follow.'`
+   (`BaseSystemPromptTest.php:68`, slice at :91-97). Break
    this and all nine tests in that file red at once.
 5. **Exactly four `# ` headings, level 1, whole-line, in order, each body >40 chars**
    (`:42-47, 151-166, 173-204`). `##` or `<section>` wrapping breaks it.

@@ -253,7 +253,68 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
-*(newest first — the first real entry goes directly below this line)*
+### P3.S2 — Emit the working diff only on the step after a write   ·   2026-08-28   ·   8a31f239c (merged dabcd27f7)
+
+**Status** `done`
+**Worktree** /home/sites/prompt-step-P3.S2 (removed at close)
+**Base** 9737ba185 (master at branch point)
+
+**Goal (restated in one sentence)**
+The two size-capped git diff sections (Staged/Unstaged) render only on the step AFTER a write tool ran, defaulting to emit; golden prompt byte-identical; every invariant green; byte delta recorded.
+
+**What changed**
+- `sugar-crush/src/Context/EnvironmentBlock.php`: 5th constructor param `bool $writeSinceLastRender = true` (default keeps pre-P3.S2 behaviour — suppression only explicit, never implicit), bare accessor `writeSinceLastRender()`, immutable fluent `withWriteSinceLastRender(bool): self` (new instance). Both gitDiffSection calls in gitStatusSnapshot() gated on the flag (subprocess count 5→3 when suppressed). Docblock rewritten per P3.S1 reality: 'WHAT IT COSTS IN PROMPT CACHE' paragraph now states env is emitted LAST on Runtime::buildSystemPrompt() (the RepoMapBlock re-prefill argument gone; the Agent::systemPrompt() tail claim preserved); the 'lever' paragraph replaced with the implemented signal + cross-turn semantics, quoted verbatim: 'Refining the first prompt of a turn to start suppressed after a quiet turn belongs to the caller that wires this signal into the engine loop, and that caller does not exist yet; the signal existing with a truthful default is what this step ships, and the wiring step decides whether a quiet turn earns a quiet opening.' (EnvironmentBlock.php:110-114).
+- `sugar-crush/tests/Context/EnvironmentBlockTest.php`: +2 tests.
+
+**Tests added or changed**
+- `EnvironmentBlockTest::testTheDiffIsEmittedOnlyOnTheStepAfterAWrite` (EnvironmentBlockTest.php:697) — drives 3 renders: #1 default emits both diff labels; #2 `withWriteSinceLastRender(false)` + no write → assertStringNotContainsString for both diff labels while Status/branch lines survive; #3 after a write + re-armed true → body +rewritten-after-the-write present. Revert of the gate reddens #2 (at :713); inversion reddens #1 (at :707).
+- `EnvironmentBlockTest::testWriteSinceLastRenderDefaultsToTrueAndIsAnImmutableSetter` (EnvironmentBlockTest.php:735) — default true, setter returns new instance (source untouched), 5th ctor param accepted directly.
+
+**Deletion experiment**: (A) gate removed (if true) → RED at :713 'does not contain Staged changes (git diff'; (B) never emit (if false) → RED at :707; live-poll test (PromptStabilityTest:428) under never-emit stays GREEN via the Status: --porcelain field (scratch.txt untracked) — confirming the live-poll invariant is status-dependent, not diff-dependent. Both restored → green.
+
+**MEASURED**
+```
+$ cd sugar-crush && vendor/bin/phpunit tests/Context/EnvironmentBlockTest.php
+OK (39 tests, 112 assertions)
+$ vendor/bin/phpunit tests/Providers/PromptStabilityTest.php
+OK (10 tests, 46 assertions)
+$ vendor/bin/phpunit tests/BaseSystemPromptTest.php
+OK (12 tests, 87 assertions)      # golden byte-identical
+$ vendor/bin/phpunit tests/SymbolCitationDriftTest.php tests/SwallowingCatchCensusTest.php tests/Support/DuplicatedTestHelperDriftTest.php tests/Support/ChildWallClockBudgetTest.php tests/Config/EnvRosterDriftTest.php tests/Tools/BuiltInToolCorpusTest.php
+OK (103 tests, 9420 assertions)   # census 6-file set
+$ vendor/bin/phpunit tests/Providers
+OK (846 tests, 2047 assertions)
+# Byte deltas (with-diff vs suppressed):
+#   deterministic fixture (1 tracked rewrite + 1 untracked): 612 B → 301 B (delta 311 B)
+#   this-checkout dirty tree: 8954 B → 693 B (delta 8261 B)
+#   reviewer's independent figures: clean tree 735 B → 616 B (delta 119 B);
+#   dirty scratch 3666 B → 289 B (delta 3377 B)
+# Hard constraint testNoAdditionalWorkingDirectoriesLineIsEmitted untouched and green.
+```
+
+**Suite result**
+```
+$ cd sugar-crush && vendor/bin/phpunit
+OK, but some tests were skipped!
+Tests: 10404, Assertions: 160919, Skipped: 1.
+```
+Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +53 tests, +271 assertions, 0 new skips (cumulative; this step +2 tests, +26 assertions vs P3.S1 close 10402/160893/1). Verified in a NON-tty agent-bash environment: two tests — `Chat\CompactModelSummaryTest::testWithASummarizerCompactReturnsACmdAndRewritesNothingYet` and `MouseModalGuardTest::testMidTurnUnderAnOverlayTheAgentsClickAndCtrlAAgreeOnEverythingButTheirWords` ('command palette' data set) — fail ONLY when phpunit runs under a pty with a live terminal (renderer viewport depends on tty size); they pass in non-tty env. Environment artifact, not a regression — tests untouched.
+
+**Review loop**
+- Cycle 1 (fresh reviewer): NO MERGE-BLOCKING FINDINGS. F1 MODERATE §16.1 — the suppression polarity is reachable ONLY from tests at merge time: all four production construction sites use bare capture() with default true (Runtime.php:1850, App/App.php:553, Agents/Agent.php:417, Cli/Bootstrap.php:1462); production output byte-identical to pre-change (proven by golden-green). Per §16.1 this is a finding, not a completion — recorded here verbatim. F2 NIT — test docblock wording — FIXED in d05728826.
+- Cycle 2 (fresh reviewer, never saw cycle 1): NO MERGE-BLOCKING FINDINGS. F1 MODERATE §16.1 (same finding, planned; recorded at merge).
+- Total cycles: 2.
+
+**§16.1 finding (MODERATE, review F1) — RESOLVED BY SCHEDULING**: wiring step P3.S5 added to the plan (plan edit 5dec5a6d4) — 'Wire the write-signal into the engine loop' (Runtime.php + Backend/EngineBackend.php + tests/RuntimeTest.php), not yet executed.
+
+**Invariants touched**
+- §17.2 — none broken. Golden byte-identical (BaseSystemPromptTest 12/87). No src/ file added (EnvironmentBlock.php modified in place; census unchanged 103/9420; Providers unchanged 846/2047). Strict types, final readonly, immutable with* via new self, 5th param defaulted (3rd slot untouched).
+
+**Surprises**
+- Worktree-checkout measurement quirk: EnvironmentBlock correctly reports 'Is directory a git repo: No' for the sugar-crush/ subdir in a worktree checkout (.git lives at the worktree root); measured at the repo root instead.
+
+**Follow-ups created**
+- P3.S1 F1 (EnvironmentBlock.php:66-75 stale docblock) — RESOLVED by this merge: the docblock was rewritten as part of the P3.S2 diff (see What changed; verbatim quote at EnvironmentBlock.php:110-114). No new follow-ups from this step. Standing items carry forward unchanged: F2 MemoryBlock.php:52-54 → Phase 6; F3 PromptStabilityTest.php:411,435; F4 AgentTest.php:312-327; obs A ensureFixtureRepo() hardening (later golden-touching steps P3.S3/S4, P5.S4-P5.S6, P9.S5).
 
 ### P3.S1 — Move <env> to the end of the system prompt   ·   2026-08-28   ·   9a1c6fa5e, 0571d1c48 → merged 379ecc7d6
 
