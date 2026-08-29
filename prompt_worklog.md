@@ -2019,3 +2019,176 @@ demonstrated pattern of docblock fixes introducing new defects. One-word fix whe
 
 **Review loop** 5 cycles, fresh agent each; cycle 5 verdict SHIP. The step agent edited the worktree
 while a reviewer was reading it — see ORCHESTRATION-RULE-1.
+
+
+---
+
+### P3.S4 — Measure the prefix win   ·   2026-08-29   ·   merged f2af06eaa
+
+**Status** `blocked (review-cycle)` — MERGED anyway; see DISPOSITION below.
+**Worktree** /home/sites/prompt-step-P3.S4 — REMOVED; branch `prompt/P3.S4` (7 commits, HEAD `a8e1c1b55`) deleted after merge.
+**Base** master `5baada1ce`. Merge commit `f2af06eaa`.
+
+**Goal (restated in one sentence)**
+Quantify what P3.S1–S3 bought: the byte position of the first difference between two consecutive
+assembled prompts, before and after the reorder, on a dirty working tree.
+
+**What changed**
+One file — `sugar-crush/tests/Providers/PromptStabilityTest.php` (+1119 −13), in all seven commits.
+**No production code changed.** ORCHESTRATOR-VERIFIED: `git diff --stat master a8e1c1b55 -- sugar-crush/src/`
+is empty, and `src/Runtime.php` md5 is `42c19e7e225aaf3648dcbe3fe9ab7fb4` in both trees.
+That verification mattered more than usual here: the "before" number cannot be read off current code
+(P3.S1 has merged), and the obvious way to obtain it is to mutate the assembler. The step obtained it
+instead via `reassembledWithEnvAtLayerTwo()`, an in-fixture pure rotation `B·R·E → B·E·R` guarded by a
+length check, cross-checked against a real production mutation that was restored every time (§16.8 rule 51).
+
+**MEASURED — by the step agent, then INDEPENDENTLY RE-MEASURED BY THE ORCHESTRATOR**
+
+| between the two renders | prompt 1 | prompt 2 | shared prefix | diverges at |
+|---|---:|---:|---:|---|
+| pre-P3.S1 order (`<env>` at layer 2) | 4,844 | 4,844 | **3,095** | blob hash |
+| shipped order, same file edited again | 4,844 | 4,844 | **4,670** | blob hash |
+| shipped, 400 vs 405 lines, diff over the 8,192 B cap | 12,751 | 12,751 | 4,583 | `--shortstat` |
+| shipped, a second tracked file dirtied | 4,844 | 5,083 | 4,403 | `Status:` |
+| a new `.php` file, ACROSS turns | 4,844 | 4,861 | 3,188 | `<repo-map>` `(2→3 files)` |
+| a new `.php` file, WITHIN one turn | 4,844 | 4,861 | 4,403 | `Status:` |
+
+**3,095 → 4,670 bytes.** The prompt is the same 4,844 bytes either way: a **reorder, not an addition**,
+moving exactly **1,575 B** — the layers between the `<repo-map>` fence (2,481) and the `<env>` fence
+(4,056) — from behind the first differing byte to in front of it. prompt_expand.md §3.4's own
+598/615/524 figures are of an `<env>` block in isolation, not of an assembled prompt, and do not compare.
+
+**N = 4,096, not the literal 4,670 the step text implies.** Two measured reasons, argued in the file
+rather than smuggled: 4,670 is the *nicest* of three in-class shapes (worst is **4,403**), so a floor
+only the luckiest edit clears would pin the fixture's luck rather than the layer order; and part of the
+prefix is host-owned (`OS version:` + `PHP version:` = 28 B here, plus the fixture root's path length).
+4,096 sits **1,001 B above** the pre-reorder 3,095 — the old assembly provably cannot reach it — and
+**307 B below** the worst in-class shape. It is a *magnitude* floor only. The ordering decision is pinned
+separately by the marker assertions and the old-order control; the size of the win by
+`MIN_PREFIX_GAIN_BYTES = 1500` and by `STABLE_LAYERS_BYTES = 1575` asserted by **equality** — the one
+host-independent figure here (re-measured under a `TMPDIR` ten bytes longer: prompt 4,844→4,854, prefix
+4,670→4,680, constant unmoved).
+
+**Tests added or changed** 10 tests / 46 assertions → **13 / 229**. No test weakened, skipped, renamed
+out, or deleted.
+- `testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree` — the floor (`:785`), the per-marker
+  offsets, `<env>`-last (`:801`), and the old-order control.
+- `testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock` — three shapes from three fixtures, each read
+  against its OWN `<env>` offset, with the cross-fixture comparability premise asserted rather than assumed.
+- `testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne` — pins the LIMIT of what P3.S1 bought.
+- `testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture` — HARDENED, not weakened: pins
+  `status.showUntrackedFiles` on its scratch repo and asserts the config call's exit code.
+- The fixture pins **eleven** git config knobs. Five consecutive reviews each found at least one more;
+  the comment records the growth (4/7/8/10/11) and says plainly the list is "found", not "exhaustive".
+
+**CLOSES A P3.S3 FOLLOW-UP.** Commit `544399f41` fixed the D7 band in this same file, which P3.S3 had
+filed: the section header called `<env>` "the very front of the prefix" (stale since P3.S1) and the
+git-snapshot comment called freezing the snapshot "the fix" with its assertion "expected to flip" —
+contradicting the `GIT_STATE_CAVEAT` P3.S3 shipped. Corrected in place per §16.8 rule 42 (what it used
+to say / what is true now / why it still earns its place), not deleted.
+
+**Deletion experiment — RE-RUN BY THE ORCHESTRATOR, verbatim**
+Sixteen by the agent, each `cp`-backed and restored. I reproduced the headline myself in the worktree.
+Moving the `<env>` append back ABOVE the repo map in `Runtime::buildSystemPrompt()` reds **three** tests:
+```
+1) …PromptStabilityTest::testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree
+the shared prefix collapsed to 3095 bytes of 4844 - something volatile moved back ahead of the stable layers (P3.S1)
+Failed asserting that 3095 is equal to 4096 or is greater than 4096.
+2) …::testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock
+Failed asserting that 3095 is equal to 4096 or is greater than 4096.
+3) …::testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne
+Failed asserting that 2828 is greater than 3269.
+Tests: 13, Assertions: 161, Failures: 3.
+```
+Restored afterwards: md5 back to `42c19e7e…`, `git status --porcelain` empty, `OK (13 tests, 229 assertions)`.
+SECONDARY FINDING, mine: a **milder** mutation — moving `<env>` only ahead of the *skills* block, not the
+repo map — reds the `<env>`-last assertion at `:801` while the floor at `:785` still PASSES (1 test, not 3).
+So the floor and the ordering are pinned by **different** assertions rather than by one, which is a
+strength of the file worth recording; a reader who assumes the floor alone pins the order is wrong.
+
+**Suite result — ORCHESTRATOR'S OWN RUNS, stdin from /dev/null**
+- Branch, full suite: `Tests: 10421, Assertions: 161281, Skipped: 1` — 0 failures.
+- **Master after merge, full suite: `Tests: 10421, Assertions: 161281, Skipped: 1`** — 0 failures. (06:34.474)
+- `tests/Providers/PromptStabilityTest.php`: `OK (13 tests, 229 assertions)`.
+- Census six-file set: `OK (103 tests, 9448 assertions)` — **identical to master**, unmoved.
+- All three path-repo gates exit 0 (`--no-lib-path-repos`, root closure, `--unused`), run from repo root.
+- Master's four commits since the branch point touch only `prompt_plan.md` / `prompt_resume.md`, with
+  ZERO `sugar-crush/` changes, so the combination cannot differ from the branch measurement.
+
+**Review loop** SIX cycles, each a brand-new agent, tree frozen during each.
+
+| cycle | findings | outcome |
+|---|---|---|
+| 1 | git knobs unpinned (a global `diff.noprefix` reddened the file); floor pinned only the nicest shape | pinned 4 knobs; widened to three shapes |
+| 2 | `…ForEveryShapeOfBetweenStepChange` claimed a bound a new `.php` file falsifies at byte 3,188 | renamed/rescoped; added the cross-turn-vs-within-turn test |
+| 3 | `log.decorate` (8th knob) moves bytes and reds nothing; `generatedLines` width claim false; floor's derivation 40 B short | all fixed; byte map added |
+| 4 | `color.diff` outranks the pinned `color.ui` (21 raw ESC bytes into the prompt); `i18n.logOutputEncoding` deletes the commit subject; "the generator is the test" false of every literal; cross-fixture `$envAt` reuse; stale "D7 got fixed" message | all five fixed |
+| 5 | `i18n.commitEncoding` (11th knob); **the cycle-4 equality assertion was a TAUTOLOGY**; two stale cardinalities; the 4,404 rot band false in both directions; `color.ui` row no longer reproduces; headline floor subsumed; two domain errors | all nine fixed; `STABLE_LAYERS_BYTES` added as the assertion that actually binds the assembler |
+| 6 | eight findings — **STANDING, unfixed, see below** | cap reached; stopped |
+
+The single most valuable catch was cycle 5's: the equality assertion cycle 4 had added was a **tautology**
+— forced by three assertions already made above it — and its comment claimed the exact opposite of what it
+did. Relabelled as the splice-helper guard it is.
+
+**DISPOSITION — orchestrator decision, taken 2026-08-29**
+§1.2 action 6 makes this step `blocked (review-cycle)`: the sixth review still found problems, so the agent
+reported verbatim and stopped. **DECIDED: merge, and do not silently move on.** Grounds: the work is green
+and independently re-verified; it changes NO production code, so the blast radius is one test file; it
+strictly *strengthens* that file (10→13 tests, 46→229 assertions) and every finding below is a request for
+*more* hardening, not a claim that an assertion is wrong; and P3.S5 is gated on this measurement existing.
+Holding it would block the phase to protect a file that is already better than the one on master.
+**The eight findings are scheduled as `P3.S4-fix-1`. PHASE 3 DOES NOT CLOSE UNTIL THEY ARE DISPOSITIONED.**
+
+**Standing findings (cycle 6, VERBATIM, unfixed — the cap)**
+- **F1 — `PromptStabilityTest.php:1344-1351`, `:1459-1478` — the twelfth knob is `GIT_DIFF_OPTS`, it beats the pinned `diff.context`, and the file stays green.** `GIT_DIFF_OPTS=-u10` takes the prompt 4,844 → 4,851 B — byte-identical damage to the `diff.context=10` row already pinned — with the suite `OK (13 tests, 229 assertions)`. Prescription run and reverted: `putenv('GIT_DIFF_OPTS');`. Better prescription also run: four `putenv()` calls (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_SYSTEM=/dev/null`, unset `GIT_DIFF_OPTS`, unset `GIT_EXTERNAL_DIFF`, plus an `XDG_CONFIG_HOME` redirect) restore the figures exactly **with zero repo-local pins** under a fully hostile environment. Caveat measured but unsolved: `putenv()` is process-wide and would leak to sibling tests.
+- **F2 — `:1381-1391` — the `status.showUntrackedFiles` row is false in both halves, and the pin it explains away is load-bearing *on this fixture*.** `testANewSourceFileVoids…` writes an **untracked** `src/Gamma.php`; with the pin deleted and a hostile global, that test reds: `<env> must still track the new file within the turn / Failed asserting that two strings are not identical.` This is a domain error introduced by cycle 5's own fix to a domain error.
+- **F3 — `:852-854` — "the coarser two are implied by this one" is false for assertion 3, and the file contradicts it 17 lines later.** A one-byte splice shift leaves assertion 1 holding at 1,575 and reds assertion 3 at 1,574. Assertions 1 and 3 are incomparable; "strongest-first" is not a total order.
+- **F4 — `:896-898` (and the `a8e1c1b55` commit message) — "before assertion 1 existed, the floor" names the wrong assertion.** What reds is the **gain floor** at `:876`; `MIN_STABLE_PREFIX_BYTES` passes. "The floor" means `MIN_STABLE_PREFIX_BYTES` everywhere else in the file.
+- **F5 — `:656-664` and `:861-867` — 78 % of the equality-pinned region is prose this file does not own.** 1,224 of the 1,575 bytes are static prose in `RepoMapBlock`, `MemoryBlock` and `SkillMatcher`. A four-byte prose edit in `RepoMapBlock` reds `STABLE_LAYERS_BYTES` with a message naming two causes, neither of which happened. Host-independence survived every attack; the "this file owns what moves it" clause — the clause licensing the equality pin — did not.
+- **F6 — `:1449-1458` — three entries in the inert/reds lists lack their domain; `core.attributesFile` is in no list at all.** `core.attributesFile`, `init.templateDir` (currently listed as *inert*) and a bare `XDG_CONFIG_HOME` with `git/attributes` all give 4,749/4,672. `log.date`/`format.pretty` are inert only for *valid* values: `log.date=true` makes `git log` exit 128, renders `unavailable (git exited 128)`, and the suite stays green. Same for `color.branch.current=true` → an empty `Current branch:`.
+- **F7 — `:565-566` — the rewritten rot band is right on the nice row and off by one on the capped row.** `statusPrefix ≥ 4096` plus `statusPrefix < cappedPrefix` force `cappedPrefix ≥ 4097`. Same class of defect the paragraph is itself a correction of.
+- **F8 — `:557-561` — the 4,421 figure has no reproducible generator.** The reviewer reproduced the assertion and message exactly but got 4,423; the mutation is described in prose, not written down.
+
+**Surprises / things the plan got wrong**
+1. **`<repo-map>` is not stable either.** A turn that creates a `.php` file moves a per-directory file
+   count at byte **3,188** — ahead of everything P3.S1 lifted. Memoisation saves it *within* a turn;
+   `EngineBackend::complete()` builds a fresh Runtime per turn, so it does not save it *across* turns.
+   The step text assumed the reorder made everything before `<env>` stable. It did not.
+2. **The fixture's figures are hostage to the developer's `~/.gitconfig`.** Eleven knobs found over five
+   reviews, several of which move the byte count while reddening nothing — `color.ui`/`color.diff` and
+   both `i18n.*` keys being the worst kind, where the pinned key NAMES the hazard family and the
+   *unpinned sibling in that family* wins.
+3. **A user with `color.ui=always` (and no `color.diff` override) ships 21 raw ANSI escape bytes into the
+   model's system prompt.**
+4. ORCHESTRATOR'S OWN: the floor assertion (`:785`) and the `<env>`-last assertion (`:801`) bite on
+   *different* mutations — see the deletion-experiment note above.
+
+**Escalations — product findings OUTSIDE the declared file list, NOT edited (§1.10)**
+1. **`RepoMapBlock` makes `<repo-map>` volatile across turns.** Its per-directory `.php` count means any
+   turn that creates a source file voids the cache prefix at byte 3,188 — ahead of everything P3.S1
+   bought. `src/Context/RepoMapBlock.php`, `src/Runtime.php` (`repoMapSnapshot()`),
+   `src/Backend/EngineBackend.php` (fresh Runtime per turn). Pinned as a finding by
+   `testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne`, which reds if it is ever fixed.
+2. **`color.ui=always` injects raw ANSI into the system prompt.** `EnvironmentBlock` shells out to git
+   without `--no-color`; measured 19–21 escape bytes and +71–77 B on a minimal fixture.
+   `src/Context/EnvironmentBlock.php`.
+3. **`EnvironmentBlock`'s branch read swallows a non-zero exit.** `src/Context/EnvironmentBlock.php:853-855`
+   uses `shell_exec('… branch --show-current 2>/dev/null')` + `trim()`, so any failure renders an empty
+   `Current branch:` with no marker — while `gitField()` two methods down renders
+   `unavailable (git exited N)` for exactly this case, under a docblock arguing that a silence the model
+   cannot see is the defect. One of five git calls not following the rule.
+4. **Process, the step agent's own, self-reported:** during cycle 3 it let two commits land and edited a
+   shared scratchpad harness while that reviewer was working — a breach of ORCHESTRATION-RULE-1, which
+   the reviewer caught and reported. Cycles 4–6 ran with the tree genuinely frozen, cycle 6 with a
+   private scratchpad. The rule worked: it was detected by the process it governs.
+
+**Follow-ups created**
+- **`P3.S4-fix-1`** — F1–F8 above. All in `tests/Providers/PromptStabilityTest.php`. Highest value first:
+  **F5** (the equality pin will red on a legitimate future prose edit, with a message naming two causes
+  neither of which happened — and Phase 5 steps are licensed to edit exactly that prose), then **F2** and
+  **F6** (wrong-green fixture holes), then F1, then the comment-accuracy set F3/F4/F7/F8.
+  **BLOCKS THE PHASE 3 CLOSE.**
+- Escalations 1–3 above need a home. Escalation 1 is architectural and belongs with P3.S5's
+  `<repo-map>`/memoisation seam; 2 and 3 are `EnvironmentBlock` defects and fit `P3.audit-fix-2`, which
+  already owns that file.
+- P3.S3's D7 follow-up against this file is CLOSED by `544399f41` (above).
