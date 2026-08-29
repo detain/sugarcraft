@@ -333,7 +333,37 @@ UNFINISHED MEASUREMENT (not a blocker, do not let it block a merge):
                    then diff the per-testcase `assertions=` attributes between the two XMLs.
 
 Blocked on:       nothing
-Awaiting user decision: nothing
+Awaiting user decision: TWO, both from P1.audit-fix-1 (VertexProvider). Neither blocks the rest of
+                   the plan — the step is parked per §1.2 action 6 and everything else continues.
+
+                   (1) THE GOOGLE ARM TARGETS AN ENVELOPE ITS OWN PINNED TEST MODEL IS NOT SERVED BY.
+                   `VertexProvider::googleBody()` builds the PaLM 2 `chat-bison` `:predict` shape —
+                   `{"instances":[{"context":…,"examples":[…],"messages":[…]}],"parameters":{…}}` —
+                   and `instances[0].context` genuinely IS the standing-instruction field OF THAT
+                   ENVELOPE. But `gemini-1.5-pro-002`, the model id BOTH test files pin as "the
+                   Google model", is not served by that envelope at all. Gemini on Vertex takes
+                   `:generateContent` / `:streamGenerateContent` with a top-level `systemInstruction`
+                   object. So the transmission fix is correct for the envelope the code builds, and
+                   the envelope the code builds is wrong for the model the tests name.
+                   The docblock the agent cited for `context` (cloud.google.com "Design chat
+                   prompts") 301s to a navigation index — the PaLM-era page is RETIRED. The field
+                   name was corroborated instead against an independent raw-REST Go implementation
+                   of the same endpoint (uber/go-vertex-ai types.go: `json:"context"`,
+                   `json:"examples,omitempty"`, `json:"messages"`).
+                   DECISION NEEDED: switch this arm to `:generateContent` + `systemInstruction`?
+                   That is a different endpoint, method AND body — a redesign, not a fix — so §1.10
+                   sends it to you rather than to an agent. The step was explicitly told not to
+                   start it. Doing nothing leaves a provider arm that transmits correctly into an
+                   envelope its pinned model does not accept.
+
+                   (2) `author` vs `role`, SECOND PRE-EXISTING DEFECT IN THE SAME ENVELOPE. The same
+                   corroborating source says the message key in the `instances` envelope is
+                   `author`; `VertexProvider::formatMessages()` emits `role`. Deliberately NOT
+                   fixed: fixing it would require changing the existing green test
+                   `testCompleteSelectsPredictAndTheInstancesEnvelopeForGoogleModels`, which is
+                   outside that step's declared list. Recorded in the docblock as an UNFIXED, sourced
+                   observation. If decision (1) goes to `:generateContent`, this becomes moot —
+                   which is a reason to settle (1) first.
 
 Retro-review track: REPORTED — all five agents complete. Shared brief:
                    .sugar-crush-prompt/retro-review-brief.md (gitignored; must be COPIED into any
