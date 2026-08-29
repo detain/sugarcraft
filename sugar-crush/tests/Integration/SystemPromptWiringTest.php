@@ -147,17 +147,15 @@ final class SystemPromptWiringTest extends TestCase
      * project instructions would red it. The model still receives the same
      * orientation facts; only their position changed.
      *
-     * THE `assertStringEndsWith` BELOW IS THE PRODUCTION-PATH PIN, and it is
-     * deliberately narrow. It reads a real `CompleteRequest`, so a layer
-     * appended after the assembled prompt on the way to the provider reds it
-     * — MEASURED: a suffix added after `Runtime::run()`'s
-     * `$systemPrompt = $this->buildSystemPrompt($app);` reds this test and
-     * nothing else in the suite. But it CANNOT see a reorder among the
-     * cacheable layers, because `completeOneTurn()` registers no skill
-     * registry: both skill layers render empty here, so <env> is last however
-     * the append is ordered. That gap is covered by
-     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()}, which
-     * drives a populated registry through the same wire.
+     * THE `assertStringEndsWith` BELOW IS A PRODUCTION-PATH PIN: it reads a
+     * real `CompleteRequest`, so a layer appended after the assembled prompt
+     * on the way to the provider reds it. MEASURED: a suffix added after
+     * `Runtime::run()`'s `$systemPrompt = $this->buildSystemPrompt($app);`
+     * reds this test and
+     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()} — the
+     * only two transmitted-prompt tests carrying that pin — and nothing else.
+     * It cannot see a reorder among the cacheable layers, because this App
+     * enables and discovers no skills; that test covers it.
      */
     public function testBothHalvesLandInOneSystemPromptWithEnvironmentLast(): void
     {
@@ -288,9 +286,10 @@ final class SystemPromptWiringTest extends TestCase
      * decision is that <env> is emitted after every cacheable layer, the
      * skill listing included; the assembler-side pin for that lives in
      * {@see testTheFixtureAssemblesEveryControlledHalfInTheRealOrder()},
-     * which reflects into the private `buildSystemPrompt()`. Without the two
-     * assertions below the wire had NO pin on it: the other transmitted-prompt
-     * test, {@see testBothHalvesLandInOneSystemPromptWithEnvironmentLast()},
+     * which calls the private `buildSystemPrompt()` through a scoped Closure.
+     * Without the two assertions below the wire had NO pin on it: the other
+     * transmitted-prompt test,
+     * {@see testBothHalvesLandInOneSystemPromptWithEnvironmentLast()},
      * registers no skill registry, so both skill layers render empty there and
      * <env> is trivially last however the append is ordered.
      *
@@ -377,14 +376,13 @@ final class SystemPromptWiringTest extends TestCase
      * pinned to END at </env> — stated as an assertion rather than left to a
      * regenerable fixture.
      *
+     * MEASURED under that same layer-5 move with these assertions in place:
+     * this test reds "Failed asserting that 4025 is less than 3764".
+     *
      * This is the ASSEMBLER-side pin; it reads {@see PromptFixture}, which
-     * reflects into the private `buildSystemPrompt()`. The wire-side pin for
-     * the same invariant is in
-     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()}, the
-     * one test here that drives a populated skill registry through a real
-     * `CompleteRequest`. Both are needed: this one alone left the transmitted
-     * bytes unpinned, and that one alone cannot see a reorder that the
-     * fixture's controlled halves expose.
+     * calls the private `buildSystemPrompt()` through a scoped Closure. The
+     * wire-side pin for the same invariant is in
+     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()}.
      */
     public function testTheFixtureAssemblesEveryControlledHalfInTheRealOrder(): void
     {

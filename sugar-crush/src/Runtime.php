@@ -1836,13 +1836,15 @@ final class Runtime
      * Memoized on the Runtime rather than re-captured per call — but NOT to
      * save git subprocesses, which is what this docblock used to claim
      * ("render() shells out to git three times"). Two things were wrong with
-     * that. The figure: it is FIVE (branch, status, log, staged diff,
-     * unstaged diff), true of the three-command version of the block and of
-     * nothing since — {@see EnvironmentBlock} documents the count and every
-     * qualification on it, including the THREE a caller gets from
-     * {@see EnvironmentBlock::withWriteSinceLastRender()} and the ZERO
-     * outside a repository, where render() gates the whole git section on a
-     * bare `file_exists($cwd . '/.git')`. And the reasoning: render() pays
+     * that. The figure: THREE was true of the three-command version of this
+     * block and of nothing since. It is FIVE — branch, status, log, staged
+     * diff, unstaged diff. {@see EnvironmentBlock}'s class docblock documents
+     * that count and the two qualifications it carries: fewer when a process
+     * helper is in `disable_functions`, and THREE from
+     * {@see EnvironmentBlock::withWriteSinceLastRender()}. The count is ZERO
+     * outside a repository, which is read off the gate itself rather than
+     * from any docblock over there — render() gates the whole git section on
+     * a bare `file_exists($cwd . '/.git')`. And the reasoning: render() pays
      * that bill on every call whoever owns the block, so the cost is a
      * function of RENDERS, not of captures, and reuse avoids none of it.
      * MEASURED 2026-08-29 with a logging `git` shim ahead of /usr/bin/git on
