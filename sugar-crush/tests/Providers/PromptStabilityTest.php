@@ -809,9 +809,27 @@ final class PromptStabilityTest extends TestCase
      * MEASURED on this fixture: 4,583 and 4,403 against the nice shape's 4,670,
      * with `<env>` opening at 4,056. Every one of them still carries the whole
      * stable region, and every one still clears
-     * {@see MIN_STABLE_PREFIX_BYTES} — inside this class, the worst case IS
-     * bounded by where `<env>` starts however big the diff gets, which is what
-     * putting the block last buys.
+     * {@see MIN_STABLE_PREFIX_BYTES}.
+     *
+     * THE BOUND AND THE FLOOR ARE 61 BYTES APART, AND SAYING SO IS THE POINT.
+     * An earlier revision of this paragraph read "the worst case IS bounded by
+     * where `<env>` starts however big the diff gets" and offered that as the
+     * justification for the floor. It is not one: "bounded by where `<env>`
+     * starts" gives >= 4,056, and 4,056 does not imply 4,096. What closes the
+     * gap is the MEASURED byte map of the fence and the line after it —
+     *
+     *     4,056  "\n\n<env>\n"
+     *     4,064  Working directory: /tmp/crush_promptfix_<12 hex>
+     *     4,117  Is directory a git repo: Yes
+     *
+     * — where every byte from 4,056 to 4,116 is the fence plus a value
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock::capture()} FROZE, so
+     * it cannot differ between two renders of one fixture. The earliest
+     * divergence any in-class change can actually produce is therefore 4,117,
+     * which is 21 B above the floor rather than 40 B below it. What putting the
+     * block last buys is that the bound exists at all and does not move with
+     * the size of the diff; what makes 4,096 safe is that the first 61 bytes
+     * of `<env>` are frozen.
      *
      * The three prefixes are also asserted to be DISTINCT and ordered. Three
      * scenarios that silently produced the same number would be three copies of
@@ -1005,11 +1023,29 @@ final class PromptStabilityTest extends TestCase
             'the memoised repo map moved inside a single turn',
         );
 
+        // Read from THIS fixture's own prompt, not from $before's. Both roots
+        // are `sys_get_temp_dir() . '/crush_promptfix_' . 12 hex` and both
+        // offsets are 4,056 today, so reusing the other one would be correct by
+        // construction — and silently wrong the day a fixture root's length
+        // stops being constant. The two are asserted equal instead, which says
+        // the coupling out loud rather than depending on it.
+        $sameTurnEnvAt = strpos($stepOne, "\n\n<env>\n");
+        $this->assertIsInt($sameTurnEnvAt);
+        $this->assertSame(
+            $envAt,
+            $sameTurnEnvAt,
+            'the two fixtures no longer lay out identically, so their byte offsets are not comparable',
+        );
+
         $withinTurn = self::commonPrefixLength($stepOne, $stepTwo);
         $this->assertNotSame($stepOne, $stepTwo, '<env> must still track the new file within the turn');
-        $this->assertGreaterThanOrEqual(self::MIN_STABLE_PREFIX_BYTES, $withinTurn);
+        $this->assertGreaterThanOrEqual(
+            self::MIN_STABLE_PREFIX_BYTES,
+            $withinTurn,
+            'within one turn the shared prefix fell to ' . $withinTurn . ' bytes, below the floor',
+        );
         $this->assertGreaterThan(
-            $envAt,
+            $sameTurnEnvAt,
             $withinTurn,
             'within one turn the memoised layers must all stay inside the shared prefix',
         );
@@ -1021,12 +1057,24 @@ final class PromptStabilityTest extends TestCase
     }
 
     /**
-     * `$count` identical-shaped comment lines under the fixture's namespace,
-     * tagged `$revision` so two calls of the same count differ on every line.
+     * `$count` comment lines under the fixture's namespace, tagged `$revision`
+     * so two calls of the same count differ on every line.
      *
-     * The line body is fixed-width on purpose: the diff's size is then a
-     * function of `$count` alone, which is what lets the caller assert it
-     * cleared {@see EnvironmentBlock::DIFF_MAX_BYTES}.
+     * The body's SIZE is a deterministic function of `$count` — MEASURED
+     * `generatedLines(400, 'A')` and `generatedLines(400, 'B')` are both
+     * 23,924 B, and `generatedLines(405, 'B')` is 24,224 B — which is what
+     * makes the two revisions of the over-cap shape differ in size by a known
+     * amount while differing on every line.
+     *
+     * The lines are NOT fixed-width, and an earlier revision of this docblock
+     * said they were: the loop interpolates a bare `$i`, so MEASURED at
+     * `$count = 400` the comment lines are 57 B (×10), 58 B (×90) and 59 B
+     * (×300). Nothing depends on the width — that same revision said the width
+     * was "what lets the caller assert it cleared
+     * {@see EnvironmentBlock::DIFF_MAX_BYTES}", and by then the caller had
+     * already abandoned the length-arithmetic form of that assertion as
+     * unsound and replaced it with the block's own truncation marker (see the
+     * comment above that assertion).
      */
     private static function generatedLines(int $count, string $revision): string
     {
@@ -1059,8 +1107,9 @@ final class PromptStabilityTest extends TestCase
      * returns null the moment `$root/.git` exists, so the ancestor walk that
      * would otherwise read `CLAUDE.md` from `/tmp` and `/` never starts);
      * `forcedInstructions`, which defaults to `[]`; the date and platform,
-     * injected by {@see PromptFixture}; the branch name; and the four git
-     * config knobs listed at the `foreach` below. What is NOT: the
+     * injected by {@see PromptFixture}; the branch name; and the eight git
+     * config knobs listed at the `foreach` below — a list that is "found", not
+     * "exhaustive", and has grown at every review so far. What is NOT: the
      * `Working directory:` path (`sys_get_temp_dir()`), `OS version:` and
      * `PHP version:`. MEASURED on this host those three contribute 33 + 23 + 5
      * = 61 B inside the shared prefix, and only the last two can SHRINK on
@@ -1120,7 +1169,7 @@ final class PromptStabilityTest extends TestCase
         // failed `commit` leaves an empty `Recent commits:` field that reads
         // exactly like a repository with no history.
         //
-        // THE FOUR `diff`/`core` KNOBS ARE NOT DECORATION. `EnvironmentBlock`
+        // THE EIGHT CONFIG KNOBS BELOW ARE NOT DECORATION. `EnvironmentBlock`
         // shells out to plain `git`, so the developer's own `~/.gitconfig`
         // reaches the assembled prompt, and REPOSITORY-local config is the only
         // lever a test has over that (it outranks global without touching the
@@ -1136,24 +1185,41 @@ final class PromptStabilityTest extends TestCase
         //                                   so two renders come out IDENTICAL
         //                                   and any measurement over them is
         //                                   vacuous
-        // and MEASURED with all seven pinned, on a host with none of them set,
+        //   `log.decorate=full`             prompt 4,844 -> 4,872 B, prefix -> 4,698
+        // and MEASURED with all eight pinned, on a host with none of them set,
         // the numbers are unchanged at 4,844/4,670 — so the pin costs nothing
-        // here and is what makes the figures reproducible anywhere.
+        // here, and it is what makes the figures reproducible on a host whose
+        // git config this list covers. NOT "anywhere": see the paragraph on
+        // completeness below, which an earlier revision of this comment
+        // contradicted in the same breath.
         //
         // `log.date` and `format.pretty` ARE inert, because `--oneline`
-        // overrides both. An earlier revision of this comment put
+        // overrides both — but `log.decorate` is in that same `log.*` family
+        // and `--oneline` does NOT override it. Its default is `auto`, which
+        // decorates only to a tty, so a piped `proc_open` sees nothing and the
+        // knob is invisible until a developer sets it. It was found by a
+        // review, not by this list, AFTER the list had already claimed to make
+        // the figures portable — which is exactly the shape the completeness
+        // paragraph below is about. An earlier revision of this comment put
         // `status.showUntrackedFiles` in that same sentence under that same
         // reason, and the reason does not apply to it:
         // {@see EnvironmentBlock} runs `status --porcelain` with no untracked
         // flag at all, so the knob decides what that field contains. It is
         // pinned above rather than explained away.
         //
-        // THIS LIST IS NOT CLAIMED TO BE COMPLETE. It is the set that was
-        // measured to bite, out of the ten candidates tried; `diff.external`,
-        // `core.quotePath` and `init.templateDir` were reasoned about and NOT
-        // measured. A knob that moves the byte count without reddening
-        // anything is the failure mode this paragraph exists to make visible,
-        // so the honest statement is "seven found" and not "seven exist".
+        // THIS LIST IS NOT CLAIMED TO BE COMPLETE, and the evidence that the
+        // caveat is load-bearing is that the list has already grown twice
+        // under it: four after the first review, seven after the second,
+        // eight after the third. A knob that moves the byte count WITHOUT
+        // reddening anything is the failure mode this paragraph exists to make
+        // visible — `core.abbrev`, `color.ui` and `log.decorate` are all of
+        // that kind — so the honest statement is "eight found" and not "eight
+        // exist". Measured-and-inert, recorded so the next reader does not
+        // re-measure them: `log.date`, `format.pretty`, `core.quotePath`,
+        // `init.templateDir`, `diff.algorithm`, `diff.indentHeuristic`,
+        // `status.relativePaths`, `log.abbrevCommit`, `core.autocrlf`.
+        // `diff.external` moves the bytes but REDS, which is the harmless
+        // direction.
         foreach ([
             ['init', '-q'],
             ['symbolic-ref', 'HEAD', 'refs/heads/master'],
@@ -1167,6 +1233,7 @@ final class PromptStabilityTest extends TestCase
             ['config', 'color.ui', 'false'],
             ['config', 'diff.suppressBlankEmpty', 'false'],
             ['config', 'status.showUntrackedFiles', 'normal'],
+            ['config', 'log.decorate', 'no'],
             ['add', '-A'],
             ['commit', '-q', '-m', 'fixture: initial import'],
         ] as $argv) {
