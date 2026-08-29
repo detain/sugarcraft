@@ -93,7 +93,7 @@ Collisions still live (re-check before the named phases):
 
 | Collision | Detail |
 |---|---|
-| `sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` + `sugar-crush/src/Context/RepoMapBlock.php` | The census asserts exact `src/` cardinalities — `assertSame(297, $files)`, `assertSame(316, $declarations)` — **and** asserts that `RepoMapBlock.php`'s doc-block (line 273, *"`src/` here is 297 files"*) restates two of them. Adding one file to `src/` reds four assertions across two files, one of them production source. This plan adds **~11** files under `sugar-crush/src/`. **Hardest collision; unavoidable. Phases 5+.** |
+| `sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` + `sugar-crush/src/Context/RepoMapBlock.php` | **RESOLVED 2026-08-29 — this was never a real collision during this plan.** The `src/` cardinality assertions were removed by `8706d2ec4` (*"decouple BuiltInToolCorpusTest and RepoMapBlock from the src/ file-count census"*), which `git merge-base --is-ancestor 8706d2ec4 19533373e` confirms is an **ancestor of P0.S1** — so it was already gone when this plan took its baseline. Found independently by two retrospective reviewers. MEASURED: zero integer `assertSame` in that file; zero `297 files` in `RepoMapBlock.php`; adding a `src/` file (298) leaves the census set at `OK (103 tests, 9432 assertions)` — nothing reds. `BuiltInToolCorpusTest.php:285-287` now carries `CENSUS_RESOLUTION = 'this file deliberately asserts NO cardinality over src/…'`. Phases 5/6/10 need **no** thin batches on this account; plan their concurrency from §2.1 like any other phase. Still an ordinary hot *file* if two steps edit it. See `prompt_plan.md` §17.1. |
 | `sugar-crush/src/Backend/EngineBackend.php` | Held by an in-flight lane; wanted by this plan's P7.S3. |
 | `sugar-crush/src/Chat.php` + `sugar-crush/src/Context/ContextCompactor.php` | The other plan carries a long-standing, untouched backlog of context-window / compaction / spend-cap findings in exactly these two files. This plan's Phases 4 and 8 rewrite them. |
 | `sugar-crush/src/Tools/BuiltIn/Bash.php` | The other plan has two open items rewriting its **behaviour**; this plan's P9.S3 rewrites its **description**. |
@@ -226,8 +226,12 @@ Next step:        P3.S3 is IN FLIGHT (see In-flight batch). When it returns: ver
                    (collision rows still live, §5 and the gate field below).
 Steps done:       16 of 62
 Phases done:      3 of 12
-Last commit:      84899c6e7 — prompt: P3.S2 status #6 — merged dabcd27f7 (suite 10404/160919/1
-                   verified non-tty)
+Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1` — this field rotted twice in one
+                   session while the bookkeeping commits that rewrote this very file left it untouched,
+                   so it is now an instruction rather than a literal (RR5 F10). What matters for §4
+                   step 2 is the last STEP commit, which is dabcd27f7 (P3.S2); everything after it is
+                   bookkeeping and retro-audit work, and a mismatch there is NOT the §3.3 gap that
+                   step tells you to reconstruct.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite Tests: 10404, Assertions: 160919, Skipped: 1 (non-tty verified at
                    P3.S2 close; note the two pty-only env-dependent tests documented in the
@@ -335,8 +339,10 @@ Open follow-ups:  (1) P4.S2: usage-payload cache fields re-probe before fixing f
 Sequencing gate:  CHECKED 2026-08-29 — Phase 3 fully serial S1→S2→S3→S4→S5; S1+S2 done, S3 in
                    flight; phases 0-4 remain safe alongside the other plan (no new src/ files).
                    RE-CHECK before Phase 5/6 (collision rows still live, §5):
-                   BuiltInToolCorpusTest assertSame(297, $files) + assertSame(316, $declarations) + RepoMapBlock.php:273
-                   doc-line restating them (this plan adds ~11 src/ files — hardest collision);
+                   src/ FILE-COUNT CENSUS — RESOLVED 2026-08-29, it never applied to this plan: the
+                   cardinality assertions were removed by 8706d2ec4, an ancestor of P0.S1. Adding a src/
+                   file reds nothing (MEASURED: 298 files, census set OK 103/9432). Phases 5/6/10 are NOT
+                   serialised by it. Remaining live collisions:
                    EngineBackend.php held by a lane, wanted by P7.S3; Chat.php + ContextCompactor.php for P4/P8;
                    Bash.php behaviour vs P9.S3 description; AgentDefinition C7 for P7.S5; tests/Support/ wholesale;
                    tree-wide census tests (SymbolCitationDriftTest, SwallowingCatchCensusTest & co. walk the tree).
