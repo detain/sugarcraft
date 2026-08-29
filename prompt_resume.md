@@ -244,7 +244,40 @@ In-flight batch:  P3.S3 ALONE (Phase 3 is fully serial — no batch). Spawned 20
                    necessarily changes tests/fixtures/prompt/golden-system-prompt.txt, so that
                    fixture is added to the declared list. Phase 3 is serial and nothing else is in
                    flight, so the §1.1 concurrency re-check is satisfied.
-Live worktrees:   /home/sites/prompt-step-P3.S3 — step P3.S3, IN FLIGHT. Found STALE at resume
+Retro-review track: RUNNING, 5 read-only agents, spawned 2026-08-29 01:5x on user instruction
+                   ("spawn review agents for all the steps that have finished so far ... look for
+                   any issues ... then between steps spawn agents to fix any issues they find ...
+                   keep going w/ the plan while the reviews are still going"). This track runs
+                   ALONGSIDE the plan; it does not gate it. Shared brief:
+                   .sugar-crush-prompt/retro-review-brief.md (gitignored) — read-only rules, the
+                   §1.4 nineteen checks, plus seven retrospective R-checks (R1 does the worklog
+                   claim survive the tree / R2 did a later step make an earlier test vacuous or its
+                   prose false / R3 re-run the deletion experiment on the MERGED tree / R4 the
+                   second path across the whole family / R5 reachability today / R6 re-derive every
+                   figure / R7 bookkeeping integrity).
+                     RR1 → P1.S1-S4, the four provider-transmission steps (2d4f738f2, a27f60229,
+                           99caad991, 0013e9730)
+                     RR2 → P0.S1-S3 (19533373e, 832f9ec0a) + P1.S5-S7 (193317de1, 070d1f5fb,
+                           843432e13) + P1 CLOSE e513409c5
+                     RR3 → P2.S1-S4 (e60a083d2, 6a6df4ddc, 74148433d, dfb618f16) + P2 close
+                           (3d7c7e420, 924c71a0d)
+                     RR4 → P3.S1 (379ecc7d6) + P3.S2 (dabcd27f7)
+                     RR5 → CROSS-PHASE seams over 19533373e^..HEAD + the bookkeeping audit
+                           (entry-format compliance, batch bracketing, resume accuracy, §2.2 hot-file
+                           table regeneration, .sugar-crush-prompt/progress.json staleness)
+                   Findings are NOT fixed by the reviewer. They come back to the orchestrator, which
+                   schedules fix agents BETWEEN plan steps, each in its own worktree with a declared
+                   file list checked disjoint against whatever plan step is then in flight. A
+                   finding landing in EnvironmentBlock.php / EnvironmentBlockTest.php /
+                   golden-system-prompt.txt is tagged OVERLAPS-P3.S3 by the reviewer and must be
+                   sequenced AFTER P3.S3 merges.
+Live worktrees:   /home/sites/prompt-review-RR1 .. RR5 — the five retro-review sandboxes above,
+                   branches review/RR1..review/RR5, all at master 84899c6e7, all vendor/ hard-linked
+                   and PSR-4-probed to their own src/. READ-ONLY: no reviewer commits, and each
+                   restores any mutation it makes for a deletion experiment. These are NOT step
+                   worktrees and are NOT stale — do not apply §1.12 to them while the track is
+                   running. Remove them (worktree remove + branch -D) when the track closes.
+                  /home/sites/prompt-step-P3.S3 — step P3.S3, IN FLIGHT. Found STALE at resume
                    (created 2026-08-28 23:41 by an orchestrator session that died; its transcript
                    does not survive). §1.12 audit: no commits (master..HEAD empty), three
                    uncommitted files — src/Context/EnvironmentBlock.php,
@@ -344,6 +377,9 @@ Phases done:      <N> of 12
 Last commit:      <sha> — <subject line>
 Baseline:         Tests: <N>, Assertions: <N>, Skipped: <N>  (from P0.S1, never edited)
 Latest suite:     Tests: <N>, Assertions: <N>, Skipped: <N>  (from your last verification run)
+Retro-review track: <the retrospective review agents currently out, their scopes, and where their
+                  findings are queued — or "none". This track runs ALONGSIDE the plan and never
+                  gates it; findings become fix steps scheduled between plan steps.>
 In-flight batch:  <the batch id, its steps, their worktree paths, and the declared MERGE ORDER —
                   or "none". Write it the moment you spawn a batch, not when you start merging.>
 Live worktrees:   <paths, or "none". Each one: the step it belongs to, and whether that step is
