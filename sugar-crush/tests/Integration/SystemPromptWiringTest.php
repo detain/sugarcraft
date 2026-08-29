@@ -153,9 +153,17 @@ final class SystemPromptWiringTest extends TestCase
      * `Runtime::run()`'s `$systemPrompt = $this->buildSystemPrompt($app);`
      * reds this test and
      * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()} — the
-     * only two transmitted-prompt tests carrying that pin — and nothing else.
-     * It cannot see a reorder among the cacheable layers, because this App
-     * enables and discovers no skills; that test covers it.
+     * only two transmitted-prompt tests carrying that pin — and nothing else
+     * across tests/Integration, tests/Context, tests/RuntimeTest.php,
+     * tests/Agents/AgentTest.php and tests/Providers/PromptStabilityTest.php.
+     *
+     * What it cannot see is a reorder that still leaves <env> at the TAIL:
+     * the layer-5 move, after <project-memory> but before the skill layers,
+     * which this App cannot expose because it enables and discovers no skills,
+     * so those layers render empty and <env> ends the prompt anyway. A reorder
+     * that leaves any non-empty layer behind <env> — <env> back to layer 2,
+     * say — does red this pin. That is the narrow gap, and
+     * testDiscoveredSkillsAreListedInTheProviderSystemPrompt() covers it.
      */
     public function testBothHalvesLandInOneSystemPromptWithEnvironmentLast(): void
     {

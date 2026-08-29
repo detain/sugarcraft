@@ -76,8 +76,11 @@ final class BaseSystemPromptTest extends TestCase
      * WHAT THAT COUNT REACHES IS NARROWER THAN "the assembled prompt".
      * basePrompt() builds from `App::new($provider, 'echo')`, which supplies
      * no instruction loader, no memory store and no skill registry — but
-     * `Runtime::buildSystemPrompt()` appends the repo map UNCONDITIONALLY,
-     * and with $app->root null it is captured at getcwd(). MEASURED
+     * `Runtime::buildSystemPrompt()` appends the repo map with no App wiring
+     * required, gated only on the map rendering non-empty (which it does from
+     * any directory carrying a composer.json; from one without, MEASURED,
+     * `<repo-map>` is absent and the whole prompt is 2662 bytes). With
+     * $app->root null it is captured at getcwd(). MEASURED
      * 2026-08-29 by reflecting into buildSystemPrompt() exactly as
      * basePrompt() does, from this package directory: strlen 5403,
      * substr_count 1, strpos 2462, <repo-map> present at offset 2483 —
@@ -130,12 +133,22 @@ final class BaseSystemPromptTest extends TestCase
             $markerAt,
             'the base prompt no longer ends with its end-of-base marker "' . self::BASE_END_MARKER . '"',
         );
+        // Counted only over what precedes <env>, not over $whole. <env>
+        // carries `git log` subjects and both diff bodies, so a commit titled
+        // after this marker -- or a working-tree diff quoting it -- would make
+        // the count 2 and red all nine tests fed by this helper, blaming a
+        // duplicated marker in the heredoc for ordinary repository content.
+        // That copy cannot move anything: P3.S1 put <env> LAST, so it is
+        // necessarily after the base's marker and strpos() never reaches it.
+        // The precondition that actually matters is "no copy AHEAD of the
+        // base's marker", and that is what this counts.
+        $envAt = strpos($whole, "\n\n<env>");
         self::assertSame(
             1,
-            substr_count($whole, self::BASE_END_MARKER),
-            'the end-of-base marker "' . self::BASE_END_MARKER . '" must occur exactly ONCE in the '
-            . 'assembled prompt: strpos() takes the FIRST occurrence, so a second one silently '
-            . 'moves this slice and every assertion fed by it.',
+            substr_count($envAt === false ? $whole : substr($whole, 0, $envAt), self::BASE_END_MARKER),
+            'the end-of-base marker "' . self::BASE_END_MARKER . '" must occur exactly ONCE ahead '
+            . 'of <env>: strpos() takes the FIRST occurrence, so a second one silently moves this '
+            . 'slice and every assertion fed by it.',
         );
 
         return substr($whole, 0, $markerAt + strlen(self::BASE_END_MARKER));
