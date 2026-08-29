@@ -64,6 +64,14 @@ final class BaseSystemPromptTest extends TestCase
      * delimited by this marker, the sentence its heredoc closes with. A
      * reword of that closing sentence reds {@see basePrompt()} until the
      * marker moves with it — the deliberate cost of an explicit boundary.
+     *
+     * ITS UNIQUENESS IS A PRECONDITION, NOT AN OBSERVATION. A structural
+     * fence like <env> cannot be typed by accident; this is PROSE, and it
+     * lives inside the very heredoc the nine tests fed by {@see basePrompt()}
+     * police the wording of. strpos() takes the FIRST occurrence, so a second
+     * copy of this sentence anywhere in the assembly moves the slice without
+     * reddening anything that reads it — which is why basePrompt() asserts the
+     * count, not just the presence.
      */
     private const BASE_END_MARKER = 'commands to follow.';
 
@@ -87,11 +95,21 @@ final class BaseSystemPromptTest extends TestCase
         // what keeps these assertions about the base literal rather than
         // about the repo-map and <env> data half that now follows it. If the
         // heredoc's closing line is ever reworded, this marker must move with
-        // it — the assertion below says so out loud.
+        // it — the first assertion below says so out loud. The second pins
+        // the precondition the slice mechanism rests on: strpos() resolves
+        // to the FIRST occurrence, so exactly one occurrence is what makes
+        // "cut at the marker" mean "cut at the end of the base".
         $markerAt = strpos($whole, self::BASE_END_MARKER);
         self::assertNotFalse(
             $markerAt,
             'the base prompt no longer ends with its end-of-base marker "' . self::BASE_END_MARKER . '"',
+        );
+        self::assertSame(
+            1,
+            substr_count($whole, self::BASE_END_MARKER),
+            'the end-of-base marker "' . self::BASE_END_MARKER . '" must occur exactly ONCE in the '
+            . 'assembled prompt: strpos() takes the FIRST occurrence, so a second one silently '
+            . 'moves this slice and every assertion fed by it.',
         );
 
         return substr($whole, 0, $markerAt + strlen(self::BASE_END_MARKER));

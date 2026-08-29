@@ -277,6 +277,24 @@ final class SystemPromptWiringTest extends TestCase
      * volatile last), so the first chain link is inverted, not deleted: the
      * repo map must now precede the environment block, and a reorder that
      * put <env> back ahead of it reds this assertion.
+     *
+     * THE CHAIN OF `assertLessThan`s IS NOT ENOUGH ON ITS OWN, and the two
+     * assertions after it are why. Every ordering pin P3.S1 inverted — here
+     * and in RuntimeTest, MemoryPromptWiringTest, FeatWiringReachabilityTest
+     * and RepoMapBlockTest — compares <env> against a layer that precedes
+     * the skills, so all of them stay green with <env> emitted at layer 5,
+     * after <project-memory> and BEFORE the skill bodies and the skill
+     * listing. MEASURED 2026-08-29: moving the append in buildSystemPrompt()
+     * to that position leaves 1164 tests / 5250 assertions green across
+     * tests/Integration, tests/Context, tests/RuntimeTest.php,
+     * tests/Agents/AgentTest.php and tests/Providers/PromptStabilityTest.php,
+     * and reds ONLY the byte golden — a file six scheduled steps are
+     * licensed to regenerate. Layer 5 is precisely the position the cache
+     * argument rules out: the skill bodies and the listing would then sit
+     * downstream of the block that changes on every file write. So the
+     * listing is pinned before <env> explicitly, and the prompt is pinned to
+     * END at </env> — the invariant P3.S1 exists to establish, stated as an
+     * assertion rather than left to a regenerable fixture.
      */
     public function testTheFixtureAssemblesEveryControlledHalfInTheRealOrder(): void
     {
@@ -318,6 +336,16 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertLessThan($memoryAt, $instructionsAt);
         $this->assertLessThan($skillAt, $memoryAt);
         $this->assertLessThan($listingAt, $skillAt);
+        $this->assertLessThan(
+            $envAt,
+            $listingAt,
+            '<env> must follow every cacheable layer, the skill listing included',
+        );
+        $this->assertStringEndsWith(
+            "\n</env>",
+            $prompt,
+            '<env> must be the LAST layer of the assembled prompt (P3.S1)',
+        );
 
         $this->assertStringContainsString('FIXTURE AGENTS MARKER', $prompt);
         $this->assertStringContainsString('FIXTURE MEMORY MARKER', $prompt);

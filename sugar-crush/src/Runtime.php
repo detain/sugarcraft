@@ -1834,10 +1834,27 @@ final class Runtime
      * Resolve the environment snapshot folded into every system prompt.
      *
      * Memoized on the Runtime rather than re-captured per call: render()
-     * shells out to git three times, and buildSystemPrompt() runs once per
-     * step of the agentic loop. A snapshot is also the semantics the block
-     * documents — a point-in-time capture, not live-polled state — so the
-     * same instance must be reused once taken. An owner that already holds a
+     * shells out to git FIVE times — branch, status, log, staged diff,
+     * unstaged diff — or THREE when the caller has suppressed the working
+     * diff via {@see EnvironmentBlock::withWriteSinceLastRender()}, and
+     * buildSystemPrompt() runs once per step of the agentic loop. (MEASURED
+     * 2026-08-29 with a logging `git` shim ahead of /usr/bin/git on PATH: 5
+     * invocations per render() by default, 3 with the diff suppressed. An
+     * earlier revision of this docblock said "three times", which had been
+     * true of the three-command version of the block and of nothing since —
+     * {@see EnvironmentBlock::gitStatusSnapshot()} retired that figure one
+     * file over and it survived here.)
+     *
+     * WHAT IS MEMOIZED IS THE CAPTURE, NOT THE GIT STATE. This docblock used
+     * to claim the block documents "a point-in-time capture, not live-polled
+     * state", which is the exact reading {@see EnvironmentBlock}'s class
+     * docblock opens by correcting: capture() freezes exactly three values —
+     * the working directory, the model name and the timestamp — while the git
+     * section is polled live on EVERY render(), and
+     * `PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`
+     * pins that. Reusing the one instance is what keeps those three frozen
+     * values from drifting mid-turn; it is not a claim that the block is a
+     * point-in-time snapshot of the repository. An owner that already holds a
      * session-wide snapshot injects it through the constructor instead.
      *
      * Captured at {@see projectRoot()}, not at the process directory: the
