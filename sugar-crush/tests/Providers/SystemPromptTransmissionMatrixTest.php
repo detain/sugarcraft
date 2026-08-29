@@ -244,8 +244,11 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * unary path), and the AWS command name `Converse` vs `ConverseStream`.
      *
      * MEASURED for Bedrock, driving both seams against a MockHandler: unary
-     * is `Converse` with NO `inferenceConfig` for a request that supplies
-     * neither temperature nor maxTokens; streamed is `ConverseStream` with
+     * is `Converse` with NO `inferenceConfig` key at all - re-derivable
+     * without a probe, because {@see request()} supplies neither temperature
+     * nor maxTokens and the unary path adds no defaults, so
+     * `inferenceConfig()` returns `[]` and the key is never set
+     * (BedrockProvider.php:169-172); streamed is `ConverseStream` with
      * `{"maxTokens":4096,"temperature":0.7}`, because ConverseStream rejects
      * an absent maxTokens (BedrockProvider.php:50-55, :206-212).
      *

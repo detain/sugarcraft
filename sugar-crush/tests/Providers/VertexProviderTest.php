@@ -864,6 +864,24 @@ final class VertexProviderTest extends TestCase
         $this->assertSame('you are a bot', $captured['body']['instances'][0]['context']);
     }
 
+    /**
+     * NEGATIVE-POLARITY CONTROL, AND IT IS NOT EVIDENCE OF THE FIX.
+     *
+     * Stated plainly because the honest reading is not obvious: this test is
+     * GREEN against the unfixed master body. Master's googleBody() never
+     * emits `context` at all, so "no context key" is trivially true there.
+     * MEASURED - a full revert of googleBody() to the master body reds six
+     * tests in this file and leaves this one and its streaming sibling
+     * {@see testCompleteStreamGoogleInstanceHasNoContextKeyWithoutASystemPrompt()}
+     * green.
+     *
+     * What it DOES catch is the opposite mutation, which no positive test
+     * can: dropping the `if ($context !== null)` guard in googleBody() so the
+     * key is written unconditionally. MEASURED - that mutation reds this test
+     * and its streaming sibling. Rule 16: an instrument that only ever says
+     * "found" is indistinguishable from a dead one, so the absence is pinned
+     * deliberately rather than left to chance.
+     */
     public function testGoogleInstanceHasNoContextKeyWithoutASystemPrompt(): void
     {
         $captured = null;
