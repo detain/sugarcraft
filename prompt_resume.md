@@ -229,28 +229,22 @@ Phase:            3 in progress. P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7.
                    Phase 3 NOT closed — P3.S3, P3.S4, P3.S5 remain (fully serial).
                    A RETROSPECTIVE REVIEW TRACK over all 16 merged steps has reported in full and
                    its fixes are running alongside the plan. See "Retro-review track" below.
-Next step:        MERGE P3.S3 — it is DONE but red on one file it was forbidden to touch. The
-                   decision is taken and recorded (worklog P3.S3 "DISPOSITION"): widen its declared
-                   list to include sugar-crush/tests/fixtures/prompt/golden-agent-prompt.txt and
-                   regenerate it, +91 B caption + a blank line after `Current date: 2026-08-26`.
-                   That is a mechanical snapshot regeneration whose generator has been reviewed five
-                   times — spawn a small agent for it, do NOT hand-edit and do NOT merge red.
-                   Then: P3.audit-fix-1, then P1.audit-fix-1, then P3.S4, then P3.S5, then the
+Next step:        Merge P3.audit-fix-1, then P1.audit-fix-1 (both in flight), then P3.S4, then P3.S5, then the
                    Phase 3 close (§1.7). Phase 3 is fully serial — do not batch it.
-Steps done:       16 of 62 merged, + 1 retro-fix landed (RETRO-FIX-1). P3.S3 complete but UNMERGED.
+Steps done:       17 of 62 merged, + 1 retro-fix landed (RETRO-FIX-1). P3.S3 MERGED (74cabae7f).
 Phases done:      3 of 12
 Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`. The last STEP commit on
                    master is dabcd27f7 (P3.S2); everything after it is bookkeeping and retro-audit
                    work, and a mismatch there is NOT the §3.3 gap §4 step 2 tells you to reconstruct.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
-Latest suite:     master: 10404 / 160919 / 1 skipped — measured INDEPENDENTLY by three retrospective
-                   reviewers, all three identical. Census 6-file set: 103 tests / 9420 assertions.
-                   tests/Providers/: 846/2047.
-                   P3.S3 branch a7513cc0e: 10407 / 160968 / 1 FAILURE / 1 skipped — the failure is
-                   the golden above, and it is the ONLY one. MEASURED BY THE ORCHESTRATOR.
+Latest suite:     MASTER, measured by the orchestrator after the P3.S3 merge, stdin from /dev/null:
+                   Tests: 10407, Assertions: 160968, Skipped: 1, Failures: 0   <- CURRENT BASELINE
+                   census 6-file set: 103 tests / 9420 assertions
+                   tests/Providers/:  846 tests / 2047 assertions
+                   P0.S1 original baseline, never edited: 10351 / 160648 / 1.
                    Two tests fail ONLY under a pty with a live terminal
-                   (Chat\CompactModelSummaryTest, MouseModalGuardTest) — environment artifact,
-                   not a regression. Run the suite with stdin redirected from /dev/null.
+                   (Chat\CompactModelSummaryTest, MouseModalGuardTest) — environment artifact, not
+                   a regression. ALWAYS run the suite with stdin redirected from /dev/null.
 
                    CAUTION ON ASSERTION COUNTS: a COMMENT-ONLY commit moves the suite total.
                    MEASURED on the P3.S3 branch, same tree, only src/Context/EnvironmentBlock.php
@@ -260,7 +254,8 @@ Latest suite:     master: 10404 / 160919 / 1 skipped — measured INDEPENDENTLY 
                    NOT DescriptorInheritanceGuardTest (3738), and does not move when run in
                    isolation. So the suite assertion TOTAL is not a stable baseline for a
                    prose-only change; compare per-file counts, or a --log-junit diff, before
-                   calling an assertion delta a real one.
+                   calling an assertion delta real. Naming the culprit is UNFINISHED — the commands
+                   are below under UNFINISHED MEASUREMENT.
 
 In-flight batch:  RESUMED 2026-08-29. The pause's agents did NOT survive the interrupt — all three
                    were respawned fresh from their worktrees, which were intact. Each new agent was
@@ -269,10 +264,9 @@ In-flight batch:  RESUMED 2026-08-29. The pause's agents did NOT survive the int
                    recover its findings list, and told to treat what it finds there as a starting
                    point to re-verify rather than as fact (§16.5).
 
-                   1. P3.S3-golden     /home/sites/prompt-step-P3.S3         from a7513cc0e
-                                       ONE file: tests/fixtures/prompt/golden-agent-prompt.txt.
-                                       Mechanical regeneration, no review loop — the generator
-                                       already spent five cycles.
+                   P3.S3 is MERGED (74cabae7f) — its golden regeneration landed as 9d4176a3a
+                   and the orchestrator verified master green afterwards. Its worktree
+                   /home/sites/prompt-step-P3.S3 is now removable.
                    2. P3.audit-fix-1   /home/sites/prompt-step-P3.audit-fix-1  from 3a24e233f
                                        2 commits stand. Files: tests/Integration/SystemPromptWiringTest.php,
                                        tests/BaseSystemPromptTest.php, src/Runtime.php.
@@ -300,8 +294,7 @@ In-flight batch:  RESUMED 2026-08-29. The pause's agents did NOT survive the int
                    .sugar-crush-prompt/rescued-P3.audit-fix-1-uncommitted.patch (mutation (a)) —
                    retained as evidence, NOT as work to reapply.
 
-                   DECLARED MERGE ORDER: P3.S3 (once its golden lands) -> P3.audit-fix-1 ->
-                   P1.audit-fix-1. Run tests/Providers/ + the census 6-file set between merges
+                   DECLARED MERGE ORDER: P3.audit-fix-1 -> P1.audit-fix-1 (P3.S3 done). Run tests/Providers/ + the census 6-file set between merges
                    (§1.3). P3.S3's base is 84899c6e7 and master has moved, but only by bookkeeping
                    commits, so the merge is clean.
                    CONFLICT WARNING: P3.audit-fix-1 and P3.S3 both bear on the <env> golden path,
