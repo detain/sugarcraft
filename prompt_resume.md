@@ -229,12 +229,43 @@ Phase:            3 in progress. P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7.
                    Phase 3 NOT closed — P3.S3, P3.S4, P3.S5 remain (fully serial).
                    A RETROSPECTIVE REVIEW TRACK over all 16 merged steps has reported in full and
                    its fixes are running alongside the plan. See "Retro-review track" below.
-Next step:        P3.S4 (measure the prefix win), then P3.S5 (wire the write-signal), then the
-                   Phase 3 close review (§1.7). Phase 3 is fully serial — do not batch it.
-                   P3.S5's brief must carry TWO things this round produced: (a) its declared file
-                   list reaches only 1 of the 4 EnvironmentBlock construction sites (9d7fbbdb4),
-                   and (b) P3.S3's Surprise 1 — the `bool $perStepRerender` conditional, which
-                   belongs to P3.S5 because it already declares Runtime.php + EngineBackend.php.
+Next step:        P3.S4 is IN FLIGHT. After it merges: **P3.S5 — wire the write-signal into the
+                   engine loop**, then the Phase 3 close review (§1.7).
+
+                   P3.S5's BRIEF MUST CARRY ALL FOUR OF THESE — they are the accumulated output of
+                   this round and none is in the plan's own step text except where noted:
+                   (a) §"THE SECOND ASSEMBLER" (added to prompt_plan.md 2026-08-29, commit
+                       9d7fbbdb4): EnvironmentBlock has FOUR production construction sites and this
+                       step's declared list reaches only ONE (src/Runtime.php:1850). The other three
+                       — Cli/Bootstrap.php:1462, App/App.php:553, Agents/Agent.php:417 — all feed
+                       the Agent assembler, which is live in production today and NOT memoised, so
+                       it pays FIVE git subprocesses per systemPrompt() call when the diff is
+                       emitted and three when suppressed. The step deliberately flips only the
+                       Runtime path; the worklog entry MUST state the gap per §16.1, and the
+                       orchestrator must then EITHER schedule a P3.S6 for the Agent assembler OR
+                       add a §18 row saying why the Agent path keeps the diff.
+                       **DO NOT CLOSE PHASE 3 WITH THIS GAP UNRECORDED.**
+                   (b) P3.S3's Surprise 1 — the `bool $perStepRerender` conditional. P3.S3 shipped a
+                       caption with NO per-step claim because there are two renderers with different
+                       cadences and an unconditional per-step sentence is false on the Agent path.
+                       Restoring it needs a flag set true by Runtime::environmentSnapshot() and
+                       false by Agent::systemPrompt(). P3.S5 already declares Runtime.php and
+                       EngineBackend.php, so it is the step that CAN do it.
+                   (c) The cross-turn limit the plan already flags: EngineBackend::completeAsync()
+                       forks, and the child calls complete() at EngineBackend.php:1166 where
+                       `new Runtime(` sits at :547 — so the Runtime and its memoised block live in a
+                       CHILD THAT EXITS AT END OF TURN. A signal cannot cross turns without going
+                       back over the socket. Done-when only requires WITHIN-turn behaviour, which is
+                       reachable; but EnvironmentBlock.php:110-114's promise that "the wiring step
+                       decides whether a quiet turn earns a quiet opening" is CROSS-turn and this
+                       file list cannot deliver it. Say so rather than quietly satisfying the
+                       narrower clause.
+                   (d) Runtime.php:1836-1839 carries two false claims (P3.S3 Surprise 4): it says
+                       the block documents "a point-in-time capture, not live-polled state" and
+                       "shells out to git three times" (it is five, or three under suppression).
+                       tests/RuntimeTest.php:1761-1764 carries the same stale pair. P3.S5 declares
+                       both files.
+
 Steps done:       19 of 62 merged, + 1 retro-fix (RETRO-FIX-1) + 1 orchestration rule
                    (ORCHESTRATION-RULE-1). Phase 3 at 3 of 5.
 Phases done:      3 of 12
@@ -259,26 +290,31 @@ Latest suite:     MASTER after all three merges, measured by the orchestrator, s
                    change. Compare per-file counts, or diff `--log-junit` per-testcase `assertions=`
                    attributes, before calling an assertion delta real.
 
-In-flight batch:  NOTHING RUNNING. All three steps merged, master clean and green. PAUSED at user
-                   request.
-                     P3.S3            merged 74cabae7f  (golden regeneration 9d4176a3a)
-                     P3.audit-fix-1   merged 6aff0bad1
-                     P1.audit-fix-1   merged 03d8fed37
-                   Each was verified by the ORCHESTRATOR on a COMBINED tree — master merged INTO the
-                   branch first, then the full suite run — because the branches predated each
-                   other's merges and touched overlapping golden-path files. Do this again next
-                   time; a clean `git merge` is not evidence the combination passes.
+In-flight batch:  ONE agent running: **P3.S4 — Measure the prefix win**.
+                   Worktree /home/sites/prompt-step-P3.S4, branch prompt/P3.S4, based on master
+                   5baada1ce. vendor/ is present and working (hardlinked with `cp -al` from
+                   sugar-crush/vendor — NEVER `ln -s`; a symlinked vendor makes __DIR__ resolve to
+                   the main repo's src/ and silently tests the wrong code).
+                   Declared file list: sugar-crush/tests/Providers/PromptStabilityTest.php ONLY.
+                   The plan also lists prompt_worklog.md, but per this plan's convention the agent
+                   does NOT write bookkeeping files — it RETURNS its entry as text and the
+                   orchestrator appends it.
 
-Live worktrees:   All three step worktrees are MERGED and removable:
-                     git worktree remove /home/sites/prompt-step-P3.S3
-                     git worktree remove /home/sites/prompt-step-P3.audit-fix-1
-                     git worktree remove /home/sites/prompt-step-P1.audit-fix-1
-                   /home/sites/prompt-review-RR1 .. RR5 — five retro-review sandboxes, all
-                   reported, read-only, NOT step worktrees (do not §1.12 them). Removable:
-                     for id in RR1 RR2 RR3 RR4 RR5; do
-                       git -C /home/sites/sugarcraft worktree remove /home/sites/prompt-review-$id
-                       git -C /home/sites/sugarcraft branch -D review/$id
-                     done
+                   THE TRAP IN THIS STEP, already in its brief. P3.S1 has merged, so the "before"
+                   number cannot be read off current code. The agent must reconstruct it — and if
+                   it does so by mutating production code, that is a MEASUREMENT, not a change:
+                   restore it and verify `git status --porcelain` empty (§16.8 rule 51). Its only
+                   committed edit is the test file. This is the exact failure mode that nearly cost
+                   P3.S1's decision earlier this round (see the RESUME commit 8d9f703da).
+
+                   Phase 3 is FULLY SERIAL — S1 -> S2 -> S3 -> S4 -> S5. Do not spawn P3.S5
+                   alongside P3.S4; P3.S5 depends on P3.S4 precisely because the measurement
+                   baseline must be recorded BEFORE the behaviour goes live.
+
+Live worktrees:   /home/sites/sugarcraft         master, clean
+                  /home/sites/prompt-step-P3.S4  prompt/P3.S4, agent running
+                  All merged step worktrees and all five RR review sandboxes have been REMOVED and
+                  the review/RR* branches deleted. Nothing else is outstanding.
 
 Blocked on:       nothing
 Awaiting user decision: TWO, both from P1.audit-fix-1 (VertexProvider). The step MERGED (03d8fed37)
