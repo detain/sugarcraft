@@ -117,6 +117,10 @@ use SugarCraft\Crush\Tools\Concerns\TruncatesOutput;
  * `git status` after its own edits is worse than either cost — and it is pinned
  * by
  * `tests/Providers/PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
+ * It is also STATED, in the prompt, at the head of the git section: see
+ * {@see GIT_STATE_CAVEAT}, which is the inverse of the "snapshot at
+ * conversation start — may be outdated" caption upstream ships, because
+ * upstream's would be false of this class.
  * See {@see MemoryBlock}, which builds an argument on exactly this block's
  * position in the prompt.
  *
@@ -233,7 +237,8 @@ final readonly class EnvironmentBlock
      *
      * THE WHOLE BLOCK, therefore: 2 * {@see DIFF_MAX_BYTES} + 2 * this = 24,576 B
      * of capped FIELD text, plus the branch line, the seven fixed lines, the
-     * four field labels and the `<env>` fence. Each field's truncation marker is
+     * four field labels, the 150-byte {@see GIT_STATE_CAVEAT} caption and the
+     * `<env>` fence. Each field's truncation marker is
      * reserved INSIDE its own cap by
      * {@see TruncatesOutput::truncateMerged()} rather than added on top, so the
      * 24,576 is a true ceiling on the fields and only the fixed part sits
@@ -287,6 +292,54 @@ final readonly class EnvironmentBlock
      * "unavailable" should not have to learn a second.
      */
     private const NO_PROCESS_REASON = 'unavailable (proc_open is disabled on this build)';
+
+    /**
+     * The honest caption for what the git section below it is — and is not.
+     *
+     * Upstream both label this block a snapshot: crush heads it
+     * `Git status (snapshot at conversation start - may be outdated):`
+     * (prompt_expand.md §5.5) and Claude Code says *"this status is a snapshot
+     * in time, and will not update during the conversation"* (§4.4). Copied
+     * here that label would be FALSE, and falsifiably so:
+     * {@see gitStatusSnapshot()} is called from {@see render()}, so
+     * `branch`/`status`/`log` — and the two diffs when they are not suppressed
+     * — are re-run on EVERY render, and `Runtime::buildSystemPrompt()` renders
+     * once per step of the agentic loop. MEASURED through that production path
+     * rather than through a bare block: two `buildSystemPrompt()` calls on ONE
+     * memoized Runtime, with a tracked edit and a new untracked file written
+     * between them, returned 5,723 B and 5,908 B differing first at byte 5,567,
+     * and only the second named the new file. Upstream can say "snapshot"
+     * because crush builds its prompt ONCE at coordinator construction
+     * (§5.5); this class is re-rendered per step, which is the whole
+     * difference.
+     *
+     * WHY THE CAPTION IS SCOPED TO THE GIT STATE and not to the block. The
+     * block is genuinely MIXED: {@see capture()} freezes the cwd, the model
+     * name and the timestamp, and only the git section is polled. A caption
+     * claiming the whole `<env>` block is live would be the same kind of false
+     * label in the other direction, so this one says "this git state" and is
+     * emitted inside the git section only.
+     *
+     * WHY IT SAYS "updates as you work" AND NOT "reflects your edits". The
+     * second is not true in every mode this class can render in: on a build
+     * with `proc_open` in `disable_functions` the capped fields report
+     * {@see NO_PROCESS_REASON} and reflect nothing, and a field whose git
+     * exited non-zero reports that instead. What holds in EVERY mode is the
+     * mechanism — the section is re-derived per step rather than carried
+     * forward from session start — so the caption claims the mechanism and
+     * lets each field state its own availability, which they already do.
+     *
+     * WHY IT IS EMITTED IN BOTH DIFF MODES. {@see withWriteSinceLastRender()}
+     * suppresses the two diff sections, never branch/status/log, so the
+     * re-read claim holds with the diffs gone; a caption that appeared and
+     * disappeared with them would read as a property of the diff.
+     *
+     * WHY AT THE HEAD OF THE SECTION. It is a claim about every line below it,
+     * the branch line included, and a caption after the first field does not
+     * label that field. It also puts constant bytes ahead of the first
+     * volatile one, which is the direction P3.S1 moved the whole block in.
+     */
+    private const GIT_STATE_CAVEAT = 'Note: this git state is re-read from the working tree on every step, not a snapshot taken at the start of the conversation, so it updates as you work.';
 
     /**
      * @param string             $cwd                Working directory rendered on the first line.
@@ -402,9 +455,10 @@ final readonly class EnvironmentBlock
      *
      * Seven lines, in this order: cwd, git-repository flag, platform, OS version,
      * PHP version, model name, current date. When the cwd is a git repository, a
-     * git section (branch, --porcelain status, recent log, staged diff, unstaged
-     * diff) is appended — polled here, on every call, not frozen at capture
-     * time. The two diff sections are conditional: they render only when
+     * git section is appended — polled here, on every call, not frozen at capture
+     * time — and it opens with {@see GIT_STATE_CAVEAT}, the caption that says so
+     * in the prompt itself, followed by branch, --porcelain status, recent log,
+     * staged diff and unstaged diff. The two diff sections are conditional: they render only when
      * {@see withWriteSinceLastRender()} says a write happened (or says nothing
      * — the default emits, which is the pre-P3.S2 behaviour). Every field of
      * that section except the branch name is size-capped;
@@ -564,6 +618,10 @@ final readonly class EnvironmentBlock
      * Pinned by
      * `tests/Providers/PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
      *
+     * The section OPENS with {@see GIT_STATE_CAVEAT} rather than with the branch
+     * line, because that caption is a claim about every field under it and
+     * upstream's opposite claim would be false here — see the constant.
+     *
      * Each field is captured separately so a failure in one does not poison the
      * others. What a failure LOOKS LIKE differs by field, and the difference is
      * the point rather than an inconsistency: `branch` still reports empty when
@@ -599,7 +657,11 @@ final readonly class EnvironmentBlock
         $status = $this->gitField(['status', '--porcelain'], self::SUMMARY_MAX_BYTES);
         $log = $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES);
 
-        $section = "Current branch: {$branch}\n\nStatus:\n{$status}\n\nRecent commits:\n{$log}";
+        // The caption goes FIRST: it is a claim about every line below it, the
+        // branch line included. See GIT_STATE_CAVEAT for why the claim is the
+        // opposite of the one upstream ships.
+        $section = self::GIT_STATE_CAVEAT . "\n\n"
+            . "Current branch: {$branch}\n\nStatus:\n{$status}\n\nRecent commits:\n{$log}";
 
         // The P3.S2 gate: the two diff sections render only on the step after
         // a write — or when nobody has said anything either way (the default,

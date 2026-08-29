@@ -18,6 +18,20 @@ use SugarCraft\Crush\Runtime;
  */
 final class EnvironmentBlockTest extends TestCase
 {
+    /**
+     * The caption the git section must carry, spelled out here rather than read
+     * back from `EnvironmentBlock::GIT_STATE_CAVEAT`.
+     *
+     * Reading the constant would make every assertion below a tautology
+     * (prompt_plan.md §16.8 rule 21): a respelling of the source constant would
+     * move the expected value with it and stay green — which is exactly the
+     * mutation this step has to catch, because the failure mode P3.S3 exists to
+     * prevent is the caption being respelled into upstream's false "snapshot at
+     * conversation start — may be outdated". An independent literal reddens on
+     * both a removal and a respelling.
+     */
+    private const EXPECTED_CAVEAT = 'Note: this git state is re-read from the working tree on every step, not a snapshot taken at the start of the conversation, so it updates as you work.';
+
     private string $tempDir;
 
     protected function setUp(): void
@@ -625,6 +639,12 @@ final class EnvironmentBlockTest extends TestCase
         $this->assertLessThan($ceiling, strlen($output), 'the <env> block must not scale with the diff');
         // ...and it must still be a real answer, not an empty one.
         $this->assertStringContainsString('truncated:', $output);
+        // P3.S3: the caption is fixed-part text, so it sits INSIDE the 1 KiB of
+        // slack the ceiling above allows for the fixed part and must survive a
+        // render in which all four capped fields were clipped — a caption that
+        // truncation could eat would be a claim the model stops being told
+        // exactly when the tree is dirtiest.
+        $this->assertSame(1, substr_count($output, self::EXPECTED_CAVEAT));
     }
 
     /**
@@ -724,6 +744,86 @@ final class EnvironmentBlockTest extends TestCase
         $third = $armed->render();
         $this->assertStringContainsString('+rewritten-after-the-write', $third);
         $this->assertStringContainsString('Staged changes (git diff', $third);
+    }
+
+    // ─── P3.S3: the git section's caption says what it actually is ──
+
+    /**
+     * The Done-when test for plan step P3.S3: the git section carries a caption,
+     * the caption is the MEASURED refresh behaviour, and it is not upstream's.
+     *
+     * Upstream both call this block a snapshot — crush heads it
+     * `Git status (snapshot at conversation start - may be outdated):`
+     * (prompt_expand.md §5.5), Claude Code says *"this status is a snapshot in
+     * time, and will not update during the conversation"* (§4.4) — and both are
+     * entitled to, because crush builds its prompt once at coordinator
+     * construction. This block is re-derived per step:
+     * `Runtime::buildSystemPrompt()` calls `EnvironmentBlock::render()`, which
+     * calls `gitStatusSnapshot()`, which re-runs `branch`/`status`/`log` every
+     * time; only the cwd, model name and timestamp are frozen by `capture()`.
+     * MEASURED through the production path: two `buildSystemPrompt()` calls on
+     * ONE memoized Runtime with a write between them returned 5,723 B and
+     * 5,908 B, differing first at byte 5,567, and only the second named the
+     * file written in between.
+     *
+     * So the assertions are: the byte-exact caption is present exactly once,
+     * it stands at the HEAD of the git section (it is a claim about every field
+     * under it, the branch line included), the upstream wording is NOT present,
+     * a non-git render carries no caption at all, and the caption survives both
+     * the diff-suppressed mode and a second render that tracks a new file — the
+     * live poll the caption claims.
+     */
+    public function testTheGitSectionCarriesTheHonestCaveatAndNotUpstreamsSnapshotLabel(): void
+    {
+        // Polarity 1: the caption is a claim about the GIT section, and a
+        // non-git render has no git section — so it must carry no caption.
+        $noRepo = EnvironmentBlock::capture($this->tempDir, 'model')->render();
+        $this->assertStringNotContainsString(self::EXPECTED_CAVEAT, $noRepo);
+        $this->assertStringNotContainsString('Note:', $noRepo);
+
+        $this->initGitRepo();
+        file_put_contents($this->tempDir . '/tracked.txt', "original\n");
+        $this->gitCommitAll('seed');
+        file_put_contents($this->tempDir . '/tracked.txt', "rewritten\n");
+
+        $block = EnvironmentBlock::capture($this->tempDir, 'model');
+        $first = $block->render();
+
+        // Byte-exact, and exactly once — a caption emitted twice is the
+        // double-emit shape §16.2 asks for the counting form on.
+        $this->assertSame(1, substr_count($first, self::EXPECTED_CAVEAT));
+
+        // Position, not just presence: the caption opens the git section, so
+        // what follows it is the blank line and then the branch line.
+        $this->assertStringContainsString(
+            self::EXPECTED_CAVEAT . "\n\nCurrent branch: ",
+            $first,
+            'the caption must stand at the head of the git section, above the branch line',
+        );
+
+        // The other polarity of the step: upstream's label must NOT be here.
+        // A respelling towards it is the regression this test exists to catch.
+        $this->assertStringNotContainsString('snapshot at conversation start', $first);
+        $this->assertStringNotContainsString('may be outdated', $first);
+        $this->assertStringNotContainsString('will not update during the conversation', $first);
+
+        // The caption holds in the P3.S2 SUPPRESSED mode too: branch, status
+        // and log are re-read whether or not the diffs render, so a caption
+        // that came and went with the diff would read as a property of the
+        // diff rather than of the section.
+        $suppressed = $block->withWriteSinceLastRender(false)->render();
+        $this->assertStringNotContainsString('Staged changes (git diff', $suppressed);
+        $this->assertSame(1, substr_count($suppressed, self::EXPECTED_CAVEAT));
+
+        // And the claim itself, driven: a file written between two renders of
+        // the SAME block shows up in the second, which is what "re-read from
+        // the working tree on every step" means. The caption is byte-stable
+        // across the pair; the status is not.
+        file_put_contents($this->tempDir . '/fresh.txt', 'written between renders');
+        $second = $block->render();
+        $this->assertStringNotContainsString('?? fresh.txt', $first);
+        $this->assertStringContainsString('?? fresh.txt', $second);
+        $this->assertSame(1, substr_count($second, self::EXPECTED_CAVEAT));
     }
 
     /**
@@ -948,6 +1048,13 @@ final class EnvironmentBlockTest extends TestCase
         // The uncapped branch line still goes through shell_exec, which this
         // probe leaves enabled — so the block is degraded, not blank.
         $this->assertStringContainsString('Current branch:', $out);
+        // P3.S3: the caption claims the MECHANISM (re-derived per step), not
+        // that any particular field was readable, so it is still emitted on a
+        // build where the capped fields could not run — each of which states
+        // its own unavailability on its own line. A caption suppressed here
+        // would leave the degraded block silently indistinguishable from a
+        // snapshot.
+        $this->assertSame(1, substr_count($out, self::EXPECTED_CAVEAT));
     }
 
     private function buildSystemPrompt(Runtime $runtime, App $app): string
