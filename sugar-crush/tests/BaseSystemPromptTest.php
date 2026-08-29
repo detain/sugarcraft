@@ -74,17 +74,35 @@ final class BaseSystemPromptTest extends TestCase
      * count, not just the presence.
      *
      * WHAT THAT COUNT REACHES IS NARROWER THAN "the assembled prompt", and
-     * this paragraph replaces a sentence that said "anywhere in the assembly".
-     * basePrompt() builds from `App::new($provider, 'echo')` — no instruction
-     * loader, no memory store, no skill registry — so the only text it can
-     * count is the base heredoc plus <env>. The realistic duplicate route is
-     * exactly the one it cannot see: <project-instructions> and
-     * <project-memory> carry repo- and user-controlled prose, and this
-     * sentence is itself part of the system prompt, so a project AGENTS.md
-     * that quotes the prompt back would move the slice in production while
-     * this assertion stayed green. It is still worth asserting — a duplicate
-     * introduced in the heredoc is the copy this file owns and the one a
-     * reword would create — but it guards the base literal, not the assembly.
+     * this paragraph replaces two earlier attempts at saying so. The first
+     * said the count reached "anywhere in the assembly", which overclaimed.
+     * The second undershot in the other direction — "the only text it can
+     * count is the base heredoc plus <env>" — and that was measured false:
+     * basePrompt() builds from `App::new($provider, 'echo')`, which supplies
+     * no instruction loader, no memory store and no skill registry, but
+     * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} appends the
+     * repo map UNCONDITIONALLY, and with $app->root null it is captured at
+     * getcwd(). MEASURED 2026-08-29 by reflecting into buildSystemPrompt()
+     * exactly as basePrompt() does, from this package directory: strlen 5403,
+     * substr_count 1, strpos 2462, <repo-map> present at offset 2483 —
+     * i.e. immediately AFTER the marker — while <project-instructions>,
+     * <project-memory> and the "Available skills" listing are all absent.
+     * THREE layers are in the counted string, then: the base heredoc, the
+     * <repo-map> block, and <env>.
+     *
+     * That correction matters to the guard's reach rather than only to its
+     * prose. The repo map is repo-derived content — directory names, PSR-4
+     * namespaces, file counts — so it is not inert text this count can ignore,
+     * and it moves with the directory the suite happens to run from. The
+     * routes the count still cannot see are the author-controlled ones:
+     * <project-instructions> and <project-memory> carry repo- and
+     * user-controlled prose, and this sentence is itself part of the system
+     * prompt, so a project AGENTS.md that quotes the prompt back would move
+     * the slice in production while this assertion stayed green. It is still
+     * worth asserting — a duplicate introduced in the heredoc is the copy this
+     * file owns and the one a reword would create — but it guards the base
+     * literal plus what buildSystemPrompt() renders unrooted, not the
+     * assembly a real session builds.
      */
     private const BASE_END_MARKER = 'commands to follow.';
 

@@ -1845,16 +1845,30 @@ final class Runtime
      * exactly zero of them. (An earlier revision of this paragraph offered
      * that cost as the REASON for the memoization — and said "three times"
      * besides, a figure true of the three-command version of this block and
-     * of nothing since: EnvironmentBlock retired it one file over, in the
-     * docblock of its private `gitStatusSnapshot()`, and it survived here.
+     * of nothing since. EnvironmentBlock had already retired that figure one
+     * file over, and this docblock used to misattribute where: not in
+     * `gitStatusSnapshot()`'s docblock, which states FIVE and retires nothing,
+     * but in an inline comment inside {@see EnvironmentBlock::render()} —
+     * "an earlier revision of this comment still said `shell_exec() three
+     * times`, which had been true of the three-command version and of nothing
+     * since". The retirement was a comment, not a docblock, which is exactly
+     * why it was easy to miss and why the stale figure survived here.
      * The measurement is kept rather than dropped because the next
      * paragraph's answer — that what reuse buys is the frozen triple — only
      * carries weight once the cheaper-sounding explanation is ruled out.)
      *
      * FIVE IS THE COUNT WHERE THERE IS A REPOSITORY TO READ. render() gates
-     * the entire git section on `.git` existing at the captured directory, so
-     * outside a repository it is ZERO — EnvironmentBlock's own docblock
-     * carries that caveat and this one used to omit it. The count is THREE
+     * the entire git section on `isGitRepo()` — a bare
+     * `file_exists($cwd . '/.git')` — so outside a repository the count is
+     * ZERO. That is read off the gate itself, and this docblock used both to
+     * omit the caveat and then, correcting it, to credit it to
+     * "EnvironmentBlock's own docblock". No docblock there states it: the
+     * class docblock qualifies FIVE only for disabled process helpers and for
+     * diff suppression, and `gitStatusSnapshot()`'s zero is the both-helpers-
+     * disabled case, a DIFFERENT zero that still emits five unavailability
+     * lines. The nearest neighbouring prose is `isGitRepo()`'s own docblock,
+     * which argues a fixed `is_dir`-vs-`file_exists` bug and mentions no
+     * subprocess count at all. The count is THREE
      * for a block carrying `withWriteSinceLastRender(false)`, which withholds
      * the two diff sections; that mode is DORMANT as of this writing — no
      * caller in `src/` or `bin/` sets it either way, so every production
