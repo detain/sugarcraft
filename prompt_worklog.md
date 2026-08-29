@@ -1894,3 +1894,128 @@ measurement taken against a tree someone else is editing is not a measurement.
 worktree, and the orchestrator must DIFF a dirty step worktree before assuming it holds work
 (recorded in the RESUME commit 8d9f703da — the mutation found there would have silently reverted
 P3.S1's env-last decision, with a comment still vouching for the behaviour that was gone).
+
+### P3.audit-fix-1 — pin P3.S1's env-last decision in assertions   ·   2026-08-29   ·   merged 6aff0bad1
+
+**Status** `merged`   **Base** 9d7fbbdb4   **Branch HEAD** 85554496f (6 commits, +224/-13)
+**Worktree** /home/sites/prompt-step-P3.audit-fix-1 (removable)
+
+**Goal** Nothing but a regenerable golden pinned `<env>` LAST. Pin it in assertions.
+
+**The defect.** Moving `<env>` to layer 5 left **1164 tests green** and reddened exactly one file:
+`tests/fixtures/prompt/golden-system-prompt.txt` — a fixture six scheduled steps are licensed to
+regenerate. The decision was defended solely by the one artefact whose correct response to a change
+is to be rewritten.
+
+**What changed.** Six assertions across three surfaces: the assembler's return value; the
+transmitted `CompleteRequest` with an empty skill fixture; and the transmitted prompt with a
+**populated** `SkillRegistry`. `basePrompt()`'s marker-uniqueness precondition asserted, scoped to
+the layers ahead of `<env>`. `Runtime::environmentSnapshot()` docblock corrected — git cost is FIVE
+subprocesses per render not three, reuse saves ZERO (measured 0/15/15 with a logging shim), and the
+block is not a point-in-time snapshot.
+
+**The gap cycle 3 found, and it is the one worth remembering.** The only wire test registered NO
+skills, so `<env>` came last in it **by accident** — the assertion held for a reason unrelated to
+what it claimed to prove. The transmitted prompt therefore had no ordering pin at all while looking
+covered. The third surface exists because of this.
+
+**Cycle 5's find.** An unscoped `substr_count` marker guard would count `<env>`'s git-derived body,
+so a commit subject quoting the marker would FALSE-RED all nine `basePrompt()` consumers. A guard
+that reddens on repository content is not a guard.
+
+**Deletion experiments** (each cp-backed, cmp-verified, `git status --porcelain` empty after):
+env→layer 5 → `Tests: 23, Assertions: 158, Failures: 3`. env→layer 2 → 4 failures. Extra layer after
+`<env>` → 4. Suffix on the production path → `Tests: 1164, Failures: 2` (cycle 1 measured this
+leaving the whole 10404-test suite GREEN before the fix). Marker duplicated ahead of the real one →
+reds `basePrompt()`'s consumers. Marker simulated inside `<env>` → the OLD assertion false-reds, the
+new one passes.
+
+**MEASURED by the orchestrator on the COMBINED tree** (master with P3.S3 merged into the branch
+first, because P3.S3 had regenerated the very golden `BaseSystemPromptTest` compares against and the
+two had never been tested together):
+```
+Tests: 10407, Assertions: 160992, Skipped: 1, Failures: 0
+census 6-file set                              OK (103 tests, 9428 assertions)
+SystemPromptWiringTest + BaseSystemPromptTest  OK (23 tests, 166 assertions)
+```
+Master before merge 10407/160968/1 → +24 assertions, 0 new tests, 0 new skips.
+
+**Review loop** 5 cycles (cap). Four of five found defects in PROSE, not assertions, and TWICE the
+act of editing a correction introduced a NEW false claim — rule 7 applying to edits, not only to
+original text. Cycle 3 ran two reviewers that contaminated each other's measurements; see
+ORCHESTRATION-RULE-1.
+
+**Follow-ups** `<env>` is still not last ON THE WIRE for `VertexProvider::anthropicSystem()` and
+`BedrockProvider::systemBlocks()`, both fed by `EngineBackend::toTypedMessages()`, which mints a
+`SystemMessage` for any non-user/assistant history role. Three files, all outside the declared list.
+`tests/RuntimeTest.php:1761-1764` keeps the stale "point-in-time snapshot / three times" pair.
+`SymbolCitationDriftTest` does not guard a bare-class `{@see}`, so `{@see PromptFixture}` is unpinned.
+
+### P1.audit-fix-1 — the seventh provider transmits the system prompt   ·   2026-08-29   ·   merged 03d8fed37
+
+**Status** `merged`   **Base** bd3a9baf4   **Branch HEAD** 45d0f1bf0 (5 commits)
+**Worktree** /home/sites/prompt-step-P1.audit-fix-1 (removable)
+
+**Goal** Phase 1 fixed six providers. Vertex's Google path was the seventh, and it was the plan's
+founding defect still live.
+
+**The defect.** `googleBody()` never read `$request->systemPrompt`, and `formatMessages()` mapped
+`SystemMessage` to `'user'` via a `default =>` arm — so the assembled seven-layer prompt was
+silently demoted to a user turn on BOTH `complete()` and `completeStream()`.
+
+**What changed.** Three things: `anthropicSystem()` → `systemInstruction()`; `googleBody()` hoists
+the prompt into `instances[0].context` and drops the hoisted `SystemMessage`s; new
+`withoutSystemMessages()`.
+
+**The field name was not taken on trust.** The reviewer that proposed `instances[0].context` marked
+it INFERRED and said so. The doc page the code cited is RETIRED — it 301s, and a SECOND redirect hop
+nobody had recorded was measured here, which explains why two readers fetching it disagreed about
+whether it returns an article at all. Rather than swapping one reader's verdict for another's, the
+docblock records the 301 as agreed, marks page content UNVERIFIED with the 2-1 split stated, and
+rests the claim on an independent raw-REST implementation of the same endpoint, re-derived in-step.
+
+**WHAT THIS DOES NOT FIX — the open user decision.** `instances[0].context` is genuinely the
+standing-instruction field OF THE PaLM 2 `chat-bison` `:predict` envelope this code builds. But
+`gemini-1.5-pro-002` — the id BOTH test files pin as "the Google model" — is not served by that
+envelope at all; Gemini on Vertex takes `:generateContent` with a top-level `systemInstruction`. The
+prompt now transmits correctly into a shape the named model would not accept. Switching endpoints is
+a redesign, not a fix (§1.10 → user). Verified by two reviewers independently: no routing, endpoint,
+method, publisher constant or test model id changed. Also sourced-and-unfixed: that envelope's
+message key is `author` while `formatMessages()` emits `role`.
+
+**The step's most serious defect was in its own instrument.** Cycle 3 found the matrix's split
+`#complete`/`#stream` rows land the sentinel in the SAME slot, so re-pointing a `#stream` drive at
+`complete()` left the file green — the exact conflation the map exists to break, reproduced inside
+the instrument meant to break it. Closed with six `WRONG_BUILDER` marker assertions; all six
+re-point mutations now red.
+
+**Two defects were self-inflicted by the fixes.** A docblock note shifted code ~55 lines and
+invalidated two citations it had just written plus a third pre-existing one; a stale-figure fix
+reintroduced a figure contradicting the generator added to defend it. One caught in-step, one by
+cycle 3.
+
+**MEASURED by the orchestrator on the COMBINED tree** (master merged into the branch first — its
+base was 19 commits back; note any comparison against master needs a THREE-DOT diff, two-dot shows
+phantom deletions from unrelated steps):
+```
+Tests: 10418, Assertions: 161098, Skipped: 1, Failures: 0
+tests/Providers/   OK (857 tests, 2113 assertions)
+census 6-file set  OK (103 tests, 9448 assertions)
+find src -name '*.php' | wc -l   -> 297
+```
+Master before merge 10407/160992/1 → +11 tests, +106 assertions, 0 new skips.
+
+**THE PROSE-SENSITIVE COUNTER IS IDENTIFIED.** The step re-measured its own baseline rather than
+inheriting one, reproduced 10414/161003/1 exactly, and bisected an unexplained +5 assertions to
+`Config/GlobFigureDriftTest`, a per-paragraph stale-figure census reacting to `VertexProvider.php`
+growing 224 → 229 paragraphs. That is the counter behind the assertion-total instability recorded in
+`prompt_resume.md` §8 — a COMMENT-ONLY commit moving the suite total. The §8 caution stands, and now
+has its mechanism.
+
+**Standing note, deliberately unfixed** `SystemPromptTransmissionMatrixTest.php:246-251`'s Bedrock
+aside reasons over 2 of `inferenceConfig()`'s 4 gates (omits `topP`/`stop`). Conclusion correct and
+re-derivable. Left rather than ship an UNREVIEWED edit after the final cycle, given this step's
+demonstrated pattern of docblock fixes introducing new defects. One-word fix whenever wanted.
+
+**Review loop** 5 cycles, fresh agent each; cycle 5 verdict SHIP. The step agent edited the worktree
+while a reviewer was reading it — see ORCHESTRATION-RULE-1.
