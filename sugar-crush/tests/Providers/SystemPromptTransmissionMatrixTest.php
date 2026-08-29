@@ -86,6 +86,21 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * VertexProvider.php:290-298). So the headline now holds for 6 of 6
      * body-shaped rows, where it held for 3 of 6 before.
      *
+     * BOTH HALVES OF THAT FIGURE ARE RE-DERIVABLE, which is the only reason
+     * it is allowed to stand (16.2: a figure without a generator rots). The
+     * denominator is generated, not asserted in prose: it is
+     * `count(TRANSMISSION_CONTRACT) - count(NON_BODY_CONTRACT_ROWS)`, and
+     * {@see testTheContractSlotSpellingsAreLoadBearing()} reds if the drive
+     * table and that set stop agreeing, in BOTH directions. The numerator is
+     * re-derived by opening the builder citations enumerated in the two
+     * paragraphs above - every one names a file and a line range - and
+     * counting how many rows have one builder each; the `3 of 6` half is the
+     * same count taken against `git show HEAD~1`'s map, whose rows are gone
+     * but whose builders are all still in the tree at the same citations.
+     * Neither half is a count this file measures at runtime, so if you change
+     * a provider's path structure you must re-walk those citations rather
+     * than trust this sentence.
+     *
      * WHAT THIS ALPHABET STILL CANNOT EXPRESS (rule 31). A row says WHICH
      * slot a builder writes; it does not say the two builders under one class
      * agree, nor that a path exists at all. A provider that silently stopped
@@ -143,7 +158,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      *   (BedrockProvider.php:164-166 / :215-217 via systemBlocks() :337-343);
      * - Vertex hoists it into the Anthropic body's top-level `system` string
      *   (VertexProvider.php:455-458) or, for a `publishers/google` model, into
-     *   `instances[0].context` (VertexProvider.php:1091-1093) — both through
+     *   `instances[0].context` (VertexProvider.php:1137-1139) — both through
      *   the one joiner, systemInstruction() :508;
      * - ClaudeCode turns it into a `--system-prompt` CLI argv pair
      *   (ClaudeCodeProvider.php:80 / :105 ->
@@ -766,7 +781,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     // (VertexProvider.php:231). The Anthropic arm hoists into the body's
     // top-level `system` string (VertexProvider.php:455-458): a `system` role
     // inside messages is a 400 on the Anthropic API. The Google arm hoists
-    // into `instances[0].context` (VertexProvider.php:1091-1093): that
+    // into `instances[0].context` (VertexProvider.php:1137-1139): that
     // envelope has no system role at all, and formatMessages()'s
     // `default => 'user'` arm would otherwise deliver the prompt as an
     // ordinary user turn. Both arms go through the one joiner,

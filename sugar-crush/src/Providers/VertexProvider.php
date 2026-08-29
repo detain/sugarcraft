@@ -1112,14 +1112,14 @@ final readonly class VertexProvider implements ProviderInterface
      * {@see defaultPredictor()}'s non-`rawPredict` branch builds its
      * `PredictRequest` with `->setEndpoint()` and
      * `->setInstances(...)` only and never calls `setParameters()`
-     * (VertexProvider.php:1221-1227), so the sampling knobs are dropped
+     * (VertexProvider.php:1276-1282), so the sampling knobs are dropped
      * before the request is sent. This is a SEPARATE defect from the one this
      * method's `context` hoist fixes, it predates that fix, and repairing it
      * is a different step (1.10: reported, not repaired).
      *
      * THE `context` HOIST IS UNAFFECTED, and that is why this note is a note
      * and not a blocker: `context` lives INSIDE `instances`, and
-     * {@see toProtobufValues()} (VertexProvider.php:1499-1508) merges each
+     * {@see toProtobufValues()} (VertexProvider.php:1554-1565) merges each
      * instance from arbitrary JSON via `mergeFromJsonString()`, so any key
      * added to the instance - `context` included - does survive to the wire.
      * Epistemic status: the `setParameters()` absence is MEASURED by reading
