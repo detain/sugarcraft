@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7; P3.S3 IN FLIGHT in /home/sites/prompt-step-P3.S3 (recovered stale worktree, §1.8 rung 3); P3.S5 scheduled (62 steps). See §8.**
+**Current state: Phase 3 in progress, 19 of 62 steps merged — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7; P3.S3 merged 74cabae7f; P3.audit-fix-1 merged 6aff0bad1; P1.audit-fix-1 merged 03d8fed37. P3.S4 IN FLIGHT in /home/sites/prompt-step-P3.S4; P3.S5 then the Phase 3 close review remain. See §8.**
 
 ---
 
