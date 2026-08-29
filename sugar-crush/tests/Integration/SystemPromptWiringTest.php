@@ -146,6 +146,18 @@ final class SystemPromptWiringTest extends TestCase
      * pins an order, and a future reorder that put <env> back ahead of the
      * project instructions would red it. The model still receives the same
      * orientation facts; only their position changed.
+     *
+     * THE `assertStringEndsWith` BELOW IS THE PRODUCTION-PATH PIN, and it is
+     * deliberately narrow. It reads a real `CompleteRequest`, so a layer
+     * appended after the assembled prompt on the way to the provider reds it
+     * — MEASURED: a suffix added after `Runtime::run()`'s
+     * `$systemPrompt = $this->buildSystemPrompt($app);` reds this test and
+     * nothing else in the suite. But it CANNOT see a reorder among the
+     * cacheable layers, because `completeOneTurn()` registers no skill
+     * registry: both skill layers render empty here, so <env> is last however
+     * the append is ordered. That gap is covered by
+     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()}, which
+     * drives a populated registry through the same wire.
      */
     public function testBothHalvesLandInOneSystemPromptWithEnvironmentLast(): void
     {
@@ -182,37 +194,27 @@ final class SystemPromptWiringTest extends TestCase
      * three values -- working directory, model name and timestamp -- while the
      * git section is polled LIVE on every render() (pinned by
      * `PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`),
-     * and one render costs FIVE subprocesses by default, three when the two
-     * diff sections are withheld, zero outside a git repository. The
-     * correction earns its place because it bounds what the assertion below
-     * proves: byte-identity across steps is a statement about that frozen
-     * triple -- which is the whole of the block in this test -- and NOT a
-     * promise that a real repository's status cannot legitimately change
-     * mid-turn.
+     * and the per-render subprocess count and its qualifications are
+     * documented on `EnvironmentBlock` itself rather than restated here.
      *
-     * WHY THE BLOCK IS ALL-TRIPLE HERE IS NOT THE TEMP ROOT, and an earlier
-     * revision of this paragraph said it was ("whose temp root has no `.git`").
-     * The temp root is never the captured directory: {@see backend()} builds
-     * `new EngineBackend($provider, $provider->name())` and never calls
-     * `withRoot($this->tempDir)`, so `EngineBackend`'s `$root` stays null and
-     * `Runtime::projectRoot()` falls back to `getcwd()`. This suite already
-     * asserts exactly that, green, in
-     * {@see testEnvironmentBlockReachesTheProviderSystemPrompt()}:
-     * `'Working directory: ' . getcwd()`. The captured directory is therefore
-     * the `sugar-crush` package directory, which in a monorepo checkout
-     * carries no `.git` of its own -- the repository's `.git` is one level up
-     * -- so `EnvironmentBlock::isGitRepo()`, a bare
-     * `file_exists($cwd . '/.git')`, is false and render() emits no git
-     * section.
+     * The correction bounds what the assertion below proves. The block in
+     * THIS test is all frozen triple and no git section: `backend()`
+     * never calls `withRoot()`, so the captured directory is `getcwd()` --
+     * asserted green in
+     * {@see testEnvironmentBlockReachesTheProviderSystemPrompt()} as
+     * `'Working directory: ' . getcwd()` -- and `isGitRepo()`, a bare
+     * `file_exists($cwd . '/.git')`, is false there. So byte-identity across
+     * steps is a statement about that frozen triple, NOT a promise that a
+     * real repository's status cannot legitimately change mid-turn.
      *
-     * That is a fact about THIS checkout's layout, not a structural
-     * guarantee. AGENTS.md publishes every lib standalone as
-     * `sugarcraft/sugar-crush`, and in a split-repo clone that same directory
-     * IS the repository root, `.git` and all -- at which point this test's
-     * block renders a live git section and its byte-identity assertion starts
-     * depending on the repository holding still across two steps of one turn.
-     * The assertion is still the right one; what it is exercising just is not
-     * constant across checkouts, and the paragraph should not imply it is.
+     * AND THAT IS A FACT ABOUT THE DIRECTORY THE SUITE IS RUN FROM, not about
+     * this checkout. Run phpunit from the monorepo root and `getcwd()` is the
+     * worktree root, whose `.git` exists (as a file, for a worktree), so the
+     * same test renders a live git section; the same happens in a split-repo
+     * clone of `sugarcraft/sugar-crush`, where the package directory IS the
+     * repository root. The assertion is still the right one -- what it is
+     * exercising just is not constant across working directories, and this
+     * paragraph should not imply it is.
      */
     public function testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt(): void
     {
@@ -279,6 +281,25 @@ final class SystemPromptWiringTest extends TestCase
      * Asserted on the request a provider is actually handed, for the same
      * reason as the tests above: `SkillMatcher` was unit-tested and had no
      * production caller at all before this step.
+     *
+     * IT ALSO CARRIES THE ONLY WIRE-LEVEL ORDERING PIN, because it is the one
+     * test in this file that both drives a populated `SkillRegistry` through
+     * `EngineBackend::complete()` and reads a real `CompleteRequest`. P3.S1's
+     * decision is that <env> is emitted after every cacheable layer, the
+     * skill listing included; the assembler-side pin for that lives in
+     * {@see testTheFixtureAssemblesEveryControlledHalfInTheRealOrder()},
+     * which reflects into the private `buildSystemPrompt()`. Without the two
+     * assertions below the wire had NO pin on it: the other transmitted-prompt
+     * test, {@see testBothHalvesLandInOneSystemPromptWithEnvironmentLast()},
+     * registers no skill registry, so both skill layers render empty there and
+     * <env> is trivially last however the append is ordered.
+     *
+     * MEASURED 2026-08-29: with the env append moved to layer 5 — after the
+     * memory block, before the skill bodies and this listing — this test reds
+     * "Failed asserting that 5415 is less than 5185" while
+     * testBothHalvesLandInOneSystemPromptWithEnvironmentLast() stays green.
+     * That is the reorder the step exists to forbid, and before this it was
+     * caught only by a reflection test and a regenerable byte golden.
      */
     public function testDiscoveredSkillsAreListedInTheProviderSystemPrompt(): void
     {
@@ -292,6 +313,18 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertStringContainsString(
             '- sysprompt-marker-skill: Marker skill for the system-prompt listing.',
             $prompt,
+        );
+        $this->assertLessThan(
+            strpos($prompt, '<env>'),
+            strpos($prompt, 'Available skills (invoke via Skill tool):'),
+            'the skill listing must precede <env> on the bytes a provider receives, not only in '
+            . 'the assembler return value (P3.S1)',
+        );
+        $this->assertStringEndsWith(
+            "\n</env>",
+            $prompt,
+            '<env> must be the LAST bytes of the transmitted system prompt in a session that '
+            . 'actually rendered skill layers (P3.S1)',
         );
     }
 
@@ -326,46 +359,32 @@ final class SystemPromptWiringTest extends TestCase
      * and RepoMapBlockTest — compares <env> against a layer that precedes
      * the skills, so all of them stay green with <env> emitted at layer 5,
      * after <project-memory> and BEFORE the skill bodies and the skill
-     * listing. MEASURED 2026-08-29, before the two assertions below existed:
-     * moving the append in buildSystemPrompt() to that position left 1164
-     * tests / 5250 assertions green across tests/Integration, tests/Context,
-     * tests/RuntimeTest.php, tests/Agents/AgentTest.php and
+     * listing. MEASURED 2026-08-29, before these assertions existed: that
+     * move left 1164 tests / 5250 assertions green across tests/Integration,
+     * tests/Context, tests/RuntimeTest.php, tests/Agents/AgentTest.php and
      * tests/Providers/PromptStabilityTest.php, and the only red anywhere was
      * the byte golden — a file six scheduled steps are licensed to
      * regenerate.
      *
-     * AND THE GOLDEN WAS NEVER INSIDE THAT 1164. An earlier revision of this
-     * paragraph said the mutation "reds ONLY the byte golden" directly after
-     * naming those five paths, which reads as though the golden had been in
-     * the run and had been the single failure in it. It had not:
+     * THE GOLDEN WAS NEVER INSIDE THAT 1164:
      * `BaseSystemPromptTest::testSystemPromptMatchesCommittedGolden()` lives
-     * in tests/BaseSystemPromptTest.php, which is in NONE of the five. The
-     * 1164 run was green because the only guard that could have caught the
-     * reorder was in a different file — which is the whole finding, not a
-     * footnote to it.
+     * in tests/BaseSystemPromptTest.php, which is in NONE of those five
+     * paths. The run was green because the only guard that could catch the
+     * reorder was in a different file. Layer 5 is precisely the position the
+     * cache argument rules out: the skill bodies and the listing would then
+     * sit downstream of the block that changes on every file write. So the
+     * listing is pinned before <env> explicitly here, and the prompt is
+     * pinned to END at </env> — stated as an assertion rather than left to a
+     * regenerable fixture.
      *
-     * RE-MEASURED with the assertions below in place, same mutation, both
-     * surfaces run separately: the five-path set now reds — 1164 tests, 5246
-     * assertions, 1 failure, this test, "Failed asserting that 4025 is less
-     * than 3764" — and tests/BaseSystemPromptTest.php reds separately at 12
-     * tests / 96 assertions / 1 failure, still the golden. Green on both
-     * surfaces unmutated: 1164 / 5253 and 12 / 96. So the invariant is now
-     * pinned inside the ordering suite itself and no longer depends on a
-     * regenerable fixture in a file this one does not run.
-     *
-     * (Only THIS test catches it, and that is not redundancy waiting to be
-     * trimmed: {@see testBothHalvesLandInOneSystemPromptWithEnvironmentLast()}
-     * stays green under the same mutation because its App enables no skills
-     * and discovers none, so both skill layers contribute nothing and <env>
-     * remains last there by accident of an empty fixture. The layer-5 reorder
-     * is only observable where skills actually render, which is here.)
-     *
-     * Layer 5 is precisely the position the cache
-     * argument rules out: the skill bodies and the listing would then sit
-     * downstream of the block that changes on every file write. So the
-     * listing is pinned before <env> explicitly, and the prompt is pinned to
-     * END at </env> — the invariant P3.S1 exists to establish, stated as an
-     * assertion rather than left to a regenerable fixture.
+     * This is the ASSEMBLER-side pin; it reads {@see PromptFixture}, which
+     * reflects into the private `buildSystemPrompt()`. The wire-side pin for
+     * the same invariant is in
+     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()}, the
+     * one test here that drives a populated skill registry through a real
+     * `CompleteRequest`. Both are needed: this one alone left the transmitted
+     * bytes unpinned, and that one alone cannot see a reorder that the
+     * fixture's controlled halves expose.
      */
     public function testTheFixtureAssemblesEveryControlledHalfInTheRealOrder(): void
     {

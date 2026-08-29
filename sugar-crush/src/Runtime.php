@@ -1834,57 +1834,39 @@ final class Runtime
      * Resolve the environment snapshot folded into every system prompt.
      *
      * Memoized on the Runtime rather than re-captured per call — but NOT to
-     * save git subprocesses. render() shells out FIVE times (branch, status,
-     * log, staged diff, unstaged diff) on every call whoever owns the block,
-     * and buildSystemPrompt() renders once per step of the agentic loop, so
-     * the subprocess bill is a function of RENDERS and not of captures.
+     * save git subprocesses, which is what this docblock used to claim
+     * ("render() shells out to git three times"). Two things were wrong with
+     * that. The figure: it is FIVE (branch, status, log, staged diff,
+     * unstaged diff), true of the three-command version of the block and of
+     * nothing since — {@see EnvironmentBlock} documents the count and every
+     * qualification on it, including the THREE a caller gets from
+     * {@see EnvironmentBlock::withWriteSinceLastRender()} and the ZERO
+     * outside a repository, where render() gates the whole git section on a
+     * bare `file_exists($cwd . '/.git')`. And the reasoning: render() pays
+     * that bill on every call whoever owns the block, so the cost is a
+     * function of RENDERS, not of captures, and reuse avoids none of it.
      * MEASURED 2026-08-29 with a logging `git` shim ahead of /usr/bin/git on
      * PATH, against a real repository: ten capture() calls with no render()
      * ran 0 git invocations; ONE memoized block rendered three times ran 15;
-     * THREE fresh captures rendered once each ran 15 as well. Reuse avoids
-     * exactly zero of them. (An earlier revision of this paragraph offered
-     * that cost as the REASON for the memoization — and said "three times"
-     * besides, a figure true of the three-command version of this block and
-     * of nothing since. EnvironmentBlock had already retired that figure one
-     * file over, and this docblock used to misattribute where: not in
-     * `gitStatusSnapshot()`'s docblock, which states FIVE and retires nothing,
-     * but in an inline comment inside {@see EnvironmentBlock::render()} —
-     * "an earlier revision of this comment still said `shell_exec() three
-     * times`, which had been true of the three-command version and of nothing
-     * since". The retirement was a comment, not a docblock, which is exactly
-     * why it was easy to miss and why the stale figure survived here.
-     * The measurement is kept rather than dropped because the next
-     * paragraph's answer — that what reuse buys is the frozen triple — only
-     * carries weight once the cheaper-sounding explanation is ruled out.)
+     * THREE fresh captures rendered once each ran 15 as well. The measurement
+     * is kept rather than dropped because the answer below only carries
+     * weight once the cheaper-sounding explanation is ruled out.
      *
-     * FIVE IS THE COUNT WHERE THERE IS A REPOSITORY TO READ. render() gates
-     * the entire git section on `isGitRepo()` — a bare
-     * `file_exists($cwd . '/.git')` — so outside a repository the count is
-     * ZERO. That is read off the gate itself, and this docblock used both to
-     * omit the caveat and then, correcting it, to credit it to
-     * "EnvironmentBlock's own docblock". No docblock there states it: the
-     * class docblock qualifies FIVE only for disabled process helpers and for
-     * diff suppression, and `gitStatusSnapshot()`'s zero is the both-helpers-
-     * disabled case, a DIFFERENT zero that still emits five unavailability
-     * lines. The nearest neighbouring prose is `isGitRepo()`'s own docblock,
-     * which argues a fixed `is_dir`-vs-`file_exists` bug and mentions no
-     * subprocess count at all. The count is THREE
-     * for a block carrying `withWriteSinceLastRender(false)`, which withholds
-     * the two diff sections; that mode is DORMANT as of this writing — no
-     * caller in `src/` or `bin/` sets it either way, so every production
-     * render today is a five-subprocess one. P3.S5 is the step that wires it.
+     * WHAT IS MEMOIZED IS THE CAPTURE, NOT THE GIT STATE. This docblock also
+     * used to claim the block documents "a point-in-time capture, not
+     * live-polled state" — the exact reading {@see EnvironmentBlock}'s class
+     * docblock opens by correcting. capture() freezes exactly three values:
+     * the working directory, the model name and the timestamp. The git
+     * section is polled live on EVERY render(), pinned by
+     * `PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
+     * So reusing the one instance is what keeps those three frozen values
+     * from drifting mid-turn; it is not a claim about the repository holding
+     * still. An owner that already holds a session-wide snapshot injects it
+     * through the constructor instead.
      *
-     * WHAT IS MEMOIZED IS THE CAPTURE, NOT THE GIT STATE. This docblock used
-     * to claim the block documents "a point-in-time capture, not live-polled
-     * state", which is the exact reading {@see EnvironmentBlock}'s class
-     * docblock opens by correcting: capture() freezes exactly three values —
-     * the working directory, the model name and the timestamp — while the git
-     * section is polled live on EVERY render(), and
-     * `PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`
-     * pins that. Reusing the one instance is what keeps those three frozen
-     * values from drifting mid-turn; it is not a claim that the block is a
-     * point-in-time snapshot of the repository. An owner that already holds a
-     * session-wide snapshot injects it through the constructor instead.
+     * The diff-suppressing mode is DORMANT as of this writing — no caller in
+     * `src/` or `bin/` sets it either way, so every production render today
+     * is a five-subprocess one. P3.S5 is the step that wires it.
      *
      * Captured at {@see projectRoot()}, not at the process directory: the
      * "Working directory"/"Is directory a git repo" lines this renders are
