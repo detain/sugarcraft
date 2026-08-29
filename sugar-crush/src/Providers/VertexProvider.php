@@ -436,7 +436,7 @@ final readonly class VertexProvider implements ProviderInterface
             // `messages` must hold at least one turn - an empty list is a
             // server-side 400 with no useful detail. The condition is entirely
             // local (an empty transcript, or one that is nothing but
-            // SystemMessages, which anthropicSystem() hoists out), so say so
+            // SystemMessages, which systemInstruction() hoists out), so say so
             // here instead of burning a round trip on an opaque error.
             throw new \InvalidArgumentException(
                 'Vertex rawPredict: the Anthropic Messages API requires at least one user or '
@@ -452,7 +452,7 @@ final readonly class VertexProvider implements ProviderInterface
             'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
         ];
 
-        $system = $this->anthropicSystem($request);
+        $system = $this->systemInstruction($request);
         if ($system !== null) {
             $body['system'] = $system;
         }
@@ -484,11 +484,28 @@ final readonly class VertexProvider implements ProviderInterface
     }
 
     /**
+     * The assembled system instruction for EITHER envelope this class builds.
+     *
      * Anthropic takes the system prompt as a TOP-LEVEL field - a `system`
-     * role inside `messages` is a 400. Any SystemMessage in the transcript is
-     * therefore hoisted here and joined onto the request's own systemPrompt.
+     * role inside `messages` is a 400. Google's `instances` envelope has no
+     * system role at all and carries the instruction in `instances[0].context`
+     * ({@see googleBody()}). Both hoist, both join the same way, so there is
+     * ONE joiner: any SystemMessage in the transcript is lifted out here and
+     * joined onto the request's own systemPrompt, assembled prompt first, in
+     * message order.
+     *
+     * WAS NAMED `anthropicSystem()` until the Google arm was fixed to
+     * transmit at all - the prefix described the only caller it then had, not
+     * what it computes.
+     *
+     * An empty-string systemPrompt and an empty-content SystemMessage each
+     * contribute nothing, so a request carrying only those yields `null` and
+     * neither envelope grows an empty system field. That guard
+     * (`!== null && !== ''`) is the one Sglang, Custom and this class already
+     * use; OpenAI and Bedrock check only `!== null`. This method keeps the
+     * stricter of the two rather than inventing a third.
      */
-    private function anthropicSystem(CompleteRequest $request): ?string
+    private function systemInstruction(CompleteRequest $request): ?string
     {
         $parts = [];
 
@@ -525,7 +542,7 @@ final readonly class VertexProvider implements ProviderInterface
      * Renders the transcript as Anthropic content-block turns.
      *
      * Two rules the Google `instances` shape never had to honour:
-     *   - SystemMessage is dropped here (hoisted by {@see anthropicSystem()}).
+     *   - SystemMessage is dropped here (hoisted by {@see systemInstruction()}).
      *   - Consecutive same-role turns are merged. Anthropic rejects two user
      *     turns in a row, and a tool-calling loop produces exactly that
      *     (assistant tool_use, then one ToolResultMessage per call, all of
@@ -971,21 +988,209 @@ final readonly class VertexProvider implements ProviderInterface
      * The Google-shaped `:predict` envelope. Retained for `publishers/google`
      * models, which really do take `instances`/`parameters`.
      *
+     * THE ASSEMBLED SYSTEM PROMPT RIDES `instances[0].context`. This envelope
+     * has no per-message `system` role, and {@see formatMessages()} maps every
+     * message it does not recognise - SystemMessage included - to `user`, so
+     * before this method read {@see systemInstruction()} the whole assembled
+     * prompt was dropped outright for every `publishers/google` model, on the
+     * unary path AND on {@see completeStream()}, which delegates here. A
+     * history SystemMessage fared no better: it reached the model as an
+     * ordinary user turn.
+     *
+     * `context` IS THE STANDING-INSTRUCTION FIELD - OF THE PaLM 2 `chat-bison`
+     * ENVELOPE, WHICH IS THE ONE THIS METHOD BUILDS, and naming the model
+     * family is the part that used to be missing. The instance shape is
+     * `{"content": ..., "context": ..., "examples": [...], "messages":
+     * [{"author": ..., "content": ...}]}`. The leading instance-level
+     * `content` is NOT the per-message one and was omitted from this summary
+     * until a second reader re-derived the struct; it is unused by this
+     * method, which sends `context` + `messages`. CORROBORATED at code level
+     * by an independent
+     * raw-REST Go implementation of this same `:predict` endpoint,
+     * uber/go-vertex-ai `types.go` (MEASURED 2026-08-29 from
+     * https://raw.githubusercontent.com/uber/go-vertex-ai/main/types.go): its
+     * `inputInstances` struct carries the JSON tags `json:"content"`,
+     * `json:"context"`, `json:"examples,omitempty"` and `json:"messages"`
+     * (RE-MEASURED 2026-08-29 by a third reader: `Content string` is the
+     * struct's FIRST field and was missing from this list), its `payload`
+     * struct is `{instances, parameters}` - this envelope exactly - and its
+     * README names the model: "chat-bison is a large language model ... The
+     * PaLM 2 for chat".
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY, AND WHY THE CITATION MOVED (rule 42).
+     * It used to cite "Design chat prompts" at
+     * https://cloud.google.com/vertex-ai/generative-ai/docs/chat/chat-prompts
+     * and name no model family at all. That page is NO LONGER THE
+     * LOAD-BEARING CITATION for anything in this doc-block - the Go
+     * implementation above is - and the reason is epistemic, not editorial.
+     *
+     * WHAT IS AGREED, ACROSS THREE INDEPENDENT READERS. The old URL
+     * 301-redirects. All three measured that.
+     *
+     * WHAT IS UNVERIFIED (16.3). What the destination RENDERS is disputed and
+     * this doc-block must not pretend otherwise. A review reported it as "a
+     * navigation index with none of the described content"; a re-measurement
+     * reported a live 200 article; a third reader (2026-08-29) also got an
+     * article body, containing "Design chat prompts", a "Context
+     * (recommended)" section describing `context` as what you "use ... to
+     * customize the behavior of the chat model", and a
+     * "You are Captain Barktholomew ..." example - though as a
+     * best-practices TABLE ROW, not as the worked `"context": ...` JSON
+     * snippet an earlier revision of this paragraph described. That third
+     * reader also measured a SECOND hop the earlier note did not record: the
+     * `docs.cloud.google.com/vertex-ai/...` URL itself redirects again, to
+     * https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/chat/chat-prompts,
+     * which is a plausible mechanism for two fetchers landing on different
+     * documents. Two of three readers reproduce the article; one does not.
+     * Under 16.3 a claim two readers cannot both reproduce is NOT MEASURED,
+     * so the page's current content is recorded here as UNVERIFIED. An
+     * earlier revision of this paragraph called the navigation-index report
+     * FALSE; that verdict is WITHDRAWN - it was one reader's fetch asserted
+     * over another's, which is not a measurement.
+     *
+     * WHY IT DOES NOT MATTER TO THE CLAIM. Where the readers who did see an
+     * article agree, the page describes `context` but shows a Gemini-shaped
+     * message example (`"contents": [{"role": ..., "parts": {"text": ...}}]`)
+     * and carries neither `chat-bison` nor `PaLM`. So even on the reading
+     * MOST favourable to it, that page does not identify the WIRE SHAPE this
+     * method sends. The `instances`/`context` envelope is established by the
+     * Go struct above, which every reader can re-derive from a single raw
+     * file, and nothing in this doc-block now rests on the disputed page.
+     * Either way this is DOCUMENTED, not measured on the wire: nothing here
+     * has Vertex credentials, so no live call confirms this deployment
+     * honours it.
+     *
+     * OBSERVED, PRE-EXISTING, AND DELIBERATELY NOT FIXED: that same authority
+     * spells the message key `author` - its `ChatMessage` struct is
+     * `Author string json:"author"` / `Content string json:"content"` -
+     * while {@see formatMessages()} emits `role`. That is a SECOND defect in
+     * this envelope, older than the system-prompt hoist above it and
+     * independent of it. It is left standing because correcting it would
+     * change the body pinned by the existing green
+     * `VertexProviderTest::testCompleteSelectsPredictAndTheInstancesEnvelopeForGoogleModels`,
+     * which the step that wrote this paragraph is not permitted to touch.
+     * Recorded so the next reader finds it rather than re-discovers it.
+     *
+     * A GEMINI MODEL ID ROUTED HERE DOES NOT GET A REQUEST GEMINI WOULD
+     * ACCEPT - the same class of gap the class doc-block above already states
+     * for `publishers/mistralai`, `publishers/meta` and `publishers/ai21`.
+     * `gemini-1.5-pro-002`, the id both Vertex test files pin as "the Google
+     * model", is not served by `instances`/`context` at all: Gemini on Vertex
+     * answers `:generateContent` / `:streamGenerateContent` and takes its
+     * standing instruction in a top-level `systemInstruction` object
+     * (MEASURED 2026-08-29, verbatim from
+     * https://ai.google.dev/api/generate-content: "systemInstruction object
+     * (Content) Optional. Developer set system instruction(s). Currently, text
+     * only."; see also
+     * https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/projects.locations.publishers.models/generateContent).
+     * Switching this arm to that endpoint is a different endpoint, a different
+     * method and a different request document - a feature decision for the
+     * user, not a fix - and is deliberately not taken here.
+     *
+     * A SYSTEM-MESSAGE-ONLY TRANSCRIPT NOW YIELDS AN EMPTY `messages` LIST,
+     * which is a NEW route introduced by the dedup below and is pinned rather
+     * than guarded. MEASURED 2026-08-29:
+     * `messages: [SystemMessage('only'), SystemMessage('this')]` with
+     * `systemPrompt: 'asm'` produces
+     * `{"instances":[{"messages":[],"context":"asm\n\nonly\n\nthis"}],"parameters":{...}}`.
+     * BEFORE the dedup the same input produced two `role: user` turns carrying
+     * the instruction text twice over. The Anthropic arm REJECTS this exact
+     * input with a named \InvalidArgumentException (VertexProvider.php:435-446,
+     * pinned by
+     * `VertexProviderTest::testCompleteRejectsASystemOnlyTranscriptLocally`)
+     * because the Messages API requires at least one turn. This arm does not,
+     * and that asymmetry is deliberate: the `instances` envelope states no
+     * such requirement, and
+     * `VertexProviderTest::testGoogleModelsStillAcceptAnEmptyTranscript`
+     * records the no-guard position for the empty transcript already. The new
+     * system-only route is pinned by
+     * `VertexProviderTest::testAGoogleSystemMessageOnlyTranscriptYieldsAnEmptyMessagesList`.
+     *
+     * HALF OF THE BODY THIS METHOD BUILDS NEVER REACHES THE WIRE. OBSERVED,
+     * PRE-EXISTING, AND DELIBERATELY NOT FIXED HERE. The `parameters` map
+     * below (`temperature`, `maxOutputTokens`) is DISCARDED:
+     * {@see defaultPredictor()}'s non-`rawPredict` branch builds its
+     * `PredictRequest` with `->setEndpoint()` and
+     * `->setInstances(...)` only and never calls `setParameters()`
+     * (VertexProvider.php:1276-1282), so the sampling knobs are dropped
+     * before the request is sent. This is a SEPARATE defect from the one this
+     * method's `context` hoist fixes, it predates that fix, and repairing it
+     * is a different step (1.10: reported, not repaired).
+     *
+     * THE `context` HOIST IS UNAFFECTED, and that is why this note is a note
+     * and not a blocker: `context` lives INSIDE `instances`, and
+     * {@see toProtobufValues()} (VertexProvider.php:1554-1565) merges each
+     * instance from arbitrary JSON via `mergeFromJsonString()`, so any key
+     * added to the instance - `context` included - does survive to the wire.
+     * Epistemic status: the `setParameters()` absence is MEASURED by reading
+     * the seam; that the deployed service would honour `parameters` if it
+     * were sent is UNVERIFIED, since nothing here has Vertex credentials.
+     *
      * @return array{instances: array<int, array<string, mixed>>, parameters: array<string, mixed>}
      */
     private function googleBody(CompleteRequest $request): array
     {
+        $instance = [
+            'messages' => $this->formatMessages($this->withoutSystemMessages($request->messages)),
+        ];
+
+        $context = $this->systemInstruction($request);
+        if ($context !== null) {
+            $instance['context'] = $context;
+        }
+
         return [
-            'instances' => [
-                [
-                    'messages' => $this->formatMessages($request->messages),
-                ],
-            ],
+            'instances' => [$instance],
             'parameters' => [
                 'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
                 'maxOutputTokens' => $request->maxTokens ?? self::DEFAULT_MAX_TOKENS,
             ],
         ];
+    }
+
+    /**
+     * A SystemMessage hoisted into `context` must not ALSO stay in
+     * `messages`, where {@see formatMessages()}'s `default => 'user'` arm
+     * would render it a second time as a user turn.
+     *
+     * Deliberately a second copy of {@see BedrockProvider::withoutSystemMessages()}
+     * rather than a shared trait: the only honest home for one copy is a new
+     * file under `src/Providers/Concerns/`, and adding a file to `src/` reds
+     * four exact-cardinality assertions in BuiltInToolCorpusTest plus a
+     * doc-block in RepoMapBlock.php - out of this step's declared scope. The
+     * two bodies are byte-identical today, and NOTHING IN THE SUITE WOULD
+     * NOTICE IF THEY DRIFTED - nor even if this `{@see}` stopped naming a real
+     * method, which is stronger than the weaker claim that used to stand here.
+     * That claim was "`DuplicatedTestHelperDriftTest` reads `tests/` only";
+     * true, but not the binding limit. MEASURED 2026-08-29: replacing
+     * `BedrockProvider::withoutSystemMessages()` above with a method name that
+     * does not exist leaves `SymbolCitationDriftTest` GREEN. Reproduce with
+     * `vendor/bin/phpunit tests/SymbolCitationDriftTest.php`, mutated and
+     * unmutated; the VERDICT is the durable fact and the command is how you
+     * re-derive it. (A literal `OK (7 tests, 2924 assertions)` used to stand
+     * here. Rule 42, corrected not deleted: that figure was already stale when
+     * written - it is the count at `master` and at this branch's first commit,
+     * taken before the second commit added citations to the matrix test, and
+     * the count at this commit is different again. Per 16.2 a number no test
+     * derives rots, so the figure is dropped rather than re-pinned at a value
+     * that would rot the same way.) The census stays green either way because
+     * it only validates a
+     * citation whose target contains `SugarCraft\Crush\Tests\` or whose class
+     * short-name ends in `Test` (`SymbolCitationDriftTest.php:343-354`, the
+     * `looksLikeATestSymbol()` alphabet) - and every `{@see}` in this
+     * paragraph names a PRODUCTION symbol, which that file states is
+     * deliberately out of its scope. So the drift guard here is this sentence
+     * and a reader, not an instrument.
+     *
+     * @param array<Message> $messages
+     * @return array<Message>
+     */
+    private function withoutSystemMessages(array $messages): array
+    {
+        return array_values(array_filter(
+            $messages,
+            static fn (Message $msg): bool => !$msg instanceof SystemMessage,
+        ));
     }
 
     /**

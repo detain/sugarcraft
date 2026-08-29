@@ -56,9 +56,117 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 {
     /**
      * The wire location each covered provider's protocol uses for
-     * CompleteRequest::$systemPrompt, keyed by provider class.
+     * CompleteRequest::$systemPrompt.
      *
-     * Three families:
+     * ONE ROW PER REQUEST-BODY BUILDER, NOT PER PROVIDER CLASS.
+     *
+     * THAT HEADLINE WAS FALSE OF THIS MAP WHEN IT WAS WRITTEN, AND IS NOW
+     * TRUE (rule 42: corrected, not deleted). MEASURED: OpenAI, Custom and
+     * Bedrock each assemble their request body TWICE, inline, once per path -
+     * OpenAIProvider.php:79-95 and :115-129, CustomProvider.php:155-160 and
+     * :210-215, BedrockProvider.php:159-172 and :206-218 (Bedrock shares
+     * systemBlocks() for the hoist but not the surrounding body, and its two
+     * `inferenceConfig` blocks genuinely differ) - yet each held ONE row. The
+     * consequence was not cosmetic: {@see capturedBodyFor()} drives what the
+     * map says, so it drove only the UNARY builder for those three, and the
+     * coverage assertion in
+     * {@see testTheContractSlotSpellingsAreLoadBearing()} was satisfied
+     * without any STREAMING builder ever being resolved through the contract.
+     * The instrument did not close, for three providers, the exact defect
+     * class it was built to close for Vertex - which is the same conflation
+     * ("complete() passes") that hid the Vertex Google defect in the first
+     * place. Those three rows are now split `#complete`/`#stream`, with a
+     * drive each. The remaining three body-shaped rows are genuinely
+     * single-builder and stay undiscriminated: Sglang shares buildParams()
+     * (SglangProvider.php:642, called from :447 and :464); Vertex
+     * `#anthropic` is one method serving both paths
+     * (anthropicBody($request, stream:), VertexProvider.php:431, called from
+     * :240 and :314); Vertex `#google` is reached on the stream path only by
+     * delegation (completeStream() yields complete(),
+     * VertexProvider.php:290-298). So the headline now holds for 9 of 9
+     * body-shaped rows.
+     *
+     * THE "BEFORE" FIGURE IS 3 OF 6, AND ITS ANCHOR IS LOAD-BEARING: those 6
+     * are the body-shaped rows at `d34ce0297`, the commit BEFORE the split
+     * landed (named by SHA on purpose - it was `HEAD~1` when the split was
+     * written and is `HEAD~2` by the next commit), not at `master`. Splitting three rows in two moved the denominator from
+     * 6 to 9, so a bare "of 6" would be a figure whose base silently changed
+     * underneath it. (At `master` the map is one row per class with no
+     * discriminators at all - 6 rows, 5 of them body-shaped - and
+     * NON_BODY_CONTRACT_ROWS does not exist there yet, so `master` cannot be
+     * the anchor for either half.) An earlier revision of this paragraph said
+     * "6 of 6", which was simply wrong: it counted the pre-split denominator
+     * against the post-split numerator. Rule 42, corrected not deleted - and
+     * it is recorded because it is the same failure G2 fixed, reintroduced by
+     * the commit that fixed G2.
+     *
+     * BOTH HALVES OF THAT FIGURE ARE RE-DERIVABLE, which is the only reason
+     * it is allowed to stand (16.2: a figure without a generator rots). The
+     * denominator is generated, not asserted in prose: it is
+     * `count(TRANSMISSION_CONTRACT) - count(NON_BODY_CONTRACT_ROWS)`, and
+     * {@see testTheContractSlotSpellingsAreLoadBearing()} reds if the drive
+     * table and that set stop agreeing, in BOTH directions. The numerator is
+     * re-derived by opening the builder citations enumerated in the two
+     * paragraphs above - every one names a file and a line range - and
+     * counting how many rows have one builder each; the `3 of 6` half is the
+     * same count taken against `git show d34ce0297:<this file>`'s map, whose
+     * rows are gone but whose builders are all still in the tree at the same
+     * citations. The anchor is spelled as a SHA, not as `HEAD~1`: a relative
+     * ref renames itself on the next commit, and this paragraph's first
+     * draft said `HEAD~1` and was stale within one commit of being written.
+     * Neither half is a count this file measures at runtime, so if you change
+     * a provider's path structure you must re-walk those citations rather
+     * than trust this sentence.
+     *
+     * WHAT THIS ALPHABET STILL CANNOT EXPRESS (rule 31). A row says WHICH
+     * slot a builder writes; it does not say the two builders under one class
+     * agree, nor that a path exists at all. A provider that silently stopped
+     * having a streaming path would drop its `#stream` drive, and the
+     * coverage assertion would red - but only because the ROW is still there.
+     * Delete both the row and the drive together and nothing here notices;
+     * that is what the derived-roster test
+     * {@see testEveryProviderImplementerHasATransmissionContract()} covers at
+     * CLASS granularity, and nothing covers at PATH granularity.
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY. It said the row-per-class shape was
+     * WHY the Vertex Google defect survived Phase 1: the map was
+     * `array<class-string, string>`, VertexProvider builds TWO bodies chosen
+     * at call time by isAnthropicModel() (VertexProvider.php:231, :397-400),
+     * and a single `VertexProvider::class => 'system'` row could not SAY that,
+     * so "nothing here could notice that only one of them transmitted".
+     *
+     * WHAT IS TRUE NOW. That causal claim was measured FALSE and is corrected
+     * rather than deleted (rule 42). The map's VALUES had no enforcement power
+     * at all — only `array_keys()` was ever read — so the key TYPE was never
+     * what let the defect through. MEASURED before the fix below landed:
+     * rewriting `BedrockProvider::class => 'system[0].text'` to `=> 'WRONG'`
+     * AND the Vertex `#google` row to `=> 'TOTAL-NONSENSE-NOT-A-FIELD'` left
+     * the whole file green at `OK (17 tests, 54 assertions)`. The REAL cause
+     * is simpler and is a roster gap, not a key-shape gap: NO TEST DROVE A
+     * NON-`claude` MODEL ID THROUGH A TRANSMISSION ASSERTION. Every Vertex
+     * test here hardcoded a `claude-*` model, so the Google builder was never
+     * executed by this file, and no key shape could have rescued that.
+     *
+     * WHY THE ROW-PER-BUILDER SHAPE STILL EARNS ITS PLACE. Two reasons, and
+     * both are now load-bearing rather than descriptive. First, the alphabet
+     * argument survives its false causal claim: a map that cannot SAY a class
+     * has two builders cannot be walked to drive both, and
+     * {@see testTheContractSlotSpellingsAreLoadBearing()} walks it to do
+     * exactly that — deleting the `#google` row now reds, because the drive
+     * table below asserts every row it drives is present AND that every
+     * body-shaped row is driven. Second, the two Vertex arms genuinely land in
+     * different slots (`system` vs `instances[0].context`), so one row per
+     * class would have to drop one of the two facts.
+     *
+     * A class with more than one builder therefore contributes several rows,
+     * keyed `<FQCN>#<discriminator>`. The class half stays a `::class`
+     * reference so a class rename still breaks this file at compile time.
+     *
+     * EVERY VALUE HERE IS A BODY PATH READ BY {@see resolveContractSlot()},
+     * except the one row named in {@see NON_BODY_CONTRACT_ROWS}.
+     *
+     * Four families (the `/` in a citation pair separates the `#complete`
+     * builder from the `#stream` one):
      * - Sglang/Custom/OpenAI prepend an OpenAI-chat-shaped leading system
      *   message into `messages` (SglangProvider.php:672-677,
      *   CustomProvider.php:155-160 / :210-215, OpenAIProvider.php:90-95 /
@@ -66,7 +174,9 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * - Bedrock hoists it into the Converse top-level `system` block list
      *   (BedrockProvider.php:164-166 / :215-217 via systemBlocks() :337-343);
      * - Vertex hoists it into the Anthropic body's top-level `system` string
-     *   (VertexProvider.php:455-458 via anthropicSystem() :495-496);
+     *   (VertexProvider.php:455-458) or, for a `publishers/google` model, into
+     *   `instances[0].context` (VertexProvider.php:1137-1139) — both through
+     *   the one joiner, systemInstruction() :508;
      * - ClaudeCode turns it into a `--system-prompt` CLI argv pair
      *   (ClaudeCodeProvider.php:80 / :105 ->
      *   ClaudeCodeInvocation.php:75-78).
@@ -77,16 +187,78 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * {@see testEveryProviderImplementerHasATransmissionContract} for the
      * derived-roster assertion that names this exemption.
      *
-     * @var array<class-string, string>
+     * @var array<string, string>
      */
     private const TRANSMISSION_CONTRACT = [
         SglangProvider::class => 'messages[0]',
-        CustomProvider::class => 'messages[0]',
-        OpenAIProvider::class => 'messages[0]',
-        BedrockProvider::class => 'system[0].text',
-        VertexProvider::class => 'system',
+        CustomProvider::class . '#complete' => 'messages[0]',
+        CustomProvider::class . '#stream' => 'messages[0]',
+        OpenAIProvider::class . '#complete' => 'messages[0]',
+        OpenAIProvider::class . '#stream' => 'messages[0]',
+        BedrockProvider::class . '#complete' => 'system[0].text',
+        BedrockProvider::class . '#stream' => 'system[0].text',
+        VertexProvider::class . '#anthropic' => 'system',
+        VertexProvider::class . '#google' => 'instances[0].context',
         ClaudeCodeProvider::class => '--system-prompt argv',
     ];
+
+    /**
+     * The rows of {@see TRANSMISSION_CONTRACT} whose value is NOT a
+     * request-body path, excluded BY KEY and with a named reason — the same
+     * discipline `EchoProvider`'s exemption from the roster gets.
+     *
+     * `--system-prompt argv` is a CLI argument vector, not a JSON document:
+     * ClaudeCodeProvider never serializes a request body at all, it shells out
+     * (ClaudeCodeProvider.php:80 / :105 -> ClaudeCodeInvocation.php:75-78).
+     * {@see resolveContractSlot()} walks bodies, so this row has no body to
+     * walk; it is pinned instead by
+     * {@see testClaudeCodeTransmitsSystemPromptAsASystemPromptArgvPairOnBothPaths()},
+     * which asserts the flag AND its adjacent value.
+     *
+     * @var list<string>
+     */
+    private const NON_BODY_CONTRACT_ROWS = [
+        ClaudeCodeProvider::class,
+    ];
+
+    /**
+     * What {@see resolveContractSlot()} returns when the declared slot is not
+     * in the body — distinctive, so it can never be confused with a real
+     * value, an empty string, or `null`, each of which a body could legitimately
+     * hold. Rule 17: `''`/`null`/`[]` are also what a dead instrument returns.
+     */
+    private const SLOT_NOT_FOUND = 'P1S7-SLOT-NOT-FOUND-1d0e77bc';
+
+    /**
+     * Why every split row proves WHICH builder it drove.
+     *
+     * A `#complete`/`#stream` pair lands the sentinel in the SAME slot -
+     * `messages[0]` for Custom and OpenAI, `system[0].text` for Bedrock - so
+     * the slot assertion alone cannot tell the two builders apart. MEASURED
+     * 2026-08-29: re-pointing the `#stream` drive for Bedrock at `complete()`
+     * left this whole file green at `OK (18 tests, 86 assertions)`. That is
+     * the "complete() passes, therefore completeStream() passes" conflation
+     * this map was built to break, reproduced INSIDE the instrument meant to
+     * break it - so each split drive now asserts a marker only its own
+     * builder emits: `stream: true` in the OpenAI-chat body (absent on the
+     * unary path), and the AWS command name `Converse` vs `ConverseStream`.
+     *
+     * MEASURED for Bedrock, driving both seams against a MockHandler: unary
+     * is `Converse` with NO `inferenceConfig` key at all - re-derivable
+     * without a probe, because {@see request()} supplies neither temperature
+     * nor maxTokens and the unary path adds no defaults, so
+     * `inferenceConfig()` returns `[]` and the key is never set
+     * (BedrockProvider.php:169-172); streamed is `ConverseStream` with
+     * `{"maxTokens":4096,"temperature":0.7}`, because ConverseStream rejects
+     * an absent maxTokens (BedrockProvider.php:50-55, :206-212).
+     *
+     * The single-builder rows (Sglang, both Vertex arms) need no such guard:
+     * they have only one builder to resolve, which is what their
+     * undiscriminated key SAYS.
+     */
+    private const WRONG_BUILDER = 'this drive resolved the WRONG builder for its contract row: a '
+        . '`#complete`/`#stream` pair lands the sentinel in the same slot, so the row is only '
+        . 'evidence about its own path if the captured body is that path\'s body';
 
     /**
      * The distinctive, FIXED marker every covered provider must put on the
@@ -95,6 +267,16 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * sentinel rides the protocol's system slot and nowhere else.
      */
     private const SENTINEL = 'P1S7-SENTINEL-4f8a2c91';
+
+    /**
+     * A `publishers/google` model id, which is what selects VertexProvider's
+     * SECOND body builder: isAnthropicModel() is
+     * `str_contains(strtolower($model), 'claude')` (VertexProvider.php:397-400)
+     * and modelId() prefers the REQUEST's model over the provider's own
+     * default (:412-415), so this id on the request routes there whatever the
+     * helper below constructs the provider with.
+     */
+    private const VERTEX_GOOGLE_MODEL = 'gemini-1.5-pro-002';
 
     /**
      * One OpenAI-compatible streamed chunk plus the terminal marker, carrying
@@ -119,10 +301,17 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         // test on day one.
         $implementers = ProviderRequestResponseTest::providerImplementers();
 
-        $contracted = array_map(
-            static fn (string $fqcn): string => substr($fqcn, (int) strrpos($fqcn, '\\') + 1),
+        // A multi-body provider contributes several rows under one class, and
+        // the roster diff is about CLASS coverage, so drop the
+        // `#<discriminator>` suffix and de-duplicate before comparing.
+        $contracted = array_values(array_unique(array_map(
+            static function (string $key): string {
+                $fqcn = explode('#', $key)[0];
+
+                return substr($fqcn, (int) strrpos($fqcn, '\\') + 1);
+            },
             array_keys(self::TRANSMISSION_CONTRACT),
-        );
+        )));
 
         $this->assertSame(
             ['EchoProvider'],
@@ -141,6 +330,305 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             'a TRANSMISSION_CONTRACT entry names a class that no longer implements '
             . 'ProviderInterface; delete the entry.',
         );
+    }
+
+    /**
+     * THE MAP'S VALUES ARE LOAD-BEARING. This test exists for nothing else.
+     *
+     * Before it, only `array_keys(self::TRANSMISSION_CONTRACT)` was ever read,
+     * so the slot spellings were metadata standing in for a test (1.11).
+     * MEASURED on the unfixed file: deleting the whole Vertex `#google` row,
+     * and separately rewriting two rows' values to `'WRONG'` and
+     * `'TOTAL-NONSENSE-NOT-A-FIELD'`, both left the file green at
+     * `OK (17 tests, 54 assertions)`. Both mutations must red here.
+     *
+     * POSITIVE AND NEGATIVE, IN ONE TEST (rule 16 — a sibling test is a
+     * separately deletable unit, so the control lives here):
+     *
+     * - POSITIVE, per driven row: the row must EXIST in the map, its declared
+     *   slot must resolve against the real captured body, and it must resolve
+     *   to the EXACT value that protocol puts there (rule 20 — an exact value,
+     *   not "contains the sentinel", because `messages[0]` broadened to
+     *   `messages` still "contains" it);
+     * - COVERAGE, both directions: every body-shaped row is driven, and every
+     *   driven key is a row. A row deleted from the map reds the first; a row
+     *   added without a drive reds the second;
+     * - NEGATIVE CONTROL: the resolver must ANSWER NOT-FOUND for a well-formed
+     *   slot that is simply wrong for that body, and for a malformed one. An
+     *   instrument that says "found" for everything is indistinguishable from
+     *   one that is dead.
+     *
+     * WHAT THIS TEST CANNOT EXPRESS (rule 31): it pins the slot SPELLING and
+     * the value AT that spelling. It does not pin that no OTHER path also
+     * carries the sentinel — that is the `substr_count(..., 1)` assertion in
+     * each per-provider test, which is kept alongside this one precisely
+     * because the two catch different mutations.
+     */
+    public function testTheContractSlotSpellingsAreLoadBearing(): void
+    {
+        // The expected value AT each declared slot, stated as the protocol
+        // fact it is — never rendered from the map (rule 21: an expected value
+        // derived from the constant under test stays green under any mutation
+        // of it).
+        $expectedAtSlot = [
+            SglangProvider::class => ['role' => 'system', 'content' => self::SENTINEL],
+            CustomProvider::class . '#complete' => ['role' => 'system', 'content' => self::SENTINEL],
+            CustomProvider::class . '#stream' => ['role' => 'system', 'content' => self::SENTINEL],
+            OpenAIProvider::class . '#complete' => ['role' => 'system', 'content' => self::SENTINEL],
+            OpenAIProvider::class . '#stream' => ['role' => 'system', 'content' => self::SENTINEL],
+            BedrockProvider::class . '#complete' => self::SENTINEL,
+            BedrockProvider::class . '#stream' => self::SENTINEL,
+            VertexProvider::class . '#anthropic' => self::SENTINEL,
+            VertexProvider::class . '#google' => self::SENTINEL,
+        ];
+
+        $bodyShapedRows = array_values(array_diff(
+            array_keys(self::TRANSMISSION_CONTRACT),
+            self::NON_BODY_CONTRACT_ROWS,
+        ));
+
+        // Coverage, direction 1: every body-shaped row is driven below. A row
+        // ADDED to the map with no drive reds here rather than riding along
+        // unexercised.
+        sort($bodyShapedRows);
+        $driven = array_keys($expectedAtSlot);
+        sort($driven);
+        $this->assertSame(
+            $bodyShapedRows,
+            $driven,
+            'every TRANSMISSION_CONTRACT row that is a body path must be driven by this test, '
+            . 'and every row driven here must be in the map. A row deleted from the map (the '
+            . 'measured mutation that used to leave this file green) reds here.',
+        );
+
+        foreach ($expectedAtSlot as $key => $expected) {
+            // Coverage, direction 2: deleting the row reds inside
+            // contractSlotFor(), before any slot is resolved.
+            $slot = $this->contractSlotFor($key);
+            $body = $this->capturedBodyFor($key);
+
+            $this->assertSame(
+                $expected,
+                $this->resolveContractSlot($body, $slot),
+                sprintf(
+                    'TRANSMISSION_CONTRACT declares %s transmits the system prompt at `%s`, but '
+                    . 'that path does not hold it in the body %s actually built: %s',
+                    $key,
+                    $slot,
+                    $key,
+                    (string) json_encode($body),
+                ),
+            );
+        }
+
+        // NEGATIVE CONTROLS, through the same resolver, against a real body.
+        // Without these, a resolver that returned the sentinel for any input
+        // would pass every assertion above.
+        $googleBody = $this->capturedBodyFor(VertexProvider::class . '#google');
+
+        $this->assertSame(
+            self::SLOT_NOT_FOUND,
+            $this->resolveContractSlot($googleBody, 'system'),
+            'a well-formed slot that is wrong for this body must answer NOT-FOUND — `system` is '
+            . 'the ANTHROPIC arm\'s slot and has no meaning in the Google instances envelope',
+        );
+        $this->assertSame(
+            self::SLOT_NOT_FOUND,
+            $this->resolveContractSlot($googleBody, 'instances[1].context'),
+            'an index past the end must answer NOT-FOUND, not the element at 0',
+        );
+        $this->assertSame(
+            self::SLOT_NOT_FOUND,
+            $this->resolveContractSlot($googleBody, 'instances[0].contxt'),
+            'a one-character typo in a slot spelling must answer NOT-FOUND',
+        );
+        $this->assertSame(
+            self::SLOT_NOT_FOUND,
+            $this->resolveContractSlot($googleBody, 'TOTAL-NONSENSE-NOT-A-FIELD'),
+            'a malformed slot must answer NOT-FOUND — this is the exact garbage value that used '
+            . 'to leave the whole file green',
+        );
+
+        // And the resolver is not merely negative: the same body, walked with
+        // the RIGHT spelling, still finds the sentinel. A dead resolver would
+        // answer NOT-FOUND to everything and pass all four controls above.
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot($googleBody, 'instances[0].context'),
+        );
+    }
+
+    /**
+     * The declared slot for one contract row, failing LEGIBLY if the row is
+     * gone.
+     *
+     * Rule 25: a guard's failure message is the one part of a green suite that
+     * never runs. Without this, a deleted row reached
+     * {@see resolveContractSlot()} as `null` and the per-provider test died on
+     * a TypeError about argument #2 — a red, but one that names the helper
+     * rather than the missing row.
+     */
+    private function contractSlotFor(string $contractKey): string
+    {
+        $this->assertArrayHasKey(
+            $contractKey,
+            self::TRANSMISSION_CONTRACT,
+            'TRANSMISSION_CONTRACT has no row for ' . $contractKey . '; a provider whose wire '
+            . 'slot is no longer declared is a provider whose transmission nothing pins.',
+        );
+
+        return self::TRANSMISSION_CONTRACT[$contractKey];
+    }
+
+    /**
+     * Resolve a TRANSMISSION_CONTRACT slot spelling against a captured request
+     * body, or answer {@see SLOT_NOT_FOUND}.
+     *
+     * A GENERAL PATH WALKER, DELIBERATELY NOT A `match` ON THE FOUR LITERAL
+     * SPELLINGS IN THE MAP — a `match` on the literals would be the same
+     * tautology in a new costume (rule 21): every arm would be written FROM
+     * the map, so no mutation of the map could ever disagree with it. This
+     * walks `.`-separated segments, each an identifier optionally followed by
+     * one or more `[<int>]` indices, and reports anything it cannot parse or
+     * cannot follow rather than guessing (rule 32: a guard must never silently
+     * pass what it cannot read).
+     *
+     * @param array<string, mixed> $body
+     */
+    private function resolveContractSlot(array $body, string $slot): mixed
+    {
+        $cursor = $body;
+
+        foreach (explode('.', $slot) as $segment) {
+            if (preg_match('/^([A-Za-z_][A-Za-z0-9_]*)((?:\[\d+\])*)$/', $segment, $m) !== 1) {
+                return self::SLOT_NOT_FOUND;
+            }
+
+            $keys = [$m[1]];
+            if ($m[2] !== '') {
+                preg_match_all('/\[(\d+)\]/', $m[2], $indices);
+                foreach ($indices[1] as $index) {
+                    $keys[] = (int) $index;
+                }
+            }
+
+            foreach ($keys as $key) {
+                if (!is_array($cursor) || !array_key_exists($key, $cursor)) {
+                    return self::SLOT_NOT_FOUND;
+                }
+                $cursor = $cursor[$key];
+            }
+        }
+
+        return $cursor;
+    }
+
+    /**
+     * Drive one TRANSMISSION_CONTRACT row's provider with the shared
+     * {@see request()} and return the request body it actually built.
+     *
+     * The `match` is on the CONTRACT KEY, not on the slot spelling: each
+     * provider needs its own harness (a Guzzle history, an SDK mock, an AWS
+     * MockHandler, an injected predictor), so the drives cannot be derived.
+     * Both directions of the map/drive correspondence are asserted in
+     * {@see testTheContractSlotSpellingsAreLoadBearing()}, so this list cannot
+     * silently omit a row the way a hand-maintained `@dataProvider` can
+     * (rule 15).
+     *
+     * @return array<string, mixed>
+     */
+    private function capturedBodyFor(string $contractKey): array
+    {
+        switch ($contractKey) {
+            case SglangProvider::class:
+                $this->sglangProvider()->complete($this->request());
+
+                return $this->sentBody();
+
+            case CustomProvider::class . '#complete':
+                $this->customProvider()->complete($this->request());
+
+                $customUnary = $this->sentBody();
+                $this->assertArrayNotHasKey('stream', $customUnary, self::WRONG_BUILDER);
+
+                return $customUnary;
+
+            case CustomProvider::class . '#stream':
+                // The SSE body is what makes the streamed builder reachable:
+                // completeStream() parses the response before returning, so
+                // the unary fixture would throw before the request body could
+                // be read back off the history middleware.
+                iterator_to_array($this->customProvider(self::SSE_BODY)->completeStream($this->request()));
+
+                $customStreamed = $this->sentBody();
+                $this->assertTrue($customStreamed['stream'] ?? false, self::WRONG_BUILDER);
+
+                return $customStreamed;
+
+            case OpenAIProvider::class . '#complete':
+                $captured = [];
+                $this->openAiProviderWithCapture($captured)->complete($this->request());
+                $this->assertArrayNotHasKey('stream', $captured, self::WRONG_BUILDER);
+
+                return $captured;
+
+            case OpenAIProvider::class . '#stream':
+                $streamCaptured = [];
+                iterator_to_array(
+                    $this->openAiProviderWithCapture($streamCaptured)->completeStream($this->request()),
+                );
+                $this->assertTrue($streamCaptured['stream'] ?? false, self::WRONG_BUILDER);
+
+                return $streamCaptured;
+
+            case BedrockProvider::class . '#complete':
+                $mock = new MockHandler();
+                $mock->append(new Result([
+                    'output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'ok']]]],
+                ]));
+                $provider = new BedrockProvider(
+                    $this->offlineRuntimeClient($mock),
+                    'us-east-1',
+                    'anthropic.claude-sonnet-4-6',
+                );
+                $provider->complete($this->request());
+                $this->assertSame('Converse', $mock->getLastCommand()->getName(), self::WRONG_BUILDER);
+
+                return $mock->getLastCommand()->toArray();
+
+            case BedrockProvider::class . '#stream':
+                // ConverseStream answers an event stream; an empty one is
+                // enough, because the assertion is about the REQUEST the
+                // command carries, not the response.
+                $streamMock = new MockHandler();
+                $streamMock->append(new Result(['stream' => new \ArrayIterator([])]));
+                $streamProvider = new BedrockProvider(
+                    $this->offlineRuntimeClient($streamMock),
+                    'us-east-1',
+                    'anthropic.claude-sonnet-4-6',
+                );
+                iterator_to_array($streamProvider->completeStream($this->request()));
+                $this->assertSame('ConverseStream', $streamMock->getLastCommand()->getName(), self::WRONG_BUILDER);
+
+                return $streamMock->getLastCommand()->toArray();
+
+            case VertexProvider::class . '#anthropic':
+                $vertexCaptured = null;
+                $this->vertexProvider([], $vertexCaptured)
+                    ->complete($this->request(model: 'claude-3-sonnet@20240229'));
+
+                return $vertexCaptured['body'];
+
+            case VertexProvider::class . '#google':
+                $googleCaptured = null;
+                $this->vertexProvider([], $googleCaptured)
+                    ->complete($this->request(model: self::VERTEX_GOOGLE_MODEL));
+
+                return $googleCaptured['body'];
+        }
+
+        // Rule 32: an unreadable row is reported, never quietly passed.
+        $this->fail('no transmission drive is wired for contract row ' . $contractKey);
     }
 
     // =========================================================================
@@ -347,9 +835,16 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     }
 
     // =========================================================================
-    // Vertex — Anthropic body's top-level `system` string
-    // (VertexProvider.php:455-458 via anthropicSystem() :495-496). A `system`
-    // role inside messages is a 400 on the Anthropic API.
+    // Vertex — TWO body builders, selected by isAnthropicModel()
+    // (VertexProvider.php:231). The Anthropic arm hoists into the body's
+    // top-level `system` string (VertexProvider.php:455-458): a `system` role
+    // inside messages is a 400 on the Anthropic API. The Google arm hoists
+    // into `instances[0].context` (VertexProvider.php:1137-1139): that
+    // envelope has no system role at all, and formatMessages()'s
+    // `default => 'user'` arm would otherwise deliver the prompt as an
+    // ordinary user turn. Both arms go through the one joiner,
+    // systemInstruction() :508. Driving only the Anthropic arm is how the
+    // Google arm's silence survived the whole of Phase 1.
     // =========================================================================
 
     public function testVertexTransmitsSystemPromptInTheAnthropicTopLevelSystemFieldOnBothPaths(): void
@@ -359,6 +854,18 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $provider->complete($this->request(model: 'claude-3-sonnet@20240229'));
 
         $this->assertSame(self::SENTINEL, $captured['body']['system']);
+        // ALSO through the declared contract slot, so a wrong spelling in
+        // TRANSMISSION_CONTRACT reds a real per-provider test and not only the
+        // contract test. Kept ALONGSIDE the direct assertion above, never
+        // instead of it: the direct one pins the value, this one pins that the
+        // map still names where the value lives.
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $captured['body'],
+                $this->contractSlotFor(VertexProvider::class . '#anthropic'),
+            ),
+        );
         $this->assertSame(
             [['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Hi']]]],
             $captured['body']['messages'],
@@ -372,6 +879,13 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
 
         $this->assertSame(self::SENTINEL, $streamed['body']['system']);
         $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $streamed['body'],
+                $this->contractSlotFor(VertexProvider::class . '#anthropic'),
+            ),
+        );
+        $this->assertSame(
             [['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Hi']]]],
             $streamed['body']['messages'],
         );
@@ -384,9 +898,84 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $provider = $this->vertexProvider([], $captured);
         $provider->complete($this->request(null, 'claude-3-sonnet@20240229'));
 
-        // anthropicSystem() returns null when no part exists, and anthropicBody()
+        // systemInstruction() returns null when no part exists, and anthropicBody()
         // only sets the key for a non-null value (VertexProvider.php:455-458).
         $this->assertArrayNotHasKey('system', $captured['body']);
+    }
+
+    public function testVertexTransmitsSystemPromptInTheGoogleInstanceContextOnBothPaths(): void
+    {
+        $captured = null;
+        $provider = $this->vertexProvider([], $captured);
+        $provider->complete($this->request(model: self::VERTEX_GOOGLE_MODEL));
+
+        $this->assertSame('predict', $captured['method']);
+        $this->assertSame(self::SENTINEL, $captured['body']['instances'][0]['context']);
+        // ALSO through the declared contract slot — see the note on the
+        // Anthropic arm above; both assertions are kept.
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $captured['body'],
+                $this->contractSlotFor(VertexProvider::class . '#google'),
+            ),
+        );
+        $this->assertSame(
+            [['role' => 'user', 'content' => 'Hi']],
+            $captured['body']['instances'][0]['messages'],
+            // NARROWED, because the wider claim this message used to make was
+            // one this assertion cannot support: it read "a prompt left in
+            // `messages` reaches the model as an ordinary user turn", but
+            // request() hands every provider in this file the SAME
+            // CompleteRequest — one UserMessage and no SystemMessage
+            // (see request(), and the class doc-block's identical-request
+            // invariant) — so no hoist-dedup failure is observable here.
+            // MEASURED: reverting only the withoutSystemMessages() call in
+            // VertexProvider::googleBody() leaves this whole file green.
+            // What this assertion DOES pin is that the `systemPrompt` hoist
+            // did not also leave a copy in `messages`, and that the one user
+            // turn survives it unaltered. The hoist-dedup for a history
+            // SystemMessage is pinned in
+            // VertexProviderTest::testTheGooglePromptRidesContextAndNowhereElseInTheBody
+            // and
+            // VertexProviderTest::testGoogleInstanceContextJoinsEveryHistorySystemMessageInMessageOrder.
+            'the systemPrompt must be hoisted into `context` and NOT also left in `messages`; '
+            . 'the one user turn must survive unaltered',
+        );
+        $this->assertSame(1, substr_count((string) json_encode($captured['body']), self::SENTINEL));
+
+        // NOT the streamer seam: completeStream() yields complete() for a
+        // non-Anthropic model (VertexProvider.php:290-298), so the streaming
+        // path is captured on the PREDICTOR. Asserting it separately is still
+        // the point — complete() passing is not evidence about
+        // completeStream(), which is exactly how the OpenAI arm hid this same
+        // defect until P1.S3.
+        $streamed = null;
+        $streamProvider = $this->vertexProvider([], $streamed);
+        iterator_to_array(
+            $streamProvider->completeStream($this->request(model: self::VERTEX_GOOGLE_MODEL)),
+            false,
+        );
+
+        $this->assertSame('predict', $streamed['method']);
+        $this->assertSame(self::SENTINEL, $streamed['body']['instances'][0]['context']);
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $streamed['body'],
+                $this->contractSlotFor(VertexProvider::class . '#google'),
+            ),
+        );
+        $this->assertSame(1, substr_count((string) json_encode($streamed['body']), self::SENTINEL));
+    }
+
+    public function testVertexGoogleArmNullSystemPromptTransmitsNothing(): void
+    {
+        $captured = null;
+        $provider = $this->vertexProvider([], $captured);
+        $provider->complete($this->request(null, self::VERTEX_GOOGLE_MODEL));
+
+        $this->assertArrayNotHasKey('context', $captured['body']['instances'][0]);
     }
 
     // =========================================================================
