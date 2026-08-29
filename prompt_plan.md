@@ -3238,7 +3238,15 @@ cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit \
   tests/Config/EnvRosterDriftTest.php \
   tests/Tools/BuiltInToolCorpusTest.php
 # MEASURED 2026-08-25 on master @2b53302af: OK (103 tests, 9380 assertions), 00:11.965.
-# That is the number to compare against — a step that changes it has changed a census.
+# MEASURED 2026-08-29 on master @b5cafe461: OK (103 tests, 9448 assertions), 00:11.897.
+#
+# DO NOT COMPARE AGAINST EITHER LITERAL ABOVE. They are dated readings, kept because
+# each is pinned to a sha, and the drift between them is the point: the assertion total
+# moved +68 across Phases 1-3 without any census breaking. Several of these suites are
+# PER-PARAGRAPH doc-drift censuses, so prose-only commits move the total legitimately.
+# The figure to compare against is the one in prompt_resume.md §8 `Latest suite`, which
+# is re-measured every step. A step that moves it must say WHICH suite moved and why —
+# per §16.2, prefer the derived figure to the literal.
 
 # The full suite — the phase-close checkpoint. Quote the summary line VERBATIM.
 cd /home/sites/sugarcraft/sugar-crush && vendor/bin/phpunit
