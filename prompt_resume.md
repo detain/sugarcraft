@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 in progress, 20 of 62 steps merged — P3.S1 379ecc7d6; P3.S2 dabcd27f7; P3.S3 74cabae7f; P3.audit-fix-1 6aff0bad1; P1.audit-fix-1 03d8fed37; P3.S4 f2af06eaa. NOTHING IS IN FLIGHT — no worktrees, no branches, no agents. Next: P3.S5, then P3.S4-fix-1, then the Phase 3 close review. See §8.**
+**Current state: Phase 3, 20 of 62 steps merged — P3.S1 379ecc7d6; P3.S2 dabcd27f7; P3.S3 74cabae7f; P3.audit-fix-1 6aff0bad1; P1.audit-fix-1 03d8fed37; P3.S4 f2af06eaa. **P3.S5, the final Phase 3 step, is IN FLIGHT** in /home/sites/prompt-step-P3.S5. Phase 3 then needs P3.S4-fix-1 and the SECOND ASSEMBLER disposition before its close review. See §8.**
 
 ---
 
@@ -303,12 +303,44 @@ Latest suite:     MASTER after the P3.S4 merge, measured by the orchestrator, st
                    Compare per-file counts, or diff `--log-junit` per-testcase `assertions=`
                    attributes, before calling an assertion delta real.
 
-In-flight batch:  NONE. No agents running.
-Live worktrees:   /home/sites/sugarcraft  master, clean. THAT IS ALL.
-                   Every step worktree and every review sandbox has been removed, and every
-                   prompt/* and review/* branch deleted (`git branch --list 'prompt/*' 'review/*'`
-                   is empty). /home/sites/crush-lane-{a,b,c} are NOT worktrees of this repo and
-                   belong to the other plan — leave them alone.
+In-flight batch:  ONE agent running: **P3.S5 — Wire the write-signal into the engine loop**,
+                   the FINAL step of Phase 3. Spawned 2026-08-29 after P3.S4 merged.
+                   Worktree /home/sites/prompt-step-P3.S5, branch prompt/P3.S5, based on master
+                   7c0ab6954. vendor/ hardlinked with `cp -al` and VERIFIED: the PSR-4 root prints
+                   /home/sites/prompt-step-P3.S5/sugar-crush/src (NEVER `ln -s` — a symlinked vendor
+                   makes __DIR__ resolve to the main repo's src/ and silently tests the wrong code).
+                   .sugar-crush-prompt/P3.S5-brief-prereqs.md was COPIED in (it is gitignored, so
+                   `git worktree add` does not carry it).
+                   Declared file list: src/Runtime.php, src/Backend/EngineBackend.php,
+                   tests/RuntimeTest.php. The agent does NOT write bookkeeping files — it RETURNS
+                   its worklog entry as text and I append it.
+
+                   ITS BRIEF CARRIES ALL FIVE ITEMS UNDER "Next step" ABOVE, (a) through (e).
+                   THE TRAPS IN THIS STEP, already in its brief:
+                     * golden-system-prompt.txt must stay BYTE-IDENTICAL. If it moves, production
+                       output changed — the agent was told to stop and escalate, not regenerate.
+                       Golden fixtures are outside its declared list.
+                     * PromptStabilityTest's testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne
+                       pins the <repo-map> cross-turn volatility AS A FINDING and WILL RED if that
+                       behaviour is ever fixed. Intended — rewrite deliberately, never delete.
+                     * MIN_STABLE_PREFIX_BYTES=4096 and STABLE_LAYERS_BYTES=1575 are live. If the
+                       change moves them that is a real signal; do not adjust the constant to match.
+                     * Any production mutation taken as a MEASUREMENT must be restored, with
+                       `git status --porcelain` empty afterwards (§16.8 rule 51). This is the trap
+                       that nearly cost P3.S1's decision and that P3.S4 handled correctly.
+
+                   AFTER P3.S5 MERGES, PHASE 3 STILL DOES NOT CLOSE. In order:
+                     1. P3.S4-fix-1 (the eight standing findings — see Open follow-ups item 1).
+                     2. Disposition the §"THE SECOND ASSEMBLER" gap: EITHER schedule a P3.S6 for the
+                        Agent assembler OR add a §18 row saying why the Agent path keeps the diff.
+                     3. THEN the Phase 3 close review (§1.7), cap three cycles.
+
+Live worktrees:   /home/sites/sugarcraft         master, clean
+                  /home/sites/prompt-step-P3.S5  prompt/P3.S5, agent running
+                   Nothing else. Every earlier step worktree and review sandbox has been removed and
+                   every stale prompt/* and review/* branch deleted.
+                   /home/sites/crush-lane-{a,b,c} are NOT worktrees of this repo and belong to the
+                   other plan — leave them alone.
 
 Blocked on:       nothing is blocked from running. But note P3.S4 is recorded as
                    `blocked (review-cycle)` per §1.2 action 6 — its sixth review returned eight
