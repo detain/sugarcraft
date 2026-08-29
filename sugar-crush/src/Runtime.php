@@ -187,6 +187,87 @@ final class Runtime
     private ?RepoMapBlock $repoMapBlock = null;
 
     /**
+     * The per-step write signal the engine loop derives, or NULL while nobody
+     * has said anything either way.
+     *
+     * NULL IS THE POINT, and it is not the same value as `false` OR as `true`.
+     * {@see EnvironmentBlock}'s own flag defaults to TRUE, and a block handed
+     * in through the constructor may carry either polarity deliberately — a
+     * caller that already holds a session-wide snapshot it has suppressed is
+     * exactly the shape the `$environmentBlock` parameter exists for. A plain
+     * `bool $writeSinceLastStep = true` here would OVERWRITE that injected
+     * decision on the first render, silently, so the absence of a caller is
+     * modelled as absence rather than as the default's value.
+     * {@see environmentSnapshot()} therefore leaves the block exactly as it
+     * found it while this is null, which is byte-for-byte the pre-P3.S5
+     * behaviour for every caller that never marks.
+     *
+     * NOT PAIRED WITH A `bool $…Set` SENTINEL, which prompt_plan.md §17.3 asks
+     * of a nullable field: that convention is for the immutable `with*()`
+     * value objects ({@see \SugarCraft\Crush\Context\EnvironmentBlock},
+     * `Style`), where a `with*(null)` call and an untouched field must stay
+     * distinguishable. This class is a mutable per-turn service — its
+     * neighbours {@see $memoryBlock}, {@see $repoMapBlock} and
+     * {@see $environmentBlock} are all nullable with no sentinel — and
+     * {@see markWriteSinceLastRender()} takes a non-nullable `bool`, so no
+     * caller can ever set this back to null. The three states are reachable,
+     * distinguishable, and one field expresses all three.
+     */
+    private ?bool $writeSinceLastStep = null;
+
+    /**
+     * The built-in tool names a step may have written the working tree
+     * through, as {@see isWriteCapableTool()} reads them.
+     *
+     * A SECOND SPELLING OF AN EXISTING ROSTER, and said so rather than
+     * presented as new. `PermissionGate::isWriteTool()` answers exactly this
+     * question — MEASURED at `src/Permissions/PermissionGate.php:687`, it
+     * holds `['Bash', 'Edit', 'Write']` plus the same `mcp__` prefix rule —
+     * and this constant repeats it. Two NEIGHBOURING tool-name rosters answer
+     * DIFFERENT questions and are deliberately not reconciled with it:
+     * `ProtectFilesHook`'s `^(Bash|Edit|Write|Read)$` (`:121`) and
+     * `PermissionRule::PATH_SUBJECT_TOOLS` (`:220`) both include `Read`,
+     * because they are about which calls carry a path subject, not about which
+     * calls change one. prompt_plan.md §16.8 rule 15 forbids a hand-maintained
+     * roster standing on its own, so this one does not:
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheWriteToolRosterDoesNotDriftFromThePermissionGate()}
+     * derives `PermissionGate::isWriteTool()`'s list out of that file's source
+     * and asserts it equals this constant, so adding a write tool to one and
+     * not the other is a red rather than a prompt that silently stops showing
+     * a diff.
+     *
+     * IT IS NOT MERGED INTO ONE ROSTER HERE because `PermissionGate` is
+     * outside this step's declared file list; the drift test is what makes the
+     * duplication safe until a step that owns both can collapse it.
+     *
+     * PUBLIC for the same reason {@see DENIAL_HOOK} and its two siblings are:
+     * an embedder driving this class needs to be able to read the judgement
+     * rather than re-derive it. Inside `src/` its only consumer is
+     * {@see isWriteCapableTool()}.
+     *
+     * WHY `Bash` IS ON A LIST ABOUT WRITES. Conservatively — a shell can do
+     * anything, and the same reasoning is why `PermissionGate` treats it as a
+     * write. The consequence is worth stating rather than discovering: a step
+     * that ran `Bash(command: "ls")` re-arms the diff, so the suppression
+     * fires only on a genuinely read-only step (`Read`/`Grep`/`Glob`/`Lsp`/
+     * `WebFetch`/`WebSearch`/`Skill`/`doctor`, and any user-supplied tool this
+     * list does not name). That is the fail-safe direction: over-showing the
+     * diff costs bytes, under-showing it withholds the state the model must
+     * see to continue, and {@see EnvironmentBlock}'s docblock has already
+     * argued that the second loss is the worse one.
+     *
+     * @var list<string>
+     */
+    public const WRITE_CAPABLE_TOOL_NAMES = ['Bash', 'Edit', 'Write'];
+
+    /**
+     * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is
+     * server-defined and unknowable in this process, so it counts as a write.
+     * Same judgement, and the same spelling, as `PermissionGate::isWriteTool()`.
+     */
+    private const MCP_TOOL_PREFIX = 'mcp__';
+
+    /**
      * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
      *                                            one is captured lazily on first use and
      *                                            reused for the life of this Runtime.
@@ -214,6 +295,98 @@ final class Runtime
         private bool $parallelToolCalls = true,
         private int $parallelToolDeadlineSeconds = self::PARALLEL_TOOL_DEADLINE_SECONDS,
     ) {}
+
+    /**
+     * Record whether the step that just finished ran anything that could have
+     * written the working tree, so the NEXT prompt this Runtime assembles
+     * shows the git diff or withholds it.
+     *
+     * THIS IS THE CALLER SIDE OF P3.S2's LEVER.
+     * {@see EnvironmentBlock::withWriteSinceLastRender()} shipped the switch
+     * and named the missing half — "the caller — the engine loop that observes
+     * tool results between prompt builds — flips it per step" — and left the
+     * class docblock's paragraph on it saying "that caller does not exist
+     * yet". It exists now, and it is
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}'s bounded
+     * agentic loop, which calls this once per step with
+     * {@see stepRequestedAWrite()} over the step's own assistant turn.
+     *
+     * NOT `with*()`, DELIBERATELY. prompt_plan.md §17.3's immutable-and-fluent
+     * rule is about value objects; this class is a mutable per-turn service
+     * that already memoises three blocks in place, and a `withX()` returning a
+     * clone would hand the loop a SECOND Runtime whose memoised
+     * {@see EnvironmentBlock}, {@see MemoryBlock} and {@see RepoMapBlock} were
+     * all freshly captured — re-reading the memory directory and re-walking
+     * the repository map every step, which is precisely the cost those memos
+     * exist to avoid. A mutator is the honest shape for a signal that belongs
+     * to the run, not to a value.
+     *
+     * IT DOES NOT REACH ACROSS TURNS, and the limit is structural rather than
+     * an omission here: `EngineBackend::complete()` builds a fresh Runtime per
+     * user turn, and on the `completeAsync()` path that Runtime lives inside a
+     * forked child that exits when the turn ends. Nothing this method sets
+     * survives to the next turn, so every turn's FIRST prompt opens in
+     * {@see EnvironmentBlock}'s default emit state. That is the truthful
+     * default the lever shipped with — see its
+     * "CROSS-TURN SEMANTICS, STATED" paragraph — but it is NOT the wider
+     * promise that paragraph ends on ("the wiring step decides whether a quiet
+     * turn earns a quiet opening"), which needs the signal carried back over
+     * the child's socket and is not delivered here.
+     */
+    public function markWriteSinceLastRender(bool $wroteThisStep): void
+    {
+        $this->writeSinceLastStep = $wroteThisStep;
+    }
+
+    /**
+     * Whether one step of the agentic loop asked for a tool that could have
+     * written the working tree.
+     *
+     * REQUESTED, NOT EXECUTED, and the distinction is a decision rather than
+     * an oversight. What is available here is the assistant turn's tool CALLS;
+     * a {@see \SugarCraft\Crush\Messages\ToolResultMessage} carries a call id
+     * and no tool name, so the results cannot answer this question at all. A
+     * call the permission gate denied, or one whose tool threw, therefore
+     * counts as a write and re-arms the diff. That is the fail-safe direction:
+     * a spurious re-arm costs the bytes of one diff section pair, while a
+     * missed one shows the model a tree that no longer matches what it just
+     * changed. {@see EnvironmentBlock}'s "showing beats hiding" argument is
+     * the same trade, made one layer down.
+     *
+     * A null or empty list is FALSE — a step that called no tools wrote
+     * nothing. In the live loop that step is also the last one
+     * ({@see \SugarCraft\Crush\Backend\EngineBackend::complete()} breaks when a
+     * step produces no tool results), so the false it returns there is
+     * recorded and never read; it is stated as behaviour rather than left to
+     * the caller's shape because this method is public and the caller's shape
+     * is not a contract.
+     *
+     * @param ?list<ToolCall> $toolCalls the step's assistant turn's tool calls,
+     *                                   as {@see \SugarCraft\Crush\Messages\AssistantMessage::toolCalls()}
+     *                                   returns them
+     */
+    public static function stepRequestedAWrite(?array $toolCalls): bool
+    {
+        foreach ($toolCalls ?? [] as $toolCall) {
+            if (self::isWriteCapableTool($toolCall->name())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * One tool name against {@see WRITE_CAPABLE_TOOL_NAMES} and the
+     * {@see MCP_TOOL_PREFIX} rule — see that constant for the roster, for the
+     * drift test that pins it against `PermissionGate::isWriteTool()`, and for
+     * why `Bash` is on it.
+     */
+    private static function isWriteCapableTool(string $toolName): bool
+    {
+        return in_array($toolName, self::WRITE_CAPABLE_TOOL_NAMES, true)
+            || str_starts_with($toolName, self::MCP_TOOL_PREFIX);
+    }
 
     /**
      * Run a completion and handle tool calls.
@@ -1866,9 +2039,33 @@ final class Runtime
      * still. An owner that already holds a session-wide snapshot injects it
      * through the constructor instead.
      *
-     * The diff-suppressing mode is DORMANT as of this writing — no caller in
-     * `src/` or `bin/` sets it either way, so every production render today
-     * is a five-subprocess one. P3.S5 is the step that wires it.
+     * WHAT THIS SAID: "The diff-suppressing mode is DORMANT as of this
+     * writing — no caller in `src/` or `bin/` sets it either way, so every
+     * production render today is a five-subprocess one. P3.S5 is the step
+     * that wires it."
+     * WHAT IS TRUE NOW: P3.S5 is this change, and the mode is wired.
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()} — the only
+     * production construction of this class, and the only production caller of
+     * {@see run()} — derives the signal once per step of its bounded agentic
+     * loop and hands it to {@see markWriteSinceLastRender()}. A step whose
+     * assistant turn requested no write-capable tool leaves the NEXT step's
+     * prompt rendering three subprocesses and no diff sections; a step that
+     * requested one re-arms both.
+     * WHY THE PARAGRAPH STILL EARNS ITS PLACE: the count it names is the whole
+     * reason the lever exists, and the default it names is still the default —
+     * a Runtime nobody talks to, and every first prompt of every turn, still
+     * renders five. The dormancy is what moved, not the arithmetic.
+     *
+     * WHY THE SIGNAL IS A FIELD HERE AND NOT A FLIP OF THE MEMO. The block is
+     * `readonly`, so {@see EnvironmentBlock::withWriteSinceLastRender()}
+     * returns a new instance and a naive re-derivation on every call would
+     * break the memoisation §17.2 invariant 9 pins
+     * ({@see \SugarCraft\Crush\Tests\RuntimeTest::testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns()}
+     * asserts `assertSame` across two calls). So the new instance is minted
+     * only when the signal actually DIFFERS from the one the held block
+     * carries, and the held block is replaced with it — two calls with no
+     * intervening {@see markWriteSinceLastRender()} return the identical
+     * object, which is what that assertion means.
      *
      * Captured at {@see projectRoot()}, not at the process directory: the
      * "Working directory"/"Is directory a git repo" lines this renders are
@@ -1877,7 +2074,13 @@ final class Runtime
      */
     private function environmentSnapshot(App $app): EnvironmentBlock
     {
-        return $this->environmentBlock ??= EnvironmentBlock::capture(self::projectRoot($app), $app->model);
+        $block = $this->environmentBlock ??= EnvironmentBlock::capture(self::projectRoot($app), $app->model);
+
+        if ($this->writeSinceLastStep === null || $block->writeSinceLastRender() === $this->writeSinceLastStep) {
+            return $block;
+        }
+
+        return $this->environmentBlock = $block->withWriteSinceLastRender($this->writeSinceLastStep);
     }
 
     /**

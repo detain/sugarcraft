@@ -6,6 +6,7 @@ namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Context\EnvironmentBlock;
 use SugarCraft\Crush\Context\InstructionFileLoader;
 use SugarCraft\Crush\Events\ToolFinished;
@@ -20,8 +21,11 @@ use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Message as RootMessage;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\EmbeddingsRequest;
+use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Runtime;
@@ -1758,10 +1762,37 @@ final class RuntimeTest extends TestCase
 
     public function testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns(): void
     {
-        // The block documents itself as a point-in-time snapshot and shells out
-        // to git three times to build one: re-capturing per turn would both
-        // burn three subprocesses per step of the agentic loop and let the
-        // rendered date/git state drift mid-session.
+        // WHAT THIS SAID: "The block documents itself as a point-in-time
+        // snapshot and shells out to git three times to build one:
+        // re-capturing per turn would both burn three subprocesses per step of
+        // the agentic loop and let the rendered date/git state drift
+        // mid-session."
+        //
+        // WHAT IS TRUE NOW: neither half. The block does NOT document itself as
+        // a point-in-time snapshot — {@see EnvironmentBlock}'s class docblock
+        // opens by correcting exactly that reading, and since P3.S3 the
+        // rendered prompt says so too, in `GIT_STATE_CAVEAT`: "this git state
+        // is as of this prompt's render, not a snapshot from conversation
+        // start". `capture()` freezes three values (cwd, model, timestamp) and
+        // the git section is polled live on every render. And the count is
+        // FIVE subprocesses per render, not three — branch, status, log,
+        // staged diff, unstaged diff — falling to THREE only when a caller has
+        // suppressed the diff through `withWriteSinceLastRender(false)`, which
+        // is the state P3.S5 wires the engine loop to derive. Because the git
+        // section is re-polled either way, re-capturing per turn would burn
+        // ZERO extra subprocesses: the bill is a function of RENDERS, and the
+        // same correction was made to `Runtime::environmentSnapshot()`'s own
+        // docblock (it kept the identical stale pair until P3.audit-fix-1).
+        //
+        // WHY THE TEST STILL EARNS ITS PLACE, restated as what it actually
+        // pins: the three CAPTURED values must not drift mid-session, so one
+        // Runtime must hand out one block. That is §17.2 invariant 9's
+        // per-Runtime memoisation, and it is the invariant P3.S5's write
+        // signal had to be threaded THROUGH rather than around — a naive
+        // re-derivation of the block on every `environmentSnapshot()` call
+        // would red this `assertSame` (see
+        // {@see testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges()},
+        // which pins the identity on both sides of a mark).
         $app = App::new($this->provider, 'gpt-4');
 
         $first = $this->invokePrivateMethod($this->runtime, 'environmentSnapshot', [$app]);
@@ -1790,6 +1821,362 @@ final class RuntimeTest extends TestCase
             strpos($result, '<project-instructions>'),
             'the environment block must reach the model after the project conventions it could invalidate',
         );
+    }
+
+
+    // =========================================================================
+    // P3.S5 - the per-step write signal
+    //
+    // P3.S2 shipped the lever (`EnvironmentBlock::withWriteSinceLastRender()`)
+    // with nothing in `src/` or `bin/` pulling it, and its own docblock said
+    // so: "that caller does not exist yet". These tests are about the caller.
+    // The seam runs `EngineBackend::complete()`'s bounded agentic loop ->
+    // `Runtime::markWriteSinceLastRender()` -> `Runtime::environmentSnapshot()`
+    // -> the memoised block -> the assembled system prompt, and the tests
+    // below drive it from BOTH ends: the engine loop for reachability, and the
+    // Runtime directly for the polarities the loop cannot reach in one turn.
+    // =========================================================================
+
+    /**
+     * THE REACHABILITY TEST (prompt_plan.md 16.1): the live
+     * `EngineBackend::complete()` loop - the only production construction of
+     * `Runtime` and the only production caller of `run()` - flips the signal
+     * per step, and the flip is visible in the prompt the provider is handed.
+     *
+     * Three steps, driven through a recording provider that keeps every
+     * `CompleteRequest::$systemPrompt` it receives:
+     *
+     *   step 0 asks for `Read`  -> its own prompt is the turn's first, so it
+     *                              renders in the DEFAULT emit state
+     *   step 1 asks for `Edit`  -> its prompt follows a read-only step, so the
+     *                              diff is SUPPRESSED
+     *   step 2 answers          -> its prompt follows a write step, so the diff
+     *                              is BACK
+     *
+     * The middle row is what could not happen before this step, and the third
+     * is what makes the middle row a flip rather than a one-way latch.
+     */
+    public function testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite(): void
+    {
+        $root = $this->makeDirtyGitFixture();
+
+        /** @var list<string> $prompts */
+        $prompts = [];
+        $provider = $this->recordingProvider($prompts, [
+            new CompleteResponse('reading', null, [new ToolCall('c0', 'Read', [])]),
+            new CompleteResponse('editing', null, [new ToolCall('c1', 'Edit', [])]),
+            new CompleteResponse('done'),
+        ]);
+
+        $backend = EngineBackend::new($provider, 'test-model')
+            ->withoutHooks()
+            ->withRoot($root)
+            ->withTools([
+                $this->createMockTool('Read', 'file contents'),
+                // Deliberately does NOT touch the filesystem: the signal is
+                // derived from the tool NAME the model asked for, never from a
+                // tree comparison, so a mock is the honest fixture here.
+                $this->createMockTool('Edit', 'edited'),
+            ]);
+
+        $reply = $backend->complete([RootMessage::user('go')]);
+
+        $this->assertSame('done', $reply->content);
+        $this->assertCount(3, $prompts, 'the loop must have assembled exactly three prompts');
+
+        $label = 'Unstaged changes (git diff, working tree vs index)';
+        $staged = 'Staged changes (git diff --cached, index vs HEAD)';
+
+        $this->assertSame(1, substr_count($prompts[0], $label), 'step 0 opens in the default emit state');
+        $this->assertSame(1, substr_count($prompts[0], $staged), 'step 0 opens in the default emit state');
+
+        $this->assertSame(0, substr_count($prompts[1], $label), 'step 1 follows a read-only step: no unstaged diff');
+        $this->assertSame(0, substr_count($prompts[1], $staged), 'step 1 follows a read-only step: no staged diff');
+
+        $this->assertSame(1, substr_count($prompts[2], $label), 'step 2 follows an Edit: the diff is re-armed');
+        $this->assertSame(1, substr_count($prompts[2], $staged), 'step 2 follows an Edit: the diff is re-armed');
+
+        // Suppression takes the two diff sections and NOTHING else. Asserted as
+        // an exact byte identity rather than as three absences, because the
+        // three cheap fields going missing with them would be a silent
+        // regression that absence assertions cannot see.
+        $cut = strpos($prompts[0], "\n\nStaged changes (");
+        $this->assertIsInt($cut, 'the emitting prompt must carry the staged-diff section');
+        $this->assertSame(
+            substr($prompts[0], 0, $cut) . "\n</env>",
+            $prompts[1],
+            'the suppressed prompt must be the emitting one with exactly the two diff sections cut out',
+        );
+
+        // The three cheap git fields and P3.S3's caveat survive the
+        // suppression - stated positively, because the identity above would
+        // also hold if all four had never been emitted in either prompt.
+        foreach (['Note: this git state is as of', 'Current branch:', 'Status:', 'Recent commits:'] as $kept) {
+            $this->assertSame(1, substr_count($prompts[1], $kept), "the suppressed prompt keeps: {$kept}");
+        }
+    }
+
+    /**
+     * The Done-when's first clause, driven as the sequence it names:
+     * CONSECUTIVE no-write steps, with the assertion on the SECOND assembled
+     * prompt.
+     *
+     * Separate from the flip test above because it pins a different property -
+     * that suppression PERSISTS across a run of quiet steps rather than
+     * decaying back to emit after one. A latch that reset itself every step
+     * would pass the flip test (step 1 suppressed, step 2 emitting after the
+     * Edit) and fail this one.
+     */
+    public function testTwoConsecutiveNoWriteStepsBothAssembleASuppressedPrompt(): void
+    {
+        $root = $this->makeDirtyGitFixture();
+
+        /** @var list<string> $prompts */
+        $prompts = [];
+        $provider = $this->recordingProvider($prompts, [
+            new CompleteResponse('read one', null, [new ToolCall('c0', 'Read', [])]),
+            new CompleteResponse('read two', null, [new ToolCall('c1', 'Grep', [])]),
+            new CompleteResponse('read three', null, [new ToolCall('c2', 'Glob', [])]),
+            new CompleteResponse('done'),
+        ]);
+
+        $backend = EngineBackend::new($provider, 'test-model')
+            ->withoutHooks()
+            ->withRoot($root)
+            ->withTools([
+                $this->createMockTool('Read', 'contents'),
+                $this->createMockTool('Grep', 'matches'),
+                $this->createMockTool('Glob', 'paths'),
+            ]);
+
+        $backend->complete([RootMessage::user('go')]);
+
+        $this->assertCount(4, $prompts);
+
+        $staged = 'Staged changes (git diff --cached, index vs HEAD)';
+        $this->assertSame(1, substr_count($prompts[0], $staged), 'the turn still opens on the diff');
+        $this->assertSame(0, substr_count($prompts[1], $staged));
+        $this->assertSame(0, substr_count($prompts[2], $staged));
+        $this->assertSame(0, substr_count($prompts[3], $staged));
+
+        // Byte-identical, and that is the cache claim rather than a
+        // restatement of the counts above: three quiet steps in a row hand the
+        // provider the SAME prompt, so the whole prefix is reusable. Before
+        // this step they differed - not because the diff changed (nothing
+        // wrote), but they carried it three times over.
+        $this->assertSame($prompts[1], $prompts[2], 'two consecutive quiet steps assemble the same bytes');
+        $this->assertSame($prompts[2], $prompts[3]);
+
+        // And the saving is real, not a relabelling.
+        $this->assertGreaterThan(
+            strlen($prompts[1]),
+            strlen($prompts[0]),
+            'the suppressed prompt must be SHORTER than the emitting one on a dirty tree',
+        );
+    }
+
+    /**
+     * The Runtime side of the seam, on its own, driving both polarities and the
+     * re-arm on ONE Runtime - which is the sequence the engine loop produces
+     * and which no single turn of the loop can be made to produce twice.
+     */
+    public function testMarkWriteSinceLastRenderFlipsTheAssembledPromptBothWays(): void
+    {
+        $root = $this->makeDirtyGitFixture();
+        $app = App::new($this->provider, 'gpt-4')->withRoot($root);
+        $runtime = new Runtime($this->provider, $this->hookManager);
+
+        $staged = 'Staged changes (git diff --cached, index vs HEAD)';
+
+        $first = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $this->assertSame(1, substr_count($first, $staged), 'an unmarked Runtime emits, exactly as before P3.S5');
+
+        $runtime->markWriteSinceLastRender(false);
+        $quiet = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $this->assertSame(0, substr_count($quiet, $staged));
+
+        $runtime->markWriteSinceLastRender(true);
+        $loud = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $this->assertSame(1, substr_count($loud, $staged));
+
+        // The re-armed prompt is the ORIGINAL prompt, byte for byte: the flip
+        // must be reversible, not merely repeatable. `$now` is frozen at
+        // capture and the memoised block is reused, so nothing else can drift
+        // between the two.
+        $this->assertSame($first, $loud);
+    }
+
+    /**
+     * 17.2 invariant 9 - per-Runtime memoisation - held THROUGH the new signal.
+     *
+     * A naive implementation derives `withWriteSinceLastRender()` on every
+     * `environmentSnapshot()` call; that returns a fresh readonly instance each
+     * time and quietly breaks the identity
+     * {@see testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns()}
+     * asserts. This pins the narrower rule the implementation actually follows:
+     * a new instance is minted only when the signal DIFFERS from the one the
+     * held block carries.
+     */
+    public function testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges(): void
+    {
+        $app = App::new($this->provider, 'gpt-4');
+        $runtime = new Runtime($this->provider, $this->hookManager);
+
+        $first = $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]);
+        $this->assertSame($first, $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]));
+
+        // Marking the value the block ALREADY carries must not churn it.
+        $runtime->markWriteSinceLastRender(true);
+        $this->assertSame($first, $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]));
+
+        // Marking the opposite value must.
+        $runtime->markWriteSinceLastRender(false);
+        $quiet = $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]);
+        $this->assertNotSame($first, $quiet);
+        $this->assertFalse($quiet->writeSinceLastRender());
+        $this->assertTrue($first->writeSinceLastRender(), 'the old instance must be untouched - the block is readonly');
+
+        // And the new one is memoised in turn.
+        $this->assertSame($quiet, $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]));
+    }
+
+    /**
+     * The null-sentinel polarity, and the reason `$writeSinceLastStep` is
+     * `?bool` rather than `bool $x = true`.
+     *
+     * A Runtime constructed around a block a caller has ALREADY suppressed must
+     * keep that decision until someone marks. With a non-nullable field
+     * defaulting to true, the first `environmentSnapshot()` would silently
+     * re-arm the diff and the constructor argument would be a lie.
+     */
+    public function testAnInjectedSuppressedBlockSurvivesUntilTheLoopMarksSomethingElse(): void
+    {
+        $root = $this->makeDirtyGitFixture();
+        $app = App::new($this->provider, 'gpt-4')->withRoot($root);
+        $block = (new EnvironmentBlock($root, 'gpt-4', new DateTimeImmutable('2026-08-29 12:00:00')))
+            ->withWriteSinceLastRender(false);
+
+        $runtime = new Runtime($this->provider, $this->hookManager, $block);
+
+        $held = $this->invokePrivateMethod($runtime, 'environmentSnapshot', [$app]);
+        $this->assertSame($block, $held, 'the injected instance must be handed back untouched');
+        $this->assertFalse($held->writeSinceLastRender());
+
+        $prompt = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $this->assertSame(0, substr_count($prompt, 'Staged changes (git diff --cached, index vs HEAD)'));
+
+        // ...and the loop still owns it once it speaks.
+        $runtime->markWriteSinceLastRender(true);
+        $armed = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [$app]);
+        $this->assertSame(1, substr_count($armed, 'Staged changes (git diff --cached, index vs HEAD)'));
+    }
+
+    /**
+     * The classifier, every polarity and the pathological input.
+     *
+     * `Runtime::stepRequestedAWrite()` is what turns one step's assistant turn
+     * into the boolean the loop marks, so a classifier that answered the same
+     * way for every input would make the whole seam read as working while
+     * either always emitting or never emitting.
+     *
+     * @dataProvider writeClassificationCases
+     * @param list<string> $toolNames
+     */
+    public function testStepRequestedAWriteClassifiesEachToolBatch(array $toolNames, bool $expected, string $why): void
+    {
+        $calls = [];
+        foreach ($toolNames as $i => $name) {
+            $calls[] = new ToolCall('call_' . $i, $name, []);
+        }
+
+        $this->assertSame($expected, Runtime::stepRequestedAWrite($calls), $why);
+    }
+
+    /** @return array<string, array{list<string>, bool, string}> */
+    public static function writeClassificationCases(): array
+    {
+        return [
+            // Negative rows: every one of these must leave the next prompt quiet.
+            'no calls at all' => [[], false, 'a step that called nothing wrote nothing'],
+            'Read alone' => [['Read'], false, 'Read is read-only in PermissionGate too'],
+            'Grep alone' => [['Grep'], false, 'Grep is read-only'],
+            'Glob alone' => [['Glob'], false, 'Glob is read-only'],
+            'Lsp alone' => [['Lsp'], false, 'Lsp queries only; applying an edit comes back through Edit/Write'],
+            'WebFetch and WebSearch' => [['WebFetch', 'WebSearch'], false, 'neither touches the working tree'],
+            'a user-supplied tool' => [['my_custom_tool'], false, 'an unknown name is not assumed to write'],
+            'three reads' => [['Read', 'Grep', 'Read'], false, 'a whole read-only batch stays quiet'],
+            'lowercase edit' => [['edit'], false, 'the roster is exact; tool names are not case-folded anywhere else either'],
+            'a name merely containing mcp__' => [['not_mcp__real'], false, 'the MCP rule is a PREFIX, not a substring'],
+
+            // Positive rows: every one must re-arm the diff.
+            'Edit alone' => [['Edit'], true, 'the canonical write'],
+            'Write alone' => [['Write'], true, 'the other canonical write'],
+            'Bash alone' => [['Bash'], true, 'a shell can do anything - PermissionGate makes the same call'],
+            'an MCP tool' => [['mcp__files__patch'], true, 'server-defined capability, treated conservatively as a write'],
+            'the bare MCP prefix' => [['mcp__'], true, 'the prefix rule does not require a suffix, and neither does PermissionGate'],
+
+            // Mixed batches: ONE write anywhere in the batch is enough, and the
+            // position of it must not matter. A classifier reading only the
+            // first or only the last call passes half of these.
+            'write first' => [['Edit', 'Read'], true, 'a write anywhere in the batch counts'],
+            'write last' => [['Read', 'Edit'], true, 'including at the end'],
+            'write in the middle' => [['Read', 'Bash', 'Grep'], true, 'including in the middle'],
+        ];
+    }
+
+    /** A null tool-call list is the shape `AssistantMessage::toolCalls()` returns for a plain answer. */
+    public function testStepRequestedAWriteTreatsANullToolCallListAsNoWrite(): void
+    {
+        $this->assertFalse(Runtime::stepRequestedAWrite(null));
+    }
+
+    /**
+     * 16.8 rule 15 - a hand-maintained roster inherits its own omissions - and
+     * check 19's roster-membership question, made into a red.
+     *
+     * `Runtime::WRITE_CAPABLE_TOOL_NAMES` is the FOURTH spelling in this tree
+     * of "which tools write". It is not derived from
+     * `PermissionGate::isWriteTool()` because that file is outside P3.S5's
+     * declared list, so this test derives the gate's list out of its own source
+     * and asserts the two agree. Adding a write tool to one and not the other
+     * reds here, rather than silently costing the model a diff it needed.
+     *
+     * The extraction is asserted to have FOUND something before it is compared:
+     * a regex that matched nothing returns `[]`, which is also what a genuinely
+     * empty roster returns, and those are not the same answer (rule 17).
+     */
+    public function testTheWriteToolRosterDoesNotDriftFromThePermissionGate(): void
+    {
+        $gate = dirname(__DIR__) . '/src/Permissions/PermissionGate.php';
+        $this->assertFileExists($gate);
+
+        $source = (string) file_get_contents($gate);
+
+        $found = preg_match(
+            '/function isWriteTool\(ToolCall \$call\): bool\s*\{\s*if \(in_array\(\$call->name, \[([^\]]*)\], true\)\)/',
+            $source,
+            $m,
+        );
+        $this->assertSame(1, $found, 'PermissionGate::isWriteTool() no longer has the shape this drift test reads');
+
+        preg_match_all("/'([^']+)'/", $m[1], $names);
+        $gateRoster = $names[1];
+
+        $this->assertNotEmpty($gateRoster, 'the extraction found no names - the instrument is dead, not the roster empty');
+        $this->assertSame(['Bash', 'Edit', 'Write'], $gateRoster, 'the control: this is what the gate holds today');
+        $this->assertSame(
+            $gateRoster,
+            Runtime::WRITE_CAPABLE_TOOL_NAMES,
+            'Runtime::WRITE_CAPABLE_TOOL_NAMES has drifted from PermissionGate::isWriteTool()',
+        );
+
+        // The MCP half of the same judgement, pinned the same way.
+        $this->assertSame(
+            1,
+            preg_match("/return str_starts_with\(\\\$call->name, 'mcp__'\);/", $source),
+            'PermissionGate still treats an mcp__ prefix as a write; Runtime must agree',
+        );
+        $this->assertTrue(Runtime::stepRequestedAWrite([new ToolCall('c', 'mcp__x__y', [])]));
     }
 
     // =========================================================================
@@ -2309,6 +2696,154 @@ final class RuntimeTest extends TestCase
             public function execute(HookContext $context): HookResult
             {
                 return HookResult::ask($this->question, $this->modifiedInput);
+            }
+        };
+    }
+
+    /**
+     * A committed git repository with a dirty working tree - one tracked file
+     * edited but not staged, one edited AND staged - so both diff sections
+     * this step suppresses have a non-empty body to lose.
+     *
+     * THE CONFIG PINS ARE NOT DECORATION. `EnvironmentBlock` shells out to
+     * plain `git`, so the developer's own `~/.gitconfig` reaches the rendered
+     * block; repository-local config is the only lever a test has over that
+     * without touching any other test's environment. The list is copied from
+     * `tests/Providers/PromptStabilityTest::dirtyRepoFixtureWithEveryStableLayer()`,
+     * where it was grown by five successive reviews and where the comment on
+     * it records what each knob costs and that the list is "found", not
+     * exhaustive. Nothing here asserts a byte LITERAL, so an unpinned knob
+     * would move figures no assertion reads - but `diff.noprefix`,
+     * `color.diff` and `i18n.commitEncoding` all change what a diff section
+     * CONTAINS, and this file's assertions do read that.
+     */
+    private function makeDirtyGitFixture(): string
+    {
+        $root = $this->makeTempRepo();
+        mkdir($root . '/src', 0o777, true);
+
+        file_put_contents($root . '/src/Alpha.php', "<?php\n\nnamespace Fixture;\n\nfinal class Alpha\n{\n    public function one(): int\n    {\n        return 1;\n    }\n}\n");
+        file_put_contents($root . '/src/Beta.php', "<?php\n\nnamespace Fixture;\n\nfinal class Beta {}\n");
+
+        foreach ([
+            ['init', '-q'],
+            ['symbolic-ref', 'HEAD', 'refs/heads/master'],
+            ['config', 'user.email', 'fixture@example.invalid'],
+            ['config', 'user.name', 'P3S5 Fixture'],
+            ['config', 'commit.gpgsign', 'false'],
+            ['config', 'diff.noprefix', 'false'],
+            ['config', 'diff.mnemonicPrefix', 'false'],
+            ['config', 'core.abbrev', '7'],
+            ['config', 'diff.context', '3'],
+            ['config', 'color.ui', 'false'],
+            ['config', 'color.diff', 'false'],
+            ['config', 'diff.suppressBlankEmpty', 'false'],
+            ['config', 'status.showUntrackedFiles', 'normal'],
+            ['config', 'log.decorate', 'no'],
+            ['config', 'i18n.logOutputEncoding', 'UTF-8'],
+            ['config', 'i18n.commitEncoding', 'UTF-8'],
+            ['add', '-A'],
+            ['commit', '-q', '-m', 'fixture: initial import'],
+        ] as $argv) {
+            $command = 'git -C ' . escapeshellarg($root);
+            foreach ($argv as $arg) {
+                $command .= ' ' . escapeshellarg($arg);
+            }
+            exec($command . ' 2>&1', $output, $code);
+            // Asserted rather than ignored: a silently failed `commit` leaves an
+            // empty `Recent commits:` and, worse here, an EMPTY diff - which
+            // would make every "the diff is present" assertion below pass on a
+            // label with no body, and every "it is absent" assertion vacuous.
+            $this->assertSame(0, $code, 'git ' . implode(' ', $argv) . ' failed: ' . implode("\n", $output));
+        }
+
+        file_put_contents($root . '/src/Alpha.php', "<?php\n\nnamespace Fixture;\n\nfinal class Alpha\n{\n    public function one(): int\n    {\n        return 42;\n    }\n}\n");
+        file_put_contents($root . '/src/Beta.php', "<?php\n\nnamespace Fixture;\n\nfinal class Beta\n{\n    public const X = 'staged';\n}\n");
+
+        $command = 'git -C ' . escapeshellarg($root) . ' add ' . escapeshellarg('src/Beta.php');
+        exec($command . ' 2>&1', $addOutput, $addCode);
+        $this->assertSame(0, $addCode, 'git add failed: ' . implode("\n", $addOutput));
+
+        return $root;
+    }
+
+    /**
+     * A non-streaming provider that records the `systemPrompt` of every
+     * request it is handed and answers with the next scripted response.
+     *
+     * Non-streaming on purpose: `Runtime::run()` assembles the prompt BEFORE
+     * it branches on `supportsStreaming()`, so both paths see the identical
+     * prompt and `runBatch()` is the one with no retry accumulator to reason
+     * about.
+     *
+     * @param list<string>           &$prompts  filled in call order
+     * @param list<CompleteResponse>  $script
+     */
+    private function recordingProvider(array &$prompts, array $script): ProviderInterface
+    {
+        return new class($prompts, $script) implements ProviderInterface {
+            private int $next = 0;
+
+            /**
+             * @param list<string>           $prompts
+             * @param list<CompleteResponse> $script
+             */
+            public function __construct(private array &$prompts, private array $script) {}
+
+            public function name(): string
+            {
+                return 'p3s5-recorder';
+            }
+
+            public function supportsStreaming(): bool
+            {
+                return false;
+            }
+
+            public function supportsFunctionCalling(): bool
+            {
+                return true;
+            }
+
+            public function supportsVision(): bool
+            {
+                return false;
+            }
+
+            public function supportsJsonSchema(): bool
+            {
+                return false;
+            }
+
+            public function contextWindow(): int
+            {
+                return 128_000;
+            }
+
+            public function costPer1kTokens(string $model, string $direction): float
+            {
+                return 0.0;
+            }
+
+            public function complete(CompleteRequest $request): CompleteResponse
+            {
+                $this->prompts[] = (string) $request->systemPrompt;
+
+                if (!isset($this->script[$this->next])) {
+                    throw new \LogicException('the engine loop asked for step ' . $this->next . '; the script has ' . count($this->script));
+                }
+
+                return $this->script[$this->next++];
+            }
+
+            public function completeStream(CompleteRequest $request): \Generator
+            {
+                yield $this->complete($request);
+            }
+
+            public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+            {
+                throw new \LogicException('not used by this fixture');
             }
         };
     }
