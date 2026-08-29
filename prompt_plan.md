@@ -8,7 +8,7 @@ Where they disagree about *how* the work is run, this document wins.
 subsystem, the compaction path, the tool-description surface, and the rules/skills/hooks/memory
 channels that feed them.
 
-**Status** Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7; P3.S5 scheduled (62 steps). Next: P3.S3 (fully serial). See prompt_resume.md §8.
+**Status** Phase 3 in progress, 19 of 62 steps merged — P3.S1 379ecc7d6; P3.S2 dabcd27f7; P3.S3 74cabae7f; plus retro-fix steps P3.audit-fix-1 6aff0bad1 and P1.audit-fix-1 03d8fed37. Next: P3.S4 (in flight), then P3.S5, then the Phase 3 close review (§1.7). Phase 3 is fully serial. See prompt_resume.md §8.
 
 **Companion files**
 - `prompt_worklog.md` — append-only, one entry per step, newest at the top.
