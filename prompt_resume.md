@@ -143,6 +143,31 @@ Full detail in `prompt_plan.md` §1. The short form:
 - At the end of each phase, spawn a phase review agent over all that phase's commits together.
   Findings → fix → **a new** phase reviewer → loop. Cap three cycles.
 
+## 6a. Harness note — these documents were written for OpenCode, not Claude Code
+
+**Confirmed by the user, 2026-08-29.** `prompt_plan.md`, this file, and `prompt_worklog.md` were
+authored assuming OpenCode as the harness. Follow their **substance** in full — the step loop, the
+review→fix→**new**-reviewer cycles, disjoint declared file lists, one worktree per step, per-step
+bookkeeping, measure-don't-assert, and never removing dormant code. Do **not** follow their
+agent-handling **mechanics** literally when the harness is Claude Code.
+
+Specifically, these do not apply here and should not be attempted:
+
+- PTY handling of any kind, and the `pkill -f 'phpunit.*prompt-step-<ID>'` watchdog in
+  `prompt_plan.md` §19.
+- Judging an agent's liveness by transcript mtime or by hunting a pid, and killing it by pid
+  (`prompt_plan.md` §1.8.6). Use the harness's own completion notification.
+- Rung 1 of the recovery ladder (`prompt_plan.md` §1.8.3) as an OpenCode capability. Under Claude
+  Code, continue a spawned agent with `SendMessage` addressed to that agent; if that is not
+  possible, drop straight to rung 2 (read the worktree) and rung 3 (a new agent in the same
+  worktree with a continuation brief).
+- OpenCode's `task` vs `delegate` spawn routing. Use the normal Agent tool.
+
+Everything §1.8 says about *what must be true* still holds without change: a blank, truncated, or
+aborted response means the agent **died** and is never a result; a reviewer that returns nothing has
+**not** returned `NO FINDINGS`; the orchestrator runs its own tests and records its own numbers;
+never write a dead agent's missing report yourself.
+
 ## 7. Non-negotiables
 
 - Never modify `docs/plans/crush_code_*.md` or `left_steps.md`.
@@ -289,7 +314,7 @@ there instead.
 
 ### What must survive every rewrite, unchanged in substance
 
-Sections **1, 2, 6, 7** and this section **§R**. They are the operating instructions and they do not
+Sections **1, 2, 6, 6a, 7** and this section **§R**. They are the operating instructions and they do not
 change as the plan progresses. Copy them forward verbatim. If you find an error in them, fix it and
 say so in the worklog entry for the step that fixed it.
 
