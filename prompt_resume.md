@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7; P3.S5 scheduled (62 steps). Next: P3.S3 (fully serial). See §8.**
+**Current state: Phase 3 in progress — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7; P3.S3 IN FLIGHT in /home/sites/prompt-step-P3.S3 (recovered stale worktree, §1.8 rung 3); P3.S5 scheduled (62 steps). See §8.**
 
 ---
 
@@ -189,16 +189,20 @@ Full detail in `prompt_plan.md` §1. The short form:
 
 ```
 Phase:            3 in progress — P3.S1 merged 379ecc7d6; P3.S2 merged dabcd27f7 (step commits
-                   8a31f239c + d05728826); P3.S5 scheduled (62 steps).
+                   8a31f239c + d05728826); P3.S3 IN FLIGHT (recovered stale worktree, §1.8.3
+                   rung 3); P3.S5 scheduled (62 steps).
                    Phase 3 NOT closed — P3.S3, P3.S4, P3.S5 remain (fully serial).
-Next step:        P3.S3 (fully serial S1→S2→S3→S4→S5); read prompt_plan.md Phase 3 section +
-                   prompt_expand.md P3 section before starting. Step texts prompt_plan.md §4;
-                   review bar §1.4; merge format §1.6. Sequencing gate re-check before Phase
-                   5/6 (collision rows still live, §5/§8 field below).
+Next step:        P3.S3 is IN FLIGHT (see In-flight batch). When it returns: verify with the
+                   orchestrator's own run (§1.2 action 7), merge --no-ff into master (§1.6 message
+                   format), remove the worktree, append the worklog entry, rewrite this file. THEN
+                   P3.S4 (measure the prefix win), then P3.S5 (wire the write-signal into the
+                   engine loop), then the Phase 3 close review (§1.7). Phase 3 is fully serial
+                   S1→S2→S3→S4→S5 — do not batch it. Sequencing gate re-check before Phase 5/6
+                   (collision rows still live, §5 and the gate field below).
 Steps done:       16 of 62
 Phases done:      3 of 12
-Last commit:      dabcd27f7 — prompt/P3.S2: emit the working diff only on the step after a write
-                   (merge; step commits 8a31f239c + d05728826)
+Last commit:      84899c6e7 — prompt: P3.S2 status #6 — merged dabcd27f7 (suite 10404/160919/1
+                   verified non-tty)
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, never edited)
 Latest suite:     full suite Tests: 10404, Assertions: 160919, Skipped: 1 (non-tty verified at
                    P3.S2 close; note the two pty-only env-dependent tests documented in the
@@ -206,8 +210,31 @@ Latest suite:     full suite Tests: 10404, Assertions: 160919, Skipped: 1 (non-t
                    check-path-repos exit 0. Oldest full-suite
                    checkpoint: 10393/160779/1 EXIT 0 @ e513409c5. Baseline 10351/160648/1
                    (P0.S1, never edited).
-In-flight batch:  none
-Live worktrees:   none (main repo only)
+In-flight batch:  P3.S3 ALONE (Phase 3 is fully serial — no batch). Spawned 2026-08-29 01:35 as a
+                   §1.8.3 RUNG-3 CONTINUATION agent into the pre-existing worktree
+                   /home/sites/prompt-step-P3.S3 (branch prompt/P3.S3). No merge order — one step.
+                   DECLARED-SCOPE WIDENING APPROVED by the orchestrator at spawn: P3.S3's plan text
+                   declares only src/Context/EnvironmentBlock.php +
+                   tests/Context/EnvironmentBlockTest.php; changing the rendered <env> text
+                   necessarily changes tests/fixtures/prompt/golden-system-prompt.txt, so that
+                   fixture is added to the declared list. Phase 3 is serial and nothing else is in
+                   flight, so the §1.1 concurrency re-check is satisfied.
+Live worktrees:   /home/sites/prompt-step-P3.S3 — step P3.S3, IN FLIGHT. Found STALE at resume
+                   (created 2026-08-28 23:41 by an orchestrator session that died; its transcript
+                   does not survive). §1.12 audit: no commits (master..HEAD empty), three
+                   uncommitted files — src/Context/EnvironmentBlock.php,
+                   tests/Context/EnvironmentBlockTest.php,
+                   tests/fixtures/prompt/golden-system-prompt.txt. Diff RESCUED to
+                   /home/sites/sugarcraft/.sugar-crush-prompt/rescued-P3.S3.patch (6809 B) before
+                   anything was touched. No worklog entry exists for P3.S3, so the partial work is
+                   UNREVIEWED (§1.12). Worktree fast-forwarded to master 84899c6e7; vendor/ probe
+                   prints /home/sites/prompt-step-P3.S3/sugar-crush/src (correct). Orchestrator's
+                   own measurement of the partial work at 84899c6e7:
+                     tests/Context/EnvironmentBlockTest.php + tests/BaseSystemPromptTest.php +
+                     tests/Providers/PromptStabilityTest.php → OK (62 tests, 251 assertions)
+                     census 6-file set → OK (103 tests, 9424 assertions)   [was 9420 at P3.S2 close
+                     on master: +4 assertions, cause UNEXPLAINED — the step agent is tasked with
+                     identifying which census moved and why]
 Blocked on:       nothing
 Awaiting user decision: nothing
 Open follow-ups:  (1) P4.S2: usage-payload cache fields re-probe before fixing fixture shape;
@@ -241,7 +268,8 @@ Open follow-ups:  (1) P4.S2: usage-payload cache fields re-probe before fixing f
                    semantics;
                    (11) F1 resolved by P3.S5 (wiring the write-signal into the engine loop — step
                    added to the plan, not yet executed);
-Sequencing gate:  CHECKED 2026-08-28 — Phase 3 fully serial S1→S2→S3→S4, P3.S1 done, next P3.S2;
+Sequencing gate:  CHECKED 2026-08-29 — Phase 3 fully serial S1→S2→S3→S4→S5; S1+S2 done, S3 in
+                   flight; phases 0-4 remain safe alongside the other plan (no new src/ files).
                    RE-CHECK before Phase 5/6 (collision rows still live, §5):
                    BuiltInToolCorpusTest assertSame(297, $files) + assertSame(316, $declarations) + RepoMapBlock.php:273
                    doc-line restating them (this plan adds ~11 src/ files — hardest collision);
