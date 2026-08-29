@@ -1855,3 +1855,42 @@ test and read as legitimate in review. This is the RR3-F8 finding ("both goldens
 bytes nothing pins") arriving from a second direction, and it is what P2.S1's platform injection
 removes. Do not regenerate either golden on a host whose three host lines differ from the committed
 ones without saying so in the commit message.
+
+### ORCHESTRATION-RULE-1 — one writer per worktree, and reviewers read a FROZEN tree   ·   2026-08-29
+
+**Status** `recorded (orchestrator defect, not a step defect)`
+
+**What happened.** In the same round, the two audit-fix steps independently reported the same class
+of failure, from opposite sides:
+
+- **P3.audit-fix-1** spawned a SECOND cycle-3 reviewer while the first was still alive — it misread
+  an idle transcript as a dead agent. Both ran against the SAME worktree and each briefly
+  contaminated one of the other's measurements. Both detected it, re-ran clean, and converged
+  independently on the same headline finding. Its own words: no corrupted result reached a commit,
+  "but that was luck, not design."
+- **P1.audit-fix-1** edited its worktree WHILE a reviewer was reading it. The reviewer correctly
+  reported the tree as dirty and flagged a possible rogue writer. The rogue writer was the step
+  agent. Subsequent cycles were run against a frozen tree.
+
+**Why this is the orchestrator's defect and not theirs.** Nothing in the brief either agent was
+given said who owns the tree while a review is in flight. §1.4 tells a reviewer to run the tests
+itself, in the step's worktree — which is exactly the window in which the step agent must not be
+writing. The plan's whole verification model rests on a measurement being reproducible, and a
+measurement taken against a tree someone else is editing is not a measurement.
+
+**The rule, to be carried in every step brief from here.**
+1. A worktree has exactly ONE writer at a time. While a review is in flight the step agent does not
+   edit, does not run a deletion experiment, and does not commit. It waits.
+2. Never two reviewers in one worktree at once. If a second opinion is wanted, give the second
+   reviewer its OWN worktree at the same sha, or run it after the first returns.
+3. An idle transcript is NOT a dead agent. Under Claude Code, liveness comes from the completion
+   notification, not from transcript mtime, pid, or silence (see the standing note that the plan's
+   §1.8.6 liveness mechanics are OpenCode-flavoured). Ping before replacing.
+4. A reviewer that finds the tree dirty STOPS and reports it rather than measuring, and the
+   orchestrator treats "reviewer saw a dirty tree" as a failed cycle to re-run, not as a finding
+   about the code.
+
+**Related, from the same round:** an agent KILLED mid-deletion-experiment leaves its mutation in the
+worktree, and the orchestrator must DIFF a dirty step worktree before assuming it holds work
+(recorded in the RESUME commit 8d9f703da — the mutation found there would have silently reverted
+P3.S1's env-last decision, with a comment still vouching for the behaviour that was gone).
