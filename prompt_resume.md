@@ -233,7 +233,11 @@ Next step:        P3.S4 is IN FLIGHT. After it merges: **P3.S5 — wire the writ
                    engine loop**, then the Phase 3 close review (§1.7).
 
                    P3.S5's BRIEF MUST CARRY ALL FOUR OF THESE — they are the accumulated output of
-                   this round and none is in the plan's own step text except where noted:
+                   this round and none is in the plan's own step text except where noted. THEY ARE
+                   ALSO ASSEMBLED, WITH SOURCES, IN
+                   .sugar-crush-prompt/P3.S5-brief-prereqs.md — which is GITIGNORED, so it must be
+                   COPIED into the P3.S5 worktree (`git worktree add` checks out committed files
+                   only). The summary below is authoritative if the two ever disagree:
                    (a) §"THE SECOND ASSEMBLER" (added to prompt_plan.md 2026-08-29, commit
                        9d7fbbdb4): EnvironmentBlock has FOUR production construction sites and this
                        step's declared list reaches only ONE (src/Runtime.php:1850). The other three
@@ -274,6 +278,10 @@ Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never ed
 Latest suite:     MASTER after all three merges, measured by the orchestrator, stdin from /dev/null:
                    Tests: 10418, Assertions: 161098, Skipped: 1, Failures: 0   <- CURRENT BASELINE
                    census 6-file set: 103 tests / 9448 assertions
+                   (census RE-CONFIRMED 2026-08-29 on master @b5cafe461 after three bookkeeping
+                   commits: OK (103 tests, 9448 assertions), 00:11.897 — unmoved, so repo-root
+                   prompt_*.md edits are census-neutral. GlobFigureDriftTest scans
+                   sugar-crush/docs/SETTINGS.md, not the plan's own files.)
                    tests/Providers/:  857 tests / 2113 assertions
                    find sugar-crush/src -name '*.php' | wc -l  ->  297
                    All three path-repo gates exit 0 (--no-lib-path-repos, root closure, --unused).
