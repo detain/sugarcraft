@@ -997,12 +997,88 @@ final readonly class VertexProvider implements ProviderInterface
      * history SystemMessage fared no better: it reached the model as an
      * ordinary user turn.
      *
-     * `context` is the field Google's own chat-prompt documentation for this
-     * `instances` envelope describes as carrying the model's standing
-     * instructions ("Design chat prompts",
-     * https://cloud.google.com/vertex-ai/generative-ai/docs/chat/chat-prompts).
-     * That is DOCUMENTED, not measured on the wire - nothing here has Vertex
+     * `context` IS THE STANDING-INSTRUCTION FIELD - OF THE PaLM 2 `chat-bison`
+     * ENVELOPE, WHICH IS THE ONE THIS METHOD BUILDS, and naming the model
+     * family is the part that used to be missing. The instance shape is
+     * `{"context": ..., "examples": [...], "messages": [{"author": ...,
+     * "content": ...}]}`. CORROBORATED at code level by an independent
+     * raw-REST Go implementation of this same `:predict` endpoint,
+     * uber/go-vertex-ai `types.go` (MEASURED 2026-08-29 from
+     * https://raw.githubusercontent.com/uber/go-vertex-ai/main/types.go): its
+     * `inputInstances` struct carries the JSON tags `json:"context"`,
+     * `json:"examples,omitempty"` and `json:"messages"`, its `payload`
+     * struct is `{instances, parameters}` - this envelope exactly - and its
+     * README names the model: "chat-bison is a large language model ... The
+     * PaLM 2 for chat".
+     *
+     * WHAT THIS PARAGRAPH USED TO SAY, WHAT IS TRUE NOW, AND WHY THE CLAIM
+     * STILL STANDS (rule 42). It used to cite "Design chat prompts" at
+     * https://cloud.google.com/vertex-ai/generative-ai/docs/chat/chat-prompts
+     * and name no model family at all. MEASURED 2026-08-29: that URL
+     * 301-redirects to
+     * https://docs.cloud.google.com/vertex-ai/generative-ai/docs/chat/chat-prompts.
+     * A review reported the destination as "a navigation index with none of
+     * the described content" and the page as retired; RE-MEASURED, THAT IS
+     * FALSE and is recorded here so it is not propagated - the destination is
+     * a live 200 content page still titled "Design chat prompts", still
+     * listing Messages / Context / Examples as the chat-prompt components,
+     * still describing `context` as what you "use ... to customize the
+     * behavior of the chat model", and still carrying a worked
+     * `"context": "You are captain Barktholomew ..."` example. What HAS
+     * moved is the envelope it documents: its message example is now
+     * Gemini-shaped (`"contents": [{"role": ..., "parts": {"text": ...}}]`)
+     * and the strings `chat-bison` and `PaLM` no longer appear on it at all.
+     * So that page still supports the CLAIM about `context` but no longer
+     * identifies the WIRE SHAPE this method sends, which is why the Go
+     * implementation above - not that page - is now the citation. Either way
+     * this is DOCUMENTED, not measured on the wire: nothing here has Vertex
      * credentials, so no live call confirms this deployment honours it.
+     *
+     * OBSERVED, PRE-EXISTING, AND DELIBERATELY NOT FIXED: that same authority
+     * spells the message key `author` - its `ChatMessage` struct is
+     * `Author string json:"author"` / `Content string json:"content"` -
+     * while {@see formatMessages()} emits `role`. That is a SECOND defect in
+     * this envelope, older than the system-prompt hoist above it and
+     * independent of it. It is left standing because correcting it would
+     * change the body pinned by the existing green
+     * `VertexProviderTest::testCompleteSelectsPredictAndTheInstancesEnvelopeForGoogleModels`,
+     * which the step that wrote this paragraph is not permitted to touch.
+     * Recorded so the next reader finds it rather than re-discovers it.
+     *
+     * A GEMINI MODEL ID ROUTED HERE DOES NOT GET A REQUEST GEMINI WOULD
+     * ACCEPT - the same class of gap the class doc-block above already states
+     * for `publishers/mistralai`, `publishers/meta` and `publishers/ai21`.
+     * `gemini-1.5-pro-002`, the id both Vertex test files pin as "the Google
+     * model", is not served by `instances`/`context` at all: Gemini on Vertex
+     * answers `:generateContent` / `:streamGenerateContent` and takes its
+     * standing instruction in a top-level `systemInstruction` object
+     * (MEASURED 2026-08-29, verbatim from
+     * https://ai.google.dev/api/generate-content: "systemInstruction object
+     * (Content) Optional. Developer set system instruction(s). Currently, text
+     * only."; see also
+     * https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/projects.locations.publishers.models/generateContent).
+     * Switching this arm to that endpoint is a different endpoint, a different
+     * method and a different request document - a feature decision for the
+     * user, not a fix - and is deliberately not taken here.
+     *
+     * A SYSTEM-MESSAGE-ONLY TRANSCRIPT NOW YIELDS AN EMPTY `messages` LIST,
+     * which is a NEW route introduced by the dedup below and is pinned rather
+     * than guarded. MEASURED 2026-08-29:
+     * `messages: [SystemMessage('only'), SystemMessage('this')]` with
+     * `systemPrompt: 'asm'` produces
+     * `{"instances":[{"messages":[],"context":"asm\n\nonly\n\nthis"}],"parameters":{...}}`.
+     * BEFORE the dedup the same input produced two `role: user` turns carrying
+     * the instruction text twice over. The Anthropic arm REJECTS this exact
+     * input with a named \InvalidArgumentException (VertexProvider.php:435-446,
+     * pinned by
+     * `VertexProviderTest::testCompleteRejectsASystemOnlyTranscriptLocally`)
+     * because the Messages API requires at least one turn. This arm does not,
+     * and that asymmetry is deliberate: the `instances` envelope states no
+     * such requirement, and
+     * `VertexProviderTest::testGoogleModelsStillAcceptAnEmptyTranscript`
+     * records the no-guard position for the empty transcript already. The new
+     * system-only route is pinned by
+     * `VertexProviderTest::testAGoogleSystemMessageOnlyTranscriptYieldsAnEmptyMessagesList`.
      *
      * @return array{instances: array<int, array<string, mixed>>, parameters: array<string, mixed>}
      */
@@ -1036,9 +1112,20 @@ final readonly class VertexProvider implements ProviderInterface
      * file under `src/Providers/Concerns/`, and adding a file to `src/` reds
      * four exact-cardinality assertions in BuiltInToolCorpusTest plus a
      * doc-block in RepoMapBlock.php - out of this step's declared scope. The
-     * two bodies are byte-identical today; nothing in the suite would notice
-     * if they drifted, because DuplicatedTestHelperDriftTest reads `tests/`
-     * only and no census compares two `src/` files.
+     * two bodies are byte-identical today, and NOTHING IN THE SUITE WOULD
+     * NOTICE IF THEY DRIFTED - nor even if this `{@see}` stopped naming a real
+     * method, which is stronger than the weaker claim that used to stand here.
+     * That claim was "`DuplicatedTestHelperDriftTest` reads `tests/` only";
+     * true, but not the binding limit. MEASURED 2026-08-29: replacing
+     * `BedrockProvider::withoutSystemMessages()` above with a method name that
+     * does not exist leaves `SymbolCitationDriftTest` green at
+     * `OK (7 tests, 2924 assertions)`, because that census only validates a
+     * citation whose target contains `SugarCraft\Crush\Tests\` or whose class
+     * short-name ends in `Test` (`SymbolCitationDriftTest.php:343-354`, the
+     * `looksLikeATestSymbol()` alphabet) - and every `{@see}` in this
+     * paragraph names a PRODUCTION symbol, which that file states is
+     * deliberately out of its scope. So the drift guard here is this sentence
+     * and a reader, not an instrument.
      *
      * @param array<Message> $messages
      * @return array<Message>

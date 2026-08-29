@@ -914,6 +914,58 @@ final class VertexProviderTest extends TestCase
         );
     }
 
+    public function testAGoogleSystemMessageOnlyTranscriptYieldsAnEmptyMessagesList(): void
+    {
+        // A NEW ROUTE TO `messages: []`, PINNED AS A DECISION RATHER THAN LEFT
+        // AS AN ACCIDENT (16.2 "pin absences deliberately"). Hoisting every
+        // SystemMessage out of `messages` means a transcript that is NOTHING
+        // BUT SystemMessages - non-empty on the way in - leaves an EMPTY
+        // `messages` list on the way out. Before the hoist the same input
+        // produced two `role: user` turns carrying the instruction text.
+        //
+        // The Anthropic arm rejects exactly this input with a named
+        // InvalidArgumentException (VertexProvider.php:435-446), pinned by
+        // {@see testCompleteRejectsASystemOnlyTranscriptLocally()}. This arm
+        // does not, matching the no-guard position
+        // {@see testGoogleModelsStillAcceptAnEmptyTranscript()} already
+        // records for the empty transcript: the `instances` envelope states no
+        // minimum-turn requirement. Both polarities of that asymmetry are now
+        // pinned, so flipping either one is a visible red rather than a quiet
+        // behaviour change.
+        $captured = null;
+        $provider = $this->providerWithPredictor(['content' => 'ok'], $captured, self::GOOGLE_MODEL);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: self::GOOGLE_MODEL,
+            messages: [new SystemMessage('only'), new SystemMessage('this')],
+            systemPrompt: 'asm',
+        ));
+
+        // No throw, no error response: the Google arm accepts it.
+        $this->assertFalse($response->isError);
+        $this->assertTrue($captured['called']);
+
+        // The exact body, not a shape assertion on part of it.
+        $this->assertSame(
+            [
+                'instances' => [[
+                    'messages' => [],
+                    'context' => "asm\n\nonly\n\nthis",
+                ]],
+                'parameters' => [
+                    'temperature' => 0.7,
+                    'maxOutputTokens' => 4096,
+                ],
+            ],
+            $captured['body'],
+        );
+
+        // The instruction text rides `context` once and is not also replayed
+        // as a user turn - the pre-hoist behaviour this route replaced.
+        $this->assertSame(1, substr_count((string) json_encode($captured['body']), 'only'));
+        $this->assertSame(1, substr_count((string) json_encode($captured['body']), 'this'));
+    }
+
     public function testCompleteParsesTheLegacyGooglePredictionShape(): void
     {
         $provider = $this->providerWithPredictor(
