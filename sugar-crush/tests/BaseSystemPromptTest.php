@@ -69,9 +69,22 @@ final class BaseSystemPromptTest extends TestCase
      * fence like <env> cannot be typed by accident; this is PROSE, and it
      * lives inside the very heredoc the nine tests fed by {@see basePrompt()}
      * police the wording of. strpos() takes the FIRST occurrence, so a second
-     * copy of this sentence anywhere in the assembly moves the slice without
+     * copy of this sentence ahead of the real one moves the slice without
      * reddening anything that reads it — which is why basePrompt() asserts the
      * count, not just the presence.
+     *
+     * WHAT THAT COUNT REACHES IS NARROWER THAN "the assembled prompt", and
+     * this paragraph replaces a sentence that said "anywhere in the assembly".
+     * basePrompt() builds from `App::new($provider, 'echo')` — no instruction
+     * loader, no memory store, no skill registry — so the only text it can
+     * count is the base heredoc plus <env>. The realistic duplicate route is
+     * exactly the one it cannot see: <project-instructions> and
+     * <project-memory> carry repo- and user-controlled prose, and this
+     * sentence is itself part of the system prompt, so a project AGENTS.md
+     * that quotes the prompt back would move the slice in production while
+     * this assertion stayed green. It is still worth asserting — a duplicate
+     * introduced in the heredoc is the copy this file owns and the one a
+     * reword would create — but it guards the base literal, not the assembly.
      */
     private const BASE_END_MARKER = 'commands to follow.';
 

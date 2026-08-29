@@ -1833,17 +1833,32 @@ final class Runtime
     /**
      * Resolve the environment snapshot folded into every system prompt.
      *
-     * Memoized on the Runtime rather than re-captured per call: render()
-     * shells out to git FIVE times — branch, status, log, staged diff,
-     * unstaged diff — or THREE when the caller has suppressed the working
-     * diff via {@see EnvironmentBlock::withWriteSinceLastRender()}, and
-     * buildSystemPrompt() runs once per step of the agentic loop. (MEASURED
-     * 2026-08-29 with a logging `git` shim ahead of /usr/bin/git on PATH: 5
-     * invocations per render() by default, 3 with the diff suppressed. An
-     * earlier revision of this docblock said "three times", which had been
-     * true of the three-command version of the block and of nothing since —
-     * {@see EnvironmentBlock::gitStatusSnapshot()} retired that figure one
-     * file over and it survived here.)
+     * Memoized on the Runtime rather than re-captured per call — but NOT to
+     * save git subprocesses. render() shells out FIVE times (branch, status,
+     * log, staged diff, unstaged diff) on every call whoever owns the block,
+     * and buildSystemPrompt() renders once per step of the agentic loop, so
+     * the subprocess bill is a function of RENDERS and not of captures.
+     * MEASURED 2026-08-29 with a logging `git` shim ahead of /usr/bin/git on
+     * PATH, against a real repository: ten capture() calls with no render()
+     * ran 0 git invocations; ONE memoized block rendered three times ran 15;
+     * THREE fresh captures rendered once each ran 15 as well. Reuse avoids
+     * exactly zero of them. (An earlier revision of this paragraph offered
+     * that cost as the REASON for the memoization — and said "three times"
+     * besides, a figure true of the three-command version of this block and
+     * of nothing since: EnvironmentBlock retired it one file over, in the
+     * docblock of its private `gitStatusSnapshot()`, and it survived here.
+     * The measurement is kept rather than dropped because the next
+     * paragraph's answer — that what reuse buys is the frozen triple — only
+     * carries weight once the cheaper-sounding explanation is ruled out.)
+     *
+     * FIVE IS THE COUNT WHERE THERE IS A REPOSITORY TO READ. render() gates
+     * the entire git section on `.git` existing at the captured directory, so
+     * outside a repository it is ZERO — EnvironmentBlock's own docblock
+     * carries that caveat and this one used to omit it. The count is THREE
+     * for a block carrying `withWriteSinceLastRender(false)`, which withholds
+     * the two diff sections; that mode is DORMANT as of this writing — no
+     * caller in `src/` or `bin/` sets it either way, so every production
+     * render today is a five-subprocess one. P3.S5 is the step that wires it.
      *
      * WHAT IS MEMOIZED IS THE CAPTURE, NOT THE GIT STATE. This docblock used
      * to claim the block documents "a point-in-time capture, not live-polled

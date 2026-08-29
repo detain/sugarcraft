@@ -161,16 +161,34 @@ final class SystemPromptWiringTest extends TestCase
             strpos($prompt, '<project-instructions>'),
             'the environment block must follow the project instructions in the assembled prompt',
         );
+        $this->assertStringEndsWith(
+            "\n</env>",
+            $prompt,
+            '<env> must be the LAST bytes of the system prompt a real provider is handed (P3.S1)',
+        );
     }
 
     /**
      * `EngineBackend::complete()` runs a bounded agentic loop, calling
-     * `Runtime::run()` once per step. The environment block documents itself as
-     * a point-in-time snapshot and shells out to git three times to build one,
-     * so every step of a turn must be handed a byte-identical prompt: a
-     * per-step re-capture would burn subprocesses and let the reported date and
-     * git state drift inside a single turn. Only a real multi-step loop can
-     * demonstrate that -- a single `buildSystemPrompt()` call cannot.
+     * `Runtime::run()` once per step, and every step of a turn must be handed
+     * a byte-identical prompt: a per-step re-capture would let the reported
+     * working directory, model name and date drift inside a single turn. Only
+     * a real multi-step loop can demonstrate that -- a single
+     * `buildSystemPrompt()` call cannot.
+     *
+     * THIS PARAGRAPH USED TO SAY the environment block "documents itself as a
+     * point-in-time snapshot and shells out to git three times to build one",
+     * and neither half is true. `EnvironmentBlock::capture()` freezes exactly
+     * three values -- working directory, model name and timestamp -- while the
+     * git section is polled LIVE on every render() (pinned by
+     * `PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`),
+     * and one render costs FIVE subprocesses by default, three when the two
+     * diff sections are withheld, zero outside a git repository. The
+     * correction earns its place because it bounds what the assertion below
+     * proves: byte-identity across steps is a statement about that frozen
+     * triple -- which is the whole of the block in this test, whose temp root
+     * has no `.git` and therefore no git section at all -- and NOT a promise
+     * that a real repository's status cannot legitimately change mid-turn.
      */
     public function testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt(): void
     {
