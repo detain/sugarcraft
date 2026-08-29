@@ -267,10 +267,19 @@ final readonly class EnvironmentBlock
      * cap. That absolute is of THAT
      * fixture — it moves with the fixture's own directory and file names, which
      * this description does not pin — so the ceiling is the claim and the
-     * absolute is only an illustration. (The SAME fixture rendered 21,700 B
+     * absolute is only an illustration, and NO TEST BUILDS THIS FIXTURE, so
+     * nothing downstream can falsify the absolutes; only the delta below is
+     * checkable, and the derivable part of it checks out (five 1,500-byte
+     * subjects are 5 * (7 + 1 + 1500 + 1) = 7,545 B, of which two whole lines
+     * minus the trailing newline are kept, giving the 4,528 B omitted above).
+     * (The SAME fixture rendered 21,700 B
      * against master, MEASURED by rebuilding it once and rendering it twice
      * with the same script, changing only which `EnvironmentBlock.php` was
-     * loaded. The delta is +93 B — the 91-byte caption plus its blank line —
+     * loaded. Master's own docblock recorded 21,774 B for the fixture it
+     * described in these same words — 74 B above what the rebuild produced.
+     * That gap is unexplained and is left standing rather than reconciled: it
+     * is the same unpinned-fixture problem, one revision older, and averaging
+     * the two or picking the nicer one would hide it. The delta is +93 B — the 91-byte caption plus its blank line —
      * and being fixed-part text it is the same +93 B on any fixture, which is
      * the part of this parenthesis that reproduces. An earlier revision
      * recorded 21,804 / 21,702 / +102 B here; those are of the 100-byte caption
@@ -382,7 +391,14 @@ final readonly class EnvironmentBlock
      * those paths the block is rendered exactly ONCE for the whole run, so a
      * flat per-step claim IS a false caption handed to a subagent, which is the
      * same defect as copying upstream's, only pointing the other way — and it
-     * was reaching them: the sentence rendered into `golden-agent-prompt.txt`.
+     * was reaching them: `Agent::systemPrompt()`'s committed byte-golden,
+     * `tests/fixtures/prompt/golden-agent-prompt.txt`, reds on the caption,
+     * which is how a caption emitted on the subagent path shows up at all.
+     * (It reds because the fixture has not been regenerated, not because it
+     * carries the sentence: that file has never contained it. An earlier
+     * revision of this line said "the sentence rendered into
+     * `golden-agent-prompt.txt`", which named the pin as though it were the
+     * artefact.)
      *
      * AND ON ONE OF THOSE PATHS THE CAPTION IS TRUE BUT UNINFORMATIVE — the
      * honest limit of a cadence-free caption, recorded here because this is
@@ -463,10 +479,23 @@ final readonly class EnvironmentBlock
      * this render; a caption that appeared and disappeared with them would
      * read as a property of the diff.
      *
-     * WHY AT THE HEAD OF THE SECTION. It is a claim about every line below it,
-     * the branch line included, and a caption after the first field does not
-     * label that field. It also puts constant bytes ahead of the first
-     * volatile one, which is the direction P3.S1 moved the whole block in.
+     * WHY AT THE HEAD OF THE SECTION — AND WHAT POSITION DOES NOT DO. It is a
+     * claim about every line below it, the branch line included, and a caption
+     * after the first field does not label that field. It also puts constant
+     * bytes ahead of the first volatile one, which is the direction P3.S1
+     * moved the whole block in.
+     *
+     * But position is ORDERING, not SCOPING, and an earlier revision of this
+     * paragraph claimed both. MEASURED on the rendered block: the blank line
+     * above the caption is byte-identical to the one below it and the section
+     * carries no heading, so nothing typographic binds the caption to the
+     * fields under it. Upstream binds its own label by making it the section
+     * heading with a trailing colon — `Git status (snapshot at conversation
+     * start - may be outdated):` (prompt_expand.md §5.5). What confines this
+     * one to git is LEXICAL: the words "this git state". That is deliberate,
+     * because a caption scoped by position alone would read as a claim about
+     * the whole `<env>` block, which is the false label in the other direction
+     * this constant's second paragraph exists to refuse.
      *
      * WHAT THIS CAPTION CANNOT DEFEND AGAINST, AND WHERE THE REPAIR BELONGS.
      * `{$status}` and `{$log}` are repo-controlled and interpolated raw into
