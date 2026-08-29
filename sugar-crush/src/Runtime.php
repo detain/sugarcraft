@@ -1833,12 +1833,42 @@ final class Runtime
     /**
      * Resolve the environment snapshot folded into every system prompt.
      *
-     * Memoized on the Runtime rather than re-captured per call: render()
-     * shells out to git three times, and buildSystemPrompt() runs once per
-     * step of the agentic loop. A snapshot is also the semantics the block
-     * documents — a point-in-time capture, not live-polled state — so the
-     * same instance must be reused once taken. An owner that already holds a
-     * session-wide snapshot injects it through the constructor instead.
+     * Memoized on the Runtime rather than re-captured per call — but NOT to
+     * save git subprocesses, which is what this docblock used to claim
+     * ("render() shells out to git three times"). Two things were wrong with
+     * that. The figure: THREE was true of the three-command version of this
+     * block and of nothing since. It is FIVE — branch, status, log, staged
+     * diff, unstaged diff. {@see EnvironmentBlock}'s class docblock documents
+     * that count and the two qualifications it carries: fewer when a process
+     * helper is in `disable_functions`, and THREE from
+     * {@see EnvironmentBlock::withWriteSinceLastRender()}. The count is ZERO
+     * outside a repository, which is read off the gate itself rather than
+     * from any docblock over there — render() gates the whole git section on
+     * a bare `file_exists($cwd . '/.git')`. And the reasoning: render() pays
+     * that bill on every call whoever owns the block, so the cost is a
+     * function of RENDERS, not of captures, and reuse avoids none of it.
+     * MEASURED 2026-08-29 with a logging `git` shim ahead of /usr/bin/git on
+     * PATH, against a real repository: ten capture() calls with no render()
+     * ran 0 git invocations; ONE memoized block rendered three times ran 15;
+     * THREE fresh captures rendered once each ran 15 as well. The measurement
+     * is kept rather than dropped because the answer below only carries
+     * weight once the cheaper-sounding explanation is ruled out.
+     *
+     * WHAT IS MEMOIZED IS THE CAPTURE, NOT THE GIT STATE. This docblock also
+     * used to claim the block documents "a point-in-time capture, not
+     * live-polled state" — the exact reading {@see EnvironmentBlock}'s class
+     * docblock opens by correcting. capture() freezes exactly three values:
+     * the working directory, the model name and the timestamp. The git
+     * section is polled live on EVERY render(), pinned by
+     * `PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`.
+     * So reusing the one instance is what keeps those three frozen values
+     * from drifting mid-turn; it is not a claim about the repository holding
+     * still. An owner that already holds a session-wide snapshot injects it
+     * through the constructor instead.
+     *
+     * The diff-suppressing mode is DORMANT as of this writing — no caller in
+     * `src/` or `bin/` sets it either way, so every production render today
+     * is a five-subprocess one. P3.S5 is the step that wires it.
      *
      * Captured at {@see projectRoot()}, not at the process directory: the
      * "Working directory"/"Is directory a git repo" lines this renders are
