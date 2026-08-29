@@ -489,9 +489,11 @@ final class PromptStabilityTest extends TestCase
         // decides whether `git status --porcelain` can see one — this block
         // runs `status --porcelain` with no untracked flag of its own. MEASURED:
         // with `status.showUntrackedFiles=no` in a global gitconfig, this test
-        // reds on master too (the two renders come out byte-identical and the
-        // assertion below reads as "D7 got fixed"). Pinned repo-locally rather
-        // than left to the developer's own config.
+        // reds on master too — the two renders come out byte-identical, and
+        // master's failure message then reported a config artefact as "D7 got
+        // fixed". Pinned repo-locally rather than left to the developer's own
+        // config, and that message rewritten below to say what a red here
+        // actually means.
         $this->assertSame(
             0,
             self::git($dir, ['config', 'status.showUntrackedFiles', 'normal'], $configured),
@@ -507,7 +509,11 @@ final class PromptStabilityTest extends TestCase
         $this->assertNotSame(
             $before,
             $after,
-            'expected the <env> git snapshot to track the working tree; if it no longer does, D7 got fixed',
+            'the <env> git snapshot stopped tracking the working tree. That is a BEHAVIOUR CHANGE, not '
+                . 'a fix: P3.S3 shipped EnvironmentBlock::GIT_STATE_CAVEAT precisely so the block could keep '
+                . 'live-polling and tell the model the snapshot is a point-in-time reading. If freezing it is '
+                . 'now the intended design, retire the caveat in the same change and rewrite this test — do not '
+                . 'delete this assertion on its own',
         );
         $this->assertStringContainsString('scratch.txt', $after);
     }
@@ -525,10 +531,8 @@ final class PromptStabilityTest extends TestCase
      * row and identical on all three, by assembling two consecutive prompts
      * through the real private
      * {@see \SugarCraft\Crush\Runtime::buildSystemPrompt()} over that fixture
-     * and counting bytes to the first one that differs. Every row is driven by
-     * a test in this file — the generator is the test, not this table, and the
-     * two prompt lengths are given separately because they are two different
-     * strings:
+     * and counting bytes to the first one that differs. The two prompt lengths
+     * are given separately because they are two different strings:
      *
      *   | between the two renders            | prompt 1 | prompt 2 | prefix | diverges at   | driven by |
      *   |------------------------------------|---------:|---------:|-------:|---------------|-----------|
@@ -536,6 +540,30 @@ final class PromptStabilityTest extends TestCase
      *   | 400 vs 405 lines, over the 8,192 B cap | 12,751 | 12,751 |  4,583 | `--shortstat` | {@see testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock()} |
      *   | a SECOND tracked file dirtied      |    4,844 |    5,083 |  4,403 | `Status:`     | {@see testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock()} |
      *   | pre-P3.S1 order, same file edited  |    4,844 |    4,844 |  3,095 | blob hash     | the old-order control inside the first test |
+     *
+     * WHAT THE LAST COLUMN MEANS, AND WHAT IT DOES NOT. It names the test that
+     * exercises the row's SCENARIO. That is all it claims — an earlier revision
+     * of this paragraph said "the generator is the test, not this table", and
+     * that was false of every literal above. NO TEST DERIVES OR ASSERTS THESE
+     * BYTE COUNTS. What the tests pin is deliberately weaker: the floor
+     * {@see MIN_STABLE_PREFIX_BYTES}, the gain floor
+     * {@see MIN_PREFIX_GAIN_BYTES}, `prefix > $envAt` per fixture, each stable
+     * marker ending before the prefix does, and the three-way ordering of the
+     * three post-reorder rows. So the prefix column could regress from 4,670 to
+     * anywhere down to 4,404 with this whole file green and this table still
+     * reading 4,670.
+     *
+     * That rot risk is taken ON PURPOSE, and the alternative is worse: these
+     * absolutes contain bytes this file does not own — `OS version:` and `PHP
+     * version:` (28 B here) and the fixture root's path length — so pinning
+     * them by equality would red on the next developer's host for no defect.
+     * §16.3's rule, "a number no test derives rots", is answered the other way
+     * instead. Every figure here carries the domain it was measured in, and the
+     * ONE relation that is host-independent — 4,670 - 3,095 = 4,056 - 2,481 =
+     * 1,575, the size of exactly the block P3.S1 lifted — IS asserted by
+     * equality, inside the first test beside the old-order control. Treat the
+     * rest as dated observations: re-measure before quoting them, do not
+     * correct them from arithmetic.
      *
      * `<env>` opens at byte 4,056 on this fixture, so every post-reorder row
      * above keeps the whole stable region — base heredoc, repo map, instruction
@@ -776,6 +804,31 @@ final class PromptStabilityTest extends TestCase
             $prefix - $oldPrefix,
             'the reorder moved the first differing byte by only ' . ($prefix - $oldPrefix) . ' bytes',
         );
+
+        // AND THE GAIN IS EXACTLY THE BLOCK THAT MOVED. The floor above cannot
+        // catch a reorder that lifts only SOME of the five layers over `<env>`;
+        // this identity can, because the splice is a pure rotation: whatever
+        // byte inside `<env>` differs, it sits at `$envAt + d` in the shipped
+        // order and at `$mapAt + d` in the old one, so the gain is `$envAt -
+        // $mapAt` and nothing else.
+        //
+        // It is also the ONLY figure in this file's tables that is
+        // host-independent — both offsets are read off the same string, and the
+        // base heredoc, the `OS version:`/`PHP version:` lines and the fixture
+        // root's path length shift the two orders equally and cancel. That is
+        // why it is pinned by EQUALITY here while the absolute byte counts are
+        // pinned only by floors: an equality assertion on those would red on
+        // the next developer's host for no defect. MEASURED 4,056 - 2,481 =
+        // **1,575** = 4,670 - 3,095.
+        $mapAt = strpos($first, "\n\n<repo-map>");
+        $this->assertIsInt($mapAt, 'the assembled prompt carries no <repo-map> layer to have lifted');
+        $this->assertSame(
+            $envAt - $mapAt,
+            $prefix - $oldPrefix,
+            'the reorder moved the first differing byte by ' . ($prefix - $oldPrefix) . ' bytes, but the region '
+                . 'it lifted over <env> is ' . ($envAt - $mapAt) . ' bytes - so what moved is not exactly the '
+                . 'five layers between <repo-map> and <env>',
+        );
     }
 
     /**
@@ -884,14 +937,32 @@ final class PromptStabilityTest extends TestCase
         $this->assertStringContainsString(' M src/Beta.php', $statusSecond, 'the second write did not reach `git status`');
         $statusPrefix = self::commonPrefixLength($statusFirst, $statusSecond);
 
-        $envAt = strpos($niceFirst, "\n\n<env>\n");
-        $this->assertIsInt($envAt);
+        // EACH SHAPE IS COMPARED AGAINST ITS OWN FIXTURE'S `<env>` OFFSET, not
+        // against the nice fixture's. All three are 4,056 today, so borrowing
+        // one would be correct by construction — and silently wrong the first
+        // time the region ahead of `<env>` becomes content-dependent. It
+        // already is in part: {@see \SugarCraft\Crush\Context\RepoMapBlock}
+        // counts `.php` files, and the capped fixture's `src/Alpha.php` is a
+        // different SIZE, not a different count, only because this shape was
+        // chosen that way. A borrowed offset would let a divergence sitting
+        // BEFORE that fixture's real `<env>` pass an assertion whose message
+        // says it did not. The same argument is made at length by
+        // {@see testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne()};
+        // this test used to be the one place in the file that did not follow it.
+        $envOffsets = [];
 
         foreach ([
-            'same file edited again' => $nicePrefix,
-            'diff over the cap, revisions of different size' => $cappedPrefix,
-            'a second file dirtied' => $statusPrefix,
-        ] as $shape => $prefix) {
+            'same file edited again' => [$nicePrefix, $niceFirst],
+            'diff over the cap, revisions of different size' => [$cappedPrefix, $cappedFirst],
+            'a second file dirtied' => [$statusPrefix, $statusFirst],
+        ] as $shape => [$prefix, $first]) {
+            $envAt = strpos($first, "\n\n<env>\n");
+            $this->assertIsInt(
+                $envAt,
+                'shape "' . $shape . '" produced a prompt with no <env> fence at all',
+            );
+            $envOffsets[$shape] = $envAt;
+
             $this->assertGreaterThanOrEqual(
                 self::MIN_STABLE_PREFIX_BYTES,
                 $prefix,
@@ -903,6 +974,20 @@ final class PromptStabilityTest extends TestCase
                 'shape "' . $shape . '" diverged before <env> began, so a stable layer is volatile',
             );
         }
+
+        // The three ordering comparisons below put prefix lengths measured on
+        // three DIFFERENT repositories on one number line, which is only
+        // meaningful while the layers ahead of `<env>` assemble to the same
+        // length in all three. That is a premise, so it is asserted rather than
+        // assumed — if a future block makes the pre-`<env>` region depend on
+        // file sizes or LOC, this reds here with a clear reason instead of
+        // reddening the ordering assertions with a misleading one.
+        $this->assertSame(
+            [$envOffsets['same file edited again']],
+            array_values(array_unique($envOffsets)),
+            'the three fixtures no longer agree on where <env> starts (' . json_encode($envOffsets)
+                . '), so their prefix lengths are not comparable to each other',
+        );
 
         // Each shape bit somewhere different, and in the order the layout
         // predicts: `Status:` is ahead of `--shortstat`, which is ahead of the
@@ -1180,13 +1265,26 @@ final class PromptStabilityTest extends TestCase
         //   `core.abbrev=20`                prompt 4,844 -> 4,883 B, prefix -> 4,696
         //   `diff.context=10`               prompt 4,844 -> 4,851 B
         //   `color.ui=always`               prompt 4,844 -> 4,921 B, prefix -> 4,689
+        //   `color.diff=always`             prompt 4,844 -> 4,921 B, prefix -> 4,689,
+        //                                   and 21 raw ESC bytes in the prompt EVEN
+        //                                   WITH `color.ui=false` pinned below it:
+        //                                   git's per-command `color.<slot>` keys
+        //                                   OUTRANK `color.ui`, so pinning `color.ui`
+        //                                   alone does NOT cover the colour hazard it
+        //                                   appears to name. Both are pinned.
         //   `diff.suppressBlankEmpty=true`  prompt 4,844 -> 4,842 B
         //   `status.showUntrackedFiles=no`  makes an untracked file invisible,
         //                                   so two renders come out IDENTICAL
         //                                   and any measurement over them is
         //                                   vacuous
         //   `log.decorate=full`             prompt 4,844 -> 4,872 B, prefix -> 4,698
-        // and MEASURED with all eight pinned, on a host with none of them set,
+        //   `i18n.logOutputEncoding=UTF-16` prompt 4,844 -> 4,821 B, prefix -> 4,647.
+        //                                   `--oneline` does NOT override it, and the
+        //                                   damage is not a shifted byte count but a
+        //                                   DELETION: the commit SUBJECT disappears
+        //                                   from `Recent commits:` entirely, leaving
+        //                                   the bare sha (-23 B, the subject's length)
+        // and MEASURED with all ten pinned, on a host with none of them set,
         // the numbers are unchanged at 4,844/4,670 — so the pin costs nothing
         // here, and it is what makes the figures reproducible on a host whose
         // git config this list covers. NOT "anywhere": see the paragraph on
@@ -1195,12 +1293,16 @@ final class PromptStabilityTest extends TestCase
         //
         // `log.date` and `format.pretty` ARE inert, because `--oneline`
         // overrides both — but `log.decorate` is in that same `log.*` family
-        // and `--oneline` does NOT override it. Its default is `auto`, which
+        // and `--oneline` does NOT override it, and neither does it override
+        // `i18n.logOutputEncoding`. `log.decorate`'s default is `auto`, which
         // decorates only to a tty, so a piped `proc_open` sees nothing and the
-        // knob is invisible until a developer sets it. It was found by a
-        // review, not by this list, AFTER the list had already claimed to make
-        // the figures portable — which is exactly the shape the completeness
-        // paragraph below is about. An earlier revision of this comment put
+        // knob is invisible until a developer sets it. All three of
+        // `log.decorate`, `color.diff` and `i18n.logOutputEncoding` were found
+        // by a review, not by this list, AFTER the list had already claimed to
+        // make the figures portable — which is exactly the shape the
+        // completeness paragraph below is about, and the `color.ui` case is the
+        // worst of them, because the list did not merely omit the colour hazard,
+        // it named it and then failed to cover it. An earlier revision of this comment put
         // `status.showUntrackedFiles` in that same sentence under that same
         // reason, and the reason does not apply to it:
         // {@see EnvironmentBlock} runs `status --porcelain` with no untracked
@@ -1208,18 +1310,23 @@ final class PromptStabilityTest extends TestCase
         // pinned above rather than explained away.
         //
         // THIS LIST IS NOT CLAIMED TO BE COMPLETE, and the evidence that the
-        // caveat is load-bearing is that the list has already grown twice
-        // under it: four after the first review, seven after the second,
-        // eight after the third. A knob that moves the byte count WITHOUT
-        // reddening anything is the failure mode this paragraph exists to make
-        // visible — `core.abbrev`, `color.ui` and `log.decorate` are all of
-        // that kind — so the honest statement is "eight found" and not "eight
+        // caveat is load-bearing is that the list has already grown at every
+        // review that looked for more: four after the first, seven after the
+        // second, eight after the third, ten after the fourth. A knob that
+        // moves the byte count WITHOUT reddening anything is the failure mode
+        // this paragraph exists to make visible — `core.abbrev`, `color.ui`,
+        // `color.diff`, `log.decorate` and `i18n.logOutputEncoding` are all of
+        // that kind — so the honest statement is "ten found" and not "ten
         // exist". Measured-and-inert, recorded so the next reader does not
         // re-measure them: `log.date`, `format.pretty`, `core.quotePath`,
         // `init.templateDir`, `diff.algorithm`, `diff.indentHeuristic`,
         // `status.relativePaths`, `log.abbrevCommit`, `core.autocrlf`.
-        // `diff.external` moves the bytes but REDS, which is the harmless
-        // direction.
+        // `diff.external`, `core.bigFileThreshold=1` and a `core.excludesFile`
+        // naming the tracked file all move the bytes but RED, which is the
+        // harmless direction and needs no pin. `color.status` and
+        // `color.branch` are inert here for a reason worth writing down rather
+        // than re-deriving: `status --porcelain` and `branch --show-current`
+        // are plumbing-ish forms that never colour, whatever the slot says.
         foreach ([
             ['init', '-q'],
             ['symbolic-ref', 'HEAD', 'refs/heads/master'],
@@ -1231,9 +1338,11 @@ final class PromptStabilityTest extends TestCase
             ['config', 'core.abbrev', '7'],
             ['config', 'diff.context', '3'],
             ['config', 'color.ui', 'false'],
+            ['config', 'color.diff', 'false'],
             ['config', 'diff.suppressBlankEmpty', 'false'],
             ['config', 'status.showUntrackedFiles', 'normal'],
             ['config', 'log.decorate', 'no'],
+            ['config', 'i18n.logOutputEncoding', 'UTF-8'],
             ['add', '-A'],
             ['commit', '-q', '-m', 'fixture: initial import'],
         ] as $argv) {
