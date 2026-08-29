@@ -989,7 +989,7 @@ where the two plans touch, because a merge conflict there is not yours to resolv
 
 | Contended surface | Why |
 |---|---|
-| `sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` + `sugar-crush/src/Context/RepoMapBlock.php` | The `src/` file-count census (§17.1). This plan adds ~11 `src/` files; that test has been held by an in-flight lane. **The hardest collision.** |
+| `sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` + `sugar-crush/src/Context/RepoMapBlock.php` | **NO LONGER A CARDINALITY COLLISION — corrected 2026-08-29, see §17.1.** The `src/` file-count census was decoupled at `59411203c` (this plan's own P0.S1 base); MEASURED, adding a `src/` file reds nothing. Still hot as an ordinary shared FILE if two steps edit it. |
 | `sugar-crush/src/Backend/EngineBackend.php` | Held by an in-flight lane; wanted by P7.S3. |
 | `sugar-crush/src/Chat.php`, `sugar-crush/src/Context/ContextCompactor.php` | The other plan has a backlog of compaction/context-window findings in exactly these files, untouched for many rounds. This plan's Phases 4 and 8 rewrite them. |
 | `sugar-crush/src/Tools/BuiltIn/Bash.php` | The other plan has two open items rewriting its *behaviour* (controlling-terminal detachment, PTY opt-in); P9.S3 rewrites its *description*. |
@@ -1446,6 +1446,46 @@ paragraphs (sugar-crush/src/Context/EnvironmentBlock.php).
 - `sugar-crush/src/Runtime.php`
 - `sugar-crush/src/Backend/EngineBackend.php`
 - `sugar-crush/tests/RuntimeTest.php`
+
+**THE SECOND ASSEMBLER — added 2026-08-29 after a retrospective review measured this step's file
+list against the family it has to reach.** `EnvironmentBlock` has **four** production construction
+sites, not one, and the list above reaches only the first:
+
+| Site | Feeds |
+|---|---|
+| `src/Runtime.php:1850` | `Runtime::buildSystemPrompt()` — **this step's target** |
+| `src/Cli/Bootstrap.php:1462` | `Agent::systemPrompt()` (per-agent roster capture) |
+| `src/App/App.php:553` | `Agent::systemPrompt()` (skill-fork capture) |
+| `src/Agents/Agent.php:417` | `Agent::systemPrompt()` (last-resort fallback) |
+
+MEASURED: there is **no fifth** site (`/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/` and
+`'new EnvironmentBlock('` → the four above and zero direct constructions). The other three all feed
+the **Agent** assembler — the one §17.2 keeps deliberately separate from `Runtime`'s — whose
+`systemPrompt()` is consumed at nine live sites: `App/App.php:569`, `Agents/ProcessExecutor.php:473`,
+`Agents/AgentManager.php:433`, and `Workflows/WorkflowEngine.php:1042/1152/1252/1294/1397`. That path
+is live in production today: `bin/sugarcrush` → `Bootstrap::chat()` → `Bootstrap.php:1044`
+`agentManager()` → `Bootstrap.php:1462` capture-per-agent → `AgentManager.php:433`.
+
+**And it is the path that pays the most for the diff.** `Bootstrap.php:1458-1460` records that
+`render()` is **not** memoised there, so its git shell-out happens once per `systemPrompt()` call —
+MEASURED with a logging `git` shim on `PATH`: **five** subprocesses when the diff is emitted
+(branch, status, log, `diff --cached`, `diff`), **three** when it is suppressed.
+
+**So: this step deliberately flips only the Runtime path.** That is the right scope — it is one
+change, and the Agent assembler is a different seam with a different lifetime. But the gap must not
+close silently. This step's worklog entry **must** state, per §16.1, that the three Agent-assembler
+sites keep the default-emit behaviour and its five-subprocess cost, and the orchestrator must then
+do exactly one of: schedule a **P3.S6** for the Agent assembler, or add a row to §18 saying why the
+Agent path deliberately keeps the diff. **Do not close Phase 3 with this gap unrecorded.**
+
+**A second constraint the implementer must not discover late** (INFERRED from the code, not
+measured, and stated as a judgement): `EngineBackend::completeAsync()` forks (`pcntl_fork`), and the
+child calls `$this->complete()` at `EngineBackend.php:1166`, where `new Runtime(` sits at `:547`. On
+that path the `Runtime` and its memoised block live in a **child that exits at end of turn**, so a
+signal cannot carry across turns without being sent back over the socket. This step's Done-when only
+requires *within-turn* behaviour, which is reachable — but `EnvironmentBlock.php:110-114`'s promise
+that "the wiring step decides whether a quiet turn earns a quiet opening" is **cross-turn** and this
+file list cannot deliver it. Say so rather than quietly satisfying the narrower clause.
 
 **Depends on** P3.S2 (the lever API), P3.S4 (the measurement baseline is recorded before the
 behaviour goes live).
@@ -2971,38 +3011,74 @@ numbering.
 
 Read this before your first edit, not after your first red.
 
-### 17.1 The `src/` file-count census — read this before adding a file to `src/`
+### 17.1 The `src/` file-count census — CORRECTED 2026-08-29; it does not exist
 
-`sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` asserts **exact cardinalities over `src/`**:
+**This section used to be the single largest stated constraint on this plan's parallelism, and it
+was describing code that had already been deleted before the plan's first commit.** It is corrected
+in place rather than removed, because the reasoning is worth keeping and because a silently
+disappeared constraint is indistinguishable from one nobody checked (§16.8 rule 42).
 
+**WHAT THIS SECTION USED TO SAY.** That `sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` asserts
+exact cardinalities over `src/` — `assertSame(297, $files)` at `:405`, `assertSame(297, count($files))`
+at `:500`, `assertSame(316, $declarations)` at `:501`, `assertSame(19, …)` at `:491` — and that
+`sugar-crush/src/Context/RepoMapBlock.php:273` restates two of them in a doc-block reading *"`src/`
+here is 297 files"*; therefore that **adding one file to `src/` reds four assertions across two
+files, one of them production source**; therefore that the corpus test is an *implicit member of the
+declared file list of every step that adds a `src/` file*, that P5.S1, P5.S5, P6.S1, P6.S2 and
+P10.S2 cannot run concurrently, and that this is *"why Phases 5, 6 and 10 have such thin batches."*
+
+**WHAT IS TRUE NOW.** None of it. The other lane decoupled the census at `59411203c` — whose commit
+subject reads *"plan: close round 60 - floor 10351/160648, green merge, **census decoupled** +6 to
++223"* — and that commit is **this plan's own P0.S1 `Base`**. The constraint was therefore already
+false on the day the plan started; it was true only when §17.1 was drafted, at `59ce746fc`, on a
+parallel lane that `59411203c` is not an ancestor of.
+
+MEASURED 2026-08-29 at `0bcbf97a3`, by the orchestrator, reproducing RR2's finding:
+
+```sh
+/usr/bin/grep -c 'assertSame( *[0-9]' sugar-crush/tests/Tools/BuiltInToolCorpusTest.php   # → 0
+/usr/bin/grep -c '297 files' sugar-crush/src/Context/RepoMapBlock.php                     # → 0
 ```
-:405  $this->assertSame(297, $files, self::CENSUS_RESOLUTION);
-:500  $this->assertSame(297, count($files), self::CENSUS_RESOLUTION);
-:501  $this->assertSame(316, $declarations, …);
-:491  $this->assertSame(19, array_sum(array_map('count', $secondary)));
+
+There is **no integer `assertSame` in that file at all**. `:405` is a bare `0,` — an argument to an
+`assertGreaterThan` whose own failure message reads *"This is a BOUND, not a count — it does not
+move when a file is added"*. `:491` is `);`. `:500-501` are doc-block prose.
+`RepoMapBlock.php:273` is `* An I/O bound, not a render bound, and the distinction is why it is a`.
+
+And the decisive test — add a file to `src/` and run the §1.2 action 7b census set:
+
+```sh
+# in a throwaway worktree, with one new final class under sugar-crush/src/
+find src -name '*.php' | wc -l                      # → 298
+vendor/bin/phpunit <the six census files>           # → OK (103 tests, 9432 assertions)
 ```
 
-and it **additionally asserts that `sugar-crush/src/Context/RepoMapBlock.php`'s doc-block restates
-two of them** — `RepoMapBlock.php:273` currently reads *"`src/` here is 297 files"*.
+**Nothing reds.** The file now asserts *bounds* and a *named* secondary-declaration map, so a census
+that does move names the offending file rather than moving a total — which is what §16.2 asked for
+("prefer a derived figure to a literal") and it is exactly what the other lane implemented.
 
-**Adding one file to `src/` reds four assertions across two files, one of which is production
-source.** Measured today: `find sugar-crush/src -name '*.php' | wc -l` → **297**.
+**THE RULE FOR THIS PLAN, RESTATED.** A step that adds a file under `sugar-crush/src/` runs the
+census set and reports the result. It updates **no** literal, because there is no literal to update,
+and it does **not** need to touch `BuiltInToolCorpusTest.php` at all. That test is **not** an
+implicit member of any step's declared file list. P5.S1, P5.S5, P6.S1, P6.S2 and P10.S2 are **not**
+serialised against one another by this constraint, and Phases 5, 6 and 10 do **not** need thin
+batches on account of it — re-plan their concurrency from §2.1 (intersect the declared file lists)
+like every other phase.
 
-This plan adds roughly **eleven** new files under `sugar-crush/src/`:
+**Two cautions that survive the correction.** First, `BuiltInToolCorpusTest.php` is still a hot
+*file*: two steps that both edit it still collide, in the ordinary §2.1 way. Second, and more
+important — **re-derive this before relying on it.** The census's shape has already changed once,
+mid-plan, in a lane this plan does not control, and nothing warned us. Run the two greps and the
+add-a-file probe above rather than trusting this paragraph; that is the whole lesson of §16.8 rule 6
+("re-derive every figure you inherit; a figure that does not reproduce is a finding") arriving in
+this plan's own operating instructions.
+
+**Still true and still worth knowing:** `find sugar-crush/src -name '*.php' | wc -l` → **297** today,
+and this plan still expects to add roughly **eleven** files under `sugar-crush/src/`:
 `Context/PromptSection.php`, `Context/Stability.php`, `Context/Sections/MaximsSection.php`,
 `Context/RuleLoader.php`, `Context/Rule.php`, `Context/Triggers/{Trigger,KeywordTrigger,PathTrigger,IntentTrigger}.php`,
-`Providers/CacheBreakpoints.php`, plus whatever P9.S2's capability probe becomes.
-
-**The rule for this plan:** the step that adds a file to `src/` also updates the census literals
-**and** the `RepoMapBlock` prose, in the same commit, and states the new numbers in its worklog entry.
-Two literals that merge textually clean can be arithmetically wrong — check that
-`declarations − files` still equals the secondary-declaration total, which is the one assertion a
-wrong pair cannot satisfy by accident.
-
-`sugar-crush/tests/Tools/BuiltInToolCorpusTest.php` is therefore an **implicit member of the declared
-file list of every step that adds a `src/` file**, and those steps cannot run concurrently with each
-other. This is the single largest constraint on this plan's parallelism. The affected steps are
-P5.S1, P5.S5, P6.S1, P6.S2, P10.S2 — and it is why Phases 5, 6 and 10 have such thin batches.
+`Providers/CacheBreakpoints.php`, plus whatever P9.S2's capability probe becomes. That count is now
+informational — a planning figure, not a constraint.
 
 ### 17.2 The prompt-construction test constraints
 
@@ -3140,7 +3216,8 @@ cd /home/sites/sugarcraft/sugar-crush && php -r '
   echo "files=", count($files), " declarations=", $d, PHP_EOL;'
 # MEASURED 2026-08-25 in /home/sites/sugarcraft/sugar-crush:
 #   files=297 declarations=316
-# — the two literals asserted at BuiltInToolCorpusTest.php:500-501.
+# — INFORMATIONAL ONLY. BuiltInToolCorpusTest asserts NEITHER as a literal;
+#   the census was decoupled before this plan began. See §17.1 (corrected 2026-08-29).
 ```
 
 ### Running tests

@@ -64,6 +64,43 @@ final class BaseSystemPromptTest extends TestCase
      * delimited by this marker, the sentence its heredoc closes with. A
      * reword of that closing sentence reds {@see basePrompt()} until the
      * marker moves with it — the deliberate cost of an explicit boundary.
+     *
+     * ITS UNIQUENESS IS A PRECONDITION, NOT AN OBSERVATION. A structural
+     * fence like <env> cannot be typed by accident; this is PROSE, and it
+     * lives inside the very heredoc the nine tests fed by {@see basePrompt()}
+     * police the wording of. strpos() takes the FIRST occurrence, so a second
+     * copy of this sentence ahead of the real one moves the slice without
+     * reddening anything that reads it — which is why basePrompt() asserts the
+     * count, not just the presence.
+     *
+     * WHAT THAT COUNT REACHES IS NARROWER THAN "the assembled prompt".
+     * basePrompt() builds from `App::new($provider, 'echo')`, which supplies
+     * no instruction loader, no memory store and no skill registry — but
+     * `Runtime::buildSystemPrompt()` appends the repo map with no App wiring
+     * required, gated only on the map rendering non-empty (which it does from
+     * any directory carrying a composer.json; from one without, MEASURED,
+     * `<repo-map>` is absent and the whole prompt is 2662 bytes). With
+     * $app->root null it is captured at getcwd(). MEASURED
+     * 2026-08-29 by reflecting into buildSystemPrompt() exactly as
+     * basePrompt() does, from this package directory: strlen 5403,
+     * substr_count 1, strpos 2462, <repo-map> present at offset 2483 —
+     * immediately AFTER the marker — while <project-instructions>,
+     * <project-memory> and the "Available skills" listing are all absent.
+     * THREE layers are in the counted string: the base heredoc, <repo-map>,
+     * and <env>.
+     *
+     * The repo map is repo-derived content — directory names, PSR-4
+     * namespaces, file counts — so it is not inert text this count can
+     * ignore, and it moves with the directory the suite runs from. The routes
+     * the count CANNOT see are the author-controlled ones:
+     * <project-instructions> and <project-memory> carry repo- and
+     * user-controlled prose, and this sentence is itself part of the system
+     * prompt, so a project AGENTS.md that quotes the prompt back would move
+     * the slice in production while this assertion stayed green. Still worth
+     * asserting — a duplicate introduced in the heredoc is the copy this file
+     * owns and the one a reword would create — but it guards the base literal
+     * plus what buildSystemPrompt() renders unrooted, not the assembly a real
+     * session builds.
      */
     private const BASE_END_MARKER = 'commands to follow.';
 
@@ -87,11 +124,31 @@ final class BaseSystemPromptTest extends TestCase
         // what keeps these assertions about the base literal rather than
         // about the repo-map and <env> data half that now follows it. If the
         // heredoc's closing line is ever reworded, this marker must move with
-        // it — the assertion below says so out loud.
+        // it — the first assertion below says so out loud. The second pins
+        // the precondition the slice mechanism rests on: strpos() resolves
+        // to the FIRST occurrence, so exactly one occurrence is what makes
+        // "cut at the marker" mean "cut at the end of the base".
         $markerAt = strpos($whole, self::BASE_END_MARKER);
         self::assertNotFalse(
             $markerAt,
             'the base prompt no longer ends with its end-of-base marker "' . self::BASE_END_MARKER . '"',
+        );
+        // Counted only over what precedes <env>, not over $whole. <env>
+        // carries `git log` subjects and both diff bodies, so a commit titled
+        // after this marker -- or a working-tree diff quoting it -- would make
+        // the count 2 and red all nine tests fed by this helper, blaming a
+        // duplicated marker in the heredoc for ordinary repository content.
+        // That copy cannot move anything: P3.S1 put <env> LAST, so it is
+        // necessarily after the base's marker and strpos() never reaches it.
+        // The precondition that actually matters is "no copy AHEAD of the
+        // base's marker", and that is what this counts.
+        $envAt = strpos($whole, "\n\n<env>");
+        self::assertSame(
+            1,
+            substr_count($envAt === false ? $whole : substr($whole, 0, $envAt), self::BASE_END_MARKER),
+            'the end-of-base marker "' . self::BASE_END_MARKER . '" must occur exactly ONCE ahead '
+            . 'of <env>: strpos() takes the FIRST occurrence, so a second one silently moves this '
+            . 'slice and every assertion fed by it.',
         );
 
         return substr($whole, 0, $markerAt + strlen(self::BASE_END_MARKER));

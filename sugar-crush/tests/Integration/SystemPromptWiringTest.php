@@ -146,6 +146,24 @@ final class SystemPromptWiringTest extends TestCase
      * pins an order, and a future reorder that put <env> back ahead of the
      * project instructions would red it. The model still receives the same
      * orientation facts; only their position changed.
+     *
+     * THE `assertStringEndsWith` BELOW IS A PRODUCTION-PATH PIN: it reads a
+     * real `CompleteRequest`, so a layer appended after the assembled prompt
+     * on the way to the provider reds it. MEASURED: a suffix added after
+     * `Runtime::run()`'s `$systemPrompt = $this->buildSystemPrompt($app);`
+     * reds this test and
+     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()} — the
+     * only two transmitted-prompt tests carrying that pin — and nothing else
+     * across tests/Integration, tests/Context, tests/RuntimeTest.php,
+     * tests/Agents/AgentTest.php and tests/Providers/PromptStabilityTest.php.
+     *
+     * What it cannot see is a reorder that still leaves <env> at the TAIL:
+     * the layer-5 move, after <project-memory> but before the skill layers,
+     * which this App cannot expose because it enables and discovers no skills,
+     * so those layers render empty and <env> ends the prompt anyway. A reorder
+     * that leaves any non-empty layer behind <env> — <env> back to layer 2,
+     * say — does red this pin. That is the narrow gap, and
+     * testDiscoveredSkillsAreListedInTheProviderSystemPrompt() covers it.
      */
     public function testBothHalvesLandInOneSystemPromptWithEnvironmentLast(): void
     {
@@ -161,16 +179,48 @@ final class SystemPromptWiringTest extends TestCase
             strpos($prompt, '<project-instructions>'),
             'the environment block must follow the project instructions in the assembled prompt',
         );
+        $this->assertStringEndsWith(
+            "\n</env>",
+            $prompt,
+            '<env> must be the LAST bytes of the system prompt a real provider is handed (P3.S1)',
+        );
     }
 
     /**
      * `EngineBackend::complete()` runs a bounded agentic loop, calling
-     * `Runtime::run()` once per step. The environment block documents itself as
-     * a point-in-time snapshot and shells out to git three times to build one,
-     * so every step of a turn must be handed a byte-identical prompt: a
-     * per-step re-capture would burn subprocesses and let the reported date and
-     * git state drift inside a single turn. Only a real multi-step loop can
-     * demonstrate that -- a single `buildSystemPrompt()` call cannot.
+     * `Runtime::run()` once per step, and every step of a turn must be handed
+     * a byte-identical prompt: a per-step re-capture would let the reported
+     * working directory, model name and date drift inside a single turn. Only
+     * a real multi-step loop can demonstrate that -- a single
+     * `buildSystemPrompt()` call cannot.
+     *
+     * THIS PARAGRAPH USED TO SAY the environment block "documents itself as a
+     * point-in-time snapshot and shells out to git three times to build one",
+     * and neither half is true. `EnvironmentBlock::capture()` freezes exactly
+     * three values -- working directory, model name and timestamp -- while the
+     * git section is polled LIVE on every render() (pinned by
+     * `PromptStabilityTest::testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()`),
+     * and the per-render subprocess count and its qualifications are
+     * documented on `EnvironmentBlock` itself rather than restated here.
+     *
+     * The correction bounds what the assertion below proves. The block in
+     * THIS test is all frozen triple and no git section: `backend()`
+     * never calls `withRoot()`, so the captured directory is `getcwd()` --
+     * asserted green in
+     * {@see testEnvironmentBlockReachesTheProviderSystemPrompt()} as
+     * `'Working directory: ' . getcwd()` -- and `isGitRepo()`, a bare
+     * `file_exists($cwd . '/.git')`, is false there. So byte-identity across
+     * steps is a statement about that frozen triple, NOT a promise that a
+     * real repository's status cannot legitimately change mid-turn.
+     *
+     * AND THAT IS A FACT ABOUT THE DIRECTORY THE SUITE IS RUN FROM, not about
+     * this checkout. Run phpunit from the monorepo root and `getcwd()` is the
+     * worktree root, whose `.git` exists (as a file, for a worktree), so the
+     * same test renders a live git section; the same happens in a split-repo
+     * clone of `sugarcraft/sugar-crush`, where the package directory IS the
+     * repository root. The assertion is still the right one -- what it is
+     * exercising just is not constant across working directories, and this
+     * paragraph should not imply it is.
      */
     public function testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt(): void
     {
@@ -237,6 +287,26 @@ final class SystemPromptWiringTest extends TestCase
      * Asserted on the request a provider is actually handed, for the same
      * reason as the tests above: `SkillMatcher` was unit-tested and had no
      * production caller at all before this step.
+     *
+     * IT ALSO CARRIES THE ONLY WIRE-LEVEL ORDERING PIN, because it is the one
+     * test in this file that both drives a populated `SkillRegistry` through
+     * `EngineBackend::complete()` and reads a real `CompleteRequest`. P3.S1's
+     * decision is that <env> is emitted after every cacheable layer, the
+     * skill listing included; the assembler-side pin for that lives in
+     * {@see testTheFixtureAssemblesEveryControlledHalfInTheRealOrder()},
+     * which calls the private `buildSystemPrompt()` through a scoped Closure.
+     * Without the two assertions below the wire had NO pin on it: the other
+     * transmitted-prompt test,
+     * {@see testBothHalvesLandInOneSystemPromptWithEnvironmentLast()},
+     * registers no skill registry, so both skill layers render empty there and
+     * <env> is trivially last however the append is ordered.
+     *
+     * MEASURED 2026-08-29: with the env append moved to layer 5 — after the
+     * memory block, before the skill bodies and this listing — this test reds
+     * "Failed asserting that 5415 is less than 5185" while
+     * testBothHalvesLandInOneSystemPromptWithEnvironmentLast() stays green.
+     * That is the reorder the step exists to forbid, and before this it was
+     * caught only by a reflection test and a regenerable byte golden.
      */
     public function testDiscoveredSkillsAreListedInTheProviderSystemPrompt(): void
     {
@@ -250,6 +320,18 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertStringContainsString(
             '- sysprompt-marker-skill: Marker skill for the system-prompt listing.',
             $prompt,
+        );
+        $this->assertLessThan(
+            strpos($prompt, '<env>'),
+            strpos($prompt, 'Available skills (invoke via Skill tool):'),
+            'the skill listing must precede <env> on the bytes a provider receives, not only in '
+            . 'the assembler return value (P3.S1)',
+        );
+        $this->assertStringEndsWith(
+            "\n</env>",
+            $prompt,
+            '<env> must be the LAST bytes of the transmitted system prompt in a session that '
+            . 'actually rendered skill layers (P3.S1)',
         );
     }
 
@@ -277,6 +359,38 @@ final class SystemPromptWiringTest extends TestCase
      * volatile last), so the first chain link is inverted, not deleted: the
      * repo map must now precede the environment block, and a reorder that
      * put <env> back ahead of it reds this assertion.
+     *
+     * THE CHAIN OF `assertLessThan`s IS NOT ENOUGH ON ITS OWN, and the two
+     * assertions after it are why. Every ordering pin P3.S1 inverted — here
+     * and in RuntimeTest, MemoryPromptWiringTest, FeatWiringReachabilityTest
+     * and RepoMapBlockTest — compares <env> against a layer that precedes
+     * the skills, so all of them stay green with <env> emitted at layer 5,
+     * after <project-memory> and BEFORE the skill bodies and the skill
+     * listing. MEASURED 2026-08-29, before these assertions existed: that
+     * move left 1164 tests / 5250 assertions green across tests/Integration,
+     * tests/Context, tests/RuntimeTest.php, tests/Agents/AgentTest.php and
+     * tests/Providers/PromptStabilityTest.php, and the only red anywhere was
+     * the byte golden — a file six scheduled steps are licensed to
+     * regenerate.
+     *
+     * THE GOLDEN WAS NEVER INSIDE THAT 1164:
+     * `BaseSystemPromptTest::testSystemPromptMatchesCommittedGolden()` lives
+     * in tests/BaseSystemPromptTest.php, which is in NONE of those five
+     * paths. The run was green because the only guard that could catch the
+     * reorder was in a different file. Layer 5 is precisely the position the
+     * cache argument rules out: the skill bodies and the listing would then
+     * sit downstream of the block that changes on every file write. So the
+     * listing is pinned before <env> explicitly here, and the prompt is
+     * pinned to END at </env> — stated as an assertion rather than left to a
+     * regenerable fixture.
+     *
+     * MEASURED under that same layer-5 move with these assertions in place:
+     * this test reds "Failed asserting that 4025 is less than 3764".
+     *
+     * This is the ASSEMBLER-side pin; it reads {@see PromptFixture}, which
+     * calls the private `buildSystemPrompt()` through a scoped Closure. The
+     * wire-side pin for the same invariant is in
+     * {@see testDiscoveredSkillsAreListedInTheProviderSystemPrompt()}.
      */
     public function testTheFixtureAssemblesEveryControlledHalfInTheRealOrder(): void
     {
@@ -318,6 +432,16 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertLessThan($memoryAt, $instructionsAt);
         $this->assertLessThan($skillAt, $memoryAt);
         $this->assertLessThan($listingAt, $skillAt);
+        $this->assertLessThan(
+            $envAt,
+            $listingAt,
+            '<env> must follow every cacheable layer, the skill listing included',
+        );
+        $this->assertStringEndsWith(
+            "\n</env>",
+            $prompt,
+            '<env> must be the LAST layer of the assembled prompt (P3.S1)',
+        );
 
         $this->assertStringContainsString('FIXTURE AGENTS MARKER', $prompt);
         $this->assertStringContainsString('FIXTURE MEMORY MARKER', $prompt);
