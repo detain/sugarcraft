@@ -423,7 +423,10 @@ final class PromptStabilityTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // The environment block, which sits at the very front of the prefix.
+    // The environment block, which is now the TAIL of the prefix. It was
+    // layer 2 of 7 when this section was written; P3.S1 moved it last, and
+    // testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree() below
+    // measures what that bought.
     // -------------------------------------------------------------------------
 
     public function testEnvironmentBlockRenderIsDeterministicForAFixedCapture(): void
@@ -442,17 +445,36 @@ final class PromptStabilityTest extends TestCase
 
     public function testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture(): void
     {
-        // HAZARD PIN, not an endorsement. `render()` shells out to
-        // `git status --porcelain` every call rather than freezing the snapshot
-        // at capture time, and `Runtime::environmentSnapshot()` memoizes only
-        // per Runtime — while `EngineBackend::complete()` builds a fresh
-        // Runtime per user turn. So the moment the agent writes a file, the
-        // <env> block at the very front of the system prompt changes and the
-        // ENTIRE RadixAttention prefix is voided for the rest of the session.
-        // See the report accompanying W4.S3; this test exists so the mechanism
-        // is observable. If a later change freezes the snapshot at capture
-        // (the fix), this assertion is expected to flip and should be rewritten
-        // deliberately rather than deleted quietly.
+        // BOUNDED COST PIN. `render()` shells out to `git status --porcelain`
+        // every call rather than freezing the snapshot at capture time, and
+        // `Runtime::environmentSnapshot()` memoizes only per Runtime — while
+        // `EngineBackend::complete()` builds a fresh Runtime per user turn. So
+        // the moment the agent writes a file, the `<env>` block changes and
+        // everything from that byte on is re-prefilled.
+        //
+        // WHAT THIS COMMENT USED TO SAY, in two claims that are no longer
+        // true. First, that `<env>` sits "at the very front of the system
+        // prompt" and that a write therefore voids "the ENTIRE RadixAttention
+        // prefix for the rest of the session": P3.S1 moved the block LAST, and
+        // testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree() measures
+        // the remainder — MEASURED on its fixture, 4,670 of 4,844 bytes still
+        // shared after an edit, against 3,095 in the old order. The cost is
+        // real and it is now the tail, not the whole prompt. Second, that
+        // freezing the snapshot at capture is "the fix" and that this
+        // assertion would then be "expected to flip": P3.S3 decided the
+        // opposite on purpose and SHIPPED that decision in prompt text — see
+        // `EnvironmentBlock::GIT_STATE_CAVEAT`, which tells the model the git
+        // state is as of this render precisely because it is. A model reading
+        // a stale `git status` after its own edits is the worse failure, and
+        // P3.S2's `withWriteSinceLastRender()` is the lever that was taken
+        // instead. So this assertion is not awaiting a flip; it pins a live
+        // decision, and anything that freezes the snapshot must rewrite the
+        // caveat in the same commit.
+        //
+        // WHY IT STILL EARNS ITS PLACE: the live-polling is what makes the
+        // `<env>` tail volatile at all, which is the whole reason the layer
+        // order matters. Delete this and the reorder above it loses its
+        // premise.
         $dir = $this->tempDir();
 
         shell_exec('git -C ' . escapeshellarg($dir) . ' init -q 2>/dev/null');
