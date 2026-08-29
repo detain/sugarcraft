@@ -30,7 +30,7 @@ final class EnvironmentBlockTest extends TestCase
      * conversation start — may be outdated". An independent literal reddens on
      * both a removal and a respelling.
      */
-    private const EXPECTED_CAVEAT = 'Note: this git state was read when this prompt was rendered, not a snapshot from conversation start. The main agent loop rebuilds this prompt, and re-reads the state, on every step.';
+    private const EXPECTED_CAVEAT = 'Note: this git state was read when this prompt was rendered, not a snapshot from conversation start.';
 
     private string $tempDir;
 
@@ -762,9 +762,16 @@ final class EnvironmentBlockTest extends TestCase
      * calls `gitStatusSnapshot()`, which re-runs `branch`/`status`/`log` every
      * time; only the cwd, model name and timestamp are frozen by `capture()`.
      * MEASURED through the production path: two `buildSystemPrompt()` calls on
-     * ONE memoized Runtime with a write between them returned 5,723 B and
-     * 5,908 B, differing first at byte 5,567, and only the second named the
-     * file written in between.
+     * ONE memoized Runtime with a tracked edit and a new untracked file written
+     * between them differed — the second prompt was 206 B longer, the first
+     * difference landing inside the `Status:` field, and only the second named
+     * the file written in between. This paragraph and the one on
+     * `EnvironmentBlock::GIT_STATE_CAVEAT` used to publish two mutually
+     * contradictory triples of absolute lengths for this one experiment; both
+     * are dropped rather than corrected, because the fixture repo's path is
+     * interpolated into the prompt and every absolute moved with the temp
+     * directory's name. The delta and the field the difference lands in are
+     * what reproduce.
      *
      * So the assertions are: the byte-exact caption is present exactly once,
      * it stands at the HEAD of the git section (it is a claim about every field
@@ -856,10 +863,19 @@ final class EnvironmentBlockTest extends TestCase
      * lines and the branch name all vary — so a body line is compared as
      * `<body>` rather than as itself. The BLANK LINES are compared as
      * themselves, which is what makes this a roster rather than a label list: an
-     * extra line anywhere outside a diff interior moves the array. The one
-     * region collapsed wholesale is the interior of each diff section, which
-     * carries its own internal blank line between the shortstat and the patch
-     * and whose length is a property of the fixture, not of this class.
+     * extra line anywhere outside a diff interior moves the array.
+     *
+     * WHAT IS COLLAPSED, EXACTLY, AND WHY THE ARRAY IS NOT THE WHOLE PIN.
+     * `$inDiffBody` is set at each diff LABEL and never reset, so the collapse
+     * is not "the interior of each diff section" — it is two regions, and the
+     * second runs from the `Unstaged changes` label to the end of the block.
+     * That is unavoidable here — a diff interior carries its own internal blank
+     * line between the shortstat and the patch, and its length is a property of
+     * the fixture, not of this class — but it leaves the ARRAY blind to its own
+     * TAIL: a line appended after the last diff falls inside the collapsed
+     * region and moves nothing in it. The array is therefore not the whole
+     * pin; the assertion after it, on the block's last line, is what bounds
+     * the tail. See the comment there for what was measured.
      */
     public function testTheCompleteGitSectionLineSetAndItsOrder(): void
     {
@@ -925,6 +941,23 @@ final class EnvironmentBlockTest extends TestCase
             'Unstaged changes:',
             '<diff body>',
         ], $structural);
+
+        // WHERE THE COLLAPSED TAIL ENDS. The roster above cannot answer that:
+        // $inDiffBody is never reset, so from the `Unstaged changes` label to
+        // the end of the block every line is swallowed, and a line appended
+        // after the last diff moves nothing in the array. MEASURED — appending
+        // `. "\n\nSMUGGLED TRAILING LINE"` to the unstaged-diff concatenation
+        // in EnvironmentBlock::gitStatusSnapshot() left the roster GREEN, and
+        // appending an `<end>` sentinel after the loop left it green too (the
+        // sentinel lands after `<diff body>` either way, because the smuggled
+        // line is swallowed before it is reached). What DOES see it is the last
+        // line itself: this fixture's unstaged patch finishes on its one added
+        // line, so anything smuggled in after the diffs displaces `+unstaged`.
+        $this->assertSame(
+            '+unstaged',
+            substr($body, strrpos($body, "\n") + 1),
+            'the git section must END inside the unstaged diff - nothing may follow',
+        );
     }
 
     /**

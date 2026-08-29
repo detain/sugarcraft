@@ -90,7 +90,7 @@ PHP version: 8.3.6
 Model: claude-sonnet-4-6
 Current date: 2026-08-26
 
-Note: this git state was read when this prompt was rendered, not a snapshot from conversation start. The main agent loop rebuilds this prompt, and re-reads the state, on every step.
+Note: this git state was read when this prompt was rendered, not a snapshot from conversation start.
 
 Current branch: main
 
