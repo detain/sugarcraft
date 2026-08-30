@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3. P3.S5 IS MERGED (405252a41) and P2.audit-fix-1 is fully merged including cycle 4 (33df838d0 + f95546b10). Master is GREEN LOCALLY from both cwds at 10452/161673 — but origin/master is still RED ON CI on exactly one test, whose ROOT CAUSE IS NOW FOUND. ONE AGENT IS RUNNING (CI-fix-1). Start at §8 'Next step'.**
+**Current state: Phase 3. P3.S5 merged (405252a41), P2.audit-fix-1 fully merged (33df838d0 + f95546b10). Master GREEN LOCALLY both cwds at 10452/161673; origin/master still RED ON CI on one test whose root cause is FOUND. **TWO AGENTS RUNNING** (CI-fix-1, P1.audit-fix-3). The user has ANSWERED two of the three standing decisions. Start at §8 'Next step'.**
 
 ---
 
@@ -246,7 +246,11 @@ Phase:            3. P3.S1-S5 all MERGED. P3.S6 newly SCHEDULED (see below).
 Next step:        **WAIT for the running agent. Then: CI, then the Phase 3 close queue.**
 
                   ==================================================================
-                  0. ONE AGENT IS RUNNING — CI-fix-1. DO NOT SPAWN UNTIL IT REPORTS.
+                  0. TWO AGENTS ARE RUNNING. Verify each yourself before merging.
+                     They are DISJOINT (CI-fix-1: tests/bootstrap.php +
+                     SuiteTempSandboxContractTest.php · P1.audit-fix-3:
+                     src/Providers/VertexProvider.php + its two test files), so
+                     they cannot conflict and either may be merged first.
                   ==================================================================
                   Worktree /home/sites/prompt-step-CI-fix-1, branch prompt/CI-fix-1,
                   based on master f95546b10, vendor/ hardlinked and PSR-4 root VERIFIED
@@ -292,6 +296,32 @@ Next step:        **WAIT for the running agent. Then: CI, then the Phase 3 close
                   DO NOT accept a fix that weakens, skips, or environment-gates the
                   assertion — that is the forbidden move here and the brief says so.
 
+                  0b. **P1.audit-fix-3 — THE GEMINI ARM. USER-AUTHORISED FEATURE.**
+                     Worktree /home/sites/prompt-step-P1.audit-fix-3, branch
+                     prompt/P1.audit-fix-3, based on master f0e80960a, vendor/
+                     hardlinked and PSR-4 root VERIFIED into the worktree.
+                     THE USER CHOSE OPTION (a): build the :generateContent arm.
+                     This is a deliberately authorised FEATURE, not a refactor —
+                     do not let a reviewer reject it as scope creep.
+                     DE-RISKED BEFORE SPAWNING: the SDK path is fully vendored —
+                     PredictionServiceClient::generateContent() (:518) and
+                     ::streamGenerateContent() (:669), and GenerateContentRequest
+                     has setModel/setContents/setSystemInstruction/
+                     setGenerationConfig. No raw REST needed.
+                     ITS ACCEPTANCE BAR: both cwds identical, green, at or above
+                     Tests: 10452, Assertions: 161673, Skipped: 1 — its new tests
+                     should RAISE both, and it must account for the delta. Plus
+                     tests/Providers/VertexProviderTest.php and
+                     SystemPromptTransmissionMatrixTest.php reported separately.
+                     WATCH FOR: it must NOT touch the legacy instances/context arm
+                     (non-Gemini Google models still route there — §1.10 forbids
+                     removing it), must NOT reproduce the legacy arm's dropped-
+                     parameters bug in the new arm, and must REWRITE rather than
+                     delete the googleBody() doc-block paragraph that says the
+                     Gemini switch "is deliberately not taken here" — that
+                     sentence is now false, and this branch has been bitten by an
+                     inverted comment before.
+
                   1. **MERGE CI-fix-1** once verified, then re-run the full suite from
                      BOTH cwds, then remove the worktree per §1.12 (status + unmerged
                      commits FIRST) and delete the branch with `git branch -d` (which
@@ -304,7 +334,23 @@ Next step:        **WAIT for the running agent. Then: CI, then the Phase 3 close
                         tests/Providers/PromptStabilityTest.php. Highest value first:
                         F5, then F2 and F6 (wrong-green fixture holes), then F1, then
                         the comment-accuracy set F3/F4/F7/F8.
-                     b. **P3.S5-fix-1** — cycle-6 findings 1-4 in Runtime.php and 5 in
+                     b. **P3.S5-fix-1** — **PLUS THE TEST RENAME, WHICH THE USER HAS NOW
+                        APPROVED** ("rename whatever is needed"). Fold it in rather than
+                        making it its own step: it touches src/Runtime.php, which this
+                        fix already declares, so a separate step would collide on that
+                        file. THREE sites:
+                          tests/Integration/SystemPromptWiringTest.php:261  the method
+                          tests/Integration/SystemPromptWiringTest.php:710  self-reference
+                          src/Runtime.php:540                              prose citation
+                        The name testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt now
+                        asserts the OPPOSITE of what it says. MEASURED TWICE: nothing in
+                        the tree catches a stranded citation — fabricating the cited
+                        METHOD name leaves SymbolCitationDriftTest OK (7 tests, 2952
+                        assertions), and fabricating the cited CLASS name does too. So
+                        renaming all three in ONE diff is required; there is no guard to
+                        lean on. Update the docblock paragraph that argues for keeping
+                        the name — it is now spent.
+                        Then the cycle-6 findings 1-4 in Runtime.php and 5 in
                         RuntimeTest.php (both files already declared by P3.S5). The
                         full review is at
                         /home/sites/sugarcraft/.sugar-crush-prompt/P3.S5-cycle6-review.txt
@@ -354,10 +400,15 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                   (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect
                   stdin from /dev/null.
 
-In-flight batch:  ONE agent — CI-fix-1. See "Next step" item 0 for everything about it.
+In-flight batch:  TWO agents, disjoint file lists, either may merge first.
+                    CI-fix-1        /home/sites/prompt-step-CI-fix-1        @ f95546b10
+                    P1.audit-fix-3  /home/sites/prompt-step-P1.audit-fix-3  @ f0e80960a
+                  See "Next step" items 0 and 0b.
 
 Live worktrees:   /home/sites/sugarcraft            master, at the commit above
                   /home/sites/prompt-step-CI-fix-1  prompt/CI-fix-1 @ f95546b10,
+                                                    AGENT WORKING IN IT — do not remove
+                  /home/sites/prompt-step-P1.audit-fix-3  prompt/P1.audit-fix-3 @ f0e80960a,
                                                     AGENT WORKING IN IT — do not remove
                   /home/sites/crush-lane-{a,b,c}    NOT this plan's — leave alone
                   (P3.S5 and P2.audit-fix-1 worktrees were REMOVED 2026-08-30 after
@@ -365,29 +416,32 @@ Live worktrees:   /home/sites/sugarcraft            master, at the commit above
 
 Blocked on:       Nothing.
 
-Awaiting user decision: THREE. None of them blocks any queued work.
+Awaiting user decision: NONE OUTSTANDING. All three were ANSWERED 2026-08-30. Recorded here
+                  because §R says a decision leaves this field only when the user has answered, and
+                  the answer belongs in the worklog entry for the step that acts on it:
+                    (1) Vertex envelope -> **user chose (a): build the :generateContent arm.**
+                        In flight as P1.audit-fix-3. See item 0b.
+                    (2) `role` vs `author` in the legacy instances envelope -> NOT a user
+                        decision any more; the choice of (a) resolved the coupling. Gemini
+                        traffic leaves that envelope entirely, and Gemini's own vocabulary is
+                        `user`/`model` (NOT `assistant`), which P1.audit-fix-3 handles. The
+                        legacy arm keeps `role` where its authority says `author`, and that is
+                        now an ordinary open follow-up below, not a question for the user.
+                    (3) the misnamed test -> **user approved the rename.** Folded into
+                        P3.S5-fix-1; see item 2b.
 
-                  (1) + (2) THE TWO VERTEXPROVIDER QUESTIONS, unchanged and merged.
-                  `VertexProvider::googleBody()` builds the PaLM 2 `chat-bison` `:predict` envelope,
-                  and `instances[0].context` IS that envelope's standing-instruction field — but
-                  `gemini-1.5-pro-002`, the model BOTH test files pin as "the Google model", is not
-                  served by that envelope at all. Gemini on Vertex takes `:generateContent` with a
-                  top-level `systemInstruction`. So the transmission fix is right for the envelope
-                  the code builds, and the envelope is wrong for the model the tests name. Switching
-                  is a different endpoint, method AND body — a redesign, so §1.10 sends it to the
-                  user. SECOND, same envelope: the message key should be `author`, not `role`;
-                  `formatMessages()` emits `role`. Deliberately unfixed (it would require changing an
-                  existing green test outside that step's list). If (1) goes to `:generateContent`,
-                  (2) is moot — a reason to settle (1) first.
+Open follow-ups:  **VertexProvider legacy arm, TWO defects, both now unblocked as ordinary steps.**
+                  (i) `formatMessages()` emits `role` where the instances envelope's authority spells
+                  it `author` (`ChatMessage` struct: `Author string json:"author"`). Deferred
+                  originally because fixing it changes a body pinned by the green
+                  `VertexProviderTest::testCompleteSelectsPredictAndTheInstancesEnvelopeForGoogle
+                  Models`. (ii) `defaultPredictor()`'s non-rawPredict branch builds its PredictRequest
+                  with setEndpoint()+setInstances() and NEVER setParameters() (~:1276-1282), so
+                  `temperature` and `maxOutputTokens` are silently DISCARDED for every Google model
+                  today. Both are explicitly OUT of P1.audit-fix-3's scope and must not be swept into
+                  it. Schedule after it merges, when the legacy arm's remaining traffic is known.
 
-                  (3) **The test method rename.** P3.S5 shipped
-                  `testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt` asserting the OPPOSITE of its
-                  name. Renaming needs `src/Runtime.php` in the same diff (the citation lives there),
-                  and MEASURED: nothing in the tree would catch a stranded citation if the rename
-                  shipped alone. The docblock says so and escalates. Decide: rename it (a two-file
-                  diff), or keep the name and accept that it misdescribes what it pins.
-
-Open follow-ups:  **HIGH / SECURITY, LIVE IN PRODUCTION — see commit f571e59b5.** The `<env>` diff
+                  **HIGH / SECURITY, LIVE IN PRODUCTION — see commit f571e59b5.** The `<env>` diff
                   sections are an UNROSTERED `</env>` fence-escape vector.
                   tests/Context/EnvironmentBlockTest.php:981-1051 enumerates exactly two vectors (a
                   commit subject — live, pinned, scheduled for P5.S3; and a filename — a dead negative
