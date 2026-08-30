@@ -221,6 +221,32 @@ final class SystemPromptWiringTest extends TestCase
      * repository root. The assertion is still the right one -- what it is
      * exercising just is not constant across working directories, and this
      * paragraph should not imply it is.
+     *
+     * P3.S5 INVERTED THIS PIN, deliberately, the way P3.S1 inverted the three
+     * ordering pins above. `EngineBackend::complete()`'s loop now calls
+     * {@see \SugarCraft\Crush\Runtime::markWriteSinceLastRender()} after every
+     * step, and the only tool call step 0 makes here is `no_such_tool`, which
+     * is not write-capable, so `Runtime::stepRequestedAWrite()` derives FALSE
+     * and step 1's `<env>` block suppresses the two git diff sections. The two
+     * prompts are therefore no longer byte-identical wherever a git section
+     * renders at all.
+     *
+     * NOTHING IS DROPPED: an inverted assertion still pins a relationship, a
+     * deleted one pins nothing. The single equality became an equality against
+     * the RECONSTRUCTED suppressed form, plus a pin that the marker it cuts on
+     * occurs exactly once (so the cut cannot land in a commit subject), plus a
+     * pin on the exact shape of the tail that came off. The surviving
+     * invariant is the one this test was always really about — every byte
+     * before that cut, the frozen triple included, is still identical across
+     * the two steps, and the two diff sections are the ONLY licensed mid-turn
+     * difference.
+     *
+     * THE METHOD NAME IS KEPT THOUGH IT NOW OVERSTATES, for a measured reason
+     * rather than inertia: `src/Runtime.php:536` cites it by name in a
+     * backticked doc-block reference; that file is outside this step's
+     * declared file list; and {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest}
+     * reds on a backticked `src/` citation that resolves to nothing. Renaming
+     * here would red a census in a file this step may not touch.
      */
     public function testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt(): void
     {
@@ -229,8 +255,63 @@ final class SystemPromptWiringTest extends TestCase
         $provider = $this->completeOneTurn(toolCallOnFirstStep: true);
 
         $this->assertCount(2, $provider->requests, 'expected a tool-calling step followed by an answering step');
-        $this->assertSame($provider->requests[0]->systemPrompt, $provider->requests[1]->systemPrompt);
-        $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', (string) $provider->requests[1]->systemPrompt);
+
+        $first = (string) $provider->requests[0]->systemPrompt;
+        $second = (string) $provider->requests[1]->systemPrompt;
+
+        // WHICH REGIME THIS RUN IS IN, read off the block itself rather than
+        // assumed. `EnvironmentBlock::isGitRepo()` is a bare
+        // `file_exists($cwd . '/.git')` against the CAPTURED directory, and
+        // `backend()` never calls `withRoot()`, so the captured directory is
+        // `getcwd()` — the directory phpunit was started from, not this
+        // checkout. MEASURED on this tree: started from `sugar-crush/`, the
+        // path `sugar-crush/.git` does not exist (a monorepo package directory
+        // has none), the block renders `Is directory a git repo: No`, and
+        // there is no git section for anything to suppress; started from the
+        // checkout root — which is the form `.github/workflows/ci.yml` uses,
+        // `php <lib>/vendor/bin/phpunit -c <lib>/phpunit.xml` with no `cd` and
+        // no `working-directory:` — `.git` exists at that path and the section
+        // renders.
+        //
+        // NOTE WHAT THE `No` BRANCH IS NOT. It is not "getcwd() is not a
+        // repository": `sugar-crush/` sits INSIDE the sugarcraft repository
+        // and `git -C sugar-crush status` answers there perfectly well. What
+        // is absent is a `.git` entry at that exact path, which is the whole
+        // of what `isGitRepo()` looks at. Both branches are live — CI takes
+        // the first, a developer running the suite from `sugar-crush/` takes
+        // the second — so neither is decorative.
+        if (str_contains($first, "\nIs directory a git repo: Yes\n")) {
+            $marker = "\n\nStaged changes (git diff --cached, index vs HEAD):";
+
+            // The cut marker has to be unambiguous or the reconstruction below
+            // would silently cut in the wrong place. `Recent commits:` renders
+            // this repository's own commit subjects verbatim, and a subject
+            // could in principle carry this text — but `git log --oneline`
+            // emits one line per commit and `git status --porcelain` one line
+            // per path, so nothing above the diff sections can be preceded by
+            // the blank line the marker opens with. Asserted, not argued.
+            $this->assertSame(1, substr_count($first, $marker), 'the cut marker must occur exactly once in the emitting step prompt');
+            $this->assertSame(0, substr_count($second, $marker), 'the suppressed step must carry no staged-diff section at all');
+
+            $cut = (int) strpos($first, $marker);
+
+            $this->assertSame(
+                substr($first, 0, $cut) . "\n</env>",
+                $second,
+                'the second step must be the first with exactly the two diff sections cut — nothing else may drift mid-turn',
+            );
+
+            $this->assertMatchesRegularExpression(
+                '~^\n\nStaged changes \(git diff --cached, index vs HEAD\):.*\n\nUnstaged changes \(git diff, working tree vs index\):.*\n</env>$~s',
+                substr($first, $cut),
+                'the tail cut off the second step must be exactly the two diff sections and the closing fence',
+            );
+        } else {
+            $this->assertStringContainsString("\nIs directory a git repo: No\n", $first, 'the block must answer the git question one way or the other');
+            $this->assertSame($first, $second, 'with no git section rendered there is nothing to suppress, so the two steps must still be byte-identical');
+        }
+
+        $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', $second);
     }
 
     /**
