@@ -282,11 +282,19 @@ final class Runtime
      * the embedder wrote, registered, and can classify — and, decisively,
      * `mcp__` is the exact spelling `PermissionGate::isWriteTool()` already
      * resolves the same way, so agreeing with it is the point of the rule.
-     * MEASURED, the unrecognised-name arm is unreachable in production today:
+     * THE UNRECOGNISED-NAME ARM IS REACHABLE, and an earlier revision of this
+     * paragraph said it was not — "unreachable in production today, because
      * `Cli\Bootstrap::tools()` supplies the eleven built-ins plus
-     * `Tools\McpToolBridge` instances, whose `name()` is `mcp__<server>__<tool>`.
-     * It is reachable by an embedder, and for one of those a write tool this
-     * list does not name would be under-shown.
+     * `Tools\McpToolBridge` instances". That reasons about which tools are
+     * REGISTERED, and this classifier reads the names the model REQUESTED:
+     * {@see runBatch()} builds its {@see AssistantMessage} straight off
+     * `$response->toolCalls`, so any string a provider emits arrives here.
+     * A hallucinated or renamed tool name lands on this arm and is classified
+     * NOT a write — which is harmless in that particular case, since a call
+     * that never dispatched cannot have written, but the reachability claim was
+     * the stated reason for leaving the arm non-fail-safe and it was wrong. The
+     * exposure that remains is an EMBEDDER's write-capable tool this list does
+     * not name; that one is real and is under-shown.
      *
      * THE OTHER UNDER-EMIT IS NOT ABOUT TOOLS AT ALL, and no roster closes it:
      * this classifier answers "did the model ask for something that writes",
@@ -295,10 +303,15 @@ final class Runtime
      * mid-turn, or a `PostToolUse` hook that reformats what a read-only step
      * touched — moves it invisibly, and the next step renders no diff. Stated
      * as a judgement rather than a measurement: the eight read-only built-ins
-     * were checked and genuinely do not write (`Lsp`'s `codeActions` RETURNS
-     * edits; nothing in `Read`/`Grep`/`Glob`/`Skill`/`WebFetch`/`WebSearch`/
-     * `doctor` writes), so the classifier is correct about tools; the exposure
-     * is to writers this loop cannot see. The honest fix is a cheap tree
+     * were checked and genuinely do not write THEMSELVES (`Lsp`'s `codeActions`
+     * RETURNS edits and nothing applies one; nothing in `Read`/`Grep`/`Glob`/
+     * `Skill`/`WebFetch`/`WebSearch`/`doctor` calls a write primitive). One of
+     * them writes by PROXY, named rather than left to the general sentence:
+     * `Lsp` drives `LSP\LspClient`, which `proc_open`s a language server, and
+     * language servers routinely drop index and cache directories inside the
+     * project. So an `Lsp` step can move the tree without this classifier
+     * seeing it — the same shape as the editor and hook cases, arriving through
+     * a tool that is correctly on the read-only list. The honest fix is a cheap tree
      * fingerprint rather than a longer roster, and it is not this step's.
      *
      * The built-in half of the roster hole is closed by
@@ -422,8 +435,11 @@ final class Runtime
      * the model has already seen". THE DOMAIN OF EVERY FIGURE BELOW IS THE
      * FIXTURE {@see \SugarCraft\Crush\Tests\RuntimeTest::makeDirtyGitFixture()}
      * BUILDS — two tracked source files, one edited and unstaged, one edited
-     * and staged, sixteen git config knobs pinned — so it can be rebuilt and
-     * the figures re-derived rather than taken on trust. Three successive
+     * and staged, FOURTEEN git config knobs pinned (MEASURED by counting the
+     * `['config', …]` rows; the loop has eighteen rows in total, the other four
+     * being `init`, `symbolic-ref`, `add` and `commit`, and an earlier revision
+     * of this sentence said "sixteen", which is neither number) — so it can be
+     * rebuilt and the figures re-derived rather than taken on trust. Three successive
      * {@see buildSystemPrompt()} calls on ONE unmarked Runtime over it, which
      * is exactly the pre-P3.S5 behaviour because a null signal short-circuits
      * {@see environmentSnapshot()}: **three renders, ALL BYTE-IDENTICAL.**
@@ -463,12 +479,17 @@ final class Runtime
      * leave the two failures visible so the next reader distrusts an absolute
      * in this paragraph rather than the domain of one.
      *
-     * AND IT COSTS ONE CACHE DIVERGENCE, which the lever's framing had the
-     * sign of backwards. Suppression introduces a differing byte at the
-     * emit->suppress transition that the old behaviour did not have, after
-     * which the quiet steps re-converge; every sequence adds exactly one such
-     * divergence per transition. Worth it for the bytes; not a prefix win, and
-     * nothing downstream should be built on the belief that it is.
+     * AND IT COSTS CACHE DIVERGENCES, which the lever's framing had the sign of
+     * backwards. BOTH transition directions are new, and an earlier revision of
+     * this paragraph named only the first: emit->suppress introduces a differing
+     * byte the old behaviour did not have, and so does suppress->emit whenever
+     * the re-arming call did not actually move the tree — `Bash(command: "ls")`,
+     * a gate-denied `Edit`, a throwing `Edit`, all of which this classifier
+     * re-arms on by design. On `Read, Bash("ls"), Read` the old code rendered
+     * four byte-identical prompts and this one renders three divergences, not
+     * one. Between transitions the quiet steps re-converge. Worth it for the
+     * bytes; not a prefix win, and nothing downstream should be built on the
+     * belief that it is.
      *
      * THE MODEL SEES NO DIFF ON A QUIET STEP — not a STALE one. "A diff the
      * model has already seen" reads as though the previous prompt were still
@@ -2253,9 +2274,14 @@ final class Runtime
      * WHY THE SIGNAL IS A FIELD HERE AND NOT A FLIP OF THE MEMO. The block is
      * `readonly`, so {@see EnvironmentBlock::withWriteSinceLastRender()}
      * returns a new instance and a naive re-derivation on every call would
-     * break the memoisation §17.2 invariant 9 pins
-     * ({@see \SugarCraft\Crush\Tests\RuntimeTest::testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns()}
-     * asserts `assertSame` across two calls). So the new instance is minted
+     * break the per-Runtime memoisation §17.2 invariant 9 pins. That invariant
+     * names `SystemPromptWiringTest.php:168`, `MemoryPromptWiringTest.php:210`
+     * and `RepoMapBlockTest.php:~1170` — NOT the assertion below, which an
+     * earlier revision of this sentence cited as though it were invariant 9's
+     * own pin. The one nearest to hand is
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testBuildSystemPromptReusesTheSameEnvironmentSnapshotAcrossTurns()},
+     * which asserts `assertSame` across two calls and reds on that mistake
+     * whether or not it is the invariant's canonical site. So the new instance is minted
      * only when the signal actually DIFFERS from the one the held block
      * carries, and the held block is replaced with it — two calls with no
      * intervening {@see markWriteSinceLastRender()} return the identical

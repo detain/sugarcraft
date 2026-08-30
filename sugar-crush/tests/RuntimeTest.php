@@ -31,6 +31,7 @@ use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Tests\Prompt\PromptFixture;
+use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Tools\ToolResult;
@@ -2221,16 +2222,29 @@ final class RuntimeTest extends TestCase
         sort($gateSorted);
         sort($ourSorted);
 
-        // THE DRIFT VERDICT GOES FIRST, and that ordering is the finding rather
-        // than a style choice: with the content control above it, a genuine
-        // drift reported under the CONTROL's message ("this is what the gate
-        // holds today") instead of its own, sending a reader to the wrong
-        // question. MEASURED, by adding a name to the gate and by dropping one
-        // from it - both reds arrived on the control line.
+        // THE DRIFT VERDICT GOES FIRST, and the ordering is deliberate rather
+        // than a style choice: a genuine drift must report under its OWN
+        // message, not under a control's.
+        //
+        // THE MEASUREMENT THAT ARGUED FOR THIS IS NO LONGER ABOUT THIS CODE,
+        // and saying so is the point. It read "MEASURED, by adding a name to
+        // the gate and by dropping one from it - both reds arrived on the
+        // control line", and that was true of the EXACT-LITERAL control this
+        // same commit replaced with the subset control below. Against the
+        // subset form an added name leaves array_diff() empty, so the control
+        // would stay green and the verdict would report either way. The
+        // ordering is kept because it is still the right shape - a verdict
+        // before its controls cannot be masked by one - but the evidence for it
+        // is historical, and a correction is a claim that gets measured like
+        // any other (§16.8 rule 7).
         $this->assertSame(
             $gateSorted,
             $ourSorted,
-            'Runtime::WRITE_CAPABLE_TOOL_NAMES has drifted from PermissionGate::isWriteTool()',
+            'Runtime::WRITE_CAPABLE_TOOL_NAMES has drifted from PermissionGate::isWriteTool(). '
+            . 'The two answer DIFFERENT questions - the gate asks "may this call be denied", this '
+            . 'roster asks "did the working tree move" - so making them equal is not automatically '
+            . 'the fix. A name REMOVED from the gate for a permissions reason must not be removed '
+            . 'here unless the tool also stopped writing.',
         );
 
         // The content control, and a SUBSET one for the same reason the corpus
@@ -2257,69 +2271,65 @@ final class RuntimeTest extends TestCase
 
         // THE HALF A GATE-TO-GATE DRIFT TEST CANNOT SEE, and §16.8 rule 15's
         // real failure mode one level up: both rosters can be SIMULTANEOUSLY
-        // incomplete. Land `src/Tools/BuiltIn/MultiEdit.php` and neither list
-        // moves, the comparison above stays green, and the engine silently
-        // stops re-arming the diff after a genuine write. So the corpus is
-        // read off the directory rather than trusted: every built-in tool's
-        // own name() must be classified by ONE of the two lists below.
+        // incomplete. Land a new write-capable tool and neither list moves, the
+        // comparison above stays green, and the engine silently stops re-arming
+        // the diff after a genuine write. So the corpus is DERIVED and every
+        // tool's own name() must be classified by one of the two lists.
         //
-        // The read-only list is spelled out here rather than derived, and that
-        // is deliberate: it is the decision half. A new tool joins it only by
-        // someone typing it in, which is the review this assertion exists to
-        // force. EIGHT names - eleven built-ins less the three on the write
-        // roster - and the last of them is lowercase `doctor`, because that is
-        // what `Doctor::name()` returns, MEASURED off the file rather than
-        // assumed from the class name.
-        $classified = [
-            ...Runtime::WRITE_CAPABLE_TOOL_NAMES,
-            'Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor',
-        ];
+        // DERIVED FROM BuiltInToolCorpus, NOT FROM A GLOB OF THIS OWN, and that
+        // is a correction rather than a preference. This assertion first
+        // scanned `src/Tools/BuiltIn/*.php` with a regex over the source - the
+        // exact flat glob {@see BuiltInToolCorpus::classNames()}'s docblock
+        // records as a LATENT TRAP it was widened to fix, naming McpToolBridge
+        // in `src/Tools/` as the twelfth implementor the flat form cannot see.
+        // MEASURED: with the flat glob, a `Tool` implementor dropped at
+        // `src/Tools/Probe/MultiEdit.php` on NEITHER roster left this test
+        // green - the hole the comment claimed to close, in the instrument
+        // closing it. `instances()` sweeps everything under `src/` by PSR-4 and
+        // reflection, so it cannot be evaded by location, and it reads each
+        // tool's real name() rather than a regex's guess at it.
+        //
+        // The read-only list stays spelled out, and that is the decision half:
+        // a new tool joins it only by someone typing it in, which is the review
+        // this assertion exists to force. EIGHT names, the last lowercase
+        // because that is what `Doctor::name()` actually returns.
+        $readOnly = ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor'];
 
-        $files = glob(dirname(__DIR__) . '/src/Tools/BuiltIn/*.php') ?: [];
         $corpus = [];
-        $unreadable = [];
-        foreach ($files as $file) {
-            if (preg_match("/function name\\(\\): string\\s*\\{\\s*return '([^']+)';/", (string) file_get_contents($file), $nm) === 1) {
-                $corpus[] = $nm[1];
-
-                continue;
-            }
-            $unreadable[] = basename($file);
+        foreach (BuiltInToolCorpus::instances() as $tool) {
+            $corpus[] = $tool->name();
         }
         sort($corpus);
 
-        // A FILE THIS SCAN CANNOT PARSE IS REPORTED, NEVER SKIPPED (§16.8 rule
-        // 32). The regex only recognises a name() that returns a bare string
-        // literal; a tool whose name came from a constant, a concatenation or
-        // two statements would drop out of $corpus SILENTLY, and the verdict
-        // below would then pass vacuously for exactly the tool it exists to
-        // catch - a hole shaped like the next defect. All eleven current files
-        // parse, so this is latent rather than live, which is why it is
-        // asserted rather than left to be found later.
-        $this->assertSame(
-            [],
-            $unreadable,
-            'a src/Tools/BuiltIn/ file this scan cannot read a name() out of - widen the scan, do not let it drop out',
-        );
-
-        // LIVENESS CONTROL, and deliberately a SUBSET one. A scanner that
-        // matched nothing returns [], and so does a directory with no tools in
-        // it; those are not the same answer (§16.8 rule 17), so the scan has to
-        // prove it found something specific before its verdict is read. It is
-        // NOT an exact corpus pin: that would be §17.1's `assertSame(297,
-        // $files)` defect rebuilt here, reddening on every correctly-classified
-        // new tool. The exact assertion is the verdict below - which is exact
-        // in the direction that matters, because the offending NAME appears in
-        // its own failure output rather than a total moving by one.
+        // LIVENESS CONTROL, and deliberately a SUBSET one. A sweep that found
+        // nothing returns [], and so does a tree with no tools in it; those are
+        // not the same answer (§16.8 rule 17). It is not an exact corpus pin,
+        // which would be §17.1's `assertSame(297, $files)` defect rebuilt here,
+        // reddening on every correctly-classified new tool. The exact assertion
+        // is the verdict below, and it is exact in the direction that matters:
+        // the offending NAME appears in its own failure output.
         $this->assertSame(
             [],
             array_values(array_diff(['Bash', 'Edit', 'Write', 'Read', 'Grep', 'doctor'], $corpus)),
-            'the built-in corpus scan lost tools it used to find - the instrument is broken, fix it before reading its verdict',
+            'the Tool corpus sweep lost tools it used to find - the instrument is broken, fix it before reading its verdict',
         );
+
+        $unclassified = [];
+        foreach ($corpus as $toolName) {
+            if (!Runtime::stepRequestedAWrite([new ToolCall('probe', $toolName, [])]) && !in_array($toolName, $readOnly, true)) {
+                $unclassified[] = $toolName;
+            }
+        }
+
+        // Asked through stepRequestedAWrite() rather than against the constant,
+        // so the MCP prefix rule counts as classification too - McpToolBridge's
+        // own name is `mcp__…`, and a verdict that only consulted the roster
+        // would report the tree's twelfth tool as unclassified when the rule
+        // above has in fact already decided it.
         $this->assertSame(
             [],
-            array_values(array_diff($corpus, $classified)),
-            'a built-in tool is classified by NEITHER the write roster nor the read-only list - decide which, in this commit',
+            $unclassified,
+            'a Tool implementor is classified by NEITHER the write rule nor the read-only list - decide which, in this commit',
         );
     }
 
@@ -2875,7 +2885,18 @@ final class RuntimeTest extends TestCase
      * `tests/Providers/PromptStabilityTest::dirtyRepoFixtureWithEveryStableLayer()`,
      * where it was grown by five successive reviews and where the comment on
      * it records what each knob costs and that the list is "found", not
-     * exhaustive. Nothing here asserts a byte LITERAL, so an unpinned knob
+     * exhaustive. MEASURED: the fourteen `['config', …]` rows are byte-identical
+     * between the two fixtures.
+     *
+     * AND NOTHING ENFORCES THAT, which is worth stating rather than leaving to
+     * be discovered. `tests/Support/DuplicatedTestHelperDriftTest` compares two
+     * declarations of the SAME private method NAME in different files; these
+     * two have different names, so the census is blind to the duplication and
+     * its green says nothing about it. A fifteenth knob found by a future
+     * PromptStability review will not propagate here on its own. Sharing one
+     * list needs a support class both files can read, which is outside P3.S5's
+     * declared file list; it is recorded here as a follow-up rather than
+     * half-done. Nothing here asserts a byte LITERAL, so an unpinned knob
      * would move figures no assertion reads - but `diff.noprefix`,
      * `color.diff` and `i18n.commitEncoding` all change what a diff section
      * CONTAINS, and this file's assertions do read that.
