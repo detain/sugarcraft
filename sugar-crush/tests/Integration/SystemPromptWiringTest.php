@@ -227,18 +227,17 @@ final class SystemPromptWiringTest extends TestCase
      * {@see \SugarCraft\Crush\Runtime::markWriteSinceLastRender()} after every
      * step, and the only tool call step 0 makes here is `no_such_tool`, which
      * is not write-capable, so `Runtime::stepRequestedAWrite()` derives FALSE
-     * and step 1's `<env>` block suppresses the two git diff sections. The two
-     * prompts are therefore no longer byte-identical wherever a git section
-     * renders at all.
+     * and step 1's `<env>` block suppresses the two git diff sections.
      *
      * NOTHING IS DROPPED: an inverted assertion still pins a relationship, a
      * deleted one pins nothing. The single equality became an equality against
      * the RECONSTRUCTED suppressed form, plus a pin that the marker it cuts on
-     * occurs exactly once, plus a pin that the tail holds exactly TWO sections
-     * and not three. The surviving invariant is the one this test was always
-     * really about — every byte before that cut, the frozen triple included,
-     * is still identical across the two steps, and the two diff sections are
-     * the ONLY licensed mid-turn difference.
+     * occurs exactly once in the emitting prompt and not at all in the
+     * suppressed one, plus a full-shape pin on the tail that came off. The
+     * surviving invariant is the one this test was always really about — every
+     * byte before that cut, the frozen triple included, is still identical
+     * across the two steps, and the two diff sections are the ONLY licensed
+     * mid-turn difference.
      *
      * THE METHOD NAME NOW OVERSTATES AND IS KEPT ANYWAY, and the reason first
      * written here was wrong. It claimed
@@ -263,143 +262,95 @@ final class SystemPromptWiringTest extends TestCase
     {
         file_put_contents($this->tempDir . '/AGENTS.md', 'MULTI STEP INTEGRATION MARKER');
 
-        $provider = $this->completeOneTurn(toolCallOnFirstStep: true);
+        // THE GIT REGIME IS FORCED HERE, not inherited from `getcwd()`, and
+        // that is the whole reason this test bites at all.
+        //
+        // `EnvironmentBlock::isGitRepo()` is a bare `file_exists($cwd .
+        // '/.git')` against the CAPTURED directory, and the captured directory
+        // is `Runtime::projectRoot()`, which is `$app->root ?? getcwd()`.
+        // Every other test in this file leaves the root null, so the block
+        // describes wherever phpunit was started from — and a `sugar-crush/`
+        // package directory holds no `.git`, so it renders `Is directory a git
+        // repo: No` and NO git section at all. There is then nothing for the
+        // write signal to suppress.
+        //
+        // MEASURED, and this is why the fixture below is not optional: with
+        // the root left null and `markWriteSinceLastRender()` deleted from
+        // `EngineBackend::complete()`'s loop, this test stayed GREEN from
+        // `sugar-crush/` — the invocation CLAUDE.md, AGENTS.md and
+        // CONTRIBUTING.md all document — and only reds from the checkout root.
+        // Half the runs of the assertion below would have been decorative.
+        //
+        // An EMPTY `.git` DIRECTORY IS ENOUGH, because `isGitRepo()` looks at
+        // nothing else. It is the same shape
+        // {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest} builds:
+        // the gate opens, every `git` invocation then fails against a
+        // directory that is not a repository, and each field reports its own
+        // exit code rather than an empty string. That is what makes this
+        // fixture better than a real repository for THIS test — the two
+        // sections are one deterministic line each, independent of whatever
+        // the developer's working tree happens to hold, so the tail can be
+        // pinned by shape instead of by a heuristic over diff bodies.
+        mkdir($this->tempDir . '/.git');
+
+        $provider = $this->completeOneTurn(toolCallOnFirstStep: true, root: $this->tempDir);
 
         $this->assertCount(2, $provider->requests, 'expected a tool-calling step followed by an answering step');
 
         $first = (string) $provider->requests[0]->systemPrompt;
         $second = (string) $provider->requests[1]->systemPrompt;
 
-        // WHICH REGIME THIS RUN IS IN, read off the block itself rather than
-        // assumed. `EnvironmentBlock::isGitRepo()` is a bare
-        // `file_exists($cwd . '/.git')` against the CAPTURED directory, and
-        // `backend()` never calls `withRoot()`, so the captured directory is
-        // `getcwd()` — the directory phpunit was started from, not this
-        // checkout. MEASURED on this tree: started from `sugar-crush/`, the
-        // path `sugar-crush/.git` does not exist (a monorepo package directory
-        // has none), the block renders `Is directory a git repo: No`, and
-        // there is no git section for anything to suppress; started from the
-        // checkout root — which is the form `.github/workflows/ci.yml` uses,
-        // `php <lib>/vendor/bin/phpunit -c <lib>/phpunit.xml` with no `cd` and
-        // no `working-directory:` — `.git` exists at that path and the section
-        // renders.
+        $this->assertStringContainsString(
+            "\nIs directory a git repo: Yes\n",
+            $first,
+            'the fixture must put the block in the git regime, or nothing below tests the suppression',
+        );
+
+        $marker = "\n\nStaged changes (git diff --cached, index vs HEAD):";
+
+        // The cut marker must be unambiguous or the reconstruction below would
+        // silently cut in the wrong place, and this scans the WHOLE prompt.
+        // `Recent commits:` renders commit subjects verbatim and a subject
+        // could carry this text, but `git log --oneline` emits one line per
+        // commit and `git status --porcelain` one line per path, so nothing
+        // above can be preceded by the blank line the marker opens with. Under
+        // this fixture both of those fields are an `unavailable (git exited N)`
+        // line anyway. Asserted, not argued.
+        $this->assertSame(1, substr_count($first, $marker), 'the cut marker must occur exactly once in the emitting step prompt');
+        $this->assertSame(0, substr_count($second, $marker), 'the suppressed step must carry no staged-diff section at all');
+
+        $cut = (int) strpos($first, $marker);
+        $tail = substr($first, $cut);
+
+        $this->assertSame(
+            substr($first, 0, $cut) . "\n</env>",
+            $second,
+            'the second step must be the first with exactly the two diff sections cut — nothing else may drift mid-turn',
+        );
+
+        // EXCLUSIVITY, and it is the deterministic fixture that buys it. There
+        // is NO `/s` here and no `.*`: `[^\n]*` cannot cross a line, so this
+        // says the tail is exactly two one-line sections and the closing
+        // fence, in that order, and nothing else. A third section — the
+        // failure mode the reconstruction above structurally cannot see, since
+        // anything added after the cut is suppressed on both sides of that
+        // comparison — reds here whether it is separated by a blank line or by
+        // a single newline.
         //
-        // NOTE WHAT THE `No` BRANCH IS NOT. It is not "getcwd() is not a
-        // repository": `sugar-crush/` sits INSIDE the sugarcraft repository
-        // and `git -C sugar-crush status` answers there perfectly well. What
-        // is absent is a `.git` entry at that exact path, which is the whole
-        // of what `isGitRepo()` looks at. Both branches are live — CI takes
-        // the first, a developer running the suite from `sugar-crush/` takes
-        // the second — so neither is decorative.
-        //
-        // AND THE `No` BRANCH IS THE WEAK ONE, WHICH IS A COST OF THIS STEP'S
-        // SCOPE RATHER THAN A PROPERTY OF THE PROBLEM. In that regime the
-        // assertion below is the OLD equality, so it pins nothing about the
-        // suppression: MEASURED, deleting `markWriteSinceLastRender()` from
-        // `EngineBackend::complete()`'s loop reds this test from the checkout
-        // root and leaves it green from `sugar-crush/` — which is the
-        // invocation CLAUDE.md, AGENTS.md and CONTRIBUTING.md all document.
-        // Determinism WAS available and this branch already uses it 1,600
-        // lines away: {@see \SugarCraft\Crush\Backend\EngineBackend::withRoot()}
-        // over the hermetic dirty-repo fixture that
-        // `RuntimeTest::testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite()`
-        // drives. Reaching it here means sharing that fixture builder, and
-        // copying it instead would be the exact defect
-        // {@see \SugarCraft\Crush\Tests\Support\DuplicatedTestHelperDriftTest}
-        // exists to catch — so it has to be hoisted into `tests/Support/`,
-        // which is two files outside this step's one-file declared list.
-        // Escalated to the orchestrator rather than half-done. What keeps this
-        // from being a hole in the BRANCH is that the same deletion also reds
-        // `RuntimeTest` cwd-independently; what it is, is a weakness in THIS
-        // test, and it is written down instead of being called honest.
-        if (str_contains($first, "\nIs directory a git repo: Yes\n")) {
-            $marker = "\n\nStaged changes (git diff --cached, index vs HEAD):";
-
-            // The cut marker has to be unambiguous or the reconstruction
-            // below would silently cut in the wrong place, and the assertion
-            // scans the WHOLE prompt — so the argument has to cover the whole
-            // prompt, including the two diff bodies, which are whatever the
-            // captured working tree happens to hold. Two regions, two reasons.
-            //
-            // ABOVE the diff sections: `Recent commits:` renders this
-            // repository's own commit subjects verbatim, and a subject could
-            // carry this text — but `git log --oneline` emits one line per
-            // commit and `git status --porcelain` one line per path, so
-            // nothing there can be preceded by the blank line the marker
-            // opens with.
-            //
-            // INSIDE a diff body the earlier version of this comment was
-            // WRONG in shape, and the correction is the reason the claim
-            // survives. `git diff --shortstat --patch` DOES emit a bare blank
-            // line — MEASURED in a scratch repository: the shortstat line,
-            // then an empty line, then `diff --git `. What makes the marker
-            // still unreachable is not the absence of blank lines but the
-            // prefixing: every patch-body line carries `+`, `-`, ` `, `@`,
-            // `\` or a `diff --git `/`index `/`Binary files ` header, and the
-            // one bare blank line `--shortstat` produces is always followed
-            // by `diff --git `. A line reading `Staged changes (…)` cannot
-            // appear unprefixed. Asserted anyway, not argued.
-            $this->assertSame(1, substr_count($first, $marker), 'the cut marker must occur exactly once in the emitting step prompt');
-            $this->assertSame(0, substr_count($second, $marker), 'the suppressed step must carry no staged-diff section at all');
-
-            $cut = (int) strpos($first, $marker);
-
-            $this->assertSame(
-                substr($first, 0, $cut) . "\n</env>",
-                $second,
-                'the second step must be the first with exactly the two diff sections cut — nothing else may drift mid-turn',
-            );
-
-            $tail = substr($first, $cut);
-
-            // ORDER, and then EXCLUSIVITY. The regex alone pins only that the
-            // staged section opens the tail, the unstaged one follows it and
-            // the fence closes it: both `.*` run under `/s`, so a THIRD
-            // section smuggled between or after them still matches. The
-            // equality above cannot cover that gap either — a section that is
-            // added to the emitting prompt AND suppressed from the other one
-            // lives entirely after the cut, so the reconstruction stays true.
-            // Without the count below, "the two diff sections are the only
-            // licensed mid-turn difference" would be the one thing this test
-            // does not check.
-            $this->assertMatchesRegularExpression(
-                '~^\n\nStaged changes \(git diff --cached, index vs HEAD\):.*\n\nUnstaged changes \(git diff, working tree vs index\):.*\n</env>$~s',
-                $tail,
-                'the tail must open with the staged section, then the unstaged one, then the fence',
-            );
-
-            // EXACTLY TWO SECTIONS. A blank line inside the tail is either a
-            // section separator or the one `--shortstat` prints before its
-            // patch, and the second kind is ALWAYS followed by `diff --git `.
-            // So the separators are the blank lines that are not, and there
-            // must be two of them — one per licensed section.
-            //
-            // MEASURED, rendering `EnvironmentBlock` against three working
-            // trees, `substr_count($tail, "\n\n")` first and this count
-            // second: a clean tree 2 and 2; a tree with a staged text edit, an
-            // unstaged text edit and an unstaged BINARY file 4 and 2; a tree
-            // whose diff overruns `DIFF_MAX_BYTES` and takes the truncation
-            // notice 3 and 2. A bare `substr_count(…, "\n\n") === 2` — the
-            // obvious spelling — would therefore red on any dirty tree, which
-            // is why it is not what is written here.
-            //
-            // THE ONE INPUT THAT WOULD BREAK IT, stated rather than left to be
-            // discovered: git's `diff.suppressBlankEmpty`, which renders a
-            // blank CONTEXT line as an empty line instead of a single space.
-            // It is off by default and MEASURED off here — the probe's blank
-            // context lines came back as `" "` — but a developer who turns it
-            // on globally and has a blank line in an uncommitted hunk would
-            // see this count red. That is a false red on a stated condition,
-            // not a silent hole.
-            $this->assertSame(
-                2,
-                preg_match_all('/\n\n(?!diff --git )/', $tail),
-                'the tail must hold exactly two sections — a third one, emitted on one step and suppressed on the next, is not a licensed mid-turn difference',
-            );
-        } else {
-            $this->assertStringContainsString("\nIs directory a git repo: No\n", $first, 'the block must answer the git question one way or the other');
-            $this->assertSame($first, $second, 'with no git section rendered there is nothing to suppress, so the two steps must still be byte-identical');
-        }
+        // MEASURED, both mutations applied to the two `gitDiffSection()` calls
+        // in `src/Context/EnvironmentBlock.php` and both reverted: appending
+        // `. "\n\nSmuggled third section: yes"` reds, and appending
+        // `. "\nSmuggled third section: yes"` reds. An earlier version of this
+        // assertion counted blank-line separators instead; it caught the first
+        // mutation and passed the second, `OK (1 test, 7 assertions)`. This
+        // shape is strictly stronger, which is why the count is gone rather
+        // than weakened — it also carried a false-red bound on git's
+        // `diff.suppressBlankEmpty` that a one-line section cannot have.
+        $this->assertMatchesRegularExpression(
+            '~^\n\nStaged changes \(git diff --cached, index vs HEAD\): [^\n]*\n\nUnstaged changes \(git diff, working tree vs index\): [^\n]*\n</env>$~',
+            $tail,
+            'the tail must be exactly the two one-line diff sections and the closing fence',
+        );
 
         $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', $second);
     }
@@ -688,11 +639,16 @@ final class SystemPromptWiringTest extends TestCase
      * Drive one real `EngineBackend::complete()` turn against a capturing
      * provider and hand the provider back for assertions.
      */
-    private function completeOneTurn(bool $toolCallOnFirstStep = false): object
+    private function completeOneTurn(bool $toolCallOnFirstStep = false, ?string $root = null): object
     {
         $provider = $this->capturingProvider($toolCallOnFirstStep);
 
-        $this->backend($provider)->complete([Message::user('hello')]);
+        // `withRoot(null)` is the constructor default, so every caller that
+        // omits $root keeps the behaviour it had: the `EnvironmentBlock`
+        // describes `getcwd()`. Only the caller that needs a DETERMINISTIC
+        // git regime passes one -- see
+        // {@see testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt()}.
+        $this->backend($provider)->withRoot($root)->complete([Message::user('hello')]);
 
         return $provider;
     }
