@@ -739,8 +739,11 @@ final class BaseSystemPromptTest extends TestCase
         // A HEAD AND A TAIL LANDMARK LEAVE A MID-BODY DELETION INVISIBLE, and
         // the middle of this file is where the volatile half lives. MEASURED
         // on the draft that had only the three landmarks above: cutting the
-        // entire git section out of this golden - 356 bytes, 5176 down to
-        // 4820 - left both leak tests `OK (2 tests, 35 assertions)`, because
+        // branch, status, recent-commits and staged-changes blocks out of
+        // this golden - 356 bytes, 5176 down to 4820, leaving the `Note:`
+        // preamble and the unstaged block in place, so NOT the whole git
+        // section, which is 744 bytes here - left both leak tests
+        // `OK (2 tests, 35 assertions)`, because
         // every assertion below is an ABSENCE assertion and the survivors
         // still satisfied all of them. A byte count is the only landmark that
         // catches a truncation ANYWHERE, and it is stable across machines
@@ -778,6 +781,16 @@ final class BaseSystemPromptTest extends TestCase
             self::hostPathLeaks($golden),
             'the golden carries an absolute filesystem path - the fixture cwd, repo root and memory '
             . 'store must all stay relative',
+        );
+        // RESTORED, not replaced. hostPathLeaks() is not a superset of this
+        // check: a path segment cannot be empty, so a slash followed by
+        // whitespace (`/ home/ci`, `// comment`) is caught here and by
+        // nothing there. Deleting this in favour of the scanner was a
+        // narrowing on that class of input; both stand.
+        self::assertDoesNotMatchRegularExpression(
+            '/^\//m',
+            $golden,
+            'a golden line starts with an absolute path - the fixture cwd must stay relative',
         );
         self::assertSame(
             ['/var/www/build-agent-42/checkout'],
@@ -1252,6 +1265,116 @@ final class BaseSystemPromptTest extends TestCase
     }
 
     /**
+     * {@see hostPathLeaks()} returns the EXACT list of absolute paths in a
+     * line, and the empty list for everything a prompt legitimately carries.
+     *
+     * WHY THIS EXISTS, measured rather than argued. Before it, the scanner
+     * was exercised by exactly two inputs: a clean golden, and one spliced
+     * `/var/www/build-agent-42/checkout` control. MEASURED - replacing the
+     * whole function body with
+     *
+     *     preg_match_all('#/var/www[\w./-]*#', $text, $posix);
+     *     $windows = [[]];
+     *     $unc = [[]];
+     *
+     * left both step files at `OK (39 tests, 246 assertions)`, byte for byte
+     * the unmutated total. Every property the doc-block claims - the Windows
+     * arm, the UNC arm, mid-line detection, doubled slashes, the git-prefix
+     * and URL exclusions, the enumerate-no-roots design that item 2(c) asked
+     * for - held in the implementation and in nothing the tree could check.
+     * A hard-coded single root passed the leak tests exactly as well as the
+     * shape-based scanner did. This table is what makes that mutation red.
+     *
+     * BOTH POLARITIES, and the exact string. A scanner that reports SOME hit
+     * is not the same as one that reports the RIGHT hit: the narrow first
+     * draft answered `/x` for `/'quoted'/x`, naming a path that is not in
+     * the text while missing the one that is, and an `assertNotSame([], ...)`
+     * would have called that a pass.
+     */
+    public function testHostPathLeaksReportsEveryAbsolutePathAndNothingElse(): void
+    {
+        $mustFire = [
+            // Plain POSIX, at column 0 and mid-line.
+            '/usr/local/bin' => ['/usr/local/bin'],
+            '/home/my/thing' => ['/home/my/thing'],
+            'Working directory: /var/www/build-agent-42/checkout' => ['/var/www/build-agent-42/checkout'],
+            'Working directory: /opt/ci/work' => ['/opt/ci/work'],
+            'Working directory: /srv/x' => ['/srv/x'],
+            'Working directory: /builds/gitlab/proj' => ['/builds/gitlab/proj'],
+            'Working directory: /workspace' => ['/workspace'],
+            'Working directory: /Volumes/ci/x' => ['/Volumes/ci/x'],
+            'trailing note here /root/agent then more' => ['/root/agent'],
+            // A first segment that does not open with a word character. The
+            // first draft's `[\w.~-]+` missed all four.
+            '/@scope/pkg/build' => ['/@scope/pkg/build'],
+            '/+build/out' => ['/+build/out'],
+            '/$HOME/build' => ['/$HOME/build'],
+            "/'quoted'/x" => ["/'quoted'/x"],
+            // A doubled leading slash - what `$base . '/' . $rel` produces
+            // when $base already ends in one.
+            'Working directory: //opt/ci/work' => ['//opt/ci/work'],
+            'cwd = //srv/agent/checkout' => ['//srv/agent/checkout'],
+            '///opt/ci/work' => ['//opt/ci/work'],
+            // Windows drive paths and a UNC share.
+            'Working directory: C:\\Users\\bob\\proj' => ['C:\\Users\\bob\\proj'],
+            'Working directory: D:/build/out' => ['D:/build/out'],
+            'Working directory: \\\\fileserver\\share\\proj' => ['\\\\fileserver\\share\\proj'],
+        ];
+
+        $mustStaySilent = [
+            // git's own diff prefixes and porcelain, and ordinary relative paths.
+            '--- /dev/null',
+            '+++ b/docs/notes.md',
+            'diff --git a/src/app.php b/src/app.php',
+            ' M src/Lib.php',
+            'A  docs/notes.md',
+            '?? scratch.txt',
+            '@@ -0,0 +1 @@',
+            'vendor/prompt-fixture/agent-repo',
+            '- src/  ->  Fixture\\Lib\\  (2 files)',
+            // Closing fence tags - the `<` lookbehind.
+            '</env>',
+            '</repo-map>',
+            '</project-instructions>',
+            // Prose and dates.
+            'and/or, 2026/08/26, ok',
+            'Recent commits:',
+            // URLs - the two colon lookbehinds.
+            'see https://example.com/docs/x for more',
+            'http://a.b/c',
+        ];
+
+        foreach ($mustFire as $line => $expected) {
+            self::assertSame($expected, self::hostPathLeaks((string) $line), 'hostPathLeaks() on: ' . $line);
+        }
+        foreach ($mustStaySilent as $line) {
+            self::assertSame([], self::hostPathLeaks($line), 'hostPathLeaks() falsely reports a leak in: ' . $line);
+        }
+
+        // THE SUPERSET RELATION, ASSERTED RATHER THAN CLAIMED. This scanner
+        // did not replace `assertDoesNotMatchRegularExpression('/^\//m')`; it
+        // stands beside it, because it is NOT a superset - a path segment
+        // cannot be empty, so `/ home/ci` and `// comment` are caught by the
+        // column-0 regex and by nothing here. Both halves are pinned: every
+        // column-0 path the old check sees is either seen here too, or is
+        // one of the two the leak scans still run that check for.
+        $slashThenSpace = ['/ home/ci', '// comment'];
+        foreach ([...array_keys($mustFire), ...$slashThenSpace] as $line) {
+            $line = (string) $line;
+            if (!str_starts_with($line, '/')) {
+                continue;
+            }
+            self::assertSame(1, preg_match('/^\//m', $line), 'control: the column-0 check must see ' . $line);
+            self::assertSame(
+                !in_array($line, $slashThenSpace, true),
+                self::hostPathLeaks($line) !== [],
+                'the column-0 check and hostPathLeaks() disagree about ' . $line . ', and the leak '
+                . 'scans rely on exactly one of them covering what the other misses',
+            );
+        }
+    }
+
+    /**
      * Every absolute filesystem path $text carries, de-duplicated, in
      * first-appearance order.
      *
@@ -1264,7 +1387,13 @@ final class BaseSystemPromptTest extends TestCase
      * last CI runner somebody thought about.
      *
      * WHAT IT MATCHES. A POSIX path is a run of ONE OR TWO leading slashes
-     * that opens a run of path segments and is not preceded by a path
+     * that opens a run of path segments, each segment being any run of
+     * characters that are not whitespace, a slash, a backslash, an angle
+     * bracket, a quote or a pipe - NOT a run of word characters. The
+     * narrower `[\w.~-]+` was measured to miss `/@scope/pkg/build`,
+     * `/+build/out` and `/$HOME/build` outright, and to report `/x` for
+     * `/'quoted'/x` - naming a path that is not in the text while missing
+     * the one that is. A leading slash is not preceded by a path
      * character, so git's own diff prefixes (`a/docs/notes.md`,
      * `+++ b/src/app.php`), ordinary relative paths (`src/Lib.php`,
      * `vendor/prompt-fixture/agent-repo`), closing tags (`</env>`,
@@ -1281,10 +1410,18 @@ final class BaseSystemPromptTest extends TestCase
      * `//opt/ci/work` and `//srv/agent/checkout` both reported `[]`, and
      * writing `//opt/ci/work-agent-42` into the committed agent golden at
      * column 0 left its leak test `OK (1 test, 14 assertions)`. The
-     * `assertDoesNotMatchRegularExpression('/^\//m', ...)` this function
-     * replaced DID catch that case, so the draft was not the superset its
-     * own doc-block claimed. It is now: `/` is out of the lookbehind and the
-     * leading run may be one slash or two.
+     * `assertDoesNotMatchRegularExpression('/^\//m', ...)` DID catch that
+     * case, so the draft was not the superset its own doc-block claimed.
+     *
+     * THIS FUNCTION IS STILL NOT A SUPERSET OF THAT CHECK, AND THE CHECK IS
+     * THEREFORE BACK rather than replaced. MEASURED: `/ home/ci` and
+     * `// comment` - a slash followed by whitespace - are caught by `/^\//m`
+     * and by nothing here, because a path segment cannot be empty. Deleting
+     * the column-0 regex in favour of this one was a NARROWING on that
+     * class of input, which is exactly what §1.9 forbids; both checks now
+     * stand side by side in the leak scans, and the superset relation is
+     * asserted rather than claimed - see the second half of
+     * {@see testHostPathLeaksReportsEveryAbsolutePathAndNothingElse()}.
      *
      * WHY THE TWO COLON LOOKBEHINDS. Taking `/` out of the lookbehind let a
      * URL through - `https://example.com/x` matched `//example.com/x` - so
@@ -1301,16 +1438,18 @@ final class BaseSystemPromptTest extends TestCase
      * CONTENT is a different thing from enumerating forbidden ROOTS - this
      * list cannot grow silently, because anything not on it fails.
      *
-     * MEASURED on this tree over 27 known-answer inputs: it reports nothing
-     * for either committed golden, and reports EXACTLY ONE path for each of
-     * `/var/www/build-agent-42/checkout`, `//opt/ci/work`, `//srv/agent/checkout`,
-     * `///opt/ci/work`, `/opt/ci/work`, `/srv/x`, `/builds/gitlab/proj`,
-     * `/workspace`, `/Volumes/ci/x`, a mid-line `/root/agent`,
-     * `C:\Users\bob\proj`, `D:/build/out` and `\\fileserver\share\proj`. It
-     * reports nothing for `a/docs/notes.md`, `+++ b/src/app.php`, `src/`,
-     * `vendor/prompt-fixture/agent-repo`, `</env>`, `</repo-map>`,
-     * `</project-instructions>`, `and/or`, `2026/08/26`, `--- /dev/null`,
-     * `http://a.b/c` and `https://example.com/docs/x`.
+     * THE KNOWN-ANSWER TABLE IS A TEST, NOT A SENTENCE IN THIS DOC-BLOCK.
+     * It used to be prose here - "MEASURED over 27 known-answer inputs" -
+     * describing a measurement that existed nowhere in the repository, and
+     * the tree could not tell the difference: MEASURED, replacing this whole
+     * function body with `preg_match_all('#/var/www[\w./-]*#', $text,
+     * $posix); $windows = [[]]; $unc = [[]];` left both files at
+     * `OK (39 tests, 246 assertions)`, because the only inputs anything ran
+     * it over were a clean golden and one spliced `/var/www/...` control. A
+     * scanner nothing exercises is a scanner nobody can grade. The rows now
+     * live in {@see testHostPathLeaksReportsEveryAbsolutePathAndNothingElse()},
+     * which asserts the exact returned list for every one of them and reds
+     * on that mutation.
      *
      * @return list<string>
      */
@@ -1318,7 +1457,7 @@ final class BaseSystemPromptTest extends TestCase
     {
         $allowed = ['/dev/null'];
 
-        preg_match_all('#(?<![\w.~\\\\<-])(?<!:)(?<!:/)/{1,2}[\w.~-]+(?:/[\w.~-]+)*/?#', $text, $posix);
+        preg_match_all('#(?<![\w.~\\\\<-])(?<!:)(?<!:/)/{1,2}[^\s/\\\\<>"|]+(?:/[^\s/\\\\<>"|]+)*/?#', $text, $posix);
         preg_match_all('#(?<![A-Za-z])[A-Za-z]:[\\\\/][^\r\n]*#', $text, $windows);
         preg_match_all('#\\\\\\\\[\w.-]+\\\\[^\r\n]*#', $text, $unc);
 
