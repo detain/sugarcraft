@@ -85,8 +85,8 @@ Available skills (invoke via Skill tool):
 Working directory: vendor/prompt-fixture/system-repo
 Is directory a git repo: Yes
 Platform: linux
-OS version: Linux 6.8.0-138-generic
-PHP version: 8.3.6
+OS version: <host>
+PHP version: <host>
 Model: claude-sonnet-4-6
 Current date: 2026-08-26
 
