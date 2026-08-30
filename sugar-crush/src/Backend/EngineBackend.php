@@ -628,6 +628,41 @@ final class EngineBackend implements Backend, ReportsContextWindow, ObservesReas
                 break; // model answered without calling tools — done
             }
 
+            // P3.S5: the per-step half of P3.S2's lever. This loop is the only
+            // thing in `src/` that sees one step of the agentic loop end and
+            // the next one's prompt get assembled, so it is where the write
+            // signal is derived. After a step whose assistant turn asked for
+            // Edit/Write/Bash/mcp__*, the next `run()` renders the working
+            // diff; after a step that only read, it renders three git
+            // subprocesses instead of five and no diff sections at all — see
+            // {@see Runtime::markWriteSinceLastRender()} and
+            // {@see \SugarCraft\Crush\Context\EnvironmentBlock::withWriteSinceLastRender()}.
+            //
+            // BELOW THE `break`, ON PURPOSE: a step with no tool results is the
+            // last step of the turn, and nothing will assemble another prompt
+            // from this Runtime, so marking there would set a field nobody
+            // reads. The FIRST prompt of the turn is unaffected for the mirror
+            // reason — `$runtime` is built fresh above and this line has not
+            // run yet, so step 0 renders in `EnvironmentBlock`'s default emit
+            // state. That is the whole of the cross-turn behaviour available on
+            // this path: the Runtime and its memoised block die with the turn,
+            // and on {@see completeAsync()} with the forked child that ran it.
+            //
+            // `$assistant === null` FAILS SAFE, AND IT IS DORMANT — said
+            // rather than left for a reader to assume either way. Reaching it
+            // needs tool results with no assistant message beside them, and
+            // {@see \SugarCraft\Crush\Runtime::runStreaming()} and
+            // {@see \SugarCraft\Crush\Runtime::runBatch()} both yield the
+            // AssistantMessage BEFORE dispatching its calls, so nothing
+            // produces that shape today. It resolves to "a write happened"
+            // regardless, because the alternative is to hide a diff on the
+            // strength of tool calls this loop could not read: over-showing
+            // costs the bytes of one section pair, under-showing withholds the
+            // state the model needs to continue.
+            $runtime->markWriteSinceLastRender(
+                $assistant === null || Runtime::stepRequestedAWrite($assistant->toolCalls()),
+            );
+
             $app = $app->withMessages([
                 ...$app->messages,
                 ...($assistant !== null ? [$assistant] : []),

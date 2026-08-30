@@ -221,16 +221,198 @@ final class SystemPromptWiringTest extends TestCase
      * repository root. The assertion is still the right one -- what it is
      * exercising just is not constant across working directories, and this
      * paragraph should not imply it is.
+     *
+     * P3.S5 INVERTED THIS PIN, deliberately, the way P3.S1 inverted the three
+     * ordering pins above. `EngineBackend::complete()`'s loop now calls
+     * {@see \SugarCraft\Crush\Runtime::markWriteSinceLastRender()} after every
+     * step, and the only tool call step 0 makes here is `no_such_tool`, which
+     * is not write-capable, so `Runtime::stepRequestedAWrite()` derives FALSE
+     * and step 1's `<env>` block suppresses the two git diff sections.
+     *
+     * NOTHING IS DROPPED: an inverted assertion still pins a relationship, a
+     * deleted one pins nothing. The single equality became an equality against
+     * the RECONSTRUCTED suppressed form, plus a pin that the marker it cuts on
+     * occurs exactly once in the emitting prompt and not at all in the
+     * suppressed one, plus a full-shape pin on the tail that came off. The
+     * surviving invariant is the one this test was always really about — every
+     * byte before that cut, the frozen triple included, is still identical
+     * across the two steps, and the two diff sections are the ONLY licensed
+     * mid-turn difference.
+     *
+     * THE METHOD NAME NOW OVERSTATES AND IS KEPT ANYWAY, and the reason first
+     * written here was wrong. It claimed
+     * {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest} would red on a
+     * renamed method because `src/Runtime.php` cites this test in a backticked
+     * doc-block reference. MEASURED, twice, against that census run from
+     * `sugar-crush/`: rewriting the cited METHOD name to one that was never
+     * written leaves it `OK (7 tests, 2952 assertions)`, and rewriting the
+     * cited CLASS name to one that does not exist leaves it `OK (7 tests, 2952
+     * assertions)` as well. That census does not police this citation form at
+     * all, so the constraint invoked did not exist.
+     *
+     * WHAT IS ACTUALLY TRUE is smaller and is not a census: the citing bullet
+     * in `Runtime.php` names this method in PROSE, `Runtime.php` is outside
+     * this step's one-file declared list, and nothing in the tree would catch
+     * the stranded reference — which is the argument for renaming BOTH in one
+     * diff rather than for renaming neither. That is a §1.10 outcome-3
+     * escalation, recorded for the orchestrator, not a decision this step may
+     * take on its own.
      */
     public function testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt(): void
     {
         file_put_contents($this->tempDir . '/AGENTS.md', 'MULTI STEP INTEGRATION MARKER');
 
-        $provider = $this->completeOneTurn(toolCallOnFirstStep: true);
+        // THE GIT REGIME IS FORCED HERE, not inherited from `getcwd()`, and
+        // that is the whole reason this test bites at all.
+        //
+        // `EnvironmentBlock::isGitRepo()` is a bare `file_exists($cwd .
+        // '/.git')` against the CAPTURED directory, and the captured directory
+        // is `Runtime::projectRoot()`, which is `$app->root ?? getcwd()`.
+        // Every other test in this file leaves the root null, so the block
+        // describes wherever phpunit was started from — and a `sugar-crush/`
+        // package directory holds no `.git`, so it renders `Is directory a git
+        // repo: No` and NO git section at all. There is then nothing for the
+        // write signal to suppress.
+        //
+        // MEASURED, and this is why the fixture below is not optional: with
+        // the root left null and `markWriteSinceLastRender()` deleted from
+        // `EngineBackend::complete()`'s loop, this test stayed GREEN from
+        // `sugar-crush/` — the invocation CLAUDE.md, AGENTS.md and
+        // CONTRIBUTING.md all document — and only reds from the checkout root.
+        // Half the runs of the assertion below would have been decorative.
+        //
+        // An EMPTY `.git` DIRECTORY IS ENOUGH, because `isGitRepo()` looks at
+        // nothing else. It is the same shape
+        // {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest} builds:
+        // the gate opens, and every `git` invocation then fails against a
+        // directory that is not a repository. FOUR of the five reads report
+        // that failure as their own exit code rather than as an empty string:
+        // `status`, `log`, and the two diffs, which go through `gitField()`
+        // and `gitDiffSection()`. THE FIFTH DOES NOT. The branch line is a
+        // bare `shell_exec(... '2>/dev/null')` plus `trim()` at
+        // src/Context/EnvironmentBlock.php:853-855, with no exit-code check at
+        // all, so on this fixture it renders an EMPTY `Current branch: ` line
+        // and no marker. MEASURED by rendering
+        // EnvironmentBlock::capture($d, 'stub')->render() against exactly this
+        // fixture: str_contains($out, "Current branch: \n") is true and
+        // str_contains($out, 'Current branch: unavailable') is false. That
+        // asymmetry is a known finding and not this step's to fix — it is
+        // recorded in prompt_worklog.md's P3.S4 entry, Escalation 3. Nothing
+        // below depends on the branch line either way; what the pin at the
+        // bottom of this method needs is the four fields that DO mark their
+        // failure.
+        //
+        // That is what makes this fixture better than a real
+        // repository for THIS test — the two
+        // sections are one deterministic line each, independent of whatever
+        // the developer's working tree happens to hold, so the tail can be
+        // pinned by shape instead of by a heuristic over diff bodies.
+        //
+        // MEASURED against exactly this fixture, because the numbers are what
+        // the exclusivity pin at the bottom of this method actually encodes:
+        // `git status --porcelain` and `git log --oneline -5` exit 128, and
+        // BOTH `git diff --shortstat --patch` and its `--cached` form exit
+        // 129. All four of those reads therefore take their failure branch
+        // (the fifth git read, the branch line, reports no exit code at all —
+        // see above), and
+        // the two diff sections in particular render through the `exitCode
+        // !== 0` early return inside `gitDiffSection()` — its success branch
+        // is never reached from this test at all. What is pinned below is
+        // consequently a FIXTURE-SHAPED prompt and not the shape a real
+        // repository produces: there both diff commands exit 0 (MEASURED) and
+        // the body is a multi-line patch that a one-line body class would
+        // false-red on. That regime is covered deliberately elsewhere, by
+        // {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite()},
+        // which builds a real committed-then-dirtied repository. Do not
+        // "repair" this test by handing it one: that would delete the only
+        // exclusivity pin in this file to duplicate coverage that exists.
+        mkdir($this->tempDir . '/.git');
+
+        $provider = $this->completeOneTurn(toolCallOnFirstStep: true, root: $this->tempDir);
 
         $this->assertCount(2, $provider->requests, 'expected a tool-calling step followed by an answering step');
-        $this->assertSame($provider->requests[0]->systemPrompt, $provider->requests[1]->systemPrompt);
-        $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', (string) $provider->requests[1]->systemPrompt);
+
+        $first = (string) $provider->requests[0]->systemPrompt;
+        $second = (string) $provider->requests[1]->systemPrompt;
+
+        $this->assertStringContainsString(
+            "\nIs directory a git repo: Yes\n",
+            $first,
+            'the fixture must put the block in the git regime, or nothing below tests the suppression',
+        );
+
+        $marker = "\n\nStaged changes (git diff --cached, index vs HEAD):";
+
+        // The cut marker must be unambiguous or the reconstruction below would
+        // silently cut in the wrong place, and this scans the WHOLE prompt.
+        // `Recent commits:` renders commit subjects verbatim and a subject
+        // could carry this text, but `git log --oneline` emits one line per
+        // commit and `git status --porcelain` one line per path, so nothing
+        // above can be preceded by the blank line the marker opens with. Under
+        // this fixture both of those fields are an `unavailable (git exited N)`
+        // line anyway. Asserted, not argued.
+        $this->assertSame(1, substr_count($first, $marker), 'the cut marker must occur exactly once in the emitting step prompt');
+        $this->assertSame(0, substr_count($second, $marker), 'the suppressed step must carry no staged-diff section at all');
+
+        // NOT `(int) strpos(...)`. `strpos()` returns `int|false`, and
+        // `(int) false === 0` turns "the marker is absent" into "cut at byte
+        // 0" — handing every assertion below a `$tail` that is the whole
+        // prompt and a reconstruction that is the empty string. The
+        // `substr_count()` assertion above makes that unreachable today, but a
+        // cast standing in for a failure path is still a failure path spelled
+        // as a value, so the failure is spelled out instead.
+        $cut = strpos($first, $marker);
+        $this->assertNotFalse($cut, 'the cut marker must be locatable in the emitting step prompt');
+        $tail = substr($first, $cut);
+
+        $this->assertSame(
+            substr($first, 0, $cut) . "\n</env>",
+            $second,
+            'the second step must be the first with exactly the two diff sections cut — nothing else may drift mid-turn',
+        );
+
+        // EXCLUSIVITY, and it is the deterministic fixture that buys it. There
+        // is NO `/s` here and no `.*`: `[^\n]*` cannot cross a line, so this
+        // says the tail is exactly two one-line sections and the closing
+        // fence, in that order, and nothing else. A third section — the
+        // failure mode the reconstruction above structurally cannot see, since
+        // anything added after the cut is suppressed on both sides of that
+        // comparison — reds here whether it is separated by a blank line or by
+        // a single newline.
+        //
+        // THE ANCHOR IS `\z`, NOT `$`, and that is not decoration. MEASURED
+        // with `php -r` over four candidate tails: ended `$~`, the pattern
+        // returns 1 for the intended tail AND 1 for that same tail plus a
+        // single trailing newline, because PCRE's `$` matches before a final
+        // `\n`. Ended `\z~` it returns 1 and then 0. (Two trailing newlines,
+        // and a newline followed by text, were already 0 under both anchors,
+        // which is why nobody noticed.) One smuggled byte past `</env>` was
+        // being admitted by an assertion whose message said "exactly". It was
+        // not exploitable — the reconstruction above would have red-flagged
+        // that same input — but a pin weaker than its own prose is the defect
+        // this file exists in order not to ship.
+        //
+        // The one-line body class `[^\n]*` is bought by the empty-`.git`
+        // fixture; the MEASURED exit codes that make it a one-line body, and
+        // the test that covers the real-repository regime instead, are written
+        // out beside the `mkdir()` at the top of this method.
+        //
+        // MEASURED, both mutations applied to the two `gitDiffSection()` calls
+        // in `src/Context/EnvironmentBlock.php` and both reverted: appending
+        // `. "\n\nSmuggled third section: yes"` reds, and appending
+        // `. "\nSmuggled third section: yes"` reds. An earlier version of this
+        // assertion counted blank-line separators instead; it caught the first
+        // mutation and passed the second, `OK (1 test, 7 assertions)`. This
+        // shape is strictly stronger, which is why the count is gone rather
+        // than weakened — it also carried a false-red bound on git's
+        // `diff.suppressBlankEmpty` that a one-line section cannot have.
+        $this->assertMatchesRegularExpression(
+            '~^\n\nStaged changes \(git diff --cached, index vs HEAD\): [^\n]*\n\nUnstaged changes \(git diff, working tree vs index\): [^\n]*\n</env>\z~',
+            $tail,
+            'under this fixture the tail must be exactly the two one-line diff sections and the closing fence, with nothing whatsoever after </env> — not even a trailing newline',
+        );
+
+        $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', $second);
     }
 
     /**
@@ -517,11 +699,16 @@ final class SystemPromptWiringTest extends TestCase
      * Drive one real `EngineBackend::complete()` turn against a capturing
      * provider and hand the provider back for assertions.
      */
-    private function completeOneTurn(bool $toolCallOnFirstStep = false): object
+    private function completeOneTurn(bool $toolCallOnFirstStep = false, ?string $root = null): object
     {
         $provider = $this->capturingProvider($toolCallOnFirstStep);
 
-        $this->backend($provider)->complete([Message::user('hello')]);
+        // `withRoot(null)` is the constructor default, so every caller that
+        // omits $root keeps the behaviour it had: the `EnvironmentBlock`
+        // describes `getcwd()`. Only the caller that needs a DETERMINISTIC
+        // git regime passes one -- see
+        // {@see testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt()}.
+        $this->backend($provider)->withRoot($root)->complete([Message::user('hello')]);
 
         return $provider;
     }
