@@ -869,16 +869,42 @@ Baseline for comparison: 10351/160648/1 (P0.S1). Delta: +51 tests, +245 assertio
 - F4: `tests/Agents/AgentTest.php:312-327` docblock claims Runtime seats `<env>` EARLY (layer 2 of 7) and the two assemblers are 'deliberately opposite' — both false post-P3.S1; also references the retired base-prompt slice semantics.
 - Standing obs A: `ensureFixtureRepo()` staleness hardening — recommended for later golden-touching steps (P3.S2/S3/S4, P5.S4-S5.S6, P9.S5).
 
-## Phase 2 — close (P2.S1..P2.S4)
+> **BOOKKEEPING DEFECT, recorded 2026-08-30 — these next four entries do not conform to the
+> required entry format (§ "Required entry format", line 46), and their heading level was wrong.**
+>
+> They were written as compressed `##` narrative paragraphs rather than `###` entries with the
+> mandated sections. The heading level was the load-bearing half of the bug: `## ENTRIES` is itself
+> `##`, so these four were its SIBLINGS, and every entry below them — twenty headings, including
+> P1 CLOSE, P0 CLOSE and every Phase-0/1 step entry — nested under `## P2.S2` in any outline view.
+> **The heading levels are now corrected to `###`; the narrative bodies are left as they were
+> written.**
+>
+> What is genuinely UNRECOVERABLE, and is not reconstructed here because reconstructing it would
+> mean inventing it:
+> * **P2.S4's deletion experiments.** Recorded only as "A/B/C RED→GREEN" with no statement of what
+>   was reverted or what the failure said. Its guards are therefore UNPROVEN until someone re-runs
+>   them. This is exactly the evidence §1.11 exists to require.
+> * **All four Surprises sections.**
+> * **The phase close's "Cross-step problems found".** Its absence is the direct reason the Phase 2
+>   close's deletion of the repo-root `.gitattributes` guard went unrecorded until RETRO-RR3 F1
+>   found it (fixed as RETRO-FIX-1).
+>
+> A further defect these compressed entries share: **no suite figure in them names the cwd it was
+> measured from.** That omission is what hid CI being red on `origin/master` from 2026-08-27
+> onward — see the `9141db7ff` commit message. Both P2.S2 and P2.S4 above quote census and suite
+> counts with no cwd; treat every one of those numbers as `sugar-crush/`-cwd figures and therefore
+> as NOT evidence about CI.
+
+### Phase 2 — close (P2.S1..P2.S4)   ·   2026-08-28   ·   close commit 3d7c7e420
 Phase-close review over whole diff 0f3bf202f..HEAD (18 commits) VERDICT FINDINGS — 1 LOW gate-level: git diff --check exit 2 on intentional trailing-space bytes at golden-agent-prompt.txt:42 + golden-system-prompt.txt:84 (whitespace-only lines inside pinned sample-diff sections; byte-goldens pass). Fixed: repo-root .gitattributes `sugar-crush/tests/fixtures/prompt/** whitespace=-trailing-space` → diff --check exit 0. Suites on master: BaseSystemPromptTest 12/87, census 6-file 103/9420, Providers 846/2047, phase suites 174/520, check-path-repos exit 0. F1 fold PASS (SSE_BODY byte-identical, 155 bytes, verified structurally); F2 fold PASS (three distinct ''-semantics pinned in SystemPromptTransmissionMatrixTest). Phase-level 19-check: all PASS. Bookkeeping verified (af1e6079f touches only resume+worklog; §8 batch cleared). Master clean; no worktrees; no prompt/* branches. Steps done 14 of 61; phases done 3 of 12. Close commit 3d7c7e420.
 
-## P2.B2 — batch close (P2.S2 + P2.S4)
+### BATCH P2.B2 CLOSE   ·   2026-08-28   ·   master dfb618f16
 Batch P2.B2 closed: P2.S2 (golden system prompt) merged 74148433d; P2.S4 (prompt-composition fixture) merged dfb618f16. Both reviewed APPROVE (19/19); Providers 846/2047 + check-path-repos exit 0 after each merge; all worktrees removed; branches prompt/P2.S2 + prompt/P2.S4 deleted. Master dfb618f16; steps done 14 of 61; phases done 2 of 12.
 
-## P2.S4 — prompt-composition fixture (merged dfb618f16)
+### P2.S4 — prompt-composition fixture   ·   2026-08-28   ·   merged dfb618f16
 1aa8677e2 (5 files +406/-44) added tests/Prompt/PromptFixture.php (235 lines; closure-based buildSystemPrompt harness; docblock explains why not tests/Support/ — cross-plan lane + DuplicatedTestHelperDriftTest), 3 fixture-exercising tests in SystemPromptWiringTest (+111; testARealChatKeystrokeTurnDeliversBothHalves untouched), migrated 9 prompt tests (MemoryPromptWiring 3, RepoMapBlock 4, Runtime 2) with assertions character-identical (sorted assert-line multisets byte-identical 28/147/255), restored orphaned fixture-backed systemPrompt() helper in RepoMapBlockTest. edcad3ef1 fixed cycle-1 LOW finding (PSR-12 EOF trailing newline; 1 file +1/-1). Review: c1 FINDINGS (1 LOW) → fixed; c2 fresh reviewer APPROVE 19/19, no findings. Suites: SystemPromptWiring 11/65, MemoryPromptWiring 14/36, RepoMapBlock 62/163, Runtime 87/256, census 103/9400 (base 103/9390; +10 accepted by SymbolCitationDriftTest + ChildWallClockBudgetTest), Providers 846/2047, check-path-repos exit 0. Deletion experiments A/B/C RED→GREEN (cycle-1 agent). Merged --no-ff dfb618f16; worktree removed; branch prompt/P2.S4 deleted.
 
-## P2.S2 — golden system prompt (merged 74148433d)
+### P2.S2 — golden system prompt   ·   2026-08-28   ·   merged 74148433d
 d19f06665 (9 files +533/-2) pinned Runtime::buildSystemPrompt() output to tests/fixtures/prompt/golden-system-prompt.txt (assertSame) + 10-fragment host-path leak scan with /^\//m guard + deterministic fixture-repo builder + regeneration-discipline docblock; 30a32a49b added the '/test/' leak fragment (cycle-1 LOW finding). Review: c1 FINDINGS (1 LOW) → fixed; c2 fresh reviewer APPROVE 19/19 (mutations measured: golden 't'→'x' RED at BaseSystemPromptTest.php:570; mid-file '/test/path/leak' RED at :602; restored byte-identical md5 e89d98c72975ca8c22914d7f6796ec7a). Suites: BaseSystemPromptTest 12 tests/87 assertions; census 6-file set 103/9410; Providers 846/2047 (post-merge); check-path-repos exit 0. Observations A/B/C non-blocking (A: stale ensureFixtureRepo hardening recommended for later golden-touching steps P3.S1/P5.S4-P5.S6/P9.S5; B: gitRun env gaps; C: AgentTest.php:571-578 pinHostLines comment stale-in-spirit — recorded follow-up). Merged --no-ff 74148433d; worktree removed; branch prompt/P2.S2 deleted. Orchestrator: coder-executed merge + Providers run.
 
 ### P2.B2 session status #3 · 2026-08-28 · reviewer delegate died (timeout, no output) → respawned via script(1)
@@ -1659,7 +1685,7 @@ Consistency check: `git log -1` subject on the base commit reads "plan: close ro
 ---
 
 
-### P3.S3 — Snapshot semantics and the honest caveat   ·   2026-08-29   ·   a7513cc0e (6 commits, UNMERGED)
+### P3.S3 — Snapshot semantics and the honest caveat   ·   2026-08-29   ·   merged 74cabae7f (branch HEAD 9d4176a3a, 7 commits)
 
 **Status** `merged`  — merge commit 74cabae7f, branch HEAD 9d4176a3a (7 commits)
 **Worktree** /home/sites/prompt-step-P3.S3 (removable; the branch is merged)
