@@ -354,6 +354,48 @@ In-flight batch:  TWO AGENTS RUNNING, spawned 2026-08-30. Neither has reported y
                        P3.S5 genuinely inverts that assertion's premise and §1.10 requires the
                        assertion be inverted rather than deleted.
 
+                   (D) **RESOLVED BY (B), 2026-08-30: CI IS RED ON origin/master FOR sugar-crush,
+                       AND THIS PLAN BROKE IT.** Evidence from GitHub's own CI logs, MEASURED:
+                       * The last THREE CI runs on origin/master are all `failure`. The failing jobs
+                         are exactly `Test PHP 8.3 · sugar-crush`, `Test PHP 8.4 · sugar-crush`,
+                         `Coverage · sugar-crush`. Last GREEN master run: `2b53302af` (2026-08-25).
+                       * ci.yml's cwd IS the repo root — confirmed, no `cd`, no `working-directory:`,
+                         no `defaults:`; and `sugar-crush/tests/bootstrap.php` has NO `chdir()`.
+                         So the "CI form" is exactly what CI runs. The plan's habit of measuring from
+                         `sugar-crush/` hid this for five days.
+                       * BOTH failures were introduced BY THIS PLAN'S OWN PHASE 2 STEPS:
+                         `8fa2721d9` (P2.S3) added AgentTest::testSystemPromptMatchesCommittedGolden;
+                         `d19f06665` (P2.S2) added
+                         BaseSystemPromptTest::testSystemPromptMatchesCommittedGolden.
+                         The cwd sensitivity was born WITH each test, not introduced by a later P3
+                         commit. None of 03d8fed37/6aff0bad1/379ecc7d6/dabcd27f7/74cabae7f/f2af06eaa
+                         caused it.
+                       * MECHANISM: `AgentTest.php:459` materialises the fixture repo at a `__DIR__`
+                         -anchored ABSOLUTE path, but `AgentTest.php:417`'s `goldenContext()` passes a
+                         RELATIVE cwd (`vendor/prompt-fixture/agent-repo`) — deliberately, so the
+                         golden carries no host path — and
+                         `EnvironmentBlock::isGitRepo()` (src/Context/EnvironmentBlock.php:805) is
+                         `file_exists($this->cwd . '/.git')`, resolved against the PROCESS getcwd().
+                         From the repo root that is false, so the whole git section vanishes while the
+                         golden's line 5 says `Is directory a git repo: Yes`.
+                         Separately `BaseSystemPromptTest.php:737` passes a relative
+                         `'tests/fixtures/prompt/memory'` to `MemoryStore`, which throws from the repo
+                         root (src/Memory/MemoryStore.php:66) — that is the `Errors: 1`.
+                       * A THIRD CI failure exists that does NOT reproduce locally from either cwd:
+                         `SuiteTempSandboxContractTest::testPutenvDoesNotMoveTheCallingProcessesTempDirectory`.
+                         Present at a8100d388, 9f531b566, af1e6079f; PREDATES both golden commits.
+                         INFERRED runner-environment-specific (TMPDIR/sys_get_temp_dir on the runner).
+                         **This one is NOT covered by P2.audit-fix-1 and still needs its own step.**
+                       * NOTE: local master is ~68 commits AHEAD of origin/master — the plan never
+                         pushes (§7), so CI has not seen any Phase-3 work. The red runs above are from
+                         af1e6079f (2026-08-28) and earlier, which ARE pushed.
+                       * DISPATCHED: P2.audit-fix-1 (worktree /home/sites/prompt-step-P2.audit-fix-1,
+                         branch prompt/P2.audit-fix-1 off b56d67181) now carries the CI-red repair as
+                         its ITEM 1, alongside RR3 F2/F8/F9. `src/Runtime.php` was EXCLUDED from its
+                         declared list to stay disjoint from the in-flight prompt/P3.S5 branch, so
+                         **RR3 F5 (the doubled skill separator) is deferred** to a follow-up after
+                         P3.S5 merges.
+
 Live worktrees:   /home/sites/sugarcraft         master, clean, at the commit above
                   /home/sites/prompt-step-P3.S5  prompt/P3.S5 @ d046550d3, 6 commits, NO AGENT
                                                   RUNNING. **LEFT IN PLACE DELIBERATELY — DO NOT
