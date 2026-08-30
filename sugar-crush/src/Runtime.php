@@ -470,8 +470,11 @@ final class Runtime
      * revision announced that it had "re-derived the figures against the
      * shipped fixture" and quoted 3,557 / 2,891 / byte 2,885 / "a
      * ~30-character root" — which were measured on a THIRD ad-hoc script whose
-     * root was 30 characters, while {@see makeTempRepo()} builds a 42-character
-     * one, so every absolute was out by twelve and the prose said "twelve
+     * root was 30 characters, while `makeTempRepo()` builds `sys_get_temp_dir()`
+     * plus a 38-character suffix — 42 on a host whose temp dir is `/tmp`, 46
+     * under `TMPDIR=/var/tmp`, which is that same host-dependence one more
+     * time and the reason the length is given as the suffix rather than as a
+     * total. Every absolute was out, and the prose said "twelve
      * characters" of a pad that was eleven. A correction is a claim and gets
      * measured like any other (§16.8 rule 7); this one was not, and it
      * reproduced the defect it named. The repair is not a third set of
@@ -539,6 +542,26 @@ final class Runtime
      *     `sugarcraft/sugar-crush` — it goes RED on this branch and is green
      *     on master. That assertion needs INVERTING, not deleting, the way
      *     P3.S1 inverted three ordering pins.
+     *  2b. THE SECOND ASSEMBLER KEEPS THE OLD BEHAVIOUR AND ITS FULL COST, and
+     *     this is the gap prompt_plan.md's P3.S5 section says must not close
+     *     silently. `EnvironmentBlock` has FOUR production construction sites;
+     *     this step reaches ONE. MEASURED with
+     *     `/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/ bin/`: this
+     *     class, plus `Cli/Bootstrap.php:1462`, `App/App.php:553` and
+     *     `Agents/Agent.php:417` — and those three all feed
+     *     `Agents\Agent::systemPrompt()`, the assembler prompt_plan.md §17.2
+     *     keeps deliberately separate from this one because the two order
+     *     `<env>` oppositely. Nothing on that path calls
+     *     {@see EnvironmentBlock::withWriteSinceLastRender()} — MEASURED, zero
+     *     hits across `src/Agents/`, `src/Cli/` and `src/App/` — so it can
+     *     never reach the suppressed state and pays FIVE git subprocesses on
+     *     every one of its nine `systemPrompt()` call sites, per render rather
+     *     than per turn. `Bootstrap.php:1462` memoises the CAPTURE onto each
+     *     agent, which costs nothing: capture() runs ZERO subprocesses
+     *     (MEASURED with a logging `git` shim: ten captures with no render, 0
+     *     invocations) and `render()` pays the bill on every call. The gap is
+     *     deliberate scope, not an oversight, and it needs either a P3.S6 or a
+     *     prompt_plan.md §18 row saying why the Agent path keeps the diff.
      *  3. The `bool $perStepRerender` caption variant `EnvironmentBlock`'s
      *     GIT_STATE_CAVEAT docblock costs out — true from
      *     {@see environmentSnapshot()}, false from `Agents\Agent::systemPrompt()`

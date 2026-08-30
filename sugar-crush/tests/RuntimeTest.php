@@ -2200,7 +2200,14 @@ final class RuntimeTest extends TestCase
         $source = (string) file_get_contents($gate);
 
         $found = preg_match(
-            '/function isWriteTool\(ToolCall \$call\): bool\s*\{\s*if \(in_array\(\$call->name, \[([^\]]*)\], true\)\)/',
+            // THE PARAMETER NAME IS NOT PART OF THE SHAPE. An earlier revision
+            // spelled `\$call` literally in both halves, so renaming the gate's
+            // parameter - a change with no semantic content at all - reddened
+            // this test under "no longer has the shape this drift test reads".
+            // That is a guard reddening on correct code, which is what the
+            // sort-order comment below already argues against. `\$\w+`
+            // matches any name while still requiring the same structure.
+            '/function isWriteTool\(ToolCall \$\w+\): bool\s*\{\s*if \(in_array\(\$\w+->name, \[([^\]]*)\], true\)\)/',
             $source,
             $m,
         );
@@ -2264,7 +2271,7 @@ final class RuntimeTest extends TestCase
         // The MCP half of the same judgement, pinned the same way.
         $this->assertSame(
             1,
-            preg_match("/return str_starts_with\(\\\$call->name, 'mcp__'\);/", $source),
+            preg_match("/return str_starts_with\(\\\$\\w+->name, 'mcp__'\);/", $source),
             'PermissionGate still treats an mcp__ prefix as a write; Runtime must agree',
         );
         $this->assertTrue(Runtime::stepRequestedAWrite([new ToolCall('c', 'mcp__x__y', [])]));
@@ -2885,8 +2892,12 @@ final class RuntimeTest extends TestCase
      * `tests/Providers/PromptStabilityTest::dirtyRepoFixtureWithEveryStableLayer()`,
      * where it was grown by five successive reviews and where the comment on
      * it records what each knob costs and that the list is "found", not
-     * exhaustive. MEASURED: the fourteen `['config', …]` rows are byte-identical
-     * between the two fixtures.
+     * exhaustive. MEASURED: THIRTEEN of the fourteen `['config', …]` rows are
+     * byte-identical between the two fixtures; the fourteenth is `user.name`,
+     * deliberately different ('P3S5 Fixture' here, 'Prefix Fixture' there) so a
+     * commit in one fixture cannot be mistaken for the other's. An earlier
+     * revision of this sentence said all fourteen matched, which is the kind of
+     * near-miss that makes a reader trust the next claim in the paragraph.
      *
      * AND NOTHING ENFORCES THAT, which is worth stating rather than leaving to
      * be discovered. `tests/Support/DuplicatedTestHelperDriftTest` compares two
@@ -2933,6 +2944,12 @@ final class RuntimeTest extends TestCase
             foreach ($argv as $arg) {
                 $command .= ' ' . escapeshellarg($arg);
             }
+            // RESET PER CALL. `exec()` APPENDS to an existing array, so a
+            // shared $output would hand the assertion below the concatenated
+            // output of every command run so far, under the label of the one
+            // that failed - misattributing the diagnostic in exactly the way
+            // the comment beneath it says this assertion exists to prevent.
+            $output = [];
             exec($command . ' 2>&1', $output, $code);
             // Asserted rather than ignored: a silently failed `commit` leaves an
             // empty `Recent commits:` and, worse here, an EMPTY diff - which
