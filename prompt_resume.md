@@ -319,82 +319,55 @@ Latest suite:     **THE FIGURE BELOW IS DISPUTED — READ In-flight batch (C) FI
                    commits are census-neutral. Compare per-file counts, or diff `--log-junit`
                    per-testcase `assertions=` attributes, before calling an assertion delta real.
 
-In-flight batch:  TWO AGENTS RUNNING, spawned 2026-08-30. Neither has reported yet.
+In-flight batch:  TWO FIX AGENTS RUNNING (2026-08-30). Both are FINAL cycles; neither spawns a
+                   reviewer — the orchestrator verifies both directly.
 
-                   (A) P3.S5-escalation-1 — the step agent, in the EXISTING worktree
-                       /home/sites/prompt-step-P3.S5 (branch prompt/P3.S5 @ d046550d3). Declared list
-                       WIDENED BY THE ORCHESTRATOR to exactly one file:
-                       sugar-crush/tests/Integration/SystemPromptWiringTest.php. Job: apply the
-                       measured inversion from .sugar-crush-prompt/P3.S5-ESCALATION-patch.md (copied
-                       into the worktree), INVERT NOT DELETE (§1.10), run the deletion experiment,
-                       verify from BOTH cwds, commit to prompt/P3.S5, then run its own review cycle
-                       capped at 3. It was SENT A CORRECTION mid-flight — see (C) below.
-                       MERGE ORDER: it is the only step; merge it alone after its review closes.
+                   **DECLARED MERGE ORDER — P2.audit-fix-1 FIRST, THEN P3.S5.**
+                   Rationale: P2.audit-fix-1 is what closes the CI red, and its four files are
+                   disjoint from P3.S5's four, so no conflict is possible. Run the FULL suite from
+                   BOTH cwds after EACH merge (§1.6) — the combination is not proven by either
+                   branch's own run, because P2.audit-fix-1 moves both goldens and P3.S5 changes the
+                   assembly path that produces them.
 
-                   (B) A READ-ONLY INVESTIGATION agent in /home/sites/sugarcraft, answering: is CI
-                       actually red on master today for sugar-crush, or is the "CI form" not what CI
-                       effectively runs? It edits NOTHING. See the finding below.
+                   (A) **P2.audit-fix-1** — worktree /home/sites/prompt-step-P2.audit-fix-1, branch
+                       prompt/P2.audit-fix-1 @ e2e7805be (3 commits off b56d67181), + a cycle-4 fix
+                       in flight. Files: tests/BaseSystemPromptTest.php, tests/Agents/AgentTest.php,
+                       and both golden fixtures.
+                       **ALREADY VERIFIED BY THE ORCHESTRATOR at e2e7805be — the CI red is FIXED:**
+                         checkout root: Tests: 10427, Assertions: 161455, Skipped: 1.
+                         sugar-crush/:  Tests: 10427, Assertions: 161455, Skipped: 1.
+                       IDENTICAL from both cwds, 0 failures, 0 errors — against master's
+                       `Errors: 1, Failures: 1` from the root. The cwd-dependence itself is gone, not
+                       just its symptom. Goldens moved 7efcc488->32ea749d and 81626993->ef0326dd:
+                       4 lines total, `OS version:`/`PHP version:` -> `<host>`. VERIFIED legitimate —
+                       it STRIPS generator-host bytes (`Linux 6.8.0-138-generic`, `8.3.6`) that were
+                       baked into the committed goldens and would mismatch on CI's PHP 8.4 job. That
+                       is the opposite of regenerate-to-silence.
+                       Cycle 4 closes the leak-scanner hole: `-` in the lookbehind
+                       `(?<![\w.~\\<-])` makes a path on a DELETED diff line (`-/opt/ci/build`)
+                       invisible, and `<env>` embeds diff bodies, so that is the LIKELIEST real leak
+                       shape in the thing the scan exists to check.
 
-                   (C) **A PREMISE IN THIS FILE IS FALSE AND HAS BEEN CORRECTED TO AGENT (A).**
-                       This file said master was green in the CI form. IT IS NOT.
-                       MEASURED by the orchestrator on master @1d07627b9, clean tree, stdin from
-                       /dev/null, from the REPO ROOT:
-                         Tests: 10421, Assertions: 161280, Errors: 1, Failures: 1, Skipped: 1.
-                       sugar-crush/tests/Agents/AgentTest.php::testSystemPromptMatchesCommittedGolden
-                       FAILS at AgentTest.php:355 in that form, IN ISOLATION, ON MASTER, with no
-                       P3.S5 involved. Its own assertion message says the fixture repo resolves from
-                       a RELATIVE path (vendor/prompt-fixture/agent-repo) and that you must "run
-                       phpunit from sugar-crush/". So MASTER IS ALREADY CWD-SENSITIVE.
-                       ci.yml has NO working-directory: and NO defaults: anywhere — verified — so
-                       either CI is red on master today, or the CI form is not what CI runs.
-                       AGENT (B) IS RESOLVING THIS. Until it reports, do NOT claim in any commit
-                       message, comment or worklog entry that P3.S5 "unblocks CI" or that master is
-                       green in the CI form. Both are unproven and the second is measured false.
-                       The P3.S5 inversion is still correct and still wanted on its own merits —
-                       P3.S5 genuinely inverts that assertion's premise and §1.10 requires the
-                       assertion be inverted rather than deleted.
-
-                   (D) **RESOLVED BY (B), 2026-08-30: CI IS RED ON origin/master FOR sugar-crush,
-                       AND THIS PLAN BROKE IT.** Evidence from GitHub's own CI logs, MEASURED:
-                       * The last THREE CI runs on origin/master are all `failure`. The failing jobs
-                         are exactly `Test PHP 8.3 · sugar-crush`, `Test PHP 8.4 · sugar-crush`,
-                         `Coverage · sugar-crush`. Last GREEN master run: `2b53302af` (2026-08-25).
-                       * ci.yml's cwd IS the repo root — confirmed, no `cd`, no `working-directory:`,
-                         no `defaults:`; and `sugar-crush/tests/bootstrap.php` has NO `chdir()`.
-                         So the "CI form" is exactly what CI runs. The plan's habit of measuring from
-                         `sugar-crush/` hid this for five days.
-                       * BOTH failures were introduced BY THIS PLAN'S OWN PHASE 2 STEPS:
-                         `8fa2721d9` (P2.S3) added AgentTest::testSystemPromptMatchesCommittedGolden;
-                         `d19f06665` (P2.S2) added
-                         BaseSystemPromptTest::testSystemPromptMatchesCommittedGolden.
-                         The cwd sensitivity was born WITH each test, not introduced by a later P3
-                         commit. None of 03d8fed37/6aff0bad1/379ecc7d6/dabcd27f7/74cabae7f/f2af06eaa
-                         caused it.
-                       * MECHANISM: `AgentTest.php:459` materialises the fixture repo at a `__DIR__`
-                         -anchored ABSOLUTE path, but `AgentTest.php:417`'s `goldenContext()` passes a
-                         RELATIVE cwd (`vendor/prompt-fixture/agent-repo`) — deliberately, so the
-                         golden carries no host path — and
-                         `EnvironmentBlock::isGitRepo()` (src/Context/EnvironmentBlock.php:805) is
-                         `file_exists($this->cwd . '/.git')`, resolved against the PROCESS getcwd().
-                         From the repo root that is false, so the whole git section vanishes while the
-                         golden's line 5 says `Is directory a git repo: Yes`.
-                         Separately `BaseSystemPromptTest.php:737` passes a relative
-                         `'tests/fixtures/prompt/memory'` to `MemoryStore`, which throws from the repo
-                         root (src/Memory/MemoryStore.php:66) — that is the `Errors: 1`.
-                       * A THIRD CI failure exists that does NOT reproduce locally from either cwd:
-                         `SuiteTempSandboxContractTest::testPutenvDoesNotMoveTheCallingProcessesTempDirectory`.
-                         Present at a8100d388, 9f531b566, af1e6079f; PREDATES both golden commits.
-                         INFERRED runner-environment-specific (TMPDIR/sys_get_temp_dir on the runner).
-                         **This one is NOT covered by P2.audit-fix-1 and still needs its own step.**
-                       * NOTE: local master is ~68 commits AHEAD of origin/master — the plan never
-                         pushes (§7), so CI has not seen any Phase-3 work. The red runs above are from
-                         af1e6079f (2026-08-28) and earlier, which ARE pushed.
-                       * DISPATCHED: P2.audit-fix-1 (worktree /home/sites/prompt-step-P2.audit-fix-1,
-                         branch prompt/P2.audit-fix-1 off b56d67181) now carries the CI-red repair as
-                         its ITEM 1, alongside RR3 F2/F8/F9. `src/Runtime.php` was EXCLUDED from its
-                         declared list to stay disjoint from the in-flight prompt/P3.S5 branch, so
-                         **RR3 F5 (the doubled skill separator) is deferred** to a follow-up after
-                         P3.S5 merges.
+                   (B) **P3.S5** — worktree /home/sites/prompt-step-P3.S5, branch prompt/P3.S5 @
+                       efc58cfb8 (4 escalation commits on top of the original 6), + a cycle-5 prose
+                       fix in flight. Files: src/Runtime.php, src/Backend/EngineBackend.php,
+                       tests/Integration/SystemPromptWiringTest.php, tests/RuntimeTest.php.
+                       VERIFIED BY THE ORCHESTRATOR: SystemPromptWiringTest is
+                       `OK (11 tests, 75 assertions)` from BOTH cwds (was `Failures: 1` from the
+                       root). Census `OK (103 tests, 9448 assertions)`. Golden md5 unchanged.
+                       A fresh reviewer confirmed **the branch introduces no new red in the CI form**
+                       and walked the full Done-when ledger; the primary deletion experiment reds from
+                       both cwds.
+                       Cycle 5 fixes two PROSE defects, no behaviour change:
+                         * SystemPromptWiringTest.php:288/299 — "every git field takes its failure
+                           branch" is FALSE; the branch line renders EMPTY (EnvironmentBlock.php:853-855
+                           uses shell_exec with no exit check). This contradicts a measurement ALREADY
+                           committed in this repo (P3.S4 Escalation 3).
+                         * **src/Runtime.php:536-544 — PRODUCTION SOURCE ships a §16.1 gap-record that
+                           now INVERTS the truth**: it still says the assertion "needs INVERTING, not
+                           deleting" and "goes RED on this branch", when it was inverted on this very
+                           branch and is green from both cwds. Merging that would ship a live TODO for
+                           finished work.
 
 Live worktrees:   /home/sites/sugarcraft         master, clean, at the commit above
                   /home/sites/prompt-step-P3.S5  prompt/P3.S5 @ d046550d3, 6 commits, NO AGENT
