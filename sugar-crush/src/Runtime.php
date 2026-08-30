@@ -517,9 +517,13 @@ final class Runtime
      * turn earns a quiet opening"), which needs the signal carried back over
      * the child's socket and is not delivered here.
      *
-     * THREE THINGS THIS METHOD MAKES FALSE OR BROKEN ELSEWHERE, NAMED HERE
-     * BECAUSE THE FILES THAT HOLD THEM ARE OUTSIDE THIS STEP'S DECLARED LIST
-     * AND A GAP NOBODY WROTE DOWN IS INDISTINGUISHABLE FROM ONE NOBODY FOUND:
+     * THREE THINGS THIS METHOD MADE FALSE OR BROKEN ELSEWHERE, NAMED HERE
+     * BECAUSE THE FILES THAT HOLD THEM WERE OUTSIDE THIS STEP'S DECLARED LIST
+     * AND A GAP NOBODY WROTE DOWN IS INDISTINGUISHABLE FROM ONE NOBODY FOUND.
+     * ITEM 2 HAS SINCE BEEN CLOSED — its file was added to the list and the
+     * assertion was inverted on this branch — and it is kept, rewritten as the
+     * record of the fix, because a gap-record that is silently deleted when it
+     * closes teaches the next reader nothing. 1, 1b and 3 are still open:
      *
      *  1. `Context/EnvironmentBlock.php`'s class docblock says the caller that
      *     wires this signal "does not exist yet". It exists: it is
@@ -533,15 +537,49 @@ final class Runtime
      *     because it is the API this class consumes, and it is the last place
      *     the falsified motivation would be noticed. Listed separately from
      *     the class docblock because they are two edits, not one.
-     *  2. `tests/Integration/SystemPromptWiringTest::testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt()`
-     *     pins the invariant this method deliberately INVERTS — that every
-     *     step of one turn is handed a byte-identical prompt. It stays green
-     *     in the monorepo layout only because `sugar-crush/` holds no `.git`,
-     *     so its fixture renders no git section at all; run from a directory
-     *     that IS a repository — the monorepo root, or any split-repo clone of
-     *     `sugarcraft/sugar-crush` — it goes RED on this branch and is green
-     *     on master. That assertion needs INVERTING, not deleting, the way
-     *     P3.S1 inverted three ordering pins.
+     *  2. CLOSED. `Integration\SystemPromptWiringTest::testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt()`
+     *     pinned the invariant this method deliberately INVERTS — that every
+     *     step of one turn is handed a byte-identical prompt. The orchestrator
+     *     widened P3.S5's declared file list to that one test file, and the
+     *     assertion WAS inverted, not deleted, the way P3.S1 inverted three
+     *     ordering pins: commit 99dd19c12 did the inversion, and 644838652,
+     *     974ef971a and efc58cfb8 tightened it over three review cycles.
+     *
+     *     THE SURVIVING INVARIANT, which is what this test was always really
+     *     about: the suppressed step's prompt must equal the emitting step's
+     *     prompt truncated at "\n\nStaged changes (git diff --cached, index
+     *     vs HEAD):" plus "\n</env>". Every byte before that cut — the frozen
+     *     triple included — is still pinned byte-for-byte across the two
+     *     steps, and THE TWO GIT DIFF SECTIONS ARE THE ONLY LICENSED MID-TURN
+     *     DIFFERENCE. The cut marker is additionally pinned to occur exactly
+     *     once in the emitting prompt and zero times in the suppressed one,
+     *     and the tail that comes off is pinned by regex to be exactly those
+     *     two one-line sections and the closing fence, anchored `\z`.
+     *
+     *     AND IT NO LONGER INHERITS ITS GIT REGIME FROM `getcwd()`. An earlier
+     *     revision of this paragraph said the test stayed green "only because
+     *     `sugar-crush/` holds no `.git`", and went RED when run from a
+     *     directory that IS a repository. That was true of the test as it then
+     *     stood; it is FALSE of the test at HEAD, and it is corrected here
+     *     rather than left standing. Commit 974ef971a gave the method its own
+     *     fixture — an empty `.git` directory made under the test's temp dir
+     *     and handed to the backend through `withRoot()` — so
+     *     {@see \SugarCraft\Crush\Context\EnvironmentBlock::isGitRepo()}
+     *     reads the FIXTURE and not the working directory, and the git regime
+     *     is forced rather than inherited. MEASURED at HEAD, stdin from
+     *     /dev/null: `OK (11 tests, 75 assertions)` from `sugar-crush/` AND
+     *     from the checkout root with `-c sugar-crush/phpunit.xml`.
+     *
+     *     The method NAME still overstates what the method now asserts. It is
+     *     kept for now and the rename is escalated separately; the citation
+     *     above is spelled WITHOUT a path prefix on purpose, because
+     *     {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest} cannot see
+     *     a backticked citation containing a `/` (MEASURED: fabricating the
+     *     method name in the path-prefixed form left that suite
+     *     `OK (7 tests, 2952 assertions)`; the same fabrication without the
+     *     path prefix reds it), so the path-prefixed form this paragraph used
+     *     to carry was an unpoliced citation of a name this very branch was
+     *     changing.
      *  2b. THE SECOND ASSEMBLER KEEPS THE OLD BEHAVIOUR AND ITS FULL COST, and
      *     this is the gap prompt_plan.md's P3.S5 section says must not close
      *     silently. `EnvironmentBlock` has FOUR production construction sites;

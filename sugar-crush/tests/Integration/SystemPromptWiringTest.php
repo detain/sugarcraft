@@ -284,10 +284,26 @@ final class SystemPromptWiringTest extends TestCase
         // An EMPTY `.git` DIRECTORY IS ENOUGH, because `isGitRepo()` looks at
         // nothing else. It is the same shape
         // {@see \SugarCraft\Crush\Tests\Context\EnvironmentBlockTest} builds:
-        // the gate opens, every `git` invocation then fails against a
-        // directory that is not a repository, and each field reports its own
-        // exit code rather than an empty string. That is what makes this
-        // fixture better than a real repository for THIS test — the two
+        // the gate opens, and every `git` invocation then fails against a
+        // directory that is not a repository. FOUR of the five reads report
+        // that failure as their own exit code rather than as an empty string:
+        // `status`, `log`, and the two diffs, which go through `gitField()`
+        // and `gitDiffSection()`. THE FIFTH DOES NOT. The branch line is a
+        // bare `shell_exec(... '2>/dev/null')` plus `trim()` at
+        // src/Context/EnvironmentBlock.php:853-855, with no exit-code check at
+        // all, so on this fixture it renders an EMPTY `Current branch: ` line
+        // and no marker. MEASURED by rendering
+        // EnvironmentBlock::capture($d, 'stub')->render() against exactly this
+        // fixture: str_contains($out, "Current branch: \n") is true and
+        // str_contains($out, 'Current branch: unavailable') is false. That
+        // asymmetry is a known finding and not this step's to fix — it is
+        // recorded in prompt_worklog.md's P3.S4 entry, Escalation 3. Nothing
+        // below depends on the branch line either way; what the pin at the
+        // bottom of this method needs is the four fields that DO mark their
+        // failure.
+        //
+        // That is what makes this fixture better than a real
+        // repository for THIS test — the two
         // sections are one deterministic line each, independent of whatever
         // the developer's working tree happens to hold, so the tail can be
         // pinned by shape instead of by a heuristic over diff bodies.
@@ -296,7 +312,9 @@ final class SystemPromptWiringTest extends TestCase
         // the exclusivity pin at the bottom of this method actually encodes:
         // `git status --porcelain` and `git log --oneline -5` exit 128, and
         // BOTH `git diff --shortstat --patch` and its `--cached` form exit
-        // 129. Every git field here therefore takes its failure branch, and
+        // 129. All four of those reads therefore take their failure branch
+        // (the fifth git read, the branch line, reports no exit code at all —
+        // see above), and
         // the two diff sections in particular render through the `exitCode
         // !== 0` early return inside `gitDiffSection()` — its success branch
         // is never reached from this test at all. What is pinned below is
