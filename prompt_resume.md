@@ -352,8 +352,9 @@ Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never ed
 
 Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers for weeks without
                   doing so, and that is exactly what hid CI being red for five days.**
-                  MASTER @ 1fcf8bb42/72686c380 (CI-fix-1 merged), stdin from /dev/null.
-                  FOUR runs, all agreeing:
+                  MASTER @ 72686c380 (CI-fix-1 merged), stdin from /dev/null. Measured at
+                  the branch tip AND RE-CONFIRMED ON MASTER AFTER THE MERGE in all three
+                  configurations below. Every run agrees:
                     checkout root (= CI's cwd), ambient:  Tests: 10454, Assertions: 161697, Skipped: 1.
                     from sugar-crush/, ambient:           Tests: 10454, Assertions: 161697, Skipped: 1.
                     checkout root, CI-SHAPE (no swoole):  Tests: 10454, Assertions: 161697, Skipped: 1.
