@@ -16,6 +16,40 @@ use SugarCraft\Crush\Context\EnvironmentBlock;
  */
 final class AgentTest extends TestCase
 {
+    /**
+     * Structural landmarks that must survive anywhere in the MIDDLE of the
+     * committed agent-prompt golden.
+     *
+     * WHY A LIST AND NOT JUST THE BYTE COUNT. The leak scan's landmarks were
+     * a head (the fixture agent prompt), a tail (`</env>`) and
+     * `strlen($golden) === 1060`. Every assertion the scan then runs is an
+     * ABSENCE assertion, so any deletion that the landmarks miss reads
+     * exactly like a clean golden. A byte count catches a deletion, but it
+     * catches it only while the byte total moves - and a truncation that
+     * REPLACES what it removes is invisible to it. MEASURED on the committed
+     * golden: cutting the four git blocks (branch, status, recent commits,
+     * staged changes - 356 bytes) and padding the surviving `Note:` line back
+     * up to 1060 bytes left the whole leak test `OK` on the byte count,
+     * because 1060 is 1060 whether or not the git section is still there.
+     * These headings make that class of edit red on WHAT is missing rather
+     * than on how much of it is.
+     *
+     * The sibling file has had this since its own rewrite
+     * ({@see \SugarCraft\Crush\Tests\BaseSystemPromptTest} `REQUIRED_SECTIONS`);
+     * this file was the copy that got the head, the tail and the count and
+     * not the middle.
+     *
+     * @var list<string>
+     */
+    private const REQUIRED_GOLDEN_LANDMARKS = [
+        'Is directory a git repo: Yes',
+        'Current branch: main',
+        'Status:',
+        'Recent commits:',
+        'Staged changes (git diff --cached, index vs HEAD):',
+        'Unstaged changes (git diff, working tree vs index):',
+    ];
+
     // -------------------------------------------------------------------------
     // fromArray() - deserialization
     // -------------------------------------------------------------------------
@@ -390,23 +424,37 @@ final class AgentTest extends TestCase
      * path at all, and this test pins that absence.
      *
      * WHAT THIS TEST USED TO BE, and why the shape changed. It was seven
-     * absence assertions - six literal roots plus `/^\//m`. MEASURED, both
-     * defects, before the rewrite:
+     * absence assertions - FIVE literal roots, ONE identity literal
+     * (`Joe Huss`), and a `/^\//m`. WHAT THIS SAID: "six literal roots",
+     * and it then listed `/tmp/ /home/ /Users/ C:\Users\ /my/ /test/`. That
+     * sentence was true of the SIBLING file and false of this one: the count
+     * and the list were copied wholesale from
+     * BaseSystemPromptTest::testGoldenSystemPromptLeaksNoHostPaths(), whose
+     * pre-rewrite check really did carry six roots and three identities.
+     * MEASURED on this file's own history - `git show 8fa2721d9` and
+     * `git log -S"'/test/'" -- sugar-crush/tests/Agents/AgentTest.php`, which
+     * returns no commit at all - this test has never at any point asserted
+     * the absence of `/test/`. A doc-block that describes a neighbour's code
+     * is worse than one that describes nothing, because it reads as a
+     * measurement. MEASURED, both defects, before the rewrite:
      *
      *   * Truncating this golden to ZERO BYTES left the test `OK`. Every
      *     assertion in it was an ABSENCE assertion, and '' contains nothing,
      *     so a golden that had been emptied read exactly like a clean one.
      *   * Splicing in `Working directory: /var/www/build-agent-42/checkout`
-     *     ALSO left it `OK`: `/^\//m` is anchored at column 0 and the six
-     *     literals are `/tmp/ /home/ /Users/ C:\Users\ /my/ /test/`, so the
-     *     path was neither at the start of a line nor under one of the six
-     *     roots somebody had happened to think of. `/opt/`, `/srv/`,
-     *     `/root/`, `/builds/`, `/workspace/` were all free to leak.
+     *     ALSO left it `OK`: `/^\//m` is anchored at column 0 and the five
+     *     roots are `/tmp/ /home/ /Users/ C:\Users\ /my/`, so the path was
+     *     neither at the start of a line nor under one of the five roots
+     *     somebody had happened to think of. `/opt/`, `/srv/`, `/root/`,
+     *     `/builds/`, `/workspace/` were all free to leak.
      *
      * The three answers, in order below. (1) LANDMARKS make the scan's input
-     * falsifiable, so an empty or head/tail-truncated golden reds here
-     * instead of reading clean. (2) The six literals STAY - they name the
-     * specific historic leaks and cost nothing - but the column-0 regex is
+     * falsifiable - head, tail, committed byte count, and every required
+     * mid-body line in between ({@see REQUIRED_GOLDEN_LANDMARKS}) - so an
+     * emptied, truncated, or silently-repadded golden reds here instead of
+     * reading clean. (2) The five roots and the identity literal
+     * STAY - they name the specific historic leaks and cost nothing - but
+     * the column-0 regex is
      * replaced by {@see hostPathLeaks()}, which recognises an absolute path
      * by its SHAPE at any column and so enumerates no roots at all; the one
      * thing it allows is git's own `/dev/null`. (3) A KNOWN-POSITIVE CONTROL
@@ -457,6 +505,20 @@ final class AgentTest extends TestCase
             'the agent-prompt golden is not its committed length - it has been truncated or padded '
             . 'somewhere the absence assertions below would scan straight past',
         );
+        // AND THE BYTE COUNT ALONE IS NOT ENOUGH EITHER: it moves only while
+        // a deletion is not compensated for. A cut that pads itself back to
+        // 1060 walks straight past it, and every assertion below is an
+        // ABSENCE assertion that a shorter golden satisfies more easily, not
+        // less. These landmarks name WHAT has to still be there - see
+        // {@see REQUIRED_GOLDEN_LANDMARKS} for the measurement.
+        foreach (self::REQUIRED_GOLDEN_LANDMARKS as $landmark) {
+            self::assertStringContainsString(
+                "\n" . $landmark . "\n",
+                $golden,
+                'the golden is missing the "' . $landmark . '" line - it has been truncated in the '
+                . 'middle, and the byte count does not see a deletion that padded itself back',
+            );
+        }
 
         self::assertStringNotContainsString('/tmp/', $golden, 'golden leaks a /tmp/ host path');
         self::assertStringNotContainsString('/home/', $golden, 'golden leaks a /home/ host path');
@@ -465,10 +527,20 @@ final class AgentTest extends TestCase
         self::assertStringNotContainsString('/my/', $golden, 'golden leaks the author username as a path segment');
         self::assertStringNotContainsString('Joe Huss', $golden, 'golden leaks the author identity');
 
+        // WHAT TO CHECK WHEN THIS FIRES - the same caveat the sibling file
+        // carries. hostPathLeaks() recognises a path by SHAPE and enumerates
+        // no roots, which is what makes it worth having and also means it
+        // cannot tell a build machine's cwd apart from an `/etc/hosts` or a
+        // `[docs](/docs/x)` written deliberately into an agent's own prompt
+        // text, which this golden embeds whole. Read the reported path
+        // before believing the word "leak".
         self::assertSame(
             [],
             self::hostPathLeaks($golden),
-            'the golden carries an absolute filesystem path - the fixture cwd must stay relative',
+            'the golden carries an absolute filesystem path - if it comes from the env or git '
+            . 'section the fixture cwd must stay relative; if it is prose in the agent\'s own '
+            . 'prompt text, nothing leaked - reword it or add the exact string to '
+            . 'hostPathLeaks()\'s $allowed list',
         );
         // RESTORED, not replaced. hostPathLeaks() is not a superset of this
         // check: a path segment cannot be empty, so a slash followed by
@@ -957,6 +1029,33 @@ final class AgentTest extends TestCase
             'Working directory: //opt/ci/work' => ['//opt/ci/work'],
             'cwd = //srv/agent/checkout' => ['//srv/agent/checkout'],
             '///opt/ci/work' => ['//opt/ci/work'],
+            // A PATH ON A DELETED DIFF LINE, which is the likeliest real leak
+            // shape in the thing this scanner exists to read: <env> embeds
+            // `git diff` bodies verbatim, so a removed line carrying an
+            // absolute path arrives here with a `-` welded to its leading
+            // slash. It is also the one shape BOTH halves of the leak scan
+            // used to miss at once - `/^\//m` is anchored at column 0 and the
+            // `-` occupies column 0, while the `-` was itself inside this
+            // scanner's lookbehind class. MEASURED on the class that still
+            // carried it: `-/opt/ci/build` returned [] here, matched nothing
+            // at column 0, and removing the `-` from `[\w.~\\<-]` left both
+            // step files at `OK (41 tests, 354 assertions)` - nothing in the
+            // tree noticed either the hole or its repair.
+            '-/opt/ci/build' => ['/opt/ci/build'],
+            '-Working directory: /opt/ci/build' => ['/opt/ci/build'],
+            // The added-line polarity, which always fired because `+` was
+            // never in the class. It is pinned so that widening the class
+            // again - the exact edit that opened the `-` hole - reds here
+            // instead of silently reopening it on the other polarity.
+            '+/opt/ci/build' => ['/opt/ci/build'],
+            // A TRAILING SLASH IS PART OF THE REPORTED PATH, which is the
+            // whole of what the pattern's closing `/?` buys, and nothing
+            // exercised it: MEASURED, deleting that `/?` left both step files
+            // at `OK (41 tests, 354 assertions)`. Without it this line reports
+            // `/opt/ci/work` - a real path in the text, but not the string
+            // that is there - so this row reds on the near-miss rather than
+            // accepting it.
+            'Working directory: /opt/ci/work/' => ['/opt/ci/work/'],
             // Windows drive paths and a UNC share.
             'Working directory: C:\\Users\\bob\\proj' => ['C:\\Users\\bob\\proj'],
             'Working directory: D:/build/out' => ['D:/build/out'],
@@ -984,6 +1083,14 @@ final class AgentTest extends TestCase
             // URLs - the two colon lookbehinds.
             'see https://example.com/docs/x for more',
             'http://a.b/c',
+            // TILDE-HOME PATHS - the `~` in the lookbehind class, which
+            // nothing exercised either: MEASURED, dropping the `~` left both
+            // step files at `OK (41 tests, 354 assertions)`. `~/x` names a
+            // home directory without naming a host, so it is not a leak; with
+            // the `~` gone these two report `/projects/app` and
+            // `/.config/crush/config.json`, and this pair reds.
+            '~/projects/app',
+            'edit ~/.config/crush/config.json then rerun',
         ];
 
         foreach ($mustFire as $line => $expected) {
@@ -1021,9 +1128,11 @@ final class AgentTest extends TestCase
      * first-appearance order.
      *
      * THE DENY SIDE ENUMERATES NOTHING. An absolute path is recognised by its
-     * SHAPE, which is the whole point: the check this replaced was six
-     * literal roots (`/tmp/ /home/ /Users/ C:\Users\ /my/ /test/`) plus a
-     * `/^\//m` anchored at column 0, and `/opt/`, `/srv/`, `/root/`,
+     * SHAPE, which is the whole point: the check this replaced was five
+     * literal roots (`/tmp/ /home/ /Users/ C:\Users\ /my/`) plus a
+     * `/^\//m` anchored at column 0 - the sibling copy of this doc-block in
+     * BaseSystemPromptTest says six and adds `/test/`, which is true THERE
+     * and has never been true here - and `/opt/`, `/srv/`, `/root/`,
      * `/builds/`, `/workspace/` and any path not at the start of a line all
      * walked straight through it. A list of roots is only ever as good as the
      * last CI runner somebody thought about.
@@ -1054,6 +1163,29 @@ final class AgentTest extends TestCase
      * column 0 left its leak test `OK (1 test, 14 assertions)`. The
      * `assertDoesNotMatchRegularExpression('/^\//m', ...)` DID catch that
      * case, so the draft was not the superset its own doc-block claimed.
+     *
+     * WHY THE LOOKBEHIND CLASS HAS NO HYPHEN, which is the hole that mattered
+     * most of the several this pattern has had. It used to read
+     * `[\w.~\\<-]`, and a `-` welded to a leading slash is exactly what
+     * `git diff` writes on a REMOVED line: `-/opt/ci/build`. <env> embeds
+     * diff bodies verbatim, so a deleted line carrying an absolute path is
+     * the likeliest real leak shape in the very text this scanner was written
+     * to read - and it was the one shape BOTH halves of the leak scan missed
+     * at the same time, because the `-` occupies column 0 and
+     * `/^\//m` is anchored there. MEASURED on the class that still carried
+     * the `-`: `-/opt/ci/build` returned `[]`, and taking the `-` out left
+     * both step files at `OK (41 tests, 354 assertions)`, byte for byte the
+     * unmutated total - nothing in the tree could tell the hole from its
+     * repair. Both diff polarities are rows in the known-answer table now.
+     * WHAT THE `-` BOUGHT, and why losing it is cheap: it suppressed a match
+     * on a token that ends in a hyphen and is immediately followed by a slash
+     * (`a-/opt/x`). MEASURED: neither committed golden contains the two-byte
+     * sequence `-/` anywhere (`grep -- '-/'` over both files exits 1), git's
+     * diff headers and porcelain do not produce it, and the full suite is
+     * green from both cwds without it. A hyphen inside an ordinary hyphenated
+     * path (`build-agent-42/checkout`) was never affected either way - the
+     * character before that slash is a word character, which is still in the
+     * class.
      *
      * THIS FUNCTION IS STILL NOT A SUPERSET OF THAT CHECK, AND THE CHECK IS
      * THEREFORE BACK rather than replaced. MEASURED: `/ home/ci` and
@@ -1099,7 +1231,7 @@ final class AgentTest extends TestCase
     {
         $allowed = ['/dev/null'];
 
-        preg_match_all('#(?<![\w.~\\\\<-])(?<!:)(?<!:/)/{1,2}[^\s/\\\\<>"|]+(?:/[^\s/\\\\<>"|]+)*/?#', $text, $posix);
+        preg_match_all('#(?<![\w.~\\\\<])(?<!:)(?<!:/)/{1,2}[^\s/\\\\<>"|]+(?:/[^\s/\\\\<>"|]+)*/?#', $text, $posix);
         preg_match_all('#(?<![A-Za-z])[A-Za-z]:[\\\\/][^\r\n]*#', $text, $windows);
         preg_match_all('#\\\\\\\\[\w.-]+\\\\[^\r\n]*#', $text, $unc);
 
