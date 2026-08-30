@@ -8,7 +8,7 @@ Where they disagree about *how* the work is run, this document wins.
 subsystem, the compaction path, the tool-description surface, and the rules/skills/hooks/memory
 channels that feed them.
 
-**Status** Phase 3, 20 of 62 steps merged — P3.S1 379ecc7d6; P3.S2 dabcd27f7; P3.S3 74cabae7f; P3.S4 f2af06eaa; plus retro-fix steps P3.audit-fix-1 6aff0bad1 and P1.audit-fix-1 03d8fed37. **P3.S5 is IMPLEMENTED BUT NOT MERGED** — `blocked (review-cycle)` AND `blocked (scope-escalation)`; merging it as-is would RED CI, because it deliberately inverts an invariant pinned by tests/Integration/SystemPromptWiringTest.php:232, which is outside its declared file list. Its worktree /home/sites/prompt-step-P3.S5 is left in place on purpose. Next: P3.S5-escalation-1. **Phase 3 CANNOT close until P3.S5 merges AND P3.S5-fix-1, P3.S4-fix-1 and the SECOND ASSEMBLER disposition all land.** See prompt_resume.md §8.
+**Status** Phase 3, 22 of 63 steps merged — P3.S1 379ecc7d6; P3.S2 dabcd27f7; P3.S3 74cabae7f; P3.S4 f2af06eaa; **P3.S5 405252a41**; plus retro-fix steps P3.audit-fix-1 6aff0bad1, P1.audit-fix-1 03d8fed37 and **P2.audit-fix-1 33df838d0**. **P3.S5 IS MERGED (2026-08-30).** Its `blocked (scope-escalation)` state was cleared by widening the declared file list by exactly one file (tests/Integration/SystemPromptWiringTest.php) and running four further review cycles. **The earlier claim here that "merging it as-is would RED CI" was FALSE and is retracted:** CI was ALREADY red on origin/master from 2026-08-27, broken by this plan's own P2.S2 and P2.S3 (cwd-sensitive golden tests), and nobody noticed for five days because every recorded suite figure was measured from sugar-crush/ without naming its cwd. P2.audit-fix-1 fixed that; master is green in the CI form (checkout root) for the first time since. P3.S5 would have added a THIRD instance of the same class, not the first. **EVERY SUITE FIGURE IN THIS PLAN AND ITS WORKLOG MUST NAME THE CWD IT WAS MEASURED FROM.** **Phase 3 CANNOT close until P3.S4-fix-1, P3.S5-fix-1 and the newly scheduled P3.S6 (the second-assembler disposition) all land, then the Phase 3 close review.** See prompt_resume.md §8.
 
 **Companion files**
 - `prompt_worklog.md` — append-only, one entry per step, newest at the top.
@@ -57,7 +57,7 @@ exists to carry — a rules tier, the dormant hook/skill/memory channels, a real
 per-tool prompt fragments. Phase 10 adds cache breakpoints, which are only meaningful once Phase 3
 has landed. Phase 11 documents it.
 
-**62 steps across 12 phases.** Nothing in phases 2–11 is observable until Phase 1 lands.
+**63 steps across 12 phases.** Nothing in phases 2–11 is observable until Phase 1 lands.
 
 ---
 
@@ -546,7 +546,7 @@ After the last step of a phase merges:
    blocked and reported.
 4. Commit and merge the phase-review fixes the same way as any step.
 5. Append a phase-close entry to the worklog and rewrite `prompt_resume.md`.
-6. **Tell the user, in one line.** This plan runs 62 steps and otherwise speaks to the user only
+6. **Tell the user, in one line.** This plan runs 63 steps and otherwise speaks to the user only
    when something blocks. A phase close is the natural checkpoint: post a single line to the user
    naming the phase, the steps that landed, the suite delta against the baseline, and anything
    parked. Do not wait for a reply — this is a report, not a question, and the plan continues. It
@@ -910,11 +910,13 @@ $rev = [];
 foreach ($map as $s => $fs) foreach ($fs as $f) $rev[$f][] = $s;
 uasort($rev, fn($a, $b) => count($b) - count($a));
 foreach ($rev as $f => $ss) if (count($ss) >= 3) printf("| `%s` | %s |\n", $f, implode(", ", $ss));
-printf("(%d steps parsed — must be 62)\n", count($map));
+printf("(%d steps parsed — must be 63)\n", count($map));
 '
 ```
 
-MEASURED output of that command on this document, 2026-08-28 (62 steps parsed). Files wanted by
+MEASURED output of that command on this document, 2026-08-28 (62 steps parsed) — that figure is
+historical and correct for that date; P3.S6 was appended 2026-08-30, so the count is now 63 and the
+sanity check above was moved with it. Files wanted by
 **three or more** steps:
 
 | File | Wanted by |
@@ -1453,7 +1455,7 @@ sites, not one, and the list above reaches only the first:
 
 | Site | Feeds |
 |---|---|
-| `src/Runtime.php:1850` | `Runtime::buildSystemPrompt()` — **this step's target** |
+| `src/Runtime.php:2358` | `Runtime::buildSystemPrompt()` — **this step's target** |
 | `src/Cli/Bootstrap.php:1462` | `Agent::systemPrompt()` (per-agent roster capture) |
 | `src/App/App.php:553` | `Agent::systemPrompt()` (skill-fork capture) |
 | `src/Agents/Agent.php:417` | `Agent::systemPrompt()` (last-resort fallback) |
@@ -1480,7 +1482,7 @@ Agent path deliberately keeps the diff. **Do not close Phase 3 with this gap unr
 
 **A second constraint the implementer must not discover late** (INFERRED from the code, not
 measured, and stated as a judgement): `EngineBackend::completeAsync()` forks (`pcntl_fork`), and the
-child calls `$this->complete()` at `EngineBackend.php:1166`, where `new Runtime(` sits at `:547`. On
+child calls `$this->complete()` at `EngineBackend.php:1201`, where `new Runtime(` sits at `:547`. On
 that path the `Runtime` and its memoised block live in a **child that exits at end of turn**, so a
 signal cannot carry across turns without being sent back over the socket. This step's Done-when only
 requires *within-turn* behaviour, which is reachable — but `EnvironmentBlock.php:110-114`'s promise
@@ -1497,8 +1499,68 @@ stays byte-identical; the full suite is green; if any seam remains reachable onl
 is stated in the worklog per §16.1; the worklog records the measured byte delta of a suppressed
 no-write step on a dirty tree.
 
-**Concurrency (Phase 3)** — **fully serial**: S1 → S2 → S3 → S4 → S5. Every step touches a file the
-previous one touched, and S4 measures the result of the other three. Do not batch this phase.
+### P3.S6 — Wire the write-signal into the Agent assembler, or record why it stays
+
+**Goal** P3.S5 wired the per-step write signal into ONE of `EnvironmentBlock`'s four production
+construction sites — the `Runtime` one. The other three feed `Agents\Agent::systemPrompt()`, the
+second assembler §17.2 keeps deliberately separate from `Runtime`'s. That path is live in production
+today (`bin/sugarcrush` → `Bootstrap::chat()` → `Bootstrap.php:1044` `agentManager()` →
+`Bootstrap.php:1462` capture-per-agent → `AgentManager.php:433`) and its `systemPrompt()` is consumed
+at nine live sites. **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
+not memoised there (`Bootstrap.php:1458-1460`), so the git shell-out happens once per
+`systemPrompt()` call — MEASURED with a logging `git` shim on `PATH`, **five** subprocesses when the
+diff is emitted (branch, status, log, `diff --cached`, `diff`) and **three** when it is suppressed.
+`capture()` itself runs zero.
+
+**This step is scheduled rather than waived, and that is the orchestrator's recorded disposition of
+the "second assembler" gap P3.S5 left open** (added 2026-08-30; the P3.S5 section required the
+orchestrator to do exactly one of schedule this step or add a §18 row). Scheduling is the right half
+of that choice because the lever is dormant on three of four sites and the path that skips it is the
+more expensive one — a §18 row would have to argue that the *cheaper* path deserved the optimisation
+and the dearer one did not.
+
+**FIRST ACTION, BEFORE ANY EDIT — establish whether the seam exists at all.** The Runtime path had an
+obvious per-step loop to mark. The Agent path may not: `systemPrompt()` is called from
+`AgentManager.php:433`, `App/App.php:569`, `Agents/ProcessExecutor.php:473` and
+`Workflows/WorkflowEngine.php:1042/1152/1252/1294/1397`, and it is not yet measured which of those
+are per-step and which are once-per-agent. **Measure it and say so.** If there is no per-step loop on
+this path, the honest outcome of this step is a §18 row plus the measurement that justifies it —
+that is a completed step under §1.10, not a failed one. Do not manufacture a loop to have something
+to wire.
+
+**Preserve the default.** As in P3.S2/P3.S5, `writeSinceLastRender` defaults to `true`, so production
+output and `tests/fixtures/prompt/golden-agent-prompt.txt` are unchanged unless a caller marks the
+signal. A diff that moves that golden has changed default behaviour and is wrong. NOTE P3.S5's
+Surprise 3: an earlier claim that a `$perStepRerender` change had a Runtime-only half was FALSE — it
+needs `EnvironmentBlock.php` and `Agents/Agent.php` together.
+
+**Source** prompt_expand.md §3.4, §9.2; prompt_plan.md §17.2 (the two-assembler invariant); the P3.S5
+worklog entry's §1.10 escalation 4; `Runtime.php:546-561`, where the gap is stated in code.
+
+**Files**
+- `sugar-crush/src/Agents/Agent.php`
+- `sugar-crush/src/Cli/Bootstrap.php`
+- `sugar-crush/src/App/App.php`
+- `sugar-crush/tests/Agents/AgentTest.php`
+
+**Sequencing** `AgentTest.php` was rewritten by P2.audit-fix-1 (`inPackageRoot()`, the leak scanner
+and its landmark pins) — rebase on current master, do not resurrect the pre-fix shape. §5 lists no
+lane claim on `Agent.php`, `Bootstrap.php` or `App.php`, but `Agents/AgentDefinition.php` IS claimed
+(the other plan's `C7`), so do not widen into it; if this step needs it, escalate instead.
+
+**Depends on** P3.S5 (the lever, the vocabulary, and the Runtime-side precedent to mirror).
+**Done when** either (a) a test drives the Agent path across consecutive no-write steps and asserts
+the second `systemPrompt()`'s env block carries no diff section, with a stated deletion experiment
+that reds when the marking call is removed, the golden agent prompt byte-identical, and the
+subprocess count re-measured with the `git` shim and recorded; or (b) the step lands a §18 row and
+the measurement showing the Agent path has no per-step seam to wire, with the nine call sites
+classified per-step vs once-per-agent. In both cases the full suite is green from BOTH cwds and the
+worklog records which outcome it was and why.
+
+**Concurrency (Phase 3)** — **fully serial**: S1 → S2 → S3 → S4 → S5 → S6. Every step touches a file the
+previous one touched, and S4 measures the result of the other three. S6 was appended 2026-08-30
+as the disposition of P3.S5's second-assembler gap; it is serial after S5 because it mirrors
+S5's lever onto the other assembler. Do not batch this phase.
 
 **Do not merge S2 and S3 into one step.** It is the obvious saving — same two files, serial anyway,
 one fewer review loop — and it is wrong here. S2 changes *behaviour* (when the diff is emitted); S3
@@ -1646,8 +1708,12 @@ interface PromptSection
   doubles the separators those contributors already carry, and
   `MemoryPromptWiringTest.php:498` asserts the prompt contains `MemoryBlock::capture($store)->render()`
   **byte-for-byte**.
-- Memoisation stays **per-`Runtime`**, not per-build (`SystemPromptWiringTest.php:168`,
-  `MemoryPromptWiringTest.php:210`, `RepoMapBlockTest.php:~1170`).
+- Memoisation stays **per-`Runtime`**, not per-build (`RuntimeTest.php:2063`
+  `testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges`,
+  `MemoryPromptWiringTest.php:209`, `RepoMapBlockTest.php:1166`). CORRECTED 2026-08-30: this
+  used to cite `SystemPromptWiringTest.php:168`, which MEASURED is
+  `testBothHalvesLandInOneSystemPromptWithEnvironmentLast()` — an ORDERING pin, not a
+  memoisation one. That file has no test with "memo" in its name at all.
 - `environmentSnapshot(App)` stays privately reflectable (`RuntimeTest.php:1721` asserts `assertSame`
   across two calls).
 - **Empty-layer suppression:** an absent layer contributes *nothing*, not an empty fence. Seven
@@ -3104,8 +3170,13 @@ All eleven, from `prompt_expand.md` §11. Twenty test files touch prompt constru
    `"<env>\n"` and ends `"\n</env>"`. Strictest: `MemoryPromptWiringTest.php:498` asserts the prompt
    contains `MemoryBlock::capture($store)->render()` **byte-for-byte** — a naive
    `implode("\n\n", $layers)` doubles separators the contributors already carry.
-9. **Memoisation is per-`Runtime`, not per-call** (`SystemPromptWiringTest.php:168`,
-   `MemoryPromptWiringTest.php:210`, `RepoMapBlockTest.php:~1170`).
+9. **Memoisation is per-`Runtime`, not per-call** (`RuntimeTest.php:2063`
+   `testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges` for the
+   environment block, `MemoryPromptWiringTest.php:209`
+   `testTheMemoryDirectoryIsReadOncePerRuntimeNotOncePerStep`, `RepoMapBlockTest.php:1166`
+   `testTheSnapshotIsMemoizedSoARepositoryChangedMidTurnDoesNotAlterAlaterStep`).
+   CORRECTED 2026-08-30 — see the note in the P3.S5 section; the old
+   `SystemPromptWiringTest.php:168` citation named an ordering pin.
 10. **Instruction de-duplication** — `assertSame(1, substr_count(...))` at
     `RuntimeTest.php:1591/1610`, `SystemPromptWiringTest.php:109`.
 11. **Empty-layer suppression** — an absent layer adds *nothing*, not an empty fence. Seven
@@ -3308,7 +3379,7 @@ php /home/sites/sugarcraft/tools/check-path-repos.php --no-lib-path-repos
 ### Regenerating §2.2
 
 The command is inside §2.2 itself. Run it after any edit to a step's `**Files**` list; it prints
-`(62 steps parsed — must be 62)` as its own sanity check, and a different number means the parser
+`(63 steps parsed — must be 63)` as its own sanity check, and a different number means the parser
 missed a step heading and the table it just printed is wrong.
 
 ---
