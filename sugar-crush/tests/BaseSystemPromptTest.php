@@ -622,35 +622,56 @@ final class BaseSystemPromptTest extends TestCase
      * contains no host path. The two host-property lines render() reads from
      * the runtime — OS version and PHP version, which are php_uname()/
      * PHP_VERSION constants of the HOST and not injectable — are normalized
-     * before the comparison ({@see pinHostLines()}), which keeps the golden
-     * byte-stable across machines while still failing on any one-byte change
-     * to anything the prompt builder actually controls.
+     * on the RENDERED side only ({@see pinHostLines()}); the committed golden
+     * carries the `<host>` placeholder itself, so those two lines are pinned
+     * rather than masked away on both sides at once.
+     *
+     * THE RENDER RUNS AT THE PACKAGE ROOT, pinned by {@see inPackageRoot()}
+     * and located from __DIR__, because those relative paths resolve against
+     * the PROCESS cwd — which PHPUnit does not set. Read that method for the
+     * CI failure this cost.
      *
      * REGENERATION DISCIPLINE: regenerate the golden ONLY when the rendered
      * output legitimately changes (prose change, new prompt layer, env-field
      * or git-section wording). Regenerate with a recorded human-readable
      * reason in the commit message, and the regenerating step MUST diff
-     * old-vs-new and paste the diff into the worklog. NEVER regenerate to
-     * silence a failing test — a red here means the prompt changed under the
-     * golden, and that change has to be argued, not smoothed over.
+     * old-vs-new and paste the diff into the worklog. A raw dump of the
+     * render is NOT a valid golden — it has to go through
+     * {@see pinHostLines()} first, or it puts the generator's kernel back
+     * into the committed file and reds both this test and the leak scan.
+     * NEVER regenerate to silence a failing test — a red here means the
+     * prompt changed under the golden, and that change has to be argued, not
+     * smoothed over.
      */
     public function testSystemPromptMatchesCommittedGolden(): void
     {
         $repo = self::ensureFixtureRepo();
+        // WHAT THIS MESSAGE USED TO SAY: "run phpunit from sugar-crush/ so
+        // the relative cwd vendor/prompt-fixture/system-repo resolves against
+        // the phpunit working directory". It blamed a failure mode that
+        // CANNOT happen -- ensureFixtureRepo() anchors on __DIR__, so the
+        // fixture is materialised under sugar-crush/vendor/ from any cwd, and
+        // this assertion has never once been the one that failed. It sent a
+        // reader hunting for a materialisation bug when the real defect was
+        // the process cwd downstream of here, now fixed by inPackageRoot().
         self::assertDirectoryExists(
             $repo,
-            'Fixture repo was not materialised - run phpunit from sugar-crush/ so the relative '
-            . 'cwd vendor/prompt-fixture/system-repo resolves against the phpunit working directory.',
+            'Fixture repo was not materialised at ' . $repo . ' - git init or the fixture writes '
+            . 'failed; the path is __DIR__-anchored, so this is not a working-directory problem.',
         );
 
-        [$runtime, $app] = self::goldenContext();
+        $rendered = self::inPackageRoot(static function (): string {
+            [$runtime, $app] = self::goldenContext();
 
-        $build = new \ReflectionMethod($runtime, 'buildSystemPrompt');
-        $build->setAccessible(true);
+            $build = new \ReflectionMethod($runtime, 'buildSystemPrompt');
+            $build->setAccessible(true);
+
+            return (string) $build->invoke($runtime, $app);
+        });
 
         self::assertSame(
-            self::pinHostLines(self::readSystemPromptGolden()),
-            self::pinHostLines((string) $build->invoke($runtime, $app)),
+            self::readSystemPromptGolden(),
+            self::pinHostLines($rendered),
             'Runtime::buildSystemPrompt() drifted from the committed golden - see the regeneration discipline note.',
         );
     }
@@ -664,16 +685,64 @@ final class BaseSystemPromptTest extends TestCase
      * generator's host paths. The fixture cwd, repo root and memory store are
      * deliberately RELATIVE (vendor/prompt-fixture/system-repo,
      * tests/fixtures/prompt/memory), so the golden contains no absolute path
-     * at all; this test pins that absence deliberately — no line may start
-     * with '/', and the literal host-path fragments below must not appear
-     * anywhere in the file. The fixture author identity is scanned for too:
-     * a golden that leaked 'Fixture Author' or the fixture email would be
-     * leaking the test harness's own environment, the same class of leak one
-     * step closer to home.
+     * at all, and this test pins that absence. The fixture author identity is
+     * scanned for too: a golden that leaked 'Fixture Author' or the fixture
+     * email would be leaking the test harness's own environment, the same
+     * class of leak one step closer to home.
+     *
+     * WHAT THIS TEST USED TO BE, and why the shape changed. It was ten
+     * absence assertions — six literal roots, three identities, and a
+     * `/^\//m` anchored at column 0. MEASURED, both defects, before the
+     * rewrite:
+     *
+     *   * Truncating this golden to ZERO BYTES left the test `OK`. Every
+     *     assertion in it was an ABSENCE assertion, and '' contains nothing,
+     *     so a golden that had been emptied read exactly like a clean one.
+     *   * Splicing in `Working directory: /var/www/build-agent-42/checkout`
+     *     ALSO left it `OK`: the regex is anchored at column 0 and the six
+     *     literals are `/tmp/ /home/ /Users/ C:\Users\ /my/ /test/`, so that
+     *     path was neither at the start of a line nor under a root somebody
+     *     had happened to think of. `/opt/`, `/srv/`, `/root/`, `/builds/`,
+     *     `/workspace/` were all free to leak.
+     *
+     * The three answers, in order below. (1) LANDMARKS make the scan's input
+     * falsifiable — head, tail, and every required section heading in
+     * between — so an emptied or truncated golden reds here instead of
+     * reading clean. (2) The literals STAY, because they name the specific
+     * historic leaks and cost nothing, but the column-0 regex is replaced by
+     * {@see hostPathLeaks()}, which recognises an absolute path by its SHAPE
+     * at any column and enumerates no roots at all. (3) A KNOWN-POSITIVE
+     * CONTROL runs the same scanner over the same golden with a host path
+     * spliced in, because a scanner that answers "clean" for every input is
+     * indistinguishable from a clean golden.
+     *
+     * The generator-host VALUE lines are pinned here too — see the assertions
+     * at the end and {@see pinHostLines()} for why they are placeholders in
+     * the committed file rather than this machine's kernel and PHP build.
      */
     public function testGoldenSystemPromptLeaksNoHostPaths(): void
     {
         $golden = self::readSystemPromptGolden();
+
+        self::assertNotSame('', $golden, 'the golden is empty - every absence assertion below is vacuous on it');
+        self::assertStringStartsWith(
+            'You are SugarCrush,',
+            $golden,
+            'the golden no longer opens with the identity clause - it has been truncated at the head, '
+            . 'and a truncated golden satisfies every absence assertion below without being scanned',
+        );
+        self::assertStringEndsWith(
+            "\n</env>",
+            $golden,
+            'the golden no longer closes with </env> - it has been truncated at the tail',
+        );
+        foreach (self::REQUIRED_SECTIONS as $heading) {
+            self::assertStringContainsString(
+                "\n" . $heading . "\n",
+                $golden,
+                'the golden is missing the "' . $heading . '" section - it has been truncated in the middle',
+            );
+        }
 
         self::assertStringNotContainsString('/tmp/', $golden, 'golden leaks a /tmp/ host path');
         self::assertStringNotContainsString('/home/', $golden, 'golden leaks a /home/ host path');
@@ -684,10 +753,35 @@ final class BaseSystemPromptTest extends TestCase
         self::assertStringNotContainsString('Joe Huss', $golden, 'golden leaks the author identity');
         self::assertStringNotContainsString('Fixture Author', $golden, 'golden leaks the fixture commit author identity');
         self::assertStringNotContainsString('fixture@example.invalid', $golden, 'golden leaks the fixture commit author email');
-        self::assertDoesNotMatchRegularExpression(
-            '/^\//m',
+
+        self::assertSame(
+            [],
+            self::hostPathLeaks($golden),
+            'the golden carries an absolute filesystem path - the fixture cwd, repo root and memory '
+            . 'store must all stay relative',
+        );
+        self::assertSame(
+            ['/var/www/build-agent-42/checkout'],
+            self::hostPathLeaks($golden . "\nWorking directory: /var/www/build-agent-42/checkout"),
+            'the leak scanner reports nothing for a golden with a known host path spliced into it, '
+            . 'so its verdict on the real golden means nothing either',
+        );
+
+        self::assertStringContainsString(
+            "\nPlatform: linux\n",
             $golden,
-            'a golden line starts with an absolute path - the fixture cwd must stay relative',
+            'the golden no longer pins the INJECTED platform - goldenContext() passes it, so it is '
+            . 'real prompt output and must not go back to being masked',
+        );
+        self::assertStringContainsString(
+            "\nOS version: <host>\n",
+            $golden,
+            'the golden carries a generator-host OS version instead of the placeholder it is compared as',
+        );
+        self::assertStringContainsString(
+            "\nPHP version: <host>\n",
+            $golden,
+            'the golden carries a generator-host PHP version instead of the placeholder it is compared as',
         );
     }
 
@@ -698,9 +792,11 @@ final class BaseSystemPromptTest extends TestCase
      * that reflects this method through BaseSystemPromptTest), so the
      * committed golden can never drift from what the test renders. The cwd,
      * the repo root and the memory-store path are deliberately RELATIVE so
-     * the golden contains no host path; they resolve against the phpunit
-     * working directory (sugar-crush/), exactly as AgentTest's golden fixture
-     * documents.
+     * the golden contains no host path; they resolve against the package
+     * root, which {@see inPackageRoot()} pins for the render rather than
+     * leaving it to whatever directory phpunit was launched from — and note
+     * that MemoryStore validates its path IN ITS CONSTRUCTOR, so this method
+     * itself has to run inside that pin, not only the render.
      *
      * A real {@see EchoProvider} rather than a PHPUnit mock, so the same
      * reflection a /tmp regeneration script uses works outside a test
@@ -918,14 +1014,28 @@ final class BaseSystemPromptTest extends TestCase
      * Normalizes the two host-property lines render() reads from the runtime,
      * so the committed golden is byte-stable across machines.
      *
+     * APPLIED TO THE RENDERED SIDE ONLY. It used to be applied to BOTH sides,
+     * and that made the very lines it names UNPINNED: masking the golden's
+     * copy too meant the committed bytes were compared against nothing.
+     * MEASURED before the change — writing `OS version: Windows 95` into the
+     * committed golden left this suite green. The golden now carries the
+     * PLACEHOLDER, `<host>`, which is exactly what the comparison
+     * constrains, so any other value there reds the golden test.
+     * Consequence for the regeneration procedure: a raw dump of the render is
+     * NOT a valid golden; it has to go through this method first.
+     *
      * EnvironmentBlock's own docblock calls php_uname() and PHP_VERSION
      * "read AT RENDER TIME" — constants of the HOST, not behaviour of the
      * prompt builder — and EnvironmentBlockTest interpolates them dynamically
      * for the same reason. A golden that pinned the generator's kernel would
-     * red on every other machine. Platform is deliberately NOT normalized:
-     * P2.S1 made it injectable, {@see goldenContext()} pins it to 'linux', and
-     * an un-normalized Platform line is what keeps the injectable seam honest
-     * in the golden.
+     * red on every other machine. Making them injectable, the way P2.S1 made
+     * platform injectable, would remove the need for this method entirely;
+     * that needs src/Context/EnvironmentBlock.php, outside this step's
+     * declared file list, and is reported as a follow-up rather than done
+     * here. Platform is deliberately NOT normalized: P2.S1 made it
+     * injectable, {@see goldenContext()} pins it to 'linux', and an
+     * un-normalized Platform line is what keeps the injectable seam honest in
+     * the golden.
      */
     private static function pinHostLines(string $block): string
     {
@@ -933,5 +1043,181 @@ final class BaseSystemPromptTest extends TestCase
         $block = preg_replace('/^PHP version: .*$/m', 'PHP version: <host>', $block);
 
         return $block;
+    }
+
+    /**
+     * {@see inPackageRoot()} restores the working directory on BOTH exit
+     * paths, and this is the assertion that matters more than the fix it
+     * guards.
+     *
+     * chdir() is process-global and PHPUnit runs one test after another in
+     * one process, so a render that threw while the cwd was moved would hand
+     * a changed working directory to every test that runs after it - roughly
+     * half this suite, failing in places that have nothing to do with the
+     * prompt. That is a strictly worse defect than the CI red the pin was
+     * written to fix, so the `finally` is checked here rather than trusted:
+     * the second half of this test drives the throw path deliberately, and
+     * also pins that the exception is RE-RAISED rather than swallowed.
+     *
+     * WHY THIS TEST MOVES THE CWD FIRST, and it is not tidiness. The check is
+     * only meaningful from a directory that is NOT the package root: run from
+     * the package root, `$before` and the pinned root are the same string and
+     * a missing restore is invisible. MEASURED - the first draft of this test
+     * had no chdir() and stayed `OK (2 tests, 8 assertions)` with the
+     * `finally` deleted and the restore moved onto the success path only. It
+     * was decorative, in exactly the way §1.11 describes, until this line.
+     * Its own restore is in a `finally` for the same reason the subject's is.
+     */
+    public function testInPackageRootRestoresTheWorkingDirectoryOnEveryExitPath(): void
+    {
+        $outer = (string) getcwd();
+        self::assertTrue(chdir(__DIR__), 'could not move to a directory distinct from the package root');
+
+        try {
+            $before = getcwd();
+
+            $inside = self::inPackageRoot(static fn (): string => (string) getcwd());
+            self::assertNotSame($before, $inside, 'inPackageRoot() did not move the working directory at all');
+            self::assertFileExists($inside . '/composer.json', 'inPackageRoot() did not run at a package root');
+            self::assertSame($before, getcwd(), 'inPackageRoot() leaked a changed working directory on the SUCCESS path');
+
+            try {
+                self::inPackageRoot(static function (): string {
+                    throw new \LogicException('the render threw');
+                });
+                self::fail('inPackageRoot() swallowed the exception the render threw');
+            } catch (\LogicException $thrown) {
+                self::assertSame('the render threw', $thrown->getMessage());
+            }
+
+            self::assertSame(
+                $before,
+                getcwd(),
+                'inPackageRoot() leaked a changed working directory on the FAILURE path - every test '
+                . 'that runs after this one would have inherited it',
+            );
+        } finally {
+            chdir($outer);
+        }
+    }
+
+    /**
+     * Runs $render with the process working directory pinned to the package
+     * root - the directory holding composer.json, vendor/ and tests/ - and
+     * restores the previous working directory on every exit path.
+     *
+     * WHY THIS EXISTS, and it is not hypothetical: master's CI was RED on
+     * exactly this. The golden fixture's cwd, repo root and memory-store path
+     * are deliberately RELATIVE so the committed golden carries no host path
+     * ({@see goldenContext()}), and a relative path resolves against the
+     * PROCESS working directory. PHPUnit never sets that directory: `-c
+     * <lib>/phpunit.xml` relocates test DISCOVERY and leaves getcwd() alone,
+     * and tests/bootstrap.php contains no chdir(). CI runs
+     * `php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml` with no
+     * `cd` and no `working-directory:`, so its cwd is the REPO ROOT, where
+     * `vendor/prompt-fixture/...` and `tests/fixtures/...` name nothing.
+     * MEASURED from the repo root: EnvironmentBlock::isGitRepo() is
+     * `file_exists($cwd . '/.git')`, so the block rendered `Is directory a git
+     * repo: No` and dropped the whole git section against a golden that says
+     * `Yes`; and MemoryStore's constructor threw
+     * `Memory path must be a writable directory`. One failure and one error,
+     * on both PHP 8.3 and 8.4, and nothing else in the suite.
+     *
+     * THE INVARIANT: the golden render executes at the package root whatever
+     * directory the process was launched from. The root is located by walking
+     * up from __DIR__ and never by consulting getcwd(), so this is not "works
+     * from the two directories somebody tried" - no launch directory can
+     * defeat it, including one above the repo or one inside vendor/.
+     *
+     * WHY NOT MAKE THE PATHS ABSOLUTE INSTEAD: because the relative path is
+     * the load-bearing part. It is what keeps the committed golden free of
+     * this machine's paths, and it is pinned by the leak scan in this file.
+     *
+     * WHY THE RESTORE IS IN A `finally`: chdir() is process-global and
+     * PHPUnit runs one test after another in one process. A failed assertion
+     * or a thrown fixture error inside $render that leaked a changed cwd into
+     * every subsequent test would be a far worse defect than the one this
+     * fixes, so the restore cannot be on the success path only.
+     *
+     * @param callable():string $render
+     */
+    private static function inPackageRoot(callable $render): string
+    {
+        $root = __DIR__;
+        while (!is_file($root . '/composer.json')) {
+            $parent = \dirname($root);
+            if ($parent === $root) {
+                self::fail('no package root (a directory holding composer.json) above ' . __DIR__);
+            }
+            $root = $parent;
+        }
+
+        $previous = getcwd();
+        if ($previous === false) {
+            self::fail('getcwd() failed - the golden render cannot be pinned to ' . $root);
+        }
+        if (!chdir($root)) {
+            self::fail('chdir() to the package root failed: ' . $root);
+        }
+
+        try {
+            return $render();
+        } finally {
+            chdir($previous);
+        }
+    }
+
+    /**
+     * Every absolute filesystem path $text carries, de-duplicated, in
+     * first-appearance order.
+     *
+     * THE DENY SIDE ENUMERATES NOTHING. An absolute path is recognised by its
+     * SHAPE, which is the whole point: the check this replaced was six
+     * literal roots (`/tmp/ /home/ /Users/ C:\Users\ /my/ /test/`) plus a
+     * `/^\//m` anchored at column 0, and `/opt/`, `/srv/`, `/root/`,
+     * `/builds/`, `/workspace/` and any path not at the start of a line all
+     * walked straight through it. A list of roots is only ever as good as the
+     * last CI runner somebody thought about.
+     *
+     * WHAT IT MATCHES. A POSIX path is a `/` that opens a run of path
+     * segments and is NOT preceded by a path character, so git's own diff
+     * prefixes (`a/docs/notes.md`, `+++ b/src/app.php`), ordinary relative
+     * paths (`src/Lib.php`, `vendor/prompt-fixture/agent-repo`), closing
+     * tags (`</env>`, `</repo-map>`) and prose (`and/or`) do not match, while
+     * ` /var/www/build-agent-42/checkout` does at any column. A Windows path
+     * is a drive letter not preceded by a letter (so a URL scheme's `p://` is
+     * not read as drive `p:`) followed by a separator; a UNC path is a
+     * doubled backslash followed by a host.
+     *
+     * THE ONE ALLOWED PATH is `/dev/null`. git renders the absent side of an
+     * added file as `--- /dev/null`; it is git's own literal, byte-identical
+     * on every machine, and names nothing about the host. Allowing expected
+     * CONTENT is a different thing from enumerating forbidden ROOTS - this
+     * list cannot grow silently, because anything not on it fails.
+     *
+     * MEASURED on this tree before it was wired in: it reports nothing for
+     * either committed golden, and reports the path for each of
+     * `/var/www/build-agent-42/checkout`, `/opt/ci/work`, `/srv/x`,
+     * `/builds/gitlab/proj`, `/workspace`, a mid-line `/root/agent`,
+     * `C:\Users\bob\proj`, `D:/build/out` and `\\fileserver\share\proj`.
+     *
+     * @return list<string>
+     */
+    private static function hostPathLeaks(string $text): array
+    {
+        $allowed = ['/dev/null'];
+
+        preg_match_all('#(?<![\w.~/\\\\<-])/[\w.~-]+(?:/[\w.~-]+)*/?#', $text, $posix);
+        preg_match_all('#(?<![A-Za-z])[A-Za-z]:[\\\\/][^\r\n]*#', $text, $windows);
+        preg_match_all('#\\\\\\\\[\w.-]+\\\\[^\r\n]*#', $text, $unc);
+
+        $hits = [];
+        foreach ([...$posix[0], ...$windows[0], ...$unc[0]] as $hit) {
+            if (!in_array($hit, $allowed, true) && !in_array($hit, $hits, true)) {
+                $hits[] = $hit;
+            }
+        }
+
+        return $hits;
     }
 }
