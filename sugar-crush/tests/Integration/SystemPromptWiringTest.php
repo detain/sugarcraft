@@ -291,6 +291,23 @@ final class SystemPromptWiringTest extends TestCase
         // sections are one deterministic line each, independent of whatever
         // the developer's working tree happens to hold, so the tail can be
         // pinned by shape instead of by a heuristic over diff bodies.
+        //
+        // MEASURED against exactly this fixture, because the numbers are what
+        // the exclusivity pin at the bottom of this method actually encodes:
+        // `git status --porcelain` and `git log --oneline -5` exit 128, and
+        // BOTH `git diff --shortstat --patch` and its `--cached` form exit
+        // 129. Every git field here therefore takes its failure branch, and
+        // the two diff sections in particular render through the `exitCode
+        // !== 0` early return inside `gitDiffSection()` — its success branch
+        // is never reached from this test at all. What is pinned below is
+        // consequently a FIXTURE-SHAPED prompt and not the shape a real
+        // repository produces: there both diff commands exit 0 (MEASURED) and
+        // the body is a multi-line patch that a one-line body class would
+        // false-red on. That regime is covered deliberately elsewhere, by
+        // {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite()},
+        // which builds a real committed-then-dirtied repository. Do not
+        // "repair" this test by handing it one: that would delete the only
+        // exclusivity pin in this file to duplicate coverage that exists.
         mkdir($this->tempDir . '/.git');
 
         $provider = $this->completeOneTurn(toolCallOnFirstStep: true, root: $this->tempDir);
@@ -319,7 +336,15 @@ final class SystemPromptWiringTest extends TestCase
         $this->assertSame(1, substr_count($first, $marker), 'the cut marker must occur exactly once in the emitting step prompt');
         $this->assertSame(0, substr_count($second, $marker), 'the suppressed step must carry no staged-diff section at all');
 
-        $cut = (int) strpos($first, $marker);
+        // NOT `(int) strpos(...)`. `strpos()` returns `int|false`, and
+        // `(int) false === 0` turns "the marker is absent" into "cut at byte
+        // 0" — handing every assertion below a `$tail` that is the whole
+        // prompt and a reconstruction that is the empty string. The
+        // `substr_count()` assertion above makes that unreachable today, but a
+        // cast standing in for a failure path is still a failure path spelled
+        // as a value, so the failure is spelled out instead.
+        $cut = strpos($first, $marker);
+        $this->assertNotFalse($cut, 'the cut marker must be locatable in the emitting step prompt');
         $tail = substr($first, $cut);
 
         $this->assertSame(
@@ -337,6 +362,23 @@ final class SystemPromptWiringTest extends TestCase
         // comparison — reds here whether it is separated by a blank line or by
         // a single newline.
         //
+        // THE ANCHOR IS `\z`, NOT `$`, and that is not decoration. MEASURED
+        // with `php -r` over four candidate tails: ended `$~`, the pattern
+        // returns 1 for the intended tail AND 1 for that same tail plus a
+        // single trailing newline, because PCRE's `$` matches before a final
+        // `\n`. Ended `\z~` it returns 1 and then 0. (Two trailing newlines,
+        // and a newline followed by text, were already 0 under both anchors,
+        // which is why nobody noticed.) One smuggled byte past `</env>` was
+        // being admitted by an assertion whose message said "exactly". It was
+        // not exploitable — the reconstruction above would have red-flagged
+        // that same input — but a pin weaker than its own prose is the defect
+        // this file exists in order not to ship.
+        //
+        // The one-line body class `[^\n]*` is bought by the empty-`.git`
+        // fixture; the MEASURED exit codes that make it a one-line body, and
+        // the test that covers the real-repository regime instead, are written
+        // out beside the `mkdir()` at the top of this method.
+        //
         // MEASURED, both mutations applied to the two `gitDiffSection()` calls
         // in `src/Context/EnvironmentBlock.php` and both reverted: appending
         // `. "\n\nSmuggled third section: yes"` reds, and appending
@@ -347,9 +389,9 @@ final class SystemPromptWiringTest extends TestCase
         // than weakened — it also carried a false-red bound on git's
         // `diff.suppressBlankEmpty` that a one-line section cannot have.
         $this->assertMatchesRegularExpression(
-            '~^\n\nStaged changes \(git diff --cached, index vs HEAD\): [^\n]*\n\nUnstaged changes \(git diff, working tree vs index\): [^\n]*\n</env>$~',
+            '~^\n\nStaged changes \(git diff --cached, index vs HEAD\): [^\n]*\n\nUnstaged changes \(git diff, working tree vs index\): [^\n]*\n</env>\z~',
             $tail,
-            'the tail must be exactly the two one-line diff sections and the closing fence',
+            'under this fixture the tail must be exactly the two one-line diff sections and the closing fence, with nothing whatsoever after </env> — not even a trailing newline',
         );
 
         $this->assertStringContainsString('MULTI STEP INTEGRATION MARKER', $second);
