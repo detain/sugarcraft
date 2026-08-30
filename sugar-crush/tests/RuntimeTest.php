@@ -2221,11 +2221,30 @@ final class RuntimeTest extends TestCase
         sort($gateSorted);
         sort($ourSorted);
 
-        $this->assertSame(['Bash', 'Edit', 'Write'], $gateSorted, 'the control: this is what the gate holds today');
+        // THE DRIFT VERDICT GOES FIRST, and that ordering is the finding rather
+        // than a style choice: with the content control above it, a genuine
+        // drift reported under the CONTROL's message ("this is what the gate
+        // holds today") instead of its own, sending a reader to the wrong
+        // question. MEASURED, by adding a name to the gate and by dropping one
+        // from it - both reds arrived on the control line.
         $this->assertSame(
             $gateSorted,
             $ourSorted,
             'Runtime::WRITE_CAPABLE_TOOL_NAMES has drifted from PermissionGate::isWriteTool()',
+        );
+
+        // The content control, and a SUBSET one for the same reason the corpus
+        // control below is: an exact literal reds on a LEGITIMATE lockstep
+        // update - someone adding a real write tool to both rosters in one
+        // commit, which is exactly what the drift assertion above wants them to
+        // do. That is a guard reddening on correct code, which the ordering
+        // comment above already argues against; pinning the three names that
+        // must be there keeps the instrument honest without punishing the
+        // right answer.
+        $this->assertSame(
+            [],
+            array_values(array_diff(['Bash', 'Edit', 'Write'], $gateSorted)),
+            'the gate no longer names one of the three tools this classifier was built around',
         );
 
         // The MCP half of the same judgement, pinned the same way.

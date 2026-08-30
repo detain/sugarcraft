@@ -195,10 +195,25 @@ final class Runtime
      * {@see EnvironmentBlock}'s own flag defaults to TRUE, and a block handed
      * in through the constructor may carry either polarity deliberately — a
      * caller that already holds a session-wide snapshot it has suppressed is
-     * exactly the shape the `$environmentBlock` parameter exists for. A plain
+     * the shape the `$environmentBlock` parameter exists for. A plain
      * `bool $writeSinceLastRender = true` here would OVERWRITE that injected
      * decision on the first render, silently, so the absence of a caller is
      * modelled as absence rather than as the default's value.
+     *
+     * AND THAT CALLER DOES NOT EXIST IN `src/` — said here because §16.1 says
+     * a seam reachable only from tests is a finding, not a completion, and
+     * because the sentence above reads as though one did. MEASURED:
+     * `/usr/bin/grep -rn 'new Runtime(' src/ bin/` returns exactly one site,
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}, and it
+     * passes `parallelToolCalls:` and `parallelToolDeadlineSeconds:` by name
+     * and NO `$environmentBlock`. So the injected-block polarity this `?bool`
+     * protects is exercised today by
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testAnInjectedSuppressedBlockSurvivesUntilTheLoopMarksSomethingElse()}
+     * and by an embedder, not by this application. It is kept rather than
+     * simplified to a plain `bool` because the constructor parameter is a
+     * published seam whose contract would otherwise be quietly false — the
+     * choice is between honouring a documented argument and overwriting it,
+     * and only one of those is defensible in a class an embedder constructs.
      * {@see environmentSnapshot()} therefore leaves the block exactly as it
      * found it while this is null, which is byte-for-byte the pre-P3.S5
      * behaviour for every caller that never marks.
@@ -271,8 +286,22 @@ final class Runtime
      * `Cli\Bootstrap::tools()` supplies the eleven built-ins plus
      * `Tools\McpToolBridge` instances, whose `name()` is `mcp__<server>__<tool>`.
      * It is reachable by an embedder, and for one of those a write tool this
-     * list does not name would be under-shown. The built-in half of that hole
-     * is closed by
+     * list does not name would be under-shown.
+     *
+     * THE OTHER UNDER-EMIT IS NOT ABOUT TOOLS AT ALL, and no roster closes it:
+     * this classifier answers "did the model ask for something that writes",
+     * which is a proxy for "did the working tree move". Anything that moves it
+     * from OUTSIDE the tool loop — the user saving a file in their editor
+     * mid-turn, or a `PostToolUse` hook that reformats what a read-only step
+     * touched — moves it invisibly, and the next step renders no diff. Stated
+     * as a judgement rather than a measurement: the eight read-only built-ins
+     * were checked and genuinely do not write (`Lsp`'s `codeActions` RETURNS
+     * edits; nothing in `Read`/`Grep`/`Glob`/`Skill`/`WebFetch`/`WebSearch`/
+     * `doctor` writes), so the classifier is correct about tools; the exposure
+     * is to writers this loop cannot see. The honest fix is a cheap tree
+     * fingerprint rather than a longer roster, and it is not this step's.
+     *
+     * The built-in half of the roster hole is closed by
      * {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheWriteToolRosterDoesNotDriftFromThePermissionGate()},
      * which reds when a new `src/Tools/BuiltIn/` tool is classified by
      * neither roster; the embedder half is not closed and has no owner yet.
@@ -285,6 +314,12 @@ final class Runtime
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is
      * server-defined and unknowable in this process, so it counts as a write.
      * Same judgement as `PermissionGate::isWriteTool()`.
+     *
+     * PUBLIC for the same reason {@see WRITE_CAPABLE_TOOL_NAMES} is, and it
+     * was `private` first: the two constants are two halves of ONE rule, and
+     * this is the half that decides every MCP call. An embedder reading only
+     * the public roster read half the judgement and would have concluded that
+     * an `mcp__*` tool is not a write.
      *
      * READ FROM THE AUTHORITY, NOT RESPELLED, and the first draft of this line
      * did respell it. {@see McpToolBridge::NAME_PREFIX} is what
@@ -301,18 +336,29 @@ final class Runtime
      * paragraphs on exactly this question for a different roster and the
      * answer is not free by inspection: a class constant in a constant
      * expression resolves LAZILY, on first read, not at class-declaration
-     * time. MEASURED on PHP 8.3.6 — after `class_exists(Runtime::class)` and
-     * before any classification, `class_exists(McpToolBridge::class, false)`
-     * is FALSE (and FALSE on master, which has no such reference); after ONE
+     * time. MEASURED on PHP 8.3.6, and independently reproduced by a reviewer
+     * — after `class_exists(Runtime::class)` and before any classification,
+     * `class_exists(McpToolBridge::class, false)` is FALSE (and FALSE on
+     * master, which has no such reference); after ONE
      * {@see stepRequestedAWrite()} call it is TRUE. So the bill is one file
      * include, paid once per process and only by a turn that actually
-     * dispatched a tool: 0.040 ms for the first classification, 4.5 ms for
-     * ten thousand more. That is the same shape as the E239 answer — reading
+     * dispatched a tool. That is the same shape as the E239 answer — reading
      * the authority costs one leaf class — and the leaf here is a `Tool`
      * implementation the engine loads anyway the moment an MCP tool is
      * registered.
+     *
+     * NO MILLISECOND FIGURE IS QUOTED, deliberately. An earlier revision gave
+     * "0.040 ms for the first classification, 4.5 ms for ten thousand more"
+     * from a single unwarmed run; a reviewer re-measuring five times got
+     * ~0.24 ms and ~2.86 ms — six times slower on one and a third faster on
+     * the other, so the two disagreed in OPPOSITE directions and the gap is
+     * not a faster or slower host. §16.8 rule 4 wants three takes before a
+     * delta counts and the first revision had one. What the argument actually
+     * needs is the lazy-resolution fact above, which both of us reproduced
+     * exactly; the timings were decoration, and decoration that rots is worse
+     * than none.
      */
-    private const MCP_TOOL_PREFIX = McpToolBridge::NAME_PREFIX;
+    public const MCP_TOOL_PREFIX = McpToolBridge::NAME_PREFIX;
 
     /**
      * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
@@ -393,27 +439,36 @@ final class Runtime
      * plus the two labels, and it scales with the size of the working diff,
      * not with anything this class controls.
      *
-     * 666 IS THE ONLY HOST-INDEPENDENT FIGURE HERE, which is why it is the
-     * only absolute one quoted. The prompt TOTAL that 666 is a fraction of
-     * moves with the length of the fixture root's own path, because the block
-     * renders `Working directory: <root>` — MEASURED, a fixture root name
-     * twelve characters longer took the emitting prompt 3,557 -> 3,568 B and
-     * the suppressed one 2,891 -> 2,902, while the saving stayed exactly 666.
-     * So the ratio is ~18.7% ON A ~30-CHARACTER ROOT and is not a property of
-     * the mechanism. An earlier revision of this paragraph quoted 3,215 /
-     * 374 B / 11.6% / byte 2,835 from a DIFFERENT, one-file fixture that
-     * nothing in the tree rebuilds, and a figure whose fixture no reader can
-     * reconstruct is the defect §16.8 rule 3 is about; it is replaced rather
-     * than adjusted.
+     * 666 IS THE ONLY ABSOLUTE FIGURE QUOTED HERE, AND THE REASON IS WORTH MORE
+     * THAN THE FIGURES THAT WERE DROPPED. The saving is the two diff sections,
+     * so it is a fact about the fixture's CONTENT. The prompt TOTAL it is a
+     * fraction of is not: the block renders `Working directory: <root>`, so
+     * every total, every ratio and every byte OFFSET moves with the length of
+     * whatever temp path the fixture happens to be handed — MEASURED, a root
+     * name eleven characters longer moved the totals by eleven and left the
+     * saving at exactly 666.
+     *
+     * THIS PARAGRAPH HAS BEEN WRONG TWICE, and the second time was the
+     * correction. The first revision quoted 3,215 B / 374 B / 11.6% / byte
+     * 2,835 from a one-file fixture nothing in the tree rebuilds. The second
+     * revision announced that it had "re-derived the figures against the
+     * shipped fixture" and quoted 3,557 / 2,891 / byte 2,885 / "a
+     * ~30-character root" — which were measured on a THIRD ad-hoc script whose
+     * root was 30 characters, while {@see makeTempRepo()} builds a 42-character
+     * one, so every absolute was out by twelve and the prose said "twelve
+     * characters" of a pad that was eleven. A correction is a claim and gets
+     * measured like any other (§16.8 rule 7); this one was not, and it
+     * reproduced the defect it named. The repair is not a third set of
+     * numbers — it is to quote only what does not depend on a path, and to
+     * leave the two failures visible so the next reader distrusts an absolute
+     * in this paragraph rather than the domain of one.
      *
      * AND IT COSTS ONE CACHE DIVERGENCE, which the lever's framing had the
      * sign of backwards. Suppression introduces a differing byte at the
-     * emit->suppress transition that the old behaviour did not have — on that
-     * fixture at byte 2,885 of 3,557, an offset that moves with the root path
-     * exactly as the totals do — after which the quiet steps re-converge.
-     * Every sequence adds exactly one such divergence per transition. Worth it
-     * for the bytes; not a prefix win, and nothing downstream should be built
-     * on the belief that it is.
+     * emit->suppress transition that the old behaviour did not have, after
+     * which the quiet steps re-converge; every sequence adds exactly one such
+     * divergence per transition. Worth it for the bytes; not a prefix win, and
+     * nothing downstream should be built on the belief that it is.
      *
      * THE MODEL SEES NO DIFF ON A QUIET STEP — not a STALE one. "A diff the
      * model has already seen" reads as though the previous prompt were still
@@ -447,6 +502,13 @@ final class Runtime
      *     {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}'s loop.
      *     The same paragraph's byte-different-prompts motivation is falsified
      *     by the measurement above.
+     *  1b. AND SO IS `EnvironmentBlock::withWriteSinceLastRender()`'s OWN
+     *     method docblock, which repeats it unqualified — "two consecutive
+     *     no-write steps would otherwise render byte-different prompts for a
+     *     diff the model has already seen". That is the one a reader lands on,
+     *     because it is the API this class consumes, and it is the last place
+     *     the falsified motivation would be noticed. Listed separately from
+     *     the class docblock because they are two edits, not one.
      *  2. `tests/Integration/SystemPromptWiringTest::testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt()`
      *     pins the invariant this method deliberately INVERTS — that every
      *     step of one turn is handed a byte-identical prompt. It stays green
