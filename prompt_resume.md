@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3, 20 of 62 steps merged. NOTHING IS RUNNING. P3.S5 is IMPLEMENTED BUT NOT MERGED — it is `blocked (review-cycle)` AND `blocked (scope-escalation)`, and merging it as-is WOULD RED CI. Its worktree /home/sites/prompt-step-P3.S5 is LEFT IN PLACE ON PURPOSE — do not delete it. Start at §8 'Next step'.**
+**Current state: Phase 3, 20 of 62 steps merged. TWO AGENTS ARE RUNNING (see §8 In-flight batch). P3.S5 is IMPLEMENTED BUT NOT MERGED — it is `blocked (review-cycle)` AND `blocked (scope-escalation)`, and merging it as-is WOULD RED CI. Its worktree /home/sites/prompt-step-P3.S5 is LEFT IN PLACE ON PURPOSE — do not delete it. Start at §8 'Next step'.**
 
 ---
 
@@ -289,8 +289,15 @@ Steps done:       20 of 62 MERGED, + 1 retro-fix (RETRO-FIX-1) + 2 orchestration
 Phases done:      3 of 12
 Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
-Latest suite:     MASTER, measured by the orchestrator, stdin from /dev/null:
-                   Tests: 10421, Assertions: 161281, Skipped: 1, Failures: 0   <- CURRENT BASELINE
+Latest suite:     **THE FIGURE BELOW IS DISPUTED — READ In-flight batch (C) FIRST.**
+                   Previously recorded here as MASTER, stdin from /dev/null:
+                   Tests: 10421, Assertions: 161281, Skipped: 1, Failures: 0
+                   RE-MEASURED 2026-08-30 on master @1d07627b9 from the REPO ROOT (the CI form):
+                   Tests: 10421, Assertions: 161280, Errors: 1, Failures: 1, Skipped: 1.
+                   Same test count, one fewer assertion, and NOT green. The recorded "Failures: 0"
+                   was therefore almost certainly measured from sugar-crush/, not from the repo root.
+                   THE CWD IS PART OF THE MEASUREMENT AND WAS NEVER RECORDED WITH IT. Record it from
+                   now on: every suite figure in this file must name the cwd it was taken from.
                    census 6-file set: 103 tests / 9448 assertions
                    tests/Providers/PromptStabilityTest.php: 13 tests / 229 assertions
                    golden-system-prompt.txt md5: 7efcc4882f0597440518fc02799a923a
@@ -312,7 +319,40 @@ Latest suite:     MASTER, measured by the orchestrator, stdin from /dev/null:
                    commits are census-neutral. Compare per-file counts, or diff `--log-junit`
                    per-testcase `assertions=` attributes, before calling an assertion delta real.
 
-In-flight batch:  NONE. No agents are running.
+In-flight batch:  TWO AGENTS RUNNING, spawned 2026-08-30. Neither has reported yet.
+
+                   (A) P3.S5-escalation-1 — the step agent, in the EXISTING worktree
+                       /home/sites/prompt-step-P3.S5 (branch prompt/P3.S5 @ d046550d3). Declared list
+                       WIDENED BY THE ORCHESTRATOR to exactly one file:
+                       sugar-crush/tests/Integration/SystemPromptWiringTest.php. Job: apply the
+                       measured inversion from .sugar-crush-prompt/P3.S5-ESCALATION-patch.md (copied
+                       into the worktree), INVERT NOT DELETE (§1.10), run the deletion experiment,
+                       verify from BOTH cwds, commit to prompt/P3.S5, then run its own review cycle
+                       capped at 3. It was SENT A CORRECTION mid-flight — see (C) below.
+                       MERGE ORDER: it is the only step; merge it alone after its review closes.
+
+                   (B) A READ-ONLY INVESTIGATION agent in /home/sites/sugarcraft, answering: is CI
+                       actually red on master today for sugar-crush, or is the "CI form" not what CI
+                       effectively runs? It edits NOTHING. See the finding below.
+
+                   (C) **A PREMISE IN THIS FILE IS FALSE AND HAS BEEN CORRECTED TO AGENT (A).**
+                       This file said master was green in the CI form. IT IS NOT.
+                       MEASURED by the orchestrator on master @1d07627b9, clean tree, stdin from
+                       /dev/null, from the REPO ROOT:
+                         Tests: 10421, Assertions: 161280, Errors: 1, Failures: 1, Skipped: 1.
+                       sugar-crush/tests/Agents/AgentTest.php::testSystemPromptMatchesCommittedGolden
+                       FAILS at AgentTest.php:355 in that form, IN ISOLATION, ON MASTER, with no
+                       P3.S5 involved. Its own assertion message says the fixture repo resolves from
+                       a RELATIVE path (vendor/prompt-fixture/agent-repo) and that you must "run
+                       phpunit from sugar-crush/". So MASTER IS ALREADY CWD-SENSITIVE.
+                       ci.yml has NO working-directory: and NO defaults: anywhere — verified — so
+                       either CI is red on master today, or the CI form is not what CI runs.
+                       AGENT (B) IS RESOLVING THIS. Until it reports, do NOT claim in any commit
+                       message, comment or worklog entry that P3.S5 "unblocks CI" or that master is
+                       green in the CI form. Both are unproven and the second is measured false.
+                       The P3.S5 inversion is still correct and still wanted on its own merits —
+                       P3.S5 genuinely inverts that assertion's premise and §1.10 requires the
+                       assertion be inverted rather than deleted.
 
 Live worktrees:   /home/sites/sugarcraft         master, clean, at the commit above
                   /home/sites/prompt-step-P3.S5  prompt/P3.S5 @ d046550d3, 6 commits, NO AGENT
