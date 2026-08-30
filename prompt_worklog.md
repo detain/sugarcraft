@@ -253,6 +253,123 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### CI-fix-1 — sys_get_temp_dir() caches on FIRST RESOLUTION, not at startup   ·   2026-08-30   ·   merged 72686c380 (branch HEAD 1fcf8bb42, 1 commit)
+
+**Status** `merged`. **This clears the LAST red test on CI.**
+**Worktree** /home/sites/prompt-step-CI-fix-1 — REMOVED after the merge per §1.12 (tree clean,
+`master..HEAD` empty, nothing untracked outside vendor); branch deleted with `git branch -d`.
+**Files** tests/bootstrap.php · tests/SuiteTempSandboxContractTest.php
+
+**THE TEST WAS RIGHT AND CI WAS RIGHT TO BE RED.** `SuiteTempSandboxContractTest`'s claim 1 —
+"`putenv('TMPDIR=…')` does NOT move `sys_get_temp_dir()` in the process that calls it" — is FALSE.
+PHP caches its temporary directory on the FIRST RESOLUTION, reading `getenv('TMPDIR')` at that
+moment, not at startup as the comment claimed. So `putenv` participates or not purely on whether
+anything already asked:
+
+```
+TMPDIR=/tmp php -n -r '$b=sys_get_temp_dir(); putenv("TMPDIR=$T"); echo sys_get_temp_dir();'  -> /tmp
+TMPDIR=/tmp php -n -r 'putenv("TMPDIR=$T"); echo sys_get_temp_dir();'                         -> $T
+```
+
+**THIS ENTRY RETRACTS A RECORDED NON-REPRODUCTION.** This failure stood in the follow-up list for
+days as "fails on CI but reproduces locally from NEITHER cwd … INFERRED runner-specific
+(TMPDIR/sys_get_temp_dir)". It reproduces in one command. The cwd was never the variable — the
+EXTENSION SET was, and nobody had varied it. Bisecting `/etc/php/8.3/cli/conf.d/*.ini` one extension
+at a time, INDEPENDENTLY by the orchestrator and by the step agent: **swoole is the ONLY masking
+extension**, and it masks by WARMING, not by overriding — it does not set the `sys_temp_dir` ini, and
+a launch-environment `TMPDIR` is still honoured under it. CI has no swoole.
+
+**A TRAP THE STEP AGENT FOUND AND THE ORCHESTRATOR HAD NOT.** Running the SUITE under `php -n` does
+NOT reproduce CI. The probes are children spawned as `[PHP_BINARY, '-r', …]`, which re-read the full
+ini set and come back WARM. The faithful simulation is `PHP_INI_SCAN_DIR` pointed at a copy of
+`conf.d` minus `20-swoole.ini`, which every child inherits with the other extensions intact. The
+orchestrator's own first instinct (`php -n`) would have produced a false green.
+
+**WHAT WAS ACTUALLY FIXED, AND WHY IT IS NOT A WEAKENED TEST.** The suite's real requirement was
+never claim 1. It is that in-process `sys_get_temp_dir()` stays on the real temp directory (for
+`ToolIpcFiles::reserve()` and `tasklist_test_*.sqlite3`) while children get the sandbox — and that
+STILL HOLDS on a cold cache, because `bootstrap.php` resolves (building `$sandbox`) BEFORE it
+exports. **Nobody had written that down.** So E242's conclusion survives and its REASON changes: it
+used to rest on an interpreter guarantee that does not exist, and now rests on an ordering the
+bootstrap controls. Strictly better — true by construction on any extension set rather than by
+accident on this one — and strictly more fragile, because a refactor can break it. It is therefore
+now PINNED rather than assumed.
+
+The contract file goes 3 tests / 19 assertions → **5 / 40**. Claim 1 is replaced by what is true,
+asserted on BOTH the ambient and the cold interpreter and REQUIRED TO AGREE — "deterministic on any
+extension set" being exactly what the old version failed to be. A new test requires the two orderings
+to DISAGREE on a cold interpreter, which is the whole reason `bootstrap.php` may not be reordered and
+is invisible warm. The ordering is asserted three ways: in-process, against an ABSOLUTE ANCHOR (a
+child handed the launch `TMPDIR` from `/proc/self/environ`), and over `bootstrap.php`'s own TOKEN
+STREAM.
+
+**A RENAME IS INVOLVED, AND IT IS ACCEPTED DELIBERATELY.** `testPutenvDoesNotMoveTheCallingProcesses
+TempDirectory` no longer exists, and "rename-out" is on §7's forbidden list. **This is not the
+forbidden move.** Its true half (late-putenv plus the known-positive control) is preserved and
+strengthened inside `testResolutionIsCachedOnTheFirstCallSoALaterPutenvCannotMoveIt`, and the
+behaviour its false half DENIED is now pinned more strongly than before — net 3→5 tests, 19→40
+assertions. The old NAME asserted the false claim, so keeping it would have preserved the error in
+the one place a reader looks first. **The step agent flagged the rename itself rather than letting it
+pass quietly, and that is the reason it is accepted** — the forbidden move is making a failing test
+disappear, not correcting a name that lies.
+
+**DELETION EXPERIMENTS, with their exact text.**
+1. Master's file on the cold interpreter reds with CI's message VERBATIM, line number included.
+2. **Hoist the putenv above the resolve** — cold: `this process resolved a DIFFERENT temp directory
+   than its launch environment names … -'/tmp' +'/tmp/sc_suite_tmp_hoisted'` (:220); warm, the
+   token-stream half instead: `Failed asserting that 108 is less than 85`. **THIS ONE CHANGED THE
+   DESIGN:** it showed the in-process assertions are only SELF-CONSISTENT — a bad bootstrap corrupts
+   the captured value, `sys_get_temp_dir()` and the sandbox together and all three still agree —
+   which is why the launch-environment anchor exists at all.
+3. **Drop the `$GLOBALS` publication** — `the bootstrap did not publish the temp directory it
+   resolved / Failed asserting that null is of type string` (:191).
+4. **Drop `-n` from the reversed probe** — `export-then-resolve did NOT move sys_get_temp_dir() on a
+   cold interpreter…`, i.e. swoole's warming observed from inside the harness.
+
+**MEASURED BY THE ORCHESTRATOR, stdin from /dev/null, at `1fcf8bb42`. Four runs, all agreeing:**
+
+| configuration | result |
+|---|---|
+| checkout root (CI's cwd), ambient | `Tests: 10454, Assertions: 161697, Skipped: 1.` |
+| from `sugar-crush/`, ambient | `Tests: 10454, Assertions: 161697, Skipped: 1.` |
+| checkout root, **CI-SHAPE (no swoole)** | `Tests: 10454, Assertions: 161697, Skipped: 1.` |
+| contract file alone, BOTH shapes | `OK (5 tests, 40 assertions)` |
+
+The CI-shape interpreter was built and verified independently by the orchestrator
+(`PHP_INI_SCAN_DIR` → `conf.d` minus `20-swoole.ini`; `swoole=false`, `uv=true`, 72 extensions), and
+**master's version of the file was confirmed to RED on it with CI's exact failure text before the
+fixed file was run**. THE FULL SUITE IS GREEN ON THAT INTERPRETER and byte-identical to the ambient
+run — the strongest evidence available here short of pushing, and it also establishes that swoole's
+presence changes nothing else in this suite.
+
+`+2` tests / `+24` assertions over master's `10452/161673`, fully accounted: `+2/+21` from this file,
+`+3` from per-site census tests in `tests/Support` that now see one more subject file.
+
+**AN ORCHESTRATOR ERROR THE AGENT CAUGHT.** The brief gave the baseline as `Tests: 10452, Assertions:
+161663` — that is CI's assertion figure, not this box's. This box measures `161673` at `f95546b10`,
+which is what the orchestrator had itself measured an hour earlier. The agent re-measured rather than
+trusting the brief and reported the discrepancy. **This is the second time in two days that a figure
+recorded without its provenance has misled someone**, and it is the same root cause as the five-day
+CI blindness: a number copied without recording where it came from.
+
+**OUT OF SCOPE, REPORTED NOT REPAIRED (§1.10).** `src/Hooks/BuiltIn/AuditHook.php:103-105` carries
+`MEASURED, PHP 8.3.6: putenv('TMPDIR=…') followed by sys_get_temp_dir() still answers /tmp, because
+PHP resolves and caches the temp directory once per process.` That measurement was taken WARM; on a
+cold interpreter the same sequence answers the new directory. The SEAM argument it justifies is
+unaffected — an explicit seam is still right — but the reason given for it is now known false.
+`src/` was deliberately left alone. VERIFIED by the orchestrator by reading the file.
+`ToolIpcFiles.php:290` says only "once per process", which is correct as written;
+`ScriptHookTest.php:1381/1481` already say it correctly. **Needs a small step.**
+
+**NOT MEASURED.** PHP 8.4, which CI also runs and this box does not have — the new tests are written
+so 8.4 answers for itself. And "CI has no swoole" remains **INFERRED**: from the failure reproducing
+exactly when and only when swoole is removed here, not from reading CI's extension list.
+`php-cs-fixer` is not installed on this box and is not vendored anywhere in the tree, so the style
+gate could not be run; `php -l` is clean on both files and
+`php tools/check-path-repos.php --no-lib-path-repos` exits 0.
+
+---
+
 ### PLAN-FIX-1 — schedule P3.S6, fix three stale citations, retract the plan's false CI claim   ·   2026-08-30   ·   54ec6f7fd
 
 **Status** `merged`. Orchestrator bookkeeping only — `prompt_plan.md`, no `src/` or `tests/` change,

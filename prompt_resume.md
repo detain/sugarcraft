@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3. P3.S5 merged (405252a41), P2.audit-fix-1 fully merged (33df838d0 + f95546b10). Master GREEN LOCALLY both cwds at 10452/161673; origin/master still RED ON CI on one test whose root cause is FOUND. **TWO AGENTS RUNNING** (CI-fix-1, P1.audit-fix-3). The user has ANSWERED two of the three standing decisions. Start at §8 'Next step'.**
+**Current state: Phase 3. CI-fix-1 IS MERGED (72686c380) and the LAST red test on CI is fixed — the full suite is green from both cwds AND on a CI-shape interpreter. P3.S5 merged (405252a41), P2.audit-fix-1 fully merged. ONE AGENT RUNNING (P1.audit-fix-3, the user-authorised Gemini arm). Start at §8 'Next step'.**
 
 ---
 
@@ -246,55 +246,30 @@ Phase:            3. P3.S1-S5 all MERGED. P3.S6 newly SCHEDULED (see below).
 Next step:        **WAIT for the running agent. Then: CI, then the Phase 3 close queue.**
 
                   ==================================================================
-                  0. TWO AGENTS ARE RUNNING. Verify each yourself before merging.
-                     They are DISJOINT (CI-fix-1: tests/bootstrap.php +
-                     SuiteTempSandboxContractTest.php · P1.audit-fix-3:
-                     src/Providers/VertexProvider.php + its two test files), so
-                     they cannot conflict and either may be merged first.
+                  0. ONE AGENT IS RUNNING — P1.audit-fix-3. Verify it yourself.
                   ==================================================================
-                  Worktree /home/sites/prompt-step-CI-fix-1, branch prompt/CI-fix-1,
-                  based on master f95546b10, vendor/ hardlinked and PSR-4 root VERIFIED
-                  to resolve into the worktree. Find it with ListAgents; continue it
-                  with SendMessage. §1.8: a blank/aborted/rate-limited return means it
-                  DIED — never a result, never write its report for it.
+                  CI-fix-1 is DONE and MERGED (72686c380); its worktree and branch
+                  are gone. See its worklog entry. Two things from it you will want:
 
-                  WHAT IT IS FIXING. origin/master is RED on CI with exactly ONE
-                  failure, and it is the only thing keeping CI red:
-                    SuiteTempSandboxContractTest
-                      ::testPutenvDoesNotMoveTheCallingProcessesTempDirectory
-                    "putenv() before the first call DID move sys_get_temp_dir(); the
-                     bootstrap comment is now wrong and every in-process temp path in
-                     this suite has moved with it"   at that file :64
-                    CI: Tests: 10452, Assertions: 161663, Failures: 1, Skipped: 1.
+                  **THE CI-SHAPE INTERPRETER — keep this, it is reusable.** This box
+                  has swoole and CI does not, and swoole WARMS PHP's temp-dir cache at
+                  module init, which masked a real failure for days. To run anything as
+                  CI would:
+                    SC=<scratchpad>; mkdir -p $SC/ci-ini
+                    cp /etc/php/8.3/cli/conf.d/*.ini $SC/ci-ini/ && rm -f $SC/ci-ini/20-swoole.ini
+                    PHP_INI_SCAN_DIR=$SC/ci-ini php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
+                  Verify it took: `swoole=false`, `uv=true`, 72 extensions.
+                  **`php -n` IS NOT A SUBSTITUTE** — child processes spawned as
+                  [PHP_BINARY,'-r',...] re-read the full ini set and come back WARM, so
+                  `-n` on the suite gives a FALSE GREEN. PHP_INI_SCAN_DIR is inherited;
+                  `-n` is not.
 
-                  ROOT CAUSE — FOUND, and it OVERTURNS what this file used to say.
-                  This was recorded for days as "fails on CI, does not reproduce
-                  locally from either cwd." THAT WAS FALSE. It reproduces instantly:
-                    T=/tmp/probe; mkdir -p $T
-                    TMPDIR=/tmp php    -r 'putenv("TMPDIR=$T"); echo sys_get_temp_dir();'
-                      -> /tmp        (pinned — what this box does)
-                    TMPDIR=/tmp php -n -r 'putenv("TMPDIR=$T"); echo sys_get_temp_dir();'
-                      -> /tmp/probe  (MOVED — exactly CI's failure)
-                  `php -n` reproduces CI. Bisecting /etc/php/8.3/cli/conf.d/*.ini one
-                  extension at a time: the ONLY extension that masks it on this box is
-                  **swoole** (20-swoole.ini). NOT opcache, NOT pcov. PHP 8.3.6,
-                  sys_temp_dir ini empty. MECHANISM: PHP caches its temp dir on first
-                  resolution; swoole's module init resolves it during startup, so the
-                  cache is warm before user code runs and a later putenv cannot move
-                  it. CI has no swoole -> cold cache -> putenv wins.
-                  **So the test is NOT flaky. It is correctly reporting that its own
-                  claim 1 is false** — the claim holds only when some extension
-                  happened to warm the cache first.
-
-                  ITS ACCEPTANCE BAR (run it yourself, stdin from /dev/null):
-                    cd /home/sites/prompt-step-CI-fix-1 && php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
-                    cd /home/sites/prompt-step-CI-fix-1/sugar-crush && php vendor/bin/phpunit -c phpunit.xml --colors=never </dev/null
-                  Both green, numbers IDENTICAL, not below Tests: 10452, Assertions:
-                  161673, Skipped: 1. **AND it must prove the fix on a COLD-CACHE
-                  build** (the -n / no-swoole form), because a fix that is green on
-                  this box and unproven cold has not fixed CI. Send it back if not.
-                  DO NOT accept a fix that weakens, skips, or environment-gates the
-                  assertion — that is the forbidden move here and the brief says so.
+                  **A STANDING LESSON.** This failure sat in the follow-up list for days
+                  as "does not reproduce locally from either cwd, INFERRED
+                  runner-specific." It reproduced in ONE command. The cwd was never the
+                  variable; the EXTENSION SET was, and nobody had varied it. When a
+                  failure is CI-only, vary the interpreter before concluding it is the
+                  runner.
 
                   0b. **P1.audit-fix-3 — THE GEMINI ARM. USER-AUTHORISED FEATURE.**
                      Worktree /home/sites/prompt-step-P1.audit-fix-3, branch
@@ -368,7 +343,7 @@ Next step:        **WAIT for the running agent. Then: CI, then the Phase 3 close
                         manufacture a loop in order to have something to wire.
                      d. **THEN the Phase 3 close review** (§1.7), cap three cycles.
 
-Steps done:       22 of 63 merged. P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f ·
+Steps done:       22 of 63 merged (plus audit-fix sub-steps, which are not in the 63). P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f ·
                   P3.S4 f2af06eaa · P3.S5 405252a41 · retro-fixes P3.audit-fix-1 6aff0bad1,
                   P1.audit-fix-1 03d8fed37, P2.audit-fix-1 33df838d0 + f95546b10 (cycle 4).
 Phases done:      3 of 12  (Phase 3 is NOT closed — see the close queue above)
@@ -377,14 +352,17 @@ Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never ed
 
 Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers for weeks without
                   doing so, and that is exactly what hid CI being red for five days.**
-                  MASTER @ f95546b10 (P3.S5 + P2 cycle-4 both merged), stdin from /dev/null:
-                    checkout root (= CI's cwd): Tests: 10452, Assertions: 161673, Skipped: 1. GREEN
-                    from sugar-crush/:          Tests: 10452, Assertions: 161673, Skipped: 1. GREEN
-                  IDENTICAL from both cwds. That combination is proven by neither branch
-                  alone: P2.audit-fix-1 moved both goldens, P3.S5 changed the assembly
-                  path that produces them.
-                  **BUT CI IS STILL RED** on the one test in item 0. Green here is not
-                  green there — this box has swoole and CI does not.
+                  MASTER @ 1fcf8bb42/72686c380 (CI-fix-1 merged), stdin from /dev/null.
+                  FOUR runs, all agreeing:
+                    checkout root (= CI's cwd), ambient:  Tests: 10454, Assertions: 161697, Skipped: 1.
+                    from sugar-crush/, ambient:           Tests: 10454, Assertions: 161697, Skipped: 1.
+                    checkout root, CI-SHAPE (no swoole):  Tests: 10454, Assertions: 161697, Skipped: 1.
+                    contract file alone, BOTH shapes:     OK (5 tests, 40 assertions)
+                  **CI SHOULD NOW BE GREEN.** The full suite passing on the CI-shape
+                  interpreter, byte-identical to ambient, is the strongest evidence
+                  available short of pushing — and master's old file was confirmed to RED
+                  on that same interpreter with CI's exact failure text first.
+                  Previous master (f95546b10): 10452/161673 both cwds.
                   **CI/local assertion counts are NOT comparable.** CI counted 161663 at
                   405252a41 where this box counts 161655 — 8 MORE — because the two
                   environments gate different tests (FFI/pty/extension paths) and a
@@ -400,16 +378,14 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                   (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect
                   stdin from /dev/null.
 
-In-flight batch:  TWO agents, disjoint file lists, either may merge first.
-                    CI-fix-1        /home/sites/prompt-step-CI-fix-1        @ f95546b10
-                    P1.audit-fix-3  /home/sites/prompt-step-P1.audit-fix-3  @ f0e80960a
-                  See "Next step" items 0 and 0b.
+In-flight batch:  ONE agent — P1.audit-fix-3, /home/sites/prompt-step-P1.audit-fix-3 @ f0e80960a.
+                  See "Next step" item 0b. CI-fix-1 closed and merged.
 
 Live worktrees:   /home/sites/sugarcraft            master, at the commit above
-                  /home/sites/prompt-step-CI-fix-1  prompt/CI-fix-1 @ f95546b10,
-                                                    AGENT WORKING IN IT — do not remove
                   /home/sites/prompt-step-P1.audit-fix-3  prompt/P1.audit-fix-3 @ f0e80960a,
                                                     AGENT WORKING IN IT — do not remove
+                  (CI-fix-1's worktree was removed 2026-08-30 after its §1.12 checks;
+                   branch deleted with `git branch -d`.)
                   /home/sites/crush-lane-{a,b,c}    NOT this plan's — leave alone
                   (P3.S5 and P2.audit-fix-1 worktrees were REMOVED 2026-08-30 after
                   their §1.12 checks; their branches deleted with `git branch -d`.)
@@ -430,7 +406,17 @@ Awaiting user decision: NONE OUTSTANDING. All three were ANSWERED 2026-08-30. Re
                     (3) the misnamed test -> **user approved the rename.** Folded into
                         P3.S5-fix-1; see item 2b.
 
-Open follow-ups:  **VertexProvider legacy arm, TWO defects, both now unblocked as ordinary steps.**
+Open follow-ups:  **AuditHook carries a measurement that is now known false.**
+                  src/Hooks/BuiltIn/AuditHook.php:103-105 says `MEASURED, PHP 8.3.6:
+                  putenv('TMPDIR=…') followed by sys_get_temp_dir() still answers /tmp, because PHP
+                  resolves and caches the temp directory once per process.` That was measured WARM;
+                  on a cold interpreter the same sequence answers the NEW directory. The SEAM
+                  argument it justifies is unaffected — an explicit seam is still right — but the
+                  reason given for it is false. VERIFIED by the orchestrator by reading the file.
+                  ToolIpcFiles.php:290 ("once per process") is correct as written, and
+                  ScriptHookTest.php:1381/1481 already say it correctly. Small step, src/ only.
+
+                  **VertexProvider legacy arm, TWO defects, both now unblocked as ordinary steps.**
                   (i) `formatMessages()` emits `role` where the instances envelope's authority spells
                   it `author` (`ChatMessage` struct: `Author string json:"author"`). Deferred
                   originally because fixing it changes a body pinned by the green
