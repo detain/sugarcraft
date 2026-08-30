@@ -253,6 +253,208 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P2.audit-fix-1 — the golden prompt tests no longer depend on the cwd, and CI goes green   ·   2026-08-30   ·   merged 33df838d0 (branch HEAD e2e7805be, 3 commits)
+
+**Status** `merged` — but see Follow-ups: a cycle-4 fix agent is STILL RUNNING on this branch and its
+commit is NOT in this merge. The branch will move ahead of what was merged; merge it a SECOND time to
+pick up the delta.
+**Worktree** /home/sites/prompt-step-P2.audit-fix-1 (KEEP — agent working in it)
+**Base** b56d67181
+**Files** tests/BaseSystemPromptTest.php · tests/Agents/AgentTest.php · both golden fixtures.
+`src/Runtime.php` was deliberately EXCLUDED to stay disjoint from the in-flight prompt/P3.S5.
+
+**Why this step existed at all.** It was queued as an RR3 follow-up, then re-scoped when the
+orchestrator discovered CI had been RED on origin/master since 2026-08-27 and that THIS PLAN broke it.
+See commit 9141db7ff for the full investigation.
+
+**What was wrong.** The last three CI runs on origin/master were `failure`; failing jobs exactly
+`Test PHP 8.3 · sugar-crush`, `Test PHP 8.4 · sugar-crush`, `Coverage · sugar-crush`. Last green
+master run 2b53302af (2026-08-25). Both failures were introduced by this plan's OWN Phase 2 steps —
+`8fa2721d9` (P2.S3) and `d19f06665` (P2.S2) — and the cwd sensitivity was born with each test.
+
+**Mechanism.** `AgentTest.php:459` materialises the fixture repo at a `__DIR__`-anchored ABSOLUTE
+path; `AgentTest.php:417` passed a RELATIVE cwd to `EnvironmentBlock` (deliberately — it is what keeps
+the committed golden host-independent); `EnvironmentBlock::isGitRepo()` is
+`file_exists($this->cwd . '/.git')` against the PROCESS `getcwd()`. From the checkout root that is
+false, so the whole git section vanished while the golden asserted `Is directory a git repo: Yes`.
+Separately `BaseSystemPromptTest.php:737` handed `MemoryStore` a relative fixture path that throws
+from the checkout root — the unexplained `Errors: 1`.
+
+**Fix.** `inPackageRoot()`, byte-identical in both files: walk up from `__DIR__` (never `getcwd()`) to
+the dir holding `composer.json`, run the render there, restore cwd in a `finally`.
+INVARIANT: the golden render always executes at the package root, whatever cwd the process was
+launched from. Verified from the checkout root, `sugar-crush/`, and `/`.
+
+**MEASURED by the orchestrator, stdin from /dev/null:**
+* branch @ e2e7805be — checkout root: `Tests: 10427, Assertions: 161455, Skipped: 1.`
+* branch @ e2e7805be — from `sugar-crush/`: `Tests: 10427, Assertions: 161455, Skipped: 1.`
+  IDENTICAL from both cwds, 0 failures, 0 errors.
+* master BEFORE — checkout root: `Tests: 10421, Assertions: 161280, Errors: 1, Failures: 1, Skipped: 1.`
+* master BEFORE — from `sugar-crush/`: `Tests: 10421, Assertions: 161281, Skipped: 1.`
+* **master AFTER the merge @ 33df838d0 — checkout root: `Tests: 10427, Assertions: 161455, Skipped: 1.`**
+  The second-cwd confirmation run was still in flight when this entry was written — RE-RUN IT.
+* Goldens: `7efcc488…`→`32ea749d…` and `81626993…`→`ef0326dd…`.
+
+**The golden change is legitimate and was verified as such.** 4 lines total, `OS version:` /
+`PHP version:` → `<host>`. It STRIPS generator-host bytes (`Linux 6.8.0-138-generic`, `8.3.6`) that
+were baked into the committed goldens and would have mismatched on CI's own PHP 8.4 job. Golden
+neutrality of the cwd fix was proven separately: with master's goldens restored and ONLY the cwd pin
+applied, `OK (2 tests, 4 assertions)` from the checkout root. That is the opposite of
+regenerate-to-silence.
+
+**Also landed.** RR3 F2 — both golden leak scans were vacuous (an emptied golden passed; the
+absolute-path check was line-anchored so it saw only column 0). Now landmark + committed byte counts
+(1060/5176) + a shape-based `hostPathLeaks()` + a known-positive control. RR3 F8 — `pinHostLines()`
+now masks the RENDERED side only; goldens carry `<host>`; the mask is `(?=.*\S).*` so an
+empty/whitespace value no longer passes. RR3 F9 — closed; `'linux'` injected via `EnvironmentBlock`'s
+4th ctor arg, `Platform` mask dropped, `'darwin'` now reds.
+
+**Deletion experiments** 18 run. TWO caught the agent's own decorative work: the restoration test was
+green with the `finally` deleted until it was made to chdir first; and cycle 2 showed the whole
+scanner could be replaced by a hardcoded `/var/www` literal with zero test movement.
+
+**Review loop** 3 cycles, cap reached.
+
+**Surprises**
+1. The orchestrator's own brief overstated item 2: an emptied golden was never invisible to the
+   SUITE — `testSystemPromptMatchesCommittedGolden` reds. Item 2(a) bought falsifiability of one test
+   read alone, at the cost of two hand-maintained byte counts. (Agent's finding 6, accepted.)
+2. `AgentTest.php:347`'s `assertDirectoryExists` message blames a materialisation failure that CANNOT
+   happen (line 459 is `__DIR__`-anchored). It sent the orchestrator down the wrong path initially.
+
+**Scope deviation, disclosed and ACCEPTED by the orchestrator.** The brief said to report
+`AgentTest.php:347`'s message as an observation, not fix it. The agent fixed it in both files, because
+its own cwd pin made that message's "run phpunit from sugar-crush/" guidance actively wrong. Leaving
+it would have shipped a false instruction. Both files are in the declared list, so this is not a
+file-scope violation.
+
+**Escalated, still open** — `OS version:` / `PHP version:` are `php_uname()` / `PHP_VERSION` and are
+NOT injectable, so they still need a mask rather than injection. Making them injectable the way P2.S1
+did for platform needs `src/Context/EnvironmentBlock.php`, outside the declared list.
+
+**Follow-ups (STANDING FINDINGS, cycle 3, cap reached — cycle 4 was dispatched, DIED on a session
+rate limit having done no work, and has been RESUMED; see prompt_resume.md §8):**
+1. **`hostPathLeaks()` misses a path on a DELETED diff line.** `BaseSystemPromptTest.php:1460`,
+   `AgentTest.php:1102`. The `-` in the lookbehind `(?<![\w.~\\<-])` makes `-/opt/ci/build`
+   invisible, and `/^\//m` misses it too (the `-` is at column 0). `<env>` EMBEDS DIFF BODIES, so this
+   is the likeliest real leak shape. MEASURED unexercised: removing the `-` leaves
+   `OK (41 tests, 354 assertions)`. Fix: `[\w.~\\<-]` → `[\w.~\\<]` plus table rows.
+2. `~` and the trailing `/?` are also unexercised — dropping either leaves the same total.
+3. `AgentTest.php:393/401/1025` prose is false for its own file: says "six literals… `/test/`";
+   AgentTest has FIVE and never had `/test/`.
+4. ~470 duplicated lines across the two files; `DuplicatedTestHelperDriftTest` (`DRIFT_BOUND=1`) is
+   blind to the many-token regex divergence that would actually happen. Needs `tests/Support/` — OUT
+   OF SCOPE.
+5. `AgentTest`'s leak scan has no mid-body structural landmark, only the byte count.
+6. (Forward-looking) `hostPathLeaks()` now scans base-prompt prose; a future sentence containing
+   `/etc/hosts` or `[x](/docs/y)` will red with a misleading message.
+
+**Not checked** php-cs-fixer (not on PATH); PHP 8.4; the GitHub CI run states (agent had no network —
+the orchestrator verified those separately).
+
+---
+
+### P3.S5 — Wire the write-signal into the engine loop   ·   2026-08-30   ·   VERIFIED, NOT YET MERGED (branch HEAD 310deb392)
+
+**Status** `verified-ready-to-merge`. Supersedes the earlier `blocked` entry further down this file.
+**Worktree** /home/sites/prompt-step-P3.S5 (branch prompt/P3.S5 @ 310deb392, tree clean, vendor/ ok)
+**Merge base** 7c0ab6954. **Files** src/Runtime.php · src/Backend/EngineBackend.php ·
+tests/Integration/SystemPromptWiringTest.php · tests/RuntimeTest.php
+
+**How the block was cleared.** The step was `blocked (scope-escalation)`: it deliberately inverts an
+invariant pinned by `tests/Integration/SystemPromptWiringTest.php:232`, which was OUTSIDE its declared
+list. The orchestrator VERIFIED the block was real (branch green from `sugar-crush/`, `Failures: 1`
+from the checkout root; ci.yml has no `cd`/`working-directory:`/`defaults:`), then WIDENED the declared
+list by exactly that one file and ran four more cycles.
+
+**IMPORTANT CORRECTION.** The blocker was recorded as "merging P3.S5 as-is WOULD RED CI." That framing
+was wrong: CI was ALREADY red on master from two earlier Phase-2 steps. P3.S5 would have added a THIRD
+instance of the same cwd-sensitivity class. A fresh reviewer verified specifically that **the branch
+introduces no new red in the CI form.**
+
+**Escalation commits** `99dd19c12` (the inversion) → `644838652` (c1) → `974ef971a` (c2) →
+`efc58cfb8` (c4) → `310deb392` (c5).
+
+**MEASURED by the orchestrator at 310deb392, stdin from /dev/null:**
+* `SystemPromptWiringTest` — checkout root: `OK (11 tests, 75 assertions)`
+* `SystemPromptWiringTest` — from `sugar-crush/`: `OK (11 tests, 75 assertions)`
+  (was `Failures: 1` from the checkout root before the inversion)
+* census 6-file set: `OK (103 tests, 9448 assertions)`
+* `tests/RuntimeTest.php`: `OK (112 tests, 398 assertions)`
+* golden-system-prompt.txt md5: `7efcc4882f0597440518fc02799a923a` — UNCHANGED (note: this predates
+  the P2.audit-fix-1 merge, which moves it to `32ea749d…`; re-verify after merging)
+* full suite from `sugar-crush/` (agent+reviewer): `Tests: 10446, Assertions: 161478, Skipped: 1.`
+
+**The surviving invariant.** The suppressed step's prompt == the emitting step's prompt truncated at
+`"\n\nStaged changes (git diff --cached, index vs HEAD):"` plus `"\n</env>"`. Every byte before the
+cut — the frozen triple included — is still pinned byte-for-byte, and THE TWO GIT DIFF SECTIONS ARE
+THE ONLY LICENSED MID-TURN DIFFERENCE. Marker pinned to occur exactly 1× in the emitting prompt and 0×
+in the suppressed one; the tail pinned by an anchored regex (`\z`, no `/s`, `[^\n]*` cannot cross a
+line).
+
+**Deletion experiment** deleting `$runtime->markWriteSinceLastRender(...)` from
+`EngineBackend::complete()`'s loop reds from BOTH cwds:
+`the suppressed step must carry no staged-diff section at all / Failed asserting that 1 is identical
+to 0.` `EngineBackend.php` restored, md5 `d80a9418c584a36bd9b2b9b65c213caf`.
+
+**§1.10 ESCALATIONS — recorded here because a cycle-4 reviewer correctly found they existed ONLY in a
+commit message and a docblock, which §1.10 forbids:**
+1. **The test method NAME now asserts the opposite of what it pins.**
+   `testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt`. The rename needs `src/Runtime.php` in the same
+   diff (the citation lives there). MEASURED: nothing in the tree would catch a stranded citation if
+   the rename shipped alone — see escalation 2. **Needs a user/orchestrator decision; not done.**
+2. **`SymbolCitationDriftTest` has a hole.** MEASURED: a PATH-PREFIXED backticked citation
+   (`` `tests/Integration/SystemPromptWiringTest::testFoo()` ``) is INVISIBLE — fabricating the method
+   name leaves it `OK (7 tests, 2952 assertions)`; the same fabrication without the path prefix reds
+   it. ROOT CAUSE FOUND: the backtick scraper at `tests/SymbolCitationDriftTest.php:290` is
+   `` /`([A-Za-z0-9_\\]+(?:::[A-Za-z0-9_]+(?:\(\))?)?)`/ `` — no `/` in the class part. The one
+   citation in `Runtime.php` was respelled to the policed form (proven with a 3-run known-answer
+   experiment); **every other path-prefixed citation in the tree is still unpoliced. Needs its own
+   step.**
+3. **The cross-turn promise is undeliverable on this file list.** `EnvironmentBlock.php:110-114`
+   promises "a quiet turn earns a quiet opening", which is CROSS-turn. `EngineBackend::completeAsync()`
+   forks, and the child builds a fresh `Runtime` per turn (`EngineBackend.php:547`), so the signal
+   cannot survive without being sent back over the socket. Stated in code at `Runtime.php:508-518`.
+4. **THE SECOND ASSEMBLER keeps the old behaviour and its full cost.** `EnvironmentBlock` has FOUR
+   production construction sites; this step flips only the `Runtime` one. The other three feed
+   `Agents\Agent::systemPrompt()`, which is NOT memoised there and pays FIVE git subprocesses per
+   render (3 when suppressed) — MEASURED with a logging `git` shim; `capture()` itself runs ZERO.
+   Stated in code at `Runtime.php:546-561`. **Still owed: EITHER schedule a P3.S6 for the Agent
+   assembler OR add a §18 row saying why the Agent path deliberately keeps the diff. DO NOT CLOSE
+   PHASE 3 WITH THIS GAP UNRECORDED.**
+
+**Surprises**
+1. The preserved escalation patch's justification for its `$cut === false` branch was WRONG. It said
+   "getcwd() is not a repository"; `sugar-crush/` IS inside the sugarcraft repo. Real cause:
+   `EnvironmentBlock::isGitRepo()` is a bare `file_exists($cwd . '/.git')` and `sugar-crush/.git` does
+   not exist. The branch was then removed entirely — the test now FORCES its git regime with
+   `mkdir($this->tempDir . '/.git')` + `withRoot()` instead of inheriting one from cwd.
+2. A cycle-1 reviewer's prescribed fix was REJECTED after measurement: `assertSame(2,
+   substr_count($tail, "\n\n"))` returns 4 on a dirty tree.
+3. `$perStepRerender` has NO Runtime-only half — it needs `EnvironmentBlock.php` AND `Agents/Agent.php`
+   and it MOVES the golden. An earlier claim in prompt_resume.md that P3.S5 could do it was WRONG.
+4. Two comments this branch itself ADDED were false and had to be corrected in cycle 5 — including one
+   contradicting a measurement already committed to this repo (P3.S4 Escalation 3): the branch line is
+   NOT a `gitField()` call, so it renders an EMPTY `Current branch:` rather than a failure marker
+   (`EnvironmentBlock.php:853-855` uses `shell_exec` with no exit check).
+5. `src/Runtime.php:536-544` shipped a §16.1 gap-record that had come to INVERT the truth — it still
+   said the assertion "needs INVERTING, not deleting" and "goes RED on this branch" after that work was
+   done on that same branch. Cycle 5 rewrote it as the record of the fix rather than deleting it.
+
+**Follow-ups** cycle-3 findings 3 (the reconstruction block is duplicated with `RuntimeTest.php:1926-1932`
+and the two copies have ALREADY drifted — the RuntimeTest copy cuts on a truncated marker with no
+uniqueness guard; needs `tests/Support/`) and cycle-4 finding 7 (the `\z` anchor and the
+`assertNotFalse($cut)` are both defence-in-depth and cannot red against today's code — honestly
+recorded as such).
+
+**HIGH / SECURITY, PRE-EXISTING, recorded from a cycle-4 review — see commit f571e59b5.** The `<env>`
+diff sections are an UNROSTERED fence-escape vector. An unstaged edit to any tracked file containing
+`</env>` forges the fence (MEASURED: 3 closing fences vs 2 opening), and P3.S5's re-arm rule guarantees
+the diff renders on the step right after a write. Fold into P5.S3.
+
+---
+
+
 ### RETRO-FIX-1 — restore the repo-root .gitattributes rules the Phase 2 close deleted   ·   2026-08-29   ·   (this commit)
 
 **Status** `done`
