@@ -23,6 +23,7 @@ use SugarCraft\Crush\Permissions\DenialKind;
 use SugarCraft\Crush\Support\ForkedChild;
 use SugarCraft\Crush\Support\ToolIpcFiles;
 use SugarCraft\Crush\Tools\CarriesSessionState;
+use SugarCraft\Crush\Tools\McpToolBridge;
 use SugarCraft\Crush\Tools\ParallelSafe;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -283,9 +284,35 @@ final class Runtime
     /**
      * MCP tool-name prefix — an `mcp__<server>__<tool>` call's capability is
      * server-defined and unknowable in this process, so it counts as a write.
-     * Same judgement, and the same spelling, as `PermissionGate::isWriteTool()`.
+     * Same judgement as `PermissionGate::isWriteTool()`.
+     *
+     * READ FROM THE AUTHORITY, NOT RESPELLED, and the first draft of this line
+     * did respell it. {@see McpToolBridge::NAME_PREFIX} is what
+     * {@see McpToolBridge::name()} actually builds every MCP tool name out of,
+     * so it is the only spelling that can be wrong on its own; a literal here
+     * would be a THIRD copy, pinned against `PermissionGate`'s SECOND copy by
+     * a drift test — two copies agreeing with each other and neither agreeing
+     * with the source. MEASURED: with the literal in place, changing
+     * `McpToolBridge::NAME_PREFIX` to `'mcpsrv__'` left `tests/RuntimeTest.php`
+     * fully green while every real MCP call silently became read-only to this
+     * classifier. Deriving it makes that change red here instead.
+     *
+     * WHAT THE DEREFERENCE COSTS, because {@see DENIAL_HOOK} above spends four
+     * paragraphs on exactly this question for a different roster and the
+     * answer is not free by inspection: a class constant in a constant
+     * expression resolves LAZILY, on first read, not at class-declaration
+     * time. MEASURED on PHP 8.3.6 — after `class_exists(Runtime::class)` and
+     * before any classification, `class_exists(McpToolBridge::class, false)`
+     * is FALSE (and FALSE on master, which has no such reference); after ONE
+     * {@see stepRequestedAWrite()} call it is TRUE. So the bill is one file
+     * include, paid once per process and only by a turn that actually
+     * dispatched a tool: 0.040 ms for the first classification, 4.5 ms for
+     * ten thousand more. That is the same shape as the E239 answer — reading
+     * the authority costs one leaf class — and the leaf here is a `Tool`
+     * implementation the engine loads anyway the moment an MCP tool is
+     * registered.
      */
-    private const MCP_TOOL_PREFIX = 'mcp__';
+    private const MCP_TOOL_PREFIX = McpToolBridge::NAME_PREFIX;
 
     /**
      * @param ?EnvironmentBlock $environmentBlock Pre-captured session snapshot; when omitted
@@ -346,30 +373,47 @@ final class Runtime
      * where the wiring is rather than left standing.
      * {@see EnvironmentBlock}'s docblock motivates the lever as ending "two
      * consecutive no-write steps rendering byte-different prompts for a diff
-     * the model has already seen". MEASURED on one unmarked Runtime over a
-     * committed-then-dirtied fixture repository, three successive
-     * {@see buildSystemPrompt()} calls — which is exactly the pre-P3.S5
-     * behaviour, since a null signal short-circuits
-     * {@see environmentSnapshot()}: **3,215 / 3,215 / 3,215 bytes, all three
-     * BYTE-IDENTICAL.** Consecutive quiet steps never rendered byte-different
-     * prompts; nothing wrote, so nothing in the diff moved. The prefix across
-     * them was already fully reusable.
+     * the model has already seen". THE DOMAIN OF EVERY FIGURE BELOW IS THE
+     * FIXTURE {@see \SugarCraft\Crush\Tests\RuntimeTest::makeDirtyGitFixture()}
+     * BUILDS — two tracked source files, one edited and unstaged, one edited
+     * and staged, sixteen git config knobs pinned — so it can be rebuilt and
+     * the figures re-derived rather than taken on trust. Three successive
+     * {@see buildSystemPrompt()} calls on ONE unmarked Runtime over it, which
+     * is exactly the pre-P3.S5 behaviour because a null signal short-circuits
+     * {@see environmentSnapshot()}: **three renders, ALL BYTE-IDENTICAL.**
+     * Consecutive quiet steps never rendered byte-different prompts; nothing
+     * wrote, so nothing in the diff moved, and the prefix across them was
+     * already fully reusable.
      *
      * So the win is NOT prompt-cache stability. It is INPUT BYTES and
-     * SUBPROCESSES: on that fixture a quiet step drops 374 B of 3,215 (11.6%),
-     * on this repository's own dirty tree 8,272 B of 19,395 (42.7%, three
-     * takes identical), and the two `git diff` calls — the expensive half of
-     * the five, per {@see EnvironmentBlock}'s 373-of-399 ms worst case — are
-     * not spawned at all. The saving is bounded above by
-     * 2 x `EnvironmentBlock::DIFF_MAX_BYTES` plus the two labels.
+     * SUBPROCESSES: on that fixture a quiet step drops **666 B**, and the two
+     * `git diff` calls — the expensive half of the five, per
+     * {@see EnvironmentBlock}'s 373-of-399 ms worst case — are not spawned at
+     * all. The saving is bounded above by 2 x `EnvironmentBlock::DIFF_MAX_BYTES`
+     * plus the two labels, and it scales with the size of the working diff,
+     * not with anything this class controls.
+     *
+     * 666 IS THE ONLY HOST-INDEPENDENT FIGURE HERE, which is why it is the
+     * only absolute one quoted. The prompt TOTAL that 666 is a fraction of
+     * moves with the length of the fixture root's own path, because the block
+     * renders `Working directory: <root>` — MEASURED, a fixture root name
+     * twelve characters longer took the emitting prompt 3,557 -> 3,568 B and
+     * the suppressed one 2,891 -> 2,902, while the saving stayed exactly 666.
+     * So the ratio is ~18.7% ON A ~30-CHARACTER ROOT and is not a property of
+     * the mechanism. An earlier revision of this paragraph quoted 3,215 /
+     * 374 B / 11.6% / byte 2,835 from a DIFFERENT, one-file fixture that
+     * nothing in the tree rebuilds, and a figure whose fixture no reader can
+     * reconstruct is the defect §16.8 rule 3 is about; it is replaced rather
+     * than adjusted.
      *
      * AND IT COSTS ONE CACHE DIVERGENCE, which the lever's framing had the
      * sign of backwards. Suppression introduces a differing byte at the
-     * emit->suppress transition that the old behaviour did not have —
-     * MEASURED at byte 2,835 of 3,215 on that fixture — after which the quiet
-     * steps re-converge. Every sequence adds exactly one such divergence per
-     * transition. Worth it for the bytes; not a prefix win, and nothing
-     * downstream should be built on the belief that it is.
+     * emit->suppress transition that the old behaviour did not have — on that
+     * fixture at byte 2,885 of 3,557, an offset that moves with the root path
+     * exactly as the totals do — after which the quiet steps re-converge.
+     * Every sequence adds exactly one such divergence per transition. Worth it
+     * for the bytes; not a prefix win, and nothing downstream should be built
+     * on the belief that it is.
      *
      * THE MODEL SEES NO DIFF ON A QUIET STEP — not a STALE one. "A diff the
      * model has already seen" reads as though the previous prompt were still

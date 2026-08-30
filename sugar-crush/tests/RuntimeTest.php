@@ -50,6 +50,13 @@ final class RuntimeTest extends TestCase
     /** @var list<string> */
     private array $tempRepos = [];
 
+    /**
+     * The line the P3.S5 write-tool fixture appends. Distinctive on purpose:
+     * it has to be findable inside a rendered `git diff` body and impossible
+     * to confuse with anything the base prompt already says.
+     */
+    private const EDIT_MARKER = 'P3S5_EDIT_TOOL_WROTE_THIS_LINE';
+
     protected function setUp(): void
     {
         $this->provider = $this->createMock(ProviderInterface::class);
@@ -1872,10 +1879,15 @@ final class RuntimeTest extends TestCase
             ->withRoot($root)
             ->withTools([
                 $this->createMockTool('Read', 'file contents'),
-                // Deliberately does NOT touch the filesystem: the signal is
-                // derived from the tool NAME the model asked for, never from a
-                // tree comparison, so a mock is the honest fixture here.
-                $this->createMockTool('Edit', 'edited'),
+                // This one REALLY WRITES. The signal is derived from the tool
+                // NAME, never from a tree comparison, so a tool that wrote
+                // nothing would satisfy the classifier just as well - and that
+                // is exactly why it must not be the fixture. Writing lets the
+                // step-2 assertion below check that the re-armed diff carries
+                // the change the write made, rather than only that a label
+                // came back; a re-arm that emitted a stale or empty diff would
+                // pass the label count and fail here.
+                $this->createWritingTool('Edit', $root . '/src/Alpha.php', self::EDIT_MARKER),
             ]);
 
         $reply = $backend->complete([RootMessage::user('go')]);
@@ -1894,6 +1906,19 @@ final class RuntimeTest extends TestCase
 
         $this->assertSame(1, substr_count($prompts[2], $label), 'step 2 follows an Edit: the diff is re-armed');
         $this->assertSame(1, substr_count($prompts[2], $staged), 'step 2 follows an Edit: the diff is re-armed');
+
+        // The re-armed diff carries what the write actually did - the clause is
+        // "produces a prompt whose env block carries the diff", and a label
+        // with a stale or empty body under it would not be that. The marker is
+        // absent from step 0's prompt because the write had not happened yet,
+        // which is what makes its presence in step 2's a fact about this turn
+        // rather than about the fixture.
+        $this->assertStringNotContainsString(self::EDIT_MARKER, $prompts[0], 'the marker cannot predate the write');
+        $this->assertStringContainsString(
+            '+' . self::EDIT_MARKER,
+            $prompts[2],
+            'the re-armed unstaged diff must show the line the Edit step wrote',
+        );
 
         // Suppression takes the two diff sections and NOTHING else. Asserted as
         // an exact byte identity rather than as three absences, because the
@@ -1960,15 +1985,19 @@ final class RuntimeTest extends TestCase
 
         // Byte-identical - and NOT a prompt-cache win. The first draft of this
         // comment said it was ("before this step they differed"), and that was
-        // false. MEASURED: three unmarked buildSystemPrompt() calls on ONE
-        // Runtime over a committed-then-dirtied fixture - which is byte-for-
-        // byte the pre-P3.S5 path, since a null signal short-circuits
-        // environmentSnapshot() - rendered 3,215 / 3,215 / 3,215 B, all three
-        // IDENTICAL. Quiet steps were already fully cacheable across each
-        // other. What suppression buys is input BYTES and two subprocesses;
-        // what it costs is one extra prefix divergence at the emit->suppress
-        // transition (byte 2,835 of 3,215 on that fixture) the old behaviour
-        // did not have.
+        // false. MEASURED over makeDirtyGitFixture() below, three unmarked
+        // buildSystemPrompt() calls on ONE Runtime - which is byte-for-byte
+        // the pre-P3.S5 path, since a null signal short-circuits
+        // environmentSnapshot(): all three renders IDENTICAL. Quiet steps were
+        // already fully cacheable across each other. What suppression buys is
+        // input BYTES (666 on that fixture, the two diff sections exactly) and
+        // two git subprocesses; what it costs is one extra prefix divergence
+        // at the emit->suppress transition the old behaviour did not have.
+        //
+        // 666 is quoted and the totals are not, deliberately: the prompt total
+        // carries `Working directory: <root>`, so it moves with the length of
+        // the temp path this fixture happens to get, while the saving is the
+        // two sections and does not.
         //
         // These two assertions therefore also pass against the old code, and
         // are kept as the PERSISTENCE pin rather than presented as the bite:
@@ -2054,8 +2083,8 @@ final class RuntimeTest extends TestCase
     }
 
     /**
-     * The null-sentinel polarity, and the reason `$writeSinceLastStep` is
-     * `?bool` rather than `bool $x = true`.
+     * The null-sentinel polarity, and the reason `Runtime::$writeSinceLastRender`
+     * is `?bool` rather than `bool $x = true`.
      *
      * A Runtime constructed around a block a caller has ALREADY suppressed must
      * keep that decision until someone marks. With a non-nullable field
@@ -2218,20 +2247,41 @@ final class RuntimeTest extends TestCase
         // The read-only list is spelled out here rather than derived, and that
         // is deliberate: it is the decision half. A new tool joins it only by
         // someone typing it in, which is the review this assertion exists to
-        // force. Nine names, because `Doctor::name()` returns lowercase
-        // `doctor` - MEASURED off the file, not assumed from the class name.
+        // force. EIGHT names - eleven built-ins less the three on the write
+        // roster - and the last of them is lowercase `doctor`, because that is
+        // what `Doctor::name()` returns, MEASURED off the file rather than
+        // assumed from the class name.
         $classified = [
             ...Runtime::WRITE_CAPABLE_TOOL_NAMES,
             'Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor',
         ];
 
+        $files = glob(dirname(__DIR__) . '/src/Tools/BuiltIn/*.php') ?: [];
         $corpus = [];
-        foreach (glob(dirname(__DIR__) . '/src/Tools/BuiltIn/*.php') ?: [] as $file) {
-            if (preg_match("/function name\(\): string\s*\{\s*return '([^']+)';/", (string) file_get_contents($file), $nm) === 1) {
+        $unreadable = [];
+        foreach ($files as $file) {
+            if (preg_match("/function name\\(\\): string\\s*\\{\\s*return '([^']+)';/", (string) file_get_contents($file), $nm) === 1) {
                 $corpus[] = $nm[1];
+
+                continue;
             }
+            $unreadable[] = basename($file);
         }
         sort($corpus);
+
+        // A FILE THIS SCAN CANNOT PARSE IS REPORTED, NEVER SKIPPED (§16.8 rule
+        // 32). The regex only recognises a name() that returns a bare string
+        // literal; a tool whose name came from a constant, a concatenation or
+        // two statements would drop out of $corpus SILENTLY, and the verdict
+        // below would then pass vacuously for exactly the tool it exists to
+        // catch - a hole shaped like the next defect. All eleven current files
+        // parse, so this is latent rather than live, which is why it is
+        // asserted rather than left to be found later.
+        $this->assertSame(
+            [],
+            $unreadable,
+            'a src/Tools/BuiltIn/ file this scan cannot read a name() out of - widen the scan, do not let it drop out',
+        );
 
         // LIVENESS CONTROL, and deliberately a SUBSET one. A scanner that
         // matched nothing returns [], and so does a directory with no tools in
@@ -2296,6 +2346,25 @@ final class RuntimeTest extends TestCase
                 toolCallId: $args['toolCallId'] ?? "call_$name",
                 content: $result,
             );
+        });
+
+        return $tool;
+    }
+
+    /**
+     * A tool that appends a marker line to a real file, so a step classified as
+     * a write has actually written something the next prompt's diff can show.
+     */
+    private function createWritingTool(string $name, string $path, string $marker): Tool
+    {
+        $tool = $this->createMock(Tool::class);
+        $tool->method('name')->willReturn($name);
+        $tool->method('description')->willReturn("Description for $name");
+        $tool->method('inputSchema')->willReturn([]);
+        $tool->method('execute')->willReturnCallback(function (array $args) use ($path, $marker): ToolResult {
+            file_put_contents($path, $marker . "\n", FILE_APPEND);
+
+            return new ToolResult(toolCallId: $args['toolCallId'] ?? 'call_write', content: 'written');
         });
 
         return $tool;
