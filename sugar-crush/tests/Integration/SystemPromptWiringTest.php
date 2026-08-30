@@ -234,19 +234,30 @@ final class SystemPromptWiringTest extends TestCase
      * NOTHING IS DROPPED: an inverted assertion still pins a relationship, a
      * deleted one pins nothing. The single equality became an equality against
      * the RECONSTRUCTED suppressed form, plus a pin that the marker it cuts on
-     * occurs exactly once (so the cut cannot land in a commit subject), plus a
-     * pin on the exact shape of the tail that came off. The surviving
-     * invariant is the one this test was always really about — every byte
-     * before that cut, the frozen triple included, is still identical across
-     * the two steps, and the two diff sections are the ONLY licensed mid-turn
-     * difference.
+     * occurs exactly once, plus a pin that the tail holds exactly TWO sections
+     * and not three. The surviving invariant is the one this test was always
+     * really about — every byte before that cut, the frozen triple included,
+     * is still identical across the two steps, and the two diff sections are
+     * the ONLY licensed mid-turn difference.
      *
-     * THE METHOD NAME IS KEPT THOUGH IT NOW OVERSTATES, for a measured reason
-     * rather than inertia: `src/Runtime.php:536` cites it by name in a
-     * backticked doc-block reference; that file is outside this step's
-     * declared file list; and {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest}
-     * reds on a backticked `src/` citation that resolves to nothing. Renaming
-     * here would red a census in a file this step may not touch.
+     * THE METHOD NAME NOW OVERSTATES AND IS KEPT ANYWAY, and the reason first
+     * written here was wrong. It claimed
+     * {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest} would red on a
+     * renamed method because `src/Runtime.php` cites this test in a backticked
+     * doc-block reference. MEASURED, twice, against that census run from
+     * `sugar-crush/`: rewriting the cited METHOD name to one that was never
+     * written leaves it `OK (7 tests, 2952 assertions)`, and rewriting the
+     * cited CLASS name to one that does not exist leaves it `OK (7 tests, 2952
+     * assertions)` as well. That census does not police this citation form at
+     * all, so the constraint invoked did not exist.
+     *
+     * WHAT IS ACTUALLY TRUE is smaller and is not a census: the citing bullet
+     * in `Runtime.php` names this method in PROSE, `Runtime.php` is outside
+     * this step's one-file declared list, and nothing in the tree would catch
+     * the stranded reference — which is the argument for renaming BOTH in one
+     * diff rather than for renaming neither. That is a §1.10 outcome-3
+     * escalation, recorded for the orchestrator, not a decision this step may
+     * take on its own.
      */
     public function testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt(): void
     {
@@ -280,16 +291,54 @@ final class SystemPromptWiringTest extends TestCase
         // of what `isGitRepo()` looks at. Both branches are live — CI takes
         // the first, a developer running the suite from `sugar-crush/` takes
         // the second — so neither is decorative.
+        //
+        // AND THE `No` BRANCH IS THE WEAK ONE, WHICH IS A COST OF THIS STEP'S
+        // SCOPE RATHER THAN A PROPERTY OF THE PROBLEM. In that regime the
+        // assertion below is the OLD equality, so it pins nothing about the
+        // suppression: MEASURED, deleting `markWriteSinceLastRender()` from
+        // `EngineBackend::complete()`'s loop reds this test from the checkout
+        // root and leaves it green from `sugar-crush/` — which is the
+        // invocation CLAUDE.md, AGENTS.md and CONTRIBUTING.md all document.
+        // Determinism WAS available and this branch already uses it 1,600
+        // lines away: {@see \SugarCraft\Crush\Backend\EngineBackend::withRoot()}
+        // over the hermetic dirty-repo fixture that
+        // `RuntimeTest::testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite()`
+        // drives. Reaching it here means sharing that fixture builder, and
+        // copying it instead would be the exact defect
+        // {@see \SugarCraft\Crush\Tests\Support\DuplicatedTestHelperDriftTest}
+        // exists to catch — so it has to be hoisted into `tests/Support/`,
+        // which is two files outside this step's one-file declared list.
+        // Escalated to the orchestrator rather than half-done. What keeps this
+        // from being a hole in the BRANCH is that the same deletion also reds
+        // `RuntimeTest` cwd-independently; what it is, is a weakness in THIS
+        // test, and it is written down instead of being called honest.
         if (str_contains($first, "\nIs directory a git repo: Yes\n")) {
             $marker = "\n\nStaged changes (git diff --cached, index vs HEAD):";
 
-            // The cut marker has to be unambiguous or the reconstruction below
-            // would silently cut in the wrong place. `Recent commits:` renders
-            // this repository's own commit subjects verbatim, and a subject
-            // could in principle carry this text — but `git log --oneline`
-            // emits one line per commit and `git status --porcelain` one line
-            // per path, so nothing above the diff sections can be preceded by
-            // the blank line the marker opens with. Asserted, not argued.
+            // The cut marker has to be unambiguous or the reconstruction
+            // below would silently cut in the wrong place, and the assertion
+            // scans the WHOLE prompt — so the argument has to cover the whole
+            // prompt, including the two diff bodies, which are whatever the
+            // captured working tree happens to hold. Two regions, two reasons.
+            //
+            // ABOVE the diff sections: `Recent commits:` renders this
+            // repository's own commit subjects verbatim, and a subject could
+            // carry this text — but `git log --oneline` emits one line per
+            // commit and `git status --porcelain` one line per path, so
+            // nothing there can be preceded by the blank line the marker
+            // opens with.
+            //
+            // INSIDE a diff body the earlier version of this comment was
+            // WRONG in shape, and the correction is the reason the claim
+            // survives. `git diff --shortstat --patch` DOES emit a bare blank
+            // line — MEASURED in a scratch repository: the shortstat line,
+            // then an empty line, then `diff --git `. What makes the marker
+            // still unreachable is not the absence of blank lines but the
+            // prefixing: every patch-body line carries `+`, `-`, ` `, `@`,
+            // `\` or a `diff --git `/`index `/`Binary files ` header, and the
+            // one bare blank line `--shortstat` produces is always followed
+            // by `diff --git `. A line reading `Staged changes (…)` cannot
+            // appear unprefixed. Asserted anyway, not argued.
             $this->assertSame(1, substr_count($first, $marker), 'the cut marker must occur exactly once in the emitting step prompt');
             $this->assertSame(0, substr_count($second, $marker), 'the suppressed step must carry no staged-diff section at all');
 
@@ -301,10 +350,51 @@ final class SystemPromptWiringTest extends TestCase
                 'the second step must be the first with exactly the two diff sections cut — nothing else may drift mid-turn',
             );
 
+            $tail = substr($first, $cut);
+
+            // ORDER, and then EXCLUSIVITY. The regex alone pins only that the
+            // staged section opens the tail, the unstaged one follows it and
+            // the fence closes it: both `.*` run under `/s`, so a THIRD
+            // section smuggled between or after them still matches. The
+            // equality above cannot cover that gap either — a section that is
+            // added to the emitting prompt AND suppressed from the other one
+            // lives entirely after the cut, so the reconstruction stays true.
+            // Without the count below, "the two diff sections are the only
+            // licensed mid-turn difference" would be the one thing this test
+            // does not check.
             $this->assertMatchesRegularExpression(
                 '~^\n\nStaged changes \(git diff --cached, index vs HEAD\):.*\n\nUnstaged changes \(git diff, working tree vs index\):.*\n</env>$~s',
-                substr($first, $cut),
-                'the tail cut off the second step must be exactly the two diff sections and the closing fence',
+                $tail,
+                'the tail must open with the staged section, then the unstaged one, then the fence',
+            );
+
+            // EXACTLY TWO SECTIONS. A blank line inside the tail is either a
+            // section separator or the one `--shortstat` prints before its
+            // patch, and the second kind is ALWAYS followed by `diff --git `.
+            // So the separators are the blank lines that are not, and there
+            // must be two of them — one per licensed section.
+            //
+            // MEASURED, rendering `EnvironmentBlock` against three working
+            // trees, `substr_count($tail, "\n\n")` first and this count
+            // second: a clean tree 2 and 2; a tree with a staged text edit, an
+            // unstaged text edit and an unstaged BINARY file 4 and 2; a tree
+            // whose diff overruns `DIFF_MAX_BYTES` and takes the truncation
+            // notice 3 and 2. A bare `substr_count(…, "\n\n") === 2` — the
+            // obvious spelling — would therefore red on any dirty tree, which
+            // is why it is not what is written here.
+            //
+            // THE ONE INPUT THAT WOULD BREAK IT, stated rather than left to be
+            // discovered: git's `diff.suppressBlankEmpty`, which renders a
+            // blank CONTEXT line as an empty line instead of a single space.
+            // It is off by default and MEASURED off here — the probe's blank
+            // context lines came back as `" "` — but a developer who turns it
+            // on globally and has a blank line in an uncommitted hunk would
+            // see this count red. That is a false red on a stated condition,
+            // not a silent hole.
+            $this->assertSame(
+                2,
+                preg_match_all('/\n\n(?!diff --git )/', $tail),
+                'the tail must hold exactly two sections — a third one, emitted on one step and suppressed on the next, is not a licensed mid-turn difference',
             );
         } else {
             $this->assertStringContainsString("\nIs directory a git repo: No\n", $first, 'the block must answer the git question one way or the other');
