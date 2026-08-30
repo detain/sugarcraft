@@ -2192,3 +2192,219 @@ Holding it would block the phase to protect a file that is already better than t
   `<repo-map>`/memoisation seam; 2 and 3 are `EnvironmentBlock` defects and fit `P3.audit-fix-2`, which
   already owns that file.
 - P3.S3's D7 follow-up against this file is CLOSED by `544399f41` (above).
+
+
+---
+
+### P3.S5 — Wire the write-signal into the engine loop   ·   2026-08-30   ·   NOT MERGED
+
+**Status** `blocked (review-cycle)` **AND** `blocked (scope-escalation)`. **NOT MERGED — merging it
+would red CI.** Branch `prompt/P3.S5` @ `d046550d3` (6 commits, based on master `7c0ab6954`).
+**Worktree `/home/sites/prompt-step-P3.S5` LEFT IN PLACE** — do not delete it; the next session
+needs it.
+
+**Goal (restated in one sentence)**
+Make P3.S2's lever live: the per-step engine loop derives the write signal, so a prompt after a
+write-tool step carries the working diff and a prompt after a no-write step suppresses it.
+
+**What was built**
+The lever was unreachable because the block is private to the memoised `Runtime::environmentSnapshot()`.
+The agent opened a three-part seam:
+- `private ?bool $writeSinceLastRender = null` on `Runtime`. **`?bool`, not the repo's usual
+  `bool $XSet` sentinel pair**, because three states must be distinguishable through one field and
+  `markWriteSinceLastRender(bool)` cannot restore null: *nobody has spoken* (leave an injected block
+  alone), *a write happened*, *no write happened*. All six reviewers accepted the argument; cycle 6
+  re-checked it against convention and confirmed `Runtime` is a mutable per-turn service whose three
+  sibling memo fields are already nullable with no sentinel.
+- `markWriteSinceLastRender(bool)`, a plain mutator rather than a `with*()` — a clone would hand the
+  loop a second `Runtime` and re-do the memory-directory read and repo-map walk.
+- `environmentSnapshot()` made **identity-preserving**: it mints a new block only when the signal
+  actually differs from what the block already carries, so §17.2 invariant 9's `assertSame` across
+  two calls still holds.
+Classifier `Runtime::stepRequestedAWrite(?array $toolCalls)` over
+`WRITE_CAPABLE_TOOL_NAMES = ['Bash','Edit','Write']` plus `MCP_TOOL_PREFIX = McpToolBridge::NAME_PREFIX`
+— **derived from the authority, not a copied `'mcp__'` literal** (cycle 2 caught the copy; before that
+fix, mutating `McpToolBridge::NAME_PREFIX` left the suite fully green). Call site is one statement in
+`EngineBackend::complete()`'s bounded loop, below the `break`. The `$assistant === null` arm fails safe
+(shows the diff) and is documented as dormant — kept and labelled per §1.10, not elided.
+
+**MEASURED** A suppressed no-write step saves **666 B** on `RuntimeTest::makeDirtyGitFixture()`
+(3569 → 2903). Host-independent: re-measured with a root 11 characters longer, 3580 → 2914, saving
+unchanged at 666. Reproduced independently by three reviewers. Git subprocesses: **5** emitting, **3**
+suppressed, **0** for `capture()` itself (logging `git` shim).
+
+**CORRECTION OF RECORD — the step's motivating story was false.** On master, three consecutive quiet
+steps render **byte-identical** prompts. The lever's win is **input bytes and subprocesses, NOT
+prefix-cache retention** — suppression *adds* one divergence per transition. The agent had originally
+written "Before this step they differed"; cycle 1 measured it false and it was corrected in place.
+The agent deliberately quotes **no** whole-prompt totals or percentages: two earlier sets of figures
+were withdrawn as path-dependent, the second reproducing the exact defect the first was corrected for.
+
+**Tests** `RuntimeTest` 87/256 → **112/398**. Full suite from `sugar-crush/`:
+**`Tests: 10446, Assertions: 161473, Skipped: 1`**, 0 failures — ORCHESTRATOR-VERIFIED (06:28.324).
+`PromptStabilityTest` 13/229 and the census six-file set 103/9448 both identical to master.
+`golden-system-prompt.txt` md5 `7efcc4882f0597440518fc02799a923a` — **byte-identical to master**,
+not in the diff, nothing regenerated. ORCHESTRATOR-VERIFIED. Declared scope clean: `git diff
+--name-only master...HEAD` returns exactly the three declared files; `git status --porcelain` empty.
+
+**THE BLOCKER — ORCHESTRATOR-VERIFIED, and it is a real CI break**
+`sugar-crush/tests/Integration/SystemPromptWiringTest.php:232` —
+`testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt` pins *"every step of one turn gets the identical
+system prompt"*, **which is precisely the invariant this step is chartered to invert.** It is
+**green from `sugar-crush/`** and **red from any git-repo cwd**. I reproduced both, and confirmed the
+severity myself: `.github/workflows/ci.yml:397` is
+`php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml` with **no `cd` and no
+`working-directory:`**, so CI's cwd is the checkout root — the red cwd. Verbatim, from the repo root:
+```
+1) …SystemPromptWiringTest::testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt
+Failed asserting that two strings are identical.
+-
+-Staged changes (git diff --cached, index vs HEAD): (none)
+-
+-Unstaged changes (git diff, working tree vs index): (none)
+ </env>'
+/home/sites/prompt-step-P3.S5/sugar-crush/tests/Integration/SystemPromptWiringTest.php:232
+Tests: 11, Assertions: 69, Failures: 1.
+```
+Master from the same cwd: `OK (11 tests, 70 assertions)`. So it is a branch-only regression.
+**The file is OUTSIDE P3.S5's declared list**, so the agent correctly escalated instead of reaching.
+It must be **INVERTED, not deleted** (§1.10) — it still pins the frozen triple, and the only licensed
+difference is the two diff sections coming off the tail. A measured replacement is preserved at
+**`.sugar-crush-prompt/P3.S5-ESCALATION-patch.md`** (copied out of `/tmp`, which does not survive):
+applied it gives `OK (11 tests, 70 assertions)` from BOTH cwds, and with the P3.S5 wiring removed it
+fails with *"the second step must be the first with exactly the two diff sections cut"* — so it is
+**not vacuous**. NOT APPLIED: applying it is a declared-list widening AND it is test code, which the
+orchestrator does not write. It needs a spawned agent with a fresh review budget.
+
+**Prerequisites (a)–(e)**
+- **(a) SECOND ASSEMBLER — GAP STATED, as required, and now stated in code** (`Runtime.php:540-561`),
+  not only in a worklog. Four production `EnvironmentBlock` sites (`Bootstrap:1462`, `App:553`,
+  `Agent:417`, `Runtime:2320`); this step reaches **one**. `Agents\Agent::systemPrompt()` builds its
+  own block, orders `<env>` the opposite way, is never marked, and still pays the full
+  five-subprocess capture on every render. **Still needs the orchestrator disposition: a P3.S6, or a
+  §18 row.**
+- **(b) `$perStepRerender` — NOT LANDED, and there is no Runtime-only half.** It needs
+  `EnvironmentBlock.php` *and* `Agents/Agent.php`, and it moves `golden-system-prompt.txt`. Both
+  outside the list; the second violates the byte-identity rule. The agent stopped rather than
+  half-wire it. **Correct call.** Wants its own step with the golden in scope.
+- **(c) CROSS-TURN LIMIT — REAL, UNREACHABLE FROM HERE.** `complete()` builds a fresh `Runtime` per
+  turn, so signal and memoised block die at the turn boundary; the first step of turn *n+1* always
+  re-captures and always shows the diff, however quiet turn *n* was. **Suppression is within-turn
+  only.** Hoisting state above the per-turn `Runtime` is architecture, not wiring. Said plainly
+  rather than quietly satisfying the narrower clause — which is what the brief asked for.
+- **(d) TWO FALSE CLAIMS — one was already half-fixed.** `RuntimeTest.php:1761-1764` carried both on
+  master and was corrected in place per §16.8 rule 42. At `Runtime.php:1836-1839`, P3.audit-fix-1 had
+  already landed part of the correction, so only the standing half was touched — the agent explicitly
+  declined to re-write someone else's correction as if it were its own.
+- **(e) `<repo-map>` VOLATILITY — HONOURED.** `testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne`
+  untouched and green.
+
+**Deletion experiments** Both central reverts independently reproduced by cycle 6's reviewer in a
+`cp -a` sandbox: deleting the `markWriteSinceLastRender(...)` call from `EngineBackend::complete()`
+→ `Tests: 112, Failures: 2`; reverting `environmentSnapshot()` to master's one-line body →
+`Failures: 5`. Drift-guard matrix (8 mutations) included three **known-green** controls — a
+legitimate lockstep addition, a parameter rename, and a roster reorder — each verifying that a
+loosening made during the cycles (a `sort()`, a `\$\w+`) had not lost a real pin. Production files
+mutated only to measure (`Runtime.php`, `EngineBackend.php`, `EnvironmentBlock.php`,
+`PermissionGate.php`, `SystemPromptWiringTest.php`) were each `cp`-backed, restored, md5-verified;
+`git status --porcelain` empty.
+
+**Six of the agent's own claims were measured false and withdrawn rather than re-argued:** the
+prefix-cache motivation; two successive sets of byte figures; an unreconstructible 8,272 B / 42.7 %;
+two timing figures; "sixteen git knobs" (14) and "fourteen byte-identical" (13); and an
+"unreachable in production" claim that was false because the classifier reads *requested* names off
+the provider response.
+
+**Review loop** SIX cycles, fresh reviewer each, cap reached.
+
+| Cycle | Findings | Outcome |
+|---|---|---|
+| 1 | symbol-citation typo; **the motivating claim FALSE**; a second roster hole | fixed; false claim corrected in place |
+| 2 | byte figures measured on the wrong fixture; **MCP prefix pinned to a copy, not the authority** | prefix derived from `McpToolBridge::NAME_PREFIX`; figures re-derived |
+| 3 | the re-derived figures were wrong **the same way**; an unreconstructible 8,272 B; two unreproducible timings | every path-dependent absolute REMOVED rather than re-corrected; both failures recorded in place |
+| 4 | corpus scan used the flat glob **its own comment called a trap**; "sixteen knobs" = 14; "unreachable in production" FALSE | scan derived from `BuiltInToolCorpus::instances()`; probe verified red |
+| 5 | "fourteen byte-identical" = 13; `$output` never reset between `exec()` calls; shape regex bound a parameter name | all fixed; loosenings verified against green known-answers |
+| 6 | **six findings — CAP REACHED, NOT FIXED** | `blocked (review-cycle)` |
+
+Cycle 6 otherwise verified clean: all 19 §1.4 checks performed, Done-when clauses 1–8 ✔ (clause 6
+conditional on the escalated red), no subtraction, declared scope clean.
+
+**Standing findings (cycle 6, VERBATIM, unfixed — the cap). Full review preserved at
+`.sugar-crush-prompt/P3.S5-cycle6-review.txt`.**
+1. **`src/Runtime.php:558` — "nine `systemPrompt()` call sites" is EIGHT.** MEASURED by a
+   `token_get_all` census over `src/` + `bin/`: 8 invocations — `App/App.php:569`,
+   `Agents/ProcessExecutor.php:473`, `Agents/AgentManager.php:433`,
+   `Workflows/WorkflowEngine.php:1042/1152/1252/1294/1397`. The ninth candidate
+   (`App/App.php:527`) is a comment. **The figure is NEW IN THIS DIFF**, introduced by the last
+   commit — the "cycle-5 review fixes" one — inside the paragraph whose whole purpose is to record a
+   gap accurately, four lines below a genuinely correct `EnvironmentBlock::capture(` census. The
+   step agent re-measured it independently before reporting and confirmed the finding is correct.
+2. **`src/Runtime.php:317-320` — "The built-in half of the roster hole is closed" OVERCLAIMS,
+   MEASURED.** The drift test reds when a new `src/Tools/BuiltIn/` tool is classified by *neither*
+   roster — literally true, and not what "closed" means to a reader. The reviewer added a genuinely
+   write-capable `MultiEdit` and typed it into the `$readOnly` array (the easy path a hurried author
+   takes): **`OK (112 tests, 398 assertions)`, fully green, while the engine now permanently
+   suppresses the diff after every `MultiEdit` write.** The test forces *a* decision, not a *correct*
+   one. **This is the finding with teeth.**
+3. **`src/Runtime.php:242-246` — the roster census is incomplete.** It names two neighbouring
+   rosters and stops, having already read the file that holds a third:
+   `Permissions/PermissionGate.php:667` `isReadOnlyTool()`, five names, twenty lines above the
+   `isWriteTool()` the drift test extracts, disagreeing with this diff's own `$readOnly` by three
+   names. The gate's docblock says the divergence is deliberate, so they should NOT be reconciled —
+   but §16.8 rule 15 is about hand-maintained rosters standing alone, `$readOnly` is one, it is
+   pinned by nothing, and its nearest neighbour is unnamed.
+4. **`src/Runtime.php:424-429` — the argument against `with*()` rests on a premise wrong for one of
+   the three blocks it names.** This repo's `with*()` is `mutate()` → `new static(...get_object_vars())`,
+   not `clone`; `$environmentBlock` is a **promoted constructor parameter** and would carry over.
+   The conclusion (a mutator is right) survives; the stated reason names a block that is not among
+   them. Marked INFERRED by the reviewer.
+5. **`tests/RuntimeTest.php:1866`, `:1955` — the two engine-loop tests read the developer's real
+   `~/.sugar-crush/config.json`** via `complete()` → `Bootstrap::readUserConfig()`. Insensitive today
+   (only `parallelToolCalls` / `parallelToolDeadlineSeconds` are consumed on this path, neither can
+   change the prompt) — but `makeDirtyGitFixture()` spends a paragraph pinning fourteen `~/.gitconfig`
+   knobs against exactly this hazard while the same test opens a second unpinned door two lines
+   earlier. OBSERVED, low impact, reported not prescribed.
+6. The escalated red confirmed complete. Note `src/Context/EnvironmentBlock.php:112` still reads
+   "that caller does not exist yet", **now false in the shipped tree**, recorded rather than fixed.
+
+**Surprises / things the plan got wrong**
+1. **The step's own motivating claim was false** (see CORRECTION OF RECORD). The plan sold this step
+   as a prefix-cache win; it is an input-byte and subprocess win, and suppression *costs* one
+   divergence per transition.
+2. **Prerequisite (b) has no Runtime-only half.** The brief (and prompt_resume §8, written by me)
+   said P3.S5 "is the step that CAN do it" because it declares `Runtime.php` + `EngineBackend.php`.
+   Measured: it cannot, because the flag must be read where the caption is emitted
+   (`EnvironmentBlock.php`) and set false by `Agents/Agent.php`, and it moves the golden. **My
+   prerequisite was wrong, not the agent's execution.**
+3. **The step could not land without touching a file no one scheduled.** Done-when clause 6 named
+   `testNoAdditionalWorkingDirectoriesLineIsEmitted` and `PromptStabilityTest` as the tests that must
+   stay green, and both do — but the invariant that actually collides lives in a third file the step
+   text never mentions.
+
+**ORCHESTRATION INCIDENT — a reviewer agent contaminated the MAIN repo. Found and repaired.**
+A reviewer's throwaway-repo setup ran `git init`/`git commit` inside `/home/sites/sugarcraft` itself,
+which (1) **overwrote the repo's identity config to `t <a@b.c>`** and (2) left a stray commit
+`ad4b51630 "init"` **on master**, adding a junk root file `f`. Verified and repaired by the
+orchestrator: every plan commit through `4da6e6121` is correctly authored `Joe Huss
+<detain@interserver.net>` (the contamination came after them); identity restored; master reset to
+`4da6e6121`; `f` gone; tree clean. Nothing was ever pushed, so nothing escaped.
+**LESSON — this is ORCHESTRATION-RULE-2:** an agent that needs a scratch git repository must create
+it under its own scratchpad, never by running `git init` from a cwd it did not verify. The blast
+radius here was the plan's own commit identity, which §7 calls out as *"silent and cannot be fixed
+afterwards without rewriting history"* — it was caught only because the step agent self-reported it.
+Every future step brief must carry this prohibition, and the orchestrator must re-check
+`git config user.name/user.email` after every step, not only before committing.
+
+**Follow-ups created**
+1. **`P3.S5-escalation-1` — BLOCKS THE P3.S5 MERGE.** Apply the preserved inversion patch to
+   `tests/Integration/SystemPromptWiringTest.php:232` in the P3.S5 worktree, via a spawned agent with
+   a fresh review budget. Patch at `.sugar-crush-prompt/P3.S5-ESCALATION-patch.md`.
+2. **`P3.S5-fix-1`** — cycle-6 findings 1–4, all inside P3.S5's already-declared `Runtime.php`.
+   Finding 2 first (it is wrong-green), then 1, 3, 4. Finding 5 is `RuntimeTest.php`, also declared.
+3. **The SECOND ASSEMBLER disposition** (prerequisite a) — still owed: a P3.S6, or a §18 row.
+4. **`$perStepRerender` needs its own step** with `EnvironmentBlock.php`, `Agents/Agent.php` and
+   `golden-agent-prompt.txt`/`golden-system-prompt.txt` in scope.
+5. `EnvironmentBlock.php` stale claims at `:95`, `:112`, `:616` — `:112` "that caller does not exist
+   yet" is now false. Fold into `P3.audit-fix-2`, which already owns that file.
+6. `Agents\Agent::systemPrompt()`'s docblock is false where it says `capture()` shells out to git —
+   measured, `capture()` runs **0** subprocesses; the five happen at `render()`.
