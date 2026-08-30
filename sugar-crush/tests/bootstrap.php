@@ -122,12 +122,18 @@ putenv('COLORFGBG');
  *    primitive, and 13 naming it outside a comment — none of them eighteen.
  *    WHY THE SENTENCE STILL EARNS ITS PLACE: what it is FOR is that the set
  *    is not empty and the children are real processes, and that is why TMPDIR
- *    has to be exported rather than merely resolved in here.) It works on a CHILD and only on a child: `putenv()` does
- *    not move the temp directory of the process that calls it (PHP has already
- *    resolved sys_get_temp_dir(), so this suite keeps building its sandboxes
- *    under the real one and every test that does so keeps working), but a child
- *    is a fresh process that resolves it after inheriting this. Tests that hand
- *    their child a whitelist environment forward it explicitly.
+ *    has to be exported rather than merely resolved in here.) It works on a CHILD and only on a child: the
+ *    `putenv()` below cannot move the temp directory of THIS process, because
+ *    the `sys_get_temp_dir()` on the line that builds `$sandbox` has already
+ *    resolved it — so this suite keeps building its sandboxes under the real
+ *    one and every test that does so keeps working. A child is a fresh process
+ *    that resolves it after inheriting this. Tests that hand their child a
+ *    whitelist environment forward it explicitly.
+ *
+ *    THAT IS AN ORDERING GUARANTEE, NOT AN INTERPRETER GUARANTEE, and the
+ *    difference cost this plan a red CI for days. See the block above the
+ *    resolution below; `tests/SuiteTempSandboxContractTest.php` pins both
+ *    halves.
  *
  * What that leaves is one test: ToolIpcFilesTest's wiring proof deliberately
  * resets the latch so a real Bootstrap::backend() sweep runs, in-process, on
@@ -148,12 +154,24 @@ putenv('COLORFGBG');
  *
  *  - THE KEY CANNOT HAVE CAUSED WHAT IT WAS BLAMED FOR. E242's one observed
  *    failure was two processes opening one `tasklist_test_<id>.sqlite3`, and
- *    that path is built from `sys_get_temp_dir()`. By the paragraph above,
- *    `putenv()` never moves THIS process's answer to that — measured in both
- *    orderings, including putenv before the first call — so it was the
- *    machine's real temp directory, not this sandbox, at any key. The same is
- *    true of every in-process `ToolIpcFiles::reserve()`, whose names are
- *    `sys_get_temp_dir()`-based too. Re-keying moves none of them.
+ *    that path is built from `sys_get_temp_dir()`. By the paragraph above, the
+ *    `putenv()` below never moves THIS process's answer to that, because the
+ *    resolution happens first — so it was the machine's real temp directory,
+ *    not this sandbox, at any key. The same is true of every in-process
+ *    `ToolIpcFiles::reserve()`, whose names are `sys_get_temp_dir()`-based too.
+ *    Re-keying moves none of them.
+ *
+ *    WHAT THIS SAID: "measured in both orderings, including putenv before the
+ *    first call". WHAT IS TRUE: that second ordering was never measured on an
+ *    interpreter that could show the difference. MEASURED here, PHP 8.3.6, with
+ *    `TMPDIR=/tmp` in the launch environment and `$T` a real directory:
+ *    `php    -r 'putenv("TMPDIR=$T"); echo sys_get_temp_dir();'` prints `/tmp`,
+ *    but `php -n -r` (the same statement, no ini files) prints `$T`. Bisected
+ *    one conf.d file at a time, the ONLY extension on this box that produces
+ *    the first answer is `swoole`: it resolves the temp directory during module
+ *    startup, so user code always finds the cache warm. CI has no swoole, which
+ *    is why this line's old claim failed there and nowhere else. The
+ *    CONCLUSION survives — but on the ordering below, not on the interpreter.
  *  - THERE IS ALMOST NOTHING IN HERE TO COLLIDE ON. Sampled every 0.5s across
  *    a full 9,508-test run, the only entries this directory ever held were 20
  *    `crush-hook-payload-*` files, every one named by `tempnam()` — which is
@@ -178,7 +196,49 @@ putenv('COLORFGBG');
  * WHAT E242 ACTUALLY SAW is the descriptor-0 block recorded at the bottom of
  * this file, which reproduces with one process on an idle box.
  */
-$sandbox = sys_get_temp_dir() . '/sc_suite_tmp_' . (function_exists('posix_geteuid') ? posix_geteuid() : 'x');
+/*
+ * THE ORDER OF THE NEXT TWO STATEMENTS IS THE WHOLE CONTRACT. Resolve first,
+ * export second. Do not hoist the `putenv()`, and do not replace the
+ * resolution with a literal `/tmp` or a cached constant.
+ *
+ * WHAT PHP ACTUALLY DOES, measured on this box rather than assumed: PHP caches
+ * its temporary directory on the FIRST resolution and reads `getenv('TMPDIR')`
+ * AT THAT MOMENT — not at startup. So `putenv()` participates or not purely on
+ * whether anything has already asked. MEASURED, PHP 8.3.6, `TMPDIR=/tmp` in
+ * the launch environment, `$T` a real directory:
+ *
+ *   php -n -r '$b=sys_get_temp_dir(); putenv("TMPDIR=$T"); echo sys_get_temp_dir();'
+ *       -> /tmp   (resolve first: the export cannot move it — THIS ordering)
+ *   php -n -r 'putenv("TMPDIR=$T"); echo sys_get_temp_dir();'
+ *       -> $T     (export first: it moves, and every in-process temp path
+ *                  in this suite would move with it)
+ *
+ * Without `-n` both print `/tmp`, because `swoole` — bisected, the only
+ * extension on this box that does it — resolves the temp directory during
+ * module startup. That accident is what hid the difference locally while CI,
+ * which has no swoole, failed on it.
+ *
+ * SO THE INVARIANT IS TRUE BY CONSTRUCTION HERE, on any extension set: the
+ * resolution below warms the cache with the REAL temp directory before the
+ * export points TMPDIR at the sandbox. That is what keeps this suite's own
+ * in-process `sys_get_temp_dir()` — and therefore every
+ * `ToolIpcFiles::reserve()` name and every `tasklist_test_<id>.sqlite3` path —
+ * on the machine's real temp directory while spawned children get the sandbox.
+ *
+ * Pinned from both ends by `tests/SuiteTempSandboxContractTest.php`: the
+ * ordering is asserted over this file's own token stream, and the interpreter
+ * behaviour that makes the ordering matter is asserted in cold-cache children.
+ */
+$realTempDir = sys_get_temp_dir();
+
+// Published for the contract test, which has no other way to see the value
+// this process resolved BEFORE the export below. `$GLOBALS` rather than a
+// local for the same reason as `__sugarcrushSuiteStdin` at the foot of this
+// file: PHPUnit includes this bootstrap from inside a private method of
+// `Application`, so a bare local here does not outlive the include.
+$GLOBALS['__sugarcrushRealTempDir'] = $realTempDir;
+
+$sandbox = $realTempDir . '/sc_suite_tmp_' . (function_exists('posix_geteuid') ? posix_geteuid() : 'x');
 @mkdir($sandbox, 0o700, true);
 
 ToolIpcFiles::sweepOnce($sandbox);
@@ -197,10 +257,13 @@ putenv('TMPDIR=' . $sandbox);
  * and no longer does; the leak was every OTHER suite.
  *
  * THE `putenv()` ABOVE CANNOT MOVE IT, which is why this needs a seam of its
- * own. MEASURED, PHP 8.3.6: `sys_get_temp_dir()` still answers `/tmp` after
- * `putenv('TMPDIR=…')`, because PHP resolves and caches it once per process —
- * the same fact `ToolIpcFiles::sweep()`'s doc-block records for its `$dir`
- * parameter.
+ * own. MEASURED, PHP 8.3.6: `sys_get_temp_dir()` still answers `/tmp` here
+ * after `putenv('TMPDIR=…')`, because PHP caches the temp directory on the
+ * FIRST resolution and the block above deliberately resolves it before it
+ * exports — the same fact `ToolIpcFiles::sweep()`'s doc-block records for its
+ * `$dir` parameter. (Not an unconditional property of `putenv()`: on an
+ * interpreter where nothing has resolved yet, `putenv()` DOES move it. See the
+ * ordering block above.)
  *
  * THE GUARDS ARE NOT SWITCHED OFF BY THIS, only pointed elsewhere:
  * `AuditHook::append()` still refuses a directory that is a symlink, is not a
