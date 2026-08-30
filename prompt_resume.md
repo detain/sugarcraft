@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3. P2.audit-fix-1 IS MERGED (33df838d0) and the CI red is FIXED — master is green in the CI form for the first time since 2026-08-27. P3.S5 is VERIFIED and READY TO MERGE but NOT merged. ONE AGENT IS RUNNING. Start at §8 'Next step'.**
+**Current state: Phase 3. P3.S5 IS MERGED (405252a41) and P2.audit-fix-1 is fully merged including cycle 4 (33df838d0 + f95546b10). Master is GREEN LOCALLY from both cwds at 10452/161673 — but origin/master is still RED ON CI on exactly one test, whose ROOT CAUSE IS NOW FOUND. ONE AGENT IS RUNNING (CI-fix-1). Start at §8 'Next step'.**
 
 ---
 
@@ -52,9 +52,9 @@ shape of the code:
    `tests/Providers/SystemPromptTransmissionMatrixTest.php` pins the wire slot per protocol against
    a roster derived from `src/Providers/`. A cross-phase reviewer traced one prompt end to end and
    measured **assembled 5099 B == golden 5099 B == wire 5099 B** with `messages[0].role = 'system'`.
-2. **But not for every provider.** `VertexProvider::googleBody()` still drops the entire assembled
-   prompt for Google publisher models, on both paths — the plan's founding defect, live in the
-   seventh provider. Being fixed as `P1.audit-fix-1`.
+2. **The seventh provider's transmission fix is MERGED** (`P1.audit-fix-1`, `03d8fed37`) — but two
+   design questions it surfaced are still open and are the user's to answer, not yours. See
+   `Awaiting user decision` in §8; they block nothing.
 3. **The prompt is deterministic and golden-pinned.** Clock, platform and cwd are injectable;
    `tests/fixtures/prompt/golden-system-prompt.txt` pins the assembly byte-for-byte,
    `golden-agent-prompt.txt` pins `Agent::systemPrompt()`, and `tests/Prompt/PromptFixture.php` is
@@ -62,10 +62,12 @@ shape of the code:
 4. **`<env>` is LAST.** P3.S1 moved it from layer 2 to layer 7 — stable layers first, volatile last —
    so the cacheable prefix survives the first file write of a session. `Agent::systemPrompt()`
    deliberately uses the **opposite** order: two assemblers, see `prompt_plan.md` §17.2.
-5. **The write-signal exists but is not wired.** P3.S2 added
-   `EnvironmentBlock::withWriteSinceLastRender()`, defaulting to `true` so production output is
-   unchanged. Nothing in `src/` calls it. P3.S5 is the scheduled wiring step, and its brief has been
-   corrected to record that it reaches only one of the four construction sites.
+5. **The write-signal is WIRED — on one of four sites.** P3.S5 (`405252a41`) marks the `Runtime` from
+   `EngineBackend`'s per-step loop, so the two git diff sections are now the only licensed mid-turn
+   difference; everything before the cut, frozen triple included, is still pinned byte-for-byte.
+   `EnvironmentBlock`'s other THREE construction sites feed `Agents\Agent::systemPrompt()` and keep
+   the old default-emit behaviour. **P3.S6 is now scheduled for them** — that is the orchestrator's
+   recorded disposition of the second-assembler gap, and it is no longer owed.
 6. **The reorder is now measured, not asserted.** P3.S4 pinned it: the shared prefix between two
    consecutive prompts on a dirty tree went **3,095 -> 4,670 bytes** of the same 4,844-byte prompt —
    a reorder, not an addition, moving 1,575 B in front of the first differing byte. But `<repo-map>`
@@ -239,128 +241,133 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            3. Steps: P3.S1-S4 merged; P3.S5 VERIFIED AND READY BUT NOT MERGED.
+Phase:            3. P3.S1-S5 all MERGED. P3.S6 newly SCHEDULED (see below).
 
-Next step:        **WAIT for the running agent, then do the four things below IN ORDER.**
+Next step:        **WAIT for the running agent. Then: CI, then the Phase 3 close queue.**
 
                   ==================================================================
-                  0. ONE AGENT IS RUNNING. DO NOT SPAWN ANYTHING UNTIL IT REPORTS.
+                  0. ONE AGENT IS RUNNING — CI-fix-1. DO NOT SPAWN UNTIL IT REPORTS.
                   ==================================================================
-                  It is a FIX agent for **P2.audit-fix-1 cycle 4**, working in
-                  /home/sites/prompt-step-P2.audit-fix-1 (branch prompt/P2.audit-fix-1).
-                  Find it with `ListAgents`; continue it with SendMessage if needed.
-                  It already DIED ONCE on a session rate limit (HTTP 429, resets 11:40pm UTC)
-                  having done NO work, and was RESUMED with the full task re-sent. IT MAY DIE
-                  AGAIN THE SAME WAY.
-                  * If it reports: verify its work yourself (bar below), then merge the DELTA —
-                    `git merge --no-ff prompt/P2.audit-fix-1` a SECOND time. The first merge
-                    (33df838d0) took the branch at e2e7805be; its cycle-4 commit sits on top and
-                    is NOT yet on master.
-                  * If it died again with nothing committed: that is FINE. Its four findings are
-                    refinements, already recorded in the worklog under P2.audit-fix-1 Follow-ups
-                    1-6. Leave the branch, note it, and MOVE ON to step 1. Do not block on it.
-                  * §1.8: a blank/aborted/rate-limited return means the agent DIED. It is never a
-                    result. Never write its report for it.
-                  ITS ACCEPTANCE BAR (run it yourself, stdin from /dev/null, BOTH cwds, numbers
-                  must be IDENTICAL from both and must not fall below):
-                    cd /home/sites/prompt-step-P2.audit-fix-1 && php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
-                    cd /home/sites/prompt-step-P2.audit-fix-1/sugar-crush && php vendor/bin/phpunit -c phpunit.xml --colors=never </dev/null
-                  Baseline to match or beat: Tests: 10427, Assertions: 161455, Skipped: 1.
+                  Worktree /home/sites/prompt-step-CI-fix-1, branch prompt/CI-fix-1,
+                  based on master f95546b10, vendor/ hardlinked and PSR-4 root VERIFIED
+                  to resolve into the worktree. Find it with ListAgents; continue it
+                  with SendMessage. §1.8: a blank/aborted/rate-limited return means it
+                  DIED — never a result, never write its report for it.
 
-                  1. **MERGE P3.S5.** Branch prompt/P3.S5 @ 310deb392, worktree
-                     /home/sites/prompt-step-P3.S5, tree clean, vendor/ hardlinked and verified.
-                     ALREADY VERIFIED BY THE ORCHESTRATOR — do not re-run the whole review:
-                       SystemPromptWiringTest: OK (11 tests, 75 assertions) from BOTH cwds
-                       census 6-file set:      OK (103 tests, 9448 assertions)
-                       tests/RuntimeTest.php:  OK (112 tests, 398 assertions)
-                     Files: src/Runtime.php, src/Backend/EngineBackend.php,
-                     tests/Integration/SystemPromptWiringTest.php, tests/RuntimeTest.php —
-                     DISJOINT from P2.audit-fix-1's four, so no conflict is possible.
-                     Use `git merge --no-ff prompt/P3.S5` with a detailed message (§1.6). The full
-                     worklog entry is ALREADY WRITTEN — just add the merge sha to its heading.
-                     THEN run the FULL suite from BOTH cwds. The combination is proven by neither
-                     branch alone: P2.audit-fix-1 moved both goldens and P3.S5 changes the assembly
-                     path that produces them. NOTE the golden md5 is now 32ea749d… (P2.audit-fix-1
-                     changed it); P3.S5's entry records the OLD 7efcc488… because it predates that
-                     merge. Re-verify rather than trusting either figure.
+                  WHAT IT IS FIXING. origin/master is RED on CI with exactly ONE
+                  failure, and it is the only thing keeping CI red:
+                    SuiteTempSandboxContractTest
+                      ::testPutenvDoesNotMoveTheCallingProcessesTempDirectory
+                    "putenv() before the first call DID move sys_get_temp_dir(); the
+                     bootstrap comment is now wrong and every in-process temp path in
+                     this suite has moved with it"   at that file :64
+                    CI: Tests: 10452, Assertions: 161663, Failures: 1, Skipped: 1.
 
-                  2. **CLEAN UP THE WORKTREES** — but §1.12 FIRST (check status + unmerged commits
-                     on each before removing anything). Remove /home/sites/prompt-step-P3.S5 and
-                     its branch once merged; remove /home/sites/prompt-step-P2.audit-fix-1 only
-                     once its agent is done AND its delta is merged.
-                     NEVER touch /home/sites/crush-lane-{a,b,c} — different plan.
+                  ROOT CAUSE — FOUND, and it OVERTURNS what this file used to say.
+                  This was recorded for days as "fails on CI, does not reproduce
+                  locally from either cwd." THAT WAS FALSE. It reproduces instantly:
+                    T=/tmp/probe; mkdir -p $T
+                    TMPDIR=/tmp php    -r 'putenv("TMPDIR=$T"); echo sys_get_temp_dir();'
+                      -> /tmp        (pinned — what this box does)
+                    TMPDIR=/tmp php -n -r 'putenv("TMPDIR=$T"); echo sys_get_temp_dir();'
+                      -> /tmp/probe  (MOVED — exactly CI's failure)
+                  `php -n` reproduces CI. Bisecting /etc/php/8.3/cli/conf.d/*.ini one
+                  extension at a time: the ONLY extension that masks it on this box is
+                  **swoole** (20-swoole.ini). NOT opcache, NOT pcov. PHP 8.3.6,
+                  sys_temp_dir ini empty. MECHANISM: PHP caches its temp dir on first
+                  resolution; swoole's module init resolves it during startup, so the
+                  cache is warm before user code runs and a later putenv cannot move
+                  it. CI has no swoole -> cold cache -> putenv wins.
+                  **So the test is NOT flaky. It is correctly reporting that its own
+                  claim 1 is false** — the claim holds only when some extension
+                  happened to warm the cache first.
 
-                  3. **FIX THE STALE PLAN CITATIONS** (they could not be fixed earlier because
-                     P3.S5 shifts the very line numbers). All VERIFIED stale by the orchestrator:
-                       * prompt_plan.md:1456 cites `src/Runtime.php:1850` for the Runtime
-                         EnvironmentBlock site. On master pre-merge it is :1880; on the P3.S5 branch
-                         :2320. Re-measure after merging and write the true number.
-                       * prompt_plan.md:1483 cites `EngineBackend.php:1166` for `$this->complete()`
-                         — CORRECT on master today, becomes :1201 after P3.S5 merges. Re-measure.
-                       * prompt_plan.md:1649 and :3107 (§17.2 invariant 9) cite
-                         `SystemPromptWiringTest.php:168` as the memoisation pin. MEASURED: line 168
-                         is `testBothHalvesLandInOneSystemPromptWithEnvironmentLast()`, an ORDERING
-                         pin. There is NO test with "memo" in its name in that file. Find the real
-                         pin or say there isn't one.
+                  ITS ACCEPTANCE BAR (run it yourself, stdin from /dev/null):
+                    cd /home/sites/prompt-step-CI-fix-1 && php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
+                    cd /home/sites/prompt-step-CI-fix-1/sugar-crush && php vendor/bin/phpunit -c phpunit.xml --colors=never </dev/null
+                  Both green, numbers IDENTICAL, not below Tests: 10452, Assertions:
+                  161673, Skipped: 1. **AND it must prove the fix on a COLD-CACHE
+                  build** (the -n / no-swoole form), because a fix that is green on
+                  this box and unproven cold has not fixed CI. Send it back if not.
+                  DO NOT accept a fix that weakens, skips, or environment-gates the
+                  assertion — that is the forbidden move here and the brief says so.
 
-                  4. **THEN, BEFORE PHASE 3 CAN CLOSE**, in this order:
-                     a. **THE SECOND ASSEMBLER DISPOSITION — still owed.** Stated in code at
-                        Runtime.php:546-561. EITHER schedule a P3.S6 wiring the Agent assembler OR
-                        add a §18 row saying why the Agent path deliberately keeps the diff.
-                        prompt_plan.md's P3.S5 section says explicitly: do NOT close Phase 3 with
-                        this gap unrecorded.
-                     b. **P3.S4-fix-1** — the eight standing findings from P3.S4's sixth review,
-                        verbatim in its worklog entry, all in tests/Providers/PromptStabilityTest.php.
-                        Highest value first: F5, then F2 and F6 (wrong-green fixture holes), then F1,
-                        then the comment-accuracy set F3/F4/F7/F8.
-                     c. **P3.S5-fix-1** — cycle-6 findings 1-4 in Runtime.php and 5 in RuntimeTest.php
-                        (both already declared by P3.S5). Full review at
-                        .sugar-crush-prompt/P3.S5-cycle6-review.txt. **Finding 2 has teeth and is
-                        WRONG-GREEN:** a genuinely write-capable tool typed into the `$readOnly` array
-                        instead of WRITE_CAPABLE_TOOL_NAMES leaves the suite fully green while the
-                        engine permanently suppresses the diff after every write by that tool.
+                  1. **MERGE CI-fix-1** once verified, then re-run the full suite from
+                     BOTH cwds, then remove the worktree per §1.12 (status + unmerged
+                     commits FIRST) and delete the branch with `git branch -d` (which
+                     is itself a merge check).
+
+                  2. **THE PHASE 3 CLOSE QUEUE**, in this order — nothing here is
+                     blocked, and none of it needs a user decision:
+                     a. **P3.S4-fix-1** — the eight standing findings from P3.S4's
+                        sixth review, verbatim in its worklog entry, all in
+                        tests/Providers/PromptStabilityTest.php. Highest value first:
+                        F5, then F2 and F6 (wrong-green fixture holes), then F1, then
+                        the comment-accuracy set F3/F4/F7/F8.
+                     b. **P3.S5-fix-1** — cycle-6 findings 1-4 in Runtime.php and 5 in
+                        RuntimeTest.php (both files already declared by P3.S5). The
+                        full review is at
+                        /home/sites/sugarcraft/.sugar-crush-prompt/P3.S5-cycle6-review.txt
+                        — NOT in a worktree any more; P3.S5's was removed.
+                        **Finding 2 has teeth and is WRONG-GREEN:** a genuinely
+                        write-capable tool typed into the `$readOnly` array instead of
+                        WRITE_CAPABLE_TOOL_NAMES leaves the suite fully green while the
+                        engine permanently suppresses the diff after every write by
+                        that tool.
+                     c. **P3.S6** — NEWLY SCHEDULED, full text in prompt_plan.md. Wire
+                        the write-signal into the Agent assembler, OR land a §18 row
+                        plus the measurement showing there is no per-step seam to wire.
+                        Its FIRST action is to measure which of the nine systemPrompt()
+                        call sites are per-step vs once-per-agent. Do not let an agent
+                        manufacture a loop in order to have something to wire.
                      d. **THEN the Phase 3 close review** (§1.7), cap three cycles.
 
-Steps done:       21 of 62 merged (P2.audit-fix-1 is the 21st), + P3.S5 verified and pending.
-Phases done:      3 of 12
+Steps done:       22 of 63 merged. P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f ·
+                  P3.S4 f2af06eaa · P3.S5 405252a41 · retro-fixes P3.audit-fix-1 6aff0bad1,
+                  P1.audit-fix-1 03d8fed37, P2.audit-fix-1 33df838d0 + f95546b10 (cycle 4).
+Phases done:      3 of 12  (Phase 3 is NOT closed — see the close queue above)
 Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
 
 Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers for weeks without
                   doing so, and that is exactly what hid CI being red for five days.**
-                  MASTER @ 33df838d0 (after the P2.audit-fix-1 merge), stdin from /dev/null:
-                    checkout root (= CI's cwd): Tests: 10427, Assertions: 161455, Skipped: 1.  GREEN
-                    from sugar-crush/:          re-run to confirm; it was still in flight when this
-                                                was written. At the branch tip both cwds were
-                                                IDENTICAL at 10427/161455, so this is expected to
-                                                match — but VERIFY, do not assume.
-                  MASTER BEFORE the merge, for contrast:
-                    checkout root: Tests: 10421, Assertions: 161280, Errors: 1, Failures: 1, Skipped: 1.
-                    sugar-crush/:  Tests: 10421, Assertions: 161281, Skipped: 1.
-                  census 6-file set: OK (103 tests, 9448 assertions)
-                  golden-system-prompt.txt md5: NOW 32ea749d… (was 7efcc488… before this merge)
-                  Path-repo gates: all three exit 0 — RUN THEM FROM THE REPO ROOT, not sugar-crush/;
-                  from the wrong cwd php cannot find tools/check-path-repos.php and all three
+                  MASTER @ f95546b10 (P3.S5 + P2 cycle-4 both merged), stdin from /dev/null:
+                    checkout root (= CI's cwd): Tests: 10452, Assertions: 161673, Skipped: 1. GREEN
+                    from sugar-crush/:          Tests: 10452, Assertions: 161673, Skipped: 1. GREEN
+                  IDENTICAL from both cwds. That combination is proven by neither branch
+                  alone: P2.audit-fix-1 moved both goldens, P3.S5 changed the assembly
+                  path that produces them.
+                  **BUT CI IS STILL RED** on the one test in item 0. Green here is not
+                  green there — this box has swoole and CI does not.
+                  **CI/local assertion counts are NOT comparable.** CI counted 161663 at
+                  405252a41 where this box counts 161655 — 8 MORE — because the two
+                  environments gate different tests (FFI/pty/extension paths) and a
+                  failing test stops accruing assertions where it dies. The TEST count
+                  agrees exactly. Compare assertions between the two CWDS on one box;
+                  never between this box and CI.
+                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — both unmoved by
+                  P3.S5 and by P2 cycle 4.
+                  Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from
+                  the wrong cwd php cannot find tools/check-path-repos.php and all three
                   "fail". That misread has happened twice.
-                  Two tests fail ONLY under a pty with a live terminal (Chat\CompactModelSummaryTest,
-                  MouseModalGuardTest). ALWAYS redirect stdin from /dev/null.
+                  Two tests fail ONLY under a pty with a live terminal
+                  (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect
+                  stdin from /dev/null.
 
-In-flight batch:  ONE agent — P2.audit-fix-1 cycle 4. See "Next step" item 0 for everything about it.
+In-flight batch:  ONE agent — CI-fix-1. See "Next step" item 0 for everything about it.
 
-Live worktrees:   /home/sites/sugarcraft                     master, at the commit above
-                  /home/sites/prompt-step-P2.audit-fix-1     prompt/P2.audit-fix-1 @ e2e7805be,
-                                                             AGENT WORKING IN IT — do not remove
-                  /home/sites/prompt-step-P3.S5              prompt/P3.S5 @ 310deb392, clean, NO
-                                                             agent, VERIFIED, awaiting merge
-                  /home/sites/crush-lane-{a,b,c}             NOT this plan's — leave alone
+Live worktrees:   /home/sites/sugarcraft            master, at the commit above
+                  /home/sites/prompt-step-CI-fix-1  prompt/CI-fix-1 @ f95546b10,
+                                                    AGENT WORKING IN IT — do not remove
+                  /home/sites/crush-lane-{a,b,c}    NOT this plan's — leave alone
+                  (P3.S5 and P2.audit-fix-1 worktrees were REMOVED 2026-08-30 after
+                  their §1.12 checks; their branches deleted with `git branch -d`.)
 
-Blocked on:       Nothing. P3.S5's scope-escalation block is CLEARED (list widened by one file, five
-                  cycles run, verified green from both cwds). Its earlier `blocked (review-cycle)`
-                  findings are now scheduled as P3.S5-fix-1 above.
+Blocked on:       Nothing.
 
-Awaiting user decision: THREE.
+Awaiting user decision: THREE. None of them blocks any queued work.
 
-                  (1) + (2) THE TWO VERTEXPROVIDER QUESTIONS, unchanged, merged and blocking nothing.
+                  (1) + (2) THE TWO VERTEXPROVIDER QUESTIONS, unchanged and merged.
                   `VertexProvider::googleBody()` builds the PaLM 2 `chat-bison` `:predict` envelope,
                   and `instances[0].context` IS that envelope's standing-instruction field — but
                   `gemini-1.5-pro-002`, the model BOTH test files pin as "the Google model", is not
@@ -373,7 +380,7 @@ Awaiting user decision: THREE.
                   existing green test outside that step's list). If (1) goes to `:generateContent`,
                   (2) is moot — a reason to settle (1) first.
 
-                  (3) NEW — **the test method rename.** P3.S5 leaves
+                  (3) **The test method rename.** P3.S5 shipped
                   `testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt` asserting the OPPOSITE of its
                   name. Renaming needs `src/Runtime.php` in the same diff (the citation lives there),
                   and MEASURED: nothing in the tree would catch a stranded citation if the rename
@@ -392,9 +399,10 @@ Open follow-ups:  **HIGH / SECURITY, LIVE IN PRODUCTION — see commit f571e59b5
                   the vector the roster itself calls "the live vector" — so this is strictly MORE
                   reachable. And P3.S5's re-arm rule (EngineBackend.php:662-664) guarantees the diff
                   renders on the step right after a write, so an agent writing `</env>` into a file
-                  puts it in its own next system prompt BY CONSTRUCTION.
-                  Per the standing functionality-before-hardening rule the FIX may be deferred but the
-                  FINDING is recorded as a step. FOLD INTO P5.S3 and extend the roster in the same diff.
+                  puts it in its own next system prompt BY CONSTRUCTION. **P3.S5 IS NOW MERGED, so
+                  that construction is live on master.** Per the standing
+                  functionality-before-hardening rule the FIX may be deferred but the FINDING is
+                  recorded as a step. FOLD INTO P5.S3 and extend the roster in the same diff.
 
                   **SymbolCitationDriftTest has a hole — ROOT CAUSE FOUND.** The backtick scraper at
                   tests/SymbolCitationDriftTest.php:290 is
@@ -405,20 +413,18 @@ Open follow-ups:  **HIGH / SECURITY, LIVE IN PRODUCTION — see commit f571e59b5
                   ONE citation it owned; every other path-prefixed citation in the tree is unpoliced.
                   Needs its own step.
 
-                  **P2.audit-fix-1 follow-ups 1-6** — see its worklog entry, verbatim. #1 is the real
-                  one: the leak scanner misses an absolute path on a DELETED diff line. The running
-                  agent may close 1, 2, 3 and 5.
-
-                  **A THIRD CI FAILURE, not covered by anything above.**
-                  SuiteTempSandboxContractTest::testPutenvDoesNotMoveTheCallingProcessesTempDirectory
-                  fails on CI but reproduces locally from NEITHER cwd. Present at a8100d388,
-                  9f531b566, af1e6079f; PREDATES both golden commits. INFERRED runner-specific
-                  (TMPDIR/sys_get_temp_dir). **Needs its own step — master may still be red on CI
-                  because of it even though it is green locally from both cwds.**
+                  **P2.audit-fix-1 follow-up 4 — the only one of its six still open.**
+                  DuplicatedTestHelperDriftTest normalises comments away, so doc-block divergence
+                  between the two copies of hostPathLeaks() is INVISIBLE to it — which is exactly why
+                  cycle 4's false-comment correction could land in one file and not the other. Wants a
+                  tests/Support/ helper; that directory is lane-owned (§5), so it needs its own step.
+                  Follow-ups 1, 2, 3 and 5 were CLOSED by cycle 4 (f95546b10).
 
                   RR3 F5 — the golden pins a DOUBLED separator before every skill body and this ships
-                  to the model (Skill.php:109 already returns "\n\n"; Runtime.php:1807 prepends
-                  another). DEFERRED: needs src/Runtime.php, which prompt/P3.S5 held.
+                  to the model (Skill.php:109 already returns "\n\n"; Runtime.php prepends another).
+                  It was deferred because it needs src/Runtime.php, which prompt/P3.S5 held —
+                  **that branch is now merged and the file is FREE.** Re-measure the line number
+                  before citing it; P3.S5 moved everything in that file.
 
                   Items previously queued and still open: P1.audit-fix-2 (RR2 F1/F3/F4/F7);
                   P3.audit-fix-2 (RR4 F2/F5/F7 plus P3.S4 escalations 2-3 and P3.S5 escalations 4-5 —
@@ -426,15 +432,18 @@ Open follow-ups:  **HIGH / SECURITY, LIVE IN PRODUCTION — see commit f571e59b5
                   EnvironmentBlock.php:112's "that caller does not exist yet" is now FALSE);
                   RR1 F2/F6; the four compressed Phase-2 worklog entries (heading levels FIXED
                   2026-08-30 in 2dda88b89, but P2.S4's deletion experiments are UNRECOVERABLE and its
-                  guards are UNPROVEN until re-run); §17.2 citation rot; doc edits + progress.json
-                  (dormant machinery — wire it or build it out, NEVER delete).
+                  guards are UNPROVEN until re-run); §17.2 citation rot (three fixed in 54ec6f7fd,
+                  more likely remain and SymbolCitationDriftTest cannot see the path-prefixed ones);
+                  doc edits + progress.json (dormant machinery — wire it or build it out, NEVER
+                  delete).
 
-Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-30. Phase 3 fully serial S1->S5.
+Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-30. Phase 3 serial S1->S6.
                   The src/ file-count census is RESOLVED — it never applied to this plan (§5), so
                   Phases 5/6/10 are NOT serialised by it. Still live before Phase 5/6:
-                  EngineBackend.php held by a lane and wanted by P7.S3 (NOTE P3.S5 now edits it);
-                  Chat.php + ContextCompactor.php for P4/P8; Bash.php behaviour vs P9.S3 description;
-                  AgentDefinition C7 for P7.S5; tests/Support/ wholesale; tree-wide census tests.
+                  EngineBackend.php held by a lane and NOW ALSO EDITED BY MERGED P3.S5 (wanted by
+                  P7.S3); Chat.php + ContextCompactor.php for P4/P8; Bash.php behaviour vs P9.S3
+                  description; AgentDefinition C7 for P7.S5 (P3.S6 must NOT widen into it);
+                  tests/Support/ wholesale — now wanted by TWO queued follow-ups.
 ```
 
 ---

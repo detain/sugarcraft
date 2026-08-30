@@ -253,7 +253,59 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
-### P2.audit-fix-1 — the golden prompt tests no longer depend on the cwd, and CI goes green   ·   2026-08-30   ·   merged 33df838d0 (branch HEAD e2e7805be, 3 commits)
+### PLAN-FIX-1 — schedule P3.S6, fix three stale citations, retract the plan's false CI claim   ·   2026-08-30   ·   54ec6f7fd
+
+**Status** `merged`. Orchestrator bookkeeping only — `prompt_plan.md`, no `src/` or `tests/` change,
+so no worktree and no step agent.
+
+**THE SECOND-ASSEMBLER DISPOSITION IS NOW MADE, and it was owed before Phase 3 could close.** P3.S5's
+section required the orchestrator to do exactly one of: schedule a P3.S6 wiring the Agent assembler,
+or add a §18 row saying why the Agent path deliberately keeps the diff. **Scheduled.** A §18 row would
+have had to argue that the CHEAPER path deserved the optimisation and the dearer one did not: the
+Agent assembler is live in production, its `render()` is NOT memoised (`Bootstrap.php:1458-1460`), and
+it pays FIVE git subprocesses per `systemPrompt()` call when the diff is emitted against THREE when
+suppressed, while the `Runtime` path P3.S5 optimised memoises its block. §1.10's standing rule is to
+wire dormant code, not to write down why it stays dormant — and the lever is dormant on three of
+`EnvironmentBlock`'s four construction sites.
+
+P3.S6 is deliberately written so a §18 row is still its honest outcome IF the measurement supports
+one: its FIRST required action is to establish whether the Agent path has a per-step seam at all —
+`systemPrompt()` is consumed at nine live sites and which are per-step vs once-per-agent is NOT yet
+measured — and it says in terms not to manufacture a loop in order to have something to wire.
+
+**THREE STALE CITATIONS, all re-measured after the P3.S5 merge so the numbers are final rather than
+about to shift again:**
+
+| citation | was | is | note |
+|---|---|---|---|
+| Runtime `EnvironmentBlock` site | `src/Runtime.php:1850` | `:2358` | P3.S5 added 492 lines to that file |
+| forked child's complete() | `EngineBackend.php:1166` | `:1201` | `new Runtime(` at `:547` is STILL `:547` |
+| the memoisation pin (cited twice) | `SystemPromptWiringTest.php:168` | `RuntimeTest.php:2063` | **wrong in kind, not merely stale** |
+
+The third was not a drifted line number. `SystemPromptWiringTest.php:168` is
+`testBothHalvesLandInOneSystemPromptWithEnvironmentLast()` — an ORDERING pin — and that file has no
+test with "memo" in its name at all. The real environment-block pin is
+`testTheEnvironmentSnapshotKeepsItsIdentityUntilTheWriteSignalActuallyChanges`. The invariant's two
+CO-cited pins were checked rather than assumed and both are genuine
+(`MemoryPromptWiringTest.php:209`, `RepoMapBlockTest.php:1166`); only the wrong one was replaced, and
+the approximate `~1170` is now exact. The three unchanged rows of the construction-site table
+(`Bootstrap.php:1462`, `App/App.php:553`, `Agents/Agent.php:417`) were re-verified as still correct.
+
+**THE STATUS HEADER RETRACTED A FALSE CLAIM THE PLAN CARRIED ABOUT ITSELF** — that P3.S5 was unmerged
+because "merging it as-is would RED CI." CI was ALREADY red from 2026-08-27, broken by this plan's own
+P2.S2/P2.S3, unnoticed for five days because every recorded figure was measured from `sugar-crush/`
+without naming its cwd — self-consistent and wrong at once. P3.S5 would have added a THIRD instance of
+that class, not the first. The header now also carries the rule that came out of it: every suite
+figure in this plan and its worklog must name the cwd it was measured from.
+
+**Step count 62 → 63**, updated in all four places including §2.2's parser, whose printed count is its
+own sanity check. VERIFIED by running that parser: `(63 steps parsed — must be 63)`, and P3.S6's four
+files parsed correctly. The 2026-08-28 `MEASURED ... (62 steps parsed)` line was left standing as the
+historical fact it is, with a note rather than a rewrite — §16.3.
+
+---
+
+### P2.audit-fix-1 — the golden prompt tests no longer depend on the cwd, and CI goes green   ·   2026-08-30   ·   merged 33df838d0 (cycles 1-2) **+ f95546b10 (cycle 4)** — branch HEAD f10b57735, 4 commits
 
 **Status** `merged` — but see Follow-ups: a cycle-4 fix agent is STILL RUNNING on this branch and its
 commit is NOT in this merge. The branch will move ahead of what was merged; merge it a SECOND time to
@@ -354,10 +406,61 @@ the orchestrator verified those separately).
 
 ---
 
-### P3.S5 — Wire the write-signal into the engine loop   ·   2026-08-30   ·   VERIFIED, NOT YET MERGED (branch HEAD 310deb392)
+**CYCLE 4 — MERGED SEPARATELY AS f95546b10, 2026-08-30.** A second merge of the same branch; the
+first (`33df838d0`) took it at `e2e7805be`, this took `f10b57735` on top. Two test files, no `src/`
+change, neither golden moved (`32ea749d` / `ef0326dd`, verified equal to master's).
 
-**Status** `verified-ready-to-merge`. Supersedes the earlier `blocked` entry further down this file.
-**Worktree** /home/sites/prompt-step-P3.S5 (branch prompt/P3.S5 @ 310deb392, tree clean, vendor/ ok)
+Closes follow-ups 1, 2, 3 and 5. **Follow-up 1 was the real one:** `hostPathLeaks()`'s posix arm had
+a HYPHEN in its lookbehind class, so a path at the start of a DELETED diff line — `-/opt/ci/build`,
+exactly how git renders a removed line — matched nothing, and the `/^\//m` fallback missed it too
+because the `-` sits at column 0. MEASURED standalone before any edit: with the hyphen `[]`, without
+it `["/opt/ci/build"]`. The gap was wholly unexercised — removing the hyphen with no new rows left
+both files byte-identical at `OK (41 tests, 354 assertions)`, which is why nothing caught it.
+
+The regression that hyphen was buying was MEASURED rather than assumed: it suppressed a match on a
+token ending in a hyphen immediately followed by a slash (`a-/opt/x`); `/usr/bin/grep -- '-/'` over
+both goldens exits 1, so that two-byte sequence does not occur, and a hyphen INSIDE a hyphenated path
+(`build-agent-42/checkout`) was never affected. Both polarities are now pinned, so re-widening the
+class reds on the added-line form too, not only the deleted-line one that was broken.
+
+Also closed: the `~` and the trailing `/?` were both unexercised (each deletion left 41/354) and now
+have rows; and three doc-block sites in `AgentTest` claimed "six literal roots including `/test/`"
+when `git show 8fa2721d9` shows FIVE and `git log -S"'/test/'"` on that file returns no commit at all
+— the list had been copied wholesale from `BaseSystemPromptTest`, where it IS correct.
+
+**A landmark pin with the deletion experiment that earns it:** cut the branch/status/recent-commits
+block out of the agent golden and pad the `Note:` line back to exactly 1060 bytes and
+`assertSame(1060, strlen($golden))` still PASSES — the byte count is blind to it — while the new
+landmark loop fails on `Current branch: main`. Control: same mutated golden with the loop removed →
+`OK (1 test, 16 assertions)`. Golden restored byte-identical.
+
+**ORCHESTRATOR-MEASURED at `f10b57735`**, stdin from /dev/null, BOTH cwds
+`Tests: 10427, Assertions: 161473, Skipped: 1.` — identical from both, test count UNMOVED, `+18`
+assertions over the 10427/161455 the first merge established = exactly the 12 new table rows (6 per
+file) plus the 6 new landmarks.
+
+**Follow-up still open (4):** `DuplicatedTestHelperDriftTest` normalises comments away, so doc-block
+divergence between the two copies of `hostPathLeaks()` is INVISIBLE to it — which is exactly why the
+false-comment correction above could land in one file and not the other. The two function bodies stay
+byte-identical so the drift guard still sees zero divergence. Wants a `tests/Support/` helper; that
+directory is lane-owned (§5), so it needs its own step.
+
+**A NOTE ON THE AGENT.** This agent died once on a session rate limit (HTTP 429) having done no work,
+and was resumed with the full task re-sent — per §1.8 a rate-limited return is a DEATH, never a
+result. It self-reported one deviation worth recording: it amended its commit subject from "cycle 3"
+to "cycle 4" to match the orchestrator's numbering (the branch's own labels were one behind), which
+is why the sha is `f10b57735` and not the `0f0e9fe6c` of its first write.
+
+---
+
+### P3.S5 — Wire the write-signal into the engine loop   ·   2026-08-30   ·   **MERGED 405252a41** (branch HEAD 310deb392, 11 commits)
+
+**Status** `merged`. Supersedes the earlier `blocked` entry further down this file.
+**Worktree** /home/sites/prompt-step-P3.S5 — REMOVED 2026-08-30 after the merge, per §1.12: tree
+clean, `master..HEAD` empty, and its three ignored `.sugar-crush-prompt/` review artifacts verified
+byte-identical (`cmp`) to the copies already in the main repo before removal. Branch deleted with
+`git branch -d`, which is itself a merge check. The cycle-6 review that P3.S5-fix-1 works from is at
+`/home/sites/sugarcraft/.sugar-crush-prompt/P3.S5-cycle6-review.txt` — NOT in the worktree any more.
 **Merge base** 7c0ab6954. **Files** src/Runtime.php · src/Backend/EngineBackend.php ·
 tests/Integration/SystemPromptWiringTest.php · tests/RuntimeTest.php
 
@@ -384,6 +487,27 @@ introduces no new red in the CI form.**
 * golden-system-prompt.txt md5: `7efcc4882f0597440518fc02799a923a` — UNCHANGED (note: this predates
   the P2.audit-fix-1 merge, which moves it to `32ea749d…`; re-verify after merging)
 * full suite from `sugar-crush/` (agent+reviewer): `Tests: 10446, Assertions: 161478, Skipped: 1.`
+
+**MERGED 405252a41, 2026-08-30.** Merge message carries the mechanism, the inverted-pin rationale
+and the four escalations. MEASURED BY THE ORCHESTRATOR ON MASTER after this merge AND the
+P2.audit-fix-1 cycle-4 merge (`f95546b10`), stdin from /dev/null:
+
+| cwd | result |
+|---|---|
+| checkout root (= CI's cwd) | `Tests: 10452, Assertions: 161673, Skipped: 1.` GREEN |
+| from `sugar-crush/`        | `Tests: 10452, Assertions: 161673, Skipped: 1.` GREEN |
+
+IDENTICAL from both cwds. That combination is proven by neither branch alone: P2.audit-fix-1 moved
+both golden fixtures and P3.S5 changes the assembly path that produces them. The +25 tests over
+master's previous 10427 are P3.S5's.
+
+**A CROSS-ENVIRONMENT CAVEAT, measured not assumed.** CI reported `Tests: 10452, Assertions: 161663`
+at `405252a41`; this box reports `161673` at `f95546b10`, which is `+18` for cycle 4 over a local
+`161655` — so CI counted **8 MORE** assertions than this box at the same commit. The TEST count
+agrees exactly; the ASSERTION count does not, because the two environments gate different tests
+(FFI/pty/extension-dependent paths) and a failing test stops accruing assertions where it dies.
+**So the assertion count is comparable between the two cwds on ONE box, and is NOT comparable
+between this box and CI.** Do not treat a CI/local assertion delta as a regression on its own.
 
 **The surviving invariant.** The suppressed step's prompt == the emitting step's prompt truncated at
 `"\n\nStaged changes (git diff --cached, index vs HEAD):"` plus `"\n</env>"`. Every byte before the
