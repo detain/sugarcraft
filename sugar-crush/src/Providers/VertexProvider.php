@@ -69,8 +69,19 @@ use SugarCraft\Crush\Tools\ToolCall;
  *   - `completeStream()` was a stub that yielded one empty chunk, so the
  *     streaming path silently produced an empty answer.
  *
- * The legacy Google `predict` path is kept intact for non-Anthropic models
- * rather than removed - it is simply no longer used for Claude.
+ * The legacy Google `predict` path is kept intact rather than removed - it is
+ * simply no longer used for Claude, nor (since the Gemini arm was built) for
+ * `gemini-*`. It still serves the PaLM 2 family, whose envelope it really is.
+ *
+ * `publishers/google` IS TWO PROTOCOLS
+ * ------------------------------------
+ * The publisher segment does not determine the request document. PaLM 2
+ * (`chat-bison@002`, `text-bison@002`) takes `:predict` + `instances`; Gemini
+ * takes `:generateContent` / `:streamGenerateContent` + `contents` +
+ * `systemInstruction`. Both are `publishers/google`, so {@see publisherFor()}
+ * answers `google` for both and the FAMILY predicate {@see isGeminiModel()} is
+ * what selects between the two bodies. A `gemini-*` id used to be handed the
+ * PaLM 2 envelope; it now gets its own.
  */
 final readonly class VertexProvider implements ProviderInterface
 {
@@ -96,6 +107,17 @@ final readonly class VertexProvider implements ProviderInterface
     public const METHOD_PREDICT = 'predict';
     public const METHOD_RAW_PREDICT = 'rawPredict';
     public const METHOD_STREAM_RAW_PREDICT = 'streamRawPredict';
+
+    /**
+     * The Gemini pair. A `publishers/google` model is NOT one protocol: the
+     * PaLM 2 family answers `:predict` with the `instances` envelope, while
+     * Gemini answers `:generateContent` / `:streamGenerateContent` with a
+     * `contents` document. Both live under the same publisher, so the
+     * publisher segment cannot select the protocol - the model family has to.
+     * See {@see isGeminiModel()}.
+     */
+    public const METHOD_GENERATE_CONTENT = 'generateContent';
+    public const METHOD_STREAM_GENERATE_CONTENT = 'streamGenerateContent';
 
     private const PUBLISHER_ANTHROPIC = 'anthropic';
     private const PUBLISHER_GOOGLE = 'google';
@@ -189,12 +211,29 @@ final readonly class VertexProvider implements ProviderInterface
      */
     public function supportsStreaming(): bool
     {
-        // `streamRawPredict` is bound for Anthropic publisher models. Google's
-        // `streamPredict`/`serverStreamingPredict` response envelope is not
-        // modelled here, so that family still reports no streaming.
-        return $this->isAnthropicModel($this->defaultModel);
+        // `streamRawPredict` is bound for Anthropic publisher models and
+        // `streamGenerateContent` for Gemini ones. The PaLM 2 family's
+        // `streamPredict`/`serverStreamingPredict` response envelope is still
+        // not modelled here, so THAT family reports no streaming - it is the
+        // only arm {@see completeStream()} answers by delegating to the unary
+        // call.
+        return $this->isAnthropicModel($this->defaultModel)
+            || $this->isGeminiModel($this->defaultModel);
     }
 
+    /**
+     * ANTHROPIC ONLY, AND THAT IS A STATEMENT ABOUT THIS CLASS, NOT ABOUT
+     * GEMINI. Gemini on Vertex does support function calling
+     * (`tools[].functionDeclarations`, answered with a `functionCall` part),
+     * and {@see \Google\Cloud\AIPlatform\V1\GenerateContentRequest::setTools()}
+     * is vendored. What is absent is the SHAPER: {@see geminiBody()} builds no
+     * `tools` key and {@see parseGeminiResponse()} reads no `functionCall`
+     * part, because the step that built the Gemini arm scoped tools out. So
+     * the honest flag is false - reporting true would let a caller hand this
+     * provider tools it silently drops. Whoever adds the shaper flips this
+     * with it; the absence is pinned by
+     * `VertexProviderTest::testAGeminiBodyCarriesNoToolsKeyEvenWhenToolsAreOffered`.
+     */
     public function supportsFunctionCalling(): bool
     {
         return $this->isAnthropicModel($this->defaultModel);
@@ -229,22 +268,36 @@ final readonly class VertexProvider implements ProviderInterface
     {
         $model = $this->modelId($request);
         $anthropic = $this->isAnthropicModel($model);
-        $method = $anthropic ? self::METHOD_RAW_PREDICT : self::METHOD_PREDICT;
+        $gemini = !$anthropic && $this->isGeminiModel($model);
+
+        // THREE routes, not two. `publishers/google` is two protocols (see
+        // METHOD_GENERATE_CONTENT), so the old anthropic-or-else binary sent
+        // every Gemini id an `instances` envelope the model does not read.
+        $method = match (true) {
+            $anthropic => self::METHOD_RAW_PREDICT,
+            $gemini => self::METHOD_GENERATE_CONTENT,
+            default => self::METHOD_PREDICT,
+        };
 
         try {
-            // Inside the try: endpointFor() and anthropicBody() both reject
-            // locally-detectable bad input, and a caller expects those the same
-            // way it expects a transport failure - as an error CompleteResponse.
+            // Inside the try: endpointFor(), anthropicBody() and geminiBody()
+            // all reject locally-detectable bad input, and a caller expects
+            // those the same way it expects a transport failure - as an error
+            // CompleteResponse.
             $endpoint = $this->endpointFor($model);
-            $body = $anthropic
-                ? $this->anthropicBody($request, stream: false)
-                : $this->googleBody($request);
+            $body = match (true) {
+                $anthropic => $this->anthropicBody($request, stream: false),
+                $gemini => $this->geminiBody($request),
+                default => $this->googleBody($request),
+            };
 
             $data = ($this->predictor)($endpoint, $method, $body);
 
-            return $anthropic
-                ? $this->parseAnthropicResponse($data, $model)
-                : $this->parseResponse($data);
+            return match (true) {
+                $anthropic => $this->parseAnthropicResponse($data, $model),
+                $gemini => $this->parseGeminiResponse($data, $model),
+                default => $this->parseResponse($data),
+            };
         } catch (\Throwable $e) {
             return new CompleteResponse(
                 content: '',
@@ -287,12 +340,19 @@ final readonly class VertexProvider implements ProviderInterface
     {
         $model = $this->modelId($request);
 
+        if ($this->isGeminiModel($model) && !$this->isAnthropicModel($model)) {
+            yield from $this->streamGemini($request, $model);
+
+            return;
+        }
+
         if (!$this->isAnthropicModel($model)) {
-            // Google publisher models have no rawPredict stream and their
-            // streaming envelope is not modelled here. Yielding the unary
-            // result once keeps a caller that only ever calls completeStream()
-            // working instead of handing it the empty chunk this method used
-            // to return for every model.
+            // The PaLM 2 family has no rawPredict stream and its
+            // `serverStreamingPredict` envelope is not modelled here. Yielding
+            // the unary result once keeps a caller that only ever calls
+            // completeStream() working instead of handing it the empty chunk
+            // this method used to return for every model. Gemini no longer
+            // reaches this branch - it has a real stream, above.
             yield $this->complete($request);
 
             return;
@@ -397,6 +457,30 @@ final readonly class VertexProvider implements ProviderInterface
     public function isAnthropicModel(string $model): bool
     {
         return str_contains(strtolower($model), 'claude');
+    }
+
+    /**
+     * Gemini models are `publishers/google` - the SAME publisher as PaLM 2 -
+     * but a DIFFERENT protocol, so this predicate selects the request
+     * document and the RPC, never the endpoint. {@see publisherFor()} is
+     * unchanged by it and still answers `google` for both families;
+     * `endpointFor('gemini-1.5-pro-002')` returns the identical resource name
+     * it returned before this arm existed.
+     *
+     * Matched on the family name for the same reason {@see isAnthropicModel()}
+     * is: Vertex ids carry a version suffix (`gemini-1.5-pro-002`,
+     * `gemini-2.0-flash-001`) and an exact-id list would go stale on every
+     * model release.
+     *
+     * DELIBERATELY NARROW. Everything else under `publishers/google` -
+     * `chat-bison@002`, `text-bison@002`, `code-bison`, the `medlm` family -
+     * keeps the legacy `instances`/`:predict` route, which is the envelope
+     * those models really do take. This predicate does not try to be "is a
+     * modern Google model"; it names one family whose wire protocol is known.
+     */
+    public function isGeminiModel(string $model): bool
+    {
+        return str_contains(strtolower($model), 'gemini');
     }
 
     private function publisherFor(string $model): string
@@ -981,6 +1065,386 @@ final readonly class VertexProvider implements ProviderInterface
     }
 
     // -------------------------------------------------------------------------
+    // Gemini (generateContent / streamGenerateContent) request shaping
+    //
+    // WHY THIS ARM EXISTS. `publishers/google` fronts TWO protocols. The
+    // legacy arm below builds the PaLM 2 `chat-bison` `instances`/`context`
+    // envelope for `:predict`; Gemini does not read that document at all. It
+    // answers `:generateContent` / `:streamGenerateContent` with
+    // `{contents, systemInstruction, generationConfig}`. Before this arm, a
+    // `gemini-*` id - the id both Vertex test files pin as "the Google model"
+    // - was handed the PaLM 2 envelope, i.e. a request Gemini would not
+    // accept.
+    //
+    // EPISTEMIC STATUS, stated once for the whole arm (rule 16.3): NOTHING
+    // HERE HAS VERTEX CREDENTIALS. Every claim below is about the DOCUMENT
+    // THIS CLASS BUILDS and the protobuf request object it hands the SDK
+    // client - both measured offline, the second through the vendored REST
+    // transport with a captured http handler
+    // (`VertexProviderTest::callSiteRequestFor()`). That the deployed service
+    // accepts or honours that document is UNVERIFIED here; it rests on the
+    // vendored proto/REST config and on Google's published reference
+    // (https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/projects.locations.publishers.models/generateContent,
+    // https://ai.google.dev/api/generate-content), not on a live call.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Streams a Gemini turn through `:streamGenerateContent`.
+     *
+     * Split out of {@see completeStream()} rather than inlined so the Gemini
+     * route is one named unit next to its body builder. The catch mirrors
+     * completeStream()'s: a generator's caller must see a locally-detectable
+     * bad request as an error CHUNK, not as an exception thrown on first
+     * iteration.
+     *
+     * NO USAGE-SPLIT CAVEAT HERE, unlike the Anthropic arm. Gemini repeats
+     * `usageMetadata` on chunks rather than splitting input tokens onto a
+     * `message_start` and output tokens onto a terminal event, so
+     * {@see parseGeminiChunk()} emits a usage-bearing response only for the
+     * LAST chunk that carries `usageMetadata` - see its doc-block for why
+     * summing would double-count.
+     *
+     * @return \Generator<int, CompleteResponse>
+     */
+    private function streamGemini(CompleteRequest $request, string $model): \Generator
+    {
+        try {
+            $endpoint = $this->endpointFor($model);
+            $body = $this->geminiBody($request);
+
+            $pendingUsage = null;
+
+            foreach (($this->streamer)($endpoint, self::METHOD_STREAM_GENERATE_CONTENT, $body) as $event) {
+                $chunk = $this->parseGeminiChunk(
+                    is_array($event) ? $event : [],
+                    $model,
+                    $pendingUsage,
+                );
+
+                if ($chunk !== null) {
+                    yield $chunk;
+                }
+            }
+
+            // Usage is emitted ONCE, after the stream ends, from the last
+            // `usageMetadata` seen. Gemini restates cumulative counts on every
+            // chunk that carries them, so yielding one per chunk would make
+            // Runtime's cross-chunk SUM (documented on completeStream()) bill
+            // a five-chunk turn five times over.
+            if ($pendingUsage !== null) {
+                yield $pendingUsage;
+            }
+        } catch (\Throwable $e) {
+            yield new CompleteResponse(
+                content: '',
+                isError: true,
+                errorMessage: $e->getMessage(),
+                errorTransient: TransientFailure::isTransient($e),
+            );
+        }
+    }
+
+    /**
+     * The Gemini `:generateContent` request document.
+     *
+     * THE SYSTEM PROMPT RIDES TOP-LEVEL `systemInstruction`, which is the
+     * whole point of this arm. It is a `Content` - `{"parts":[{"text": …}]}` -
+     * not a bare string, and it carries no `role`. Assembled by the SAME
+     * {@see systemInstruction()} joiner every other envelope in this class
+     * uses, so a request whose prompt is empty in the Anthropic arm is empty
+     * here too rather than growing an empty `systemInstruction` object.
+     *
+     * Deliberately carries NO `model` key: like `rawPredict`, the model is a
+     * path segment. (The SDK's `GenerateContentRequest` DOES have a `model`
+     * field, and {@see defaultPredictor()} sets it from the endpoint - that is
+     * the request OBJECT, not this document. The two are different things and
+     * the seam signature keeps them apart.)
+     *
+     * NO `tools` KEY, deliberately - see {@see supportsFunctionCalling()}.
+     *
+     * @throws \InvalidArgumentException when the transcript yields no turns.
+     *         `contents` is annotated `(.google.api.field_behavior) = REQUIRED`
+     *         on the vendored proto
+     *         (`vendor/google/cloud-ai-platform/src/V1/GenerateContentRequest.php`,
+     *         the `contents` field's generated comment - MEASURED by reading
+     *         the vendored file), so an empty list is a server-side 400 with
+     *         nothing useful in it. This arm therefore takes the ANTHROPIC
+     *         arm's position, not the legacy Google arm's: it rejects locally.
+     *         The asymmetry with {@see googleBody()} - which accepts both an
+     *         empty transcript and a system-message-only one - is deliberate
+     *         and is a protocol difference, not an inconsistency: the
+     *         `instances` envelope states no minimum-turn requirement, and
+     *         `generateContent` does.
+     *
+     * @return array<string, mixed>
+     */
+    private function geminiBody(CompleteRequest $request): array
+    {
+        $contents = $this->formatGeminiContents($request->messages);
+
+        if ($contents === []) {
+            throw new \InvalidArgumentException(
+                'Vertex generateContent: `contents` is a REQUIRED field and the transcript '
+                . 'produced no turns (it was empty, held only system messages - which are '
+                . 'hoisted into the top-level "systemInstruction" - or held only messages with '
+                . 'empty content).'
+            );
+        }
+
+        $body = ['contents' => $contents];
+
+        $system = $this->systemInstruction($request);
+        if ($system !== null) {
+            // A `Content` with parts and NO role. Gemini rejects a `system`
+            // role inside `contents`, exactly as Anthropic rejects one inside
+            // `messages`.
+            $body['systemInstruction'] = ['parts' => [['text' => $system]]];
+        }
+
+        // EVERY SAMPLING KNOB LIVES IN ONE NESTED OBJECT, and it must reach
+        // the request. The legacy arm's `parameters` map does not
+        // ({@see googleBody()}'s note on defaultPredictor()'s missing
+        // setParameters()); that defect is NOT reproduced here, and
+        // `VertexProviderTest::testTheGeminiCallSiteSendsGenerationConfigOnTheWire`
+        // drives the real seam through the vendored REST transport and asserts
+        // this object in the serialized HTTP body, so deleting the
+        // `setGenerationConfig()` call reds.
+        $generationConfig = [
+            'temperature' => $request->temperature ?? self::DEFAULT_TEMPERATURE,
+            'maxOutputTokens' => $request->maxTokens ?? self::DEFAULT_MAX_TOKENS,
+        ];
+
+        if ($request->topP !== null) {
+            $generationConfig['topP'] = $request->topP;
+        }
+
+        if ($request->topK !== null) {
+            $generationConfig['topK'] = $request->topK;
+        }
+
+        $stopSequences = $this->stopSequences($request);
+        if ($stopSequences !== []) {
+            $generationConfig['stopSequences'] = $stopSequences;
+        }
+
+        $body['generationConfig'] = $generationConfig;
+
+        return $body;
+    }
+
+    /**
+     * Renders the transcript as Gemini `contents` turns.
+     *
+     * THE ROLE VOCABULARY IS `user` / `model`. It is NOT `assistant`:
+     * {@see formatMessages()} - which the legacy arm still uses, unchanged -
+     * emits `assistant`, and Gemini does not know that role. That single word
+     * is why this arm cannot share the legacy formatter.
+     *
+     * SystemMessage is dropped here, hoisted by {@see systemInstruction()}.
+     * A message whose content is empty contributes no turn at all: a `Part`
+     * with an empty `text` is not a useful turn, and the empty-transcript
+     * guard in {@see geminiBody()} is what then reports it.
+     *
+     * TWO THINGS THIS DOES NOT DO, both recorded rather than silently absent:
+     *
+     *   - It does not MERGE consecutive same-role turns the way
+     *     {@see formatAnthropicMessages()} must (Anthropic rejects two `user`
+     *     turns in a row). Whether Gemini requires strict alternation is
+     *     UNVERIFIED here - nothing in this repo can call the service - so the
+     *     transcript is transmitted turn-for-turn rather than reshaped on a
+     *     guess. The 1:1 mapping is pinned by
+     *     `VertexProviderTest::testGeminiContentsAreNotMergedAcrossConsecutiveSameRoleTurns`
+     *     so that adopting a merge later is a visible decision.
+     *   - It does not emit a `functionResponse` part for a ToolResultMessage;
+     *     that message renders as an ordinary `user` text turn, because no
+     *     `functionCall` is ever requested ({@see supportsFunctionCalling()}).
+     *
+     * @param array<Message> $messages
+     * @return array<int, array{role: string, parts: array<int, array{text: string}>}>
+     */
+    private function formatGeminiContents(array $messages): array
+    {
+        $contents = [];
+
+        foreach ($messages as $msg) {
+            if (!$msg instanceof Message || $msg instanceof SystemMessage) {
+                continue;
+            }
+
+            $text = $msg->content();
+            if ($text === '') {
+                continue;
+            }
+
+            $contents[] = [
+                'role' => $msg instanceof AssistantMessage ? 'model' : 'user',
+                'parts' => [['text' => $text]],
+            ];
+        }
+
+        return $contents;
+    }
+
+    // -------------------------------------------------------------------------
+    // Gemini response parsing
+    // -------------------------------------------------------------------------
+
+    /**
+     * A `GenerateContentResponse` is `candidates[0].content.parts[*].text`
+     * plus `usageMetadata` - an entirely different document from both
+     * `predictions[0]` ({@see parseResponse()}) and the Anthropic content-block
+     * list ({@see parseAnthropicResponse()}).
+     *
+     * A PROMPT-LEVEL BLOCK IS A 200, NOT AN HTTP ERROR. When a safety filter
+     * rejects the INPUT, Gemini answers success with no candidates and a
+     * `promptFeedback.blockReason`. Read naively that is an empty completion,
+     * which is indistinguishable from a model that chose to say nothing - so
+     * it is reported as an error response instead, and a permanent one: the
+     * same input blocked once will be blocked again, so retrying it is waste.
+     *
+     * TRANSPORT ERRORS DO NOT ARRIVE HERE. `:generateContent` reports them as
+     * an HTTP status, which the vendored REST transport raises as an
+     * `ApiException`; that is caught by {@see complete()} and classified by
+     * {@see TransientFailure::isTransient()}. There is deliberately no
+     * `$data['error']` branch in this method, because on this protocol no such
+     * document reaches it.
+     *
+     * KNOWN-INCOMPLETE SEAM - `thought` parts. Gemini 2.5 marks a reasoning
+     * part with `"thought": true`. This method folds every part's text into
+     * `content` and has no reasoning split, because {@see geminiBody()} never
+     * sends a `thinkingConfig` and so no thought part is ever produced.
+     * Whoever enables thinking closes both halves.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function parseGeminiResponse(array $data, string $model): CompleteResponse
+    {
+        $blockReason = $data['promptFeedback']['blockReason'] ?? null;
+        $candidates = is_array($data['candidates'] ?? null) ? $data['candidates'] : [];
+
+        if ($candidates === [] && is_string($blockReason) && $blockReason !== '') {
+            return new CompleteResponse(
+                content: '',
+                isError: true,
+                errorMessage: sprintf(
+                    'Vertex generateContent: the prompt was blocked before generation (%s).',
+                    $blockReason,
+                ),
+                // Deterministic in the input, so a retry re-sends the same
+                // blocked prompt. See TransientFailure.
+                errorTransient: false,
+            );
+        }
+
+        [$inputTokens, $outputTokens] = $this->geminiUsage($data);
+
+        return new CompleteResponse(
+            content: $this->geminiText($candidates[0] ?? null),
+            reasoning: null,
+            toolCalls: null,
+            tokensUsed: $inputTokens + $outputTokens,
+            costUsd: $this->cost($model, $inputTokens, $outputTokens),
+        );
+    }
+
+    /**
+     * Translates one decoded `streamGenerateContent` chunk into a delta
+     * response, or null when it carries no text.
+     *
+     * USAGE IS CUMULATIVE ON THIS PROTOCOL, NOT SPLIT. Gemini restates
+     * `usageMetadata` on the chunks that carry it, so this method never
+     * YIELDS usage - it parks the latest one in `$pendingUsage`, and
+     * {@see streamGemini()} emits that single response after the stream ends.
+     * Yielding per chunk would be double-counted by
+     * {@see \SugarCraft\Crush\Runtime}, which SUMS `tokensUsed` across chunks
+     * because the Anthropic arm genuinely does split its usage in two.
+     *
+     * @param array<string, mixed> $event
+     */
+    private function parseGeminiChunk(
+        array $event,
+        string $model,
+        ?CompleteResponse &$pendingUsage,
+    ): ?CompleteResponse {
+        $blockReason = $event['promptFeedback']['blockReason'] ?? null;
+
+        if (is_string($blockReason) && $blockReason !== '') {
+            return new CompleteResponse(
+                content: '',
+                isError: true,
+                errorMessage: sprintf(
+                    'Vertex streamGenerateContent: the prompt was blocked before generation (%s).',
+                    $blockReason,
+                ),
+                errorTransient: false,
+            );
+        }
+
+        [$inputTokens, $outputTokens] = $this->geminiUsage($event);
+
+        if ($inputTokens !== 0 || $outputTokens !== 0) {
+            $pendingUsage = new CompleteResponse(
+                content: '',
+                tokensUsed: $inputTokens + $outputTokens,
+                costUsd: $this->cost($model, $inputTokens, $outputTokens),
+            );
+        }
+
+        $candidates = is_array($event['candidates'] ?? null) ? $event['candidates'] : [];
+        $text = $this->geminiText($candidates[0] ?? null);
+
+        return $text === '' ? null : new CompleteResponse(content: $text);
+    }
+
+    /**
+     * The concatenated text of one candidate's parts.
+     *
+     * A candidate legitimately has NO parts - `finishReason: SAFETY` on the
+     * OUTPUT truncates the content object away - and that is not an error
+     * here, it is an empty delta.
+     */
+    private function geminiText(mixed $candidate): string
+    {
+        if (!is_array($candidate)) {
+            return '';
+        }
+
+        $parts = $candidate['content']['parts'] ?? [];
+        if (!is_array($parts)) {
+            return '';
+        }
+
+        $text = '';
+
+        foreach ($parts as $part) {
+            if (is_array($part) && is_string($part['text'] ?? null)) {
+                $text .= $part['text'];
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * `usageMetadata.promptTokenCount` / `.candidatesTokenCount`, which are
+     * Gemini's spellings of the Anthropic arm's `input_tokens` /
+     * `output_tokens`. `totalTokenCount` is deliberately NOT read: it also
+     * counts thinking tokens the two fields above exclude, so summing the two
+     * and reading the third would disagree, and only the two-field form can be
+     * priced per direction.
+     *
+     * @param array<string, mixed> $data
+     * @return array{0: int, 1: int}
+     */
+    private function geminiUsage(array $data): array
+    {
+        return [
+            (int) ($data['usageMetadata']['promptTokenCount'] ?? 0),
+            (int) ($data['usageMetadata']['candidatesTokenCount'] ?? 0),
+        ];
+    }
+
+    // -------------------------------------------------------------------------
     // Google publisher models (legacy `predict` path, unchanged in shape)
     // -------------------------------------------------------------------------
 
@@ -1071,21 +1535,39 @@ final readonly class VertexProvider implements ProviderInterface
      * which the step that wrote this paragraph is not permitted to touch.
      * Recorded so the next reader finds it rather than re-discovers it.
      *
-     * A GEMINI MODEL ID ROUTED HERE DOES NOT GET A REQUEST GEMINI WOULD
-     * ACCEPT - the same class of gap the class doc-block above already states
-     * for `publishers/mistralai`, `publishers/meta` and `publishers/ai21`.
-     * `gemini-1.5-pro-002`, the id both Vertex test files pin as "the Google
-     * model", is not served by `instances`/`context` at all: Gemini on Vertex
-     * answers `:generateContent` / `:streamGenerateContent` and takes its
-     * standing instruction in a top-level `systemInstruction` object
-     * (MEASURED 2026-08-29, verbatim from
+     * A GEMINI MODEL ID NO LONGER REACHES THIS METHOD - BUILT, NOT DEFERRED.
+     * This paragraph used to end "a feature decision for the user, not a fix -
+     * and is deliberately not taken here". THAT SENTENCE IS NOW FALSE and is
+     * rewritten rather than deleted, because the decision it deferred is the
+     * one that was subsequently taken: the user was offered three options for
+     * this arm and chose to build the `:generateContent` route. It is
+     * {@see geminiBody()} / {@see parseGeminiResponse()} /
+     * {@see streamGemini()}, selected by {@see isGeminiModel()} in
+     * {@see complete()} and {@see completeStream()}.
+     *
+     * The diagnosis that paragraph recorded stands unchanged and is why the
+     * arm exists: `gemini-1.5-pro-002`, the id both Vertex test files pinned
+     * as "the Google model", is not served by `instances`/`context` at all.
+     * Gemini on Vertex answers `:generateContent` / `:streamGenerateContent`
+     * and takes its standing instruction in a top-level `systemInstruction`
+     * object (MEASURED 2026-08-29, verbatim from
      * https://ai.google.dev/api/generate-content: "systemInstruction object
      * (Content) Optional. Developer set system instruction(s). Currently, text
      * only."; see also
      * https://docs.cloud.google.com/vertex-ai/generative-ai/docs/reference/rest/v1/projects.locations.publishers.models/generateContent).
-     * Switching this arm to that endpoint is a different endpoint, a different
-     * method and a different request document - a feature decision for the
-     * user, not a fix - and is deliberately not taken here.
+     *
+     * WHAT STILL ROUTES HERE, AND WHY THIS ARM STAYS. The PaLM 2 family -
+     * `chat-bison@002`, `text-bison@002`, `code-bison` - genuinely does take
+     * the envelope this method builds, and {@see isGeminiModel()} is
+     * deliberately narrow so those ids keep it. This arm is not deprecated,
+     * not stubbed and not scheduled for removal; the Gemini split took a
+     * family OUT of it, it did not replace it. Everything else this doc-block
+     * records about the envelope - the `author`-vs-`role` defect, the dropped
+     * `parameters`, the empty and system-only transcript routes - is
+     * unaffected and still open.
+     *
+     * `publishers/mistralai`, `publishers/meta` and `publishers/ai21` remain
+     * unrouted, exactly as the class doc-block above states.
      *
      * A SYSTEM-MESSAGE-ONLY TRANSCRIPT NOW YIELDS AN EMPTY `messages` LIST,
      * which is a NEW route introduced by the dedup below and is pinned rather
@@ -1273,6 +1755,20 @@ final readonly class VertexProvider implements ProviderInterface
                 return json_decode((string) $response->getData(), true) ?? [];
             }
 
+            if ($method === self::METHOD_GENERATE_CONTENT) {
+                $response = $client->generateContent(
+                    self::generateContentRequest($endpoint, $body),
+                    self::callOptions(),
+                );
+
+                // GenerateContentResponse is a protobuf message, not an
+                // HttpBody: round-tripping it through its own JSON printer is
+                // what gives parseGeminiResponse() the camelCase document the
+                // published REST reference describes (`candidates`,
+                // `usageMetadata`, `promptFeedback`).
+                return json_decode($response->serializeToJsonString(), true) ?? [];
+            }
+
             $requestClass = 'Google\\Cloud\\AIPlatform\\V1\\PredictRequest';
             self::requireClasses($requestClass);
 
@@ -1306,6 +1802,25 @@ final readonly class VertexProvider implements ProviderInterface
     private static function defaultStreamer(string $location, ?object $client = null): \Closure
     {
         return static function (string $endpoint, string $method, array $body) use ($location, $client): \Generator {
+            if ($method === self::METHOD_STREAM_GENERATE_CONTENT) {
+                $client ??= self::sdkClient($location);
+
+                // NO SSE FRAMING ON THIS ARM. `streamRawPredict` hands back raw
+                // HttpBody chunks that this class has to reassemble itself
+                // ({@see decodeSseStream()}); `streamGenerateContent` is a
+                // declared server-streaming RPC of a typed message, so the
+                // vendored transport does the framing and readAll() yields
+                // whole GenerateContentResponses.
+                foreach ($client->streamGenerateContent(
+                    self::generateContentRequest($endpoint, $body),
+                    self::callOptions(),
+                )->readAll() as $chunk) {
+                    yield json_decode($chunk->serializeToJsonString(), true) ?? [];
+                }
+
+                return;
+            }
+
             $requestClass = 'Google\\Cloud\\AIPlatform\\V1\\StreamRawPredictRequest';
             self::requireClasses($requestClass);
 
@@ -1541,6 +2056,83 @@ final readonly class VertexProvider implements ProviderInterface
         $httpBody->setData((string) json_encode($body));
 
         return $httpBody;
+    }
+
+    /**
+     * Builds the `GenerateContentRequest` both Gemini RPCs take, from the
+     * array document {@see geminiBody()} shapes.
+     *
+     * ONE BUILDER FOR BOTH SEAMS on purpose: the unary and the streaming RPC
+     * take the IDENTICAL request message, so a field wired into one and
+     * forgotten in the other is a class of bug this shape cannot have.
+     *
+     * EVERY FIELD IS SET, AND THAT IS THE POINT. The legacy `:predict` branch
+     * of {@see defaultPredictor()} builds its `PredictRequest` with
+     * `setEndpoint()` and `setInstances()` and NEVER CALLS `setParameters()`,
+     * so `temperature`/`maxOutputTokens` are dropped before the request goes
+     * out - a real, pre-existing defect in that arm, left standing there
+     * because repairing it is a different step. It is not repeated here:
+     * `generationConfig` and `systemInstruction` are set explicitly below and
+     * `VertexProviderTest::testTheGeminiCallSiteSendsGenerationConfigOnTheWire`
+     * asserts both in the serialized HTTP body of a request driven through the
+     * real vendored transport, so removing either setter reds.
+     *
+     * `setModel()`, not `setEndpoint()`: on `GenerateContentRequest` the
+     * publisher resource name is the `model` field, and the vendored REST
+     * config binds the `:generateContent` URI template to `getModel`
+     * (`prediction_service_rest_client_config.php`, `GenerateContent`).
+     *
+     * @param array<string, mixed> $body
+     */
+    private static function generateContentRequest(string $endpoint, array $body): object
+    {
+        $requestClass = 'Google\\Cloud\\AIPlatform\\V1\\GenerateContentRequest';
+        $contentClass = 'Google\\Cloud\\AIPlatform\\V1\\Content';
+        $configClass = 'Google\\Cloud\\AIPlatform\\V1\\GenerationConfig';
+
+        self::requireClasses($requestClass, $contentClass, $configClass);
+
+        $contents = is_array($body['contents'] ?? null) ? $body['contents'] : [];
+
+        /** @var object $req */
+        $req = (new $requestClass())
+            ->setModel($endpoint)
+            ->setContents(array_map(
+                static fn (array $content): object => self::protobufMessage($contentClass, $content),
+                array_values(array_filter($contents, 'is_array')),
+            ));
+
+        if (is_array($body['systemInstruction'] ?? null)) {
+            $req->setSystemInstruction(self::protobufMessage($contentClass, $body['systemInstruction']));
+        }
+
+        if (is_array($body['generationConfig'] ?? null)) {
+            $req->setGenerationConfig(self::protobufMessage($configClass, $body['generationConfig']));
+        }
+
+        return $req;
+    }
+
+    /**
+     * One protobuf sub-message merged from its array fragment.
+     *
+     * `mergeFromJsonString()` rather than a field-by-field setter chain, for
+     * the same reason {@see toProtobufValues()} uses it: the array shape is
+     * already the protocol's own JSON spelling, so re-typing every field here
+     * would add a second place for a key to be misspelled. It is STRICT - an
+     * unknown field throws - which is the desired failure: a typo in
+     * {@see geminiBody()} fails loudly at the seam rather than silently
+     * dropping the key on the wire.
+     *
+     * @param array<string, mixed> $fragment
+     */
+    private static function protobufMessage(string $class, array $fragment): object
+    {
+        /** @var object $message */
+        $message = new $class();
+        $message->mergeFromJsonString((string) json_encode($fragment));
+
+        return $message;
     }
 
     /**
