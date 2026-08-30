@@ -1823,7 +1823,6 @@ final class RuntimeTest extends TestCase
         );
     }
 
-
     // =========================================================================
     // P3.S5 - the per-step write signal
     //
@@ -1959,11 +1958,25 @@ final class RuntimeTest extends TestCase
         $this->assertSame(0, substr_count($prompts[2], $staged));
         $this->assertSame(0, substr_count($prompts[3], $staged));
 
-        // Byte-identical, and that is the cache claim rather than a
-        // restatement of the counts above: three quiet steps in a row hand the
-        // provider the SAME prompt, so the whole prefix is reusable. Before
-        // this step they differed - not because the diff changed (nothing
-        // wrote), but they carried it three times over.
+        // Byte-identical - and NOT a prompt-cache win. The first draft of this
+        // comment said it was ("before this step they differed"), and that was
+        // false. MEASURED: three unmarked buildSystemPrompt() calls on ONE
+        // Runtime over a committed-then-dirtied fixture - which is byte-for-
+        // byte the pre-P3.S5 path, since a null signal short-circuits
+        // environmentSnapshot() - rendered 3,215 / 3,215 / 3,215 B, all three
+        // IDENTICAL. Quiet steps were already fully cacheable across each
+        // other. What suppression buys is input BYTES and two subprocesses;
+        // what it costs is one extra prefix divergence at the emit->suppress
+        // transition (byte 2,835 of 3,215 on that fixture) the old behaviour
+        // did not have.
+        //
+        // These two assertions therefore also pass against the old code, and
+        // are kept as the PERSISTENCE pin rather than presented as the bite:
+        // they say suppression does not decay back to emit halfway through a
+        // run of quiet steps. The assertions that go red when the wiring is
+        // removed are the substr_count() zeroes above and the length
+        // comparison below - MEASURED, by deleting the mark call from
+        // EngineBackend::complete() and watching exactly those reds.
         $this->assertSame($prompts[1], $prompts[2], 'two consecutive quiet steps assemble the same bytes');
         $this->assertSame($prompts[2], $prompts[3]);
 
@@ -2134,12 +2147,16 @@ final class RuntimeTest extends TestCase
      * 16.8 rule 15 - a hand-maintained roster inherits its own omissions - and
      * check 19's roster-membership question, made into a red.
      *
-     * `Runtime::WRITE_CAPABLE_TOOL_NAMES` is the FOURTH spelling in this tree
-     * of "which tools write". It is not derived from
-     * `PermissionGate::isWriteTool()` because that file is outside P3.S5's
-     * declared list, so this test derives the gate's list out of its own source
-     * and asserts the two agree. Adding a write tool to one and not the other
-     * reds here, rather than silently costing the model a diff it needed.
+     * `Runtime::WRITE_CAPABLE_TOOL_NAMES` is the SECOND spelling in this tree
+     * of "which tools write" - the first is `PermissionGate::isWriteTool()`.
+     * (`ProtectFilesHook`'s `^(Bash|Edit|Write|Read)$` and
+     * `PermissionRule::PATH_SUBJECT_TOOLS` are NOT spellings of it: both
+     * include `Read`, because they answer which calls carry a path subject.)
+     * The constant is not derived from the gate because that file is outside
+     * P3.S5's declared list, so this test derives the gate's list out of its
+     * own source and asserts the two agree. Adding a write tool to one and not
+     * the other reds here, rather than silently costing the model a diff it
+     * needed.
      *
      * The extraction is asserted to have FOUND something before it is compared:
      * a regex that matched nothing returns `[]`, which is also what a genuinely
@@ -2163,10 +2180,22 @@ final class RuntimeTest extends TestCase
         $gateRoster = $names[1];
 
         $this->assertNotEmpty($gateRoster, 'the extraction found no names - the instrument is dead, not the roster empty');
-        $this->assertSame(['Bash', 'Edit', 'Write'], $gateRoster, 'the control: this is what the gate holds today');
+
+        // SORTED on both sides. Both rosters are consumed by `in_array()`, so
+        // their ORDER carries no meaning, and an exact-order comparison reds on
+        // a reorder that changes nothing - MEASURED: rewriting the gate's list
+        // as ['Edit', 'Write', 'Bash'] failed the ordered form while the two
+        // rosters still agreed. A guard that reds on correct code is where the
+        // next real offender gets waved through.
+        $gateSorted = $gateRoster;
+        $ourSorted = Runtime::WRITE_CAPABLE_TOOL_NAMES;
+        sort($gateSorted);
+        sort($ourSorted);
+
+        $this->assertSame(['Bash', 'Edit', 'Write'], $gateSorted, 'the control: this is what the gate holds today');
         $this->assertSame(
-            $gateRoster,
-            Runtime::WRITE_CAPABLE_TOOL_NAMES,
+            $gateSorted,
+            $ourSorted,
             'Runtime::WRITE_CAPABLE_TOOL_NAMES has drifted from PermissionGate::isWriteTool()',
         );
 
@@ -2177,6 +2206,52 @@ final class RuntimeTest extends TestCase
             'PermissionGate still treats an mcp__ prefix as a write; Runtime must agree',
         );
         $this->assertTrue(Runtime::stepRequestedAWrite([new ToolCall('c', 'mcp__x__y', [])]));
+
+        // THE HALF A GATE-TO-GATE DRIFT TEST CANNOT SEE, and §16.8 rule 15's
+        // real failure mode one level up: both rosters can be SIMULTANEOUSLY
+        // incomplete. Land `src/Tools/BuiltIn/MultiEdit.php` and neither list
+        // moves, the comparison above stays green, and the engine silently
+        // stops re-arming the diff after a genuine write. So the corpus is
+        // read off the directory rather than trusted: every built-in tool's
+        // own name() must be classified by ONE of the two lists below.
+        //
+        // The read-only list is spelled out here rather than derived, and that
+        // is deliberate: it is the decision half. A new tool joins it only by
+        // someone typing it in, which is the review this assertion exists to
+        // force. Nine names, because `Doctor::name()` returns lowercase
+        // `doctor` - MEASURED off the file, not assumed from the class name.
+        $classified = [
+            ...Runtime::WRITE_CAPABLE_TOOL_NAMES,
+            'Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor',
+        ];
+
+        $corpus = [];
+        foreach (glob(dirname(__DIR__) . '/src/Tools/BuiltIn/*.php') ?: [] as $file) {
+            if (preg_match("/function name\(\): string\s*\{\s*return '([^']+)';/", (string) file_get_contents($file), $nm) === 1) {
+                $corpus[] = $nm[1];
+            }
+        }
+        sort($corpus);
+
+        // LIVENESS CONTROL, and deliberately a SUBSET one. A scanner that
+        // matched nothing returns [], and so does a directory with no tools in
+        // it; those are not the same answer (§16.8 rule 17), so the scan has to
+        // prove it found something specific before its verdict is read. It is
+        // NOT an exact corpus pin: that would be §17.1's `assertSame(297,
+        // $files)` defect rebuilt here, reddening on every correctly-classified
+        // new tool. The exact assertion is the verdict below - which is exact
+        // in the direction that matters, because the offending NAME appears in
+        // its own failure output rather than a total moving by one.
+        $this->assertSame(
+            [],
+            array_values(array_diff(['Bash', 'Edit', 'Write', 'Read', 'Grep', 'doctor'], $corpus)),
+            'the built-in corpus scan lost tools it used to find - the instrument is broken, fix it before reading its verdict',
+        );
+        $this->assertSame(
+            [],
+            array_values(array_diff($corpus, $classified)),
+            'a built-in tool is classified by NEITHER the write roster nor the read-only list - decide which, in this commit',
+        );
     }
 
     // =========================================================================
