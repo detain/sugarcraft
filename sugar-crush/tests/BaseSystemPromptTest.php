@@ -776,11 +776,28 @@ final class BaseSystemPromptTest extends TestCase
         self::assertStringNotContainsString('Fixture Author', $golden, 'golden leaks the fixture commit author identity');
         self::assertStringNotContainsString('fixture@example.invalid', $golden, 'golden leaks the fixture commit author email');
 
+        // WHAT TO CHECK WHEN THIS FIRES, because the answer is no longer
+        // always "a host path leaked". This golden is the WHOLE assembled
+        // prompt, base heredoc included, and hostPathLeaks() recognises a
+        // path by its SHAPE rather than from a list of roots - which is the
+        // property that makes it worth having and also means it cannot tell
+        // `/opt/ci/work` interpolated from a build machine apart from
+        // `/etc/hosts` or `[docs](/docs/x)` deliberately TYPED into the
+        // prompt prose. So read the reported path first: if it came from the
+        // environment block or the git section it is a real leak and the
+        // fixture cwd, repo root or memory-store path has gone absolute; if
+        // it is a literal somebody wrote into
+        // Runtime::buildSystemPrompt()'s heredoc, nothing leaked and the two
+        // options are to reword the sentence or to add that exact string to
+        // hostPathLeaks()'s $allowed list - which is a list of expected
+        // CONTENT, not of forbidden ROOTS, and so cannot grow silently.
         self::assertSame(
             [],
             self::hostPathLeaks($golden),
-            'the golden carries an absolute filesystem path - the fixture cwd, repo root and memory '
-            . 'store must all stay relative',
+            'the golden carries an absolute filesystem path - if it comes from the env or git '
+            . 'section, the fixture cwd, repo root and memory store must all stay relative; if it '
+            . 'is prose typed into the base-prompt heredoc, nothing leaked - reword it or add the '
+            . 'exact string to hostPathLeaks()\'s $allowed list',
         );
         // RESTORED, not replaced. hostPathLeaks() is not a superset of this
         // check: a path segment cannot be empty, so a slash followed by
@@ -1315,6 +1332,33 @@ final class BaseSystemPromptTest extends TestCase
             'Working directory: //opt/ci/work' => ['//opt/ci/work'],
             'cwd = //srv/agent/checkout' => ['//srv/agent/checkout'],
             '///opt/ci/work' => ['//opt/ci/work'],
+            // A PATH ON A DELETED DIFF LINE, which is the likeliest real leak
+            // shape in the thing this scanner exists to read: <env> embeds
+            // `git diff` bodies verbatim, so a removed line carrying an
+            // absolute path arrives here with a `-` welded to its leading
+            // slash. It is also the one shape BOTH halves of the leak scan
+            // used to miss at once - `/^\//m` is anchored at column 0 and the
+            // `-` occupies column 0, while the `-` was itself inside this
+            // scanner's lookbehind class. MEASURED on the class that still
+            // carried it: `-/opt/ci/build` returned [] here, matched nothing
+            // at column 0, and removing the `-` from `[\w.~\\<-]` left both
+            // step files at `OK (41 tests, 354 assertions)` - nothing in the
+            // tree noticed either the hole or its repair.
+            '-/opt/ci/build' => ['/opt/ci/build'],
+            '-Working directory: /opt/ci/build' => ['/opt/ci/build'],
+            // The added-line polarity, which always fired because `+` was
+            // never in the class. It is pinned so that widening the class
+            // again - the exact edit that opened the `-` hole - reds here
+            // instead of silently reopening it on the other polarity.
+            '+/opt/ci/build' => ['/opt/ci/build'],
+            // A TRAILING SLASH IS PART OF THE REPORTED PATH, which is the
+            // whole of what the pattern's closing `/?` buys, and nothing
+            // exercised it: MEASURED, deleting that `/?` left both step files
+            // at `OK (41 tests, 354 assertions)`. Without it this line reports
+            // `/opt/ci/work` - a real path in the text, but not the string
+            // that is there - so this row reds on the near-miss rather than
+            // accepting it.
+            'Working directory: /opt/ci/work/' => ['/opt/ci/work/'],
             // Windows drive paths and a UNC share.
             'Working directory: C:\\Users\\bob\\proj' => ['C:\\Users\\bob\\proj'],
             'Working directory: D:/build/out' => ['D:/build/out'],
@@ -1342,6 +1386,14 @@ final class BaseSystemPromptTest extends TestCase
             // URLs - the two colon lookbehinds.
             'see https://example.com/docs/x for more',
             'http://a.b/c',
+            // TILDE-HOME PATHS - the `~` in the lookbehind class, which
+            // nothing exercised either: MEASURED, dropping the `~` left both
+            // step files at `OK (41 tests, 354 assertions)`. `~/x` names a
+            // home directory without naming a host, so it is not a leak; with
+            // the `~` gone these two report `/projects/app` and
+            // `/.config/crush/config.json`, and this pair reds.
+            '~/projects/app',
+            'edit ~/.config/crush/config.json then rerun',
         ];
 
         foreach ($mustFire as $line => $expected) {
@@ -1413,6 +1465,29 @@ final class BaseSystemPromptTest extends TestCase
      * `assertDoesNotMatchRegularExpression('/^\//m', ...)` DID catch that
      * case, so the draft was not the superset its own doc-block claimed.
      *
+     * WHY THE LOOKBEHIND CLASS HAS NO HYPHEN, which is the hole that mattered
+     * most of the several this pattern has had. It used to read
+     * `[\w.~\\<-]`, and a `-` welded to a leading slash is exactly what
+     * `git diff` writes on a REMOVED line: `-/opt/ci/build`. <env> embeds
+     * diff bodies verbatim, so a deleted line carrying an absolute path is
+     * the likeliest real leak shape in the very text this scanner was written
+     * to read - and it was the one shape BOTH halves of the leak scan missed
+     * at the same time, because the `-` occupies column 0 and
+     * `/^\//m` is anchored there. MEASURED on the class that still carried
+     * the `-`: `-/opt/ci/build` returned `[]`, and taking the `-` out left
+     * both step files at `OK (41 tests, 354 assertions)`, byte for byte the
+     * unmutated total - nothing in the tree could tell the hole from its
+     * repair. Both diff polarities are rows in the known-answer table now.
+     * WHAT THE `-` BOUGHT, and why losing it is cheap: it suppressed a match
+     * on a token that ends in a hyphen and is immediately followed by a slash
+     * (`a-/opt/x`). MEASURED: neither committed golden contains the two-byte
+     * sequence `-/` anywhere (`grep -- '-/'` over both files exits 1), git's
+     * diff headers and porcelain do not produce it, and the full suite is
+     * green from both cwds without it. A hyphen inside an ordinary hyphenated
+     * path (`build-agent-42/checkout`) was never affected either way - the
+     * character before that slash is a word character, which is still in the
+     * class.
+     *
      * THIS FUNCTION IS STILL NOT A SUPERSET OF THAT CHECK, AND THE CHECK IS
      * THEREFORE BACK rather than replaced. MEASURED: `/ home/ci` and
      * `// comment` - a slash followed by whitespace - are caught by `/^\//m`
@@ -1457,7 +1532,7 @@ final class BaseSystemPromptTest extends TestCase
     {
         $allowed = ['/dev/null'];
 
-        preg_match_all('#(?<![\w.~\\\\<-])(?<!:)(?<!:/)/{1,2}[^\s/\\\\<>"|]+(?:/[^\s/\\\\<>"|]+)*/?#', $text, $posix);
+        preg_match_all('#(?<![\w.~\\\\<])(?<!:)(?<!:/)/{1,2}[^\s/\\\\<>"|]+(?:/[^\s/\\\\<>"|]+)*/?#', $text, $posix);
         preg_match_all('#(?<![A-Za-z])[A-Za-z]:[\\\\/][^\r\n]*#', $text, $windows);
         preg_match_all('#\\\\\\\\[\w.-]+\\\\[^\r\n]*#', $text, $unc);
 
