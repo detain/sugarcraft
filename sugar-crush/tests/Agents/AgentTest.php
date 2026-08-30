@@ -435,6 +435,25 @@ final class AgentTest extends TestCase
             $golden,
             'the golden no longer closes with </env> - it has been truncated at the tail',
         );
+        // A HEAD AND A TAIL LANDMARK LEAVE A MID-BODY DELETION INVISIBLE, and
+        // the middle of this file is where the volatile half lives. MEASURED
+        // on the draft that had only the three landmarks above: cutting the
+        // entire git section out of this golden - 356 bytes, 1060 down to
+        // 704 - left both leak tests `OK (2 tests, 35 assertions)`, because
+        // every assertion below is an ABSENCE assertion and the survivors
+        // still satisfied all of them. A byte count is the only landmark that
+        // catches a truncation ANYWHERE, and it is stable across machines
+        // only because the two host-derived lines are placeholders now
+        // ({@see pinHostLines()}) rather than this host's kernel and PHP
+        // build. It has to move when the golden is legitimately regenerated,
+        // which is the cheap half of a discipline that already requires
+        // diffing old against new.
+        self::assertSame(
+            1060,
+            strlen($golden),
+            'the agent-prompt golden is not its committed length - it has been truncated or padded '
+            . 'somewhere the absence assertions below would scan straight past',
+        );
 
         self::assertStringNotContainsString('/tmp/', $golden, 'golden leaks a /tmp/ host path');
         self::assertStringNotContainsString('/home/', $golden, 'golden leaks a /home/ host path');
@@ -648,6 +667,43 @@ final class AgentTest extends TestCase
     }
 
     /**
+     * {@see pinHostLines()} normalizes a REAL host value and leaves an empty
+     * or whitespace-only one alone.
+     *
+     * A mask is a hole in a golden, and a mask written `.*` is a hole with no
+     * floor: it rewrites `OS version: ` - a line the block emitted nothing at
+     * all for - into the very placeholder the committed golden carries, so
+     * the two compare equal and the render's failure is invisible. That is
+     * the same defect this step closed for `Platform: `, which was masked by
+     * VALUE and so stayed green against the wrong platform AND against no
+     * platform. MEASURED across the three candidate masks on PHP 8.3.6, over
+     * `OS version: Linux 6.8.0-138-generic`, `OS version: `, `OS version:  `
+     * and `OS version:   x`: `.*` masks all four; `.+` masks all but the
+     * empty one; `(?=.*\S).*` masks only the two that carry a value, which is
+     * the polarity this asserts in both directions.
+     */
+    public function testPinHostLinesNormalizesAValueAndLeavesAnEmptyOneAlone(): void
+    {
+        self::assertSame(
+            "OS version: <host>\nPHP version: <host>\n",
+            self::pinHostLines("OS version: Linux 6.8.0-138-generic\nPHP version: 8.3.6\n"),
+            'pinHostLines() no longer normalizes a real host value, so the golden would red on every '
+            . 'machine but this one',
+        );
+        self::assertSame(
+            "OS version: \nPHP version: \n",
+            self::pinHostLines("OS version: \nPHP version: \n"),
+            'pinHostLines() masks an EMPTY host value into the placeholder, so a render that emitted '
+            . 'nothing at all for these two lines would compare equal to the committed golden',
+        );
+        self::assertSame(
+            "OS version:   \nPHP version:  \n",
+            self::pinHostLines("OS version:   \nPHP version:  \n"),
+            'pinHostLines() masks a WHITESPACE-ONLY host value into the placeholder',
+        );
+    }
+
+    /**
      * Normalizes the two host-property lines render() reads from the runtime,
      * so the committed golden is byte-stable across machines.
      *
@@ -671,6 +727,15 @@ final class AgentTest extends TestCase
      * injects 'linux' through EnvironmentBlock's fourth constructor
      * argument, so the golden's `Platform: linux` is real, pinned output.
      *
+     * `(?=.*\S).*` AND NOT `.*`, deliberately. A mask written `.*` matches an
+     * EMPTY value, so a render emitting a bare `OS version: ` would be rewritten
+     * to the placeholder and compare equal to the golden - the identical
+     * hole this step closed for `Platform: `, one line down. MEASURED on the
+     * `.*` form: `preg_replace('/^OS version: .*$/m', ...)` over
+     * "OS version:  \nPHP version: \n" yields exactly the golden's two
+     * lines. With `.+` the empty value no longer matches, the placeholder is
+     * not substituted, and the golden test reds.
+     *
      * OS version and PHP version cannot get the same treatment here:
      * EnvironmentBlock's own docblock calls php_uname() and PHP_VERSION
      * "read AT RENDER TIME" - constants of the HOST, not behaviour of the
@@ -681,8 +746,8 @@ final class AgentTest extends TestCase
      */
     private static function pinHostLines(string $block): string
     {
-        $block = preg_replace('/^OS version: .*$/m', 'OS version: <host>', $block);
-        $block = preg_replace('/^PHP version: .*$/m', 'PHP version: <host>', $block);
+        $block = preg_replace('/^OS version: (?=.*\S).*$/m', 'OS version: <host>', $block);
+        $block = preg_replace('/^PHP version: (?=.*\S).*$/m', 'PHP version: <host>', $block);
 
         return $block;
     }
@@ -721,6 +786,25 @@ final class AgentTest extends TestCase
             $inside = self::inPackageRoot(static fn (): string => (string) getcwd());
             self::assertNotSame($before, $inside, 'inPackageRoot() did not move the working directory at all');
             self::assertFileExists($inside . '/composer.json', 'inPackageRoot() did not run at a package root');
+            // WHICH root, not merely SOME root. The monorepo above this
+            // package has a composer.json of its own, so an assertion that
+            // stops at the file's existence is satisfied by the very
+            // directory whose selection IS the CI bug this pin exists to
+            // fix. MEASURED on the draft that stopped there: replacing the
+            // walk with `$root = \dirname(__DIR__, 3);` pinned the monorepo
+            // root and left this test `OK (1 test, 6 assertions)` - only the
+            // golden test noticed. The two assertions below name the thing
+            // that actually has to be true, which is that the fixture paths
+            // the goldens are rendered from RESOLVE against $inside.
+            self::assertSame(
+                'sugarcraft/sugar-crush',
+                json_decode((string) file_get_contents($inside . '/composer.json'), true)['name'] ?? null,
+                'inPackageRoot() pinned the wrong composer.json - the monorepo root has one too',
+            );
+            self::assertDirectoryExists(
+                $inside . '/tests/fixtures/prompt/memory',
+                'inPackageRoot() pinned a root the golden fixtures\' relative paths do not resolve against',
+            );
             self::assertSame($before, getcwd(), 'inPackageRoot() leaked a changed working directory on the SUCCESS path');
 
             try {
@@ -821,15 +905,37 @@ final class AgentTest extends TestCase
      * walked straight through it. A list of roots is only ever as good as the
      * last CI runner somebody thought about.
      *
-     * WHAT IT MATCHES. A POSIX path is a `/` that opens a run of path
-     * segments and is NOT preceded by a path character, so git's own diff
-     * prefixes (`a/docs/notes.md`, `+++ b/src/app.php`), ordinary relative
-     * paths (`src/Lib.php`, `vendor/prompt-fixture/agent-repo`), closing
-     * tags (`</env>`, `</repo-map>`) and prose (`and/or`) do not match, while
+     * WHAT IT MATCHES. A POSIX path is a run of ONE OR TWO leading slashes
+     * that opens a run of path segments and is not preceded by a path
+     * character, so git's own diff prefixes (`a/docs/notes.md`,
+     * `+++ b/src/app.php`), ordinary relative paths (`src/Lib.php`,
+     * `vendor/prompt-fixture/agent-repo`), closing tags (`</env>`,
+     * `</repo-map>`) and prose (`and/or`) do not match, while
      * ` /var/www/build-agent-42/checkout` does at any column. A Windows path
-     * is a drive letter not preceded by a letter (so a URL scheme's `p://` is
-     * not read as drive `p:`) followed by a separator; a UNC path is a
-     * doubled backslash followed by a host.
+     * is a drive letter not preceded by a letter followed by a separator; a
+     * UNC path is a doubled backslash followed by a host.
+     *
+     * WHY `/{1,2}` AND NOT `/`, and it is not a flourish. The first draft
+     * excluded `/` in the lookbehind, so a `/` could never open a match when
+     * the character before it was also a `/` - and a DOUBLED slash is what
+     * `$base . '/' . $rel` produces whenever `$base` already ends in one,
+     * which MSYS and git-bash emit routinely. MEASURED on that draft:
+     * `//opt/ci/work` and `//srv/agent/checkout` both reported `[]`, and
+     * writing `//opt/ci/work-agent-42` into the committed agent golden at
+     * column 0 left its leak test `OK (1 test, 14 assertions)`. The
+     * `assertDoesNotMatchRegularExpression('/^\//m', ...)` this function
+     * replaced DID catch that case, so the draft was not the superset its
+     * own doc-block claimed. It is now: `/` is out of the lookbehind and the
+     * leading run may be one slash or two.
+     *
+     * WHY THE TWO COLON LOOKBEHINDS. Taking `/` out of the lookbehind let a
+     * URL through - `https://example.com/x` matched `//example.com/x` - so
+     * `(?<!:)` blocks the scheme's first slash and `(?<!:/)` blocks its
+     * second. They also stop a Windows `D:/build/out` being counted twice,
+     * once by each arm. The blind spot they buy is a path written with no
+     * space after a colon (`foo:/opt/x`), which is not a spelling anything
+     * in this prompt produces; a spurious red on every URL in the base
+     * prompt would be the worse trade.
      *
      * THE ONE ALLOWED PATH is `/dev/null`. git renders the absent side of an
      * added file as `--- /dev/null`; it is git's own literal, byte-identical
@@ -837,11 +943,16 @@ final class AgentTest extends TestCase
      * CONTENT is a different thing from enumerating forbidden ROOTS - this
      * list cannot grow silently, because anything not on it fails.
      *
-     * MEASURED on this tree before it was wired in: it reports nothing for
-     * either committed golden, and reports the path for each of
-     * `/var/www/build-agent-42/checkout`, `/opt/ci/work`, `/srv/x`,
-     * `/builds/gitlab/proj`, `/workspace`, a mid-line `/root/agent`,
-     * `C:\Users\bob\proj`, `D:/build/out` and `\\fileserver\share\proj`.
+     * MEASURED on this tree over 27 known-answer inputs: it reports nothing
+     * for either committed golden, and reports EXACTLY ONE path for each of
+     * `/var/www/build-agent-42/checkout`, `//opt/ci/work`, `//srv/agent/checkout`,
+     * `///opt/ci/work`, `/opt/ci/work`, `/srv/x`, `/builds/gitlab/proj`,
+     * `/workspace`, `/Volumes/ci/x`, a mid-line `/root/agent`,
+     * `C:\Users\bob\proj`, `D:/build/out` and `\\fileserver\share\proj`. It
+     * reports nothing for `a/docs/notes.md`, `+++ b/src/app.php`, `src/`,
+     * `vendor/prompt-fixture/agent-repo`, `</env>`, `</repo-map>`,
+     * `</project-instructions>`, `and/or`, `2026/08/26`, `--- /dev/null`,
+     * `http://a.b/c` and `https://example.com/docs/x`.
      *
      * @return list<string>
      */
@@ -849,7 +960,7 @@ final class AgentTest extends TestCase
     {
         $allowed = ['/dev/null'];
 
-        preg_match_all('#(?<![\w.~/\\\\<-])/[\w.~-]+(?:/[\w.~-]+)*/?#', $text, $posix);
+        preg_match_all('#(?<![\w.~\\\\<-])(?<!:)(?<!:/)/{1,2}[\w.~-]+(?:/[\w.~-]+)*/?#', $text, $posix);
         preg_match_all('#(?<![A-Za-z])[A-Za-z]:[\\\\/][^\r\n]*#', $text, $windows);
         preg_match_all('#\\\\\\\\[\w.-]+\\\\[^\r\n]*#', $text, $unc);
 
