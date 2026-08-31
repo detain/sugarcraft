@@ -503,7 +503,7 @@ final readonly class Agent
      * one block per turn and replaces it only when the write signal differs,
      * while this method captures a fresh block on every call when none is
      * passed - and the `Runtime` assembler carries FIVE layers this one has
-     * none of: a repo map, `<project-instructions>` documents, the memory
+     * none of: a repo map, the project-instruction documents, the memory
      * block, the enabled skills' bodies, and the discovered-skill listing.
      * Those are what unification would have to reconcile. Only §17.2's argument
      * died; its answer did not.

@@ -797,7 +797,7 @@ final class Runtime
      *     and mints a replacement only when the write signal differs, while
      *     `Agent::systemPrompt()` captures a fresh block on every call whenever
      *     none is passed; and DIFFERENT LAYERS - this assembler carries a repo
-     *     map, `<project-instructions>` documents, the memory block, the
+     *     map, the project-instruction documents, the memory block, the
      *     enabled skills' bodies and the discovered-skill listing, and the
      *     agent assembler carries none of the five. Unifying them would have to
      *     reconcile those, not an ordering that no longer differs.
