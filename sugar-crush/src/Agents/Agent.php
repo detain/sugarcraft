@@ -424,21 +424,104 @@ final readonly class Agent
      * deliberately separate because the two order `<env>` oppositely. The gap
      * was left open on purpose, to be closed or explained rather than to lapse.
      *
-     * IT IS EXPLAINED, AND THE EXPLANATION IS A MEASUREMENT: THERE IS NO
-     * PER-STEP SEAM ON THIS PATH TO WIRE. The suppression is defined relative
-     * to the step BEFORE it - it withholds a diff the model was already shown
-     * earlier in the same conversation - so it needs a caller that renders this
-     * prompt more than once for one conversation. No caller does. All EIGHT
-     * production call sites are once-per-dispatch, derived and pinned by
-     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()}:
-     * {@see AgentManager::executeSubAgent()} (one), `App::dispatchSkill()`
-     * (one), {@see ProcessExecutor::spawnWorker()} (one) and five in
-     * `WorkflowEngine`. Each builds one `CompleteRequest` and hands it to one
-     * completion; there is no agentic loop, and the transient-failure retry
-     * inside `executeSubAgent()` re-sends the SAME request object rather than
-     * rebuilding it. Driven rather than read off, at one streamed chunk and at
-     * twenty, by
-     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()}.
+     * IT IS EXPLAINED, AND THE EXPLANATION IS A MEASUREMENT - CORRECTED IN
+     * PLACE (prompt_plan.md section 16.8 rule 42), because the first revision
+     * of this paragraph was FALSE and it was the step's headline claim.
+     *
+     * WHAT IT USED TO SAY: that the suppression "needs a caller that renders
+     * this prompt more than once for one conversation. No caller does" - i.e.
+     * that THERE IS NO PER-STEP SEAM ON THIS PATH AT ALL, every one of the
+     * eight call sites being once-per-dispatch.
+     *
+     * WHAT IS TRUE NOW: there IS a repeated-render seam, and it is in
+     * `Workflows/WorkflowEngine.php`. Re-derived over this tree rather than
+     * reasoned about:
+     *
+     *   - `WorkflowEngine.php:1105` `foreach ($nestedStages as $nestedStage)`
+     *     encloses the render at `:1152` - ONE RENDER PER NESTED PIPELINE
+     *     STAGE.
+     *   - `WorkflowEngine::executeVerificationStage()` renders TWICE,
+     *     straight-line, at `:1252` (the task agent) and `:1294` (the
+     *     verifier), the verifier after the task's sub-agent has already run.
+     *   - `WorkflowEngine.php:875`
+     *     `foreach ($workflow->stages as $stageIndex => $stage)` reaches
+     *     `:1042`/`:1252`/`:1294`/`:1397` once per stage.
+     *   - And this is the LIVE half, unlike the two dormant sites in the roster
+     *     below: `Bootstrap.php:1183` `workflowEngine()` is wired at
+     *     `Bootstrap.php:1058`, the same construction point as `agentManager:`
+     *     at `Bootstrap.php:1044`, so it is reachable from `bin/sugarcrush`.
+     *
+     * MEASURED with a logging `git` shim on `PATH`, driving the nested-pipeline
+     * shape (a fresh `Agent` per stage, `environment` left null, the process
+     * directory inside the committed git fixture): TWO stages cost TEN git
+     * subprocesses and FIVE stages cost TWENTY-FIVE, and in both cases the
+     * stages see ONE DISTINCT PROMPT - every render byte-identical, and the two
+     * git-diff sections re-sent unchanged on every stage. Driven by
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheWorkflowShapedPipelineReRendersTheSameEnvironmentBlockOncePerStageAndNothingCanTellItNotTo()},
+     * which DERIVES the size of the repeated diff tail rather than quoting one,
+     * because that size is a property of the repository being rendered and not
+     * of this method: on the committed fixture it is 498 of the render's 967
+     * bytes, and a brief that reached this step quoted 405 of 864 from a
+     * different fixture. The subprocess counts and the distinct-prompt count
+     * are the fixture-independent half, and they are the half that matters.
+     *
+     * WHY THE DISPOSITION STILL STANDS. The seam is real and it is still not
+     * wireable here, for two independent reasons, and the second is decisive:
+     *
+     *   1. All five repeated-render sites are in
+     *      `Workflows/WorkflowEngine.php`, which is not one of P3.S6's four
+     *      declared files.
+     *   2. THE PARENT HAS NO CHANNEL TO DERIVE THE SIGNAL.
+     *      {@see \SugarCraft\Crush\Runtime::markWriteSinceLastRender()}
+     *      derives it from the step's assistant tool calls; a workflow stage's
+     *      answer comes back as an {@see AgentResult}, whose constructor
+     *      (`src/Agents/AgentResult.php:15-23`) is exactly `agentId`, `status`,
+     *      `output`, `error`, `tokensUsed`, `costUsd`, `startedAt`,
+     *      `completedAt` - NO TOOL CALLS - and the worker's own `complete`
+     *      frame (`ProcessExecutor.php:1037-1042`) carries `output`,
+     *      `tokensUsed` and `costUsd` and nothing else. "Did this stage
+     *      write?" is unanswerable on this path today. Wiring it is a
+     *      BUILD-IT-OUT across `WorkflowEngine` + `AgentResult` + the worker
+     *      IPC frame, not a one-line mark. That absence is pinned as a
+     *      decision by the same test, which asserts
+     *      `AgentResult::__construct`'s parameter list exactly, so the day a
+     *      tool-call field appears it reds and says this seam has become
+     *      wireable.
+     *
+     * So this is escalated to the orchestrator as a declared-scope event - not
+     * silently widened, and not silently dropped.
+     *
+     * THE ROSTER, AND ITS REACHABILITY, WHICH THE FIRST REVISION DID NOT STATE.
+     * EIGHT call sites, derived and pinned by
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()};
+     * re-derived here with `/usr/bin/grep -rn -- '->systemPrompt(' src/ bin/`,
+     * SIX are production-reachable and TWO are dormant:
+     *
+     *   - LIVE: the five in `WorkflowEngine` named above, and
+     *     {@see ProcessExecutor::spawnWorker()} at `ProcessExecutor.php:473`,
+     *     which those five reach through `AgentWorkerPool::executeOne()`.
+     *   - DORMANT: {@see AgentManager::executeSubAgent()} at
+     *     `AgentManager.php:433` - `/usr/bin/grep -rn -- '->executeSubAgent('
+     *     src/ bin/` finds nothing, as `Renderer.php:164-166` and
+     *     `AgentDefinition.php:137` already record - and `App::dispatchSkill()`
+     *     at `App/App.php:569`, whose own comment at `App.php:533` says
+     *     "Nothing calls dispatchSkill() in production yet".
+     *
+     * (A review of this step wrote "five reachable, three dormant". That sums
+     * to eight but splits it wrongly: `ProcessExecutor.php:473` is reached from
+     * every WorkflowEngine stage. Six and two are the derived numbers.)
+     *
+     * Taken ONE AT A TIME the eight are still once-per-dispatch: each builds
+     * one `CompleteRequest` and hands it to one completion, there is no agentic
+     * loop inside a dispatch, and the transient-failure retry inside
+     * `executeSubAgent()` re-sends the SAME request object rather than
+     * rebuilding it. Driven at one streamed chunk and at twenty by
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()},
+     * which drives the DORMANT `executeSubAgent()` path and measures what its
+     * name has to be read carefully to mean: renders reaching ONE
+     * `CompleteRequest`, not renders per workflow run. It is retained because
+     * that per-dispatch property is real and worth pinning; the per-run
+     * property is the new test's subject.
      *
      * A NUMBER IN THE OTHER DIRECTION, so this is not read as "the second
      * assembler is cheap". It is the expensive one per call.
@@ -450,17 +533,39 @@ final readonly class Agent
      * agent. All four are asserted by
      * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheAgentAssemblerCostsFiveGitSubprocessesPerRenderAndThreeWithTheDiffSuppressed()}.
      *
-     * AND ONE DISPATCH RENDERS TWICE, WHICH IS A FINDING AND NOT A FIX. Every
-     * caller that goes through the worker pool builds its `CompleteRequest`
-     * with this method AND then {@see ProcessExecutor::spawnWorker()} calls it
-     * again for the worker's startup message - TEN subprocesses for one
-     * dispatch, two unmemoised renders of a live git section that can disagree
-     * with each other. `App::dispatchSkill()`'s own comment says the two
-     * consumers "must agree"; nothing makes them. Pinned by
+     * AND ONE DISPATCH RENDERS TWICE, WHICH IS A FINDING AND NOT A FIX.
+     * `App::dispatchSkill()` and FOUR of the five `WorkflowEngine` sites
+     * (`:1042`, `:1152`, `:1252`, `:1294`) build their `CompleteRequest` with
+     * this method AND then {@see ProcessExecutor::spawnWorker()} calls it again
+     * for the worker's startup message - TEN subprocesses for one dispatch, two
+     * unmemoised renders of a live git section that can disagree with each
+     * other. NOT "every caller that goes through the worker pool", which is
+     * what an earlier revision of this sentence said: `Chat::executeAgents()`
+     * (`src/Chat.php:5124`) also goes through the pool and is not one of the
+     * eight call sites at all. The PARALLEL stage at `:1397` is a third shape
+     * again - `$firstAgent->systemPrompt()` builds one `$defaultRequest`, the
+     * per-task agents built in the `foreach` below it call nothing, and
+     * `AgentWorkerPool::executeAll()` copies `$request->systemPrompt` onto each
+     * per-agent request - so N parallel tasks cost N+1 renders, not 2N.
+     * `App::dispatchSkill()`'s own comment says the two consumers "must agree";
+     * nothing makes them. Pinned by
      * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()}
      * and escalated rather than repaired: dropping either call site is the
      * removal prompt_plan.md section 1.10 prohibits, and `ProcessExecutor.php`
      * is outside P3.S6's declared file list.
+     *
+     * ONE PROPOSED WIRING FOR IT, MEASURED AND DECLINED. A review proposed
+     * handing the `SubAgent` in `App::dispatchSkill()` an agent whose block has
+     * `withWriteSinceLastRender(false)`, so the worker's second render costs
+     * three subprocesses instead of five. MEASURED in that exact shape: the
+     * dispatch does fall from TEN subprocesses to EIGHT. Declined anyway, and
+     * not on scope grounds - `App/App.php` IS a declared file. The comment at
+     * `App.php:524-527` attaches the block before the `SubAgent` precisely
+     * because the request's `systemPrompt` and `$agent->agent->systemPrompt()`
+     * "must agree", so deliberately handing the worker a diff-less block makes
+     * the two consumers disagree MORE rather than less. It would also be a
+     * suppression keyed on nothing: the write signal it spends is the one that
+     * reason 2 above establishes cannot be derived on this path.
      */
     public function systemPrompt(?EnvironmentBlock $environment = null): string
     {

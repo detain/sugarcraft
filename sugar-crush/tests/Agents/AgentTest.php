@@ -10,6 +10,7 @@ use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentDefinition;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentPreset;
+use SugarCraft\Crush\Agents\AgentResult;
 use SugarCraft\Crush\Agents\ProcessExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Context\EnvironmentBlock;
@@ -1432,12 +1433,27 @@ final class AgentTest extends TestCase
      * THE CONTROL IS NOT DECORATION. Every interesting thing this test says is
      * a statement about a count, and a scanner that has stopped matching
      * anything reports a count too - `[]` is what a dead instrument returns.
-     * The fixture below carries one live call and six near-misses that a
+     * The fixture below carries THREE live calls and SIX near-misses that a
      * naive textual scan would take: the same call spelled inside a line
      * comment, inside a doc comment and inside a single-quoted string, the
      * method's own declaration, `buildSystemPrompt()` (the OTHER assembler,
      * whose name ends in the one this matches), and the bare word in array-key
-     * position. The scanner must answer with exactly the one live line.
+     * position. The counts in this sentence used to say "one live call and six
+     * near-misses" while the fixture held one and FIVE - the declaration the
+     * scanner's own doc-block claimed to exclude was never in it, so that
+     * exclusion had no coverage at all. It does now.
+     *
+     * THE THREE LIVE CALLS ARE THREE SPELLINGS, not three copies. `->`,
+     * nullsafe `?->`, and a name separated from its `(` by a space are all
+     * legal PHP for the same call, and the first version of this scanner saw
+     * only the first: a review proved the hole by inserting
+     * `if (false) { $subAgent->agent?->systemPrompt(); }` into
+     * `src/Agents/AgentManager.php` and watching this test stay green, while
+     * the `->` spelling of the same line reddened it. `?->` is idiomatic in
+     * this tree - `/usr/bin/grep -ro -- '?->' src/ | wc -l` reports 98 - so
+     * that was a live hole in the instrument the whole step rests on, not a
+     * theoretical one. The scanner must answer with exactly the three live
+     * lines.
      */
     public function testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor(): void
     {
@@ -1447,13 +1463,17 @@ final class AgentTest extends TestCase
             . "\$s = '\$c->systemPrompt()';\n"
             . "\$live = \$agent->systemPrompt();\n"
             . "\$other = \$agent->buildSystemPrompt();\n"
-            . "\$key = ['systemPrompt' => 1];\n";
+            . "\$key = ['systemPrompt' => 1];\n"
+            . "function systemPrompt() {}\n"
+            . "\$d?->systemPrompt();\n"
+            . "\$e->systemPrompt ();\n";
 
         $this->assertSame(
-            [5],
+            [5, 9, 10],
             self::agentAssemblerCallSites($fixture),
-            'the call-site scanner no longer sees a live ->systemPrompt() call, or it sees one of the '
-                . 'six near-misses beside it - every count below is worthless until this line passes',
+            'the call-site scanner no longer sees all three spellings of a live ->systemPrompt() call '
+                . '(plain, nullsafe, spaced), or it sees one of the six near-misses beside them - every '
+                . 'count below is worthless until this line passes',
         );
 
         $src = \dirname(__DIR__, 2) . '/src';
@@ -1756,21 +1776,228 @@ final class AgentTest extends TestCase
     }
 
     /**
+     * THE LIVE SHAPE, WHICH THE TEST ABOVE DOES NOT DRIVE: a workflow-shaped
+     * pipeline re-renders the SAME environment block once per stage, and
+     * nothing on this path can tell it not to.
+     *
+     * WHY A SECOND TEST AND NOT AN EDIT TO THE FIRST.
+     * {@see testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()}
+     * drives `AgentManager::executeSubAgent()`, which
+     * `/usr/bin/grep -rn -- '->executeSubAgent(' src/ bin/` finds no caller for
+     * anywhere in `src/` or `bin/`. That test pins a real property of a dormant
+     * path and it stays. What it cannot see is the per-RUN question, because
+     * the shape that asks it is a loop in a different file:
+     * `WorkflowEngine.php:1105` `foreach ($nestedStages as $nestedStage)`
+     * encloses a render at `:1152`, `executeVerificationStage()` renders twice
+     * straight-line at `:1252` and `:1294`, and `WorkflowEngine.php:875`
+     * reaches `:1042`/`:1252`/`:1294`/`:1397` once per stage - and unlike the
+     * dormant pair, that engine is LIVE from `bin/sugarcrush` via
+     * `Bootstrap.php:1183`, wired at `Bootstrap.php:1058`.
+     *
+     * WHAT IS REPRODUCED HERE. A FRESH `Agent` per iteration with `environment`
+     * null and `prompt` empty, rendered inside a loop with the process
+     * directory inside the committed git fixture - which is exactly how
+     * `WorkflowEngine` builds its per-stage agent, and which is what sends
+     * `Agent::systemPrompt()` down its own
+     * `EnvironmentBlock::capture(getcwd(), ...)` last resort every time.
+     *
+     * WHAT IS PINNED, AND WHY EACH FIGURE IS DERIVED RATHER THAN QUOTED. The
+     * subprocess count and the distinct-render count are properties of the
+     * mechanism and are asserted as exact numbers. The SIZE of the repeated
+     * diff tail is a property of the repository being rendered - a brief that
+     * reached this file quoted 405 bytes of an 864-byte render from one
+     * fixture, and this fixture answers 498 of 967 - so it is computed from a
+     * `withWriteSinceLastRender(false)` render of the same block instead of
+     * being written down, and then pinned EXACTLY by rebuilding the suppressed
+     * render out of the emitted one.
+     *
+     * AND THE MISSING CHANNEL IS PINNED AS A DECISION. The reason P3.S6 does
+     * not wire the write signal here is not only that `WorkflowEngine.php` is
+     * outside its declared file list: the parent has nothing to derive the
+     * signal FROM. `Runtime::markWriteSinceLastRender()` reads the step's
+     * assistant tool calls, and a workflow stage's answer comes back as an
+     * {@see AgentResult} that carries none. The constructor's parameter list is
+     * asserted here by reflection so that the day a tool-call field is added -
+     * which is exactly the change that makes this seam wireable - this test
+     * reds and says so, instead of the opportunity passing unnoticed.
+     */
+    public function testTheWorkflowShapedPipelineReRendersTheSameEnvironmentBlockOncePerStageAndNothingCanTellItNotTo(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        $originalCwd = (string) getcwd();
+        $staged = 'Staged changes (git diff --cached, index vs HEAD):';
+        $unstaged = 'Unstaged changes (git diff, working tree vs index):';
+
+        try {
+            $this->assertTrue(chdir($repo), "could not enter the fixture repository {$repo}");
+
+            foreach ([2, 5] as $stages) {
+                /** @var list<string> $renders */
+                $renders = [];
+
+                $subprocesses = self::gitSubprocessesDuring(
+                    static function () use ($stages, &$renders): void {
+                        for ($stage = 0; $stage < $stages; $stage++) {
+                            $renders[] = (new Agent(
+                                name: 'p3s6-pipeline-stage',
+                                description: 'the WorkflowEngine nested-pipeline shape',
+                                prompt: '',
+                                model: 'stub-model',
+                                provider: 'p3s6-counting',
+                                tools: [],
+                                skillNames: [],
+                                hooks: [],
+                                isActive: true,
+                                environment: null,
+                            ))->systemPrompt();
+                        }
+                    },
+                );
+
+                $this->assertSame(
+                    5 * $stages,
+                    $subprocesses,
+                    "a {$stages}-stage pipeline no longer costs five git subprocesses per stage. If it "
+                        . 'costs fewer, either render() became memoised or a caller started sharing one '
+                        . 'EnvironmentBlock across stages - both change the P3.S6 disposition.',
+                );
+
+                $this->assertCount(
+                    $stages,
+                    $renders,
+                    'the loop did not render once per stage, so the counts above describe something else',
+                );
+
+                $this->assertSame(
+                    1,
+                    \count(array_unique($renders)),
+                    "the {$stages} stages no longer see one byte-identical prompt. That is the whole "
+                        . 'reason the repeated render is waste rather than information: nothing between '
+                        . 'stages changed, and the block was re-shelled-out and re-sent anyway.',
+                );
+
+                foreach ($renders as $index => $render) {
+                    $this->assertSame(
+                        1,
+                        substr_count($render, $staged),
+                        "stage {$index} did not emit the staged-diff section exactly once",
+                    );
+                    $this->assertSame(
+                        1,
+                        substr_count($render, $unstaged),
+                        "stage {$index} did not emit the unstaged-diff section exactly once",
+                    );
+                }
+            }
+        } finally {
+            chdir($originalCwd);
+        }
+
+        // The size of what every stage after the first re-sends unchanged,
+        // DERIVED from the same block rather than written down.
+        $block = EnvironmentBlock::capture($repo, 'stub-model');
+        $emitted = $block->render();
+        $suppressed = $block->withWriteSinceLastRender(false)->render();
+        $tail = \strlen($emitted) - \strlen($suppressed);
+
+        $this->assertGreaterThan(
+            0,
+            $tail,
+            'suppressing the write signal no longer removes any bytes, so there is nothing for a '
+                . 'per-stage write signal to have saved and this measurement has lost its subject',
+        );
+
+        $this->assertStringNotContainsString(
+            $staged,
+            $suppressed,
+            'the suppressed render still carries the staged-diff section',
+        );
+        $this->assertSame(
+            1,
+            substr_count($emitted, $staged),
+            'the emitted render no longer carries the staged-diff section exactly once',
+        );
+
+        $cut = strpos($emitted, "\n\n" . $staged);
+        $this->assertIsInt($cut);
+        $this->assertSame(
+            $suppressed,
+            substr($emitted, 0, $cut) . substr($emitted, $cut + $tail),
+            'the suppressed render is no longer the emitted render minus one contiguous run of bytes '
+                . 'starting at the staged-diff heading. Until that holds, "N bytes re-sent per stage" '
+                . 'is a subtraction of two lengths rather than a statement about what is re-sent.',
+        );
+
+        $this->assertSame(
+            [
+                'agentId',
+                'status',
+                'output',
+                'error',
+                'tokensUsed',
+                'costUsd',
+                'startedAt',
+                'completedAt',
+            ],
+            array_map(
+                static fn (\ReflectionParameter $parameter): string => $parameter->getName(),
+                (new \ReflectionMethod(AgentResult::class, '__construct'))->getParameters(),
+            ),
+            'AgentResult::__construct()\'s parameter list moved. If a tool-call field was ADDED, the '
+                . 'parent can finally answer "did this stage write?" for a workflow stage, and the '
+                . 'P3.S6 disposition - that the per-step write signal is unwireable on the Agent '
+                . 'assembler path because no signal reaches the parent - must be revisited rather '
+                . 'than left standing.',
+        );
+    }
+
+    /**
      * The line numbers of every live `->systemPrompt(` call in one PHP source.
      *
-     * Token-driven rather than textual, and the difference is exactly one call
-     * site. MEASURED on this tree with
-     * `/usr/bin/grep -ro -- '->systemPrompt(' src/ | wc -l`: NINE occurrences,
-     * against the EIGHT this scanner reports. The ninth is a comment inside
-     * `App::dispatchSkill()` describing the second render
-     * (`ProcessExecutor sends the request's systemPrompt AND, separately,`
-     * ...), so a textual census of the agent assembler's callers would
-     * over-count by one, in one of the four files whose classification is the
-     * whole content of P3.S6. Comments and strings are their own tokens, so
-     * skipping them is free; the declaration is excluded because it is preceded
-     * by `T_FUNCTION` rather than by `T_OBJECT_OPERATOR`, and
-     * `buildSystemPrompt()` because a token is compared whole rather than by
-     * suffix.
+     * Token-driven rather than textual, and the difference is four call sites.
+     * MEASURED on this tree with
+     * `/usr/bin/grep -ro -- '->systemPrompt(' src/ | wc -l`: TWELVE
+     * occurrences, against the EIGHT this scanner reports. The four extras are
+     * all prose - one comment inside `App::dispatchSkill()` describing the
+     * second render (`ProcessExecutor sends the request's systemPrompt AND,
+     * separately,` ...) and three inside `Agent::systemPrompt()`'s own
+     * doc-block - so a textual census of the agent assembler's callers would
+     * over-count by four, in two of the four files whose classification is the
+     * whole content of P3.S6. (That figure was NINE and one before the P3.S6
+     * doc-block was corrected in place; it is re-derived here rather than
+     * carried forward.)
+     *
+     * WHAT THE ALPHABET COVERS, stated because an alphabet IS the coverage and
+     * a guard must report what it cannot read:
+     *
+     * - `$x->systemPrompt(` and `$x?->systemPrompt(`. Nullsafe was added after
+     *   a review proved its absence by mutation; `?->` appears 98 times in
+     *   `src/`, so leaving it out was a hole a real call could hide in.
+     * - Whitespace, line comments and doc comments between the operator, the
+     *   name and the `(`. `$x-> systemPrompt ();` is legal PHP and the first
+     *   version of this scanner, which indexed `$tokens[$i + 1]` and
+     *   `$tokens[$i + 2]` directly, dropped it SILENTLY - reporting a smaller
+     *   census rather than an unreadable one.
+     * - Comments and strings are their own tokens, so skipping them is free;
+     *   the declaration is excluded because it is preceded by `T_FUNCTION`
+     *   rather than by an object operator, and `buildSystemPrompt()` because a
+     *   token is compared whole rather than by suffix. All three exclusions
+     *   have a fixture line in
+     *   {@see testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()}.
+     *
+     * WHAT IT STILL CANNOT EXPRESS, and would report as absence rather than as
+     * a refusal:
+     *
+     * - a dynamic name - `$m = 'systemPrompt'; $x->$m();` or
+     *   `$x->{'systemPrompt'}()` - because the name is not a `T_STRING` at that
+     *   position;
+     * - a call routed through `call_user_func([$agent, 'systemPrompt'])`, a
+     *   first-class callable stored and invoked later, or any reflection;
+     * - a static or parent-scoped spelling (`Agent::systemPrompt()`,
+     *   `parent::systemPrompt()`), because it matches only object operators.
+     *   MEASURED: none of these shapes occurs in `src/` today, which is why the
+     *   roster below is trustworthy and why this paragraph exists - the day one
+     *   is written, this scanner under-counts and says nothing.
      *
      * Deliberately NOT a brace walk - it needs no depth - so it is outside the
      * population {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest}
@@ -1783,17 +2010,35 @@ final class AgentTest extends TestCase
         $tokens = token_get_all($php);
         $lines = [];
 
+        // Index of the next token that is not whitespace or a comment. Both
+        // gaps this steps over - operator to name, name to `(` - are legal PHP.
+        $next = static function (array $tokens, int $from): int {
+            $k = $from + 1;
+            while (
+                \is_array($tokens[$k] ?? null)
+                && \in_array($tokens[$k][0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)
+            ) {
+                $k++;
+            }
+
+            return $k;
+        };
+
         foreach ($tokens as $i => $token) {
-            if (!\is_array($token) || $token[0] !== T_OBJECT_OPERATOR) {
+            if (
+                !\is_array($token)
+                || ($token[0] !== T_OBJECT_OPERATOR && $token[0] !== T_NULLSAFE_OBJECT_OPERATOR)
+            ) {
                 continue;
             }
 
-            $name = $tokens[$i + 1] ?? null;
+            $nameIndex = $next($tokens, $i);
+            $name = $tokens[$nameIndex] ?? null;
             if (!\is_array($name) || $name[0] !== T_STRING || $name[1] !== 'systemPrompt') {
                 continue;
             }
 
-            if (($tokens[$i + 2] ?? null) !== '(') {
+            if (($tokens[$next($tokens, $nameIndex)] ?? null) !== '(') {
                 continue;
             }
 
@@ -1833,6 +2078,13 @@ final class AgentTest extends TestCase
      * rather than of a stub that answers instantly. `PATH` is restored in a
      * `finally`, because a leaked shim would silently re-point every later test
      * in the process at a temp directory that this method then deletes.
+     *
+     * THE COUNT AND THE CLEANUP ARE IN THE SAME `finally`, and that is a fix
+     * rather than a style. The first version computed both AFTER the
+     * try/finally, so a `$body()` that threw - an in-body `assertSame()`
+     * failure is a PHPUnit exception, and two callers have one - left the
+     * directory behind under `sys_get_temp_dir()` with an EXECUTABLE `git`
+     * inside it, once per failing run.
      */
     private static function gitSubprocessesDuring(callable $body): int
     {
@@ -1854,17 +2106,19 @@ final class AgentTest extends TestCase
         $originalPath = (string) getenv('PATH');
         putenv('PATH=' . $dir . ':' . $originalPath);
 
+        $count = 0;
+
         try {
             $body();
         } finally {
             putenv('PATH=' . $originalPath);
+
+            $count = is_file($log)
+                ? \count((array) file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
+                : 0;
+
+            self::removeTree($dir);
         }
-
-        $count = is_file($log)
-            ? \count((array) file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
-            : 0;
-
-        self::removeTree($dir);
 
         return $count;
     }
