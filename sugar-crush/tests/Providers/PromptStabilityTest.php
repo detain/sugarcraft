@@ -549,21 +549,61 @@ final class PromptStabilityTest extends TestCase
      * {@see MIN_STABLE_PREFIX_BYTES}, the gain floor
      * {@see MIN_PREFIX_GAIN_BYTES}, `prefix > $envAt` per fixture, each stable
      * marker ending before the prefix does, `prefix > $diffAt` on the nice
-     * shape, the five-layer width {@see STABLE_LAYERS_BYTES}, and the three-way
-     * ordering of the three post-reorder rows.
+     * shape and `$diffAt > MIN_STABLE_PREFIX_BYTES` beside it, the membership
+     * and order of the five layers between the fences (no literal at all), the
+     * per-layer widths {@see STABLE_LAYER_WIDTHS} and their total
+     * {@see STABLE_LAYERS_BYTES}, and the three-way ordering of the three
+     * post-reorder rows.
      *
-     * HOW FAR EACH ROW CAN ROT WHILE THE FILE STAYS GREEN, and an earlier
-     * revision of this paragraph got it wrong in BOTH directions by leaving
-     * `$diffAt` out of that list. It said "down to 4,404". MEASURED, by making
-     * `Recent commits:` volatile with a four-byte counter in
-     * {@see \SugarCraft\Crush\Context\EnvironmentBlock}: a prefix of 4,421 —
-     * 17 B ABOVE that supposedly-green floor — already reds, at
-     * `the git status or log diverged before the diff body did`. The nice row
-     * is pinned far tighter than the constant suggests, by
-     * `$diffAt = 4,512`; the capped and status rows, which have no `$diffAt`
-     * assertion of their own, are the ones bounded only at
-     * {@see MIN_STABLE_PREFIX_BYTES}. So: the nice row cannot fall below 4,513
-     * green, and the other two can fall to 4,096.
+     * HOW FAR EACH ROW CAN ROT WHILE THE FILE STAYS GREEN. Two earlier
+     * revisions of this paragraph got this wrong, in different ways, and both
+     * corrections are kept because the second one is a correction OF the first
+     * (rule 7: a false correction is trusted, and it overwrites something that
+     * was right).
+     *
+     * The FIRST revision left `$diffAt` out of the list and said the nice row
+     * could rot "down to 4,404". The SECOND corrected that with an anecdote —
+     * "a prefix of 4,421 already reds" — and gave no generator for 4,421, so
+     * the next reader who ran the experiment got a different number and could
+     * not tell which of them had mistyped. WHAT IS TRUE NOW, with the
+     * generator written down so the figure reproduces. Apply this exact
+     * mutation to {@see \SugarCraft\Crush\Context\EnvironmentBlock::gitStatusSnapshot()},
+     * which makes `Recent commits:` differ between two renders at its first
+     * byte:
+     *
+     *     -        $log = $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES);
+     *     +        static $rot = 1000;
+     *     +        $log = ((string) $rot++) . $this->gitField(['log', '--oneline', '-5'], self::SUMMARY_MAX_BYTES);
+     *
+     * MEASURED 2026-08-31, PHP 8.3.6, Linux 6.8.0-138-generic, this worktree:
+     * prompt 4,844 -> 4,848 and the shared prefix **4,423**, not 4,421. The
+     * arithmetic checks: the log field's first byte is at 4,420 (the fence
+     * `"\n\nRecent commits:\n"` opens at 4,402 and is 18 B long) and `1000`
+     * and `1001` share three bytes, so 4,420 + 3 = 4,423. The 4,421 the last
+     * revision carried is not reachable by that mutation at all. The CLAIM
+     * both revisions were making survives the correction and is why the
+     * paragraph stays: 4,423 is 19 B above the 4,404 the first revision called
+     * a green floor, and it reds, at
+     * `the git status or log diverged before the diff body did /
+     * Failed asserting that 4423 is greater than 4516`.
+     *
+     * The nice row is pinned far tighter than the constant suggests, by
+     * `$diffAt`, MEASURED 4,512 here — and that RELATION is now asserted
+     * rather than left in prose, at the `$diffAt` site in
+     * {@see testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree()}, so a
+     * fixture that shrank until the floor became the binding constraint reds
+     * there instead of silently making this paragraph false. The capped and
+     * status rows have no `$diffAt` assertion of their own.
+     *
+     * SO, DERIVED FROM THE ASSERTIONS RATHER THAN OBSERVED — and an earlier
+     * revision of this sentence was off by one on two of the three rows, which
+     * is the same class of defect the paragraph is itself a correction of:
+     * `$statusPrefix >= 4,096` is the only row bounded by the floor alone, so
+     * the STATUS row can fall to **4,096**; `$statusPrefix < $cappedPrefix` then
+     * forces the CAPPED row to **4,097**, not 4,096; `$cappedPrefix <
+     * $nicePrefix` forces the nice row to 4,098 from that chain, and the
+     * `$diffAt` pin in the other test binds it harder still at **4,513**. Three
+     * different floors, one per row, and none of them is the constant.
      *
      * That rot risk is taken ON PURPOSE, and the alternative is worse: these
      * absolutes contain bytes this file does not own — `OS version:` and `PHP
@@ -654,16 +694,84 @@ final class PromptStabilityTest extends TestCase
      * assertion site, not by coincidence.
      *
      * PINNED BY EQUALITY, unlike every other figure in this file, because it is
-     * the only one that is host-independent. MEASURED by re-running the fixture
+     * the only one that is HOST-independent. MEASURED by re-running the fixture
      * under a `TMPDIR` ten bytes longer: the prompt goes 4,844 -> 4,854 and the
      * prefix 4,670 -> 4,680, and this constant does not move — the fixture
      * root's path lives inside `<env>`, past both fences, and so do
-     * `OS version:` and `PHP version:`. What it DOES move with is this file's
-     * own fixture content, which this file owns. If a later step edits the
-     * instruction documents, the memory store or the skill body the fixture
-     * writes, re-measure this and move it; that is the assertion working.
+     * `OS version:` and `PHP version:`. That half held up under every attack
+     * and is not in question.
+     *
+     * WHAT THIS DOC-BLOCK USED TO CLAIM, AND WHY IT WAS THE WRONG LICENCE.
+     * It said: *"What it DOES move with is this file's own fixture content,
+     * which this file owns. If a later step edits the instruction documents,
+     * the memory store or the skill body the fixture writes, re-measure this
+     * and move it."* Host-independence is not the same property as
+     * this-file-owns-it, and the second sentence was the one licensing an
+     * equality pin. It is FALSE, by a wide margin. MEASURED 2026-08-31 in this
+     * worktree, by marking every byte of the region that this file's fixture
+     * authored and taking the complement:
+     *
+     *   fixture-authored (this file owns it)    324 B   20.6 %
+     *   production-authored (it does not)     1,251 B   79.4 %
+     *
+     * The 1,251 is static prose and fence spellings inside
+     * {@see \SugarCraft\Crush\Context\RepoMapBlock} (its 403 B header and
+     * its 257 B PSR-4 note), {@see \SugarCraft\Crush\Context\MemoryBlock}
+     * (its 414 B header) and {@see \SugarCraft\Crush\Skills\SkillMatcher}
+     * (its 41 B caption). Four of this plan's later steps are licensed to edit
+     * exactly that prose. MEASURED: changing `'A map of where code lives'` to
+     * `'A map of where the code lives'` in `RepoMapBlock` — four bytes, no
+     * behaviour — red this constant at 1,579, under a failure message offering
+     * two causes ("a layer moved out from between the fences" / "this file's
+     * own fixture content changed size") of which NEITHER had happened.
+     *
+     * WHAT IS TRUE NOW, AND WHY THE CONSTANT STILL EARNS ITS PLACE. The two
+     * properties are separated. The property this equality was licensed for —
+     * that the region between the fences holds exactly these five layers, in
+     * this order, and nothing else — is pinned prose-immune by the membership
+     * and order assertions at the head of
+     * {@see testTheCachePrefixReachesPastEveryStableLayerOnADirtyTree()}, which
+     * carry no byte literal at all and survive every prose edit. The SIZE stays
+     * pinned by equality, because a size pin that a foreign prose edit reds is
+     * still worth having (it is the only thing that would catch a layer
+     * silently doubling), but it is now pinned PER LAYER through
+     * {@see STABLE_LAYER_WIDTHS}, so a red names the one layer that moved and
+     * says who owns its bytes — which of the three repairs applies is then
+     * readable off the message instead of guessed.
      */
     private const STABLE_LAYERS_BYTES = 1575;
+
+    /**
+     * The same 1,575 bytes as {@see STABLE_LAYERS_BYTES}, split per layer, so a
+     * width that moves names the layer AND the code that authored the bytes.
+     *
+     * Keyed by the layer's marker, in assembly order; the value is the byte
+     * distance from that layer's own `"\n\n" . $marker` boundary to the next
+     * layer's (the last one to the `<env>` fence). MEASURED 2026-08-31, PHP
+     * 8.3.6, Linux 6.8.0-138-generic, in this worktree, on the fixture
+     * {@see dirtyRepoFixtureWithEveryStableLayer()} builds, three takes and
+     * identical on all three. The last two columns are the ownership split
+     * described at {@see STABLE_LAYERS_BYTES}, measured the same way:
+     *
+     *   | layer                    | width | fixture-owned | production-owned, and by whom |
+     *   |--------------------------|------:|--------------:|------------------------------|
+     *   | `<repo-map>`             |   727 |            38 |  689  RepoMapBlock header + PSR-4 note + fences |
+     *   | `<project-instructions>` |   139 |            90 |   49  the two fence spellings |
+     *   | `<project-memory>`       |   518 |            63 |  455  MemoryBlock header + fences |
+     *   | `## Skill: prefix-demo`  |    73 |            59 |   14  Skill::systemPromptContribution()'s heading |
+     *   | the skill listing        |   118 |            74 |   44  SkillMatcher's caption |
+     *   | **total**                | 1,575 |           324 | 1,251 |
+     *
+     * They sum to {@see STABLE_LAYERS_BYTES} and that identity is asserted, so
+     * the two constants cannot drift apart silently.
+     */
+    private const STABLE_LAYER_WIDTHS = [
+        '<repo-map>' => 727,
+        '<project-instructions>' => 139,
+        '<project-memory>' => 518,
+        '## Skill: prefix-demo' => 73,
+        'Available skills (invoke via Skill tool):' => 118,
+    ];
 
     /**
      * One marker per layer the reorder lifted into the cacheable prefix.
@@ -773,8 +881,15 @@ final class PromptStabilityTest extends TestCase
         // this fixture and the assertion 40 lines below demands
         // `$prefix > $diffAt`, so every prefix that reds this floor reds that
         // one too: deleting these five lines would change this test's verdict
-        // for no input, only its failure message. MEASURED — at a prefix of
-        // 4,421 this floor passes and the `$diffAt` assertion is what fires.
+        // for no input, only its failure message. MEASURED 2026-08-31 with the
+        // volatile-log mutation written out in full at
+        // {@see MIN_STABLE_PREFIX_BYTES} — at a prefix of 4,423 this floor
+        // passes and the `$diffAt` assertion is what fires, at
+        // `Failed asserting that 4423 is greater than 4516`. (This line used to
+        // say 4,421 and cited no generator; 4,421 is not a value that mutation
+        // can produce. See the doc-block for the arithmetic.) The relation the
+        // sentence depends on — `$diffAt` above the floor — is asserted at the
+        // `$diffAt` site rather than left here as prose.
         //
         // The floor is NOT dead, because the shape that binds it is in the
         // other test: {@see testTheFloorHoldsForEveryChangeThatMovesOnlyTheEnvBlock()}
@@ -825,6 +940,22 @@ final class PromptStabilityTest extends TestCase
             'the git status or log diverged before the diff body did',
         );
 
+        // WHICH OF THE TWO BINDS, ASSERTED RATHER THAN NARRATED. The docblock
+        // on MIN_STABLE_PREFIX_BYTES claims this shape is pinned by `$diffAt`
+        // and not by the floor; that claim is only true while `$diffAt` sits
+        // ABOVE the floor, and it was carried for three review cycles as prose
+        // backed by an anecdotal figure nobody could reproduce. It is one
+        // comparison, it needs no literal, and if the fixture ever shrinks far
+        // enough that the floor becomes the binding constraint on this shape it
+        // reds here instead of quietly making that docblock false.
+        $this->assertGreaterThan(
+            self::MIN_STABLE_PREFIX_BYTES,
+            $diffAt,
+            'the diff body now starts at byte ' . $diffAt . ', at or below the floor of '
+                . self::MIN_STABLE_PREFIX_BYTES . ' - the floor, not $diffAt, is what binds this shape now, '
+                . 'and MIN_STABLE_PREFIX_BYTES\' doc-block says the opposite',
+        );
+
         // ---- the control: the same counter, the pre-P3.S1 order ------------
         $oldFirst = self::reassembledWithEnvAtLayerTwo($first);
         $oldSecond = self::reassembledWithEnvAtLayerTwo($second);
@@ -849,21 +980,109 @@ final class PromptStabilityTest extends TestCase
         $mapAt = strpos($first, "\n\n<repo-map>");
         $this->assertIsInt($mapAt, 'the assembled prompt carries no <repo-map> layer to have lifted');
 
+        // 0. MEMBERSHIP AND ORDER — THE PROSE-IMMUNE HALF, and the property
+        //    assertion 1 below was licensed for but does not have. It carries
+        //    no byte literal, so no prose edit anywhere in
+        //    RepoMapBlock/MemoryBlock/SkillMatcher can red it; what reds it is
+        //    a layer leaving the region, or arriving in the wrong place.
+        //    MEASURED: demoting `<repo-map>` in `Runtime::buildSystemPrompt()`
+        //    to sit immediately before `<env>` reds this at
+        //    `<project-instructions>`, naming the layer that left.
+        $boundaries = [];
+        $previous = $mapAt - 1;
+
+        foreach (self::STABLE_LAYER_WIDTHS as $marker => $width) {
+            $at = strpos($first, "\n\n" . $marker);
+            $this->assertIsInt(
+                $at,
+                'the "' . $marker . '" layer is not in the assembled prompt at all, so the region between '
+                    . '<repo-map> and <env> cannot be the five layers P3.S1 lifted',
+            );
+            $this->assertGreaterThan(
+                $previous,
+                $at,
+                'the "' . $marker . '" layer is out of assembly order at byte ' . $at
+                    . ' - the layers between <repo-map> and <env> were reordered',
+            );
+            $this->assertLessThan(
+                $envAt,
+                $at,
+                'the "' . $marker . '" layer starts at byte ' . $at . ', at or after <env> at ' . $envAt
+                    . ' - it left the region P3.S1 lifted',
+            );
+            $boundaries[$marker] = $at;
+            $previous = $at;
+        }
+
+        // The roster this loop walks and the roster the two `substr_count`
+        // loops walk are two hand-maintained lists of the same five layers, so
+        // they are asserted to be the same list. Two hand-maintained constants,
+        // not one derived from the other: this catches an edit to one of them,
+        // and nothing about the assembler.
+        $this->assertSame(
+            self::STABLE_LAYER_MARKERS,
+            array_keys(self::STABLE_LAYER_WIDTHS),
+            'STABLE_LAYER_MARKERS and STABLE_LAYER_WIDTHS have drifted apart',
+        );
+        $this->assertSame(
+            self::STABLE_LAYERS_BYTES,
+            array_sum(self::STABLE_LAYER_WIDTHS),
+            'the per-layer widths no longer sum to STABLE_LAYERS_BYTES',
+        );
+
         // WHAT MOVED, AND HOW MUCH IT MOVED, ARE THREE DIFFERENT STATEMENTS.
-        // They are asserted here strongest-first, because the coarser two are
-        // implied by this one and would otherwise be what a reader sees red.
+        // AN EARLIER REVISION OF THIS PARAGRAPH SAID THEY WERE ASSERTED
+        // "strongest-first, because the coarser two are implied by this one".
+        // That is true of assertion 2 and FALSE of assertion 3, and the file
+        // contradicted itself about assertion 3 seventeen lines further down.
+        // MEASURED: shift the rotation point of {@see reassembledWithEnvAtLayerTwo()}
+        // by one byte (splice at `$mapAt + 1`, which preserves length so the
+        // guard above it stays green) and assertion 1 holds at 1,575 while
+        // assertion 3 reds at 1,574. 1 and 3 are INCOMPARABLE — 1 is about the
+        // assembler's layout and 3 is about the splice helper, and neither
+        // implies the other. "Strongest-first" is not a total order; what is
+        // true is that 2 is implied by 1 and 3 together, which is why 2 can
+        // never be the first to red and is kept for its wording rather than
+        // for its verdict.
         //
-        // 1. THIS ONE BINDS THE ASSEMBLER: the region between the two fences is
-        //    exactly the five layers P3.S1 lifted, not four and not six.
-        //    MEASURED, by demoting `<repo-map>` in `Runtime::buildSystemPrompt()`
-        //    so only one layer sits between the fences, it reds with 727
-        //    against 1,575.
+        // 1. THIS ONE BINDS THE ASSEMBLER'S SIZE: the region between the two
+        //    fences is exactly the five layers P3.S1 lifted, at their measured
+        //    widths. MEASURED, by demoting `<repo-map>` in
+        //    `Runtime::buildSystemPrompt()` so only one layer sits between the
+        //    fences, the total reds with 727 against 1,575.
+        //
+        //    It is pinned PER LAYER first, because 79.4 % of these 1,575 bytes
+        //    are static prose this file does not own (MEASURED; see
+        //    {@see STABLE_LAYER_WIDTHS}) and a four-byte prose edit in
+        //    RepoMapBlock is a legitimate change that must red with a message
+        //    naming ITS OWN cause rather than one of two causes that did not
+        //    happen.
+        $offsets = array_values($boundaries);
+        $offsets[] = $envAt;
+
+        foreach (array_keys(self::STABLE_LAYER_WIDTHS) as $index => $marker) {
+            $measured = $offsets[$index + 1] - $offsets[$index];
+            $this->assertSame(
+                self::STABLE_LAYER_WIDTHS[$marker],
+                $measured,
+                'the "' . $marker . '" layer occupies ' . $measured . ' bytes of the region P3.S1 lifted, not '
+                    . self::STABLE_LAYER_WIDTHS[$marker] . '. Three different things cause this and they are '
+                    . 'not the same repair: (a) a layer moved out of the region - assertion 0 above is red too, '
+                    . 'fix that first; (b) this file changed the fixture content it writes into this layer - it '
+                    . 'owns 324 of the region\'s 1,575 bytes, re-measure and move the constant; (c) a PROSE '
+                    . 'EDIT in the production class that renders this layer - RepoMapBlock, MemoryBlock and '
+                    . 'SkillMatcher own the other 1,251 bytes and later steps of this plan are licensed to '
+                    . 'edit exactly that prose, so this is a legitimate change: re-measure and move the '
+                    . 'constant, and expect assertion 0 to have stayed green',
+            );
+        }
+
         $this->assertSame(
             self::STABLE_LAYERS_BYTES,
             $envAt - $mapAt,
             'the region between <repo-map> and <env> is ' . ($envAt - $mapAt) . ' bytes, not '
-                . self::STABLE_LAYERS_BYTES . ' - either a layer moved out from between the fences, or this '
-                . "file's own fixture content changed size and the constant needs re-measuring",
+                . self::STABLE_LAYERS_BYTES . ' - the per-layer assertions above say which layer moved and '
+                . 'which of the three repairs applies',
         );
 
         // 2. THE GAIN FLOOR, in the units the step text uses ("the reorder moved
@@ -894,10 +1113,23 @@ final class PromptStabilityTest extends TestCase
         // claimed the opposite — that it catches a reorder lifting only some of
         // the layers, which "the floor above cannot". MEASURED, that is
         // inverted: the demotion mutation described above leaves this identity
-        // holding exactly (727 = 727), and what reds is assertion 1 (or, before
-        // assertion 1 existed, the floor). Kept because a helper guard is worth
-        // having and this one is free; labelled correctly because a guard
-        // advertised as something stronger is how a test file stops being read.
+        // holding exactly (727 = 727), and what reds is assertion 1.
+        //
+        // THE PARENTHESIS THAT USED TO CLOSE THAT SENTENCE NAMED THE WRONG
+        // ASSERTION. It read "(or, before assertion 1 existed, the floor)", and
+        // "the floor" means {@see MIN_STABLE_PREFIX_BYTES} everywhere else in
+        // this file. MEASURED under the demotion mutation, with the assertion-1
+        // and assertion-0 values computed directly: the region is 727, the gain
+        // is 727, `$prefix` is **4,670 — unmoved** — and `$oldPrefix` is 3,943.
+        // So MIN_STABLE_PREFIX_BYTES PASSES, `$prefix > $envAt` passes and
+        // `$prefix > $diffAt` passes; what would have red before assertion 1
+        // existed is the GAIN floor {@see MIN_PREFIX_GAIN_BYTES}, at 727
+        // against 1,500. The demotion moves layers around WITHIN the shared
+        // prefix, so it cannot move the first differing byte at all — which is
+        // exactly why the magnitude floor is blind to it and the gain floor is
+        // not. Kept because a helper guard is worth having and this one is
+        // free; labelled correctly because a guard advertised as something
+        // stronger is how a test file stops being read.
         $this->assertSame(
             $envAt - $mapAt,
             $prefix - $oldPrefix,
@@ -1202,6 +1434,24 @@ final class PromptStabilityTest extends TestCase
             'the two fixtures no longer lay out identically, so their byte offsets are not comparable',
         );
 
+        // WHAT MAKES THE TWO RENDERS DIFFER AT ALL, asserted before the
+        // difference is measured. `src/Gamma.php` is UNTRACKED, so the only
+        // field of `<env>` that can see it is `git status --porcelain`, and
+        // whether that command reports an untracked file is decided by
+        // `status.showUntrackedFiles`. MEASURED: delete the repo-local pin from
+        // dirtyRepoFixtureWithEveryStableLayer() and run this suite with a
+        // global `status.showUntrackedFiles=no`, and the assertion below reds
+        // as `Failed asserting that two strings are not identical` — a message
+        // that names neither the file nor the knob. This one names both, and it
+        // reds first.
+        $this->assertStringContainsString(
+            "\n?? src/Gamma.php\n",
+            $stepTwo,
+            'the untracked src/Gamma.php did not reach `git status --porcelain`, so the two renders have '
+                . 'nothing to differ about. The repo-local `status.showUntrackedFiles=normal` pin in '
+                . 'dirtyRepoFixtureWithEveryStableLayer() is what makes this fixture see it',
+        );
+
         $withinTurn = self::commonPrefixLength($stepOne, $stepTwo);
         $this->assertNotSame($stepOne, $stepTwo, '<env> must still track the new file within the turn');
         $this->assertGreaterThanOrEqual(
@@ -1218,6 +1468,158 @@ final class PromptStabilityTest extends TestCase
             $acrossTurns,
             $withinTurn,
             'the two lifetimes must differ, or this test is measuring one thing twice',
+        );
+    }
+
+    /**
+     * EVERY GIT FIELD IN `<env>` CARRIES A REAL VALUE ON THIS FIXTURE, not a
+     * degraded placeholder that reads to the model as an answer.
+     *
+     * WHY THIS EXISTS RATHER THAN A TWELFTH CONFIG PIN. The `foreach` in
+     * {@see dirtyRepoFixtureWithEveryStableLayer()} pins sixteen git config
+     * knobs, and that list has grown at EVERY review that looked for another
+     * one — four, seven, eight, ten, eleven, now thirteen plus an attributes
+     * file. It is a hand-maintained roster, and a test over a hand-maintained
+     * list inherits that list's omissions. Worse, the omissions have a shape:
+     * three separate reviews found a knob that MOVED THE BYTES AND RED
+     * NOTHING, which is the wrong-green direction. This test is the guard built
+     * over the POPULATION instead of over the enumerated sites: it asserts what
+     * the fields must LOOK like, so an unpinned knob in any family reds here
+     * whether or not anybody ever added it to the roster.
+     *
+     * MEASURED 2026-08-31, in this worktree, each hostile setting in a
+     * `GIT_CONFIG_GLOBAL` of its own with the whole suite otherwise untouched.
+     * All four of these left `PromptStabilityTest` at `OK (13 tests, 229
+     * assertions)` before this test existed:
+     *
+     *   - `log.date=true`      -> `Recent commits:` renders
+     *                             `unavailable (git exited 128)`. `true` is not
+     *                             a date format, so `git log` dies.
+     *   - `format.pretty=true` -> the same 128, by the same route.
+     *   - `color.branch.current=true` -> `Current branch:` renders EMPTY.
+     *   - `GIT_DIFF_OPTS=-u10` (an environment variable, not a config key, and
+     *                          therefore outside the reach of every repo-local
+     *                          pin) -> prompt 4,844 -> 4,851 B, the hunk header
+     *                          `@@ -2,4 +2,4 @@` becomes `@@ -1,5 +1,5 @@`.
+     *
+     * And one that moved the bytes while reddening only the OVER-CAP shape,
+     * whose message named the cap and not the cause — `core.attributesFile`
+     * naming a file that says `*.php -diff`, prompt 4,844 -> 4,749, the patch
+     * body replaced by `Binary files a/src/Alpha.php and b/src/Alpha.php
+     * differ`. The same damage arrives from `init.templateDir` (which seeds
+     * `$GIT_DIR/info/attributes`) and from a bare `XDG_CONFIG_HOME` containing
+     * `git/attributes`: MEASURED, all three give 4,749/4,672.
+     *
+     * A NOTE ON WHAT A PIN CAN AND CANNOT REACH, because it is the reason this
+     * test is not replaceable by more rows in that `foreach`. MEASURED: git
+     * PARSES every config file in the precedence chain before it uses any of
+     * them, so an INVALID value in a lower-precedence file is fatal even when a
+     * higher-precedence file overrides it — with `color.branch.current=normal`
+     * set repo-locally, `git config --get color.branch.current` answers
+     * `normal` and `git branch --show-current` still dies with
+     * `fatal: bad config variable 'color.branch.current' ... exit 128`. The
+     * whole invalid-value hazard class is therefore UNDEFENDABLE by pinning,
+     * and only detectable. `log.date` and `format.pretty` are the exception
+     * that proves it: their values are not validated at parse time, so pinning
+     * them repo-locally does work, and they are pinned.
+     *
+     * The four absence assertions at the end run their scanner over a
+     * known-positive control in the same test, because an unfired instrument
+     * and a dead one produce identical silence.
+     */
+    public function testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder(): void
+    {
+        $fixture = $this->dirtyRepoFixtureWithEveryStableLayer();
+
+        // Untracked on purpose: it is the only thing in this file that exercises
+        // the `status.showUntrackedFiles` pin on THIS fixture, and a comment in
+        // the knob list used to claim no such thing existed.
+        $fixture->write('src/Gamma.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Gamma {}\n");
+
+        $prompt = $fixture->systemPrompt();
+
+        // 1. The branch read. `color.branch.current=true` empties this.
+        $this->assertStringContainsString(
+            "\nCurrent branch: master\n",
+            $prompt,
+            'the <env> branch field is not the fixture branch. An EMPTY `Current branch:` is what a git that '
+                . 'exited nonzero renders here - EnvironmentBlock swallows that exit code (worklog escalation 3), '
+                . 'so this assertion is the only thing that sees it',
+        );
+
+        // 2. The status field sees a tracked edit AND an untracked file.
+        $this->assertStringContainsString(
+            "\n M src/Alpha.php\n",
+            $prompt,
+            'the <env> status field lost the tracked edit the fixture makes before it returns',
+        );
+        $this->assertStringContainsString(
+            "\n?? src/Gamma.php\n",
+            $prompt,
+            'the <env> status field cannot see an untracked file, so `status.showUntrackedFiles` is not `normal` '
+                . 'for this repository - the repo-local pin in dirtyRepoFixtureWithEveryStableLayer() is gone or '
+                . 'was overridden',
+        );
+
+        // 3. The log field: a subject, and a 7-hex abbreviation. Pins the
+        //    `i18n.*` family (which deletes the subject), the `log.date` /
+        //    `format.pretty` family (which kills the subprocess) and
+        //    `core.abbrev` / `GIT_CONFIG_COUNT` (which widens the sha).
+        $this->assertSame(
+            1,
+            preg_match('/\nRecent commits:\n[0-9a-f]{7} fixture: initial import\n/', $prompt),
+            'the <env> log field is not `<7 hex> fixture: initial import`. A missing SUBJECT is what an '
+                . '`i18n.commitEncoding` / `i18n.logOutputEncoding` mismatch leaves behind; a sha of another '
+                . 'width is `core.abbrev` or a `GIT_CONFIG_COUNT` override of it',
+        );
+
+        // 4. The diff body: a real patch, at the pinned three lines of context,
+        //    with a 7-hex index line. `GIT_DIFF_OPTS=-u10` moves the hunk header
+        //    and NOTHING ELSE in this file used to notice.
+        $this->assertStringContainsString(
+            "\n@@ -2,4 +2,4 @@\n",
+            $prompt,
+            'the unstaged diff is not rendered at three lines of context. GIT_DIFF_OPTS=-u10 makes this '
+                . '`@@ -1,5 +1,5 @@`, and it is an ENVIRONMENT variable, so no repo-local `diff.context` pin '
+                . 'reaches it',
+        );
+        $this->assertSame(
+            1,
+            preg_match('/\nindex [0-9a-f]{7}\.\.[0-9a-f]{7} 100644\n/', $prompt),
+            'the diff index line is not two 7-hex blobs, so core.abbrev is not 7 for this subprocess',
+        );
+
+        // 5. The absences, each with the same scanner run over a control that
+        //    DOES carry the offender.
+        $control = "unavailable (git exited 128)\n"
+            . "Binary files a/src/Alpha.php and b/src/Alpha.php differ\n"
+            . "\x1b[31mred\x1b[0m\n";
+
+        $this->assertSame(1, substr_count($control, 'unavailable (git exited '), 'the placeholder scanner is dead');
+        $this->assertSame(1, substr_count($control, 'Binary files '), 'the binary-diff scanner is dead');
+        $this->assertSame(2, substr_count($control, "\x1b"), 'the escape-byte scanner is dead');
+
+        $this->assertSame(
+            0,
+            substr_count($prompt, 'unavailable (git exited '),
+            'a git subprocess exited nonzero and <env> rendered the placeholder. MEASURED causes: `log.date` or '
+                . '`format.pretty` set to a value that is not a format, and any INVALID value anywhere in the '
+                . 'config precedence chain, which git treats as fatal at parse time whatever overrides it',
+        );
+        $this->assertSame(
+            0,
+            substr_count($prompt, 'Binary files '),
+            'the working diff rendered as a binary difference rather than a patch, so a gitattributes source is '
+                . 'marking the fixture `-diff`. MEASURED sources: `core.attributesFile`, `init.templateDir` and '
+                . '`$XDG_CONFIG_HOME/git/attributes`, all three beaten by the `.git/info/attributes` the fixture '
+                . 'writes - which is at the TOP of that precedence chain and is why it is written rather than '
+                . 'configured',
+        );
+        $this->assertSame(
+            0,
+            substr_count($prompt, "\x1b"),
+            'a raw ANSI escape byte reached the system prompt. `color.ui=always` or `color.diff=always` on a host '
+                . 'whose pins were bypassed puts 21 of them there (worklog escalation 2)',
         );
     }
 
@@ -1277,9 +1679,12 @@ final class PromptStabilityTest extends TestCase
      * returns null the moment `$root/.git` exists, so the ancestor walk that
      * would otherwise read `CLAUDE.md` from `/tmp` and `/` never starts);
      * `forcedInstructions`, which defaults to `[]`; the date and platform,
-     * injected by {@see PromptFixture}; the branch name; and the eleven git
-     * config knobs listed at the `foreach` below — a list that is "found", not
-     * "exhaustive", and has grown at every review so far. What is NOT: the
+     * injected by {@see PromptFixture}; the branch name; the thirteen git
+     * config knobs listed at the `foreach` below plus the
+     * `.git/info/attributes` written after it — a list that is "found", not
+     * "exhaustive", and has grown at every review so far, which is why
+     * {@see testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder()}
+     * guards the rendered fields rather than the roster. What is NOT: the
      * `Working directory:` path (`sys_get_temp_dir()`), `OS version:` and
      * `PHP version:`. MEASURED on this host those three contribute 33 + 23 + 5
      * = 61 B inside the shared prefix, and only the last two can SHRINK on
@@ -1339,16 +1744,41 @@ final class PromptStabilityTest extends TestCase
         // failed `commit` leaves an empty `Recent commits:` field that reads
         // exactly like a repository with no history.
         //
-        // THE ELEVEN CONFIG KNOBS BELOW ARE NOT DECORATION. `EnvironmentBlock`
+        // THE THIRTEEN CONFIG KNOBS BELOW ARE NOT DECORATION. `EnvironmentBlock`
         // shells out to plain `git`, so the developer's own `~/.gitconfig`
         // reaches the assembled prompt, and REPOSITORY-local config is the only
         // lever a test has over that (it outranks global without touching the
-        // environment of any other test). Only over `~/.gitconfig`, though:
-        // MEASURED, `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.abbrev
-        // GIT_CONFIG_VALUE_0=20` beats every pin below and takes the prompt to
-        // 4,883/4,696. No ordinary shell sets it, and no repo-local key can
-        // outrank it, so it is recorded as the boundary of this mechanism
-        // rather than defended against.
+        // environment of any other test).
+        //
+        // TWO BOUNDARIES ON THAT LEVER, both measured, and the first of them
+        // used to be recorded here as if it were the only one.
+        //
+        // (a) THE ENVIRONMENT OUTRANKS EVERY CONFIG FILE. MEASURED,
+        //     `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.abbrev
+        //     GIT_CONFIG_VALUE_0=20` beats every pin below and takes the prompt
+        //     to 4,883/4,696; and `GIT_DIFF_OPTS=-u10` — which is not a config
+        //     key at all, so no `diff.context` pin can reach it — takes it to
+        //     4,851, byte-identical damage to the `diff.context=10` row below.
+        //     Before {@see testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder()}
+        //     existed, MEASURED, the whole file stayed `OK (13 tests, 229
+        //     assertions)` under `GIT_DIFF_OPTS=-u10`.
+        // (b) AN INVALID VALUE ANYWHERE IN THE CHAIN IS FATAL, WHATEVER
+        //     OVERRIDES IT. git parses every config file it can reach before it
+        //     uses any of them. MEASURED with `color.branch.current=normal`
+        //     pinned repo-locally and `color.branch.current=true` in a global:
+        //     `git config --get` answers `normal`, and `git branch
+        //     --show-current` still dies `fatal: bad config variable
+        //     'color.branch.current' … exit 128`, which `EnvironmentBlock`
+        //     swallows into an empty `Current branch:`. A pin cannot defend
+        //     this class; only a test that reads the rendered field can see it.
+        //
+        // Neither boundary is defended by adding a row here — one is out of
+        // reach and the other is unfixable by precedence — so both are covered
+        // by asserting the RENDERED FIELDS instead, in
+        // {@see testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder()}.
+        // That test is where a fourteenth knob is meant to be caught; this list
+        // is what keeps the byte figures below reproducible on a host that has
+        // set one of them.
         //
         // MEASURED on this host, each knob set in a `GIT_CONFIG_GLOBAL` with
         // THAT KNOB'S OWN PIN REMOVED and the rest still in force — which is
@@ -1378,17 +1808,37 @@ final class PromptStabilityTest extends TestCase
         //                                   alone does NOT cover the colour hazard it
         //                                   appears to name. Both are pinned.
         //   `diff.suppressBlankEmpty=true`  prompt 4,844 -> 4,842 B
-        //   `status.showUntrackedFiles=no`  moves NOTHING on this fixture —
-        //                                   MEASURED 4,844/4,670, unchanged,
-        //                                   because every file it dirties is
-        //                                   TRACKED. It is in this list for the
-        //                                   OTHER repository in this file: it
-        //                                   makes an untracked file invisible,
-        //                                   so the two renders in
+        //   `status.showUntrackedFiles=no`  moves nothing on the two-render
+        //                                   measurement (MEASURED 4,844/4,670,
+        //                                   unchanged) and is LOAD-BEARING on
+        //                                   this fixture anyway. THIS ROW USED
+        //                                   TO SAY the opposite twice over —
+        //                                   that "every file it dirties is
+        //                                   TRACKED", and that the pin was here
+        //                                   "for the OTHER repository in this
+        //                                   file". Both are false.
+        //                                   {@see testANewSourceFileVoidsThePrefixAcrossTurnsButNotWithinOne()}
+        //                                   writes an UNTRACKED `src/Gamma.php`
+        //                                   into this fixture and both of its
+        //                                   halves depend on `git status`
+        //                                   seeing it. MEASURED, with this pin
+        //                                   deleted and a global
+        //                                   `status.showUntrackedFiles=no`,
+        //                                   that test reds at `<env> must still
+        //                                   track the new file within the turn
+        //                                   / Failed asserting that two strings
+        //                                   are not identical`. It is now named
+        //                                   at the site as well, by a
+        //                                   `?? src/Gamma.php` assertion that
+        //                                   reds first and says which knob.
+        //                                   (The scratch repository in
         //                                   {@see testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()}
-        //                                   come out IDENTICAL and that test's
-        //                                   measurement goes vacuous. That
-        //                                   repository carries its own pin
+        //                                   does also need it, and does carry
+        //                                   its own pin — that half of the old
+        //                                   row was right about a DIFFERENT
+        //                                   repository, which is exactly the
+        //                                   "a claim never travels without its
+        //                                   domain" failure.)
         //   `log.decorate=full`             prompt 4,844 -> 4,872 B, prefix -> 4,698
         //   `i18n.logOutputEncoding=UTF-16` prompt 4,844 -> 4,821 B, prefix -> 4,647.
         //                                   `--oneline` does NOT override it, and the
@@ -1408,15 +1858,27 @@ final class PromptStabilityTest extends TestCase
         //                                   same mechanism: the pinned key names the
         //                                   hazard family, the unpinned sibling in
         //                                   that family wins
-        // and MEASURED with all eleven pinned, on a host with none of them set,
+        // and MEASURED with all thirteen pinned (and with the
+        // `.git/info/attributes` written), on a host with none of them set,
         // the numbers are unchanged at 4,844/4,670 — so the pin costs nothing
         // here, and it is what makes the figures reproducible on a host whose
         // git config this list covers. NOT "anywhere": see the paragraph on
         // completeness below, which an earlier revision of this comment
         // contradicted in the same breath.
         //
-        // `log.date` and `format.pretty` ARE inert, because `--oneline`
-        // overrides both — but `log.decorate` is in that same `log.*` family
+        // `log.date` and `format.pretty` are inert FOR A VALID VALUE ONLY, and
+        // that qualifier is the whole content of the row. This comment used to
+        // carry them as flatly inert "because `--oneline` overrides both".
+        // MEASURED: `--oneline` overrides what they FORMAT, and neither key is
+        // validated at config-parse time, so `git log` reads the value and
+        // dies on it — `log.date=true` and `format.pretty=true` each make the
+        // subprocess exit 128, `Recent commits:` render
+        // `unavailable (git exited 128)`, and (before
+        // {@see testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder()}
+        // existed) the whole file stay `OK (13 tests, 229 assertions)`. They
+        // are pinned above now, to valid values, which MEASURED does defeat
+        // both — the exception to boundary (b), because the value is used
+        // rather than parsed. `log.decorate` is in that same `log.*` family
         // and `--oneline` does NOT override it, and neither does it override
         // either `i18n.*` key. `log.decorate`'s default is `auto`, which
         // decorates only to a tty, so a piped `proc_open` sees nothing and the
@@ -1427,8 +1889,8 @@ final class PromptStabilityTest extends TestCase
         // exactly the shape the completeness paragraph below is about. Two of
         // them share the worst version of it: the list did not merely omit the
         // colour hazard and then the commit-encoding hazard, it NAMED each one
-        // and pinned a sibling key that does not cover it. If a twelfth is ever
-        // wanted, look there first — at a family this list already claims.
+        // and pinned a sibling key that does not cover it. If a fourteenth is
+        // ever wanted, look there first — at a family this list already claims.
         // An earlier revision of this comment put
         // `status.showUntrackedFiles` in that same sentence under that same
         // reason, and the reason does not apply to it:
@@ -1440,22 +1902,48 @@ final class PromptStabilityTest extends TestCase
         // caveat is load-bearing is that the list has grown at EVERY review
         // that looked for more, without exception: four after the first, seven
         // after the second, eight after the third, ten after the fourth, eleven
-        // after the fifth. Five reviews, five more knobs; the reasonable
-        // prediction is that a sixth would find a twelfth. A knob that moves the
-        // byte count WITHOUT reddening anything is the failure mode this
-        // paragraph exists to make visible — `core.abbrev`, `color.ui`,
-        // `color.diff`, `log.decorate` and both `i18n.*` keys are all of that
-        // kind — so the honest statement is "eleven found" and not "eleven
-        // exist". Measured-and-inert, recorded so the next reader does not
-        // re-measure them: `log.date`, `format.pretty`, `core.quotePath`,
-        // `init.templateDir`, `diff.algorithm`, `diff.indentHeuristic`,
-        // `status.relativePaths`, `log.abbrevCommit`, `core.autocrlf`.
-        // `diff.external`, `core.bigFileThreshold=1` and a `core.excludesFile`
-        // naming the tracked file all move the bytes but RED, which is the
-        // harmless direction and needs no pin. `color.status` and
-        // `color.branch` are inert here for a reason worth writing down rather
-        // than re-deriving: `status --porcelain` and `branch --show-current`
-        // are plumbing-ish forms that never colour, whatever the slot says.
+        // after the fifth, thirteen plus an attributes file after the sixth.
+        // Six reviews, seven more knobs; the reasonable prediction is that a
+        // seventh review finds a fourteenth. A knob that moves the byte count
+        // WITHOUT reddening anything is the failure mode this paragraph exists
+        // to make visible — `core.abbrev`, `color.ui`, `color.diff`,
+        // `log.decorate` and both `i18n.*` keys are all of that kind — so the
+        // honest statement is "thirteen found" and not "thirteen exist". THE
+        // ANSWER TO THAT PREDICTION IS NOT A FOURTEENTH ROW. It is
+        // {@see testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder()},
+        // which asserts the rendered fields rather than the knobs and therefore
+        // reds for members of these families that nobody has enumerated.
+        //
+        // THE INERT LIST, WITH THE DOMAIN OF EACH ENTRY — an earlier revision
+        // of it carried three entries without one, and one hazard with no entry
+        // at all.
+        //   - Inert for ANY value, MEASURED: `core.quotePath`,
+        //     `diff.algorithm`, `diff.indentHeuristic`, `status.relativePaths`,
+        //     `log.abbrevCommit`, `core.autocrlf`.
+        //   - Inert only for a VALID value: `log.date`, `format.pretty`. An
+        //     invalid one exits 128; see the paragraph above. Both are pinned.
+        //   - `color.status` and `color.branch` are inert for a reason worth
+        //     writing down rather than re-deriving: `status --porcelain` and
+        //     `branch --show-current` are plumbing-ish forms that never colour,
+        //     whatever the slot says. That is NOT true of the per-slot COLOUR
+        //     values: MEASURED, `color.branch.current=true` is an invalid
+        //     colour, git rejects it at parse time, `branch --show-current`
+        //     exits 128 and `Current branch:` renders EMPTY — and no repo-local
+        //     pin can defend it (boundary (b) above).
+        //   - NOT inert, and listed as inert by an earlier revision:
+        //     `init.templateDir`. MEASURED, a template dir carrying
+        //     `info/attributes` that says `*.php -diff` takes the prompt to
+        //     4,749/4,672 and replaces the patch body with `Binary files …
+        //     differ`. It seeds `$GIT_DIR/info/attributes`, which is the top of
+        //     the gitattributes precedence chain.
+        //   - `core.attributesFile` was in NO list at all. MEASURED, same
+        //     4,749/4,672 and the same binary rendering; so is a bare
+        //     `XDG_CONFIG_HOME` holding `git/attributes`. All three are now
+        //     beaten by the `.git/info/attributes` this fixture writes below,
+        //     MEASURED back to 4,844/4,670 under each of them.
+        //   - `diff.external`, `core.bigFileThreshold=1` and a
+        //     `core.excludesFile` naming the tracked file all move the bytes
+        //     but RED, which is the harmless direction and needs no pin.
         foreach ([
             ['init', '-q'],
             ['symbolic-ref', 'HEAD', 'refs/heads/master'],
@@ -1473,6 +1961,8 @@ final class PromptStabilityTest extends TestCase
             ['config', 'log.decorate', 'no'],
             ['config', 'i18n.logOutputEncoding', 'UTF-8'],
             ['config', 'i18n.commitEncoding', 'UTF-8'],
+            ['config', 'log.date', 'default'],
+            ['config', 'format.pretty', 'medium'],
             ['add', '-A'],
             ['commit', '-q', '-m', 'fixture: initial import'],
         ] as $argv) {
@@ -1482,6 +1972,24 @@ final class PromptStabilityTest extends TestCase
                 'git ' . implode(' ', $argv) . ' failed: ' . implode("\n", $output),
             );
         }
+
+        // A FILE, not a config key, and at the TOP of the precedence chain
+        // rather than in the middle of it. Attributes are consulted in the
+        // order `$GIT_DIR/info/attributes`, then in-tree `.gitattributes`, then
+        // `core.attributesFile`, then the XDG/system file — so writing this one
+        // beats all three of the sources a review found (`core.attributesFile`,
+        // `init.templateDir`, which SEEDS this very path at `git init`, and a
+        // bare `XDG_CONFIG_HOME` holding `git/attributes`). Each of those,
+        // saying `*.php -diff`, MEASURED the prompt 4,844 -> 4,749 B and the
+        // prefix 4,670 -> 4,672, replacing the patch body with `Binary files
+        // … differ`; with this file written, MEASURED all three leave 4,844 /
+        // 4,670 untouched. `* diff` forces the text path for every path in the
+        // fixture, which is what a working-diff measurement needs.
+        $this->assertNotFalse(
+            file_put_contents($root . '/.git/info/attributes', "* diff\n"),
+            'could not write .git/info/attributes on the scratch repository, so the gitattributes family is '
+                . 'unpinned and the diff body is at the mercy of the developer\'s own attributes files',
+        );
 
         $fixture->write('src/Alpha.php', self::ALPHA_FIRST_EDIT);
 
