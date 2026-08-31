@@ -708,18 +708,33 @@ final class PromptStabilityTest extends TestCase
      * and move it."* Host-independence is not the same property as
      * this-file-owns-it, and the second sentence was the one licensing an
      * equality pin. It is FALSE, by a wide margin. MEASURED 2026-08-31 in this
-     * worktree, by marking every byte of the region that this file's fixture
-     * authored and taking the complement:
+     * worktree, by summing the byte ranges whose VALUE the fixture chose
+     * ({@see STABLE_LAYER_FIXTURE_FRAGMENTS}, which is the same roster the test
+     * asserts against) and taking the complement:
      *
-     *   fixture-authored (this file owns it)    324 B   20.6 %
-     *   production-authored (it does not)     1,251 B   79.4 %
+     *   fixture-authored (this file owns it)    289 B   18.3 %
+     *   production-authored (it does not)     1,286 B   81.7 %
      *
-     * The 1,251 is static prose and fence spellings inside
+     * THE FIRST REVISION OF THIS SPLIT SAID 324 / 1,251 (20.6 % / 79.4 %) and
+     * called itself byte-exact. It was measured at the granularity of whole
+     * RENDERED LINES, which credits production formatting to the fixture:
+     * `MemoryBlock`'s `"- [pattern] "` (12 B), `SkillMatcher`'s `"- "` and
+     * `": "` (4 B), and `RepoMapBlock`'s `"- "`, `"  ->  "`, `"  ("`,
+     * `" files)"` and the file COUNT it computes (19 B) are all rendered by
+     * production code around values the fixture supplied. Corrected rather than
+     * dropped, because the difference is 35 bytes and the conclusion — the
+     * great majority of the pinned region is prose this file does not own — is
+     * the same at either granularity, and because a reader who re-measures at
+     * the coarser granularity should find the coarser number explained rather
+     * than absent.
+     *
+     * The 1,286 is static prose and fence spellings inside
      * {@see \SugarCraft\Crush\Context\RepoMapBlock} (its 403 B header and
      * its 257 B PSR-4 note), {@see \SugarCraft\Crush\Context\MemoryBlock}
      * (its 414 B header) and {@see \SugarCraft\Crush\Skills\SkillMatcher}
-     * (its 41 B caption). Four of this plan's later steps are licensed to edit
-     * exactly that prose. MEASURED: changing `'A map of where code lives'` to
+     * (its 41 B caption), plus the file-count arithmetic `RepoMapBlock`
+     * performs. Four of this plan's later steps are licensed to edit exactly
+     * that prose. MEASURED: changing `'A map of where code lives'` to
      * `'A map of where the code lives'` in `RepoMapBlock` — four bytes, no
      * behaviour — red this constant at 1,579, under a failure message offering
      * two causes ("a layer moved out from between the fences" / "this file's
@@ -735,9 +750,14 @@ final class PromptStabilityTest extends TestCase
      * pinned by equality, because a size pin that a foreign prose edit reds is
      * still worth having (it is the only thing that would catch a layer
      * silently doubling), but it is now pinned PER LAYER through
-     * {@see STABLE_LAYER_WIDTHS}, so a red names the one layer that moved and
-     * says who owns its bytes — which of the three repairs applies is then
-     * readable off the message instead of guessed.
+     * {@see STABLE_LAYER_WIDTHS}, and split again inside each layer into the
+     * bytes the fixture chose and the bytes production wrote. A red therefore
+     * names ONE layer AND ONE SIDE of that layer's split: a fixture edit reds
+     * the fragment or the fixture-width guard, a prose edit reds the
+     * production-width assertion, and the message names the class that owns
+     * those bytes. An earlier revision of this paragraph promised only that the
+     * message would list the three possible repairs; a menu is not a name, and
+     * the offsets to tell them apart were already in the test.
      */
     private const STABLE_LAYERS_BYTES = 1575;
 
@@ -753,17 +773,20 @@ final class PromptStabilityTest extends TestCase
      * identical on all three. The last two columns are the ownership split
      * described at {@see STABLE_LAYERS_BYTES}, measured the same way:
      *
-     *   | layer                    | width | fixture-owned | production-owned, and by whom |
-     *   |--------------------------|------:|--------------:|------------------------------|
-     *   | `<repo-map>`             |   727 |            38 |  689  RepoMapBlock header + PSR-4 note + fences |
-     *   | `<project-instructions>` |   139 |            90 |   49  the two fence spellings |
-     *   | `<project-memory>`       |   518 |            63 |  455  MemoryBlock header + fences |
-     *   | `## Skill: prefix-demo`  |    73 |            59 |   14  Skill::systemPromptContribution()'s heading |
-     *   | the skill listing        |   118 |            74 |   44  SkillMatcher's caption |
-     *   | **total**                | 1,575 |           324 | 1,251 |
+     *   | layer                    | width | fixture | production, and by whom |
+     *   |--------------------------|------:|--------:|-------------------------|
+     *   | `<repo-map>`             |   727 |      19 |  708  RepoMapBlock header + PSR-4 note + entry formatting + fences |
+     *   | `<project-instructions>` |   139 |      90 |   49  the two fence spellings |
+     *   | `<project-memory>`       |   518 |      51 |  467  MemoryBlock header + `- [pattern] ` + fences |
+     *   | `## Skill: prefix-demo`  |    73 |      59 |   14  Skill::systemPromptContribution()'s heading |
+     *   | the skill listing        |   118 |      70 |   48  SkillMatcher's caption + `- `/`: ` |
+     *   | **total**                | 1,575 |     289 | 1,286 |
      *
-     * They sum to {@see STABLE_LAYERS_BYTES} and that identity is asserted, so
-     * the two constants cannot drift apart silently.
+     * The widths sum to {@see STABLE_LAYERS_BYTES} and that identity is
+     * asserted, so the two constants cannot drift apart silently. The `fixture`
+     * column is {@see STABLE_LAYER_FIXTURE_WIDTHS} and is asserted separately
+     * from the `production` column, which is the difference — that is what lets
+     * a failure name WHICH side moved rather than list the possibilities.
      */
     private const STABLE_LAYER_WIDTHS = [
         '<repo-map>' => 727,
@@ -772,6 +795,99 @@ final class PromptStabilityTest extends TestCase
         '## Skill: prefix-demo' => 73,
         'Available skills (invoke via Skill tool):' => 118,
     ];
+
+    /**
+     * The `fixture` column of the table above: bytes inside each layer whose
+     * VALUE this file chose, MEASURED 2026-08-31, three takes in one session,
+     * identical on all three.
+     *
+     * These are asserted separately from the layer's total width, and the
+     * difference between the two is the production-authored remainder. That
+     * separation is the whole point: a fixture edit moves this column, a prose
+     * edit in RepoMapBlock/MemoryBlock/SkillMatcher moves the remainder, and
+     * the two reds say different things.
+     */
+    private const STABLE_LAYER_FIXTURE_WIDTHS = [
+        '<repo-map>' => 19,
+        '<project-instructions>' => 90,
+        '<project-memory>' => 51,
+        '## Skill: prefix-demo' => 59,
+        'Available skills (invoke via Skill tool):' => 70,
+    ];
+
+    /**
+     * The byte ranges {@see STABLE_LAYER_FIXTURE_WIDTHS} is the sum of, per
+     * layer, spelled as the substrings they are.
+     *
+     * DERIVED FROM THE SAME CONSTANTS THE FIXTURE WRITES, not copied beside
+     * them, so an edit to the fixture's AGENTS.md body, memory note or skill
+     * moves both sides at once and cannot drift. Each fragment is asserted to
+     * appear EXACTLY ONCE inside its own layer before its length is counted —
+     * a fragment that stopped appearing would otherwise silently contribute its
+     * length to a sum that still balanced.
+     *
+     * What is deliberately NOT here: `RepoMapBlock`'s `(2 files)` count. The
+     * fixture supplies the two files; the digit is arithmetic production
+     * performs over them, so it is counted on the production side. The earlier,
+     * coarser split counted the whole rendered line as the fixture's — see
+     * {@see STABLE_LAYERS_BYTES} for the 324/1,251 figure that produced and why
+     * it is recorded rather than dropped.
+     */
+    private const STABLE_LAYER_FIXTURE_FRAGMENTS = [
+        '<repo-map>' => [self::FIXTURE_SOURCE_DIR, self::FIXTURE_PSR4_PREFIX],
+        '<project-instructions>' => [self::FIXTURE_AGENTS_BODY],
+        '<project-memory>' => [self::FIXTURE_MEMORY_NOTE],
+        '## Skill: prefix-demo' => [self::FIXTURE_SKILL_NAME, self::FIXTURE_SKILL_BODY],
+        'Available skills (invoke via Skill tool):' => [self::FIXTURE_SKILL_NAME, self::FIXTURE_SKILL_DESCRIPTION],
+    ];
+
+    /**
+     * Which production class authors the bytes of each layer that the fixture
+     * does not, named so a width failure can say where to go and read.
+     */
+    private const STABLE_LAYER_OWNERS = [
+        '<repo-map>' => 'SugarCraft\\Crush\\Context\\RepoMapBlock',
+        '<project-instructions>' => 'SugarCraft\\Crush\\Runtime (the fence spellings only)',
+        '<project-memory>' => 'SugarCraft\\Crush\\Context\\MemoryBlock',
+        '## Skill: prefix-demo' => 'SugarCraft\\Crush\\Skills\\Skill::systemPromptContribution()',
+        'Available skills (invoke via Skill tool):' => 'SugarCraft\\Crush\\Skills\\SkillMatcher',
+    ];
+
+    /**
+     * The prefix every degraded `<env>` field shares.
+     *
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock} renders three of
+     * them — `unavailable (git exited N)` from `gitField()` and
+     * `gitDiffSection()`, `unavailable (proc_open is disabled on this build)`
+     * and `unavailable (shell_exec is disabled on this build)`. Scanning the
+     * shared prefix covers all three; scanning the git-exit spelling alone,
+     * which an earlier revision did, covered one under a heading claiming
+     * every field. The spelling is pinned by a control that renders it from
+     * production rather than typing it, so a rename over there reds the
+     * control instead of silently blinding the scan.
+     */
+    private const GIT_UNAVAILABLE_MARKER = 'unavailable (';
+
+    /** The fixture's PSR-4 source directory, as `RepoMapBlock` renders it. */
+    private const FIXTURE_SOURCE_DIR = 'src/';
+
+    /** And the namespace that directory maps to. */
+    private const FIXTURE_PSR4_PREFIX = 'Fixture\\Prefix\\';
+
+    /** The body of the fixture's one root instruction document. */
+    private const FIXTURE_AGENTS_BODY = "# Fixture conventions\n\nRun the suite before you push.\nNever edit generated files by hand.\n";
+
+    /** The one note in the fixture's project memory store. */
+    private const FIXTURE_MEMORY_NOTE = 'The fixture repository pins the prefix measurement.';
+
+    /** The fixture's one skill: name, one-line description, body. */
+    private const FIXTURE_SKILL_NAME = 'prefix-demo';
+
+    /** @see self::FIXTURE_SKILL_NAME */
+    private const FIXTURE_SKILL_DESCRIPTION = 'A skill body that occupies the stable region of the prompt.';
+
+    /** @see self::FIXTURE_SKILL_NAME */
+    private const FIXTURE_SKILL_BODY = "Use this skill when measuring the cache prefix.\n";
 
     /**
      * One marker per layer the reorder lifted into the cacheable prefix.
@@ -987,9 +1103,22 @@ final class PromptStabilityTest extends TestCase
         //    a layer leaving the region, or arriving in the wrong place.
         //    MEASURED: demoting `<repo-map>` in `Runtime::buildSystemPrompt()`
         //    to sit immediately before `<env>` reds this at
-        //    `<project-instructions>`, naming the layer that left.
+        //    `<project-instructions>`, at
+        //    `Failed asserting that 2481 is greater than 3329`. Read the
+        //    message for what it is: `<project-instructions>` is the layer that
+        //    STAYED and `<repo-map>` is the one that moved, so the name in the
+        //    message is the first layer to find itself on the wrong side of the
+        //    fence, not the culprit. An earlier revision of this line called it
+        //    "the layer that left", which is the opposite.
+        //
+        //    The FIRST iteration is an equality, not an ordering: `<repo-map>`
+        //    must open the region exactly, at `$mapAt`. Seeding the ordering
+        //    with `$mapAt - 1` instead, as an earlier revision did, made
+        //    iteration one `assertGreaterThan($mapAt - 1, $mapAt)` — true for
+        //    every possible input, which is one of the 304 assertions doing
+        //    nothing.
         $boundaries = [];
-        $previous = $mapAt - 1;
+        $previous = null;
 
         foreach (self::STABLE_LAYER_WIDTHS as $marker => $width) {
             $at = strpos($first, "\n\n" . $marker);
@@ -998,12 +1127,23 @@ final class PromptStabilityTest extends TestCase
                 'the "' . $marker . '" layer is not in the assembled prompt at all, so the region between '
                     . '<repo-map> and <env> cannot be the five layers P3.S1 lifted',
             );
-            $this->assertGreaterThan(
-                $previous,
-                $at,
-                'the "' . $marker . '" layer is out of assembly order at byte ' . $at
-                    . ' - the layers between <repo-map> and <env> were reordered',
-            );
+
+            if ($previous === null) {
+                $this->assertSame(
+                    $mapAt,
+                    $at,
+                    'the region P3.S1 lifted does not open at the "' . $marker . '" fence: that layer starts at '
+                        . 'byte ' . $at . ' and the region starts at ' . $mapAt,
+                );
+            } else {
+                $this->assertGreaterThan(
+                    $previous,
+                    $at,
+                    'the "' . $marker . '" layer is out of assembly order at byte ' . $at
+                        . ' - the layers between <repo-map> and <env> were reordered',
+                );
+            }
+
             $this->assertLessThan(
                 $envAt,
                 $at,
@@ -1051,38 +1191,94 @@ final class PromptStabilityTest extends TestCase
         //    `Runtime::buildSystemPrompt()` so only one layer sits between the
         //    fences, the total reds with 727 against 1,575.
         //
-        //    It is pinned PER LAYER first, because 79.4 % of these 1,575 bytes
-        //    are static prose this file does not own (MEASURED; see
-        //    {@see STABLE_LAYER_WIDTHS}) and a four-byte prose edit in
-        //    RepoMapBlock is a legitimate change that must red with a message
-        //    naming ITS OWN cause rather than one of two causes that did not
-        //    happen.
+        //    It is pinned PER LAYER, and inside each layer the fixture's own
+        //    bytes are counted separately from production's, because 81.7 % of
+        //    these 1,575 bytes are prose this file does not own (MEASURED; see
+        //    {@see STABLE_LAYERS_BYTES}) and a four-byte prose edit in
+        //    RepoMapBlock is a LEGITIMATE change that must red with a message
+        //    naming its own cause. An earlier revision listed three possible
+        //    causes and left the reader to pick; the offsets to tell them apart
+        //    were already in this test, so it now tells them apart:
+        //
+        //      - a fixture fragment that stopped appearing  -> the
+        //        `substr_count` assertion, naming the fragment;
+        //      - the fixture's own content resized          -> the
+        //        fixture-width assertion, naming this file;
+        //      - production prose resized                   -> the
+        //        production-width assertion, naming the class that wrote it.
         $offsets = array_values($boundaries);
         $offsets[] = $envAt;
 
         foreach (array_keys(self::STABLE_LAYER_WIDTHS) as $index => $marker) {
-            $measured = $offsets[$index + 1] - $offsets[$index];
+            $segment = substr($first, $offsets[$index], $offsets[$index + 1] - $offsets[$index]);
+            $measured = \strlen($segment);
+            $fixtureBytes = 0;
+
+            foreach (self::STABLE_LAYER_FIXTURE_FRAGMENTS[$marker] as $fragment) {
+                $this->assertSame(
+                    1,
+                    substr_count($segment, $fragment),
+                    'the fixture fragment ' . json_encode($fragment) . ' no longer appears exactly once inside '
+                        . 'the "' . $marker . '" layer, so the fixture/production byte split for that layer '
+                        . 'cannot be computed. This file writes that fragment into the fixture; if the fixture '
+                        . 'changed, change the constant it is written from',
+                );
+                $fixtureBytes += \strlen($fragment);
+            }
+
+            // A drift guard between two hand-maintained constants, not a fact
+            // about the assembler: `$fixtureBytes` is the sum of the fragment
+            // constants and this is the literal beside them. It reds when the
+            // fixture's own content is resized, which is the case the width
+            // assertion below must NOT be blamed for.
+            $this->assertSame(
+                self::STABLE_LAYER_FIXTURE_WIDTHS[$marker],
+                $fixtureBytes,
+                'THIS FILE resized its own fixture content inside the "' . $marker . '" layer: it now writes '
+                    . $fixtureBytes . ' bytes there, not ' . self::STABLE_LAYER_FIXTURE_WIDTHS[$marker]
+                    . '. Re-measure STABLE_LAYER_FIXTURE_WIDTHS and STABLE_LAYER_WIDTHS together; no production '
+                    . 'code is involved',
+            );
+
+            // THE ONE THAT A PROSE EDIT REDS, and it names the owner.
+            $expectedProduction = self::STABLE_LAYER_WIDTHS[$marker] - self::STABLE_LAYER_FIXTURE_WIDTHS[$marker];
+            $this->assertSame(
+                $expectedProduction,
+                $measured - $fixtureBytes,
+                'the production-authored half of the "' . $marker . '" layer is now '
+                    . ($measured - $fixtureBytes) . ' bytes, not ' . $expectedProduction . '. Those bytes are '
+                    . 'written by ' . self::STABLE_LAYER_OWNERS[$marker] . ', NOT by this file, and later steps '
+                    . 'of this plan are licensed to edit exactly that prose - so this is most likely a '
+                    . 'legitimate change: re-measure STABLE_LAYER_WIDTHS and move it. The fixture-width '
+                    . 'assertion above stayed green, so this file did not cause it',
+            );
+
             $this->assertSame(
                 self::STABLE_LAYER_WIDTHS[$marker],
                 $measured,
-                'the "' . $marker . '" layer occupies ' . $measured . ' bytes of the region P3.S1 lifted, not '
-                    . self::STABLE_LAYER_WIDTHS[$marker] . '. Three different things cause this and they are '
-                    . 'not the same repair: (a) a layer moved out of the region - assertion 0 above is red too, '
-                    . 'fix that first; (b) this file changed the fixture content it writes into this layer - it '
-                    . 'owns 324 of the region\'s 1,575 bytes, re-measure and move the constant; (c) a PROSE '
-                    . 'EDIT in the production class that renders this layer - RepoMapBlock, MemoryBlock and '
-                    . 'SkillMatcher own the other 1,251 bytes and later steps of this plan are licensed to '
-                    . 'edit exactly that prose, so this is a legitimate change: re-measure and move the '
-                    . 'constant, and expect assertion 0 to have stayed green',
+                'the "' . $marker . '" layer occupies ' . $measured . ' bytes, not '
+                    . self::STABLE_LAYER_WIDTHS[$marker] . '; the two assertions above say which half moved',
             );
         }
 
+        // FORCED, NOT MEASURED, and labelled as such rather than left reading
+        // like the assertion that binds. `$boundaries['<repo-map>']` is the
+        // same `strpos` as `$mapAt`, so the per-layer widths above telescope to
+        // `$envAt - $mapAt`; with the sum identity asserted at the head of this
+        // block, this equality cannot fail unless one of them already has. An
+        // earlier revision of the comment above claimed "MEASURED, by demoting
+        // `<repo-map>` … the total reds with 727 against 1,575". MEASURED under
+        // exactly that demotion, what reds is assertion 0, sixty-one assertions
+        // earlier, and this line is never reached. Kept because a coarse
+        // statement of the same fact is what a reader looking for the step's
+        // number will find, and because it is the assertion the failure
+        // messages above point back at.
         $this->assertSame(
             self::STABLE_LAYERS_BYTES,
             $envAt - $mapAt,
             'the region between <repo-map> and <env> is ' . ($envAt - $mapAt) . ' bytes, not '
                 . self::STABLE_LAYERS_BYTES . ' - the per-layer assertions above say which layer moved and '
-                . 'which of the three repairs applies',
+                . 'which half of it',
         );
 
         // 2. THE GAIN FLOOR, in the units the step text uses ("the reorder moved
@@ -1475,10 +1671,14 @@ final class PromptStabilityTest extends TestCase
      * EVERY GIT FIELD IN `<env>` CARRIES A REAL VALUE ON THIS FIXTURE, not a
      * degraded placeholder that reads to the model as an answer.
      *
-     * WHY THIS EXISTS RATHER THAN A TWELFTH CONFIG PIN. The `foreach` in
-     * {@see dirtyRepoFixtureWithEveryStableLayer()} pins sixteen git config
-     * knobs, and that list has grown at EVERY review that looked for another
-     * one — four, seven, eight, ten, eleven, now thirteen plus an attributes
+     * WHY THIS EXISTS RATHER THAN A FOURTEENTH CONFIG PIN. The `foreach` in
+     * {@see dirtyRepoFixtureWithEveryStableLayer()} carries SIXTEEN `config`
+     * rows, of which THIRTEEN are hazard pins; the other three
+     * (`user.email`, `user.name`, `commit.gpgsign`) are identity and are not
+     * counted, which is the convention every count in this file uses and which
+     * an earlier revision of this sentence stated both ways two lines apart.
+     * The hazard list has grown at EVERY review that looked for another one —
+     * four, seven, eight, ten, eleven, now thirteen plus an attributes
      * file. It is a hand-maintained roster, and a test over a hand-maintained
      * list inherits that list's omissions. Worse, the omissions have a shape:
      * three separate reviews found a knob that MOVED THE BYTES AND RED
@@ -1523,14 +1723,26 @@ final class PromptStabilityTest extends TestCase
      * that proves it: their values are not validated at parse time, so pinning
      * them repo-locally does work, and they are pinned.
      *
-     * The three absence assertions run FIRST, ahead of every positive one,
-     * and each runs its scanner over a known-positive control in the same test.
-     * Both orderings are deliberate: an unfired instrument and a dead one
-     * produce identical silence, and a degraded rendering deletes the shape the
-     * positive assertions look for, so a positive assertion that fires first
-     * reports the wrong knob. MEASURED — with the absences last, a hostile
-     * `core.attributesFile` red this test on the HUNK HEADER, naming
-     * `GIT_DIFF_OPTS`.
+     * The three absence assertions run FIRST, ahead of every positive one, and
+     * each runs its scanner over a known-positive control **rendered by the
+     * production class under test** rather than typed into this file. Both of
+     * those are deliberate and both were got wrong once here.
+     *
+     * ORDER: a degraded rendering deletes the shape the positive assertions
+     * look for, so a positive assertion that fires first reports the wrong
+     * knob. MEASURED — with the absences last, a hostile `core.attributesFile`
+     * red this test on the HUNK HEADER, naming `GIT_DIFF_OPTS`.
+     *
+     * CONTROLS: an unfired instrument and a dead one produce identical
+     * silence, and a control that is a string literal in this file cannot tell
+     * them apart, because the scan of it never touches production. MEASURED —
+     * with literal controls, renaming `unavailable (git exited {N})` in
+     * `EnvironmentBlock` left the placeholder scan SILENTLY GREEN while all
+     * three controls passed. The controls below build a directory with a `.git`
+     * that is not a repository, a fixture whose attributes say `* -diff`, and a
+     * fixture with `color.diff=always`, and assert what production renders for
+     * each — so a rename over there reds the control, which is the message that
+     * says the scanner needs updating.
      */
     public function testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder(): void
     {
@@ -1553,21 +1765,85 @@ final class PromptStabilityTest extends TestCase
         // rendered at three lines of context … GIT_DIFF_OPTS", which is the
         // wrong knob, the wrong family and the wrong repair.
 
-        // 0. The known-positive control for the three scans below, run through
-        //    the SAME scanner in the SAME test, because an unfired instrument
-        //    and a dead one produce identical silence.
-        $control = "unavailable (git exited 128)\n"
-            . "Binary files a/src/Alpha.php and b/src/Alpha.php differ\n"
-            . "\x1b[31mred\x1b[0m\n";
+        // 0. THE KNOWN-POSITIVE CONTROLS, and they are RENDERED BY PRODUCTION,
+        //    not typed here. An earlier revision of this block built the
+        //    control as a string literal three lines above the scans of it,
+        //    which tests `substr_count()` and nothing else. MEASURED, that
+        //    version was worth nothing: rename `unavailable (git exited {N})`
+        //    at {@see \SugarCraft\Crush\Context\EnvironmentBlock}:907 and :969
+        //    to `unavailable (git failed {N})`, force the placeholder with
+        //    `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=log.date
+        //    GIT_CONFIG_VALUE_0=true`, and the absence scan below went SILENTLY
+        //    GREEN while all three literal controls still passed — the test then
+        //    red two assertions later on the log SHAPE, naming `i18n.*`. Wrong
+        //    knob, wrong family, wrong repair: an unfired instrument and a dead
+        //    one produce identical silence, and a literal control cannot tell
+        //    them apart because it never touches the instrument.
+        //
+        //    Each control below is the real class rendering the real degraded
+        //    output, so a production rename reds HERE, on the control, which is
+        //    the message that says the scanner needs updating.
 
-        $this->assertSame(1, substr_count($control, 'unavailable (git exited '), 'the placeholder scanner is dead');
-        $this->assertSame(1, substr_count($control, 'Binary files '), 'the binary-diff scanner is dead');
-        $this->assertSame(2, substr_count($control, "\x1b"), 'the escape-byte scanner is dead');
+        //    A. Every git subprocess failing: a directory that HAS a `.git` (so
+        //       EnvironmentBlock's `file_exists` gate opens) but is not a
+        //       repository. MEASURED: four `unavailable (git exited N)` fields.
+        $brokenRepo = $this->tempDir();
+        $this->assertTrue(mkdir($brokenRepo . '/.git', 0o700, true), 'could not build the broken-repo control');
+        $degraded = (new EnvironmentBlock(
+            $brokenRepo,
+            SglangProvider::DEFAULT_MODEL,
+            new DateTimeImmutable(self::FIXTURE_NOW),
+            self::FIXTURE_PLATFORM,
+        ))->render();
 
-        // 1. No field degraded to the exit-code placeholder.
+        $this->assertSame(
+            4,
+            substr_count($degraded, self::GIT_UNAVAILABLE_MARKER),
+            'the placeholder scanner is looking for ' . json_encode(self::GIT_UNAVAILABLE_MARKER)
+                . ' and EnvironmentBlock no longer renders it for a git that cannot run. The scanner is dead: '
+                . 'update GIT_UNAVAILABLE_MARKER to whatever EnvironmentBlock::gitField() and gitDiffSection() '
+                . 'emit now, or the absence assertion below passes on every input',
+        );
+
+        //    B. A binary-rendered working diff, from a real `-diff` attribute.
+        $binary = $this->dirtyRepoFixtureWithEveryStableLayer();
+        $this->assertNotFalse(
+            file_put_contents($binary->root() . '/.git/info/attributes', "* -diff\n"),
+            'could not build the binary-diff control',
+        );
+
+        $this->assertSame(
+            1,
+            substr_count($binary->systemPrompt(), 'Binary files '),
+            'the binary-diff scanner found nothing in a fixture whose attributes say `* -diff`, so either git '
+                . 'stopped honouring $GIT_DIR/info/attributes or the rendering changed. The scanner is dead',
+        );
+
+        //    C. Raw ANSI, from a real `color.diff=always`.
+        $coloured = $this->dirtyRepoFixtureWithEveryStableLayer();
+        $this->assertSame(0, self::git($coloured->root(), ['config', 'color.diff', 'always']));
+        $this->assertSame(0, self::git($coloured->root(), ['config', 'color.ui', 'always']));
+
+        $this->assertSame(
+            21,
+            substr_count($coloured->systemPrompt(), "\x1b"),
+            'the escape-byte scanner did not find the 21 escapes MEASURED for a fixture with '
+                . '`color.diff=always`. Either the scanner is dead, or EnvironmentBlock started passing '
+                . '`--no-color` - which would be the fix for worklog escalation 2 and makes this control, not '
+                . 'the absence assertion, the thing to rewrite',
+        );
+
+        // 1. No field degraded to a placeholder. The scan is on the PREFIX
+        //    `unavailable (`, not on the git-exit spelling alone, because
+        //    EnvironmentBlock has three of these and the other two -
+        //    `unavailable (proc_open is disabled on this build)` at :327 and
+        //    `unavailable (shell_exec is disabled on this build)` at :855 - are
+        //    the same defect from a different cause. An earlier revision
+        //    scanned only for the git-exit spelling under a heading claiming
+        //    EVERY field.
         $this->assertSame(
             0,
-            substr_count($prompt, 'unavailable (git exited '),
+            substr_count($prompt, self::GIT_UNAVAILABLE_MARKER),
             'a git subprocess exited nonzero and <env> rendered the placeholder. MEASURED causes: `log.date` or '
                 . '`format.pretty` set to a value that is not a format, and any INVALID value anywhere in the '
                 . 'config precedence chain, which git treats as fatal at parse time whatever overrides it',
@@ -1735,16 +2011,17 @@ final class PromptStabilityTest extends TestCase
         ]);
         $fixture->write('src/Alpha.php', self::ALPHA_COMMITTED);
         $fixture->write('src/Beta.php', "<?php\n\nnamespace Fixture\\Prefix;\n\nfinal class Beta {}\n");
-        $fixture->write(
-            'AGENTS.md',
-            "# Fixture conventions\n\nRun the suite before you push.\nNever edit generated files by hand.\n",
-        );
+        // The four constants below are the SAME ones
+        // {@see STABLE_LAYER_FIXTURE_FRAGMENTS} counts, referenced rather than
+        // repeated, so an edit here moves the roster with it instead of leaving
+        // the roster asserting a string the fixture no longer writes.
+        $fixture->write('AGENTS.md', self::FIXTURE_AGENTS_BODY);
 
-        $fixture->memoryStore()->add('The fixture repository pins the prefix measurement.', MemoryScope::Project);
+        $fixture->memoryStore()->add(self::FIXTURE_MEMORY_NOTE, MemoryScope::Project);
 
         $fixture->addSkill(new Skill(
-            name: 'prefix-demo',
-            description: 'A skill body that occupies the stable region of the prompt.',
+            name: self::FIXTURE_SKILL_NAME,
+            description: self::FIXTURE_SKILL_DESCRIPTION,
             userInvocable: true,
             disableModelInvocation: false,
             allowedTools: null,
@@ -1753,8 +2030,8 @@ final class PromptStabilityTest extends TestCase
             effort: 'medium',
             context: '',
             paths: [],
-            content: "Use this skill when measuring the cache prefix.\n",
-            sourcePath: $root . '/.sugar-crush/skills/prefix-demo/SKILL.md',
+            content: self::FIXTURE_SKILL_BODY,
+            sourcePath: $root . '/.sugar-crush/skills/' . self::FIXTURE_SKILL_NAME . '/SKILL.md',
             source: SkillSource::Native,
         ));
 
@@ -1998,13 +2275,29 @@ final class PromptStabilityTest extends TestCase
         // order `$GIT_DIR/info/attributes`, then in-tree `.gitattributes`, then
         // `core.attributesFile`, then the XDG/system file — so writing this one
         // beats all three of the sources a review found (`core.attributesFile`,
-        // `init.templateDir`, which SEEDS this very path at `git init`, and a
-        // bare `XDG_CONFIG_HOME` holding `git/attributes`). Each of those,
-        // saying `*.php -diff`, MEASURED the prompt 4,844 -> 4,749 B and the
-        // prefix 4,670 -> 4,672, replacing the patch body with `Binary files
-        // … differ`; with this file written, MEASURED all three leave 4,844 /
-        // 4,670 untouched. `* diff` forces the text path for every path in the
-        // fixture, which is what a working-diff measurement needs.
+        // `init.templateDir`, and a bare `XDG_CONFIG_HOME` holding
+        // `git/attributes`). Each of those, saying `*.php -diff`, MEASURED the
+        // prompt 4,844 -> 4,749 B and the prefix 4,670 -> 4,672, replacing the
+        // patch body with `Binary files … differ`; with this file written,
+        // MEASURED all three leave 4,844 / 4,670 untouched. `* diff` forces the
+        // text path for every path in the fixture, which is what a working-diff
+        // measurement needs.
+        //
+        // THE DIRECTORY IS CREATED RATHER THAN ASSUMED, and the reason is the
+        // very knob two lines up. An earlier revision of this block wrote
+        // straight into `$root/.git/info/` and said `init.templateDir` "SEEDS
+        // this very path at `git init`". It seeds it only when the template
+        // CARRIES an `info/` subdirectory. MEASURED, git 2.43.0:
+        // `git init -q --template=<an empty directory>` produces a `.git`
+        // holding `config HEAD objects refs` and NO `info` at all — so on a host
+        // whose `~/.gitconfig` merely sets `init.templateDir`, the write
+        // returned false and reddened FOUR tests at once with a message about
+        // the attributes pin rather than about the host. That is the same
+        // wrong-domain failure this whole knob list exists to record.
+        if (!is_dir($root . '/.git/info')) {
+            mkdir($root . '/.git/info', 0o700, true);
+        }
+
         $this->assertNotFalse(
             file_put_contents($root . '/.git/info/attributes', "* diff\n"),
             'could not write .git/info/attributes on the scratch repository, so the gitattributes family is '
