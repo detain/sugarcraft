@@ -1523,9 +1523,14 @@ final class PromptStabilityTest extends TestCase
      * that proves it: their values are not validated at parse time, so pinning
      * them repo-locally does work, and they are pinned.
      *
-     * The four absence assertions at the end run their scanner over a
-     * known-positive control in the same test, because an unfired instrument
-     * and a dead one produce identical silence.
+     * The three absence assertions run FIRST, ahead of every positive one,
+     * and each runs its scanner over a known-positive control in the same test.
+     * Both orderings are deliberate: an unfired instrument and a dead one
+     * produce identical silence, and a degraded rendering deletes the shape the
+     * positive assertions look for, so a positive assertion that fires first
+     * reports the wrong knob. MEASURED — with the absences last, a hostile
+     * `core.attributesFile` red this test on the HUNK HEADER, naming
+     * `GIT_DIFF_OPTS`.
      */
     public function testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder(): void
     {
@@ -1538,7 +1543,56 @@ final class PromptStabilityTest extends TestCase
 
         $prompt = $fixture->systemPrompt();
 
-        // 1. The branch read. `color.branch.current=true` empties this.
+        // ORDER MATTERS HERE, and it is the ABSENCES FIRST on purpose. A
+        // degraded rendering removes the very shape the positive assertions
+        // below look for — a `-diff` attribute leaves no `@@` hunk header at
+        // all — so a positive assertion placed first reds with a message about
+        // its own knob while the real cause sits two assertions further down,
+        // unread. MEASURED: with the absences last, a hostile
+        // `core.attributesFile` red this test at "the unstaged diff is not
+        // rendered at three lines of context … GIT_DIFF_OPTS", which is the
+        // wrong knob, the wrong family and the wrong repair.
+
+        // 0. The known-positive control for the three scans below, run through
+        //    the SAME scanner in the SAME test, because an unfired instrument
+        //    and a dead one produce identical silence.
+        $control = "unavailable (git exited 128)\n"
+            . "Binary files a/src/Alpha.php and b/src/Alpha.php differ\n"
+            . "\x1b[31mred\x1b[0m\n";
+
+        $this->assertSame(1, substr_count($control, 'unavailable (git exited '), 'the placeholder scanner is dead');
+        $this->assertSame(1, substr_count($control, 'Binary files '), 'the binary-diff scanner is dead');
+        $this->assertSame(2, substr_count($control, "\x1b"), 'the escape-byte scanner is dead');
+
+        // 1. No field degraded to the exit-code placeholder.
+        $this->assertSame(
+            0,
+            substr_count($prompt, 'unavailable (git exited '),
+            'a git subprocess exited nonzero and <env> rendered the placeholder. MEASURED causes: `log.date` or '
+                . '`format.pretty` set to a value that is not a format, and any INVALID value anywhere in the '
+                . 'config precedence chain, which git treats as fatal at parse time whatever overrides it',
+        );
+
+        // 2. The working diff is a patch, not a binary difference.
+        $this->assertSame(
+            0,
+            substr_count($prompt, 'Binary files '),
+            'the working diff rendered as a binary difference rather than a patch, so a gitattributes source is '
+                . 'marking the fixture `-diff`. MEASURED sources: `core.attributesFile`, `init.templateDir` and '
+                . '`$XDG_CONFIG_HOME/git/attributes`, all three beaten by the `.git/info/attributes` the fixture '
+                . 'writes - which is at the TOP of that precedence chain and is why it is written rather than '
+                . 'configured',
+        );
+
+        // 3. No raw ANSI reaches the model.
+        $this->assertSame(
+            0,
+            substr_count($prompt, "\x1b"),
+            'a raw ANSI escape byte reached the system prompt. `color.ui=always` or `color.diff=always` on a host '
+                . 'whose pins were bypassed puts 21 of them there (worklog escalation 2)',
+        );
+
+        // 4. The branch read. `color.branch.current=true` empties this.
         $this->assertStringContainsString(
             "\nCurrent branch: master\n",
             $prompt,
@@ -1547,7 +1601,7 @@ final class PromptStabilityTest extends TestCase
                 . 'so this assertion is the only thing that sees it',
         );
 
-        // 2. The status field sees a tracked edit AND an untracked file.
+        // 5. The status field sees a tracked edit AND an untracked file.
         $this->assertStringContainsString(
             "\n M src/Alpha.php\n",
             $prompt,
@@ -1561,10 +1615,9 @@ final class PromptStabilityTest extends TestCase
                 . 'was overridden',
         );
 
-        // 3. The log field: a subject, and a 7-hex abbreviation. Pins the
-        //    `i18n.*` family (which deletes the subject), the `log.date` /
-        //    `format.pretty` family (which kills the subprocess) and
-        //    `core.abbrev` / `GIT_CONFIG_COUNT` (which widens the sha).
+        // 6. The log field: a subject, and a 7-hex abbreviation. Pins the
+        //    `i18n.*` family (which deletes the subject) and `core.abbrev` /
+        //    `GIT_CONFIG_COUNT` (which widens the sha).
         $this->assertSame(
             1,
             preg_match('/\nRecent commits:\n[0-9a-f]{7} fixture: initial import\n/', $prompt),
@@ -1573,9 +1626,9 @@ final class PromptStabilityTest extends TestCase
                 . 'width is `core.abbrev` or a `GIT_CONFIG_COUNT` override of it',
         );
 
-        // 4. The diff body: a real patch, at the pinned three lines of context,
-        //    with a 7-hex index line. `GIT_DIFF_OPTS=-u10` moves the hunk header
-        //    and NOTHING ELSE in this file used to notice.
+        // 7. The diff body at the pinned three lines of context, with a 7-hex
+        //    index line. `GIT_DIFF_OPTS=-u10` moves the hunk header and NOTHING
+        //    ELSE in this file used to notice.
         $this->assertStringContainsString(
             "\n@@ -2,4 +2,4 @@\n",
             $prompt,
@@ -1587,39 +1640,6 @@ final class PromptStabilityTest extends TestCase
             1,
             preg_match('/\nindex [0-9a-f]{7}\.\.[0-9a-f]{7} 100644\n/', $prompt),
             'the diff index line is not two 7-hex blobs, so core.abbrev is not 7 for this subprocess',
-        );
-
-        // 5. The absences, each with the same scanner run over a control that
-        //    DOES carry the offender.
-        $control = "unavailable (git exited 128)\n"
-            . "Binary files a/src/Alpha.php and b/src/Alpha.php differ\n"
-            . "\x1b[31mred\x1b[0m\n";
-
-        $this->assertSame(1, substr_count($control, 'unavailable (git exited '), 'the placeholder scanner is dead');
-        $this->assertSame(1, substr_count($control, 'Binary files '), 'the binary-diff scanner is dead');
-        $this->assertSame(2, substr_count($control, "\x1b"), 'the escape-byte scanner is dead');
-
-        $this->assertSame(
-            0,
-            substr_count($prompt, 'unavailable (git exited '),
-            'a git subprocess exited nonzero and <env> rendered the placeholder. MEASURED causes: `log.date` or '
-                . '`format.pretty` set to a value that is not a format, and any INVALID value anywhere in the '
-                . 'config precedence chain, which git treats as fatal at parse time whatever overrides it',
-        );
-        $this->assertSame(
-            0,
-            substr_count($prompt, 'Binary files '),
-            'the working diff rendered as a binary difference rather than a patch, so a gitattributes source is '
-                . 'marking the fixture `-diff`. MEASURED sources: `core.attributesFile`, `init.templateDir` and '
-                . '`$XDG_CONFIG_HOME/git/attributes`, all three beaten by the `.git/info/attributes` the fixture '
-                . 'writes - which is at the TOP of that precedence chain and is why it is written rather than '
-                . 'configured',
-        );
-        $this->assertSame(
-            0,
-            substr_count($prompt, "\x1b"),
-            'a raw ANSI escape byte reached the system prompt. `color.ui=always` or `color.diff=always` on a host '
-                . 'whose pins were bypassed puts 21 of them there (worklog escalation 2)',
         );
     }
 
