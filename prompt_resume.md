@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3, nothing in flight — no agents, no worktrees, no open branches. Master @ 179b13746 is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter. YOUR JOB IS TO RUN THE PLAN TO COMPLETION: finish Phase 3's close queue, close Phase 3, then keep going through Phases 4-11 without stopping at the boundaries. Read §0 first, then §8.**
+**Current state: Phase 3, nothing in flight — no agents, no worktrees, no open branches. Master is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter (measured at e0d00b6db; every commit since is bookkeeping only). YOUR JOB IS TO RUN THE PLAN TO COMPLETION: finish Phase 3's close queue, close Phase 3, then keep going through Phases 4-11 without stopping at the boundaries. Read §0 first, then §8.**
 
 ---
 
@@ -386,7 +386,8 @@ Steps done:       22 of 63 merged, plus audit-fix sub-steps (not counted in the 
                   P2.audit-fix-1 33df838d0 + f95546b10 · CI-fix-1 72686c380 ·
                   P1.audit-fix-3 e0d00b6db.
 Phases done:      3 of 12  (Phase 3 is NOT closed — see the queue above)
-Last commit:      179b13746 (bookkeeping). Always re-derive with
+Last commit:      the newest `prompt:` commit is bookkeeping; the newest CODE commit is e0d00b6db
+                  (the Gemini arm merge). Always re-derive with
                   `git -C /home/sites/sugarcraft log --oneline -1` rather than trusting this line.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
 
