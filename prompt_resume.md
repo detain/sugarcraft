@@ -289,6 +289,21 @@ never write a dead agent's missing report yourself.
   afterwards without rewriting history"*, and this was caught ONLY because the step agent
   self-reported it. **Put this prohibition in every step brief, and re-check
   `git config user.name` / `user.email` after every step, not only before committing.**
+- **ORCHESTRATION-RULE-3 — every agent gets its OWN scratchpad subdirectory, named after its step,
+  and may never `rm -rf` a path it did not create.** ADDED 2026-08-31. The session scratchpad is ONE
+  FLAT SHARED DIRECTORY that every agent writes into; it held ~180 files from concurrent agents when
+  this was found. A P3.S5-fix-1 reviewer opened its sandbox with an unconditional
+  `rm -rf "$SB"; cp -al <worktree> "$SB"` where `$SB` was `.../scratchpad/sb` — a name it picked
+  without checking — and self-reported that the `sb/` it destroyed had an mtime PREDATING its own
+  work, so it almost certainly deleted a concurrent agent's sandbox mid-experiment. Two agents also
+  both wrote `.../scratchpad/Runtime.orig.php` and `RT.orig.php`, and neither could afterwards tell
+  whose copy survived. **That second one is the dangerous shape**: an agent that backs up a worktree
+  file to a SHARED name, mutates the worktree, then restores from that name can restore ANOTHER
+  agent's version of the file — a silent cross-contamination of a step's source that no test would
+  attribute. So: every brief must name a private subdirectory (`<scratchpad>/<STEP_ID>/`), every
+  backup and sandbox goes inside it, `rm -rf` is permitted only within it, and generic names
+  (`sb`, `base`, `count.php`, `*.orig.php`) at the scratchpad ROOT are forbidden. The rule held only
+  because the reviewer volunteered the collision — nothing detects it.
 - Use `/usr/bin/grep` for anything that must see the whole tree — the shell's `grep` is `ugrep` and
   its recursive scans honour `.gitignore`.
 

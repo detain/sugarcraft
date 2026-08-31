@@ -253,6 +253,53 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### ORCHESTRATION-RULE-3 — agents share one flat scratchpad and were clobbering each other   ·   2026-08-31
+
+**Found by a P3.S5-fix-1 review agent, self-reported. Nothing in the process detects this.**
+
+The session scratchpad is a SINGLE FLAT DIRECTORY shared by every agent. ORCHESTRATOR-VERIFIED: it held
+~180 files from concurrent agents, with names like `sb`, `base`, `count.php`, `anchor.php`,
+`Runtime.orig.php`, `base_PST.php` — generic enough to collide by accident, and several with mtimes from
+agents other than the one that reported.
+
+**Two collisions, and the second is the dangerous one.**
+
+1. **A destroyed sandbox.** The reviewer opened with an unconditional
+   `rm -rf "$SB"; cp -al /home/sites/prompt-step-P3.S5-fix-1 "$SB"` where `$SB` was `.../scratchpad/sb`,
+   a name it chose without checking. It then noticed the `sb/sugar-crush` it had replaced carried an
+   mtime of 00:43, well before its own ~01:54 start, and that `sb2`/`sb3`/`sb4` existed alongside. So it
+   almost certainly deleted a concurrent agent's sandbox mid-experiment. It reported this rather than
+   quietly moving on, and explicitly declined to `rm` a `MultiEdit.php` it found there because it could
+   not prove the file was its own.
+
+2. **Shared backup filenames — the silent one.** Two agents both wrote `.../scratchpad/Runtime.orig.php`
+   and `.../scratchpad/RT.orig.php`. The reviewer found their mtimes predating its own writes and their
+   md5s not matching worktree HEAD, and stated plainly it could not tell whether another agent had
+   overwritten its copy or it had overwritten theirs.
+   **This is the shape that can corrupt a step.** The deletion-experiment pattern this whole plan runs on
+   is: back up a worktree file, mutate it, run the suite, restore from the backup. If the backup name is
+   shared, the restore can write ANOTHER agent's version of that file into this agent's worktree. Nothing
+   would attribute it: `git status` would show a diff the agent did not make, in a file it legitimately
+   had open, on a branch whose tests still plausibly pass.
+
+**Neither collision touched anything under `/home/sites`.** ORCHESTRATOR-VERIFIED after the reports:
+both worktrees `git status --porcelain` EMPTY; both goldens unmoved
+(`32ea749d84938811ac9331419cae7380` system, `ef0326dd38535aaa2f1d715919bff26e` agent) in BOTH worktrees;
+no `MultiEdit.php`, no `src/Tools/Probe/`, no stray file in either `src/Tools/BuiltIn/`. The blast radius
+was `/tmp` only, this time.
+
+**THE RULE, now in prompt_resume.md §7 and required in every future brief:** every agent gets its OWN
+scratchpad subdirectory named for its step (`<scratchpad>/<STEP_ID>/`); every sandbox and every backup
+goes inside it; `rm -rf` is permitted only within it; generic names at the scratchpad ROOT are forbidden.
+
+**Why this is recorded as a rule and not a note.** It is the second orchestration hazard on this plan
+found only because an agent volunteered it — ORCHESTRATION-RULE-2 (the reviewer that overwrote the repo's
+git identity and left a commit on master) was the first. Both were invisible to every test and to the
+orchestrator's own checks. The pattern is that agent-to-agent interference does not surface as a failure;
+it surfaces as an inexplicable diff, or not at all.
+
+---
+
 ### BATCH P3.CLOSE.B1 OPEN · 2026-08-31
 
 **Two steps, spawned concurrently, disjoint declared file lists.** This is the first batch of the Phase 3
