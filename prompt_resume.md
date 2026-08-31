@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, ALL THREE BRANCHES READY. `P3.S4-fix-1` @ `6e7308938` (16/399) and `P3.S5-fix-1` @ `6acba5f9e` (145/689) are orchestrator-verified. `P3.S6` @ `1461e1685` was RECOVERED after a rate-limit kill, committed its work, and reported IN FULL — outcome is a §1.1 DECLARED-SCOPE ESCALATION (a completed step). Its §18 row is LANDED (corrected — the agent's draft carried a claim its own cycle 2 falsified). NO AGENTS ARE RUNNING. The owed full suites are being run SERIALLY now, starting with P3.S4-fix-1. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue. THE FIRST OWED FULL SUITE CAME BACK RED — `P3.S4-fix-1` @ `6e7308938` is `10503 / 162131 / Failures: 1 / Skipped: 1`, failing `tests/Support/ChildStderrCaptureTest.php:1059`, a TREE-WIDE census that NO step-scoped filter reaches. MEASURED as the branch's doing (green on master, reproduces isolated), and the guard fired because the change was GOOD — a deferral was overtaken. A FIX AGENT IS OUT with a declared list widened to TWO files. NOTHING HAS MERGED; master is untouched. `P3.S5-fix-1` @ `6acba5f9e` and `P3.S6` @ `1461e1685` are verified and queued behind it, and NEITHER has had its full suite run yet.**
 
 ---
 
@@ -171,13 +171,17 @@ Per file, `AgentTest.php` went **26 → 33 tests**; P3.S6 added **7 tests, not 7
 **A FULL SUITE PER BRANCH, RUN SERIALLY, from that branch's worktree root, with `</dev/null`.**
 Master's figure to beat: **`10500 / 161982 / 1` from the CHECKOUT ROOT**.
 
-- `P3.S4-fix-1` @ `6e7308938` — **a run was IN FLIGHT** as background task `bx8btbi9e`, output at
-  `/tmp/claude-1000/-home-sites-sugarcraft/3e35a6d4-602a-4db1-b5fa-055d3792747f/tasks/bx8btbi9e.output`.
-  **Read that file first.** It was piped through `tail -6`, so the file stays EMPTY until the run
-  ends — an empty file means "still running", not "failed". If the process is gone and the file is
-  still empty, the run was lost with the session: just re-run it.
-- `P3.S5-fix-1` @ `6acba5f9e` — not started.
-- `P3.S6` @ `1461e1685` — not started.
+- `P3.S4-fix-1` @ `6e7308938` — **RUN. RED.** `Tests: 10503, Assertions: 162131, Failures: 1,
+  Skipped: 1` at `tests/Support/ChildStderrCaptureTest.php:1059`. Uncontended — I confirmed exactly
+  one `vendor/bin/phpunit` on the box for the whole run. **A fix agent is out; see §8 item 1.**
+  Re-run this suite after the fix lands; do NOT merge on the old figure.
+- `P3.S5-fix-1` @ `6acba5f9e` — **not started.**
+- `P3.S6` @ `1461e1685` — **not started.**
+
+**READ THE RED AS A WARNING ABOUT THE OTHER TWO.** Every review cycle and all of my own verification
+ran `--filter <step files>` plus the seven-file census set, and `ChildStderrCaptureTest` is in
+NEITHER. A step-scoped filter set is not a substitute for the full suite. Expect the same class of
+surprise on `P3.S5-fix-1` and `P3.S6`, and do not skip their suites.
 
 **Also owed on `P3.S6` specifically, before it merges (see §8 item 3):** my own test figures,
 a re-verification of mutation **E5c**, and a decision on **review cycle 4**.
@@ -393,8 +397,11 @@ Next step:        **NO AGENTS ARE RUNNING. ALL THREE BRANCHES ARE DONE AND VERIF
                   after two merges cannot be attributed to either. Master's figure to beat:
                   **10500 / 161982 / 1 from the CHECKOUT ROOT**. DO NOT PUSH.
 
-                  A) **P3.S4-fix-1 @ 6e7308938 merges FIRST** — it changes NO production code at
-                     all (`src/` diff EMPTY), so it is the cheapest thing to attribute.
+                  A) **P3.S4-fix-1 merges FIRST — BUT IT IS RED AND A FIX AGENT IS OUT.**
+                     Wait for it, verify it yourself (§8 item 1 says exactly what), RE-RUN the
+                     full suite, and only then merge. It still changes NO production code
+                     (`src/` diff EMPTY) — re-confirm that after the fix, since its declared
+                     list was widened to two files.
                   B) **P3.S5-fix-1 @ 6acba5f9e merges SECOND.**
                   C) **P3.S6 @ 1461e1685 merges THIRD — but THREE THINGS ARE OWED FIRST**, all
                      in §8 item 3: my own figures, mutation **E5c**, and the **cycle-4
@@ -501,7 +508,52 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                   `NO FINDINGS` and never a finished step.** Never write a dead agent's
                   missing report yourself. Blank returns get five attempts (§1.8).
 
-                  1. **P3.S4-fix-1 — COMPLETE AND VERIFIED. NO AGENT IS OUT ON IT.**
+                  1. **P3.S4-fix-1 — FULL SUITE RED. FIX AGENT OUT. DO NOT MERGE.**
+                     ```
+                     FULL SUITE, serial, uncontended, </dev/null, HEAD 6e7308938:
+                       Tests: 10503, Assertions: 162131, Failures: 1, Skipped: 1
+                       tests/Support/ChildStderrCaptureTest.php:1059
+                     master at c7e5a6454 was 10500 / 161982 / 1, GREEN.
+                     ChildStderrCaptureTest isolated: BRANCH 6/322 + 1 failure
+                                                     MASTER OK (6 tests, 343 assertions)
+                     ```
+                     **The branch causes it — measured. Not a flake, not contention, not
+                     pre-existing.**
+                     **THE GUARD FIRED BECAUSE THE CHANGE WAS GOOD.**
+                     `testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn` asserts every
+                     `OUT_OF_SCOPE` prefix STILL HAS an offender, and fails when a deferral has
+                     been OVERTAKEN. Cycle 4's F-C repair — the unchecked
+                     `shell_exec(… 'init -q 2>/dev/null')` at PromptStabilityTest.php:483
+                     becoming a checked `self::git()` — removed the LAST offending spawn under
+                     `Providers/`. The fix: move `'Providers/'` from OUT_OF_SCOPE (:188) into
+                     SCOPE (:119), **in the same change-set**.
+                     **DECLARED LIST WIDENED TO TWO FILES, deliberately:**
+                     tests/Providers/PromptStabilityTest.php AND
+                     tests/Support/ChildStderrCaptureTest.php. §1.4 check 19 and the guard's own
+                     message both require the roster to move in the SAME change-set — required
+                     completion, NOT scope creep. **The src/ diff must stay EMPTY.**
+                     **MEASURED so nobody re-derives it:** SCOPE at :119 is
+                     ['Agents/','Backend/','Chat/','Integration/','MCP/','Support/'];
+                     OUT_OF_SCOPE at :152 with 'Providers/' at :188; sibling guard
+                     ForkedChildReaperAdoptionTest has NO 'Providers/' row and is
+                     OK (6 tests, 30 assertions) — UNAFFECTED.
+                     **CHECK THE ASSERTION COUNT, NOT JUST THE GREEN.** Master isolated is
+                     **343**; the red branch was **322**. Assertions that stop accruing are how
+                     a guard quietly stops guarding, so a figure materially below 343 needs a
+                     reason.
+                     **THE CHEAP GREENS ARE ALL SILENT UN-GUARDINGS** and the brief forbids
+                     them: putting 'Providers/' back into OUT_OF_SCOPE, re-introducing a
+                     discarding spawn, or adding an ACCEPTED_DISCARDED_STDERR row for a spawn
+                     that does not discard. Reject any of those and re-spawn.
+                     **PLAN DEFECT THIS EXPOSED — §1.4 check 19 needs a second half.** Five
+                     review cycles and my own verification all performed check 19 honestly and
+                     COULD NOT have found this: check 19 asks for the roster of categories a
+                     diff ADDS, and this diff added nothing — it REMOVED the last instance of
+                     something a roster defers on, and no roster in check 19's list enumerates
+                     absences. Add: *a diff that removes the last instance of something a roster
+                     defers on must update that roster too.*
+                     (superseded verification follows — still valid, just not sufficient)
+                     **COMPLETE AND VERIFIED. NO AGENT IS OUT ON IT.**
                      Worktree /home/sites/prompt-step-P3.S4-fix-1, branch prompt/P3.S4-fix-1,
                      HEAD **6e7308938**, base 1267e6fbb. All six cycle-5 findings closed.
                      **ORCHESTRATOR-VERIFIED — I RAN EVERY ONE OF THESE MYSELF:**
@@ -854,10 +906,10 @@ Phase 4 is pre-read: so you do not have to re-read prompt_plan.md when Phase 3 c
                   in-flight step AND from the lane claims, so it is safe to open the moment
                   the Phase 3 close review passes.
 
-Blocked on:       Nothing, and no decision is owed to proceed. All three branches are DONE
-                  and VERIFIED; NO AGENTS ARE RUNNING. The only remaining work before three
-                  merges is three full suites — see §4 "Still owed" and the recipe in
-                  `Next step`.
+Blocked on:       P3.S4-fix-1's full-suite RED. A fix agent is out (§8 item 1). NO USER
+                  decision is owed — this is ordinary work. Nothing merges until it is green
+                  and the full suite is RE-RUN. P3.S5-fix-1 and P3.S6 are verified and queued
+                  behind it, and neither has had its own full suite yet.
 
                   **PROCESS RULE THIS EPISODE EARNED, put it in every brief that spawns a
                   sub-agent: a step agent must NEVER leave a sub-agent's work uncommitted.**
