@@ -1838,6 +1838,55 @@ final class RuntimeTest extends TestCase
             $this->assertSame(1, substr_count($prompt, '</env>'), "the {$label} prompt no longer closes the fence exactly once");
             $this->assertTrue(str_ends_with($prompt, "\n</env>"), "the {$label} prompt does not end with the closing fence");
         }
+
+        // AND THE PATH WHERE RUNTIME RE-MINTS THE BLOCK, which is the one the
+        // assertions above do NOT exercise and the one an ORDERING guard must
+        // not be hostage to.
+        //
+        // MEASURED: Runtime::environmentSnapshot() returns the INJECTED block
+        // unchanged while $writeSinceLastRender is null, which it is on a fresh
+        // Runtime - so every assertion above compares against a block Runtime
+        // happens to be handing back by identity. Call
+        // markWriteSinceLastRender() and it takes the other branch, replacing the
+        // block with $block->withWriteSinceLastRender(...). A pin that only ever
+        // saw the identity branch would read as an ordering guard and would in
+        // fact be a content guard: the day a write signal legitimately changed
+        // the rendered bytes, it would red about ORDER while nothing about the
+        // order had moved.
+        //
+        // So the ordering claim is asserted again on the re-minted path, against
+        // the block Runtime actually used rather than against the one captured
+        // before the call.
+        // The OPPOSITE of whatever the injected block already carries, because
+        // environmentSnapshot() only re-mints when the two DISAGREE - MEASURED:
+        // a hardcoded `true` against a block that already says true takes the
+        // identity branch, and this half of the pin then asserts nothing while
+        // reading as though it does. The signal has to be derived from the block.
+        $runtime->markWriteSinceLastRender(!$block->writeSinceLastRender());
+        $rebuilt = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [App::new($this->provider, 'gpt-4')]);
+        $reminted = $this->invokePrivateMethod($runtime, 'environmentSnapshot', [App::new($this->provider, 'gpt-4')]);
+
+        $this->assertNotSame(
+            $block,
+            $reminted,
+            'marking a write no longer re-mints the environment block, so this half of the pin is '
+            . 'exercising the same identity branch as the assertions above and the ordering claim '
+            . 'is still untested on the path where the block is replaced',
+        );
+        $this->assertInstanceOf(EnvironmentBlock::class, $reminted);
+        $rebuiltAt = strpos($rebuilt, "<env>\n");
+        $this->assertIsInt($rebuiltAt);
+        $this->assertGreaterThan(0, $rebuiltAt);
+        $this->assertSame(
+            $reminted->render(),
+            substr($rebuilt, $rebuiltAt),
+            'with a write signal set, Runtime::buildSystemPrompt() no longer ends with the block '
+            . 'Runtime itself minted. That is the ordering claim both corrected doc-blocks make, on '
+            . 'the branch where the block is REPLACED rather than passed through.',
+        );
+        $this->assertSame(1, substr_count($rebuilt, '<env>'));
+        $this->assertSame(1, substr_count($rebuilt, '</env>'));
+        $this->assertTrue(str_ends_with($rebuilt, "\n</env>"));
     }
 
     public function testBuildSystemPromptWithSameInjectedClockPlatformAndCwdIsByteIdenticalAcrossRuntimes(): void
@@ -2390,16 +2439,40 @@ final class RuntimeTest extends TestCase
         //
         // THE MESSAGE NAMES THE FILE THE REPAIR IS IN, which the one it
         // replaced did not. It read "PermissionGate still treats an mcp__
-        // prefix as a write; Runtime must agree" - a sentence that is true
-        // while the pin is GREEN and useless once it is red, because on the one
-        // failure this assertion actually has (the authority being legitimately
-        // respelled) the repair is in PermissionGate and the reader was sent to
-        // Runtime. MEASURED by the mutation that produces this red:
-        // src/Tools/McpToolBridge.php's NAME_PREFIX changed from 'mcp__' to
-        // 'mcpsrv__' reds 17 tests across the full suite, this one among them,
-        // and in that world Runtime is the only file in the sentence that is
-        // already correct. Section 16.8 rule 25 - a guard's failure message is
-        // the one part of a green suite that never runs.
+        // prefix as a write; Runtime must agree" - a sentence that is true while
+        // the pin is GREEN and useless once it is red, because the repair is in
+        // PermissionGate and the reader was sent to Runtime. Section 16.8 rule
+        // 25 - a guard's failure message is the one part of a green suite that
+        // never runs.
+        //
+        // THE MUTATION THAT ACTUALLY PRODUCES THIS RED, and the first one cited
+        // here did not. This comment used to name
+        // src/Tools/McpToolBridge.php's NAME_PREFIX going 'mcp__' ->
+        // 'mcpsrv__'. That figure is right about the SUITE - MEASURED, `Tests:
+        // 10540, Assertions: 162608, Failures: 17, Skipped: 1` - and wrong about
+        // THIS assertion: with `--filter
+        // testTheWriteToolRosterDoesNotDriftFromThePermissionGate` it reds the
+        // NEXT line, RuntimeTest.php:2413, at 1 test / 7 assertions, and this
+        // regex stays green. It has to: PermissionGate::isWriteTool() spells
+        // 'mcp__' as a LITERAL and never reads the authority, so respelling the
+        // authority cannot move it.
+        //
+        // The mutation that reds THIS line is the repair that would make the
+        // gate follow its authority - PermissionGate.php:691 rewritten as
+        // `str_starts_with($call->name, McpToolBridge::NAME_PREFIX)`. MEASURED:
+        // 1 test / 6 assertions / 1 failure at RuntimeTest.php:2403, printing
+        // the message below. That is the correct behaviour of this pin: the
+        // literal it watches is gone, and the message tells the reader to teach
+        // the regex the new shape rather than to undo the repair.
+        //
+        // AND THAT GAP IS ITSELF WORTH REPORTING, in a file outside this
+        // change-set's declared list: Runtime::MCP_TOOL_PREFIX reads
+        // McpToolBridge::NAME_PREFIX, while src/Permissions/PermissionGate.php:691
+        // hard-codes the same prefix. So a legitimate respelling at the authority
+        // moves the runtime and NOT the gate, and it moves them apart in the
+        // permissive direction - the gate would stop classifying MCP calls as
+        // writes. The assertion on the next line is what catches the runtime
+        // half today; nothing catches the gate half.
         $this->assertSame(
             1,
             preg_match("/return str_starts_with\(\\\$\\w+->name, 'mcp__'\);/", $source),

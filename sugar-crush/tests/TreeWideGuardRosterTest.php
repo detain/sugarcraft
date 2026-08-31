@@ -84,9 +84,18 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * definitions of those two populations reproduced neither. That is section 16.8
  * rule 2 happening inside the file that cites it. The populations are DERIVED
  * and their ORDERING is what is pinned, by
- * {@see testTheCandidateSetIsStrictlyWiderThanTheRosterAndEveryPopulationIsDerived()},
+ * {@see testTheRosterAndTheCandidateSetOverlapWithNeitherContainingTheOther()},
  * which reads them off {@see derivation()} instead of out of a sentence. A
  * superset is not a roster and is not shipped as one.
+ *
+ * AND THE WORD "SUPERSET" IS WRONG, which is worth its own sentence because it
+ * stood in this file as "the candidate set is strictly wider than the roster".
+ * MEASURED: the two sets OVERLAP and neither contains the other - 11 roster
+ * members are outside the candidate set (every channel-A member, which never
+ * reaches the candidate counter) and 27 candidates are outside the roster (the
+ * ones whose only walks are over a directory the test made). The CARDINALITIES
+ * are ordered - 67 < 83 < 181 < 440 - and that is a different and weaker claim
+ * than containment. Both are now asserted for what they are.
  *
  * WHAT IS DELIBERATELY *NOT* IN THE DERIVATION, with the measurement that
  * decided it. A rule that taints a function PARAMETER from the arguments of its
@@ -104,12 +113,31 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * PLACE (section 16.8 rule 42), because the sentence that stood here was false
  * in the one direction that matters.
  *
- * WHAT IT COVERS: every walker call site in a file that names the package root
- * lands in one of three buckets - derived tree-wide, declared tree-wide, or
- * declared local ({@see WALKS_A_DIRECTORY_THE_TEST_MADE}, keyed on the file AND
- * the flattened expression) - and anything else reds
- * {@see testEveryWalkerCallSiteInAFileThatNamesThePackageRootIsAccountedFor()}
- * and names itself.
+ * WHAT IT COVERS - AND THIS SENTENCE HAS NOW BEEN WRONG TWICE, so it is stated
+ * as the invariant the code actually enforces rather than as the one it would be
+ * nice to have. It used to say: "every walker call site in a file that names the
+ * package root lands in one of three buckets ... and anything else reds". THAT IS
+ * FALSE, and here is the shape of the falsehood: {@see derivation()} decides
+ * MEMBERSHIP first, and the moment a file is a member it stops asking about that
+ * file's remaining sites - once through channel A, once when any site in the file
+ * resolves to the root, and once on a {@see DECLARED_TREE_WIDE_GUARDS} row.
+ * MEASURED by driving the shipped classifier over `everyTestFile()`: 12
+ * unresolved walker call sites in 9 files are passed over that way
+ * (1 via channel A, 5 via a resolved sibling site, 6 via a declared row).
+ *
+ * WHAT IS TRUE, and it is the property that carries the weight: EVERY FILE with
+ * an unresolved walker site is either IN THE ROSTER or has every one of those
+ * sites licensed by name. MEASURED: all 9 of those files are roster members, and
+ * that is not a coincidence - each of the three early returns fires BECAUSE the
+ * file was just added. A site passed over in a file that is already a member
+ * cannot change a roster verdict, because the only verdict a site can move is
+ * whether its file is a member, and that is already settled.
+ * {@see testEveryFileWithAnUnresolvedWalkIsARosterMemberOrFullyLicensed()} is
+ * that invariant as an assertion, over both populations, so the claim above is
+ * checked rather than argued. What is genuinely LOST is per-site licence
+ * discipline inside member files: an unresolved walk added to a member file
+ * needs no row and gets no reader. That is a real gap, it is declared here, and
+ * it is bounded - it cannot reach roster membership.
  *
  * WHAT THIS PARAGRAPH USED TO SAY, AND IT WAS WRONG: "The accepted direction for
  * anything unreadable is a report, not a pass, which is what the third bucket is
@@ -236,10 +264,30 @@ final class TreeWideGuardRosterTest extends TestCase
      * gives. A human has read each of these three and confirmed the walk is over
      * the package's own files.
      *
-     * THIS IS NOT AN EXEMPTION LIST. An exemption removes something from a
-     * verdict; each of these ADDS a file to the roster, so the direction is
-     * toward more work rather than less, and a wrong row here costs a test run
-     * rather than a missed guard.
+     * IT ADDS A FILE, AND IT ALSO EXEMPTS THAT FILE'S REMAINING SITES - both
+     * halves, because the sentence here used to claim only the first. It said
+     * "THIS IS NOT AN EXEMPTION LIST ... a wrong row here costs a test run rather
+     * than a missed guard." MEASURED: a row here does remove something from a
+     * verdict. {@see derivation()} returns as soon as a declared row is found, so
+     * that file's unresolved sites are never licensed or reported - 6 sites in 4
+     * files at this commit, and the key is the FILE, so the number is unbounded
+     * in future.
+     *
+     * WHY THE ROW IS STILL SOUND, stated as the bound rather than as a denial: a
+     * row here puts the file IN the roster, and roster membership is the only
+     * verdict a walker site can move. So the exemption cannot cost a missed
+     * guard for THIS file - it costs per-site licence discipline inside it, which
+     * is a smaller and declared loss.
+     * {@see testEveryFileWithAnUnresolvedWalkIsARosterMemberOrFullyLicensed()}
+     * asserts exactly that bound, so if a row here ever stopped implying
+     * membership the assertion reds.
+     *
+     * WHY THE KEY IS THE FILE AND NOT FILE-PLUS-EXPRESSION, unlike
+     * {@see WALKS_A_DIRECTORY_THE_TEST_MADE} (rule 34: key an exemption on its
+     * scope). The claim a row here makes is about the FILE - "this whole file is
+     * a tree-wide guard for a reason the alphabet cannot see" - so the file IS
+     * the scope. The local bucket's claim is about one expression, so its key is
+     * the expression.
      *
      * @var array<string, string>
      */
@@ -386,6 +434,46 @@ final class TreeWideGuardRosterTest extends TestCase
      * the claim is withdrawn rather than corrected - the REASON stands on what
      * `__DIR__ . '/fixtures'` denotes, and needs no cardinality.
      */
+    /**
+     * A spelling the taint resolver is willing to look for at a use site.
+     *
+     * WHY THIS EXISTS AND WHY IT IS A FIX RATHER THAN A TIGHTENING.
+     * {@see isRootAnchored()} used to answer with `str_contains()` over a bare
+     * list of names, which fails OPEN in two independent ways.
+     *
+     * FIRST, SUBSTRING. A taint name of `$t` is a substring of `$this`, so ANY
+     * argument mentioning `$this` resolved to "the package root" in a file where
+     * some unrelated method happened to assign `$t = dirname(__DIR__, 2) .
+     * '/src'`. MEASURED through the shipped classifier before the fix:
+     * `glob($this->tempDir . '/*')` came back in the `root` bucket - the exact
+     * shape the negative control in
+     * {@see testTheDerivationIncludesItselfAndTheTraitsOtherConsumers()} declares
+     * impossible. Matching is now bounded on both sides, so `$t` cannot answer
+     * for `$this`.
+     *
+     * SECOND, SHAPE. {@see rootAnchoredNames()} takes an assignment TARGET as
+     * written, so array-append and index targets arrive as `$calls[]`,
+     * `$cases[$name]` and truncated forms like `$aliases]`. MEASURED over all of
+     * `tests/`: 8,264 well-formed spellings and 481 distinct malformed ones. A
+     * malformed spelling can only ever match by accident, so it is not consulted.
+     *
+     * THE SHAPES ALLOWED ARE THE ONES {@see spellingsOf()} PRODUCES, and I
+     * measured that list rather than guessing it: a plain local `$root`, a
+     * property read `$this->srcDir`, a class constant `self::LIB_ROOT` or
+     * `static::LIB_ROOT`, and - the one a narrower guess would have deleted
+     * outright - the zero-argument helper call `self::helper(`, `$this->helper(`
+     * or `static::helper(`, trailing paren included, which is how the fourth
+     * taint rule spells its subject. A first draft of this pattern omitted that
+     * form and would have silently disabled an entire taint rule; the census
+     * above is what caught it.
+     *
+     * MEASURED EFFECT ON THIS TREE: none. roster 67, candidates 83,
+     * walkerFiles 181, testFiles 440, unaccounted 0 - identical before and after.
+     * The fail-open was LATENT, and both polarities are now pinned by
+     * {@see testTheRootTaintResolverMatchesAtNameBoundariesAndIgnoresMalformedSpellings()}.
+     */
+    private const NAME_SPELLING = '~^(\\$[A-Za-z_][A-Za-z0-9_]*|(\\$this->|self::|static::)[A-Za-z_][A-Za-z0-9_]*\\(?)$~';
+
     private const ROOT_ANCHOR = '~dirname\(__DIR__|dirname\(__FILE__|__DIR__\.[\'"]/\.\.~i';
 
     /**
@@ -393,6 +481,9 @@ final class TreeWideGuardRosterTest extends TestCase
      *     roster: list<string>,
      *     unaccounted: array<string, list<string>>,
      *     why: array<string, list<string>>,
+     *     candidateFiles: list<string>,
+     *     consultedResidue: list<string>,
+     *     unresolvedByFile: array<string, list<string>>,
      *     testFiles: int,
      *     walkerFiles: int,
      *     candidates: int
@@ -486,14 +577,24 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
-     * THE FAIL-CLOSED HALF: nothing that walks the tree is classified silently.
+     * THE FAIL-CLOSED HALF: no file that walks the tree becomes a NON-member
+     * silently.
      *
-     * Every walker call site in a test file that also names the package root
-     * must be one of: resolved to the package root by channel B, covered by the
-     * file's declared tree-wide row, or covered by a declared local row keyed on
-     * this exact file AND this exact expression. Anything else reds here and
-     * prints itself, which is the mechanism that turns "the list is incomplete"
-     * from a discovery into a test failure.
+     * THE DOMAIN OF THIS TEST IS NARROWER THAN ITS OLD DOC-BLOCK CLAIMED, and
+     * the difference matters enough to write out. It used to say "Every walker
+     * call site in a test file that also names the package root must be one of
+     * ... Anything else reds here". MEASURED FALSE: {@see derivation()} settles
+     * MEMBERSHIP first and stops asking about a member file's remaining sites, so
+     * 12 unresolved sites in 9 files never reach this test - and all 9 files are
+     * members, which is why they never reach it.
+     *
+     * WHAT THIS TEST REALLY ASSERTS: for a file that is NOT already a roster
+     * member, every unresolved walker site must be covered by a declared local
+     * row keyed on this exact file AND this exact expression, or it reds here and
+     * prints itself. That is the direction that can cost a guard, and it is the
+     * one this mechanism turns from a discovery into a test failure. The wider
+     * per-file invariant is
+     * {@see testEveryFileWithAnUnresolvedWalkIsARosterMemberOrFullyLicensed()}.
      *
      * THE DOMAIN IS NARROWED ON PURPOSE to files that name the package root at
      * all: a test that never mentions the root cannot walk it, so requiring a
@@ -735,41 +836,158 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
-     * THE POPULATIONS ARE DERIVED AND STRICTLY ORDERED, and no cardinality of
-     * them is written down anywhere.
+     * THE POPULATIONS ARE DERIVED; THEIR SIZES ARE ORDERED; AND THE ROSTER IS
+     * NOT A SUBSET OF THE CANDIDATE SET IN EITHER DIRECTION.
      *
-     * WHY. Two population sizes stood as literals in this class's doc-block with
-     * no generator attached, and a reviewer who tried eight readings of them
-     * reproduced neither. Section 16.8 rule 2 says ship the generator, not the
-     * count - so {@see derivation()} returns the three sizes and this test pins
-     * the RELATIONSHIP between them, which is the claim that was actually being
-     * made: the candidate set is strictly wider than the roster, and strictly
-     * narrower than the set of test files that walk anything.
+     * WHY THE SIZES ARE A RELATION AND NOT LITERALS. Two population sizes stood
+     * as literals in this class's doc-block with no generator attached, and a
+     * reviewer who tried eight readings of them reproduced neither. Rule 2 says
+     * ship the generator, not the count - so {@see derivation()} returns the
+     * sizes and this test pins their ordering. A relation survives every merge
+     * that adds a test; a literal does not.
      *
-     * A relation survives every merge that adds a test; a literal does not. And
-     * a collapsed derivation cannot satisfy it: if any channel returned nothing,
-     * one of these strict inequalities fails.
+     * WHAT THIS TEST USED TO CLAIM, AND IT WAS TWO SEPARATE OVERSTATEMENTS.
+     * Its name and doc-block said "the candidate set is STRICTLY WIDER than the
+     * roster", which is a containment claim. MEASURED FALSE: the sets overlap and
+     * neither contains the other - 11 roster members are outside the candidate
+     * set (the channel-A members, which return before the candidate counter) and
+     * 27 candidates are outside the roster. AND the assertion that shipped for it
+     * was `assertNotSame($rosterCount, $candidates)`, satisfied by any two
+     * different integers, which is not the claim in either form.
+     *
+     * SO BOTH HALVES ARE NOW ASSERTED FOR WHAT THEY ARE: the cardinalities are
+     * ordered, and the two SET DIFFERENCES are separately non-empty, which is the
+     * structural fact the old sentence was reaching for. Neither is a literal:
+     * both differences are computed from the two derived lists.
+     *
+     * A COLLAPSED DERIVATION CANNOT SATISFY THIS. If channel A died the first
+     * difference empties; if the candidate gate stopped narrowing the second
+     * empties; if any population returned nothing an inequality fails.
      */
-    public function testTheCandidateSetIsStrictlyWiderThanTheRosterAndEveryPopulationIsDerived(): void
+    public function testTheRosterAndTheCandidateSetOverlapWithNeitherContainingTheOther(): void
     {
         $derived = self::derivation();
+        $roster = $derived['roster'];
+        $candidates = $derived['candidateFiles'];
 
-        $this->assertGreaterThan(0, \count($derived['roster']), 'the derived roster is empty, so every other assertion in this file is vacuous');
+        $this->assertGreaterThan(0, \count($roster), 'the derived roster is empty, so every other assertion in this file is vacuous');
         $this->assertGreaterThan(0, $derived['candidates'], 'no file both walks and names the package root, which cannot be true of this tree');
         $this->assertGreaterThan($derived['candidates'], $derived['walkerFiles'], 'every walking test also names the package root - the candidate gate has stopped narrowing anything');
         $this->assertGreaterThan($derived['walkerFiles'], $derived['testFiles'], 'every test file walks a directory, which would mean the walker alphabet is matching something it should not');
+        $this->assertSame(\count($candidates), $derived['candidates'], 'the candidate list and the candidate counter disagree, so one of them is not measuring the candidate set');
 
-        // The roster is not simply the candidate set: channel A and the declared
-        // rows add to it, and the candidates that only walk a temp directory do
-        // not. Both directions of that difference must be non-empty, or the two
-        // populations have collapsed into one.
-        $rosterCount = \count($derived['roster']);
+        // NEITHER SET CONTAINS THE OTHER, and both directions are named on
+        // failure. This is the claim the old "strictly wider" sentence was
+        // making badly.
+        $rosterOnly = array_values(array_diff($roster, $candidates));
+        $candidatesOnly = array_values(array_diff($candidates, $roster));
+
         $this->assertNotSame(
-            $rosterCount,
-            $derived['candidates'],
-            'the roster and the candidate set are now the same size. That means either every '
-                . 'candidate qualified or the trait and declared channels stopped contributing; '
-                . 'check the channels before believing the coincidence.',
+            [],
+            $rosterOnly,
+            'every roster member is also a candidate, so channel A and the declared rows have '
+                . 'stopped contributing anything the candidate gate does not already find - check '
+                . 'those two channels before believing the coincidence',
+        );
+        $this->assertNotSame(
+            [],
+            $candidatesOnly,
+            'every candidate is a roster member, so the candidate gate has stopped narrowing: a '
+                . 'walk over a directory the test just made is being read as a walk over the '
+                . 'package, which is the file-level co-occurrence failure this derivation exists to '
+                . 'avoid',
+        );
+    }
+
+    /**
+     * THE INVARIANT THAT ACTUALLY CARRIES THE WEIGHT: a file with an unresolved
+     * walk is a roster MEMBER, or every one of its unresolved sites is licensed
+     * by name.
+     *
+     * WHY THIS TEST EXISTS AND WHAT IT REPLACES. Two doc-blocks in this file
+     * claimed that every walker call SITE in a root-naming file is bucketed or
+     * reds. MEASURED FALSE: {@see derivation()} settles MEMBERSHIP first and then
+     * stops asking about that file's remaining sites, at three early returns -
+     * channel A, a sibling site that resolves, and a
+     * {@see DECLARED_TREE_WIDE_GUARDS} row - passing over 12 unresolved sites in
+     * 9 files at this commit.
+     *
+     * The claim was wrong; the MECHANISM is not, and this is the difference. The
+     * only verdict a walker site can move is whether ITS FILE is a roster member.
+     * Each of those three early returns fires precisely BECAUSE the file has just
+     * been made a member, so a site passed over there cannot change any verdict.
+     * That is an invariant, so it is asserted rather than explained: for every
+     * file with an unresolved site, membership OR a full set of licences.
+     *
+     * IT FAILS IF THE REASONING EVER STOPS HOLDING. Add a fourth early return
+     * that does not add the file to the roster, or make a declared row stop
+     * implying membership, and this reds naming the file - which is the only way
+     * a reader finds out that the bound the two corrected doc-blocks now promise
+     * has been broken.
+     *
+     * BOTH POPULATIONS ARE ASSERTED NON-EMPTY, or the test passes vacuously on a
+     * tree where nothing is unresolved, or where every unresolved file happens to
+     * be a member and the licence half is never exercised.
+     */
+    public function testEveryFileWithAnUnresolvedWalkIsARosterMemberOrFullyLicensed(): void
+    {
+        $derived = self::derivation();
+        $roster = $derived['roster'];
+
+        $this->assertNotSame(
+            [],
+            $derived['unresolvedByFile'],
+            'no test file in the tree has an unresolved walker site, so this test ranges over nothing '
+                . 'and the classifier is resolving everything - which would itself be the finding',
+        );
+
+        $members = [];
+        $licensedOnly = [];
+        $broken = [];
+
+        foreach ($derived['unresolvedByFile'] as $file => $unresolved) {
+            if (\in_array($file, $roster, true)) {
+                $members[] = $file;
+
+                continue;
+            }
+            $licensed = self::WALKS_A_DIRECTORY_THE_TEST_MADE[$file] ?? [];
+            $left = array_values(array_diff($unresolved, $licensed));
+            if ($left === []) {
+                $licensedOnly[] = $file;
+
+                continue;
+            }
+            $broken[] = $file . ' => ' . implode(' ; ', $left);
+        }
+
+        $this->assertSame(
+            [],
+            $broken,
+            "these files have an unresolved walker site, are NOT roster members, and are not fully "
+                . "licensed:\n"
+                . implode("\n", array_map(static fn (string $row): string => '  - ' . $row, $broken))
+                . "\n\nThat is the one shape this whole file exists to make impossible: a walk nobody "
+                . 'can place, in a file nobody runs when the tree changes. Either the walk resolves, '
+                . 'or the file is declared tree-wide, or the site gets a row in '
+                . 'WALKS_A_DIRECTORY_THE_TEST_MADE keyed on this file AND this expression.',
+        );
+
+        // NOT VACUOUS, in both directions. The first group is the one the three
+        // early returns produce; the second is the one the residue check
+        // produces. If either is empty this test has stopped exercising half of
+        // the invariant it states.
+        $this->assertNotSame(
+            [],
+            $members,
+            'no file with an unresolved walk is a roster member, so the three early returns in '
+                . 'derivation() are no longer reachable and the bound this test asserts is untested',
+        );
+        $this->assertNotSame(
+            [],
+            $licensedOnly,
+            'no file with an unresolved walk is a non-member covered by licences, so the residue '
+                . 'bucket is never the thing that saves a file and the licence half is untested',
         );
     }
 
@@ -787,18 +1005,27 @@ final class TreeWideGuardRosterTest extends TestCase
      * next real offender needs, because the next walk added to that file under
      * that same expression is waved through by a row nobody remembers granting.
      *
-     * TWO WAYS A ROW GOES DEAD AND BOTH ARE CHECKED. The FILE can leave the
-     * residue path entirely - it is deleted, or it becomes a channel-A member,
-     * which returns before the residue is ever consulted. Or the individual
-     * EXPRESSION can stop appearing among that file's unresolved sites. The
-     * first is the one that just nearly happened: generalising channel A moved
-     * five files into it, and had any of them held a licensed row, that row would
-     * have gone dead in the same commit, silently.
+     * THE ROUTES ARE ENUMERATED BY THE DERIVATION, NOT BY THIS DOC-BLOCK, and
+     * that is the correction. This paragraph used to say "TWO WAYS A ROW GOES
+     * DEAD AND BOTH ARE CHECKED" - the file being gone or having become a
+     * channel-A member, and the expression no longer appearing - and the loop
+     * re-derived from {@see classifyWalkSites()} to decide. MEASURED FALSE, and
+     * false in the fail-open direction: {@see derivation()} also returns early
+     * when any sibling site in the file resolves to the root, and again on a
+     * {@see DECLARED_TREE_WIDE_GUARDS} row, so a licensed row on such a file is
+     * never consulted while `classifyWalkSites()` still happily lists its
+     * expression as unresolved. Demonstrated by adding a root-anchored `glob()`
+     * helper to a file that carries a licensed row: the row went permanently
+     * unconsulted and this test stayed green.
      *
-     * MEASURED at this commit: 0 rows dead by either route, out of 27 files and
-     * 35 sites. So this test is green for a reason and not because it cannot
-     * fail - which the deletion experiment in the commit message demonstrates by
-     * planting a row and watching it name itself.
+     * SO THE LOOP NOW ASKS THE DERIVATION which files actually reached the
+     * residue check - `consultedResidue`, recorded at the one place the residue
+     * is read. That is route-agnostic: it covers all four routes known today and
+     * any fifth somebody adds later, without this doc-block having to be right
+     * about the list. A row whose file is not in that set is dead however it got
+     * there.
+     *
+     * MEASURED at this commit: 0 dead rows, out of 27 files and 35 sites.
      *
      * NOT VACUOUS: the constant must be non-empty, or every assertion below
      * ranges over nothing.
@@ -817,6 +1044,8 @@ final class TreeWideGuardRosterTest extends TestCase
             $everyFile[str_replace('\\', '/', $relative)] = $absolute;
         }
 
+        $consulted = self::derivation()['consultedResidue'];
+
         $dead = [];
         foreach (self::WALKS_A_DIRECTORY_THE_TEST_MADE as $file => $expressions) {
             if (!isset($everyFile[$file])) {
@@ -825,14 +1054,17 @@ final class TreeWideGuardRosterTest extends TestCase
                 continue;
             }
 
-            $source = (string) file_get_contents($everyFile[$file]);
-            if (self::walkingHelperUsedIn($source) !== null) {
-                $dead[] = $file . ' => the file is now a channel-A member, so its '
-                    . \count($expressions) . ' licensed row(s) are never consulted';
+            if (!\in_array($file, $consulted, true)) {
+                $dead[] = $file . ' => derivation() never consults this file\'s residue, so its '
+                    . \count($expressions) . ' licensed row(s) can never be read. It became a '
+                    . 'channel-A member, or a sibling walk in it now resolves to the package root, '
+                    . 'or it gained a DECLARED_TREE_WIDE_GUARDS row - every one of those returns '
+                    . 'before the residue.';
 
                 continue;
             }
 
+            $source = (string) file_get_contents($everyFile[$file]);
             $unresolved = self::classifyWalkSites($source)['unresolved'];
             foreach ($expressions as $expression) {
                 if (!\in_array($expression, $unresolved, true)) {
@@ -852,6 +1084,89 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'file became a channel-A member, that is the whole reason the row is dead and the '
                 . 'row goes with it.',
         );
+    }
+
+    /**
+     * THE ROOT TAINT MATCHES AT NAME BOUNDARIES, AND IGNORES SPELLINGS THAT ARE
+     * NOT NAMES.
+     *
+     * BOTH POLARITIES THROUGH THE SHIPPED CLASSIFIER (rule 18), because the
+     * fix's whole risk is over-correction: a resolver that stopped resolving
+     * would move members out of the roster and every subset assertion in this
+     * file would still pass, since the nine hand-maintained members resolve
+     * through channels this test does not touch.
+     *
+     * The false-positive shape is the one MEASURED to defeat the old resolver -
+     * `$t` answering for `$this` - and the true-positive shape is the same short
+     * name used honestly. A resolver that answered `unresolved` for everything
+     * fails the second assertion; one that answered `root` for everything fails
+     * the first.
+     *
+     * THE MALFORMED HALF IS ASSERTED ON THE PREDICATE ITSELF rather than through
+     * a walk, because the malformed spellings come out of `rootAnchoredNames()`
+     * and cannot be written into a fixture by hand: `$calls[]` is what an
+     * array-append TARGET looks like, and no use site is ever spelled that way.
+     */
+    public function testTheRootTaintResolverMatchesAtNameBoundariesAndIgnoresMalformedSpellings(): void
+    {
+        // FALSE POSITIVE, and it is the one that was live: an unrelated method
+        // taints `$t`, and the walk mentions `$this`.
+        $substringTrap = "<?php\nclass P {\n"
+            . "  private function unrelated(): string { \$t = \\dirname(__DIR__, 2) . '/src'; return \$t; }\n"
+            . "  private function walk(): array { return (array) glob(\$this->tempDir . '/*'); }\n"
+            . "}\n";
+        $trapped = self::classifyWalkSites($substringTrap);
+
+        $this->assertSame(
+            [],
+            $trapped['root'],
+            'a walk over $this->tempDir resolved to the PACKAGE ROOT because an unrelated method in '
+                . 'the same file assigned a root to $t, and "$t" is a substring of "$this". That is '
+                . 'the substring fail-open NAME_SPELLING and the bounded match exist to close, and it '
+                . 'silently promotes temp-directory walks into the roster.',
+        );
+        $this->assertSame(
+            ["glob(\$this->tempDir.'/*')"],
+            $trapped['unresolved'],
+            'the trapped walk is not being REPORTED either, so closing the substring hole turned a '
+                . 'false positive into a silent pass rather than into a residue entry',
+        );
+
+        // TRUE POSITIVE, same short name, used honestly. Without this the
+        // assertions above would pass against a resolver that resolves nothing.
+        $honest = "<?php\nclass P {\n"
+            . "  private function walk(): array { \$t = \\dirname(__DIR__, 2) . '/src'; return (array) glob(\$t . '/*.php'); }\n"
+            . "}\n";
+        $resolved = self::classifyWalkSites($honest);
+
+        $this->assertSame(
+            ["glob(\$t.'/*.php')"],
+            $resolved['root'],
+            'a walk whose argument IS the tainted short name no longer resolves to the package root, '
+                . 'so the boundary match has over-corrected and the resolver has stopped resolving',
+        );
+        $this->assertSame([], $resolved['unresolved']);
+
+        // THE SPELLING PREDICATE, both ways. The malformed entries are real
+        // output of rootAnchoredNames(), not invented shapes.
+        foreach (['$root', '$this->srcDir', 'self::LIB_ROOT', 'static::LIB_ROOT', 'self::libRoot(', '$this->libRoot('] as $wellFormed) {
+            $this->assertSame(
+                1,
+                preg_match(self::NAME_SPELLING, $wellFormed),
+                $wellFormed . ' is a spelling spellingsOf() produces and NAME_SPELLING rejects it, so '
+                    . 'a whole taint rule has been disabled - the zero-argument helper form, trailing '
+                    . 'paren included, is the one a narrower pattern drops',
+            );
+        }
+        foreach (['$calls[]', '$cases[$name]', '$aliases]', ']', '', '$t->'] as $malformed) {
+            $this->assertSame(
+                0,
+                preg_match(self::NAME_SPELLING, $malformed),
+                var_export($malformed, true) . ' is accepted as a name to look for at a use site. It '
+                    . 'is an assignment TARGET or a parse fragment, never a use, so it can only ever '
+                    . 'match by accident.',
+            );
+        }
     }
 
     /**
@@ -1031,7 +1346,7 @@ final class TreeWideGuardRosterTest extends TestCase
      * as literals in this class's doc-block, with no generator, and did not
      * reproduce for a reviewer who tried eight readings of them. Returning them
      * makes their ORDERING assertable
-     * ({@see testTheCandidateSetIsStrictlyWiderThanTheRosterAndEveryPopulationIsDerived()})
+     * ({@see testTheRosterAndTheCandidateSetOverlapWithNeitherContainingTheOther()})
      * without pinning a cardinality anywhere - section 16.8 rule 2.
      *
      * `why` maps each member to the walker sites that qualified it, or to the
@@ -1047,6 +1362,9 @@ final class TreeWideGuardRosterTest extends TestCase
      *     roster: list<string>,
      *     unaccounted: array<string, list<string>>,
      *     why: array<string, list<string>>,
+     *     candidateFiles: list<string>,
+     *     consultedResidue: list<string>,
+     *     unresolvedByFile: array<string, list<string>>,
      *     testFiles: int,
      *     walkerFiles: int,
      *     candidates: int
@@ -1065,6 +1383,9 @@ final class TreeWideGuardRosterTest extends TestCase
             $why[$declared] = ['DECLARED'];
         }
         $unaccounted = [];
+        $candidateFiles = [];
+        $consultedResidue = [];
+        $unresolvedByFile = [];
         $testFiles = 0;
         $walkerFiles = 0;
         $candidates = 0;
@@ -1081,15 +1402,28 @@ final class TreeWideGuardRosterTest extends TestCase
             if ($sites['root'] !== [] || $sites['unresolved'] !== []) {
                 $walkerFiles++;
             }
-
             $helper = self::walkingHelperUsedIn($source);
+            $namesRoot = preg_match(self::ROOT_ANCHOR, self::flatten($source)) === 1;
+
+            // The DOMAIN of the per-file invariant, recorded here so it is the
+            // same domain the decisions below use: a file whose unresolved sites
+            // this derivation would consider at all. A file that neither names
+            // the package root nor reaches it through a helper cannot be walking
+            // the package, so its unresolved sites are not this roster's
+            // business - which is the narrowing
+            // testEveryWalkerCallSiteInAFileThatNamesThePackageRootIsAccountedFor()
+            // documents.
+            if ($sites['unresolved'] !== [] && ($helper !== null || $namesRoot)) {
+                $unresolvedByFile[$relative] = $sites['unresolved'];
+            }
+
             if ($helper !== null) {
                 $roster[] = $relative;
                 $why[$relative] ??= ['HELPER:' . $helper];
 
                 continue;
             }
-            if (preg_match(self::ROOT_ANCHOR, self::flatten($source)) !== 1) {
+            if (!$namesRoot) {
                 // A file that never names the package root cannot walk it.
                 continue;
             }
@@ -1100,6 +1434,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 continue;
             }
             $candidates++;
+            $candidateFiles[] = $relative;
 
             if ($sites['root'] !== []) {
                 $roster[] = $relative;
@@ -1112,6 +1447,12 @@ final class TreeWideGuardRosterTest extends TestCase
                 continue;
             }
 
+            // The residue is CONSULTED here and nowhere else. Recording that is
+            // what lets testEveryLicensedResidueRowStillMatchesALiveWalkSite()
+            // ask which rows were actually reached, instead of re-deriving from
+            // classifyWalkSites() and missing every row that an earlier return
+            // made unreachable.
+            $consultedResidue[] = $relative;
             $licensed = self::WALKS_A_DIRECTORY_THE_TEST_MADE[$relative] ?? [];
             $left = array_values(array_diff($sites['unresolved'], $licensed));
             if ($left !== []) {
@@ -1123,11 +1464,17 @@ final class TreeWideGuardRosterTest extends TestCase
         sort($roster);
         ksort($unaccounted);
         ksort($why);
+        sort($consultedResidue);
+        sort($candidateFiles);
+        ksort($unresolvedByFile);
 
         return self::$derivation = [
             'roster' => $roster,
             'unaccounted' => $unaccounted,
             'why' => $why,
+            'candidateFiles' => $candidateFiles,
+            'consultedResidue' => $consultedResidue,
+            'unresolvedByFile' => $unresolvedByFile,
             'testFiles' => $testFiles,
             'walkerFiles' => $walkerFiles,
             'candidates' => $candidates,
@@ -1478,7 +1825,11 @@ final class TreeWideGuardRosterTest extends TestCase
             return true;
         }
         foreach ($tainted as $name) {
-            if ($name !== '' && str_contains($expression, $name)) {
+            if (preg_match(self::NAME_SPELLING, $name) !== 1) {
+                continue;
+            }
+            $boundary = '~(?<![A-Za-z0-9_$>])' . preg_quote($name, '~') . '(?![A-Za-z0-9_])~';
+            if (preg_match($boundary, $expression) === 1) {
                 return true;
             }
         }
