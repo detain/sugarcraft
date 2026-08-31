@@ -1935,6 +1935,53 @@ final class RuntimeTest extends TestCase
         $this->assertSame(1, substr_count($rebuilt, '<env>'));
         $this->assertSame(1, substr_count($rebuilt, '</env>'));
         $this->assertTrue(str_ends_with($rebuilt, "\n</env>"));
+
+        // AND THE PROSE, WHICH IS THE HALF EVERYTHING ABOVE LEAVES OPEN. The
+        // assertions above pin the CODE: they red if either assembler stops
+        // putting the block last. They say nothing about either doc-block, and
+        // the failure this whole guard exists for was a doc-block failure - the
+        // false "the two order `<env>` oppositely" survived THREE corrections of
+        // prompt_plan.md section 17.2 inside one phase and was copied into two
+        // production files, all without a byte of code being wrong. A guard that
+        // covers only the direction that never failed is the weaker half.
+        //
+        // THE SHAPE IS THE ONE THE SIBLING USES. AgentTest's citation census
+        // reads a SENTENCE out of src/Agents/Agent.php and reds on it; this does
+        // the same for the corrected claim, in both files, and it carries no
+        // cardinality: the false phrase may appear ONLY inside a
+        // "WHAT IT SAID"/"WHAT THIS SAID" quotation, which is what the rule-42
+        // three-part correction form spells it as. Restore it as a live claim
+        // anywhere else in either file and this reds.
+        foreach ([
+            'src/Runtime.php' => 'Runtime::buildSystemPrompt()',
+            'src/Agents/Agent.php' => 'Agents\Agent::systemPrompt()',
+        ] as $relative => $subject) {
+            $source = (string) file_get_contents(\dirname(__DIR__) . '/' . $relative);
+            $this->assertNotSame('', $source, $relative . ' could not be read, so the two assertions below would pass on emptiness');
+
+            // NOT VACUOUS: the phrase IS in the file, inside its quotation, so
+            // the strip below is removing something rather than finding nothing.
+            $this->assertStringContainsString(
+                'oppositely',
+                $source,
+                $relative . ' no longer quotes the false claim it corrects. The rule-42 three-part '
+                . 'form keeps WHAT IT SAID verbatim; if that paragraph was rewritten, this pin and '
+                . 'the one below have lost their subject and need rewriting with it.',
+            );
+
+            $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID:[^\n]*\n~', '', $source);
+
+            $this->assertStringNotContainsString(
+                'oppositely',
+                $live,
+                $relative . ' states, OUTSIDE a "WHAT IT SAID" quotation, that the two prompt '
+                . 'assemblers order the env block oppositely. That is false and has been since '
+                . 'P3.S1 moved this assembler\'s env block from layer 2 to layer 7: ' . $subject
+                . ' and its counterpart both put it LAST, which the assertions above measure. The '
+                . 'claim was copied into two production doc-blocks once already, from a plan '
+                . 'section that had been corrected three times. Do not restore it.',
+            );
+        }
     }
 
     public function testBuildSystemPromptWithSameInjectedClockPlatformAndCwdIsByteIdenticalAcrossRuntimes(): void

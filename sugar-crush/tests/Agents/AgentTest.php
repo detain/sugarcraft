@@ -1660,6 +1660,26 @@ final class AgentTest extends TestCase
         // newline survives between the blocks — so this is de-duplication, and
         // the reason it is still worth doing is that the local copy cannot
         // inherit the trait's next fix.
+        // THE FLATTENER'S OWN KNOWN-POSITIVE CONTROL, which this consumer owed
+        // and did not have. FlattensSourceProseTrait's doc-block requires it in
+        // so many words: "each consuming test asserts this method's output on a
+        // synthetic wrapped fixture BEFORE it trusts it on a real file", because
+        // a flattener that returned '' would turn every anchor below into a zero
+        // match and a zero match cannot be told from a dead instrument. The
+        // fixture is built by CONCATENATION for the reason that doc-block gives:
+        // this file is itself scanned by tree-wide guards, and an anchor phrase
+        // spelled contiguously here becomes a second match for it.
+        $wrapped = "/**\n     * carries 7 distinct citations of the form "
+            . "file-dot-php-colon" . "-line\n     * in 9 occurrences.\n     */";
+        $this->assertSame(
+            1,
+            preg_match('~carries (\d+) distinct citations of the form file-dot-php-colon-line in (\d+) occurrences~', self::flattened($wrapped), $control),
+            'the shared flattener did not join a doc-block sentence that wraps mid-phrase, so every '
+                . 'match below would be a zero match and this whole census would read as a clean '
+                . 'instrument while being a dead one',
+        );
+        $this->assertSame(['7', '9'], [$control[1], $control[2]], 'the flattener joined the wrapped sentence but the two figures did not survive it');
+
         $flat = self::flattened($source);
         $this->assertSame(
             1,
@@ -2239,7 +2259,8 @@ final class AgentTest extends TestCase
                 . 'RESTS ON DECLARED SCOPE. The per-step seam is REAL, LIVE and PER-STAGE, in '
                 . 'Workflows/WorkflowEngine.php, which was outside P3.S6\'s declared file list; '
                 . 'wiring it is a build-it-out across WorkflowEngine.php + Agents/AgentResult.php + '
-                . 'the worker complete IPC frame, escalated to the user and awaiting a decision. It '
+                . 'the worker complete IPC frame, and prompt_plan.md section 18 records it as '
+                . 'ESCALATED, NOT WAIVED - "it needs its own step". It '
                 . 'is NOT waived and it is NOT underivable. THIS MESSAGE USED TO SAY the signal was '
                 . '"unwireable on the Agent assembler path because no signal reaches the parent"; '
                 . 'P3.S6\'s own review cycle 2 falsified that, prompt_plan.md section 18 and '

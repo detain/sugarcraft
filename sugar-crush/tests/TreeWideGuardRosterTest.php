@@ -113,12 +113,17 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *
  * AND THE WORD "SUPERSET" IS WRONG, which is worth its own sentence because it
  * stood in this file as "the candidate set is strictly wider than the roster".
- * MEASURED: the two sets OVERLAP and neither contains the other - 11 roster
+ * MEASURED: the two sets OVERLAP and neither contains the other - some roster
  * members are outside the candidate set (every channel-A member, which never
- * reaches the candidate counter) and 27 candidates are outside the roster (the
+ * reaches the candidate counter) and some candidates are outside the roster (the
  * ones whose only walks are over a directory the test made). The CARDINALITIES
- * are ordered - 67 < 83 < 181 < 440 - and that is a different and weaker claim
- * than containment. Both are now asserted for what they are.
+ * are merely ORDERED, which is a different and weaker claim than containment.
+ * Both are now asserted for what they are, by
+ * {@see testTheRosterAndTheCandidateSetOverlapWithNeitherContainingTheOther()}.
+ *
+ * NO SIZE OF EITHER SET IS WRITTEN DOWN ANYWHERE IN THIS FILE, and that is the
+ * policy rather than an omission - see THE POPULATIONS ARE NOT PINNED IN PROSE
+ * below.
  *
  * WHAT IS DELIBERATELY *NOT* IN THE DERIVATION, with the measurement that
  * decided it. A rule that taints a function PARAMETER from the arguments of its
@@ -153,16 +158,18 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * unresolved walker call sites in 10 files are passed over that way - 2 via
  * channel A, 5 via a resolved sibling site, 6 via a declared row.
  *
- * THAT PAIR WAS FIRST WRITTEN AS "12 in 9 (1/5/6)" AND WAS FALSE AT THE COMMIT
- * THAT SHIPPED IT, which is worth the four lines it takes to say why, because the
- * cause is a fix in the same commit. 12/9 is the correct answer BEFORE
+ * A COUNT OF THEM STOOD HERE AND WAS FALSE AT THE COMMIT THAT SHIPPED IT, which
+ * is worth the four lines it takes to say why, because the cause is a fix in the
+ * same commit. The smaller answer was correct BEFORE
  * {@see NAME_SPELLING} closed the substring fail-open: with the old
  * `str_contains()` resolver, `RuntimeTest.php`'s `scandir($dir)` resolved
  * (falsely) to the package root, so it sat in the `root` bucket instead of the
  * residue. Closing the hole moved it into the residue, where channel-A
- * membership passes it over - one more site, one more file. MEASURED both ways
- * by reverting only `isRootAnchored()`: 12 in 9 with the old resolver, 13 in 10
- * with the shipped one.
+ * membership passes it over. MEASURED both ways by reverting only
+ * {@see isRootAnchored()}: the shipped resolver passes over EXACTLY ONE MORE
+ * SITE, IN EXACTLY ONE MORE FILE, than the old one. The delta is the claim; the
+ * two absolutes it was written as are the kind this file no longer records - see
+ * THE POPULATIONS ARE NOT PINNED IN PROSE.
  *
  * AND THAT ALSO CORRECTS {@see NAME_SPELLING}'s OWN "MEASURED EFFECT ON THIS
  * TREE: none". It has no effect on the roster, the candidate set, the walking-file
@@ -172,9 +179,9 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *
  * WHAT IS TRUE, and it is the property that carries the weight: EVERY FILE with
  * an unresolved walker site is either IN THE ROSTER or has every one of those
- * sites licensed by name. MEASURED: all 10 of those files are roster members, and
- * that is not a coincidence - each of the three early returns fires BECAUSE the
- * file was just added. A site passed over in a file that is already a member
+ * sites licensed by name. MEASURED: EVERY file with a passed-over site is a
+ * roster member, and that is not a coincidence - each of the three early returns
+ * fires BECAUSE the file was just added. A site passed over in a file that is already a member
  * cannot change a roster verdict, because the only verdict a site can move is
  * whether its file is a member, and that is already settled.
  * {@see testEveryFileWithAnUnresolvedWalkIsARosterMemberOrFullyLicensed()} is
@@ -258,6 +265,29 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * assertion message only on FAILURE, so no message of any wording would emit the
  * roster on a green run.
  *
+ * THE POPULATIONS ARE NOT PINNED IN PROSE, ANYWHERE IN THIS FILE, AND THAT TOOK
+ * THREE ATTEMPTS TO LEARN - which is why it is stated as a policy here rather
+ * than left to each paragraph's judgement.
+ *
+ * ATTEMPT ONE paired occurrences with distinct spellings out of a probe whose
+ * pattern was not the shipped one, and reproduced under no reading. ATTEMPT TWO
+ * gave four figures measured correctly at the commit that wrote them, and they
+ * were stale two commits later, because THIS FILE IS ONE OF THE FILES THE
+ * GENERATOR READS. ATTEMPT THREE - the one a reviewer killed - wrote a dozen
+ * MORE present-tense cardinalities into the paragraphs that were explaining why
+ * the first two were withdrawn: the roster size, the candidate size, the
+ * walking-file population, the residue's files and sites, the passed-over split,
+ * the two set differences. MEASURED, by that reviewer: planting ONE ordinary
+ * root-anchored guard under `tests/` moved four of them at once and the suite
+ * stayed `OK`. Every one of them reproduced on the day it was typed. That is
+ * exactly the property that makes them worthless - section 16.8 rule 2 is not
+ * about being careful, it is about the number having no owner.
+ *
+ * SO: a size in this file is either DERIVED at the point of use, or it is a
+ * BEFORE/AFTER pair from a controlled experiment at a named commit - which
+ * cannot rot, because both arms move together and the claim is the DELTA. The
+ * present-tense ones are gone. What replaces them is the command below.
+ *
  * SO THE ROUTE IS THE GENERATOR, WHICH IS THE ONLY KIND OF ROUTE THAT CANNOT GO
  * STALE. From `<worktree>/sugar-crush`:
  *
@@ -267,7 +297,12 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *       $m->setAccessible(true);
  *       echo implode("\n", $m->invoke(null)["roster"]), "\n";'
  *
- * That prints the 67 members whenever anybody wants them, needs no artefact, and
+ * Swap `["roster"]` for `["candidates"]`, `["walkerFiles"]`, `["testFiles"]`,
+ * `["candidateFiles"]`, `["consultedResidue"]`, `["unresolvedByFile"]` or
+ * `["why"]` and the same one-liner answers every other population question this
+ * file used to answer in prose.
+ *
+ * That prints the members whenever anybody wants them, needs no artefact, and
  * is the answer `prompt_plan.md` section 1.2 action 7b's list should be checked
  * against. A test that printed 67 lines on every green run would be noise the
  * suite has to carry forever; a test that printed them only on failure would not
@@ -384,10 +419,17 @@ final class TreeWideGuardRosterTest extends TestCase
      * is rule 40". WHAT IS TRUE: prompt_plan.md's section 16.8 rule 40 is "a
      * surviving mutation may be equivalent, and that verdict does not transfer
      * to its neighbour" - a rule about mutating NEIGHBOURS OF A SURVIVOR, not
-     * about a correction reaching neighbouring prose. HOW MEASURED: read rules
-     * 1-49 (prompt_plan.md:3056-3220) and grepped the whole file for
+     * about a correction reaching neighbouring prose. HOW MEASURED: read the
+     * WHOLE of section 16.8's rule list - rules 1 to 55, ending at
+     * prompt_plan.md:3240 - and grepped the whole file for
      * "travel"/"neighbour"; the correction-travels claim appears in the plan's
-     * PROSE twice and in no rule. So the claim stands on its own here - it is
+     * PROSE twice and in no rule. (That said "rules 1-49" when it was written,
+     * which was six rules short of the list and is the domain defect of rule 1
+     * inside a paragraph about citation discipline. The rule list has ended at
+     * 55 since before this branch's base - re-derived at `bb4a311d0` and at
+     * HEAD - and rules 50-55 are merge, commit-before-mutating, log-on-failure,
+     * still-tree, predict-first and silent-descoping: none of them is it, so
+     * the conclusion was right over the wrong population.) So the claim stands on its own here - it is
      * measured over and over in this phase - and the number is dropped rather
      * than swapped for another one. The two plan sites are outside every
      * declared file list and are REPORTED, not edited.
@@ -555,9 +597,35 @@ final class TreeWideGuardRosterTest extends TestCase
      * above is pinned, with the bucket it really lands in, by
      * {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()}.
      *
+     * `GlobIterator` WAS MISSING AND WAS THE SAME DEFECT AS THE A4 ONE THIS
+     * CHANGE-SET FIXED ONE FILE OVER - a token class absent from an alphabet
+     * AND from that alphabet's own statement of what it cannot express, which
+     * section 16.8 rule 31 is precisely about. MEASURED through the shipped
+     * classifier before the fix: `new \GlobIterator(\dirname(__DIR__, 2) .
+     * '/src/*.php')` produced NO site in either bucket, so
+     * {@see derivation()} exited at its root-anchor gate and nothing red -
+     * the fail-OPEN and silent direction, over a class that `class_parents()`
+     * reports as extending `FilesystemIterator` and `DirectoryIterator`, two
+     * of the three spellings already here.
+     *
+     * IT WAS NOT A GUESS THAT IT BELONGED: `tests/Support/ReadPathCensusTest.php`
+     * carries its own path-reader alphabet listing
+     * `RecursiveDirectoryIterator`, `DirectoryIterator`, `GlobIterator` and
+     * `SplFileObject`, so a sibling census in this same tree already named it -
+     * the identical argument the write-primitive scanner's `T_NAME_RELATIVE`
+     * correction makes.
+     *
+     * MEASURED EFFECT ON THIS TREE: none - every population {@see derivation()}
+     * returns is identical before and after, because
+     * live `GlobIterator` walks under `tests/`, `src/` and `bin/` number ZERO
+     * (the single grep hit is the alphabet string in that sibling census). A
+     * closed door rather than a behaviour change, which is the same standing
+     * `dirname(__FILE__` has in {@see ROOT_ANCHOR}. Pinned as a known-answer
+     * row in {@see testTheWalkClassifierAnswersKnownInputsCorrectly()}.
+     *
      * @var list<string>
      */
-    private const WALKER_CLASSES = ['recursivedirectoryiterator', 'directoryiterator', 'filesystemiterator'];
+    private const WALKER_CLASSES = ['recursivedirectoryiterator', 'directoryiterator', 'filesystemiterator', 'globiterator'];
 
     /** @var list<string> */
     private const WALKER_FUNCTIONS = ['glob', 'scandir', 'readdir'];
@@ -618,8 +686,8 @@ final class TreeWideGuardRosterTest extends TestCase
      * form and would have silently disabled an entire taint rule; the census
      * above is what caught it.
      *
-     * MEASURED EFFECT ON THIS TREE: none. roster 67, candidates 83,
-     * walkerFiles 181, testFiles 440, unaccounted 0 - identical before and after.
+     * MEASURED EFFECT ON THIS TREE: none - every population {@see derivation()}
+     * returns is identical before and after.
      * The fail-open was LATENT, and both polarities are now pinned by
      * {@see testTheRootTaintResolverMatchesAtNameBoundariesAndIgnoresMalformedSpellings()}.
      */
@@ -771,8 +839,8 @@ final class TreeWideGuardRosterTest extends TestCase
      * call site in a test file that also names the package root must be one of
      * ... Anything else reds here". MEASURED FALSE: {@see derivation()} settles
      * MEMBERSHIP first and stops asking about a member file's remaining sites, so
-     * 13 unresolved sites in 10 files never reach this test - and all 10 files
-     * are members, which is why they never reach it.
+     * a number of unresolved sites never reach this test - and every one of the
+     * files carrying them is a member, which is why they never reach it.
      *
      * WHAT THIS TEST REALLY ASSERTS: for a file that is NOT already a roster
      * member, every unresolved walker site must be covered by a declared local
@@ -792,10 +860,13 @@ final class TreeWideGuardRosterTest extends TestCase
      *
      * TWO CARDINALITIES USED TO STAND IN THAT SENTENCE - "182 rows of noise
      * instead of 37 of signal" - AND BOTH WERE STALE BY THE TIME ANYONE READ
-     * THEM. RE-MEASURED: the walking-file population is 181, and the residue is
-     * 27 files carrying 35 sites. That is the defect this class's doc-block
-     * declares four paragraphs earlier, recurring inside the same file, which is
-     * a fair measure of how durable it is.
+     * THEM. AND THEIR REPLACEMENTS WENT THE SAME WAY: a re-measured pair stood
+     * here next, and a reviewer planted one ordinary guard under `tests/` and
+     * moved both without anything going red. Neither ratio is written down now;
+     * {@see derivation()} returns `walkerFiles` and `consultedResidue` and the
+     * class doc-block prints the command. That is the defect this class's
+     * doc-block declares four paragraphs earlier, recurring inside the same file
+     * TWICE, which is a fair measure of how durable it is.
      *
      * The narrowing is a NECESSARY condition and therefore sound in the
      * fail-closed direction - the residual gap is a root arriving from another
@@ -871,6 +942,22 @@ final class TreeWideGuardRosterTest extends TestCase
             self::classifyWalkSites($opaque),
             'a walk over an unresolvable root came back as neither root nor unresolved, so the '
                 . 'fail-closed bucket is not being filled',
+        );
+
+        // THE SPL FAMILY'S FOURTH SPELLING, added because it was a SILENT
+        // fail-open: GlobIterator extends FilesystemIterator extends
+        // DirectoryIterator, and it produced no site in either bucket until it
+        // joined WALKER_CLASSES. Zero live uses on this tree, so this row is
+        // the only thing keeping the alphabet entry honest.
+        $viaGlobIterator = "<?php\nclass P { private function go(): void {\n"
+            . "    foreach (new \\GlobIterator(\\dirname(__DIR__, 2) . '/src/*.php') as \$f) {} } }\n";
+        $this->assertSame(
+            ['root' => ["GlobIterator(\\dirname(__DIR__,2).'/src/*.php')"], 'unresolved' => []],
+            self::classifyWalkSites($viaGlobIterator),
+            'a root-anchored GlobIterator is not seen as a directory walk. It extends '
+                . 'FilesystemIterator, which IS in WALKER_CLASSES, and a walk this alphabet cannot '
+                . 'see produces no site at all - so the file is skipped in SILENCE rather than '
+                . 'landing in the residue. Put globiterator back in WALKER_CLASSES.',
         );
 
         // Neither a walker call: `new Glob(...)` is this tree's Glob TOOL, and
@@ -1035,9 +1122,11 @@ final class TreeWideGuardRosterTest extends TestCase
      * WHAT THIS TEST USED TO CLAIM, AND IT WAS TWO SEPARATE OVERSTATEMENTS.
      * Its name and doc-block said "the candidate set is STRICTLY WIDER than the
      * roster", which is a containment claim. MEASURED FALSE: the sets overlap and
-     * neither contains the other - 11 roster members are outside the candidate
-     * set (the channel-A members, which return before the candidate counter) and
-     * 27 candidates are outside the roster. AND the assertion that shipped for it
+     * neither contains the other - the channel-A members are outside the
+     * candidate set, because they return before the candidate counter, and the
+     * files whose only walks are over a directory the test made are candidates
+     * outside the roster. Neither difference's SIZE is written here; both are
+     * computed below. AND the assertion that shipped for it
      * was `assertNotSame($rosterCount, $candidates)`, satisfied by any two
      * different integers, which is not the claim in either form.
      *
@@ -1095,8 +1184,8 @@ final class TreeWideGuardRosterTest extends TestCase
      * reds. MEASURED FALSE: {@see derivation()} settles MEMBERSHIP first and then
      * stops asking about that file's remaining sites, at three early returns -
      * channel A, a sibling site that resolves, and a
-     * {@see DECLARED_TREE_WIDE_GUARDS} row - passing over 13 unresolved sites in
-     * 10 files at this commit.
+     * {@see DECLARED_TREE_WIDE_GUARDS} row - passing over every remaining
+     * unresolved site in a file it has just made a member.
      *
      * The claim was wrong; the MECHANISM is not, and this is the difference. The
      * only verdict a walker site can move is whether ITS FILE is a roster member.
@@ -1211,7 +1300,9 @@ final class TreeWideGuardRosterTest extends TestCase
      * about the list. A row whose file is not in that set is dead however it got
      * there.
      *
-     * MEASURED at this commit: 0 dead rows, out of 27 files and 35 sites.
+     * MEASURED at this commit: ZERO dead rows. The size of the constant is not
+     * written here; it is `count(self::WALKS_A_DIRECTORY_THE_TEST_MADE)` and the
+     * assertion below ranges over all of it.
      *
      * NOT VACUOUS: the constant must be non-empty, or every assertion below
      * ranges over nothing.
@@ -1558,8 +1649,8 @@ final class TreeWideGuardRosterTest extends TestCase
      * reader would then get - it says "classify this walk or license it", and
      * the true repair was "your chain is deeper than eight".
      *
-     * MEASURED EFFECT ON THIS TREE: none. roster 67, candidates 83,
-     * walkerFiles 181, testFiles 440, unaccounted 0 - identical before and
+     * MEASURED EFFECT ON THIS TREE: none - every population {@see derivation()}
+     * returns is identical before and
      * after, because no chain in `tests/` is nine deep. The defect was latent,
      * which is exactly why it needed a test rather than an observation.
      *
@@ -1628,9 +1719,9 @@ final class TreeWideGuardRosterTest extends TestCase
      * rather than merely different.
      *
      * (1) IT FINDS MORE THAN THE LITERAL DID. At least two distinct helpers must
-     *     be carrying roster members. Rule 19: one helper carrying eleven members
-     *     is one SHAPE, and a derivation that had silently collapsed back to the
-     *     single trait would satisfy every other assertion in this file.
+     *     be carrying roster members. Rule 19: one helper carrying every one of
+     *     them is one SHAPE, and a derivation that had silently collapsed back to
+     *     the single trait would satisfy every other assertion in this file.
      * (2) BOTH POLARITIES THROUGH THE SAME MATCHER (rule 18). A helper that walks
      *     must be in the alphabet; a `tests/` helper that walks nothing must not.
      *     `Support/TokenFunctionRanges.php` is the known negative and it is a real
@@ -2131,10 +2222,20 @@ final class TreeWideGuardRosterTest extends TestCase
      *
      * MEASURED, by planting exactly that shape - a trait that consumes
      * `TestFileWalkTrait` and re-exports its walk, plus one test that uses only
-     * the new trait. With pass 2 disabled: `testFiles` 440 -> 441, so the file was
-     * SEEN, and roster 67, unaccounted 0 - in no bucket at all, and the roster
-     * test stayed green. With pass 2: the trait joins the alphabet, roster 68, and
-     * the planted test is a member.
+     * the new trait. With pass 2 DISABLED: `testFiles` rises by one, so the file
+     * was SEEN, while the roster does not move and `unaccounted` stays empty -
+     * the planted guard is in no bucket at all and this file's own suite stays
+     * green. With pass 2: the trait joins the alphabet, the roster rises by one,
+     * and the planted test is that member. The deltas are the claim; no absolute
+     * is recorded, per THE POPULATIONS ARE NOT PINNED IN PROSE.
+     *
+     * WHAT THAT MEASUREMENT ALSO SAYS, and it is a declared gap rather than a
+     * hidden one: with no delegating helper in this tree, REMOVING the call to
+     * this method from {@see walkingHelperNames()} changes nothing and reds
+     * nothing. The fixpoint below is pinned by
+     * {@see testTheHelperClosureFollowsADelegationChainOfAnyLength()}, which
+     * drives it directly; its WIRING into the derivation is not, and cannot be
+     * without planting a file under `tests/`.
      *
      * A FIXPOINT AND NOT ONE HOP, because the chain has no bound: a trait that
      * delegates to a trait that delegates. The loop terminates because each
