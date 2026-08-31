@@ -253,6 +253,111 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 — the alias channel that failed OPEN by SUBTRACTING write primitives   ·   2026-08-31   ·   `5cabca4a8`
+
+**Status** `MERGED`
+**Worktree** /home/sites/prompt-step-P3.S5-fix-1  (removed after merge)
+**Base** 1267e6fbb
+
+**Goal (restated in one sentence)**
+P3.S5's write-primitive scanner had been defeated eleven times on a fully green suite; the alias
+channel had to stop DELETING primitives from its own alphabet.
+
+**What changed**
+- `sugar-crush/src/Runtime.php`: **comment only** — verified executable-identical, 4366 tokens both
+  sides, md5 `36ecb93cf7957cb77c9448aa6e16966e`. Fifth independent derivation.
+- `sugar-crush/tests/RuntimeTest.php`: three repairs, not the one prescribed — the alias map is read
+  off the **token stream** (a comment and a string literal are each ONE token, so neither can hold a
+  `T_USE`: the falsified doc-block claim is now true BY CONSTRUCTION); resolution is **additive**,
+  not substitutive; a qualified token is not alias-resolved. +16 test methods, 0 removed.
+- `sugar-crush/tests/Integration/SystemPromptWiringTest.php`: one method reshaped.
+
+**Tests added or changed**
+- 16 new methods in `RuntimeTest.php`, covering the seventh defeat (a plain class alias
+  `use SplFileObject as Handle;`), the binary-string prefix `b'…'`, and the additive-resolution
+  property.
+**Deletion experiment**: 13 mutants, 10 red. The three GREEN ones were recorded **in the source** as
+measured-equivalent rather than left looking load-bearing. The fail-closed property is proved by a
+MUTANT's output, not the fix's: M1 removes `T_ATTRIBUTE` but keeps the flag and the three attribute
+rows are STILL reported — the mutant's only error is an extra FALSE POSITIVE.
+
+**MEASURED** (orchestrator-run; cwd `/home/sites/prompt-step-P3.S5-fix-1`; serial; box confirmed to
+hold zero other phpunit processes; `</dev/null`)
+```
+$ php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never
+Tests: 10516, Assertions: 162057, Skipped: 1.        (06:52.326)
+$ … RE-RUN, second time                              (06:54.626)
+Tests: 10516, Assertions: 162057, Skipped: 1.        IDENTICAL
+```
+**The figure is DETERMINISTIC.** Two sequential uncontended runs agree exactly, which is what
+`prompt_plan.md` predicted and what the standing contention caveat (162,075 vs 162,057, 18 apart,
+recorded during two CONCURRENT full suites) does not apply to.
+
+**Suite result**
+```
+Tests: 10516, Assertions: 162057, Skipped: 1.
+```
+Baseline for comparison: base `1267e6fbb` = `10500 / 161982 / 1` (verified: `git diff 1267e6fbb
+c7e5a6454 -- sugar-crush/` is EMPTY, so the recorded master figure IS the base figure).
+Delta: **+16 tests, +75 assertions, no new skip.**
+
+**THE RECONCILIATION, and the tool that produced it.** The declared files accounted for only +52 of
+the +75. Rather than merge on a +23 remainder, the delta was attributed **per class** by running the
+suite with `--log-junit` on both sides — PHPUnit's JUnit `<testcase>` carries an `assertions`
+attribute — and diffing:
+```
+class                                            master   branch   delta  dTests
+Providers\PromptStabilityTest                       399      229    -170      -3   } S4's, absent
+RuntimeTest                                         398      450     +52     +16   } from this branch
+Config\GlobFigureDriftTest                        21143    21166     +23      +0
+SymbolCitationDriftTest                            2984     2972     -12      +0   }
+Support\ChildStderrCaptureTest                      345      343      -2      +0   }
+                                                                     -109     +13
+```
+`162057 - 162166 = -109` and `10516 - 10503 = +13` — both EXACT, no remainder.
+**The +23 was then attributed by DELETION EXPERIMENT, not by reasoning:** reverting
+`src/Runtime.php` ALONE drops `GlobFigureDriftTest` from 21166 to exactly **21143**. Reverting
+`RuntimeTest.php` alone changes it by **zero**; reverting `SystemPromptWiringTest.php` alone,
+**zero**. It is a per-paragraph figure-drift census picking up the new doc-block prose — 23 more
+figures are now POLICED, the healthy direction.
+**The script is kept and is reusable for every remaining step.**
+
+**Review loop**
+- Cycles 1-4 disposed of at `842cc59b3` / `ab9a7dcdc`.
+- Cycle 5 — findings F1/F2/F3/F5 fixed; F4 half fixed, half **REFUSED WITH A MEASUREMENT** (adopting
+  the shared trait yields `Failures: 1 + Warnings: 1` — the trait lacks an `is_file`/`is_readable`
+  pre-check and refuses with `AssertionFailedError` where an existing test pins `\RuntimeException`;
+  the repair belongs to the TRAIT, outside scope).
+- Three of one reviewer's five prescriptions were **MEASURED FALSE** and refused.
+- **CAP REACHED**; orchestrator verification substituted for a sixth review, with the accepted risk
+  recorded rather than implied.
+Total cycles: 5 reviews + 1 orchestrator-verified fix pass.
+
+**Invariants touched**
+No file added under `sugar-crush/src/`; census figures unmoved. Goldens unmoved. `src/Runtime.php` is
+comment-only, so §17's behavioural invariants are untouched by construction.
+
+**Surprises / things the plan got wrong**
+1. **The census set does not contain every tree-wide guard, and this is now the SECOND time that has
+   mattered in one batch.** `ChildStderrCaptureTest` (outside it) red P3.S4-fix-1; `GlobFigureDrift
+   Test` (also outside it) is what moved here. The §1.2 action 7b list is six files plus
+   `InterpolationOpenerTokenTest`; neither of these is in it. A step that runs only the census set
+   can still move, or break, a tree-wide guard.
+2. **A per-class JUnit diff makes reconciliation mechanical.** Twenty-five guards were measured
+   one at a time before this, and every one came back identical — the answer was a class nobody had
+   thought to check. This should be the FIRST tool reached for, not the last.
+3. **The contention caveat is narrower than recorded.** Assertion totals are deterministic across
+   sequential uncontended runs (proved twice here). The 18-assertion spread in the plan came from two
+   CONCURRENT full suites and should not be cited as general noise.
+
+**Follow-ups created**
+- Add `GlobFigureDriftTest` and `ChildStderrCaptureTest` to the §1.2 action 7b census set, or state
+  why the set is deliberately partial.
+- Escalation **N1** (`writesTree()` on `src/Tools/Tool.php:20`) is UNAFFECTED by this merge and
+  remains open, awaiting the user.
+
+---
+
 ### P3.S4-fix-1 — the stability test made honest, and Providers/ adopted into the stderr guard   ·   2026-08-31   ·   `1279d91cf`
 
 **Status** `MERGED`

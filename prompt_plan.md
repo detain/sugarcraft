@@ -270,10 +270,29 @@ related. Where a command is given, run that command — not a variant you think 
         tests/Support/DuplicatedTestHelperDriftTest.php \
         tests/Support/ChildWallClockBudgetTest.php \
         tests/Config/EnvRosterDriftTest.php \
-        tests/Tools/BuiltInToolCorpusTest.php
+        tests/Tools/BuiltInToolCorpusTest.php \
+        tests/Support/InterpolationOpenerTokenTest.php \
+        tests/Support/ChildStderrCaptureTest.php \
+        tests/Config/GlobFigureDriftTest.php
       ```
       (Paths MEASURED on `master` 2026-08-25. If one has moved, find it with
       `find sugar-crush/tests -name '<Name>.php'` and record the new path in the worklog.)
+
+      **THE LAST THREE WERE ADDED 2026-08-31, AND THE LIST IS STILL NOT PROVABLY COMPLETE.**
+      `InterpolationOpenerTokenTest` was already being run in practice but had never been written
+      down, so a step following this list literally ran six files while the worklog recorded seven
+      (six = `103 / 9468`; seven = `109 / 9632` — they reconcile exactly, which is how the omission
+      was spotted). The other two were added because BOTH bit inside a single batch, and neither
+      was in this list:
+       - `ChildStderrCaptureTest` red `P3.S4-fix-1`'s FULL suite after five clean review cycles.
+       - `GlobFigureDriftTest` is what moved `P3.S5-fix-1`'s total by +23, and twenty-five other
+         guards were measured one at a time before anyone thought to check it.
+      **So do not treat this list as the set of tree-wide guards — treat it as the ones known to
+      bite.** The reliable method is not a longer list: run the step's suite with `--log-junit` on
+      both sides and diff assertions PER CLASS (PHPUnit's JUnit `<testcase>` carries an
+      `assertions` attribute). That names the mover in one pass instead of twenty-five, and it is
+      what §1.6's MEASURED block should be built from whenever a total moves and the declared files
+      do not account for all of it.
    c. **The full `sugar-crush` suite** at least once per phase. The phase review (§1.7) already runs
       it; that run is the phase's full-suite checkpoint. A step may skip the full suite only because
       the phase close will do it.
