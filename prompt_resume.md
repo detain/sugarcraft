@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue OPEN. Batch P3.CLOSE.B1 IS IN FLIGHT — two step agents running in two worktrees; see `In-flight batch` in §8, which is the field that survives a session loss. Master is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter (measured at e0d00b6db; every commit since is bookkeeping only). YOUR JOB IS TO RUN THE PLAN TO COMPLETION: finish Phase 3's close queue, close Phase 3, then keep going through Phases 4-11 without stopping at the boundaries. Read §0 first, then §8.**
+**Current state: Phase 3 close queue. TWO STEPS ARE BUILT AND UNMERGED, in two worktrees that must NOT be deleted. `P3.S4-fix-1` is GREEN and merge-ready-after-review; `P3.S5-fix-1` is RED at HEAD on a pre-existing tree-wide census test and MUST NOT BE MERGED until fixed. Neither has been reviewed at its current HEAD. Master itself is untouched and GREEN at 10500/161982. Read §0, then §8 — §8 has the exact next three actions.**
 
 ---
 
@@ -122,9 +122,10 @@ shape of the code:
 
 ## 4. How to resume
 
-**Nothing is in flight.** No agents are running, no worktrees exist besides the main repo, and no
-`prompt/*` branches remain. So this is a clean pick-up, not a recovery. Do these six things, then go
-to §8.
+**No agents are running — but this is NOT a clean pick-up.** Two step branches are built, committed
+and unmerged in two worktrees you must not delete, and one of them is RED at its HEAD. Nothing needs
+recovering (no agent died mid-step, nothing is uncommitted), but there is real work sitting in those
+worktrees. Do these six things, then go to §8, which has the exact next three actions.
 
 1. Confirm you are in `/home/sites/sugarcraft` on `master` with a clean tree
    (`git status --porcelain`). Untracked files outside the plan's own bookkeeping are possible —
@@ -140,17 +141,24 @@ to §8.
    plan's last commit in `git log`. A step's bookkeeping commit sits on top of its own commit; both
    belong to the same step. If an entry is missing, **reconstruct it before doing anything else**
    (`prompt_plan.md` §3.3).
-4. `git worktree list` — expect ONLY `/home/sites/sugarcraft`. Any `/home/sites/prompt-step-*` that
-   appears is stale by definition; run §1.12's checks before removing it, and **check it for ignored
-   files worth rescuing first** — P3.S5's worktree held the only copy of a review its follow-up step
-   needed, and it survived only because that check was run.
+4. `git worktree list` — **expect THREE this time, and two of them are DELIBERATE**:
+   `/home/sites/sugarcraft`, `/home/sites/prompt-step-P3.S4-fix-1` and
+   `/home/sites/prompt-step-P3.S5-fix-1`. **The last two are NOT stale and must NOT be removed** —
+   each holds four commits of finished work that is not on master. See `In-flight batch` in §8.
+   Any OTHER `/home/sites/prompt-step-*` is stale by definition; run §1.12's checks before removing
+   it, and **check it for ignored files worth rescuing first** — P3.S5's worktree held the only copy
+   of a review its follow-up step needed, and it survived only because that check was run.
+   `/home/sites/crush-lane-{a,b,c}` belong to the other plan. Leave them completely alone.
    `/home/sites/crush-lane-{a,b,c}` belong to the other plan. Leave them completely alone.
 5. Take a baseline measurement before you change anything, so a later regression has something to be
-   measured against, and **record the cwd beside every number**:
+   measured against, and **record the cwd beside every number** — and run it SERIALLY, with nothing
+   else heavy on the box (see `Latest suite` in §8 for the measurement that forced that rule):
    ```sh
    php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null | tail -4
    ```
-   Expect `Tests: 10500, Assertions: 161982, Skipped: 1.` If it differs, find out why before starting.
+   Expect `Tests: 10500, Assertions: 161982, Skipped: 1.` on **master**. If it differs, find out why
+   before starting. Do not confuse this with either branch's figure; the branches differ from master
+   and from each other, and one of them is RED.
 6. Then read §8 and do exactly what `Next step` says.
 
 ## 5. The sequencing gate — checked
@@ -310,107 +318,78 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            3. P3.S1-S5 merged. P3.S6 scheduled. Phase 3 NOT closed — see the queue.
+Phase:            3. P3.S1-S5 merged. TWO fix steps BUILT BUT UNMERGED (see In-flight
+                  batch). P3.S6 scheduled and its plan text corrected. Phase 3 NOT closed.
 
-Next step:        **BATCH P3.CLOSE.B1 IS IN FLIGHT.** Queue items (a) and (b) are both
-                  running RIGHT NOW as step agents in their own worktrees. If you are a
-                  fresh agent reading this, DO NOT re-spawn them — first find out whether
-                  they finished (see `In-flight batch` below for worktrees, branches and
-                  the merge order). If a worktree has commits on its branch, the agent got
-                  somewhere; recover it with prompt_plan.md §1.8 rather than starting over.
+Next step:        **NOTHING IS RUNNING. Two built branches are waiting, neither reviewed at
+                  its HEAD, one of them RED. Do these three things in this order.**
 
-                  (a) and (b) were launched CONCURRENTLY because their declared file lists
-                  are disjoint — (a) owns tests/Providers/PromptStabilityTest.php and
-                  nothing else; (b) owns src/Runtime.php + tests/RuntimeTest.php +
-                  tests/Integration/SystemPromptWiringTest.php. Nothing else in Phase 3's
-                  close queue may run alongside them: (c) P3.S6 wants src/Runtime.php,
-                  which (b) holds, so it is SERIAL after (b) merges.
+                  ---------------------------------------------------------------
+                  ACTION 1 — FIX THE RED IN P3.S5-fix-1.  **DO THIS FIRST.**
+                  ---------------------------------------------------------------
+                  Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,
+                  HEAD 5a0ff8e12. ORCHESTRATOR-MEASURED, serial, from the worktree root:
+                    Tests: 10506, Assertions: 162036, Failures: 1, Skipped: 1.
 
-                  After both merge: (c) P3.S6, then (d) the Phase 3 close review, then
-                  (e) OPEN PHASE 4 IMMEDIATELY.
+                  The failure is Support\InterpolationOpenerTokenTest::
+                  testEveryBraceWalkingScannerNamesEveryOpener
+                  (tests/Support/InterpolationOpenerTokenTest.php:653) — a PRE-EXISTING
+                  tree-wide census test. It EXISTS ON MASTER, is NOT in this diff, and is
+                  GREEN on master. Its message:
 
-                  BEFORE YOU SPAWN ANYTHING, read §7 and hand every agent §1.10, §1.11,
-                  §16, §17 and ORCHESTRATION-RULE-2. That last one is not optional: an
-                  agent once ran a throwaway-repo setup inside /home/sites/sugarcraft
-                  itself, overwrote the repo's git identity and left a stray commit on
-                  master.
+                    "this scanner walks braces but does not handle every token the running
+                     PHP uses to OPEN one. A missed opener does not crash: the walk loses a
+                     level and the scanner silently stops matching after the first
+                     interpolated string... Add the token beside T_CURLY_OPEN wherever the
+                     depth is counted."
+                    + 0 => 'tests/RuntimeTest.php does not name T_CURLY_OPEN,
+                            T_DOLLAR_OPEN_CURLY_BRACES'
 
-                  **THE CI-SHAPE INTERPRETER — keep this, it is reusable and it earned
-                  its place.** This box has swoole and CI does not, and swoole WARMS
-                  PHP's temp-dir cache at module init, which masked a real CI failure for
-                  five days. To run anything as CI would:
-                    SC=<scratchpad>; mkdir -p $SC/ci-ini
-                    cp /etc/php/8.3/cli/conf.d/*.ini $SC/ci-ini/ && rm -f $SC/ci-ini/20-swoole.ini
-                    PHP_INI_SCAN_DIR=$SC/ci-ini php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
-                  Verify it took: swoole=false, uv=true, 72 extensions.
-                  **`php -n` IS NOT A SUBSTITUTE** — children spawned as
-                  [PHP_BINARY,'-r',...] re-read the full ini set and come back WARM, so
-                  `-n` on the suite gives a FALSE GREEN. PHP_INI_SCAN_DIR is inherited by
-                  children; `-n` is not.
-                  **AND MIND THE CWD**: run it from the CHECKOUT ROOT. A `cd` earlier in
-                  the same chained command silently sends it to sugar-crush/, where
-                  `sugar-crush/vendor/bin/phpunit` does not resolve. That mistake was made
-                  once here and caught only because the run printed
-                  "Could not open input file".
+                  WHAT IT MEANS: the brace-walking scanner cycle 3 built in
+                  tests/RuntimeTest.php counts depth without naming T_CURLY_OPEN or
+                  T_DOLLAR_OPEN_CURLY_BRACES. A tool whose source contains an interpolated
+                  string ("{$path}") makes the walk lose a level, after which the scanner
+                  silently stops matching. So a write primitive appearing after ANY
+                  interpolated string in a read-only tool's source is MISSED — the exact
+                  wrong-green class the finding exists to close. This is the ELEVENTH
+                  defeat of that scanner; three reviewers found the first ten.
 
-                  **THE PHASE 3 CLOSE QUEUE**, in this order. Nothing here is blocked and
-                  none of it needs a user decision:
+                  THE FIX IS SMALL AND LOCAL (name the two tokens wherever depth is
+                  counted) BUT IT MUST SHIP WITH ITS ACCEPTANCE MUTATION: a read-only tool
+                  whose source interpolates a string BEFORE calling a write primitive must
+                  RED. Until that mutation is shown red, the eleventh defeat is closed only
+                  by assertion — which is what §1.11 forbids.
 
-                  a. **P3.S4-fix-1** — the eight standing findings from P3.S4's sixth
-                     review, verbatim in its worklog entry, all in
-                     tests/Providers/PromptStabilityTest.php. Highest value first: F5,
-                     then F2 and F6 (wrong-green fixture holes), then F1, then the
-                     comment-accuracy set F3/F4/F7/F8.
+                  ---------------------------------------------------------------
+                  ACTION 2 — REVIEW BOTH BRANCHES. Neither HEAD has been reviewed.
+                  ---------------------------------------------------------------
+                  Both steps were PAUSED by the user, not stopped at a cap. Each used
+                  THREE of five cycles, so TWO REMAIN on each.
+                    - P3.S5-fix-1 @ 5a0ff8e12 (plus the Action-1 fix): NEVER reviewed.
+                      Cycle 3's ten findings were all fixed in it and no cycle 4 ran.
+                    - P3.S4-fix-1 @ bdef57632: cycle 3 returned TEN STANDING FINDINGS that
+                      nothing has been done about. They are verbatim in its worklog entry.
+                      Start with F-2 (log.abbrevCommit is the fourteenth git knob — move it
+                      to the "valid value only" bullet and pin it) and F-4 (control B masks
+                      under a hostile diff.external: assert the control fixture's git diff
+                      SUCCEEDED before asserting liveness).
+                  Use a BRAND-NEW reviewer each cycle; never re-use one.
 
-                  b. **P3.S5-fix-1 — THE RENAME IS DONE. See `In-flight batch` for the
-                     rest.** WHAT THIS ENTRY USED TO SAY: that the rename was pending,
-                     with three line-numbered sites to change. WHAT IS TRUE NOW: it landed
-                     in commit 2a197ed20 on branch prompt/P3.S5-fix-1, and an independent
-                     reviewer verified it — exactly three sites carry the new name, the
-                     method body is byte-identical to base, 8 assertions before and after,
-                     still collected under --filter, and the old token survives nowhere in
-                     sugar-crush/ outside the gitignored .phpunit.cache. The new name is
-                       testEveryStepOfOneTurnGetsAByteIdenticalPromptExceptTheTwoGitDiff
-                       SectionsWhichAreTheOnlyLicensedDifference
-                     (one identifier, wrapped here only for the margin).
-                     WHY THIS PARAGRAPH STILL EARNS ITS PLACE: the reason the rename had
-                     to move all three sites in ONE diff is still live for every future
-                     citation edit. MEASURED TWICE: nothing in the tree catches a stranded
-                     citation — fabricating the cited METHOD name leaves
-                     SymbolCitationDriftTest OK (7 tests, 2952 assertions), and
-                     fabricating the cited CLASS name does too. There is no guard to lean
-                     on; hand-verify with /usr/bin/grep. The docblock paragraph arguing
-                     to keep the name is spent — rewrite it, do not delete it.
-                     Then cycle-6 findings 1-4 in Runtime.php and 5 in RuntimeTest.php.
-                     Full review: /home/sites/sugarcraft/.sugar-crush-prompt/P3.S5-cycle6-review.txt
-                     (NOT in a worktree — P3.S5's was removed).
-                     **Finding 2 has teeth and is WRONG-GREEN:** a genuinely
-                     write-capable tool typed into the `$readOnly` array instead of
-                     WRITE_CAPABLE_TOOL_NAMES leaves the suite fully green while the
-                     engine permanently suppresses the diff after every write by that
-                     tool.
+                  ---------------------------------------------------------------
+                  ACTION 3 — MERGE, IN THE DECLARED ORDER, WITH A SUITE BETWEEN.
+                  ---------------------------------------------------------------
+                  P3.S4-fix-1 FIRST (it changes NO production code — verified: git diff
+                  --stat against master over sugar-crush/src/ is empty), THEN P3.S5-fix-1.
+                  Run the full suite BETWEEN the two merges, not once after both: a
+                  regression measured after two merges cannot be attributed to either.
+                  **RUN IT SERIALLY** — see `Latest suite` for why that word is there.
+                  Master's figure to beat: 10500 / 161982 / 1.
 
-                  c. **P3.S6** — full text in prompt_plan.md. Wire the write-signal into
-                     the Agent assembler, OR land a §18 row plus the measurement showing
-                     there is no per-step seam to wire. Its FIRST action is to measure
-                     which of the nine systemPrompt() call sites are per-step vs
-                     once-per-agent. Do NOT let an agent manufacture a loop in order to
-                     have something to wire. NOTE its declared AgentTest.php was
-                     rewritten by P2.audit-fix-1 — rebase, do not resurrect the old shape.
-
-                  d. **THEN the Phase 3 close review** (§1.7), cap three cycles.
-
-                  e. **THEN OPEN PHASE 4 IMMEDIATELY AND KEEP GOING.** Do not stop at
-                     the boundary to ask — §0 is the standing order. Phase 4 is "Token
-                     accounting and cache observability" (prompt_plan.md:1575), and it
-                     starts at P4.S1 (`E17: give Usage real buckets`). Read the phase's
-                     own concurrency note before composing a batch, then run §1.7's phase
-                     loop exactly as for Phase 3. Then Phase 5, and so on to Phase 11.
-                     The ONLY extra check is at Phases 5 and 6: re-read §5's collision
-                     table first. The src/ file-count census that used to serialise them
-                     is RESOLVED, but per-file collisions with the other plan are live —
-                     if a lane holds a file a step declares, run the steps that do not
-                     touch it and ask the supervisor about the rest.
+                  THEN: (c) P3.S6 — it wants src/Runtime.php, which P3.S5-fix-1 holds, so
+                  it is SERIAL after that merge. Its plan text is corrected and ready; the
+                  "nine call sites" figure it consumes is now EIGHT (commit 344b85550).
+                  THEN: (d) the Phase 3 close review, cap three cycles.
+                  THEN: (e) OPEN PHASE 4 IMMEDIATELY — §0 is the standing order.
 
 Steps done:       22 of 63 merged, plus audit-fix sub-steps (not counted in the 63):
                   P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
@@ -425,16 +404,31 @@ Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never ed
 
 Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers for weeks without
                   doing so, and that is exactly what hid CI being red for five days.**
-                  MASTER @ e0d00b6db, stdin from /dev/null. THREE runs, all agreeing:
+                  **AND FROM 2026-08-31, EVERY FIGURE MUST NAME WHETHER IT WAS RUN SERIALLY.**
+                  MEASURED by P3.S4-fix-1: two runs of the IDENTICAL tree gave 162,075 and
+                  162,057 — 18 apart — while two full suites ran concurrently. Sequential
+                  uncontended runs agree exactly, three ways. OBSERVED, not explained. This
+                  plan compares assertion totals constantly, so from here they are measured
+                  SERIALLY or not at all.
+
+                  **MASTER — GREEN, and untouched by either branch.**
+                  @ e0d00b6db, stdin </dev/null, THREE runs all agreeing:
                     checkout root (= CI's cwd), ambient: Tests: 10500, Assertions: 161982, Skipped: 1.
                     from sugar-crush/, ambient:          Tests: 10500, Assertions: 161982, Skipped: 1.
                     checkout root, CI-SHAPE (no swoole): Tests: 10500, Assertions: 161982, Skipped: 1.
-                  RE-CONFIRMED 2026-08-31 at master 1267e6fbb (the three bookkeeping commits
-                  since e0d00b6db touch no sugar-crush/ file), checkout root, ambient:
+                  RE-CONFIRMED 2026-08-31 at 1267e6fbb, checkout root, ambient, SERIAL:
                     Tests: 10500, Assertions: 161982, Skipped: 1.  (07:05.973)
-                  That is the figure batch P3.CLOSE.B1's two steps must be measured against.
-                  **CI SHOULD BE GREEN.** Before CI-fix-1, master's version of
-                  SuiteTempSandboxContractTest was confirmed to RED on that same CI-shape
+                  Every `prompt:` commit since touches only bookkeeping — no sugar-crush/ file.
+
+                  **THE TWO BRANCHES — different states, do not confuse them.**
+                    P3.S4-fix-1 @ bdef57632, worktree root: AGENT-REPORTED
+                      Tests: 10501, Assertions: 162127, Skipped: 1 (twice by the agent, once
+                      by a reviewer, all agreeing). **I have NOT run this. Re-run serially.**
+                    P3.S5-fix-1 @ 5a0ff8e12, worktree root, ORCHESTRATOR-RUN, SERIAL:
+                      **Tests: 10506, Assertions: 162036, Failures: 1, Skipped: 1.**  <-- RED
+
+                  **CI SHOULD BE GREEN on master.** Before CI-fix-1, master's version of
+                  SuiteTempSandboxContractTest was confirmed to RED on the CI-shape
                   interpreter with CI's exact failure text, line number included.
                   Progression: 10452/161673 (f95546b10) -> 10454/161697 (CI-fix-1)
                   -> 10500/161982 (Gemini arm).
@@ -443,7 +437,8 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                   different tests (FFI/pty/extension paths) and a failing test stops
                   accruing where it dies. TEST counts agree exactly. Compare assertions
                   between the two CWDS on one box; never between this box and CI.
-                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — unmoved throughout.
+                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — unmoved throughout,
+                  and re-verified in BOTH worktrees this session.
                   Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from the
                   wrong cwd php cannot find tools/check-path-repos.php and all three
                   "fail". That misread has happened twice.
@@ -451,53 +446,54 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                   (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect
                   stdin from /dev/null.
                   php-cs-fixer is NOT installed on this box and NOT vendored anywhere in
-                  the tree — the style gate cannot be run locally. Two steps have now
-                  reported this. If CI enforces it, that is an unverifiable gate here.
+                  the tree — the style gate cannot be run locally.
 
-In-flight batch:  **P3.CLOSE.B1 — TWO STEPS, SPAWNED 2026-08-31, BOTH RUNNING.**
+In-flight batch:  **NONE RUNNING — but batch P3.CLOSE.B1 is OPEN and INCOMPLETE.**
+                  Both its steps are built, committed, and paused mid-review at the user's
+                  request. NOTHING IS SPAWNED. Do not re-spawn either step from scratch;
+                  their work is on their branches and is substantial (4 commits each).
 
-                  1. **P3.S4-fix-1**
-                     worktree /home/sites/prompt-step-P3.S4-fix-1
-                     branch   prompt/P3.S4-fix-1  (from master 1267e6fbb)
-                     declares tests/Providers/PromptStabilityTest.php  — THAT FILE ONLY
-                     brief    the eight cycle-6 findings F1-F8, verbatim in P3.S4's worklog
-                              entry (prompt_worklog.md lines ~2648-2830), worked F5 first,
-                              then F2, F6, F1, then F3/F4/F7/F8.
-                     baseline measured by the orchestrator IN that worktree before spawning:
-                              --filter PromptStabilityTest => OK (13 tests, 229 assertions)
+                  1. **P3.S4-fix-1** — /home/sites/prompt-step-P3.S4-fix-1
+                     branch prompt/P3.S4-fix-1, HEAD **bdef57632**, 4 commits, base 1267e6fbb
+                     ORCHESTRATOR-VERIFIED: status --porcelain EMPTY · zero src/ changes ·
+                     exactly ONE file touched (tests/Providers/PromptStabilityTest.php) ·
+                     goldens unmoved · --filter PromptStabilityTest = OK (14 tests, 374
+                     assertions), from a base of OK (13, 229) · clean on the
+                     InterpolationOpenerTokenTest census (OK 6/164).
+                     AGENT-REPORTED, NOT YET VERIFIED BY ME: full suite
+                     Tests: 10501, Assertions: 162127, Skipped: 1 (worktree root; the agent
+                     ran it twice and a reviewer once, all agreeing). RE-RUN SERIALLY.
+                     STATE: all eight original findings disposed. TEN NEW standing findings
+                     from cycle 3, untouched.
 
-                  2. **P3.S5-fix-1**
-                     worktree /home/sites/prompt-step-P3.S5-fix-1
-                     branch   prompt/P3.S5-fix-1  (from master 1267e6fbb)
-                     declares src/Runtime.php · tests/RuntimeTest.php ·
-                              tests/Integration/SystemPromptWiringTest.php
-                     brief    the USER-APPROVED rename first (3 sites), then cycle-6
-                              findings 2 (wrong-green, do first of the five), 1, 3, 4, 5.
-                              Review: .sugar-crush-prompt/P3.S5-cycle6-review.txt
+                  2. **P3.S5-fix-1** — /home/sites/prompt-step-P3.S5-fix-1
+                     branch prompt/P3.S5-fix-1, HEAD **5a0ff8e12**, 4 commits, base 1267e6fbb
+                     ORCHESTRATOR-VERIFIED: status --porcelain EMPTY · scope is exactly the
+                     three declared files · **src/Runtime.php's change is COMMENT-ONLY** (I
+                     stripped comments/whitespace and compared executable token streams:
+                     both c42b4a36105c5ec8cc76669b4dd8fa95, IDENTICAL) · goldens unmoved ·
+                     RuntimeTest 112/398 -> 118/439 · SystemPromptWiringTest 11/75 unchanged.
+                     **FULL SUITE AT HEAD IS RED — see ACTION 1. DO NOT MERGE.**
+                     STATE: the user-approved rename is DONE and clean. All five cycle-6
+                     findings closed. HEAD never reviewed.
 
-                  **DECLARED MERGE ORDER: P3.S4-fix-1 FIRST, then P3.S5-fix-1.**
-                  Reason: (1) touches no production code at all, so its blast radius is one
-                  test file and a bad merge is trivially revertible; (2) edits src/Runtime.php
-                  and carries the rename, so it wants the quieter tree. Run the full suite
-                  between the two merges — do not merge both and then measure once.
+                  **DECLARED MERGE ORDER STANDS: P3.S4-fix-1 first, then P3.S5-fix-1**,
+                  with a full suite between. Neither may merge before it is reviewed at its
+                  current HEAD, and P3.S5-fix-1 may not merge at all until the red is fixed.
 
-                  Both worktrees have a `cp -al` hard-linked vendor/, both VERIFIED to
-                  resolve the PSR-4 root SugarCraft\Crush\ into their OWN src/.
-
-                  Orchestrator baseline for this batch, MEASURED at master 1267e6fbb from
-                  the CHECKOUT ROOT, ambient: see `Latest suite` below.
-
-Live worktrees:   /home/sites/sugarcraft                  master, at the commit above.
-                  /home/sites/prompt-step-P3.S4-fix-1     IN FLIGHT (batch P3.CLOSE.B1)
-                  /home/sites/prompt-step-P3.S5-fix-1     IN FLIGHT (batch P3.CLOSE.B1)
+Live worktrees:   /home/sites/sugarcraft                  master, clean, at the commit above.
+                  /home/sites/prompt-step-P3.S4-fix-1     **KEEP** — holds 4 commits, green
+                  /home/sites/prompt-step-P3.S5-fix-1     **KEEP** — holds 4 commits, RED at HEAD
                   Branches prompt/P3.S4-fix-1 and prompt/P3.S5-fix-1 exist and are UNMERGED.
+                  **DO NOT DELETE EITHER WORKTREE.** Both hold committed work that is not on
+                  master. Both have a cp -al hard-linked vendor/, both verified to resolve
+                  the PSR-4 root into their OWN src/.
                   /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
-                  When a step closes, remove its worktree with §1.12's checks (uncommitted
-                  changes, unmerged commits, AND ignored files worth rescuing — P3.S5's
-                  worktree held the only copy of a review its follow-up needed) and delete
-                  the branch with `git branch -d`, which is itself a merge check.
 
-Blocked on:       Nothing.
+Blocked on:       **P3.S5-fix-1 IS RED AT HEAD and must not merge until fixed** — the full
+                  detail is under ACTION 1 in `Next step`. Not a blocker on the plan: the fix
+                  is small, local and fully specified, and P3.S4-fix-1 can be reviewed and
+                  merged while it is done. Nothing needs a user decision to proceed.
 
 Awaiting user decision: ONE, NEW, and it does not block the Phase 3 close queue.
 
@@ -519,7 +515,45 @@ Awaiting user decision: ONE, NEW, and it does not block the Phase 3 close queue.
                   The step agent raised this itself and asked for judgement rather than
                   picking. §1.10 sends it to the user.
 
-Open follow-ups:  **VertexProvider legacy arm — TWO defects, both now ordinary steps.**
+Open follow-ups:  Open follow-ups:  **NEW THIS SESSION — the three highest-value ones first.**
+
+                  **(N1) A per-tool `writesTree(): bool` on `src/Tools/Tool.php:20`, implemented by all
+                  twelve Tool implementors.** ESCALATED by P3.S5-fix-1. Grounds, and they are strong:
+                  three reviewers defeated a token scanner over function NAMES **ten times**, each on a
+                  fully green suite (fully-qualified name · a write in a `use`d trait in another file ·
+                  `fopen($p,'w')` truncating at open · `fopen($p,'x')` · `error_log($m,3,$p)` ·
+                  `gzwrite` · `imagepng($im,$p)` · `new SplFileObject($p,'w')` · an aliased import), and
+                  the TREE then found an **eleventh** (interpolated strings break the brace walk). A
+                  name-based scanner is structurally incompletable. `writesTree()` moves the judgement to
+                  the only place that can make it and covers the embedder half too. The alternative the
+                  code already names is a working-tree fingerprint. **This needs a user decision on which.**
+
+                  **(N2) `SymbolCitationDriftTest` has TWO holes, not one.** Both let a fabricated
+                  citation pass green. (a) the backtick scraper at `:290` has no `/` in its class part, so
+                  a PATH-PREFIXED citation matches nothing; (b) `looksLikeATestSymbol()` at `:335` keeps a
+                  citation only when the short class name ends in `Test`, so a fabricated `…TestClass` is
+                  discarded before resolution. **Correction to an earlier entry: it is NOT true that
+                  "nothing in the tree catches a stranded citation."** MEASURED at 1267e6fbb: fabricating
+                  the P3.S5 method name DOES red it (`Tests: 7, Assertions: 2972, Failures: 1`). The old
+                  measurement predated P3.S5's cycle-5 respelling of that citation into the policed form.
+                  One step should close both holes.
+
+                  **(N3) `tests/RuntimeTest.php:2926-2939` — a THIRD scratch-repository fixture** carrying
+                  the config roster PromptStabilityTest had BEFORE P3.S4-fix-1: no `log.date`, no
+                  `format.pretty`, no `.git/info/attributes`. MEASURED under a hostile `core.attributesFile`:
+                  PromptStabilityTest green, RuntimeTest RED. Its own step.
+
+                  **(N4) `src/Context/EnvironmentBlock.php:855`** — `'unavailable (shell_exec is disabled
+                  on this build)'` is an INLINE LITERAL where its sibling at `:327` is the constant
+                  `NO_PROCESS_REASON`, under a docblock on that constant arguing a model "should not have
+                  to learn a second" wording. MEASURED: renaming it alone leaves the tree green.
+
+                  **(N5) Two loose ends from P3.S5-fix-1's reviewers, carried:** `tests/RuntimeTest.php`
+                  asserts trait file order from `ReflectionClass::getTraits()`, so swapping two `use` lines
+                  in `Grep.php` — a semantic no-op — would red it; and `phpFilesUnder()` follows directory
+                  symlinks (`RecursiveDirectoryIterator` default), unbounded only latently.
+
+                  **VertexProvider legacy arm — TWO defects, both now ordinary steps.**
                   (i) `formatMessages()` emits `role` where the instances envelope's authority spells
                   it `author` (`ChatMessage` struct: `Author string json:"author"`). Originally
                   deferred because fixing it changes a body pinned by a green test — that test now
