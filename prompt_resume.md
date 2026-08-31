@@ -409,6 +409,10 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                     checkout root (= CI's cwd), ambient: Tests: 10500, Assertions: 161982, Skipped: 1.
                     from sugar-crush/, ambient:          Tests: 10500, Assertions: 161982, Skipped: 1.
                     checkout root, CI-SHAPE (no swoole): Tests: 10500, Assertions: 161982, Skipped: 1.
+                  RE-CONFIRMED 2026-08-31 at master 1267e6fbb (the three bookkeeping commits
+                  since e0d00b6db touch no sugar-crush/ file), checkout root, ambient:
+                    Tests: 10500, Assertions: 161982, Skipped: 1.  (07:05.973)
+                  That is the figure batch P3.CLOSE.B1's two steps must be measured against.
                   **CI SHOULD BE GREEN.** Before CI-fix-1, master's version of
                   SuiteTempSandboxContractTest was confirmed to RED on that same CI-shape
                   interpreter with CI's exact failure text, line number included.
