@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, THREE AGENTS RUNNING — a brand-new cycle-4 review agent on each of the two paused fix branches (`P3.S4-fix-1` @ `2d5f14835`, `P3.S5-fix-1` @ `842cc59b3`, whose RED is now CLOSED), plus the `P3.S6` step agent. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue, THREE AGENTS RUNNING — `P3.S5-fix-1`'s cycle-4 reviewer CAME BACK WITH EIGHT FINDINGS and a FIX AGENT is now out on it (cycle 5 is the LAST); `P3.S4-fix-1`'s cycle-4 reviewer is still out (`2d5f14835`); the `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -354,8 +354,17 @@ Next step:        **CALL `ListAgents` FIRST. Three agents are out. Do not re-spa
                      SERIALLY from /home/sites/prompt-step-P3.S4-fix-1, then MERGE IT FIRST.
                      If findings: fix agent -> a BRAND-NEW cycle-5 reviewer. One cycle left
                      after that.
-                  B) **P3.S5-fix-1 cycle-4 reviewer** -> same shape. MERGES SECOND, and only
-                     after A has merged and a full suite has run in between.
+                  B) **P3.S5-fix-1 — cycle 4 REPORTED EIGHT FINDINGS; a FIX AGENT is out.**
+                     When it reports: verify its figures yourself, then spawn a BRAND-NEW
+                     cycle-5 reviewer that has NEVER seen cycle 4's findings (§1.4 — a
+                     reviewer given a list checks the list). **Cycle 5 is the CAP.** If it
+                     comes back clean, run the FULL SUITE SERIALLY and merge SECOND, after A
+                     has merged and a full suite has run in between. If cycle 5 finds a
+                     thirteenth defeat, the step is at its cap: do NOT open a cycle 6 — record
+                     the finding against escalation N1 (which already asks the user to choose
+                     between a per-tool `writesTree(): bool` and a working-tree fingerprint,
+                     precisely because a name-based scanner is structurally incompletable) and
+                     merge on the fail-closed guarantee rather than on a complete scanner.
                   C) **P3.S6 step agent** -> runs its own review loop internally and reports
                      once at the end. Verify its numbers yourself, then MERGE THIRD.
 
@@ -458,19 +467,33 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      It writes its findings to
                      <scratchpad>/P3.S4-fix-1/review-cycle-4/findings-cycle-4.md.
 
-                  2. **P3.S5-fix-1 — cycle-4 REVIEW agent out.**
+                  2. **P3.S5-fix-1 — cycle 4 DONE (EIGHT findings). FIX agent out.**
                      Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,
-                     HEAD **842cc59b3**, 5 commits, base 1267e6fbb.
-                     Three cycles used before this one, so **TWO REMAIN** (this is 4 of 5).
+                     HEAD **842cc59b3**, 5 commits, base 1267e6fbb. **Cycle 5 is the CAP.**
                      Declared files: src/Runtime.php · tests/RuntimeTest.php ·
-                     tests/Integration/SystemPromptWiringTest.php.
-                     src/Runtime.php's change was verified COMMENT-ONLY last session by
-                     comparing executable token streams (both c42b4a36105c5ec8cc76669b4dd8fa95).
-                     The reviewer was asked to construct the TWELFTH defeat of this step's
-                     write-primitive scanner and measure it — eleven have landed on a fully
-                     green suite, so a bare "no findings" here has a poor track record.
-                     It writes its findings to
-                     <scratchpad>/P3.S5-fix-1/review-cycle-4/findings-cycle-4.md.
+                     tests/Integration/SystemPromptWiringTest.php. InterpolationOpenerTokenTest
+                     is READ-ONLY to the fix agent and no KNOWN_GAPS row may be added.
+                     Findings file, ON DISK and the authority:
+                     <scratchpad>/P3.S5-fix-1/review-cycle-4/findings-cycle-4.md
+                     F1 use-function backslash + comma-list · F2 error_log type 3 in any
+                     non-decimal radix · F3 T_ATTRIBUTE is an uncounted opener with a counted
+                     closer · F4 fopen mode as an octal escape · F5 error_log(...$a) fails OPEN
+                     with no walk bug · F6 stale defeat counts (TEN vs THREE, same instrument)
+                     · F7 grouped use-function · F8 CLOSED by the §8 rewrite.
+                     **Everything the brief asked the reviewer to falsify came back CORRECT** —
+                     Runtime.php comment-only (independently re-derived), goldens unmoved,
+                     exactly three declared files, the rename pure, the census green because
+                     the gap CLOSED. Do not re-verify those.
+                     **F5 is the CLASS; F1-F4 and F7 are instances.** ORCHESTRATOR-VERIFIED by
+                     reading tests/RuntimeTest.php:3000-3045: callArguments() has two
+                     `return $arguments` — the early one at depth 0 and the fall-through when
+                     the walk runs off the end — and they return the SAME SHAPE, so
+                     argumentsMeanAWrite() cannot tell "one argument supplied" from "the walk
+                     gave up", and two of its three rules return FALSE on an absent
+                     $arguments[1]. That is why every defeat in this family fails OPEN. The fix
+                     brief ranks fail-closed-on-truncation first and the instances alongside it.
+                     The reviewer's five "exact edit, verbatim" prescriptions were measured by
+                     NOBODY and the brief passes them through as hypotheses.
 
                   3. **P3.S6 — STEP agent out.** NEW THIS SESSION.
                      Worktree /home/sites/prompt-step-P3.S6, branch prompt/P3.S6, base
@@ -570,7 +593,10 @@ Open follow-ups:  **PROCESS RULE ADOPTED THIS SESSION, ALREADY IN EVERY BRIEF: a
                   anyway, so anything material among them is re-found by cycle 4 or was never
                   material. Nothing detects this failure; the rule costs one file write.
 
-                  **NEW, from P3.S5-fix-1's fix agent — two adjacent problems it REPORTED and
+                  **SUPERSEDED — both of the two below are now cycle-4 findings F5 and F3 and
+                  are IN THE FIX AGENT'S HANDS. Kept only because the reasoning is still right
+                  and the second one's "latent, not live" verdict is the part that aged badly.**
+                  **from P3.S5-fix-1's fix agent — two adjacent problems it REPORTED and
                   correctly did not fix:**
                   (a) `tests/RuntimeTest.php:3015-3060` — the doc-block on
                   `argumentsMeanAWrite()` says UNREADABLE MEANS WRITE *"in every branch"*.

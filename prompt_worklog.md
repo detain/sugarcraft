@@ -253,6 +253,70 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 · REVIEW CYCLE 4 · 2026-08-31 — the twelfth defeat, and the class behind all twelve
+
+Cycle 4 of 5 returned **eight findings**, not a clean review. Findings file on disk, per the rule
+this batch adopted:
+`<scratchpad>/P3.S5-fix-1/review-cycle-4/findings-cycle-4.md`. A fix agent is out; a brand-new
+cycle-5 reviewer follows it. **That is the last cycle** — cap five.
+
+**Everything the brief asked the reviewer to falsify came back CORRECT**, and this is worth recording
+because it is the part that does not need re-doing: `src/Runtime.php` comment-only (re-derived
+independently — identical executable token stream, 4366 tokens both sides); goldens unmoved; exactly
+the three declared files; the rename pure (renamed body byte-identical, md5 `720184ae…`, 9848 bytes,
+three call sites in one diff, zero stranded refs); the branch's ONLY subtraction is the three-line
+`$readOnly` literal moved verbatim into `readOnlyBuiltInToolNames()`; the census green because the
+gap CLOSED (`missingOpenersIn('tests/RuntimeTest.php')` → `[]`, not `null`) and `KNOWN_GAPS` still
+holds its three pre-existing rows. The deletion experiment on the eleventh-defeat fix reproduces:
+FIXED → `{"error_log":[9,11],"imagepng":[10]}`, MUTANT → `{"fopen":[12]}`.
+
+**The findings, five of them measured live through the shipped method by reflection:**
+
+| # | Defeat | Measured |
+|---|---|---|
+| F1 | `use function \file_put_contents as p;` and `use function a as b, c as d;` — both legal, both write | `[]` vs control `{"file_put_contents":[204]}` |
+| F2 | `error_log($m, 0x3, $p)` — the rule compares the T_LNUMBER's SOURCE TEXT to `'3'`, so `0x3`/`03`/`0b11`/`0o3` all read read-only | `[]`; the hex form really creates the file |
+| F3 | `T_ATTRIBUTE` (`#[`) is an opener the walk never counts, closed by a `]` it already decrements on | `[]` vs control `{"error_log":[3]}` — **six characters apart** |
+| F4 | `fopen($p, "\167")` — mode matched against raw source bytes, not the string's value | `[]`, and it truncates 22 bytes to 0 |
+| F5 | `error_log(...$a)` fails OPEN with no walk bug at all | `[]` while genuinely writing |
+| F6 | Stale counts: `RuntimeTest.php:2747` says TEN, `src/Runtime.php:388` says THREE, same instrument | stale within one file |
+| F7 | grouped `use function Ns\{x as y};` unresolved while the ungrouped form resolves | `[]` vs `{"file_put_contents":[3]}` |
+| F8 | `prompt_resume.md` stale method name | **CLOSED by the orchestrator's §8 rewrite** — `/usr/bin/grep` now finds zero hits there |
+
+**F3 is the same defect the commit under review just fixed.** `842cc59b3` added `T_CURLY_OPEN` and
+`T_DOLLAR_OPEN_CURLY_BRACES` to the opener list and did not add `T_ATTRIBUTE`. Its own doc-block at
+`:2737-2741` claims the whole `#[...]` group is stepped over by bracket depth — true of the main
+loop, false of `callArguments()`, which never sees `T_ATTRIBUTE` at all. The census the step calls
+this "latent" on reproduces (64 `T_ATTRIBUTE`, exactly one after `(`/`,`, a declaration) — and
+*latent* is the same word the eleventh defeat wore right up until the tree caught it.
+
+**ORCHESTRATOR-VERIFIED BY READING THE CODE, because the brief depends on it:** `callArguments()`
+(`tests/RuntimeTest.php:3000-3045`) has two `return $arguments` statements — the early one at
+`$depth === 0` and the fall-through when the walk runs off the end — and they return the same shape.
+So `argumentsMeanAWrite()` cannot distinguish *"the caller supplied one argument"* from *"the walk
+gave up"*, and two of its three rules `return false` on an absent `$arguments[1]`.
+
+**That is the class, and F1-F4 and F7 are instances of it.** The eleventh defeat was dangerous only
+because of those two `return false`s; F3 is dangerous only because of them; F5 needs no walk bug at
+all. A walk that reports whether it terminated on a balanced closer, plus rules that treat an
+incomplete parse as a write, converts the whole family from fail-open to fail-closed — including the
+thirteenth defeat nobody has found yet. **The fix brief ranks that first and asks for the instance
+fixes as well**, because fail-closed on truncation does not make the walk correct and a correct walk
+does not make the next walk bug safe. The stated hazard: `imagepng($im)` and `error_log($m)` are
+correct one-argument calls already in the shipped expected values and must stay classified as they
+are, so the repair cannot be a blanket `return true`.
+
+**The reviewer wrote five "exact edit, verbatim" prescriptions and measured NONE of them, and said
+so.** The fix brief passes them through as hypotheses with two flagged explicitly: F2's leans on
+`intval($s, 0)` parsing `0b11`/`0o3` on 8.3.6, unverified; F4's is `@eval()` on fixture text, which
+the reviewer itself names as a bad fix. This is the same shape as the `log.abbrevCommit` prescription
+earlier in this batch that was measured false and correctly refused.
+
+**No test figures changed.** The reviewer re-ran the same filtered sets and matched the
+orchestrator's numbers exactly: `OK (136 tests, 679 assertions)` for the three filtered files,
+`OK (103 tests, 9468 assertions)` for the six census files. It did not run the full suite, by
+instruction. The two owed full suites remain unmeasured.
+
 ### BATCH P3.CLOSE.B1 · STATE · 2026-08-31 — both fix steps fixed and in cycle-4 review, P3.S6 in flight
 
 Written as a checkpoint, not a close. Nothing has merged; master's `sugar-crush/` tree is still
