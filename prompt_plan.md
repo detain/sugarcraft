@@ -1658,10 +1658,82 @@ hides the unit mismatch instead of naming it.*
 the three-bucket identity holds and that a missing bucket does not silently become `0` where `null`
 is the truth.
 
+**HAZARDS, measured by the orchestrator 2026-08-31 while pre-reading. All six are things a step
+agent working only from the Goal above would walk into.**
+
+1. **`toArray()` / `fromArray()` cross a fork socket, and a bucket that does not cross it will work
+   in sync mode and silently read zero in async mode.** `src/Usage.php:151-177` exists because
+   `Backend\EngineBackend::completeAsync()`'s parent unserializes with `allowed_classes => false`
+   and so cannot receive the object; `EngineBackend.php:1384` rebuilds it with
+   `Usage::fromArray($data['usage'] ?? null)`. New buckets MUST be added to BOTH sides, and the
+   Done-when needs a test that drives the round trip — not one that asserts the array has the keys.
+   This is the failure that would not show up in any unit test of the new fields.
+2. **`plus()` must sum every bucket, and `sum()` is built on `plus()`.** `plus()` at
+   `src/Usage.php:118-121` currently adds two fields by hand. A bucket omitted there is silently
+   dropped for every multi-step turn — and per that method's own docblock, a turn is N provider
+   calls, so this is the common path, not the edge case.
+3. **`Usage` is `final readonly` with a PRIVATE constructor and no `with*()` methods at all.** The
+   Done-when asks for "immutable and fluent per repo convention", which means `with*()` returning a
+   new instance via a private `mutate()` (canonical `candy-sprinkles/src/Style.php`, trait
+   `candy-core/src/Concerns/Mutable.php`), and a nullable field paired with its `bool $XSet`
+   sentinel. That sentinel convention is exactly how the Done-when's *"a missing bucket does not
+   silently become `0` where `null` is the truth"* clause is satisfied — the two are the same
+   requirement stated twice.
+4. **`outputTokens` is deliberately NOT in the identity.** `total = cacheRead + cacheCreation +
+   input`, because `input_tokens` counts only tokens after the last cache breakpoint. That reads
+   like a bug and will be "fixed" by a later reader unless a test pins it as intentional, with the
+   reason. Pin it.
+5. **This step FALSIFIES four docblocks outside its declared file list, and Phase 4 gives three of
+   them no owner.** `src/Usage.php:20-55` is a long, careful argument titled *"Why there is no
+   input/output split here"*, and its reasoning is repeated at:
+   `src/Util/TokenTracker.php:30` · `src/Chat.php:1236-1237` and `:11588-11589` ·
+   `src/Runtime.php:1249` · `src/Providers/ProviderInterface.php:48`.
+   Of those, only `Chat.php` is declared by any Phase 4 step (P4.S4, for an unrelated goal).
+   `TokenTracker.php`, `Runtime.php:1249` and `ProviderInterface.php:48` are declared by NO step in
+   this phase. **P4.S1 REPORTS all of them and edits none of them** (§1.4's rule: a finding outside
+   the declared list is reported, never prescribed as an edit) — but §16.8 rule 40 says a correction
+   must travel to its neighbours, so the orchestrator schedules the travel as its own step rather
+   than letting the phase close with five docblocks arguing against the code. **`TokenTracker.php`
+   is the one that matters most**: `addTotalUsage()` exists *only* because the split was
+   unavailable, so P4.S1 changes that method's entire reason for existing. Per §1.10 the answer is
+   to wire or build out, never to delete it.
+6. **Do not widen into the estimator or the tier.** The `chars/4` proxy is DUPLICATED at
+   `src/Chat.php:11455` and `src/Context/ContextCompactor.php:891` (`(int) ceil(mb_strlen(...) / 4)`
+   in both), and the 70/85/95% tiers live in `src/Backend/ReportsContextWindow.php`. All three are
+   outside this step's two files, and the duplication is itself worth reporting — but the Hard
+   constraint above is about resisting exactly this temptation.
+
 ### P4.S2 — Providers populate the buckets
 
-**Goal** Every provider that receives a `usage` object parses the cache fields into `Usage`. SGLang
-reports cache hits; `src/Usage.php` already parses the `usage` object and discards them.
+**Goal** Every provider that receives a `usage` object parses the cache fields into `Usage`.
+
+**CORRECTION, 2026-08-31, measured by the orchestrator while pre-reading Phase 4 — this Goal
+carried two false claims about this tree, and a brief carries more authority than a review because
+nothing downstream is asked to falsify it (§16.8 rule 44).**
+
+- **It said:** *"`src/Usage.php` already parses the `usage` object and discards them."*
+  **What is true:** `src/Usage.php` contains NO provider-payload parsing whatsoever. The parsing
+  lives in the providers; `Usage` is the value object they hand the result to.
+  **How measured:** every occurrence of a `usage.*` field name in that file
+  (`usage.inputTokens`, `usage.outputTokens`, `usage.input_tokens`, `usage.output_tokens`,
+  `usage.prompt_tokens`, `usage.completion_tokens`, `usage.total_tokens`) is inside the CLASS
+  DOCBLOCK at `src/Usage.php:28-37`, describing what the providers do — `/usr/bin/grep -n` for
+  those names returns docblock lines only. The single method in the file that reads an array is
+  `fromArray()`, whose keys are `totalTokens` / `costUsd`: that is the `completeAsync()` fork-socket
+  shape, not a provider payload. So there is nothing in `Usage.php` for this step to stop
+  discarding.
+- **It said:** *"SGLang reports cache hits"*, presented as a fact about this code.
+  **What is true:** nothing in `src/Providers/SglangProvider.php` reads a cache field from a `usage`
+  object, so there is no discarded cache hit there to recover.
+  **How measured:** `/usr/bin/grep -n cache src/Providers/SglangProvider.php` returns exactly ONE
+  line — `:637`, a docblock reference to RadixAttention prefix-cache stability for §12 D7. Not a
+  field read.
+  **What this does NOT settle:** whether the SGLang *API* reports cache hits on the wire. This tree
+  cannot answer that, and the step must not assume it. **P4.S2's first action is therefore to
+  establish, per provider, whether a cache field exists in the real response at all** — which is
+  what the Done-when's real-shaped-payload rule already demands. A provider whose API reports no
+  cache fields is a legitimate outcome: record it, do not invent a field to parse.
+
 **Source** §9.14, §4.15.
 **Files**
 - `sugar-crush/src/Providers/SglangProvider.php`
