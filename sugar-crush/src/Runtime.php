@@ -752,13 +752,37 @@ final class Runtime
      *     silently. `EnvironmentBlock` has FOUR production construction sites;
      *     this step reaches ONE. MEASURED with
      *     `/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/ bin/`: this
-     *     class, plus `Cli/Bootstrap.php:1462`, `App/App.php:553` and
-     *     `Agents/Agent.php:417` — and those three all feed
-     *     `Agents\Agent::systemPrompt()`, the assembler prompt_plan.md §17.2
-     *     keeps deliberately separate from this one because the two order
-     *     `<env>` oppositely. Nothing on that path calls
-     *     {@see EnvironmentBlock::withWriteSinceLastRender()} — MEASURED, zero
-     *     hits across `src/Agents/`, `src/Cli/` and `src/App/` — so it can
+     *     class, plus `Cli/Bootstrap.php:1462`, `App/App.php:553` and the
+     *     last-resort fallback inside `Agents\Agent::systemPrompt()` itself.
+     *     THE SYMBOL IS THE CITATION FOR THAT THIRD ONE and the line number
+     *     is only a direction (`Agents/Agent.php:852`, MEASURED in this merge
+     *     with `/usr/bin/grep -n 'EnvironmentBlock::capture(' src/Agents/Agent.php`
+     *     — the one hit that is a STATEMENT rather than doc-block prose; that
+     *     command returns EIGHT hits in `Agents/Agent.php` and the other seven
+     *     are prose mentions of the name, a domain spelled out here because
+     *     this paragraph pins a different eight below),
+     *     because this is the figure in this paragraph that has already
+     *     rotted: it read `Agent.php:417`, which was exactly that statement
+     *     at `c7e5a6454` and was doc-block prose one commit later, with
+     *     nothing going red in between. Expect 852 to rot the same way — the
+     *     symbol will not, which is why it is the citation and the number is
+     *     not. Bootstrap's and App's both FEED that method; it is the
+     *     assembler prompt_plan.md §17.2 keeps deliberately separate from
+     *     this one because the two order `<env>` oppositely.
+     *
+     *     Nothing on that path CALLS
+     *     {@see EnvironmentBlock::withWriteSinceLastRender()}: MEASURED with
+     *     `/usr/bin/grep -rn 'withWriteSinceLastRender' src/Agents/ src/Cli/ src/App/`,
+     *     FOUR hits, every one of them doc-block prose in `Agents/Agent.php`
+     *     recording why the mark is declined there, and not one of them a
+     *     call. That sentence read "zero hits" and was true when written;
+     *     P3.S6's own prose moved it, which is the second figure here this
+     *     branch staled and the reason both now name their generator. That
+     *     grep's domain excludes THIS file, so this paragraph cannot falsify
+     *     its own count the way the two §16.8 rule-1 defects below do — but a
+     *     further line of `Agent.php` prose can, and that is exactly why the
+     *     count travels with its command instead of standing alone. THE
+     *     CONCLUSION IS UNCHANGED BY THE CORRECTION: no call means the path can
      *     never reach the suppressed state and pays FIVE git subprocesses on
      *     every one of its 8 `Agent::systemPrompt()` call sites, per render
      *     rather than per turn.
@@ -781,15 +805,15 @@ final class Runtime
      *     THE COUNT APPEARS EXACTLY ONCE IN THIS PARAGRAPH, IN THE SENTENCE
      *     ABOVE, AND AS A DIGIT. Both are deliberate. A word would need a
      *     number-word table on the test side, and this tree already carries
-     *     two private, divergent copies of one; a digit needs none. It used to appear four times, and the
-     *     test can only pin one of them — so the other three would have rotted
-     *     silently while an author corrected the sentence the failure message
-     *     named. §16.8 rule 2 is "never pin a cardinality in prose"; where a
-     *     figure must be written, write it once. The per-file DISTRIBUTION is
-     *     pinned too (one, one, one, five), because unlike a line number it
-     *     survives an edit above it. Line numbers are deliberately NOT given
-     *     here: the census prints them in its own failure output, where they
-     *     cannot be stale.
+     *     two private, divergent copies of one; a digit needs none. It used to
+     *     appear four times, and the test can only pin one of them — so the
+     *     other three would have rotted silently while an author corrected the
+     *     sentence the failure message named. §16.8 rule 2 is "never pin a
+     *     cardinality in prose"; where a figure must be written, write it
+     *     once. The per-file DISTRIBUTION is pinned too (one, one, one, five),
+     *     because unlike a line number it survives an edit above it. Line
+     *     numbers are deliberately NOT given here: the census prints them in
+     *     its own failure output, where they cannot be stale.
      *
      *     A plain `/usr/bin/grep -rn '>systemPrompt(' src bin` returned, AT
      *     THE COMMIT BEFORE THIS PARAGRAPH EXISTED, that same set plus ONE
@@ -816,15 +840,20 @@ final class Runtime
      *     defect.
      *
      *     AND THE NUMBER IS NOW DERIVED RATHER THAN TRUSTED (§16.8 rule 2:
-     *     ship the generator, not the count).
+     *     ship the generator, not the count), by TWO independent censuses that
+     *     must agree with each other and with the tree.
      *     {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheAgentAssemblerCallSiteCountInThisDocblockIsDerivedFromTheTree()}
-     *     re-runs that census on every suite run and reds unless the word in
-     *     the sentence above is the word the tree produces, so a ninth call
+     *     re-runs that census on every suite run and reds unless the figure in
+     *     the sentence above is the figure the tree produces, so a ninth call
      *     site lands here as a failure naming both numbers and every site it
-     *     found, instead of as a sentence nobody re-measures. `Bootstrap.php:1462` memoises the CAPTURE onto each
-     *     agent, which costs nothing: capture() runs ZERO subprocesses
-     *     (MEASURED with a logging `git` shim: ten captures with no render, 0
-     *     invocations) and `render()` pays the bill on every call. The gap is
+     *     found, instead of as a sentence nobody re-measures; and
+     *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()}
+     *     pins the ROSTER those numbers are counted from, so a site that moves
+     *     between files without changing the total still reds. `Bootstrap.php:1462`
+     *     memoises the CAPTURE onto each agent, which costs nothing: capture()
+     *     runs ZERO subprocesses (MEASURED with a logging `git` shim: ten
+     *     captures with no render, 0 invocations) and `render()` pays the bill
+     *     on every call. The gap is
      *     deliberate scope, not an oversight, and it needs either a P3.S6 or a
      *     prompt_plan.md §18 row saying why the Agent path keeps the diff.
      *  3. The `bool $perStepRerender` caption variant `EnvironmentBlock`'s
