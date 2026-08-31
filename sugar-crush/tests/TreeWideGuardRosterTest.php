@@ -26,15 +26,36 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *
  * MEASURED, WITH ITS GENERATOR AND ITS DOMAIN, because this figure moved while
  * the file was being written and that is the defect the file is about:
- * `/usr/bin/grep -rln 'TestFileWalkTrait' tests/ | wc -l` returns 9 at this
- * commit and 8 at `bb4a311d0`. Two of the nine are not consumers - the trait's
- * own declaration, and THIS file, which is the one the count gained. So there
- * were SEVEN consumers of the same shared whole-tree walker at `bb4a311d0`, and
- * FIVE of those seven are outside the list of nine - one of which carries 3,268
- * assertions on its own, better than a tenth of the whole nine-file set's 31,215
- * (10.5%). AN EARLIER REVISION OF THIS PARAGRAPH said the grep "names SEVEN
- * consumers", which that grep returned at no commit; the subtraction is written
- * out now instead of being left for the reader to rediscover.
+ * THIS IS THE THIRD READING OF ONE GREP AND THE FIRST ONE THAT COUNTS THE RIGHT
+ * THING, so all three are written out - a figure this file has now got wrong
+ * twice is exactly the figure a reader should not have to take on trust.
+ *
+ * REVISION 1 said the grep "names SEVEN consumers". REVISION 2 said the grep
+ * returns 9 here and 8 at `bb4a311d0`, that two of the nine are not consumers -
+ * "the trait's own declaration, and THIS file" - and therefore SEVEN consumers
+ * at base, FIVE of them outside the list of nine.
+ *
+ * WHAT IS TRUE, and the difference is that a `grep` for a NAME finds doc-blocks:
+ * `git grep -l 'TestFileWalkTrait' bb4a311d0 -- sugar-crush/tests/` returns 8
+ * files, and only FIVE of them carry `use TestFileWalkTrait;`. THREE do not: the
+ * trait's own declaration, `Backend/AwaitPromiseDiagnosticArmTest.php` and
+ * `Backend/ScaledClockHelperSeamTest.php` - the last two name the trait ONLY
+ * inside a doc-block, and each says in so many words that its own walk is NOT the
+ * trait's. Revision 2 also named THIS file as a non-consumer, and this file DOES
+ * `use TestFileWalkTrait;` - its own `derivation()['why']` records it as
+ * `HELPER:testfilewalktrait`. So revision 2 named the wrong two of the wrong
+ * count.
+ *
+ * SO: FIVE consumers at `bb4a311d0`, of which THREE are outside the list of nine
+ * (`Support/AssertionSwallowingCatchTest.php`,
+ * `Support/DuplicatedDocBlockLineTest.php`,
+ * `Support/OneSidedHomeSandboxTest.php`) - one of which carries 3,268 assertions
+ * at base on its own, better than a tenth of the whole nine-file set's 31,215
+ * (10.5%). The finding is unchanged in kind and smaller in size, and the reason
+ * the count kept moving is that the generator was a text search for a name in a
+ * tree whose doc-blocks discuss that name. {@see walkingHelperUsedIn()} exists
+ * because of exactly that, and this paragraph is where the lesson was learned
+ * twice before being applied.
  *
  * TWO CHANNELS, BOTH STRUCTURAL, AND THEIR PRECISION IS MEASURED RATHER THAN
  * ASSERTED.
@@ -121,13 +142,30 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * MEMBERSHIP first, and the moment a file is a member it stops asking about that
  * file's remaining sites - once through channel A, once when any site in the file
  * resolves to the root, and once on a {@see DECLARED_TREE_WIDE_GUARDS} row.
- * MEASURED by driving the shipped classifier over `everyTestFile()`: 12
- * unresolved walker call sites in 9 files are passed over that way
- * (1 via channel A, 5 via a resolved sibling site, 6 via a declared row).
+ * MEASURED by driving the shipped classifier over `everyTestFile()`: 13
+ * unresolved walker call sites in 10 files are passed over that way - 2 via
+ * channel A, 5 via a resolved sibling site, 6 via a declared row.
+ *
+ * THAT PAIR WAS FIRST WRITTEN AS "12 in 9 (1/5/6)" AND WAS FALSE AT THE COMMIT
+ * THAT SHIPPED IT, which is worth the four lines it takes to say why, because the
+ * cause is a fix in the same commit. 12/9 is the correct answer BEFORE
+ * {@see NAME_SPELLING} closed the substring fail-open: with the old
+ * `str_contains()` resolver, `RuntimeTest.php`'s `scandir($dir)` resolved
+ * (falsely) to the package root, so it sat in the `root` bucket instead of the
+ * residue. Closing the hole moved it into the residue, where channel-A
+ * membership passes it over - one more site, one more file. MEASURED both ways
+ * by reverting only `isRootAnchored()`: 12 in 9 with the old resolver, 13 in 10
+ * with the shipped one.
+ *
+ * AND THAT ALSO CORRECTS {@see NAME_SPELLING}'s OWN "MEASURED EFFECT ON THIS
+ * TREE: none". It has no effect on the roster, the candidate set, the walking-file
+ * population or the unaccounted-for set - those four are what was checked - but it
+ * DOES move one site between buckets inside a file that is a member either way.
+ * Four aggregates agreeing is not the same as nothing changing.
  *
  * WHAT IS TRUE, and it is the property that carries the weight: EVERY FILE with
  * an unresolved walker site is either IN THE ROSTER or has every one of those
- * sites licensed by name. MEASURED: all 9 of those files are roster members, and
+ * sites licensed by name. MEASURED: all 10 of those files are roster members, and
  * that is not a coincidence - each of the three early returns fires BECAUSE the
  * file was just added. A site passed over in a file that is already a member
  * cannot change a roster verdict, because the only verdict a site can move is
@@ -164,9 +202,20 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * stands either way; the cardinality is the table's, not the paragraph's.
  *
  * WHY IT IS PINNED RATHER THAN CLOSED - a decision, with the measurement behind
- * it. The gap is LATENT on this tree: `dirname(__FILE__` appears in 0 files, a
- * `Finder` in 0, `shell_exec('find` in 0, and the three files naming
- * `git ls-files` do so in a comment or a teardown. `dirname(__FILE__` was the one
+ * it, AND WITH THIS FILE EXCLUDED FROM ITS OWN DOMAIN. The gap is LATENT on this
+ * tree: `dirname(__FILE__`, a `Finder` and `shell_exec('find` each appear in 0
+ * files under `tests/` and `src/` OTHER THAN THIS ONE, and the files naming
+ * `git ls-files` do so in a comment or a teardown.
+ *
+ * THE EXCLUSION IS THE CORRECTION, not a hedge. Those three claims were written
+ * as a flat "0 files" and are now self-falsified by the paragraph that makes
+ * them: MEASURED, each matches exactly one file under `tests/` and `src/` -
+ * `tests/TreeWideGuardRosterTest.php`, because the blind-spot table below carries
+ * all three as FIXTURE SOURCE. At `bb4a311d0` all three were genuinely 0. No
+ * verdict moves either way, so this is a wrong figure rather than a wrong
+ * classification - but it is the same self-reference hazard this change-set
+ * handled explicitly for `src/Agents/Agent.php`'s citation census and then walked
+ * into here. `dirname(__FILE__` was the one
  * cheap spelling and it IS closed now, in {@see ROOT_ANCHOR}. A SUBPROCESS
  * channel was built and MEASURED before being rejected: on this tree it finds
  * exactly TWO root-anchored subprocess sites and BOTH are false positives -
@@ -199,7 +248,7 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * silently.
  *
  * THIS FILE IS ITSELF A MEMBER, through channel A, and
- * {@see testTheDerivationIncludesItselfAndTheTraitsOtherConsumers()} asserts it -
+ * {@see testTheDerivationIncludesItselfAndTheGuardsTheNineFileListOmits()} asserts it -
  * a roster of tree-wide guards that did not contain itself would be answering
  * about a population it is not in.
  *
@@ -235,8 +284,18 @@ final class TreeWideGuardRosterTest extends TestCase
     ];
 
     /**
-     * The five consumers of the shared walker trait that the nine-file list
-     * omits.
+     * Five tree-wide guards the nine-file list omits, WITH THE CHANNEL EACH ONE
+     * QUALIFIES THROUGH.
+     *
+     * THE HEADING USED TO SAY "the five consumers of the shared walker trait",
+     * AND TWO OF THE FIVE ARE NOT CONSUMERS. MEASURED: the two `Backend/` rows
+     * name the trait only inside a doc-block and qualify through CHANNEL B, on a
+     * `RecursiveDirectoryIterator($root, ...)` of their own; `use
+     * TestFileWalkTrait;` appears in neither. The three `Support/` rows are
+     * genuine trait consumers. The rows are all correct - every one is a
+     * tree-wide guard the nine-file list omits, which is what this constant is
+     * for - and only the label over them was wrong, so the channel is now
+     * recorded per row rather than asserted for the group.
      *
      * THE FINDING, MADE EXECUTABLE. These are not an alphabet statement and not
      * an exemption: they are the specific omissions the Phase 3 close review
@@ -247,8 +306,12 @@ final class TreeWideGuardRosterTest extends TestCase
      * @var list<string>
      */
     private const OMITTED_BY_THE_HAND_MAINTAINED_SET = [
+        // CHANNEL B, not the trait: names TestFileWalkTrait only in a doc-block,
+        // and that doc-block says its own walk is not the trait's.
         'Backend/AwaitPromiseDiagnosticArmTest.php',
+        // CHANNEL B, same shape.
         'Backend/ScaledClockHelperSeamTest.php',
+        // CHANNEL A, a real `use TestFileWalkTrait;`.
         'Support/AssertionSwallowingCatchTest.php',
         'Support/DuplicatedDocBlockLineTest.php',
         'Support/OneSidedHomeSandboxTest.php',
@@ -310,12 +373,23 @@ final class TreeWideGuardRosterTest extends TestCase
         // its `.git` exists, so copyTree() never runs again. MEASURED by a
         // reviewer: adding a file under that fixture tree left
         // `vendor/bin/phpunit tests/BaseSystemPromptTest.php` at
-        // `OK (15 tests, 179 assertions)`, byte-identical to baseline; with the
-        // cache cleared FIRST, baseline is `OK (49 tests, 601 assertions)` and
-        // the same added file gives `Tests: 49, Assertions: 601, Failures: 1` at
-        // BaseSystemPromptTest.php:672. So the delegation was to a guard its own
-        // cache masks. By this roster's stated criterion the walk qualifies, and
-        // it is declared rather than argued away.
+        // `OK (15 tests, 179 assertions)`, byte-identical to baseline. RE-MEASURED
+        // HERE, all three states, because the pair that stood in this comment -
+        // "with the cache cleared FIRST, baseline is OK (49 tests, 601
+        // assertions)" - cannot be true of a file that declares 15 test methods
+        // and no data provider, and I shipped it without deriving it:
+        //     cache warm                            OK (15 tests, 179 assertions)
+        //     cache cleared                         OK (15 tests, 195 assertions)
+        //     cache cleared + one file added under
+        //     tests/fixtures/prompt/tree            Tests: 15, Assertions: 195,
+        //                                           Failures: 1, at
+        //                                           BaseSystemPromptTest.php:672
+        // The 49/601 was wrong; the ARGUMENT it was supporting is right and the
+        // corrected figures make it sharper - the walk is masked by its own
+        // vendor/ cache (179 vs 195 assertions is the masking, measured), and it
+        // unmasks the moment the cache is cleared. By this roster's stated
+        // criterion the walk qualifies, and it is declared rather than argued
+        // away.
         'BaseSystemPromptTest.php' => 'copyTree() takes a fixture tree inside tests/ as a parameter; the golden guard it delegated to is masked by ensureFixtureRepo()\'s vendor/ cache',
     ];
 
@@ -429,15 +503,29 @@ final class TreeWideGuardRosterTest extends TestCase
      * '/src'`. MEASURED through the shipped classifier before the fix:
      * `glob($this->tempDir . '/*')` came back in the `root` bucket - the exact
      * shape the negative control in
-     * {@see testTheDerivationIncludesItselfAndTheTraitsOtherConsumers()} declares
+     * {@see testTheDerivationIncludesItselfAndTheGuardsTheNineFileListOmits()} declares
      * impossible. Matching is now bounded on both sides, so `$t` cannot answer
      * for `$this`.
      *
      * SECOND, SHAPE. {@see rootAnchoredNames()} takes an assignment TARGET as
      * written, so array-append and index targets arrive as `$calls[]`,
-     * `$cases[$name]` and truncated forms like `$aliases]`. MEASURED over all of
-     * `tests/`: 8,264 well-formed spellings and 481 distinct malformed ones. A
-     * malformed spelling can only ever match by accident, so it is not consulted.
+     * `$cases[$name]` and truncated forms like `$aliases]`. A malformed spelling
+     * can only ever match by accident, so it is not consulted.
+     *
+     * THE CENSUS, WITH ITS GENERATOR AND ITS UNITS, because the pair that stood
+     * here - "8,264 well-formed spellings and 481 distinct malformed ones" -
+     * reproduces under no reading and was WRONG IN ITS UNITS: it paired
+     * OCCURRENCES on the left with DISTINCT spellings on the right, out of a
+     * standalone probe whose pattern was not this constant. GENERATOR: for each
+     * `.php` file `everyTestFile()` returns, run {@see rootAnchoredNames()} over
+     * {@see significant()} and classify every name it yields by this pattern.
+     * MEASURED over 472 files - well-formed 5,685 occurrences across 4,731
+     * distinct spellings; malformed 437 occurrences across 312 distinct spellings.
+     * Rule 2 says ship the generator, not the count, so the DIRECTION of the claim
+     * - that malformed spellings really are produced and really are rejected - is
+     * asserted from the tree by
+     * {@see testTheRootTaintResolverMatchesAtNameBoundariesAndIgnoresMalformedSpellings()}
+     * and does not rest on these four figures at all.
      *
      * THE SHAPES ALLOWED ARE THE ONES {@see spellingsOf()} PRODUCES, and I
      * measured that list rather than guessing it: a plain local `$root`, a
@@ -495,16 +583,21 @@ final class TreeWideGuardRosterTest extends TestCase
     private static ?array $helpers = null;
 
     /**
-     * CHANNEL A, AND THIS FILE'S OWN MEMBERSHIP.
+     * THE OMISSIONS, AND THIS FILE'S OWN MEMBERSHIP.
      *
-     * The trait's consumers are the one group whose tree-wide-ness is a fact
-     * about the code rather than an inference from it, so they are the derivation
-     * step that cannot be wrong. This test pins the five the hand-maintained list
+     * A trait consumer's tree-wide-ness is a fact about the code rather than an
+     * inference from it, which is why channel A is the derivation step that
+     * cannot be wrong. This test pins the five guards the hand-maintained list
      * omits AND this file itself - a roster that did not contain itself would be
      * reporting on a population it is not in, and this file walks the whole of
      * `tests/` on every one of its own assertions.
+     *
+     * ITS NAME USED TO SAY "AndTheTraitsOtherConsumers" AND TWO OF THE FIVE ARE
+     * NOT CONSUMERS - see {@see OMITTED_BY_THE_HAND_MAINTAINED_SET}, where the
+     * channel is now recorded per row. The subjects did not change; the name was
+     * describing three of them and claiming all five.
      */
-    public function testTheDerivationIncludesItselfAndTheTraitsOtherConsumers(): void
+    public function testTheDerivationIncludesItselfAndTheGuardsTheNineFileListOmits(): void
     {
         $roster = self::derivation()['roster'];
 
@@ -519,9 +612,14 @@ final class TreeWideGuardRosterTest extends TestCase
             $this->assertContains(
                 $omitted,
                 $roster,
-                $omitted . ' walks the whole of tests/ through the shared walker trait and is not in '
-                    . 'the derived roster. It is one of the five omissions this file exists to stop '
-                    . 'being silent; if it genuinely stopped walking the tree, remove it from '
+                $omitted . ' walks the whole tree and is not in the derived roster. It is one of the '
+                    . 'five guards the hand-maintained list of nine omits, and this file exists to '
+                    . 'stop those being silent. CHECK WHICH CHANNEL IT QUALIFIED THROUGH before '
+                    . 'suspecting the trait: the three Support/ rows are trait consumers, the two '
+                    . 'Backend/ rows are channel B and name the trait only in a doc-block - an '
+                    . 'earlier version of this message asserted the trait for all five and would '
+                    . 'have printed a false sentence for either Backend/ row. If it genuinely '
+                    . 'stopped walking the tree, remove it from '
                     . 'OMITTED_BY_THE_HAND_MAINTAINED_SET in the same change-set and say why.',
             );
         }
@@ -585,8 +683,8 @@ final class TreeWideGuardRosterTest extends TestCase
      * call site in a test file that also names the package root must be one of
      * ... Anything else reds here". MEASURED FALSE: {@see derivation()} settles
      * MEMBERSHIP first and stops asking about a member file's remaining sites, so
-     * 12 unresolved sites in 9 files never reach this test - and all 9 files are
-     * members, which is why they never reach it.
+     * 13 unresolved sites in 10 files never reach this test - and all 10 files
+     * are members, which is why they never reach it.
      *
      * WHAT THIS TEST REALLY ASSERTS: for a file that is NOT already a roster
      * member, every unresolved walker site must be covered by a declared local
@@ -909,8 +1007,8 @@ final class TreeWideGuardRosterTest extends TestCase
      * reds. MEASURED FALSE: {@see derivation()} settles MEMBERSHIP first and then
      * stops asking about that file's remaining sites, at three early returns -
      * channel A, a sibling site that resolves, and a
-     * {@see DECLARED_TREE_WIDE_GUARDS} row - passing over 12 unresolved sites in
-     * 9 files at this commit.
+     * {@see DECLARED_TREE_WIDE_GUARDS} row - passing over 13 unresolved sites in
+     * 10 files at this commit.
      *
      * The claim was wrong; the MECHANISM is not, and this is the difference. The
      * only verdict a walker site can move is whether ITS FILE is a roster member.
@@ -1146,6 +1244,39 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'so the boundary match has over-corrected and the resolver has stopped resolving',
         );
         $this->assertSame([], $resolved['unresolved']);
+
+        // THE MALFORMED SPELLINGS ARE REAL OUTPUT OF THIS TREE, asserted rather
+        // than quoted from a census. The doc-block gives four figures for them;
+        // this is the part that must hold whatever those figures drift to - that
+        // rootAnchoredNames() really does yield names NAME_SPELLING rejects, so
+        // the filter is doing work rather than being decorative.
+        $malformedFromTheTree = [];
+        $wellFormedFromTheTree = 0;
+        foreach (self::everyTestFile() as $absolute) {
+            foreach (self::rootAnchoredNames(self::significant((string) file_get_contents($absolute))) as $name) {
+                if (preg_match(self::NAME_SPELLING, $name) === 1) {
+                    $wellFormedFromTheTree++;
+
+                    continue;
+                }
+                $malformedFromTheTree[$name] = true;
+            }
+        }
+
+        $this->assertNotSame(
+            [],
+            $malformedFromTheTree,
+            'rootAnchoredNames() no longer yields a single spelling NAME_SPELLING rejects, so either '
+                . 'the taint extraction started returning only well-formed names - in which case say '
+                . 'so here and the filter becomes belt-and-braces - or the pattern has been widened '
+                . 'until it accepts assignment targets again',
+        );
+        $this->assertGreaterThan(
+            \count($malformedFromTheTree),
+            $wellFormedFromTheTree,
+            'malformed taint spellings now outnumber well-formed ones, which means the filter is '
+                . 'discarding most of the taint and the resolver is about to stop resolving',
+        );
 
         // THE SPELLING PREDICATE, both ways. The malformed entries are real
         // output of rootAnchoredNames(), not invented shapes.

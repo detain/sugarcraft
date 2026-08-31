@@ -1182,6 +1182,30 @@ final class EnvironmentBlockTest extends TestCase
         shell_exec('git -C ' . $sq . ' commit -q -m ' . escapeshellarg($forgery) . ' 2>/dev/null');
 
         $viaSubject = EnvironmentBlock::capture($subjectRepo, 'model')->render();
+
+        // THE FORGERY MUST HAVE LANDED BEFORE THE COMPARISON MEANS ANYTHING, and
+        // it did not used to be asserted. MEASURED: with the commit subject
+        // replaced by 'harmless subject' the comparison below still passed at an
+        // IDENTICAL assertion count - because an unforged block's only `</env>`
+        // is its own terminator, which is of course after `Status:`. So the
+        // comparative clause was passing on a block that carried no forgery at
+        // all, and only a repo with no `git init` could red it. These two
+        // assertions are what make the comparison a comparison.
+        $this->assertStringContainsString(
+            $forgery,
+            $viaSubject,
+            'the forged commit subject did not reach the block, so the comparison below is being '
+                . 'made against an UNFORGED block whose only closing fence is its own terminator - '
+                . 'and it would pass for that reason rather than for the reason claimed',
+        );
+        $this->assertSame(
+            2,
+            substr_count($viaSubject, '</env>'),
+            'the commit-subject vector no longer produces a SECOND closing fence, so either that '
+                . 'vector has been fixed - in which case this ranking and its roster row both need '
+                . 're-deriving - or the fixture did not record the forged subject',
+        );
+
         $subjectClose = strpos($viaSubject, '</env>');
         $subjectStatus = strpos($viaSubject, 'Status:');
         $this->assertIsInt($subjectClose);

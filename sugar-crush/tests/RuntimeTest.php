@@ -2452,18 +2452,29 @@ final class RuntimeTest extends TestCase
         // 10540, Assertions: 162608, Failures: 17, Skipped: 1` - and wrong about
         // THIS assertion: with `--filter
         // testTheWriteToolRosterDoesNotDriftFromThePermissionGate` it reds the
-        // NEXT line, RuntimeTest.php:2413, at 1 test / 7 assertions, and this
-        // regex stays green. It has to: PermissionGate::isWriteTool() spells
-        // 'mcp__' as a LITERAL and never reads the authority, so respelling the
-        // authority cannot move it.
+        // `assertTrue(Runtime::stepRequestedAWrite(...))` two statements below,
+        // at 1 test / 7 assertions, and this regex stays GREEN. It has to:
+        // PermissionGate::isWriteTool() spells 'mcp__' as a LITERAL and never
+        // reads the authority, so respelling the authority cannot move it.
         //
-        // The mutation that reds THIS line is the repair that would make the
-        // gate follow its authority - PermissionGate.php:691 rewritten as
-        // `str_starts_with($call->name, McpToolBridge::NAME_PREFIX)`. MEASURED:
-        // 1 test / 6 assertions / 1 failure at RuntimeTest.php:2403, printing
-        // the message below. That is the correct behaviour of this pin: the
-        // literal it watches is gone, and the message tells the reader to teach
-        // the regex the new shape rather than to undo the repair.
+        // The mutation that reds THIS assertion is the repair that would make
+        // the gate follow its authority - PermissionGate::isWriteTool()'s
+        // `str_starts_with($call->name, 'mcp__')` rewritten to read
+        // `McpToolBridge::NAME_PREFIX`. MEASURED: 1 test / 6 assertions / 1
+        // failure here, printing the message below. That is the correct
+        // behaviour of this pin: the literal it watches is gone, and the message
+        // tells the reader to teach the regex the new shape rather than to undo
+        // the repair.
+        //
+        // NEITHER MUTATION IS CITED BY LINE NUMBER, and the reason is that both
+        // WERE and both went stale inside this very change-set. They named
+        // RuntimeTest.php:2403 and :2413, measured correctly at the commit that
+        // wrote them; a later commit in the same change-set added 83 lines above
+        // and removed 10, so both citations were off by exactly 73 two commits
+        // later. A file citing its own line numbers invalidates itself on the
+        // next edit above the citation. The assertion COUNTS (6 and 7) and the
+        // named assertions are what survive an edit, so those are what is
+        // recorded.
         //
         // AND THAT GAP IS ITSELF WORTH REPORTING, in a file outside this
         // change-set's declared list: Runtime::MCP_TOOL_PREFIX reads
