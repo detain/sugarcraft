@@ -8,8 +8,17 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\Agents\Agent;
 use SugarCraft\Crush\Agents\AgentDefinition;
+use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentPreset;
+use SugarCraft\Crush\Agents\ProcessExecutor;
+use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Context\EnvironmentBlock;
+use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\EmbeddingsRequest;
+use SugarCraft\Crush\Providers\EmbeddingsResponse;
+use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\SkillRegistry;
 
 /**
  * Tests for Agent value object - represents a configured agent instance.
@@ -1380,5 +1389,483 @@ final class AgentTest extends TestCase
         $agent = Agent::fromPreset(new AgentPreset(name: 'bare', description: ''), 'echo', 'echo');
 
         $this->assertSame('', $agent->prompt);
+    }
+
+    // =========================================================================
+    // P3.S6 - the SECOND assembler's per-step seam, measured rather than assumed
+    // =========================================================================
+
+    /**
+     * Every production call site of `Agent::systemPrompt()`, as a NAMED ROSTER
+     * keyed on the file rather than as a bare total.
+     *
+     * WHY A ROSTER AND NOT A COUNT. A cardinality moves without saying what
+     * moved; this says WHICH file gained or lost a call, which is the whole
+     * difference between a census that reds usefully and one that reds. It is
+     * keyed on the file and not on `file:line` on purpose: a line number is
+     * wrong the next time anyone edits above it, and this roster is meant to
+     * survive every edit that does not change the SET of callers.
+     *
+     * WHY IT EXISTS AT ALL. P3.S5 wired the per-step write signal into the
+     * `Runtime` assembler and left the second one - this class's - untouched,
+     * and the disposition of that gap turns entirely on whether any of these
+     * callers renders more than once per dispatch. That question had no test
+     * and the counts in prose disagreed with each other: prompt_plan.md's
+     * P3.S6 section says EIGHT and `Runtime::markWriteSinceLastRender()`'s
+     * doc-block says NINE. MEASURED at P3.S6 by the scanner below, over
+     * `src/` entire: eight, in four files, and the doc-block's nine is the
+     * stale one.
+     *
+     * @var array<string, int>
+     */
+    private const AGENT_ASSEMBLER_CALL_SITES = [
+        'Agents/AgentManager.php' => 1,
+        'Agents/ProcessExecutor.php' => 1,
+        'App/App.php' => 1,
+        'Workflows/WorkflowEngine.php' => 5,
+    ];
+
+    /**
+     * The roster above, re-derived from `src/` on every run, with the scanner's
+     * known-positive control in the SAME test.
+     *
+     * THE CONTROL IS NOT DECORATION. Every interesting thing this test says is
+     * a statement about a count, and a scanner that has stopped matching
+     * anything reports a count too - `[]` is what a dead instrument returns.
+     * The fixture below carries one live call and six near-misses that a
+     * naive textual scan would take: the same call spelled inside a line
+     * comment, inside a doc comment and inside a single-quoted string, the
+     * method's own declaration, `buildSystemPrompt()` (the OTHER assembler,
+     * whose name ends in the one this matches), and the bare word in array-key
+     * position. The scanner must answer with exactly the one live line.
+     */
+    public function testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor(): void
+    {
+        $fixture = "<?php\n"
+            . "// \$a->systemPrompt() spelled in a line comment\n"
+            . "/** \$b->systemPrompt() spelled in a doc comment */\n"
+            . "\$s = '\$c->systemPrompt()';\n"
+            . "\$live = \$agent->systemPrompt();\n"
+            . "\$other = \$agent->buildSystemPrompt();\n"
+            . "\$key = ['systemPrompt' => 1];\n";
+
+        $this->assertSame(
+            [5],
+            self::agentAssemblerCallSites($fixture),
+            'the call-site scanner no longer sees a live ->systemPrompt() call, or it sees one of the '
+                . 'six near-misses beside it - every count below is worthless until this line passes',
+        );
+
+        $src = \dirname(__DIR__, 2) . '/src';
+        $census = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $sites = self::agentAssemblerCallSites((string) file_get_contents($file->getPathname()));
+            if ($sites !== []) {
+                $census[str_replace('\\', '/', substr($file->getPathname(), \strlen($src) + 1))] = \count($sites);
+            }
+        }
+        ksort($census);
+
+        $this->assertSame(
+            self::AGENT_ASSEMBLER_CALL_SITES,
+            $census,
+            'the set of files that call Agent::systemPrompt() moved. A NEW caller must be classified '
+                . 'per-step or once-per-dispatch before this roster is updated - that classification is '
+                . 'the entire content of P3.S6.',
+        );
+
+        $this->assertSame(
+            8,
+            array_sum($census),
+            'prompt_plan.md P3.S6 states eight production call sites; Runtime::markWriteSinceLastRender()'
+                . "'s doc-block states nine. This is the derivation that settles it.",
+        );
+    }
+
+    /**
+     * THE SEAM QUESTION, ANSWERED BY DRIVING IT: one sub-agent dispatch renders
+     * the environment block exactly ONCE, however many chunks the provider
+     * streams.
+     *
+     * This is the measurement P3.S6 turns on. The `Runtime` assembler re-renders
+     * once per step of the agentic loop, which is what gave P3.S5's write signal
+     * something to suppress; the agent assembler has no agentic loop at all -
+     * `AgentManager::executeSubAgent()` builds one `CompleteRequest` and hands
+     * it to one completion, and the transient-failure retry around that
+     * completion re-sends the SAME request object rather than rebuilding it. So
+     * there is no second render inside a dispatch for a write signal to
+     * suppress, and no "step after a write" for it to be suppressed on.
+     *
+     * PINNED AS A DECISION, NOT AS AN ACCIDENT. If a later change gives the
+     * agent path a real step loop, the provider is called more than once and
+     * this reds - which is the moment the P3.S6 disposition has to be revisited
+     * rather than a moment nobody notices.
+     *
+     * BOTH POLARITIES ARE IN HERE: the chunk count is varied from one to twenty
+     * and the answer must not move. A test run at a single chunk count cannot
+     * tell "renders once per dispatch" from "renders once per chunk".
+     */
+    public function testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams(): void
+    {
+        $repo = self::ensureFixtureRepo();
+
+        foreach ([1, 20] as $chunks) {
+            $provider = new class ($chunks) implements ProviderInterface {
+                /** @var list<?string> */
+                public array $systemPrompts = [];
+                public int $streamCalls = 0;
+
+                public function __construct(private int $chunks) {}
+
+                public function name(): string
+                {
+                    return 'p3s6-counting';
+                }
+
+                public function supportsStreaming(): bool
+                {
+                    return true;
+                }
+
+                public function supportsFunctionCalling(): bool
+                {
+                    return false;
+                }
+
+                public function supportsVision(): bool
+                {
+                    return false;
+                }
+
+                public function supportsJsonSchema(): bool
+                {
+                    return false;
+                }
+
+                public function contextWindow(): int
+                {
+                    return 100_000;
+                }
+
+                public function costPer1kTokens(string $model, string $direction): float
+                {
+                    return 0.0;
+                }
+
+                public function complete(CompleteRequest $request): CompleteResponse
+                {
+                    $this->systemPrompts[] = $request->systemPrompt;
+
+                    return new CompleteResponse(content: 'done');
+                }
+
+                public function completeStream(CompleteRequest $request): \Generator
+                {
+                    $this->streamCalls++;
+                    $this->systemPrompts[] = $request->systemPrompt;
+
+                    for ($i = 0; $i < $this->chunks; $i++) {
+                        yield new CompleteResponse(content: "chunk{$i} ");
+                    }
+                }
+
+                public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+                {
+                    throw new \LogicException('the P3.S6 counting provider is never asked for embeddings');
+                }
+            };
+
+            $manager = new AgentManager($provider, new SkillRegistry());
+            $manager->register(self::probeAgent(EnvironmentBlock::capture($repo, 'stub-model')));
+
+            $subAgent = $manager->createSubAgent('p3s6-probe', 'do the thing');
+            foreach ($manager->executeSubAgent($subAgent->id) as $_) {
+                // drain the generator; the assertions are on what the provider saw
+            }
+
+            $this->assertSame(
+                1,
+                $provider->streamCalls,
+                "the agent path grew a step loop: {$chunks} streamed chunks produced "
+                    . "{$provider->streamCalls} completions, not one",
+            );
+            $this->assertCount(
+                1,
+                $provider->systemPrompts,
+                "one dispatch handed the provider more than one system prompt at {$chunks} chunks",
+            );
+
+            $handed = $provider->systemPrompts[0];
+            $this->assertIsString($handed);
+            $this->assertStringStartsWith(
+                'P3S6 PROBE PROMPT',
+                $handed,
+                'the prompt the provider received is not the one Agent::systemPrompt() assembled',
+            );
+            $this->assertSame(
+                1,
+                substr_count($handed, '<env>'),
+                'the dispatch emitted the environment block more than once into a single prompt',
+            );
+            $this->assertSame(
+                1,
+                substr_count($handed, 'Staged changes (git diff --cached, index vs HEAD):'),
+                'the default (unmarked) write signal must still emit the staged-diff section exactly once',
+            );
+        }
+    }
+
+    /**
+     * THE PRICE OF THE SECOND ASSEMBLER, measured with a logging `git` shim on
+     * `PATH` rather than quoted from a brief.
+     *
+     * Four figures, one instrument, one test, because three of them are
+     * assertions of a SMALLER number and `0` is also what a shim nobody ever
+     * invoked reports. The `5` in here is this test's known-positive control:
+     * a dead shim reds it, and a shim that logs every process would blow the
+     * `0`.
+     *
+     *   - `EnvironmentBlock::capture()` shells out to git ZERO times. It stores
+     *     three values; the whole bill is in `render()`.
+     *   - One `Agent::systemPrompt()` costs FIVE subprocesses on a repository:
+     *     branch, status, log, `diff --cached`, `diff`.
+     *   - With the P3.S5 write signal suppressed it costs THREE - the two diff
+     *     sections and their two subprocesses are what the signal withholds.
+     *   - And `render()` is NOT memoised, so three calls on ONE agent cost
+     *     fifteen rather than five. That is the fact that makes the second
+     *     assembler more expensive per call than the first, and it is asserted
+     *     here rather than left in the prose of `Bootstrap::agentManager()`.
+     */
+    public function testTheAgentAssemblerCostsFiveGitSubprocessesPerRenderAndThreeWithTheDiffSuppressed(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        $block = EnvironmentBlock::capture($repo, 'stub-model');
+
+        $this->assertSame(
+            0,
+            self::gitSubprocessesDuring(static function () use ($repo): void {
+                for ($i = 0; $i < 10; $i++) {
+                    EnvironmentBlock::capture($repo, 'stub-model');
+                }
+            }),
+            'EnvironmentBlock::capture() reached git - it is documented as storing three values and '
+                . 'shelling out to nothing',
+        );
+
+        $this->assertSame(
+            5,
+            self::gitSubprocessesDuring(static function () use ($block): void {
+                self::probeAgent($block)->systemPrompt();
+            }),
+            'one Agent::systemPrompt() no longer costs five git subprocesses (branch, status, log, '
+                . 'diff --cached, diff)',
+        );
+
+        $this->assertSame(
+            3,
+            self::gitSubprocessesDuring(static function () use ($block): void {
+                self::probeAgent($block->withWriteSinceLastRender(false))->systemPrompt();
+            }),
+            'suppressing the write signal no longer withholds the two diff subprocesses',
+        );
+
+        $this->assertSame(
+            15,
+            self::gitSubprocessesDuring(static function () use ($block): void {
+                $agent = self::probeAgent($block);
+                $agent->systemPrompt();
+                $agent->systemPrompt();
+                $agent->systemPrompt();
+            }),
+            'render() appears to have become memoised - three calls on one agent cost fewer than '
+                . 'three renders. That is a behaviour change, not an optimisation: the git section is '
+                . 'polled per render on purpose.',
+        );
+    }
+
+    /**
+     * ONE DISPATCH THROUGH THE WORKER RENDERS THE AGENT PROMPT TWICE, and this
+     * pins the cost rather than repairing it.
+     *
+     * `App::dispatchSkill()` and all five `WorkflowEngine` sites build the
+     * `CompleteRequest` with `$agent->systemPrompt()` and then hand the SubAgent
+     * to the pool, whose `ProcessExecutor::spawnWorker()` calls
+     * `$agent->agent->systemPrompt()` a second time to build the worker's
+     * startup message. `App::dispatchSkill()`'s own comment says the two
+     * consumers "must agree"; nothing makes them agree, because each is a fresh
+     * unmemoised render and the working tree can move between them.
+     *
+     * MEASURED: TEN git subprocesses for one dispatch, not five. That is
+     * outside this step's declared file list to change - `ProcessExecutor.php`
+     * is not in it - so P3.S6 records the number instead of narrowing the
+     * second call away, and the escalation carries the finding.
+     *
+     * The simulated worker is used deliberately: the second render happens in
+     * the PARENT, before `proc_open()`, so the child never has to reach a model
+     * for this count to be the real one.
+     */
+    public function testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        $agent = self::probeAgent(EnvironmentBlock::capture($repo, 'stub-model'));
+
+        $requestCost = self::gitSubprocessesDuring(static function () use ($agent): void {
+            new CompleteRequest(
+                model: $agent->model,
+                messages: [['role' => 'user', 'content' => 'task']],
+                systemPrompt: $agent->systemPrompt(),
+            );
+        });
+
+        $this->assertSame(5, $requestCost, 'building the CompleteRequest no longer costs one render');
+
+        $dispatchCost = self::gitSubprocessesDuring(static function () use ($agent): void {
+            $request = new CompleteRequest(
+                model: $agent->model,
+                messages: [['role' => 'user', 'content' => 'task']],
+                systemPrompt: $agent->systemPrompt(),
+            );
+
+            $result = (new ProcessExecutor(simulatedWorker: true))->execute(
+                new SubAgent(id: 'p3s6-dispatch', agent: $agent, task: 'task'),
+                $request,
+            );
+
+            self::assertSame(
+                'Completed',
+                $result->status->name,
+                'the simulated worker did not run to completion, so the subprocess count below is '
+                    . 'a count of a dispatch that did not happen',
+            );
+        });
+
+        $this->assertSame(
+            10,
+            $dispatchCost,
+            'one dispatch no longer renders Agent::systemPrompt() exactly twice. If it now renders '
+                . 'once, the double render was repaired and this pin should be replaced by one asserting '
+                . 'five; if it renders more, a new caller was added.',
+        );
+    }
+
+    /**
+     * The line numbers of every live `->systemPrompt(` call in one PHP source.
+     *
+     * Token-driven rather than textual, and the difference is exactly one call
+     * site. MEASURED on this tree with
+     * `/usr/bin/grep -ro -- '->systemPrompt(' src/ | wc -l`: NINE occurrences,
+     * against the EIGHT this scanner reports. The ninth is a comment inside
+     * `App::dispatchSkill()` describing the second render
+     * (`ProcessExecutor sends the request's systemPrompt AND, separately,`
+     * ...), so a textual census of the agent assembler's callers would
+     * over-count by one, in one of the four files whose classification is the
+     * whole content of P3.S6. Comments and strings are their own tokens, so
+     * skipping them is free; the declaration is excluded because it is preceded
+     * by `T_FUNCTION` rather than by `T_OBJECT_OPERATOR`, and
+     * `buildSystemPrompt()` because a token is compared whole rather than by
+     * suffix.
+     *
+     * Deliberately NOT a brace walk - it needs no depth - so it is outside the
+     * population {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest}
+     * polices.
+     *
+     * @return list<int>
+     */
+    private static function agentAssemblerCallSites(string $php): array
+    {
+        $tokens = token_get_all($php);
+        $lines = [];
+
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || $token[0] !== T_OBJECT_OPERATOR) {
+                continue;
+            }
+
+            $name = $tokens[$i + 1] ?? null;
+            if (!\is_array($name) || $name[0] !== T_STRING || $name[1] !== 'systemPrompt') {
+                continue;
+            }
+
+            if (($tokens[$i + 2] ?? null) !== '(') {
+                continue;
+            }
+
+            $lines[] = $name[2];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The fixture agent every P3.S6 measurement runs through: a non-empty
+     * prompt (so the assembled string is distinguishable from a bare block)
+     * and whatever environment snapshot the caller wants tested.
+     */
+    private static function probeAgent(?EnvironmentBlock $environment): Agent
+    {
+        return new Agent(
+            name: 'p3s6-probe',
+            description: 'P3.S6 measurement fixture',
+            prompt: 'P3S6 PROBE PROMPT',
+            model: 'stub-model',
+            provider: 'p3s6-counting',
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            environment: $environment,
+        );
+    }
+
+    /**
+     * Counts the `git` subprocesses $body starts, by putting a logging shim
+     * ahead of the real binary on `PATH`.
+     *
+     * The shim logs one line and then `exec`s the real git, so the values the
+     * block renders are the real repository's and the count is of REAL work
+     * rather than of a stub that answers instantly. `PATH` is restored in a
+     * `finally`, because a leaked shim would silently re-point every later test
+     * in the process at a temp directory that this method then deletes.
+     */
+    private static function gitSubprocessesDuring(callable $body): int
+    {
+        $real = trim((string) shell_exec('command -v git 2>/dev/null'));
+        self::assertNotSame('', $real, 'no git on PATH: the subprocess census has nothing to shim');
+
+        $dir = sys_get_temp_dir() . '/sugarcrush-p3s6-' . getmypid() . '-' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($dir, 0o700, true), "could not create the shim directory {$dir}");
+
+        $log = $dir . '/invocations.log';
+        file_put_contents(
+            $dir . '/git',
+            "#!/bin/sh\n"
+            . 'printf \'git\n\' >> ' . escapeshellarg($log) . "\n"
+            . 'exec ' . escapeshellarg($real) . ' "$@"' . "\n",
+        );
+        self::assertTrue(chmod($dir . '/git', 0o755), 'could not make the git shim executable');
+
+        $originalPath = (string) getenv('PATH');
+        putenv('PATH=' . $dir . ':' . $originalPath);
+
+        try {
+            $body();
+        } finally {
+            putenv('PATH=' . $originalPath);
+        }
+
+        $count = is_file($log)
+            ? \count((array) file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES))
+            : 0;
+
+        self::removeTree($dir);
+
+        return $count;
     }
 }

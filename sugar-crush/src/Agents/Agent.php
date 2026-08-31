@@ -411,6 +411,56 @@ final readonly class Agent
      * reaches real subagent prompts without those call sites changing.
      * Callers holding a session snapshot should pass it, since capture()
      * shells out to git.
+     *
+     * P3.S6 - WHY THE PER-STEP WRITE SIGNAL IS NOT WIRED INTO THIS ASSEMBLER,
+     * recorded here rather than in a plan document because this is the API the
+     * question is about and this is where the next reader lands.
+     *
+     * P3.S5 wired {@see EnvironmentBlock::withWriteSinceLastRender()} into
+     * {@see \SugarCraft\Crush\Runtime}'s assembler, which suppresses the two git
+     * diff sections on a step that wrote nothing. It reached ONE of
+     * `EnvironmentBlock`'s four production construction sites; the other three
+     * feed this method, the second assembler prompt_plan.md section 17.2 keeps
+     * deliberately separate because the two order `<env>` oppositely. The gap
+     * was left open on purpose, to be closed or explained rather than to lapse.
+     *
+     * IT IS EXPLAINED, AND THE EXPLANATION IS A MEASUREMENT: THERE IS NO
+     * PER-STEP SEAM ON THIS PATH TO WIRE. The suppression is defined relative
+     * to the step BEFORE it - it withholds a diff the model was already shown
+     * earlier in the same conversation - so it needs a caller that renders this
+     * prompt more than once for one conversation. No caller does. All EIGHT
+     * production call sites are once-per-dispatch, derived and pinned by
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()}:
+     * {@see AgentManager::executeSubAgent()} (one), `App::dispatchSkill()`
+     * (one), {@see ProcessExecutor::spawnWorker()} (one) and five in
+     * `WorkflowEngine`. Each builds one `CompleteRequest` and hands it to one
+     * completion; there is no agentic loop, and the transient-failure retry
+     * inside `executeSubAgent()` re-sends the SAME request object rather than
+     * rebuilding it. Driven rather than read off, at one streamed chunk and at
+     * twenty, by
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()}.
+     *
+     * A NUMBER IN THE OTHER DIRECTION, so this is not read as "the second
+     * assembler is cheap". It is the expensive one per call.
+     * {@see EnvironmentBlock::render()} is not memoised here the way
+     * {@see \SugarCraft\Crush\Runtime}'s snapshot is, so the git shell-out is paid
+     * on every call: MEASURED with a logging `git` shim on `PATH`, ZERO
+     * subprocesses for `EnvironmentBlock::capture()`, FIVE per render, THREE
+     * when the write signal is suppressed, and FIFTEEN for three calls on one
+     * agent. All four are asserted by
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheAgentAssemblerCostsFiveGitSubprocessesPerRenderAndThreeWithTheDiffSuppressed()}.
+     *
+     * AND ONE DISPATCH RENDERS TWICE, WHICH IS A FINDING AND NOT A FIX. Every
+     * caller that goes through the worker pool builds its `CompleteRequest`
+     * with this method AND then {@see ProcessExecutor::spawnWorker()} calls it
+     * again for the worker's startup message - TEN subprocesses for one
+     * dispatch, two unmemoised renders of a live git section that can disagree
+     * with each other. `App::dispatchSkill()`'s own comment says the two
+     * consumers "must agree"; nothing makes them. Pinned by
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()}
+     * and escalated rather than repaired: dropping either call site is the
+     * removal prompt_plan.md section 1.10 prohibits, and `ProcessExecutor.php`
+     * is outside P3.S6's declared file list.
      */
     public function systemPrompt(?EnvironmentBlock $environment = null): string
     {
