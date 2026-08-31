@@ -2461,20 +2461,23 @@ final class RuntimeTest extends TestCase
         // and dropping them is the correction rather than a loss - section 16.8
         // rule 42, in the shape rule 2 asks for. WHAT IT SAID: the mutation was
         // "MEASURED, `Tests: 10540, Assertions: 162608, Failures: 17, Skipped:
-        // 1`". WHAT IS TRUE: 17 is right and the other two are not - re-derived
-        // at this commit, the same mutation gives `Tests: 10544, Assertions:
-        // 163630, Failures: 17, Skipped: 1`. HOW MEASURED: from the CHECKOUT
-        // ROOT, box confirmed quiet, `php sugar-crush/vendor/bin/phpunit -c
-        // sugar-crush/phpunit.xml --colors=never </dev/null` with
-        // McpToolBridge::NAME_PREFIX respelled, against the same command on the
-        // unmutated tree (10544 / 163658 / 1). WHY THE TOTALS ARE NOT SIMPLY
-        // CORRECTED: they were measured correctly when they were written and
-        // went stale four tests later inside this very change-set, which is the
-        // same failure the paragraph below records for the two line citations.
-        // A suite total is a property of the whole tree and cannot be pinned
-        // from inside one comment by anybody. The FAILURE COUNT is the figure
-        // that survives, because it is a property of the mutation rather than
-        // of the population: it was 17 then and 17 now.
+        // 1`". WHAT IS TRUE: the SEVENTEEN reproduces and the two totals do not.
+        // WHY THEY ARE NOT SIMPLY CORRECTED, and this paragraph had to be
+        // written twice to stop doing the thing it condemns: the first revision
+        // of it announced their removal and then printed two freshly measured
+        // replacements, which a reviewer caught. A suite total is a property of
+        // the whole tree; it was right when it was typed and went stale four
+        // tests later INSIDE this same change-set, which is the same failure
+        // the paragraph below records for the two line citations. Printing a
+        // newer one buys one more commit. So no total is written here at all.
+        // HOW TO GET TODAY'S: from the CHECKOUT ROOT, box confirmed quiet,
+        // `php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml
+        // --colors=never </dev/null`, once with McpToolBridge::NAME_PREFIX
+        // respelled and once without; the difference is what this comment is
+        // about. The FAILURE COUNT is the figure that survives, because it is a
+        // property of the MUTATION rather than of the population: it was 17
+        // when it was first measured and 17 when it was re-derived here, four
+        // tests and one merge later.
         //
         // The mutation that reds THIS assertion is the repair that would make
         // the gate follow its authority - PermissionGate::isWriteTool()'s
@@ -4323,10 +4326,13 @@ final class RuntimeTest extends TestCase
      * positive a human dismisses rather than a silent pass.
      *
      * THE DELETION EXPERIMENT, MEASURED: removing `T_NAME_RELATIVE` from the
-     * accepted token classes in {@see writePrimitivesCalledIn()} reds THIS TEST
-     * AND NOTHING ELSE - `vendor/bin/phpunit tests/RuntimeTest.php` from
-     * `sugar-crush/` goes from `OK (130 tests, 481 assertions)` to `Tests: 130,
-     * Assertions: 477, Failures: 1`, naming this method.
+     * accepted token classes in {@see writePrimitivesCalledIn()} takes
+     * `vendor/bin/phpunit tests/RuntimeTest.php`, run from `sugar-crush/`, from
+     * green to EXACTLY ONE failure, and that failure is this method. No file
+     * total is written here on purpose: this change-set moved this file's own
+     * total twice while it was being written, so a total pinned in it is stale
+     * by the next commit (section 16.8 rule 2). The failure COUNT and the
+     * failing method's NAME are what a later reader can still check.
      *
      * WHAT THAT SENTENCE SAID UNTIL NOW, corrected in place (section 16.8 rule
      * 42) because it was wrong twice over in one clause. IT SAID the reversion

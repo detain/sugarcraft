@@ -1372,6 +1372,94 @@ final class TreeWideGuardRosterTest extends TestCase
             );
         }
     }
+    /**
+     * THE TAINT LOOP IS A FIXPOINT AND NOT A FIXED NUMBER OF PASSES.
+     *
+     * WHAT IT USED TO BE, and this is a correction in place (section 16.8 rule
+     * 42) of a claim that two doc-blocks in this file made about the code:
+     * {@see rootAnchoredNames()} ran `for ($pass = 0; $pass < 8; $pass++)`,
+     * while the class doc-block said the resolution is "iterated to a fixpoint,
+     * so a chain of any depth resolves" and that method's own doc-block repeated
+     * the phrase. One taint rule adds at most one link per pass, so a chain of
+     * NINE assignments written in reverse order truncated. MEASURED by a
+     * reviewer driving the shipped {@see classifyWalkSites()}: depths 2, 6, 7
+     * and 8 resolved, 9 and 12 did not.
+     *
+     * WHY THE CLAIM WAS REPAIRED RATHER THAN THE SENTENCE. The loop already
+     * stopped as soon as a pass added nothing, and the taint set only ever
+     * GROWS and is bounded by the distinct names in one file - so the cap was
+     * never what made it terminate, and dropping it costs nothing and cannot
+     * loop. `do { … } while (count($tainted) !== $before)` is the same loop
+     * without the arbitrary bound. The alternative - declaring "eight" as a
+     * blind spot in {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()} -
+     * would have been honest and would have kept a limit nothing needs.
+     *
+     * WHICH DIRECTION IT FAILED IN, said plainly because it decides the
+     * severity: CLOSED. A truncated chain drops the site into `unresolved`, the
+     * file lands in `unaccounted`, and
+     * {@see testEveryWalkerCallSiteInAFileThatNamesThePackageRootIsAccountedFor()}
+     * reds. No guard could be silently missed. What was wrong was the MESSAGE a
+     * reader would then get - it says "classify this walk or license it", and
+     * the true repair was "your chain is deeper than eight".
+     *
+     * MEASURED EFFECT ON THIS TREE: none. roster 67, candidates 83,
+     * walkerFiles 181, testFiles 440, unaccounted 0 - identical before and
+     * after, because no chain in `tests/` is nine deep. The defect was latent,
+     * which is exactly why it needed a test rather than an observation.
+     *
+     * THE NEGATIVE CONTROL IS THE POINT OF THE LAST ASSERTION: a resolver that
+     * answered `root` for every input would pass all three positive rows.
+     */
+    public function testTheRootTaintFixpointResolvesAChainDeeperThanTheOldEightPassCap(): void
+    {
+        // Reverse order on purpose: `$aN = $aN-1` is written BEFORE the
+        // assignment that anchors `$a1`, so each pass can carry the taint
+        // exactly one link further and the depth IS the pass count.
+        $chain = static function (int $depth, string $seed): string {
+            $body = "<?php\nclass P { private function go(): void {\n";
+            for ($i = $depth; $i > 1; $i--) {
+                $body .= '    $a' . $i . ' = $a' . ($i - 1) . ";\n";
+            }
+            $body .= '    $a1 = ' . $seed . ";\n";
+            $body .= '    foreach (glob($a' . $depth . " . '/*.php') as \$f) {}\n} }\n";
+
+            return $body;
+        };
+
+        $anchored = "\\dirname(__DIR__, 2) . '/src'";
+
+        // The control: a depth the old cap could reach. Without it, a resolver
+        // that had stopped resolving entirely would satisfy nothing below and
+        // this test would be reporting the wrong cause.
+        $this->assertSame(
+            ["glob(\$a2.'/*.php')"],
+            self::classifyWalkSites($chain(2, $anchored))['root'],
+            'a two-link taint chain no longer resolves, so the resolver is broken outright rather '
+                . 'than bounded - fix that before reading the depth rows below',
+        );
+
+        foreach ([9, 20] as $depth) {
+            $sites = self::classifyWalkSites($chain($depth, $anchored));
+            $this->assertSame(
+                ["glob(\$a{$depth}.'/*.php')"],
+                $sites['root'],
+                'a taint chain ' . $depth . ' links deep did not resolve to the package root. '
+                    . 'rootAnchoredNames() has regained a pass cap: one rule carries the taint one '
+                    . 'link per pass, so any fixed number of passes is a depth limit. It fails '
+                    . 'CLOSED - the walk lands in the unaccounted bucket and the reader is told to '
+                    . 'classify or license a walk that is in fact a resolvable one - so the cost is '
+                    . 'a wrong repair, not a missed guard. Restore the do/while.',
+            );
+            $this->assertSame([], $sites['unresolved']);
+        }
+
+        // NEGATIVE CONTROL, same shape, same depth: a chain that never touches
+        // an anchor must NOT resolve.
+        $unanchored = self::classifyWalkSites($chain(20, "sys_get_temp_dir() . '/x'"));
+        $this->assertSame([], $unanchored['root'], 'a 20-link chain rooted at a temp directory resolved to the package root, so the resolver taints on depth rather than on the anchor');
+        $this->assertSame(["glob(\$a20.'/*.php')"], $unanchored['unresolved']);
+    }
+
 
     /**
      * CHANNEL A'S ALPHABET IS DERIVED FROM THE TREE, AND ON TOKENS RATHER THAN
@@ -2049,6 +2137,18 @@ final class TreeWideGuardRosterTest extends TestCase
      * `self::`, `$this->` or `static::` and a rule that knew one of the three
      * would answer differently for identical code.
      *
+     * "ANY DEPTH" IS NOW LOAD-BEARING RATHER THAN ASPIRATIONAL. This phrase
+     * and the class doc-block's copy of it were BOTH false while the loop below
+     * ran a fixed eight passes: one rule carries the taint one link per pass, so
+     * eight passes is a depth limit, and a reviewer measured a nine-link chain
+     * truncating. It fails CLOSED - the site drops into the residue and the
+     * unaccounted-for test reds - so the cost was a reader sent to the wrong
+     * repair rather than a missed guard. The cap is gone (the loop already
+     * stopped on a pass that added nothing, and the taint set only grows and is
+     * bounded by the distinct names in one file, so nothing but the cap was ever
+     * arbitrary), and the claim is pinned by
+     * {@see testTheRootTaintFixpointResolvesAChainDeeperThanTheOldEightPassCap()}.
+     *
      * WHAT IS NOT HERE, and it is the measured omission the class doc-block
      * argues: taint on a function PARAMETER from its same-file call sites.
      *
@@ -2061,7 +2161,7 @@ final class TreeWideGuardRosterTest extends TestCase
         $tainted = [];
         $functions = self::functionBodies($tokens);
 
-        for ($pass = 0; $pass < 8; $pass++) {
+        do {
             $before = \count($tainted);
 
             for ($i = 0; $i < $count; $i++) {
@@ -2149,10 +2249,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 }
             }
 
-            if (\count($tainted) === $before) {
-                break;
-            }
-        }
+        } while (\count($tainted) !== $before);
 
         return $tainted;
     }
