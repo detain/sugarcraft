@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue. `P3.S4-fix-1` @ `6e7308938` is FIXED, ORCHESTRATOR-VERIFIED and MERGE-READY (16/399) — held only for a quiet box to run its full suite serially. TWO AGENTS STILL RUNNING: the `P3.S5-fix-1` final fix pass and the `P3.S6` step agent. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue. BOTH fix branches are DONE, ORCHESTRATOR-VERIFIED and MERGE-READY — `P3.S4-fix-1` @ `6e7308938` (16/399) and `P3.S5-fix-1` @ `6acba5f9e` (145/689) — held ONLY for a quiet box to run their full suites serially. `P3.S6` has THREE COMMITS and a clean tree but its REPORT NEVER ARRIVED; it has been asked for it and must not be re-spawned. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -148,9 +148,9 @@ See §8 `In-flight batch` for exactly what each one is doing and what to do when
 | `P3.S6` sandbox | PSR-4 root resolves to `/home/sites/prompt-step-P3.S6/sugar-crush/src`; `--filter AgentTest` = `OK (56 tests, 278 assertions)` | base `c7e5a6454` |
 | `log.abbrevCommit` is parse-time validated | independently re-derived by the orchestrator in a scratch repo — see §8 | git 2.43.0 |
 
-**Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `6e7308938`
-(the branch is otherwise DONE — this is the only thing between it and its merge), and the FULL suite
-at whatever head `P3.S5-fix-1`'s final fix pass lands on.
+**Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `6e7308938`,
+and the FULL suite at `P3.S5-fix-1` HEAD `6acba5f9e`. **Both branches are otherwise DONE and
+VERIFIED — their full suites are the only thing between them and their merges.**
 
 **WHY THEY HAVE NOT BEEN RUN YET, so nobody reads it as an oversight:** both must run SERIALLY with
 nothing else heavy on the box. Agents have been working continuously, and the `P3.S5-fix-1` fix pass
@@ -374,7 +374,12 @@ Next step:        **CALL `ListAgents` FIRST. Three agents are out. Do not re-spa
                      10500 / 161982 / 1 from the CHECKOUT ROOT. Then remove the worktree,
                      delete the branch, append the worklog entry, rewrite this file.
                      It merges first because it changes NO production code at all.
-                  B) **P3.S5-fix-1 — CAP REACHED. FINAL FIX PASS OUT, NO CYCLE-6 REVIEW.**
+                  B) **P3.S5-fix-1 @ 6acba5f9e — DONE, VERIFIED, MERGE-READY. HELD FOR A
+                     QUIET BOX.** Nothing further is owed except its full suite. Run it
+                     SERIALLY from /home/sites/prompt-step-P3.S5-fix-1 AFTER P3.S4-fix-1 has
+                     merged AND a full suite has run in between, then merge SECOND.
+                     (superseded detail follows, kept for the reasoning)
+                     **P3.S5-fix-1 — CAP REACHED. FINAL FIX PASS, NO CYCLE-6 REVIEW.**
                      Cycle 5 found F1, a CRITICAL fail-open that SUBTRACTS detections: a
                      one-line COMMENT of the shape `use function X as file_put_contents;`
                      deletes a primitive from the alphabet for the whole file, turning a real
@@ -563,9 +568,60 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      A SECOND sweep — 18 more knobs beyond the ~65 — again found NO new
                      wrong-green mover; all left the prompt at 4844.
 
-                  2. **P3.S5-fix-1 — CAP REACHED. FINAL FIX PASS OUT. NO CYCLE-6 REVIEW.**
+                  2. **P3.S5-fix-1 — COMPLETE AND VERIFIED. NO AGENT IS OUT ON IT.**
                      Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,
-                     HEAD **ab9a7dcdc** (6 commits, base 1267e6fbb).
+                     HEAD **6acba5f9e**, base 1267e6fbb. F1/F2/F3/F5 fixed; F4 half fixed and
+                     half REFUSED-WITH-MEASUREMENT (adopting the shared trait gives
+                     Failures: 1 + Warnings: 1 — the trait lacks an is_file/is_readable
+                     pre-check and refuses with AssertionFailedError where an existing test
+                     pins \RuntimeException; the repair is to the TRAIT, outside scope).
+                     **ORCHESTRATOR-VERIFIED — I RAN THESE MYSELF:**
+                       --filter 'InterpolationOpener|Runtime|SystemPromptWiring'Test
+                                                     OK (145 tests, 689 assertions) was 142/686
+                       InterpolationOpenerTokenTest  OK (6 tests, 164 assertions)   unchanged
+                       scope = the three declared files; census-test diff EMPTY; fixtures diff
+                       EMPTY; goldens unmoved; author Joe Huss; porcelain clean.
+                       src/Runtime.php comment-only, MY script: 4366 tokens both sides,
+                       element-identical — the FIFTH independent derivation.
+                     **MY OWN F1 BEFORE/AFTER PROBE, run against the SHIPPED method by
+                     reflection over real copies of src/Tools/BuiltIn/Read.php:**
+                       PRE-FIX ab9a7dcdc  CONTROL {"file_put_contents":[142]}
+                                          B1 //-comment []   B3 const-string []
+                       FIXED   6acba5f9e  CONTROL {"file_put_contents":[142]}
+                                          B1 //-comment [143]  B3 const-string [143]
+                     A comment and a const string each turned a real executed write into []
+                     before the fix and both report it after. CONFIRMED.
+                     **MY PROBE WAS WRONG TWICE FIRST — read this before writing your own.**
+                     (i) I injected a FULLY-QUALIFIED \file_put_contents; a leading backslash
+                     bypasses import resolution, so the pre-fix scanner reported the write and
+                     it looked like the finding was refuted. (ii) I anchored the alias on
+                     /^(final class )/m but Read.php declares `final readonly class`, so the
+                     regex matched NOTHING and my two defeat rows were UNMODIFIED COPIES OF THE
+                     CONTROL — three identical rows reading exactly like "no defect here".
+                     Only an injected=yes/NO! column caught it. §1.4 check 13 applies to the
+                     ORCHESTRATOR'S probes too: **every probe needs a positive control proving
+                     the mutation actually landed.**
+                     **The fix is three repairs, not the one prescribed:** the map is read off
+                     the TOKEN STREAM (a comment and a string literal are each ONE token, so
+                     neither can hold a T_USE — the falsified doc-block claim is now true BY
+                     CONSTRUCTION), resolution is ADDITIVE not substitutive, and a qualified
+                     token is not alias-resolved. The seventh defeat is closed and measured to
+                     be the plain `use SplFileObject as Handle;` class alias.
+                     **Tree-wide re-derivation HELD** (the thing I told the reviewer not to
+                     take): 768 scanned, 260 reporting BOTH sides, primitive SET IDENTICAL for
+                     all 768; only tests/RuntimeTest.php moves (file_put_contents 30 -> 32, the
+                     new fixtures' own calls). Nothing in src/ or bin/ changes.
+                     **13 mutants, 10 red. THREE GREEN ones were recorded as
+                     measured-equivalent IN THE SOURCE** rather than left looking load-bearing.
+                     **FIVE gaps the agent NAMED rather than papered over:** namespace scoping
+                     unmodelled (additivity makes it OVER-classify — safe direction, not free);
+                     trait-use vs class import undistinguished; two guards unpinned and
+                     declared as such; **the three in-suite fixtures are only TOKENISED, never
+                     executed** — the "really writes" claim rests on out-of-suite runs; and the
+                     structurally-open list (object method calls, string indirection, non-trait
+                     collaborators, subprocess argv, unenumerated extension functions).
+                     **N1 is now better evidenced** — the class-alias case shows the alphabet
+                     must be maintained PER KEYWORD, not merely per function name.
                      **ORCHESTRATOR DECISION — same as item 1 and for the same reason.** The
                      §1.2 five-cycle cap is HONOURED; what it exhausts is the value of another
                      REVIEW, not of a fix that arrives measured. I verify personally and accept
@@ -626,7 +682,31 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      historical text as a live claim. Do not "fix" the plan backwards.
                      **FULL suite at ab9a7dcdc NOT RUN. No figure exists.**
 
-                  3. **P3.S6 — STEP agent out.** NEW THIS SESSION.
+                  3. **P3.S6 — THREE COMMITS, CLEAN TREE, REPORT NEVER ARRIVED.**
+                     **DO NOT RE-SPAWN IT AND DO NOT WRITE ITS REPORT (§1.8).** The agent shows
+                     `completed` in ListAgents but delivered no result to the orchestrator. It
+                     has been sent a request for the report, told explicitly not to resume work,
+                     not to touch the worktree, and not to spawn another reviewer.
+                     **What I verified MYSELF in /home/sites/prompt-step-P3.S6:** clean tree;
+                     three commits above base c7e5a6454 —
+                       23fd87096 measure the Agent assembler seam - eight once-per-dispatch
+                                 call sites, no per-step loop, cost pinned
+                       c4cb9492c correct the disposition - the seam IS real and lives in
+                                 WorkflowEngine, outside this list; repair the scanner and the
+                                 shim leak
+                       b3a5e578e pin the disposition against a REAL WorkflowEngine pipeline;
+                                 repair the scanner control, the midnight flake and three
+                                 overstated claims
+                     — touching ONLY src/Agents/Agent.php and tests/Agents/AgentTest.php, a
+                     SUBSET of its declared list. Tip authored Joe Huss <detain@interserver.net>.
+                     **Two things in those subjects need its answer before any merge:** it
+                     CORRECTED ITS OWN DISPOSITION mid-step (the seam is real but lives in
+                     WorkflowEngine, outside its file list — so what did it do INSTEAD of
+                     widening?), and it repaired a "midnight flake", i.e. a TIME-DEPENDENT TEST.
+                     Neither can be inferred from a commit subject.
+                     **An unknown subagent was also running at the time of that check.** It was
+                     not spawned by this orchestrator. It was left alone, not killed.
+                     (original brief follows) **STEP agent out.** NEW THIS SESSION.
                      Worktree /home/sites/prompt-step-P3.S6, branch prompt/P3.S6, base
                      master **c7e5a6454**. Runs its OWN review->fix->new-review loop
                      internally, cap five, and reports once at the end.

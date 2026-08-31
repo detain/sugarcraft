@@ -253,6 +253,103 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 · FINAL FIX PASS · 2026-08-31 — VERIFIED BY THE ORCHESTRATOR, MERGE-READY, HELD FOR A QUIET BOX
+
+Commit `6acba5f9e` on `prompt/P3.S5-fix-1`. F1, F2, F3, F5 FIXED; F4 half fixed and half
+REFUSED-WITH-MEASUREMENT. **No cycle-6 review by design** — I verified personally, and this entry
+records what I ran, including the part where my own instrument was wrong twice.
+
+**MY OWN F1 PROBE — BEFORE AND AFTER, built by me, run against the SHIPPED method by reflection
+over real copies of `src/Tools/BuiltIn/Read.php` (a tool on the read-only roster):**
+```
+PRE-FIX  ab9a7dcdc   CONTROL {"file_put_contents":[142]}  ·  B1 //-comment []  ·  B3 const-string []
+FIXED    6acba5f9e   CONTROL {"file_put_contents":[142]}  ·  B1 //-comment [143] ·  B3 const-string [143]
+```
+A `//` comment and a `const` string each turned a real, executed write into `[]` before the fix, and
+both report it after. **F1 and its fix are independently confirmed.**
+
+**MY PROBE WAS WRONG TWICE FIRST, AND THAT IS THE PART WORTH RECORDING.**
+1. I first injected `\file_put_contents(...)` — **fully qualified**. A leading backslash bypasses
+   import resolution entirely, so the alias map never touches it and the pre-fix scanner reported the
+   write. That looked like a refutation of the finding. It was a defect in my probe.
+2. I then anchored the alias injection on `/^(final class )/m`. `Read.php` declares
+   `final readonly class Read`, so the regex silently matched nothing and B1/B3 were **unmodified
+   copies of the control** — three identical rows that read exactly like "no defect here".
+**Only an `injected=yes/NO!` column caught it.** §1.4 check 13 says to run a scanner against
+known-answer input before grading what it reports, because *a scanner that answers the same way for
+every input reads as working*. That rule applies to the orchestrator's own probes, and here it was
+the difference between confirming a critical finding and wrongly dismissing it. **Every probe of this
+kind must carry a positive control that proves the mutation actually landed.**
+
+**ORCHESTRATOR-VERIFIED AT `6acba5f9e`:**
+```
+cwd /home/sites/prompt-step-P3.S5-fix-1, stdin </dev/null
+--filter 'InterpolationOpener|Runtime|SystemPromptWiring'Test   OK (145 tests, 689 assertions)  was 142/686
+tests/Support/InterpolationOpenerTokenTest.php                  OK (6 tests, 164 assertions)   unchanged
+scope                              exactly the three declared files
+census-test diff vs base           EMPTY (no KNOWN_GAPS row)
+fixtures diff vs base              EMPTY
+goldens                            32ea749d… / ef0326dd… UNMOVED
+author / porcelain                 Joe Huss <detain@interserver.net> / clean
+src/Runtime.php comment-only       MY OWN script: 4366 tokens both sides, element-identical,
+                                   md5 36ecb93cf7957cb77c9448aa6e16966e — FIFTH independent derivation
+```
+
+**THE FIX WAS THREE REPAIRS, NOT THE ONE PRESCRIBED.** The map is now read off the **token stream**
+(`importedSymbolAliases()` replacing the raw-source regex — a comment and a string literal are each
+ONE token, so neither can hold a `T_USE`, which makes the falsified doc-block claim **true by
+construction** rather than by assertion); resolution is **additive, never substitutive**; and a
+fully-qualified token is not alias-resolved. `importedClassAliases()` closes F2 in the `$afterNew`
+branch. **The seventh defeat is closed** — measured to be I1, the plain
+`use SplFileObject as Handle;` class alias, which the function-channel patch could never have reached.
+
+**Thirteen mutants, control `OK (128 tests, 450 assertions)`.** Ten red. **Three came back GREEN and
+were recorded as measured-equivalent IN THE SOURCE rather than left looking load-bearing** — the
+`use const` arm, the closure `use (` arm, and an identity filter, each already covered by a `break`
+the mutant did not remove. And **P5M2 was green on first pass**: additivity alone closes every prose
+row, so the token reader looked unnecessary until the agent added a doc-block line aliasing
+`measure` → `unlink` — prose that manufactures a **false positive**, which is the only shape that
+makes the token reader observable. That is a mutant designed to fail, which is the point of mutants.
+
+**F4 is the honest half-refusal.** The reviewer counted three copies of the significant-token filter;
+there were **four** — `callArguments()` has one too. Three are consolidated into
+`DropsInsignificantTokensTrait`. The fourth is KEPT and named in place, because
+`testTheArgumentWalkReportsWhetherItMetItsOwnClosingParenthesis()` feeds `callArguments()` a **raw**
+`token_get_all()` stream on purpose and must not assume a stripped input. The unreadable-source
+refusal is REFUSED WITH A MEASUREMENT: adopting `RefusesAnUnreadableSourceTrait::readOrFail()` gives
+`Failures: 1, Warnings: 1` — the trait has no `is_file`/`is_readable` pre-check, so the read warns
+before it asserts, and it refuses with an `AssertionFailedError` where an existing test pins
+`\RuntimeException`. The repair is to fix the **trait**, which is outside the declared file list; the
+alternative is weakening an existing assertion, which §1.10 forbids. **Correct call.**
+
+**Tree-wide re-derivation (the thing I explicitly told the reviewer not to take on trust):**
+HEAD scanner over a `git archive` of `ab9a7dcdc` vs this scanner over this tree — **768 scanned, 260
+reporting on both sides, primitive SET IDENTICAL for all 768.** One file's counts move:
+`tests/RuntimeTest.php`, `file_put_contents` 30 → 32, which is the two calls the new fixtures make.
+**Nothing in `src/` or `bin/` changes at all.**
+
+**FIVE GAPS THE AGENT NAMED RATHER THAN PAPERED OVER — all carried, none blocking:**
+1. **Namespace scoping is not modelled.** `importedSymbolAliases()` reads the whole file, so an import
+   in one `namespace` block applies in another. **Additivity makes that OVER-classify rather than lose
+   a primitive** — safe direction, not free.
+2. Trait-use inside a class body is not distinguished from a class import; could only matter for a
+   trait literally named `SplFileObject`.
+3. Two guards (`use const`, closure `use (`) are **unpinned and declared as such rather than counted**.
+4. **The three in-suite fixtures are only TOKENISED, never executed.** The "really writes" claim rests
+   on out-of-suite runs through `Read.php` copies, not on anything the suite itself executes. Said
+   plainly rather than implied.
+5. Still structurally open and enumerated in the doc-block: method calls on objects, indirection
+   through strings, non-trait/non-ancestor collaborators, subprocess argv, unenumerated extension
+   functions.
+
+**N1 IS NOW BETTER EVIDENCED.** Both F1 and F2 were name-based defeats on a green suite, and the
+class-alias case shows the alphabet must be maintained **per keyword**, not merely per function name.
+The agent did not resolve N1 and did not argue the scanner away — correct.
+
+**MERGE-READY AND DELIBERATELY HELD**, same as `P3.S4-fix-1`: its full suite must run SERIALLY, and
+`P3.S6` was still working the box. `P3.S5-fix-1` merges SECOND, after `P3.S4-fix-1` has merged and a
+full suite has run in between. **No full-suite figure exists for this branch at any head.**
+
 ### P3.S4-fix-1 · FINAL FIX PASS · 2026-08-31 — VERIFIED BY THE ORCHESTRATOR, MERGE-READY, HELD FOR A QUIET BOX
 
 Commit `6e7308938` on `prompt/P3.S4-fix-1`. All six findings F-A..F-F closed. **No cycle-6 review by
