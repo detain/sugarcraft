@@ -2448,14 +2448,33 @@ final class RuntimeTest extends TestCase
         // THE MUTATION THAT ACTUALLY PRODUCES THIS RED, and the first one cited
         // here did not. This comment used to name
         // src/Tools/McpToolBridge.php's NAME_PREFIX going 'mcp__' ->
-        // 'mcpsrv__'. That figure is right about the SUITE - MEASURED, `Tests:
-        // 10540, Assertions: 162608, Failures: 17, Skipped: 1` - and wrong about
+        // 'mcpsrv__'. That mutation is right about the SUITE - MEASURED, it
+        // reds SEVENTEEN tests across the whole run - and wrong about
         // THIS assertion: with `--filter
         // testTheWriteToolRosterDoesNotDriftFromThePermissionGate` it reds the
         // `assertTrue(Runtime::stepRequestedAWrite(...))` two statements below,
         // at 1 test / 7 assertions, and this regex stays GREEN. It has to:
         // PermissionGate::isWriteTool() spells 'mcp__' as a LITERAL and never
         // reads the authority, so respelling the authority cannot move it.
+        //
+        // THE TWO SUITE TOTALS THAT USED TO STAND IN THAT SENTENCE ARE GONE,
+        // and dropping them is the correction rather than a loss - section 16.8
+        // rule 42, in the shape rule 2 asks for. WHAT IT SAID: the mutation was
+        // "MEASURED, `Tests: 10540, Assertions: 162608, Failures: 17, Skipped:
+        // 1`". WHAT IS TRUE: 17 is right and the other two are not - re-derived
+        // at this commit, the same mutation gives `Tests: 10544, Assertions:
+        // 163630, Failures: 17, Skipped: 1`. HOW MEASURED: from the CHECKOUT
+        // ROOT, box confirmed quiet, `php sugar-crush/vendor/bin/phpunit -c
+        // sugar-crush/phpunit.xml --colors=never </dev/null` with
+        // McpToolBridge::NAME_PREFIX respelled, against the same command on the
+        // unmutated tree (10544 / 163658 / 1). WHY THE TOTALS ARE NOT SIMPLY
+        // CORRECTED: they were measured correctly when they were written and
+        // went stale four tests later inside this very change-set, which is the
+        // same failure the paragraph below records for the two line citations.
+        // A suite total is a property of the whole tree and cannot be pinned
+        // from inside one comment by anybody. The FAILURE COUNT is the figure
+        // that survives, because it is a property of the mutation rather than
+        // of the population: it was 17 then and 17 now.
         //
         // The mutation that reds THIS assertion is the repair that would make
         // the gate follow its authority - PermissionGate::isWriteTool()'s
@@ -4304,9 +4323,31 @@ final class RuntimeTest extends TestCase
      * positive a human dismisses rather than a silent pass.
      *
      * THE DELETION EXPERIMENT, MEASURED: removing `T_NAME_RELATIVE` from the
-     * accepted token classes in {@see writePrimitivesCalledIn()} reds this test
-     * and the whole-corpus census below it. Recorded in the P3.audit-fix-2
-     * report with its counts.
+     * accepted token classes in {@see writePrimitivesCalledIn()} reds THIS TEST
+     * AND NOTHING ELSE - `vendor/bin/phpunit tests/RuntimeTest.php` from
+     * `sugar-crush/` goes from `OK (130 tests, 481 assertions)` to `Tests: 130,
+     * Assertions: 477, Failures: 1`, naming this method.
+     *
+     * WHAT THAT SENTENCE SAID UNTIL NOW, corrected in place (section 16.8 rule
+     * 42) because it was wrong twice over in one clause. IT SAID the reversion
+     * reds "this test and the whole-corpus census below it". WHAT IS TRUE:
+     * {@see testEveryToolOnTheReadOnlyListCallsNoWritePrimitiveInItsOwnSource()}
+     * is the whole-corpus census, it sits ABOVE this method rather than below
+     * it, and it stays GREEN under the reversion - measured, one failure in the
+     * whole file. HOW MEASURED: the two runs above, the second with the token
+     * class removed from the `in_array` and the file restored from a private
+     * backup afterwards.
+     *
+     * WHY IT STAYS GREEN, which is the part worth keeping and is this test's
+     * own argument stated from the other side: every file under `src/` is
+     * namespaced (re-derived at this commit - 0 of 297 carry no `namespace`
+     * line), the census only ever hands the scanner `src/` files, and the
+     * relative spelling appears in none of them. So the hole this closes is
+     * LATENT on today's corpus, exactly as the paragraphs above say - which
+     * means the corpus census could not have detected it and cannot now
+     * regress on it. A claim that it reds too would have sent the next agent
+     * looking for a second red that cannot exist, and read as evidence the
+     * defeat was live rather than latent.
      */
     public function testTheWritePrimitiveScannerSeesTheRelativeNamespaceSpellingOfAGlobalCall(): void
     {
