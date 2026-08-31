@@ -102,9 +102,12 @@ things a fresh agent needs about the **current** shape of the code:
    see `Awaiting user decision`.
 3. **The prompt is deterministic and golden-pinned.** Clock, platform and cwd are injectable;
    `golden-system-prompt.txt` (md5 `32ea749d…`) pins the assembly byte-for-byte and
-   `golden-agent-prompt.txt` (`ef0326dd…`) pins `Agent::systemPrompt()`. **Both unmoved through the
-   whole of Phase 3** — required, because `writeSinceLastRender` defaults to `true` and a moved
-   golden would mean default behaviour changed.
+   `golden-agent-prompt.txt` (`ef0326dd…`) pins `Agent::systemPrompt()`. Both have been **unmoved
+   since P3.S5 (`405252a41`)** — which is the claim that carries the load, because
+   `writeSinceLastRender` defaults to `true`, so a golden that moved in the last batch would mean
+   DEFAULT behaviour changed. **CORRECTION: earlier rewrites of this file said "both unmoved through
+   the whole of Phase 3". That was FALSE.** See §4's golden row for the full per-merge trace and why
+   each of the three legitimate moves happened.
 4. **`<env>` is LAST.** P3.S1 moved it from layer 2 to layer 7. `Agent::systemPrompt()` deliberately
    uses the **opposite** order: two assemblers, `prompt_plan.md` §17.2.
 5. **The write-signal is WIRED on the Runtime path, and MEASURED-BUT-NOT-WIRED on the Agent path.**
@@ -136,7 +139,7 @@ re-measuring a suite this file already gives you the answer to.**
 | commit identity | `Joe Huss` / `detain@interserver.net` | every commit |
 | **MASTER full suite**, checkout root, `</dev/null`, serial | **`Tests: 10526, Assertions: 162447, Skipped: 1`** | `f958ba8e6` |
 | master tree == the tree that figure was measured on | `git diff prompt/P3.S6 master -- sugar-crush/` EMPTY before the branch was deleted | `f958ba8e6` |
-| goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — UNMOVED through all of Phase 3 | `f958ba8e6` |
+| goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — **unmoved since P3.S5 `405252a41`**, i.e. through the whole last batch. **NOT unmoved through all of Phase 3 — see the correction below.** | `f958ba8e6` |
 | `P3.S4-fix-1` before merge | `10503 / 162166 / 1`; +3/+184 reconciling exactly | `4ac10894b` |
 | `P3.S5-fix-1` before merge, **RUN TWICE** | `10516 / 162057 / 1`, byte-identical both runs | `6acba5f9e` |
 | `P3.S6` before merge | `10526 / 162447 / 1`; +7/+206 reconciling exactly, no remainder | `db0243771` |
@@ -171,7 +174,34 @@ c7e5a6454  10500 / 161982 / 1   pre-merge master
    assertion count came in +12 high — which is what sent me looking and found the tenth guard. A
    prediction that misses is information; a figure with nothing to compare against is not.
 
-### TWO CORRECTIONS SO THEY STOP PROPAGATING
+### CORRECTIONS SO THEY STOP PROPAGATING
+
+- **THE GOLDENS WERE NOT "UNMOVED THROUGH THE WHOLE OF PHASE 3" — that sentence was mine and it
+  was wrong.** *What it said:* both goldens unmoved through all of Phase 3. *What is true:* both
+  moved three times / twice respectively, and have been unmoved only **since P3.S5**. *How
+  measured:* `git show <sha>:sugar-crush/tests/fixtures/prompt/golden-*.txt | md5sum` at each of the
+  ten Phase 3 merge points —
+  ```
+                    system    agent
+  924c71a0d base     e89d98c7  edf691dc
+  379ecc7d6 P3.S1    e3319c8b  edf691dc   <- <env> moved to the end (the step's whole purpose)
+  dabcd27f7 P3.S2    e3319c8b  edf691dc
+  74cabae7f P3.S3    7efcc488  81626993   <- the git-section caption line (the step's purpose)
+  f2af06eaa P3.S4    7efcc488  81626993
+  405252a41 P3.S5    32ea749d  ef0326dd   <- fixture hermeticity, NOT behaviour: see below
+  1279d91cf P3.S4-f1 32ea749d  ef0326dd
+  5cabca4a8 P3.S5-f1 32ea749d  ef0326dd
+  f958ba8e6 P3.S6    32ea749d  ef0326dd
+  ```
+  All three moves are legitimate and each was verified by reading the diff, not inferred:
+  P3.S1's and P3.S3's ARE the steps' stated purpose, and P3.S5's is a **hermeticity** fix, not a
+  behaviour change — `OS version: Linux 6.8.0-138-generic` / `PHP version: 8.3.6` became
+  `OS version: <host>` / `PHP version: <host>` in both fixtures, so the goldens stopped being
+  host-specific. **Why this correction matters more than a tidy-up:** the false sentence taught the
+  next reader that a golden move anywhere in Phase 3 is a red flag, so they would either alarm at
+  three legitimate moves or, worse, trust the sentence and skip the check entirely. State the window
+  a no-move claim covers, or the claim is unfalsifiable.
+
 
 - **`--filter AgentTest` is a regex that ALSO matches `SubAgentTest`.** Per file, `AgentTest.php`
   went 26 → 33 tests; P3.S6 added **7**, not 7-of-63. Prefer a path (`… sugar-crush/tests/Agents/AgentTest.php`)
