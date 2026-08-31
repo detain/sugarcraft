@@ -11,7 +11,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3. CI-fix-1 IS MERGED (72686c380) and the LAST red test on CI is fixed — the full suite is green from both cwds AND on a CI-shape interpreter. P3.S5 merged (405252a41), P2.audit-fix-1 fully merged. ONE AGENT RUNNING (P1.audit-fix-3, the user-authorised Gemini arm). Start at §8 'Next step'.**
+**Current state: Phase 3. NO AGENTS RUNNING, NO WORKTREES, NO OPEN BRANCHES — everything verified and merged. Master @ e0d00b6db is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter. CI's last red test is fixed. ONE NEW user decision (Gemini tool calling). Next work is the Phase 3 close queue. Start at §8 'Next step'.**
 
 ---
 
@@ -241,192 +241,164 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            3. P3.S1-S5 all MERGED. P3.S6 newly SCHEDULED (see below).
+Phase:            3. P3.S1-S5 merged. P3.S6 scheduled. Phase 3 NOT closed — see the queue.
 
-Next step:        **WAIT for the running agent. Then: CI, then the Phase 3 close queue.**
+Next step:        **NOTHING IS IN FLIGHT. Start the Phase 3 close queue at (a).**
 
-                  ==================================================================
-                  0. ONE AGENT IS RUNNING — P1.audit-fix-3. Verify it yourself.
-                  ==================================================================
-                  CI-fix-1 is DONE and MERGED (72686c380); its worktree and branch
-                  are gone. See its worklog entry. Two things from it you will want:
+                  There are no running agents, no worktrees besides the main repo, and no
+                  prompt/* branches. Everything spawned so far is verified and merged.
 
-                  **THE CI-SHAPE INTERPRETER — keep this, it is reusable.** This box
-                  has swoole and CI does not, and swoole WARMS PHP's temp-dir cache at
-                  module init, which masked a real failure for days. To run anything as
-                  CI would:
+                  BEFORE YOU SPAWN ANYTHING, read §7 and hand every agent §1.10, §1.11,
+                  §16, §17 and ORCHESTRATION-RULE-2. That last one is not optional: an
+                  agent once ran a throwaway-repo setup inside /home/sites/sugarcraft
+                  itself, overwrote the repo's git identity and left a stray commit on
+                  master.
+
+                  **THE CI-SHAPE INTERPRETER — keep this, it is reusable and it earned
+                  its place.** This box has swoole and CI does not, and swoole WARMS
+                  PHP's temp-dir cache at module init, which masked a real CI failure for
+                  five days. To run anything as CI would:
                     SC=<scratchpad>; mkdir -p $SC/ci-ini
                     cp /etc/php/8.3/cli/conf.d/*.ini $SC/ci-ini/ && rm -f $SC/ci-ini/20-swoole.ini
                     PHP_INI_SCAN_DIR=$SC/ci-ini php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
-                  Verify it took: `swoole=false`, `uv=true`, 72 extensions.
-                  **`php -n` IS NOT A SUBSTITUTE** — child processes spawned as
+                  Verify it took: swoole=false, uv=true, 72 extensions.
+                  **`php -n` IS NOT A SUBSTITUTE** — children spawned as
                   [PHP_BINARY,'-r',...] re-read the full ini set and come back WARM, so
-                  `-n` on the suite gives a FALSE GREEN. PHP_INI_SCAN_DIR is inherited;
-                  `-n` is not.
+                  `-n` on the suite gives a FALSE GREEN. PHP_INI_SCAN_DIR is inherited by
+                  children; `-n` is not.
+                  **AND MIND THE CWD**: run it from the CHECKOUT ROOT. A `cd` earlier in
+                  the same chained command silently sends it to sugar-crush/, where
+                  `sugar-crush/vendor/bin/phpunit` does not resolve. That mistake was made
+                  once here and caught only because the run printed
+                  "Could not open input file".
 
-                  **A STANDING LESSON.** This failure sat in the follow-up list for days
-                  as "does not reproduce locally from either cwd, INFERRED
-                  runner-specific." It reproduced in ONE command. The cwd was never the
-                  variable; the EXTENSION SET was, and nobody had varied it. When a
-                  failure is CI-only, vary the interpreter before concluding it is the
-                  runner.
+                  **THE PHASE 3 CLOSE QUEUE**, in this order. Nothing here is blocked and
+                  none of it needs a user decision:
 
-                  0b. **P1.audit-fix-3 — THE GEMINI ARM. USER-AUTHORISED FEATURE.**
-                     Worktree /home/sites/prompt-step-P1.audit-fix-3, branch
-                     prompt/P1.audit-fix-3, based on master f0e80960a, vendor/
-                     hardlinked and PSR-4 root VERIFIED into the worktree.
-                     THE USER CHOSE OPTION (a): build the :generateContent arm.
-                     This is a deliberately authorised FEATURE, not a refactor —
-                     do not let a reviewer reject it as scope creep.
-                     DE-RISKED BEFORE SPAWNING: the SDK path is fully vendored —
-                     PredictionServiceClient::generateContent() (:518) and
-                     ::streamGenerateContent() (:669), and GenerateContentRequest
-                     has setModel/setContents/setSystemInstruction/
-                     setGenerationConfig. No raw REST needed.
-                     ITS ACCEPTANCE BAR: both cwds identical, green, at or above
-                     Tests: 10452, Assertions: 161673, Skipped: 1 — its new tests
-                     should RAISE both, and it must account for the delta. Plus
-                     tests/Providers/VertexProviderTest.php and
-                     SystemPromptTransmissionMatrixTest.php reported separately.
-                     WATCH FOR: it must NOT touch the legacy instances/context arm
-                     (non-Gemini Google models still route there — §1.10 forbids
-                     removing it), must NOT reproduce the legacy arm's dropped-
-                     parameters bug in the new arm, and must REWRITE rather than
-                     delete the googleBody() doc-block paragraph that says the
-                     Gemini switch "is deliberately not taken here" — that
-                     sentence is now false, and this branch has been bitten by an
-                     inverted comment before.
+                  a. **P3.S4-fix-1** — the eight standing findings from P3.S4's sixth
+                     review, verbatim in its worklog entry, all in
+                     tests/Providers/PromptStabilityTest.php. Highest value first: F5,
+                     then F2 and F6 (wrong-green fixture holes), then F1, then the
+                     comment-accuracy set F3/F4/F7/F8.
 
-                  1. **MERGE CI-fix-1** once verified, then re-run the full suite from
-                     BOTH cwds, then remove the worktree per §1.12 (status + unmerged
-                     commits FIRST) and delete the branch with `git branch -d` (which
-                     is itself a merge check).
+                  b. **P3.S5-fix-1, WITH THE USER-APPROVED TEST RENAME FOLDED IN.**
+                     Fold rather than split: the rename touches src/Runtime.php, which
+                     this fix already declares, so a separate step would collide there.
+                     THREE rename sites:
+                       tests/Integration/SystemPromptWiringTest.php:261  the method
+                       tests/Integration/SystemPromptWiringTest.php:710  self-reference
+                       src/Runtime.php:540                              prose citation
+                     testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt asserts the
+                     OPPOSITE of its name. MEASURED TWICE: nothing in the tree catches a
+                     stranded citation — fabricating the cited METHOD name leaves
+                     SymbolCitationDriftTest OK (7 tests, 2952 assertions), and
+                     fabricating the cited CLASS name does too. So all three move in ONE
+                     diff; there is no guard to lean on. The docblock paragraph arguing
+                     to keep the name is spent — rewrite it, do not delete it.
+                     Then cycle-6 findings 1-4 in Runtime.php and 5 in RuntimeTest.php.
+                     Full review: /home/sites/sugarcraft/.sugar-crush-prompt/P3.S5-cycle6-review.txt
+                     (NOT in a worktree — P3.S5's was removed).
+                     **Finding 2 has teeth and is WRONG-GREEN:** a genuinely
+                     write-capable tool typed into the `$readOnly` array instead of
+                     WRITE_CAPABLE_TOOL_NAMES leaves the suite fully green while the
+                     engine permanently suppresses the diff after every write by that
+                     tool.
 
-                  2. **THE PHASE 3 CLOSE QUEUE**, in this order — nothing here is
-                     blocked, and none of it needs a user decision:
-                     a. **P3.S4-fix-1** — the eight standing findings from P3.S4's
-                        sixth review, verbatim in its worklog entry, all in
-                        tests/Providers/PromptStabilityTest.php. Highest value first:
-                        F5, then F2 and F6 (wrong-green fixture holes), then F1, then
-                        the comment-accuracy set F3/F4/F7/F8.
-                     b. **P3.S5-fix-1** — **PLUS THE TEST RENAME, WHICH THE USER HAS NOW
-                        APPROVED** ("rename whatever is needed"). Fold it in rather than
-                        making it its own step: it touches src/Runtime.php, which this
-                        fix already declares, so a separate step would collide on that
-                        file. THREE sites:
-                          tests/Integration/SystemPromptWiringTest.php:261  the method
-                          tests/Integration/SystemPromptWiringTest.php:710  self-reference
-                          src/Runtime.php:540                              prose citation
-                        The name testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt now
-                        asserts the OPPOSITE of what it says. MEASURED TWICE: nothing in
-                        the tree catches a stranded citation — fabricating the cited
-                        METHOD name leaves SymbolCitationDriftTest OK (7 tests, 2952
-                        assertions), and fabricating the cited CLASS name does too. So
-                        renaming all three in ONE diff is required; there is no guard to
-                        lean on. Update the docblock paragraph that argues for keeping
-                        the name — it is now spent.
-                        Then the cycle-6 findings 1-4 in Runtime.php and 5 in
-                        RuntimeTest.php (both files already declared by P3.S5). The
-                        full review is at
-                        /home/sites/sugarcraft/.sugar-crush-prompt/P3.S5-cycle6-review.txt
-                        — NOT in a worktree any more; P3.S5's was removed.
-                        **Finding 2 has teeth and is WRONG-GREEN:** a genuinely
-                        write-capable tool typed into the `$readOnly` array instead of
-                        WRITE_CAPABLE_TOOL_NAMES leaves the suite fully green while the
-                        engine permanently suppresses the diff after every write by
-                        that tool.
-                     c. **P3.S6** — NEWLY SCHEDULED, full text in prompt_plan.md. Wire
-                        the write-signal into the Agent assembler, OR land a §18 row
-                        plus the measurement showing there is no per-step seam to wire.
-                        Its FIRST action is to measure which of the nine systemPrompt()
-                        call sites are per-step vs once-per-agent. Do not let an agent
-                        manufacture a loop in order to have something to wire.
-                     d. **THEN the Phase 3 close review** (§1.7), cap three cycles.
+                  c. **P3.S6** — full text in prompt_plan.md. Wire the write-signal into
+                     the Agent assembler, OR land a §18 row plus the measurement showing
+                     there is no per-step seam to wire. Its FIRST action is to measure
+                     which of the nine systemPrompt() call sites are per-step vs
+                     once-per-agent. Do NOT let an agent manufacture a loop in order to
+                     have something to wire. NOTE its declared AgentTest.php was
+                     rewritten by P2.audit-fix-1 — rebase, do not resurrect the old shape.
 
-Steps done:       22 of 63 merged (plus audit-fix sub-steps, which are not in the 63). P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f ·
-                  P3.S4 f2af06eaa · P3.S5 405252a41 · retro-fixes P3.audit-fix-1 6aff0bad1,
-                  P1.audit-fix-1 03d8fed37, P2.audit-fix-1 33df838d0 + f95546b10 (cycle 4).
-Phases done:      3 of 12  (Phase 3 is NOT closed — see the close queue above)
+                  d. **THEN the Phase 3 close review** (§1.7), cap three cycles.
+
+Steps done:       22 of 63 merged, plus audit-fix sub-steps (not counted in the 63):
+                  P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
+                  P3.S5 405252a41 · P3.audit-fix-1 6aff0bad1 · P1.audit-fix-1 03d8fed37 ·
+                  P2.audit-fix-1 33df838d0 + f95546b10 · CI-fix-1 72686c380 ·
+                  P1.audit-fix-3 e0d00b6db.
+Phases done:      3 of 12  (Phase 3 is NOT closed — see the queue above)
 Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
 
 Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers for weeks without
                   doing so, and that is exactly what hid CI being red for five days.**
-                  MASTER @ 72686c380 (CI-fix-1 merged), stdin from /dev/null. Measured at
-                  the branch tip AND RE-CONFIRMED ON MASTER AFTER THE MERGE in all three
-                  configurations below. Every run agrees:
-                    checkout root (= CI's cwd), ambient:  Tests: 10454, Assertions: 161697, Skipped: 1.
-                    from sugar-crush/, ambient:           Tests: 10454, Assertions: 161697, Skipped: 1.
-                    checkout root, CI-SHAPE (no swoole):  Tests: 10454, Assertions: 161697, Skipped: 1.
-                    contract file alone, BOTH shapes:     OK (5 tests, 40 assertions)
-                  **CI SHOULD NOW BE GREEN.** The full suite passing on the CI-shape
-                  interpreter, byte-identical to ambient, is the strongest evidence
-                  available short of pushing — and master's old file was confirmed to RED
-                  on that same interpreter with CI's exact failure text first.
-                  Previous master (f95546b10): 10452/161673 both cwds.
+                  MASTER @ e0d00b6db, stdin from /dev/null. THREE runs, all agreeing:
+                    checkout root (= CI's cwd), ambient: Tests: 10500, Assertions: 161982, Skipped: 1.
+                    from sugar-crush/, ambient:          Tests: 10500, Assertions: 161982, Skipped: 1.
+                    checkout root, CI-SHAPE (no swoole): Tests: 10500, Assertions: 161982, Skipped: 1.
+                  **CI SHOULD BE GREEN.** Before CI-fix-1, master's version of
+                  SuiteTempSandboxContractTest was confirmed to RED on that same CI-shape
+                  interpreter with CI's exact failure text, line number included.
+                  Progression: 10452/161673 (f95546b10) -> 10454/161697 (CI-fix-1)
+                  -> 10500/161982 (Gemini arm).
                   **CI/local assertion counts are NOT comparable.** CI counted 161663 at
-                  405252a41 where this box counts 161655 — 8 MORE — because the two
-                  environments gate different tests (FFI/pty/extension paths) and a
-                  failing test stops accruing assertions where it dies. The TEST count
-                  agrees exactly. Compare assertions between the two CWDS on one box;
-                  never between this box and CI.
-                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — both unmoved by
-                  P3.S5 and by P2 cycle 4.
-                  Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from
-                  the wrong cwd php cannot find tools/check-path-repos.php and all three
+                  405252a41 where this box counted 161655 — the two environments gate
+                  different tests (FFI/pty/extension paths) and a failing test stops
+                  accruing where it dies. TEST counts agree exactly. Compare assertions
+                  between the two CWDS on one box; never between this box and CI.
+                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — unmoved throughout.
+                  Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from the
+                  wrong cwd php cannot find tools/check-path-repos.php and all three
                   "fail". That misread has happened twice.
                   Two tests fail ONLY under a pty with a live terminal
                   (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect
                   stdin from /dev/null.
+                  php-cs-fixer is NOT installed on this box and NOT vendored anywhere in
+                  the tree — the style gate cannot be run locally. Two steps have now
+                  reported this. If CI enforces it, that is an unverifiable gate here.
 
-In-flight batch:  ONE agent — P1.audit-fix-3, /home/sites/prompt-step-P1.audit-fix-3 @ f0e80960a.
-                  See "Next step" item 0b. CI-fix-1 closed and merged.
+In-flight batch:  NONE.
 
-Live worktrees:   /home/sites/sugarcraft            master, at the commit above
-                  /home/sites/prompt-step-P1.audit-fix-3  prompt/P1.audit-fix-3 @ f0e80960a,
-                                                    AGENT WORKING IN IT — do not remove
-                  (CI-fix-1's worktree was removed 2026-08-30 after its §1.12 checks;
-                   branch deleted with `git branch -d`.)
-                  /home/sites/crush-lane-{a,b,c}    NOT this plan's — leave alone
-                  (P3.S5 and P2.audit-fix-1 worktrees were REMOVED 2026-08-30 after
-                  their §1.12 checks; their branches deleted with `git branch -d`.)
+Live worktrees:   /home/sites/sugarcraft  master, at the commit above. That is ALL.
+                  /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
+                  No prompt/* branches remain; every one was removed with `git branch -d`,
+                  which is itself a merge check.
 
 Blocked on:       Nothing.
 
-Awaiting user decision: NONE OUTSTANDING. All three were ANSWERED 2026-08-30. Recorded here
-                  because §R says a decision leaves this field only when the user has answered, and
-                  the answer belongs in the worklog entry for the step that acts on it:
-                    (1) Vertex envelope -> **user chose (a): build the :generateContent arm.**
-                        In flight as P1.audit-fix-3. See item 0b.
-                    (2) `role` vs `author` in the legacy instances envelope -> NOT a user
-                        decision any more; the choice of (a) resolved the coupling. Gemini
-                        traffic leaves that envelope entirely, and Gemini's own vocabulary is
-                        `user`/`model` (NOT `assistant`), which P1.audit-fix-3 handles. The
-                        legacy arm keeps `role` where its authority says `author`, and that is
-                        now an ordinary open follow-up below, not a question for the user.
-                    (3) the misnamed test -> **user approved the rename.** Folded into
-                        P3.S5-fix-1; see item 2b.
+Awaiting user decision: ONE, NEW, and it does not block the Phase 3 close queue.
 
-Open follow-ups:  **AuditHook carries a measurement that is now known false.**
+                  **GEMINI FUNCTION CALLING IS NOT BUILT.** P1.audit-fix-3 built the
+                  :generateContent arm, so Gemini now gets a request it would accept and
+                  streams properly — but `setTools()` is vendored and Gemini supports tool
+                  calling, and no shaper was written. So `supportsFunctionCalling()`
+                  honestly reports FALSE for Gemini and the body carries no `tools` key,
+                  with that absence PINNED by
+                  testAGeminiBodyCarriesNoToolsKeyEvenWhenToolsAreOffered.
+                  This is NOT a regression — every Google model already reported false —
+                  but sugar-crush is an agent app, so **a model that cannot call tools
+                  cannot drive a turn.** It is therefore the one thing between "Gemini
+                  works" and "Gemini is usable here".
+                  DECIDE: schedule a follow-up step building the Gemini tools shaper
+                  (setTools + functionDeclarations + parsing functionCall parts back into
+                  the tool-call shape Runtime expects), or record in §18 that Gemini is
+                  deliberately a non-tool-calling model in this provider.
+                  The step agent raised this itself and asked for judgement rather than
+                  picking. §1.10 sends it to the user.
+
+Open follow-ups:  **VertexProvider legacy arm — TWO defects, both now ordinary steps.**
+                  (i) `formatMessages()` emits `role` where the instances envelope's authority spells
+                  it `author` (`ChatMessage` struct: `Author string json:"author"`). Originally
+                  deferred because fixing it changes a body pinned by a green test — that test now
+                  names `chat-bison@002` rather than a Gemini id, so the fix is cleaner than it was.
+                  (ii) `defaultPredictor()`'s non-rawPredict branch never calls `setParameters()`, so
+                  `temperature`/`maxOutputTokens` are DISCARDED for every legacy Google model. NOT
+                  fixed, but now **PINNED at the wire** by
+                  `testTheLegacyPredictCallSiteStillDropsItsParameters` — whoever repairs it reds that
+                  test BY DESIGN. Also still unrouted: `publishers/mistralai`, `meta`, `ai21`.
+
+                  **AuditHook carries a measurement that is now known false.**
                   src/Hooks/BuiltIn/AuditHook.php:103-105 says `MEASURED, PHP 8.3.6:
                   putenv('TMPDIR=…') followed by sys_get_temp_dir() still answers /tmp, because PHP
-                  resolves and caches the temp directory once per process.` That was measured WARM;
-                  on a cold interpreter the same sequence answers the NEW directory. The SEAM
-                  argument it justifies is unaffected — an explicit seam is still right — but the
-                  reason given for it is false. VERIFIED by the orchestrator by reading the file.
-                  ToolIpcFiles.php:290 ("once per process") is correct as written, and
-                  ScriptHookTest.php:1381/1481 already say it correctly. Small step, src/ only.
-
-                  **VertexProvider legacy arm, TWO defects, both now unblocked as ordinary steps.**
-                  (i) `formatMessages()` emits `role` where the instances envelope's authority spells
-                  it `author` (`ChatMessage` struct: `Author string json:"author"`). Deferred
-                  originally because fixing it changes a body pinned by the green
-                  `VertexProviderTest::testCompleteSelectsPredictAndTheInstancesEnvelopeForGoogle
-                  Models`. (ii) `defaultPredictor()`'s non-rawPredict branch builds its PredictRequest
-                  with setEndpoint()+setInstances() and NEVER setParameters() (~:1276-1282), so
-                  `temperature` and `maxOutputTokens` are silently DISCARDED for every Google model
-                  today. Both are explicitly OUT of P1.audit-fix-3's scope and must not be swept into
-                  it. Schedule after it merges, when the legacy arm's remaining traffic is known.
+                  resolves and caches the temp directory once per process.` Measured WARM; on a cold
+                  interpreter the same sequence answers the NEW directory. The SEAM argument it
+                  justifies is unaffected — an explicit seam is still right — but the reason given is
+                  false. VERIFIED by the orchestrator by reading the file. ToolIpcFiles.php:290
+                  ("once per process") is correct as written; ScriptHookTest.php:1381/1481 already say
+                  it correctly. Small step, src/ only.
 
                   **HIGH / SECURITY, LIVE IN PRODUCTION — see commit f571e59b5.** The `<env>` diff
                   sections are an UNROSTERED `</env>` fence-escape vector.
@@ -440,10 +412,10 @@ Open follow-ups:  **AuditHook carries a measurement that is now known false.**
                   the vector the roster itself calls "the live vector" — so this is strictly MORE
                   reachable. And P3.S5's re-arm rule (EngineBackend.php:662-664) guarantees the diff
                   renders on the step right after a write, so an agent writing `</env>` into a file
-                  puts it in its own next system prompt BY CONSTRUCTION. **P3.S5 IS NOW MERGED, so
-                  that construction is live on master.** Per the standing
-                  functionality-before-hardening rule the FIX may be deferred but the FINDING is
-                  recorded as a step. FOLD INTO P5.S3 and extend the roster in the same diff.
+                  puts it in its own next system prompt BY CONSTRUCTION. **P3.S5 IS MERGED, so that
+                  construction is live on master.** Per the standing functionality-before-hardening
+                  rule the FIX may be deferred but the FINDING is recorded as a step. FOLD INTO P5.S3
+                  and extend the roster in the same diff.
 
                   **SymbolCitationDriftTest has a hole — ROOT CAUSE FOUND.** The backtick scraper at
                   tests/SymbolCitationDriftTest.php:290 is
@@ -463,28 +435,30 @@ Open follow-ups:  **AuditHook carries a measurement that is now known false.**
 
                   RR3 F5 — the golden pins a DOUBLED separator before every skill body and this ships
                   to the model (Skill.php:109 already returns "\n\n"; Runtime.php prepends another).
-                  It was deferred because it needs src/Runtime.php, which prompt/P3.S5 held —
-                  **that branch is now merged and the file is FREE.** Re-measure the line number
-                  before citing it; P3.S5 moved everything in that file.
+                  Deferred because it needed src/Runtime.php, which prompt/P3.S5 held — **that branch
+                  is merged and the file is FREE.** Re-measure the line number before citing it; both
+                  P3.S5 and P1.audit-fix-3 moved things.
 
                   Items previously queued and still open: P1.audit-fix-2 (RR2 F1/F3/F4/F7);
                   P3.audit-fix-2 (RR4 F2/F5/F7 plus P3.S4 escalations 2-3 and P3.S5 escalations 4-5 —
                   note `color.ui=always` injects raw ANSI into the model's system prompt, and
                   EnvironmentBlock.php:112's "that caller does not exist yet" is now FALSE);
-                  RR1 F2/F6; the four compressed Phase-2 worklog entries (heading levels FIXED
-                  2026-08-30 in 2dda88b89, but P2.S4's deletion experiments are UNRECOVERABLE and its
-                  guards are UNPROVEN until re-run); §17.2 citation rot (three fixed in 54ec6f7fd,
-                  more likely remain and SymbolCitationDriftTest cannot see the path-prefixed ones);
+                  RR1 F2/F6; the four compressed Phase-2 worklog entries (heading levels FIXED in
+                  2dda88b89, but P2.S4's deletion experiments are UNRECOVERABLE and its guards are
+                  UNPROVEN until re-run); §17.2 citation rot (three fixed in 54ec6f7fd, more likely
+                  remain and SymbolCitationDriftTest cannot see the path-prefixed ones);
                   doc edits + progress.json (dormant machinery — wire it or build it out, NEVER
                   delete).
 
-Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-30. Phase 3 serial S1->S6.
+Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-31. Phase 3 serial S1->S6.
                   The src/ file-count census is RESOLVED — it never applied to this plan (§5), so
                   Phases 5/6/10 are NOT serialised by it. Still live before Phase 5/6:
-                  EngineBackend.php held by a lane and NOW ALSO EDITED BY MERGED P3.S5 (wanted by
+                  EngineBackend.php held by a lane and now also edited by merged P3.S5 (wanted by
                   P7.S3); Chat.php + ContextCompactor.php for P4/P8; Bash.php behaviour vs P9.S3
                   description; AgentDefinition C7 for P7.S5 (P3.S6 must NOT widen into it);
                   tests/Support/ wholesale — now wanted by TWO queued follow-ups.
+                  NEW: src/Providers/VertexProvider.php is now a hot file — P1.audit-fix-2 and both
+                  legacy-arm follow-ups all want it. Serialise them.
 ```
 
 ---

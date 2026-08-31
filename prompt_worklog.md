@@ -253,6 +253,119 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P1.audit-fix-3 — VertexProvider gets a real Gemini `:generateContent` arm   ·   2026-08-31   ·   merged e0d00b6db (branch HEAD 59e0d16c2, 1 commit)
+
+**Status** `merged`. **USER-AUTHORISED FEATURE** — the user was offered three options for the Google
+arm and chose to build this one. Not a refactor; a reviewer meeting a new endpoint, method and
+request document in a provider would otherwise be right to call it scope creep.
+**Worktree** /home/sites/prompt-step-P1.audit-fix-3 — REMOVED after the merge per §1.12 (tree clean,
+`master..HEAD` empty, nothing untracked outside vendor); branch deleted with `git branch -d`.
+**Files** src/Providers/VertexProvider.php · tests/Providers/VertexProviderTest.php ·
+tests/Providers/SystemPromptTransmissionMatrixTest.php
+
+**WHAT WAS WRONG.** `googleBody()` built the PaLM 2 `chat-bison` `instances`/`context` envelope and
+sent it to `:predict` for EVERY `publishers/google` model. The hoist P1.audit-fix-1 shipped is correct
+FOR THAT ENVELOPE — `instances[0].context` really is its standing-instruction field. But
+`gemini-1.5-pro-002`, the id BOTH Vertex test files pinned as "the Google model", is not served by it
+at all. **So the founding defect this plan exists to fix was still live for the model the tests
+named** — the prompt was reaching a request Gemini would not accept.
+
+**WHAT WAS BUILT.** A THIRD route, selected by model FAMILY not publisher, because `publishers/google`
+is two protocols and the publisher segment cannot distinguish them: `isGeminiModel()`,
+`METHOD_GENERATE_CONTENT` / `METHOD_STREAM_GENERATE_CONTENT`, `geminiBody()` emitting
+`{contents, systemInstruction, generationConfig}`, `formatGeminiContents()` with Gemini's own role
+vocabulary `user`/**`model`** (NOT `assistant`), `parseGeminiResponse()` / `parseGeminiChunk()` /
+`streamGemini()` over `candidates[0].content.parts[*].text` plus `usageMetadata`, and one protobuf
+builder serving both RPCs. **The SDK path was already vendored** — `PredictionServiceClient::
+generateContent()` (:518) and `::streamGenerateContent()` (:669), verified by the orchestrator BEFORE
+briefing — so no raw REST was needed. That was the main risk in taking this option and it was retired
+up front.
+
+Routing is deliberately narrow: `str_contains(strtolower($model), 'gemini')`, applied ONLY to the RPC
+and the body. `publisherFor()` is untouched and still answers `google`, and
+`endpointFor('gemini-1.5-pro-002')` returns the byte-identical resource name it did before (pinned by
+a new test). `chat-bison`, `text-bison`, `code-bison`, `medlm` keep the legacy route.
+
+**THE LEGACY ARM STAYS**, unchanged and still routed for every non-Gemini `publishers/google` id.
+
+**WHY THE CHANGED EXISTING TESTS ARE A CONTRACT CHANGE, NOT AN ACCOMMODATION.** Nothing was weakened,
+skipped, renamed out or deleted. **What moved is an ID.** Seventeen tests used
+`GOOGLE_MODEL = 'gemini-1.5-pro-002'` to exercise the `instances`/`context` envelope — an envelope
+that model does not read. The constant became `LEGACY_GOOGLE_MODEL = 'chat-bison@002'`, which DOES
+take it; every one of those tests keeps its assertions verbatim, and three hardcoded endpoint strings
+moved with it. **VERIFIED BY THE ORCHESTRATOR by reading the diff** — the assertion bodies are
+unchanged; only the constant and the endpoint literals differ.
+
+Two assertions genuinely inverted, both correctly.
+`testGoogleDefaultModelReportsNoStreamingOrToolSupport` asserted no streaming for a Gemini id; it now
+asserts that for `chat-bison@002`, where it is STILL TRUE (that family's streaming envelope is still
+unmodelled), while a new test asserts streaming IS supported for Gemini — reporting false would now be
+a lie about a path that works. `testCompleteStreamFallsBackToTheUnaryCallForGoogleModels` moved the
+same way: chat-bison still falls back, Gemini has a real stream.
+
+The transmission matrix gains a third Vertex row, `#gemini => systemInstruction.parts[0].text`, driven
+on BOTH paths — the streaming drive comes off the **streamer seam**, not by delegation — with the
+sentinel asserted at its declared slot and `substr_count(...) == 1` over the whole body. Both
+`publishers/google` rows now also assert WHICH RPC they drove, so a routing regression reds with the
+cause named.
+
+**MEASURED BY THE ORCHESTRATOR at `59e0d16c2`, stdin from /dev/null:**
+
+| cwd | result |
+|---|---|
+| checkout root (= CI's cwd) | `Tests: 10498, Assertions: 161958, Skipped: 1.` |
+| from `sugar-crush/` | `Tests: 10498, Assertions: 161958, Skipped: 1.` |
+
+Identical from both. `+46` tests / `+285` assertions over that branch's `10452` baseline, accounted in
+full: `+46/+160` in `tests/Providers` (the two touched files), `+20` in `SymbolCitationDriftTest`,
+`+105` in `Config/GlobFigureDriftTest` — the last two are derived per-file/per-line censuses that grow
+because the touched files grew, with no assertion of theirs changing meaning. Per file:
+`VertexProviderTest` `OK (153 tests, 397 assertions)` (was 109/256);
+`SystemPromptTransmissionMatrixTest` `OK (20 tests, 111 assertions)` (was 18/92).
+
+**ONE DELETION EXPERIMENT RE-RUN INDEPENDENTLY BY THE ORCHESTRATOR** rather than taken on report,
+because it is the step's central claim. Commenting out `$req->setSystemInstruction(...)` at
+`VertexProvider.php:2106` reds exactly 2 of 153 with `Failed asserting that null is identical to
+Array &0 ['parts' => [0 => ['text' => 'you are a bot']]]` — **and ONLY the wire test caught it**, on
+both data sets, while every array-level test stayed green. **That is why the wire probe exists:
+without it this step would have been wrong-green.** File restored, md5
+`1444a2ff699bddb9c04b88a6571aaa8f`, worktree clean. (The `Warnings: 1` in that run was an artifact of
+the mutation; the clean per-file run is `OK (153 tests, 397 assertions)` with none, which matters
+because `phpunit.xml` sets `failOnWarning="true"`.)
+
+The step agent ran seven more, including an **opposite-polarity control**: ADDING `setParameters()` to
+the legacy `:predict` branch reds `testTheLegacyPredictCallSiteStillDropsItsParameters`, proving that
+negative control is a live instrument rather than a vacuous one.
+
+**§1.10 ESCALATIONS — reported, not repaired.** The legacy arm's `author`/`role` defect stands. The
+legacy arm's dropped `parameters` stands — NOT fixed, but now **PINNED at the wire**, so whoever
+repairs it reds that test by design. `mistralai`/`meta`/`ai21` remain unrouted. **And GEMINI FUNCTION
+CALLING IS NOT BUILT:** `setTools()` is vendored and Gemini supports it, but no shaper exists, so
+`supportsFunctionCalling()` honestly reports `false` and the body carries no `tools` key, with that
+absence pinned. **Not a regression** — Google models already reported false — **but it is the one
+thing between "Gemini works" and "Gemini is usable as an agent model here", and it goes to the user as
+its own decision.**
+
+**DELIBERATE DECISIONS, visible and reversible.** Turnless transcripts are REJECTED locally for Gemini
+(empty, system-only, empty-content-only), unlike the legacy arm which accepts them — basis:
+`contents` is annotated `field_behavior = REQUIRED` on the vendored proto, measured by reading it.
+That asymmetry with the legacy arm was introduced knowingly and both polarities are pinned so it can
+be flipped visibly. Consecutive same-role turns are NOT merged, because whether Gemini requires
+alternation is **UNVERIFIED** here, so the transcript is transmitted turn-for-turn rather than
+reshaped on a guess. Stream usage is emitted ONCE after the stream ends, from the last
+`usageMetadata` seen, because Gemini restates **cumulative** counts per chunk and `Runtime` sums
+across chunks — yielding per chunk would bill a 3-chunk turn's 12 output tokens as 24.
+
+**HONEST GAPS.** Nothing here has Vertex credentials. EVERY claim is about the document this class
+builds and the protobuf request / serialized HTTP body handed to the vendored SDK, measured offline
+through the real REST transport with a captured http handler. **That the deployed service ACCEPTS OR
+HONOURS that document is UNVERIFIED** and is labelled so in the code. One measured protobuf detail:
+`temperature` is a float32, so `0.7` serializes as `0.69999999`, and the wire test asserts it with a
+delta rather than pinning that literal. `php-cs-fixer` is not installed on this box and is not
+vendored anywhere in the tree, so PSR-12 was checked by `php -l` plus a line-length sweep only.
+
+---
+
 ### CI-fix-1 — sys_get_temp_dir() caches on FIRST RESOLUTION, not at startup   ·   2026-08-30   ·   merged 72686c380 (branch HEAD 1fcf8bb42, 1 commit)
 
 **Status** `merged`. **This clears the LAST red test on CI.**
