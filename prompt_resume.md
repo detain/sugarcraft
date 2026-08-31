@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, THREE AGENTS RUNNING — BOTH cycle-4 reviewers have now REPORTED FINDINGS (eight on `P3.S5-fix-1`, five on `P3.S4-fix-1`) and a FIX AGENT is out on each; cycle 5 is the LAST on both. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue, THREE AGENTS RUNNING — `P3.S5-fix-1` is at `ab9a7dcdc` with all seven cycle-4 findings FIXED and its CYCLE-5 REVIEWER (the cap) out; `P3.S4-fix-1`'s fix agent is out on five cycle-4 findings; the `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -149,7 +149,7 @@ See §8 `In-flight batch` for exactly what each one is doing and what to do when
 | `log.abbrevCommit` is parse-time validated | independently re-derived by the orchestrator in a scratch repo — see §8 | git 2.43.0 |
 
 **Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `2d5f14835`, and
-the FULL suite at `P3.S5-fix-1` HEAD `842cc59b3`. Both must be run **serially, from the worktree
+the FULL suite at `P3.S5-fix-1` HEAD `ab9a7dcdc`. Both must be run **serially, from the worktree
 root, with nothing else heavy on the box**, immediately before that branch merges. Do not write a
 figure for either until you have run it.
 
@@ -415,10 +415,11 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIA
                       Progression 13/229 (base) -> 14/374 (bdef57632) -> 15/391.
                       **FULL SUITE NEVER RUN AT THIS HEAD.** Only figure that exists is
                       AGENT-REPORTED at the older bdef57632: 10501 / 162127 / 1.
-                    P3.S5-fix-1 @ 842cc59b3, cwd /home/sites/prompt-step-P3.S5-fix-1:
+                    P3.S5-fix-1 @ **ab9a7dcdc**, cwd /home/sites/prompt-step-P3.S5-fix-1:
                       --filter 'InterpolationOpenerTokenTest|RuntimeTest|SystemPromptWiringTest'
-                                                        OK (136 tests, 679 assertions)
-                      the six census files              OK (103 tests, 9468 assertions)
+                                                        OK (142 tests, 686 assertions)
+                      InterpolationOpenerTokenTest      OK (6 tests, 164 assertions)
+                      (at the older 842cc59b3 these were 136/679 and 103/9468)
                       scope: exactly the three declared files; the census test
                       tests/Support/InterpolationOpenerTokenTest.php is UNTOUCHED (its own
                       diff vs base is empty) and no KNOWN_GAPS row was added.
@@ -485,33 +486,38 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      it cannot be tested here. Nobody may write a guard for it or a comment
                      claiming a measurement of it.
 
-                  2. **P3.S5-fix-1 — cycle 4 DONE (EIGHT findings). FIX agent out.**
+                  2. **P3.S5-fix-1 — cycle 4 FIXED. CYCLE-5 REVIEWER OUT — THIS IS THE CAP.**
                      Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,
-                     HEAD **842cc59b3**, 5 commits, base 1267e6fbb. **Cycle 5 is the CAP.**
+                     HEAD **ab9a7dcdc** (6 commits, base 1267e6fbb). All seven live cycle-4
+                     findings FIXED in one commit; nothing escalated, nothing removed.
                      Declared files: src/Runtime.php · tests/RuntimeTest.php ·
-                     tests/Integration/SystemPromptWiringTest.php. InterpolationOpenerTokenTest
-                     is READ-ONLY to the fix agent and no KNOWN_GAPS row may be added.
-                     Findings file, ON DISK and the authority:
-                     <scratchpad>/P3.S5-fix-1/review-cycle-4/findings-cycle-4.md
-                     F1 use-function backslash + comma-list · F2 error_log type 3 in any
-                     non-decimal radix · F3 T_ATTRIBUTE is an uncounted opener with a counted
-                     closer · F4 fopen mode as an octal escape · F5 error_log(...$a) fails OPEN
-                     with no walk bug · F6 stale defeat counts (TEN vs THREE, same instrument)
-                     · F7 grouped use-function · F8 CLOSED by the §8 rewrite.
-                     **Everything the brief asked the reviewer to falsify came back CORRECT** —
-                     Runtime.php comment-only (independently re-derived), goldens unmoved,
-                     exactly three declared files, the rename pure, the census green because
-                     the gap CLOSED. Do not re-verify those.
-                     **F5 is the CLASS; F1-F4 and F7 are instances.** ORCHESTRATOR-VERIFIED by
-                     reading tests/RuntimeTest.php:3000-3045: callArguments() has two
-                     `return $arguments` — the early one at depth 0 and the fall-through when
-                     the walk runs off the end — and they return the SAME SHAPE, so
-                     argumentsMeanAWrite() cannot tell "one argument supplied" from "the walk
-                     gave up", and two of its three rules return FALSE on an absent
-                     $arguments[1]. That is why every defeat in this family fails OPEN. The fix
-                     brief ranks fail-closed-on-truncation first and the instances alongside it.
-                     The reviewer's five "exact edit, verbatim" prescriptions were measured by
-                     NOBODY and the brief passes them through as hypotheses.
+                     tests/Integration/SystemPromptWiringTest.php.
+                     **ORCHESTRATOR-VERIFIED AT ab9a7dcdc — do NOT re-measure these:**
+                       --filter 'InterpolationOpener|Runtime|SystemPromptWiring'Test
+                                                       OK (142 tests, 686 assertions)
+                       InterpolationOpenerTokenTest    OK (6 tests, 164 assertions)
+                       scope = exactly the three declared files; census-test diff EMPTY (no
+                       KNOWN_GAPS row); fixtures diff EMPTY; goldens 32ea749d…/ef0326dd…
+                       UNMOVED; author Joe Huss; porcelain empty.
+                       src/Runtime.php STILL COMMENT-ONLY — re-derived with the orchestrator's
+                       OWN script: 4366 executable tokens both sides, element-by-element
+                       identical, md5 36ecb93cf7957cb77c9448aa6e16966e. The 230-insertion src/
+                       diff is entirely comment.
+                     **The scanner is now FAIL-CLOSED, and the proof is a mutant's output, not
+                     the fix's:** M1 removes T_ATTRIBUTE but keeps the fail-closed flag, and
+                     the three attribute rows are STILL REPORTED — the mutant's only error is
+                     an extra FALSE POSITIVE. An unknown thirteenth spelling now costs a false
+                     positive a human dismisses, not a silent pass. **That property is what
+                     makes this branch mergeable without a complete scanner**, and it survives
+                     whichever way escalation N1 is decided.
+                     THREE of the reviewer's five prescriptions were MEASURED FALSE and
+                     refused (intval('0o3',0)===0; stripcslashes is not PHP's alphabet; the
+                     `[,;]` terminator reaches only the first comma-list item), and the fix
+                     agent found one defect the review missed (a `b'…'` binary-string prefix).
+                     **STILL OWED and NOT re-derived by me:** the fix agent's tree-wide
+                     before/after claim — 260 files, zero gained or lost a primitive name. The
+                     cycle-5 reviewer is told to re-derive it rather than take it.
+                     **FULL suite at ab9a7dcdc NOT RUN. No figure exists.**
 
                   3. **P3.S6 — STEP agent out.** NEW THIS SESSION.
                      Worktree /home/sites/prompt-step-P3.S6, branch prompt/P3.S6, base

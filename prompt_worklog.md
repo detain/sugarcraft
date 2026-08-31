@@ -253,6 +253,96 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 · FIX CYCLE 4 · 2026-08-31 — fail-OPEN to fail-CLOSED, and three refused prescriptions
+
+Commit `ab9a7dcdc` on `prompt/P3.S5-fix-1`, one commit on top of `842cc59b3`. All seven live
+findings FIXED, nothing escalated, nothing removed. A brand-new cycle-5 reviewer is out — **the cap**.
+
+**THE RESULT WORTH KEEPING, and it is the mutant's output, not the fix's.** The fix agent ran seven
+mutants, each reverting exactly one fix in a sandbox copy; each reds exactly one test and the control
+`M0` is green. The headline is **M1**, which removes `T_ATTRIBUTE` but keeps the fail-closed flag:
+
+```
+M1-drop-T_ATTRIBUTE  ->  the three attribute rows are STILL REPORTED.
+                         The mutant's only error is an extra FALSE POSITIVE, fopen at line 13.
+```
+
+That is the fail-open → fail-closed conversion demonstrated **on a live defect**: with the structural
+fix in place, an unknown thirteenth spelling costs a false positive a human must dismiss, instead of
+a silent pass. This is the property that survives whichever way escalation N1 is decided, and it is
+the reason this branch is mergeable without a complete scanner.
+
+**THREE OF THE REVIEWER'S FIVE PRESCRIPTIONS WERE MEASURED FALSE AND REFUSED.** §16.8 rules 43/45
+again, and this is now the third time in this batch that a prescription written by someone who did
+not measure it turned out to be wrong.
+
+- **F2 REFUSED.** The reviewer flagged `intval($s, 0)` as unverified and was right to.
+  MEASURED on 8.3.6: `intval('0b11', 0) === 3` ✓ but **`intval('0o3', 0) === 0`** ✗ — the
+  explicit-octal spelling PHP 8.1 added parses to ZERO, which is the fail-open direction. The
+  compound `octdec(…) || (int) || intval(…,0)` form is also wrong: `octdec()` skips characters it
+  does not recognise and reads `0b11` as **9**. A real radix parser was written instead. The
+  regression row is fixture line 18: `013` is octal **eleven**, which catches both a decimal cast and
+  a bare `octdec()`.
+- **F4 REFUSED.** The reviewer named its own `@eval()` prescription a *bad* fix; it also violates the
+  repo's no-`@`-suppression convention. The "small unescaper" it named as the honest repair was
+  written. MEASURED that the obvious shortcut is ALSO wrong: `stripcslashes()` is not PHP's
+  double-quote alphabet — it reads `\u{77}` as `u{77}` where PHP reads `w`, and eats the `a` in `\a`.
+  Both divergences are fail-open for a mode string.
+- **F1 INCOMPLETE, refused as written.** The prescribed `\s*[,;]` terminator reaches only the FIRST
+  item of a comma list, because `preg_match_all` still requires the `use function` prefix on each
+  match — `use function strlen as len, file_put_contents as persist;` stays invisible. MEASURED.
+  Splitting the statement and validating each item closes F7 (the grouped form) with the same code.
+- **F3 MEASURED TRUE, implemented differently.** Adding `T_ATTRIBUTE` is correct, but adding it to a
+  list named `$interpolationOpeners` while a bare depth counter does the work leaves the class open.
+  Implemented as a **matched-closer stack**.
+- **F5 MEASURED PARTLY FALSE.** The prescription said the flag should report *"returned on a balanced
+  `)` or ran off the end"*. **That would have caught neither F3 nor the eleventh defeat** — both
+  return on a `)`, just the wrong one, with the stack silently one level short. The signal that works
+  is **delimiter matching**, not arrival-at-a-paren. The prescription also omitted the spread case
+  entirely, which it had listed as a symptom two paragraphs earlier.
+
+**ONE DEFECT THE REVIEW DID NOT REPORT, found and closed by the fix agent:** a binary-string prefix
+(`b'…'`) makes `$literal[0]` the letter `b` rather than the quote, so `b'\x72'` was read as
+double-quoted and resolved to `r` — fail-open. Fixture lines 18-19, mutant `M7`.
+
+**F6 — both cardinalities deleted rather than corrected.** `RuntimeTest.php` said TEN, `src/Runtime.php`
+said THREE, about the same population. §16.8 rule 2 is *ship the generator, not the count*, and no
+generator exists for a historical defeat list — so both numbers are gone, the enumeration (now
+sixteen entries) lives in exactly ONE doc-block, and `src/Runtime.php` defers to it in rule-42
+three-part form. The interpolation test's *"it is the eleventh"* ordinal was stale for the same
+reason and is likewise de-ordinalised.
+
+**ORCHESTRATOR-VERIFIED, all of it re-run or re-derived, not taken:**
+```
+cwd /home/sites/prompt-step-P3.S5-fix-1, stdin </dev/null
+--filter 'InterpolationOpenerTokenTest|RuntimeTest|SystemPromptWiringTest'
+                                          OK (142 tests, 686 assertions)   was 136/679
+tests/Support/InterpolationOpenerTokenTest.php
+                                          OK (6 tests, 164 assertions)     unchanged
+git diff --name-only 1267e6fbb..HEAD      exactly the three declared files
+census test diff vs base                  EMPTY (no KNOWN_GAPS row added)
+tests/fixtures/ diff vs base              EMPTY
+goldens                                   32ea749d… / ef0326dd… UNMOVED
+author                                    Joe Huss <detain@interserver.net>
+git status --porcelain                    empty
+```
+**`src/Runtime.php` comment-only — re-derived with the orchestrator's OWN script**, not the agent's:
+stripping `T_COMMENT`/`T_DOC_COMMENT`/`T_WHITESPACE` from base and HEAD gives **4366 tokens on both
+sides, element-by-element identical**, md5 `36ecb93cf7957cb77c9448aa6e16966e` both. The token COUNT
+agrees with the two independent derivations (fix agent, cycle-4 reviewer) that used different
+serialisations and therefore different digests. The `src/` diff is 230 insertions / 19 deletions and
+every one of them is comment.
+
+**The fix agent's own tree-wide regression measurement, REPORTED not yet re-derived:** running the
+scanner over every PHP file in `sugar-crush/{src,tests,bin}` before and after, 260 files report a
+primitive in both states and **zero files gained or lost a primitive name** — the only map that
+changed at all is `tests/RuntimeTest.php`'s own line numbers. All 16 defeat rows reproduce at
+`842cc59b3` and all 16 close; all 21 control rows identical. **The cycle-5 reviewer is explicitly
+told to re-derive this rather than take it**, because a silent widening that happens not to bite
+today would still be a finding.
+
+**FULL suite at `ab9a7dcdc`: NOT RUN. No figure exists for it and none may be written.**
+
 ### P3.S4-fix-1 · REVIEW CYCLE 4 · 2026-08-31 — the question I asked came back "yes", and the branch's own judgement was wrong
 
 Cycle 4 of 5 returned **five findings**. Findings file on disk:
