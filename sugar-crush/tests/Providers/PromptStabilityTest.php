@@ -1871,6 +1871,34 @@ final class PromptStabilityTest extends TestCase
         );
         $binaryPrompt = $binary->systemPrompt();
 
+        //       THE CONTROL'S OWN SUBPROCESS IS ASSERTED BEFORE ITS LIVENESS,
+        //       and the reason is that this control blamed the wrong file once.
+        //       MEASURED: with `diff.external` naming a command that cannot
+        //       exec — a knob a developer's own `~/.gitconfig` can carry —
+        //       `git diff --shortstat --patch` exits 128 on
+        //       `fatal: external diff died`, EnvironmentBlock renders
+        //       `unavailable (git exited 128)` in place of the patch, no
+        //       `Binary files ` reaches the prompt, and the liveness assertion
+        //       below red FIRST with "The scanner is dead". That sentence is
+        //       FALSE — the scanner is fine and a host knob broke `git diff` —
+        //       and the placeholder assertion further down, which would have
+        //       named the real cause, was never reached. A guard whose failure
+        //       message names the wrong cause sends the next reader to the
+        //       wrong file, which is the same wrong-domain failure the knob
+        //       roster in {@see dirtyRepoFixtureWithEveryStableLayer()} exists
+        //       to record. The exit code is captured rather than asserted
+        //       inline so the message can carry the actual N.
+        $binaryDiffOutput = [];
+        $binaryDiffExit = self::git($binary->root(), ['diff', '--shortstat', '--patch'], $binaryDiffOutput);
+        $this->assertSame(
+            0,
+            $binaryDiffExit,
+            'git diff failed, exit ' . $binaryDiffExit . ' - the binary-diff control fixture cannot produce a '
+                . 'diff at all, so nothing below this line is a statement about the scanner. MEASURED cause: a '
+                . '`diff.external` naming a command that cannot exec, anywhere in the config precedence chain. '
+                . 'git said: ' . implode("\n", $binaryDiffOutput),
+        );
+
         $this->assertGreaterThan(
             0,
             substr_count($binaryPrompt, 'Binary files '),
@@ -2008,6 +2036,151 @@ final class PromptStabilityTest extends TestCase
                 . 'scanner: the diff CONTEXT WIDTH (MEASURED, GIT_DIFF_OPTS=-u10 makes it 22), a field that '
                 . 'stopped rendering (MEASURED, log.date=true makes it 19), and a different git version '
                 . 'colouring differently',
+        );
+    }
+
+    /**
+     * `log.abbrevCommit` is parse-time validated, so no repo-local pin defends
+     * it — the fourteenth knob, and the assertion the roster's prose is not.
+     *
+     * WHAT THE ROSTER USED TO SAY, in
+     * {@see dirtyRepoFixtureWithEveryStableLayer()}: that `log.abbrevCommit` is
+     * "inert for ANY value, MEASURED", listed beside `core.quotePath`,
+     * `diff.algorithm`, `diff.indentHeuristic`, `status.relativePaths` and
+     * `core.autocrlf`. WHAT IS TRUE NOW: half of it. This test is the
+     * measurement, and it exists because a paragraph is not an assertion — the
+     * roster carried that claim through six reviews without anything able to
+     * red on it.
+     *
+     * BOTH POLARITIES, because a knob that is fatal for every value and one
+     * that is fatal for none are the same test otherwise. A VALID value is
+     * inert: `log --oneline` carries its own `--abbrev-commit` and a
+     * command-line flag beats config, so a global `abbrevCommit = false`
+     * leaves the output byte-identical to a run with no global config at all.
+     * An INVALID one is fatal: exit 128, and {@see EnvironmentBlock} renders
+     * `Recent commits: unavailable (git exited 128)`, which MEASURED takes the
+     * fixture prompt 4,844 -> 4,841 B and the cache prefix 4,670 -> 4,667.
+     *
+     * AND THE PIN IS LIVE WHILE THAT HAPPENS, which is the whole point and the
+     * one assertion that separates "undefendable by pinning" from "nobody
+     * pinned it". The repository below sets `log.abbrevCommit=false` in its own
+     * config, at HIGHER precedence than the hostile global file: `git config
+     * --get` answers `false`, and `git log` dies anyway, because git parses
+     * every file in the chain before it uses any of them. That is boundary (b)
+     * of the roster comment, the same shape as `color.branch.current`, and NOT
+     * the `log.date`/`format.pretty` shape whose values reach a formatter
+     * rather than a parser and which pinning therefore does defend. So the knob
+     * gets no `foreach` row: detection is the only available answer, and
+     * {@see testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder()}
+     * already is it — MEASURED `Failures: 1` under this knob at this commit,
+     * and SILENTLY GREEN at 1267e6fbb, where that guard did not exist.
+     *
+     * The exit code is what is asserted exactly; the fatal SENTENCE is asserted
+     * only for the knob name it must contain, because the wording is a git
+     * version's and the exit code is not.
+     */
+    public function testLogAbbrevCommitIsParseTimeValidatedSoNoRepoLocalPinDefendsIt(): void
+    {
+        $probe = [];
+        if (self::git(null, ['--version'], $probe) !== 0) {
+            $this->markTestSkipped('git is unusable in this environment: ' . implode("\n", $probe));
+        }
+
+        $root = $this->tempDir();
+        $configs = $this->tempDir();
+
+        foreach ([
+            ['init', '-q'],
+            ['symbolic-ref', 'HEAD', 'refs/heads/master'],
+            ['config', 'user.email', 'fixture@example.invalid'],
+            ['config', 'user.name', 'Prefix Fixture'],
+            ['config', 'commit.gpgsign', 'false'],
+            // THE PIN ITSELF. Repo-local, so it outranks both hostile files
+            // written below - the test measures a DEFENDED repository, not an
+            // undefended one, or it would prove nothing about the defence.
+            ['config', 'log.abbrevCommit', 'false'],
+            ['commit', '-q', '--allow-empty', '-m', 'fixture: initial import'],
+        ] as $argv) {
+            $output = [];
+            $this->assertSame(
+                0,
+                self::git($root, $argv, $output),
+                'git ' . implode(' ', $argv) . ' failed: ' . implode("\n", $output),
+            );
+        }
+
+        $valid = $configs . '/valid-global.gitconfig';
+        $invalid = $configs . '/invalid-global.gitconfig';
+        $this->assertNotFalse(
+            file_put_contents($valid, "[log]\n\tabbrevCommit = false\n"),
+            'could not write the valid-value global config, so the inert polarity below cannot be measured',
+        );
+        $this->assertNotFalse(
+            file_put_contents($invalid, "[log]\n\tabbrevCommit = nonsense\n"),
+            'could not write the invalid-value global config, so the fatal polarity below cannot be measured',
+        );
+
+        // POLARITY 1 - a VALID value is inert, and the run with NO global
+        // config at all is the control that says so rather than saying the
+        // command merely happened to work twice.
+        $withValid = [];
+        $this->assertSame(
+            0,
+            self::git($root, ['log', '--oneline', '-5'], $withValid, $valid),
+            '`git log --oneline -5` failed under a VALID global `log.abbrevCommit`, so the knob is not inert '
+                . 'for valid values either and the roster bullet needs rewriting again: ' . implode("\n", $withValid),
+        );
+
+        $withNone = [];
+        $this->assertSame(
+            0,
+            self::git($root, ['log', '--oneline', '-5'], $withNone, '/dev/null'),
+            '`git log --oneline -5` failed with NO global config at all, so this host cannot measure the knob: '
+                . implode("\n", $withNone),
+        );
+        $this->assertSame(
+            $withNone,
+            $withValid,
+            'a VALID `log.abbrevCommit` changed what `log --oneline` renders, so `--abbrev-commit` no longer '
+                . 'overrides the config key and the inert half of the roster bullet is false: '
+                . json_encode([$withNone, $withValid]),
+        );
+
+        // POLARITY 2 - an INVALID value is fatal, ACROSS the repo-local pin.
+        $withInvalid = [];
+        $this->assertSame(
+            128,
+            self::git($root, ['log', '--oneline', '-5'], $withInvalid, $invalid),
+            '`git log --oneline -5` did not exit 128 under an INVALID `log.abbrevCommit` in a lower-precedence '
+                . 'global file. If it exited 0 the knob really is inert for any value and the roster bullet '
+                . 'this test corrects should go back to what it said; any other code is a third behaviour '
+                . 'nobody has measured: ' . implode("\n", $withInvalid),
+        );
+        $this->assertStringContainsString(
+            'log.abbrevcommit',
+            implode("\n", $withInvalid),
+            'git died under the invalid value but did not name `log.abbrevcommit` while doing it, so this test '
+                . 'is measuring some other fatal: ' . implode("\n", $withInvalid),
+        );
+
+        // AND THE PIN WAS LIVE THROUGHOUT. Same hostile file, same repository,
+        // one command later: the pinned value is what `--get` answers, and the
+        // command above still died. Without this pair the test would be
+        // indistinguishable from one run against a repository that never
+        // pinned the knob at all.
+        $pinned = [];
+        $this->assertSame(
+            0,
+            self::git($root, ['config', '--get', 'log.abbrevCommit'], $pinned, $invalid),
+            '`git config --get log.abbrevCommit` failed under the hostile global file, so the pin cannot be '
+                . 'shown to be live and the fatal above says nothing about pinning: ' . implode("\n", $pinned),
+        );
+        $this->assertSame(
+            ['false'],
+            $pinned,
+            'the repo-local pin does not answer `false` under the hostile global file, so the fatal above was '
+                . 'measured against an UNPINNED repository and proves nothing about whether pinning defends: '
+                . json_encode($pinned),
         );
     }
 
@@ -2318,14 +2491,54 @@ final class PromptStabilityTest extends TestCase
         // which asserts the rendered fields rather than the knobs and therefore
         // reds for members of these families that nobody has enumerated.
         //
+        // THE PREDICTION CAME TRUE AND THE ANSWER HELD. A seventh review found
+        // the fourteenth, and it was `log.abbrevCommit` — a knob THIS list
+        // already named, in its inert bullet. MEASURED, git 2.43.0, with
+        // `[log] abbrevCommit = nonsense` in a lower-precedence global file:
+        // `git log --oneline -5` dies `fatal: bad boolean config value
+        // 'nonsense' for 'log.abbrevcommit'`, exit 128, the `Recent commits:`
+        // field degrades to `unavailable (git exited 128)`, and the prompt goes
+        // 4,844 -> 4,841 B with the prefix 4,670 -> 4,667. It is STILL NOT A
+        // ROW in the `foreach` below, because a row there would not defend it
+        // — see the corrected bullet in the list beneath — and it reds at the
+        // rendered-field guard exactly as this paragraph predicted it would:
+        // MEASURED `Failures: 1` under that knob at this commit, and SILENTLY
+        // GREEN at 1267e6fbb where the guard did not yet exist. The knob's own
+        // behaviour is pinned by
+        // {@see testLogAbbrevCommitIsParseTimeValidatedSoNoRepoLocalPinDefendsIt()}
+        // rather than restated here, because a paragraph is not an assertion.
+        //
         // THE INERT LIST, WITH THE DOMAIN OF EACH ENTRY — an earlier revision
         // of it carried three entries without one, and one hazard with no entry
         // at all.
         //   - Inert for ANY value, MEASURED: `core.quotePath`,
         //     `diff.algorithm`, `diff.indentHeuristic`, `status.relativePaths`,
-        //     `log.abbrevCommit`, `core.autocrlf`.
+        //     `core.autocrlf`.
         //   - Inert only for a VALID value: `log.date`, `format.pretty`. An
         //     invalid one exits 128; see the paragraph above. Both are pinned.
+        //   - Inert only for a VALID value AND UNDEFENDABLE BY PINNING:
+        //     `log.abbrevCommit`. CORRECTED — the bullet above used to carry it
+        //     as "inert for ANY value, MEASURED", and half of that is right.
+        //     WHAT IS TRUE NOW, MEASURED on git 2.43.0: a VALID value is inert,
+        //     because `log --oneline` carries its own `--abbrev-commit` and a
+        //     command-line flag beats config, so `abbrevCommit = false` in a
+        //     global file leaves `git log --oneline -5` byte-identical. An
+        //     INVALID one is FATAL — exit 128, `Recent commits:` degrades, the
+        //     prompt loses 3 B — and NO REPO-LOCAL PIN REACHES IT, because the
+        //     value is parsed rather than used: with `log.abbrevCommit=false`
+        //     set repo-locally and `= nonsense` in a global file,
+        //     `git config --get` answers `false` and `git log` still exits 128.
+        //     That is boundary (b) above, the same shape as
+        //     `color.branch.current`, and NOT the `log.date`/`format.pretty`
+        //     shape whose values reach a formatter and which pinning does
+        //     defend. WHY IT STILL EARNS A LINE HERE rather than a `foreach`
+        //     row: a row would be a licence, not a defence. It would move the
+        //     knob out of the inert list and into a list of things claimed to
+        //     be handled while handling nothing — which is the exact failure
+        //     the completeness paragraph above records ("the list did not
+        //     merely omit the hazard, it NAMED it and pinned a sibling key that
+        //     does not cover it"). Detection is the only available answer and
+        //     it is already built: the rendered-field guard reds on it.
         //   - `color.status` and `color.branch` are inert for a reason worth
         //     writing down rather than re-deriving: `status --porcelain` and
         //     `branch --show-current` are plumbing-ish forms that never colour,
@@ -2429,12 +2642,23 @@ final class PromptStabilityTest extends TestCase
      * Run one git command under `$root` (or nowhere, for `--version`),
      * returning its exit code and handing back its combined output.
      *
-     * @param list<string>  $argv   Subcommand and flags, each escaped separately
-     * @param list<string> &$output Combined stdout/stderr, for the failure message
+     * `$globalConfig` replaces the caller's own `~/.gitconfig` for the duration
+     * of the one command. The GLOBAL slot is the point of it: it sits BELOW the
+     * repository's own config in the precedence chain, which is the only
+     * arrangement that can show whether a repo-local pin defends a hostile host
+     * value at all. Passing `/dev/null` is how a caller asks for "no global
+     * config", which is a different statement from passing nothing.
+     *
+     * @param list<string>  $argv         Subcommand and flags, each escaped separately
+     * @param list<string> &$output       Combined stdout/stderr, for the failure message
+     * @param string|null   $globalConfig Path to stand in for the global config file, or null to inherit
      */
-    private static function git(?string $root, array $argv, ?array &$output = null): int
+    private static function git(?string $root, array $argv, ?array &$output = null, ?string $globalConfig = null): int
     {
         $command = 'git';
+        if ($globalConfig !== null) {
+            $command = 'GIT_CONFIG_GLOBAL=' . escapeshellarg($globalConfig) . ' ' . $command;
+        }
         if ($root !== null) {
             $command .= ' -C ' . escapeshellarg($root);
         }
