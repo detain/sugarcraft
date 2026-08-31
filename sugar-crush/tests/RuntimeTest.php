@@ -30,7 +30,9 @@ use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Permissions\PermissionReply;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Tests\Prompt\PromptFixture;
+use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -43,6 +45,8 @@ use DateTimeImmutable;
  */
 final class RuntimeTest extends TestCase
 {
+    use HomeSandboxTrait;
+
     private ProviderInterface $provider;
     private HookRegistry $hookRegistry;
     private HookManager $hookManager;
@@ -71,6 +75,11 @@ final class RuntimeTest extends TestCase
 
     protected function tearDown(): void
     {
+        // BEFORE the temp trees go, because the sandbox HOME lives in one of
+        // them and a restore that pointed at a deleted directory would be a
+        // sandbox nobody could tell was broken.
+        $this->restoreHomeSandbox();
+
         foreach ($this->tempRepos as $dir) {
             $this->removeTree($dir);
         }
@@ -1865,6 +1874,9 @@ final class RuntimeTest extends TestCase
      */
     public function testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite(): void
     {
+        // The git fixture pins ~/.gitconfig out; this pins ~/.sugar-crush out.
+        // Same hazard, second door - see the helper's doc-block.
+        $this->pinDispatchConfigToASandboxHome();
         $root = $this->makeDirtyGitFixture();
 
         /** @var list<string> $prompts */
@@ -1954,6 +1966,7 @@ final class RuntimeTest extends TestCase
      */
     public function testTwoConsecutiveNoWriteStepsBothAssembleASuppressedPrompt(): void
     {
+        $this->pinDispatchConfigToASandboxHome();
         $root = $this->makeDirtyGitFixture();
 
         /** @var list<string> $prompts */
@@ -2298,9 +2311,15 @@ final class RuntimeTest extends TestCase
         //
         // The read-only list stays spelled out, and that is the decision half:
         // a new tool joins it only by someone typing it in, which is the review
-        // this assertion exists to force. EIGHT names, the last lowercase
-        // because that is what `Doctor::name()` actually returns.
-        $readOnly = ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor'];
+        // this assertion exists to force.
+        //
+        // IT LIVES IN ONE PLACE NOW - {@see readOnlyBuiltInToolNames()} - and
+        // is no longer a literal in this method. A second test asserts that
+        // every name on it is TRUE, which is the half this method cannot see:
+        // this one forces *a* decision, that one forces a *correct* one. Two
+        // consumers of one hand-typed list is fine; two copies of it is the
+        // §16.8-rule-15 defect one level up.
+        $readOnly = self::readOnlyBuiltInToolNames();
 
         $corpus = [];
         foreach (BuiltInToolCorpus::instances() as $tool) {
@@ -2337,6 +2356,548 @@ final class RuntimeTest extends TestCase
             [],
             $unclassified,
             'a Tool implementor is classified by NEITHER the write rule nor the read-only list - decide which, in this commit',
+        );
+    }
+
+
+    /**
+     * The distinctive value {@see pinDispatchConfigToASandboxHome()} writes, so
+     * a run that reads the DEVELOPER'S config instead reports a mismatch
+     * naming what it actually found rather than a bare inequality.
+     */
+    private const SANDBOX_CONFIG_MARKER = 'P3S5FIX1_SANDBOXED_USER_CONFIG';
+
+    /**
+     * Point `$HOME` at a temp directory holding a known
+     * `~/.sugar-crush/config.json`, for the tests that drive
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()}.
+     *
+     * WHY, and it is an asymmetry a reviewer found rather than a hazard
+     * anybody designed in. {@see makeDirtyGitFixture()} spends a paragraph on
+     * exactly this class of leak for `~/.gitconfig` and pins FOURTEEN knobs
+     * against it - and two lines earlier the same tests opened a SECOND,
+     * unpinned door to the developer's home. `EngineBackend::complete()` opens
+     * with `self::userConfig()` -> `Bootstrap::readUserConfig()` ->
+     * `mergedConfig()`, which reads the real `~/.sugar-crush/config.json` AND
+     * the real `~/.sugar-crush/settings.json`.
+     *
+     * TODAY IT CANNOT CHANGE A PROMPT, MEASURED, and the pin is still right.
+     * Only `parallelToolCalls` and `parallelToolDeadlineSeconds` are consumed
+     * on that path, neither reaches prompt assembly, and on the box this was
+     * written on the real file holds `{"provider":…,"theme":…}` - so the
+     * assertions were insensitive rather than safe. "Insensitive today" is a
+     * fact about one developer's home directory, which is not something a
+     * suite may depend on; the same sentence was true of `~/.gitconfig` until
+     * it was not.
+     *
+     * BOTH HALVES OF THAT MEASURED, on PHP 8.3.6, stdin from /dev/null:
+     * deleting this call from the two engine-loop tests leaves them
+     * `OK (2 tests, 62 assertions)` — they really are insensitive today, so
+     * the pin here is decorative ON ITS OWN. Deleting it from
+     * {@see testTheEngineLoopTestsReadTheirDispatchConfigFromASandboxHomeNotTheDevelopers()}
+     * instead REDS, reporting the developer's actual file
+     * (`['provider' => 'dev-sglang', 'theme' => 'ansi']` on the box this was
+     * written on) against the fixture's marker. That control is what makes the
+     * pin a pin rather than a comment.
+     *
+     * @return string the sandbox HOME
+     */
+    private function pinDispatchConfigToASandboxHome(): string
+    {
+        $home = $this->makeTempRepo();
+        mkdir($home . '/.sugar-crush', 0o700, true);
+        file_put_contents(
+            $home . '/.sugar-crush/config.json',
+            (string) json_encode(['marker' => self::SANDBOX_CONFIG_MARKER]),
+        );
+
+        return $this->useHomeSandbox($home);
+    }
+
+    /**
+     * THE PIN BITES: with the sandbox installed, the per-turn config read that
+     * {@see \SugarCraft\Crush\Backend\EngineBackend::complete()} performs
+     * resolves to the FIXTURE and not to the developer's home.
+     *
+     * A CONTROL FOR A SANDBOX, WHICH IS ITSELF AN ASSERTION OF ABSENCE. The
+     * two engine-loop tests would pass whether or not
+     * {@see pinDispatchConfigToASandboxHome()} did anything at all - a sandbox
+     * that silently failed to redirect and one that worked produce identical
+     * green (§16.8 rule 16). So this asserts the redirect by VALUE, through the
+     * same {@see \SugarCraft\Crush\Cli\Bootstrap::readUserConfig()} that
+     * `complete()` calls, and it asserts both polarities: the marker is what
+     * comes back, and the real home's path is not what is being read.
+     */
+    public function testTheEngineLoopTestsReadTheirDispatchConfigFromASandboxHomeNotTheDevelopers(): void
+    {
+        $realHome = getenv('HOME');
+
+        $home = $this->pinDispatchConfigToASandboxHome();
+
+        $this->assertSame(
+            ['marker' => self::SANDBOX_CONFIG_MARKER],
+            Bootstrap::readUserConfig(),
+            'EngineBackend::complete() would read the developer\'s ~/.sugar-crush, not the fixture',
+        );
+        $this->assertSame(
+            $home . '/.sugar-crush/config.json',
+            Bootstrap::userConfigPath(),
+            'the config path still resolves outside the sandbox',
+        );
+        $this->assertNotSame($realHome, $home, 'the sandbox HOME must not be the real one');
+
+        // AND THE RESTORE WORKS, because a sandbox that never comes down
+        // leaks into every test that runs after it in this process.
+        $this->restoreHomeSandbox();
+        $this->assertSame($realHome, getenv('HOME'));
+        $this->assertNotSame(
+            ['marker' => self::SANDBOX_CONFIG_MARKER],
+            Bootstrap::readUserConfig(),
+            'the sandbox did not come down - later tests are still reading the fixture',
+        );
+    }
+
+    /**
+     * The built-in tool names this classifier treats as NOT moving the working
+     * tree - the decision half of the roster pair, in exactly one place.
+     *
+     * EIGHT names, the last lowercase because that is what `Doctor::name()`
+     * actually returns. A tool joins this list only by someone typing it in,
+     * which is the review
+     * {@see testTheWriteToolRosterDoesNotDriftFromThePermissionGate()} exists
+     * to force - and the claim each entry makes is then checked by
+     * {@see testEveryToolOnTheReadOnlyListCallsNoWritePrimitiveInItsOwnSource()}.
+     *
+     * DELIBERATELY NOT `PermissionGate::isReadOnlyTool()`'s list, which holds
+     * FIVE (`src/Permissions/PermissionGate.php:667`) and is missing
+     * `WebSearch`, `Skill` and `doctor`. That gate's own doc-block at `:646`
+     * says the divergence is "A DECISION, NOT A CENSUS" and gives the reason:
+     * those three each reach something outside this process, so leaving them
+     * to Ask costs a prompt while listing them would spend a judgement that
+     * class cannot make. "Did the working tree move" and "may this call be
+     * denied without asking" are different questions and the answers differ on
+     * three tools, so the two lists must NOT be reconciled.
+     *
+     * @return list<string>
+     */
+    private static function readOnlyBuiltInToolNames(): array
+    {
+        return ['Read', 'Grep', 'Glob', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor'];
+    }
+
+    /**
+     * Filesystem- and subprocess-mutating functions a tool that claims to be
+     * read-only must not call.
+     *
+     * TWO GROUPS, both deliberate. The first mutates the tree directly. The
+     * second spawns a process, which can do anything a shell can - the same
+     * conservatism that puts `Bash` on {@see Runtime::WRITE_CAPABLE_TOOL_NAMES}
+     * in the first place.
+     *
+     * `fopen` IS ABSENT AND ITS ABSENCE IS THE DESIGN, not an oversight: it is
+     * write-capable only for some modes, and `src/Tools/BuiltIn/Read.php:213`
+     * legitimately opens `'rb'`. Classifying it would need literal-argument
+     * mode analysis and would red on correct code. Nothing can be written
+     * through a handle without one of `fwrite`/`fputs`/`fputcsv`/`fprintf`/
+     * `stream_copy_to_stream`, all of which ARE here, so the coverage is the
+     * same and the classifier stays structural.
+     *
+     * @var list<string>
+     */
+    private const WRITE_PRIMITIVES = [
+        'file_put_contents', 'fwrite', 'fputs', 'fputcsv', 'fprintf', 'stream_copy_to_stream',
+        'unlink', 'rmdir', 'mkdir', 'rename', 'copy', 'touch', 'ftruncate', 'symlink', 'link',
+        'chmod', 'chown', 'chgrp', 'move_uploaded_file', 'tempnam', 'tmpfile',
+        'proc_open', 'popen', 'exec', 'shell_exec', 'system', 'passthru', 'pcntl_exec',
+    ];
+
+    /**
+     * Every {@see WRITE_PRIMITIVES} member CALLED in $file, mapped to the lines
+     * it is called on.
+     *
+     * `token_get_all()` AND NOT A REGEX, because a regex cannot tell an
+     * offender from a description of one (§16.8 rule 38) and this tree ships
+     * the counterexample: `src/Tools/BuiltIn/Write.php` mentions `mkdir()`
+     * inside a comment on `:124` and calls it on `:175`. A text grep reports
+     * both; this reports only `:175`
+     * ({@see testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames()} pins
+     * that on a synthetic fixture rather than on those line numbers, which
+     * move).
+     *
+     * A NAME COUNTS ONLY AS A CALL. The token must be followed by `(` and must
+     * NOT be preceded by `->`, `?->`, `::`, `function` or `new`, so a method
+     * named `copy()`, a class named `Link`, and `$this->rename(...)` are all
+     * excluded - a method on some other object is that object's business, and
+     * classifying it here would red on correct code.
+     *
+     * @return array<string, list<int>>
+     */
+    private static function writePrimitivesCalledIn(string $file): array
+    {
+        $tokens = token_get_all((string) file_get_contents($file));
+        $count = \count($tokens);
+        $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
+        $found = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_STRING) {
+                continue;
+            }
+            $name = strtolower($token[1]);
+            if (!\in_array($name, self::WRITE_PRIMITIVES, true)) {
+                continue;
+            }
+
+            $previous = null;
+            for ($j = $i - 1; $j >= 0; $j--) {
+                if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
+                    continue;
+                }
+                $previous = $tokens[$j];
+
+                break;
+            }
+            if (\is_array($previous) && \in_array($previous[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION, T_NEW], true)) {
+                continue;
+            }
+
+            $next = null;
+            for ($j = $i + 1; $j < $count; $j++) {
+                if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
+                    continue;
+                }
+                $next = $tokens[$j];
+
+                break;
+            }
+            if ($next !== '(') {
+                continue;
+            }
+
+            $found[$name][] = $token[2];
+        }
+
+        ksort($found);
+
+        return $found;
+    }
+
+    /**
+     * THE HALF THE DRIFT TEST CANNOT SEE: every name on
+     * {@see readOnlyBuiltInToolNames()} must be TRUE, not merely typed.
+     *
+     * WHY THIS EXISTS, MEASURED. `Runtime.php`'s doc-block used to say the
+     * built-in half of the roster hole was "closed by" the drift test, which
+     * "reds when a new `src/Tools/BuiltIn/` tool is classified by NEITHER
+     * roster". Literally true; not what "closed" means to a reader, because
+     * the hole named one paragraph earlier is "a prompt that silently stops
+     * showing a diff". A reviewer measured the gap and this fix agent
+     * reproduced it verbatim at the base commit: add a genuinely write-capable
+     * `src/Tools/BuiltIn/MultiEdit.php` whose `execute()` calls
+     * `file_put_contents()`, then take the easy path a hurried author takes
+     * and type `'MultiEdit'` into the READ-ONLY list rather than into
+     * {@see Runtime::WRITE_CAPABLE_TOOL_NAMES}, and the whole file was
+     * `OK (112 tests, 398 assertions)` - fully green, while the engine now
+     * permanently suppresses the working diff after every `MultiEdit` write.
+     * The drift test forces *a* decision. This one forces a *correct* one.
+     *
+     * WHAT IT PINS AND WHAT IT DOES NOT, stated rather than left to "closed".
+     * It is a SAME-FILE, DIRECT-CALL scan. It catches a read-only entry whose
+     * own class calls a write primitive, which is the shape a new write tool
+     * actually arrives in. It does NOT catch a tool that writes through a
+     * collaborator - `src/Tools/BuiltIn/Bash.php` calls no primitive in this
+     * list at all and is on the WRITE roster on judgement, and `Lsp` writes by
+     * proxy through a language server, which `Runtime.php` already records.
+     * Closing THAT needs a per-tool `writesTree()` capability on the
+     * {@see \SugarCraft\Crush\Tools\Tool} interface, or the cheap tree
+     * fingerprint `Runtime.php` names - both outside this step's file list and
+     * both escalated. So the honest verb is NARROWED, not CLOSED.
+     */
+    public function testEveryToolOnTheReadOnlyListCallsNoWritePrimitiveInItsOwnSource(): void
+    {
+        $builtIns = dirname(__DIR__) . '/src/Tools/BuiltIn';
+
+        // KNOWN-POSITIVE CONTROLS FIRST (§16.8 rule 16): an unfired instrument
+        // and a dead one produce identical silence, and the verdict below is an
+        // assertion of ABSENCE. These two run through the SAME scanner in the
+        // SAME test - a sibling test is a separately deletable unit.
+        $this->assertSame(
+            ['file_put_contents'],
+            array_keys(self::writePrimitivesCalledIn($builtIns . '/Edit.php')),
+            'the scanner no longer finds Edit\'s file_put_contents() - it is dead, fix it before reading the verdict',
+        );
+        $this->assertSame(
+            ['file_put_contents', 'mkdir'],
+            array_keys(self::writePrimitivesCalledIn($builtIns . '/Write.php')),
+            'the scanner no longer finds Write\'s two primitives - it is dead, fix it before reading the verdict',
+        );
+
+        // EVERY NAME ON THE LIST MUST NAME A REAL TOOL. A typo, or a name left
+        // behind by a rename, silently classifies nothing - and an entry that
+        // classifies nothing is indistinguishable from one that classifies
+        // correctly, which is how a roster rots without reddening.
+        $corpus = [];
+        foreach (BuiltInToolCorpus::instances() as $tool) {
+            $corpus[$tool->name()] = (string) (new \ReflectionObject($tool))->getFileName();
+        }
+
+        $this->assertSame(
+            [],
+            array_values(array_diff(self::readOnlyBuiltInToolNames(), array_keys($corpus))),
+            'the read-only list names a tool that does not exist - it classifies nothing and pins nothing',
+        );
+
+        // THE VERDICT. Exact, and it names the offender and the primitive in
+        // its own failure output rather than reporting a count.
+        $offenders = [];
+        foreach (self::readOnlyBuiltInToolNames() as $name) {
+            foreach (self::writePrimitivesCalledIn($corpus[$name]) as $primitive => $lines) {
+                $offenders[] = $name . ' calls ' . $primitive . '() at '
+                    . basename($corpus[$name]) . ':' . implode(',', $lines);
+            }
+        }
+        sort($offenders);
+
+        $this->assertSame(
+            [],
+            $offenders,
+            'a tool on the READ-ONLY list writes the working tree. Either it belongs on '
+            . 'Runtime::WRITE_CAPABLE_TOOL_NAMES instead, or it stopped writing and this scan is stale. '
+            . 'Putting a write-capable tool on the read-only list makes the engine suppress the working '
+            . 'diff after it writes - silently, forever.',
+        );
+    }
+
+    /**
+     * The scanner reads CODE. A mention in a comment, a match inside a string,
+     * a method DECLARATION and a call on some other object are all not calls.
+     *
+     * SYNTHETIC AND NOT LINE NUMBERS IN `src/`, deliberately: the natural
+     * counterexample this tree ships (`Write.php` says `mkdir()` in a comment
+     * on one line and calls it on another) is real evidence but its line
+     * numbers move, and a control keyed on a moving number is a control that
+     * gets "fixed" by deleting it. The fixture below cannot move.
+     */
+    public function testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames(): void
+    {
+        $dir = $this->makeTempRepo();
+        $file = $dir . '/Probe.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Probe
+            {
+                // A comment saying mkdir() and unlink() and calling neither.
+                /** A doc-block saying file_put_contents() and calling nothing. */
+                public function copy(): string
+                {
+                    $other = new \stdClass();
+                    $prose = 'proc_open() inside a string literal';
+
+                    return $prose . self::rename() . $other->touch();
+                }
+
+                private static function rename(): string
+                {
+                    return 'still not a call to the global rename()';
+                }
+
+                public function realWrite(string $path): void
+                {
+                    fwrite(STDERR, 'x');
+                    file_put_contents($path, 'y');
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            ['file_put_contents' => [25], 'fwrite' => [24]],
+            self::writePrimitivesCalledIn($file),
+            'the scanner must report exactly the two real calls, on their own lines, and nothing else',
+        );
+
+        // BOTH POLARITIES THROUGH THE SAME INSTRUMENT (§16.8 rule 18): a
+        // classifier that reports everything passes an absence test built only
+        // from offenders, and one that reports nothing passes one built only
+        // from clean input.
+        $clean = $dir . '/Clean.php';
+        file_put_contents($clean, "<?php\n\ndeclare(strict_types=1);\n\n// mkdir() unlink() proc_open()\n\$s = 'file_put_contents()';\n");
+
+        $this->assertSame([], self::writePrimitivesCalledIn($clean));
+    }
+
+    /**
+     * Number words this suite is willing to read out of prose.
+     *
+     * @var array<int, string>
+     */
+    private const NUMBER_WORDS = [
+        0 => 'ZERO', 1 => 'ONE', 2 => 'TWO', 3 => 'THREE', 4 => 'FOUR', 5 => 'FIVE',
+        6 => 'SIX', 7 => 'SEVEN', 8 => 'EIGHT', 9 => 'NINE', 10 => 'TEN',
+        11 => 'ELEVEN', 12 => 'TWELVE', 13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
+    ];
+
+    /**
+     * Every invocation of $method under $roots, as `relative/path.php:line`.
+     *
+     * `token_get_all()` again, for the reason
+     * {@see writePrimitivesCalledIn()} gives, plus one this census was
+     * actually bitten by: the figure it re-derives was wrong BECAUSE a text
+     * grep counts a call written inside a `//` comment
+     * (`src/App/App.php:527`).
+     *
+     * @param list<string> $roots directories or files, relative to
+     *                            `sugar-crush/` unless already absolute (the
+     *                            known-answer fixture passes a temp dir)
+     *
+     * @return list<string>
+     */
+    private static function invocationsOf(string $method, array $roots): array
+    {
+        $base = dirname(__DIR__);
+        $files = [];
+        foreach ($roots as $root) {
+            $path = str_starts_with($root, '/') ? $root : $base . '/' . $root;
+            if (is_file($path)) {
+                $files[] = $path;
+
+                continue;
+            }
+            /** @var iterable<\SplFileInfo> $walk */
+            $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS));
+            foreach ($walk as $entry) {
+                if ($entry->isFile()) {
+                    $files[] = $entry->getPathname();
+                }
+            }
+        }
+        sort($files);
+
+        $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
+        $hits = [];
+        foreach ($files as $file) {
+            $source = (string) file_get_contents($file);
+            if (!str_contains($source, $method)) {
+                continue;
+            }
+            $tokens = @token_get_all($source);
+            $count = \count($tokens);
+            for ($i = 0; $i < $count; $i++) {
+                $token = $tokens[$i];
+                if (!\is_array($token) || $token[0] !== T_STRING || $token[1] !== $method) {
+                    continue;
+                }
+
+                $previous = null;
+                for ($j = $i - 1; $j >= 0; $j--) {
+                    if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
+                        continue;
+                    }
+                    $previous = $tokens[$j];
+
+                    break;
+                }
+                // A DECLARATION IS NOT A CALL. Everything else - a member
+                // fetch, a static call, a bare call - is.
+                if (\is_array($previous) && \in_array($previous[0], [T_FUNCTION, T_NEW], true)) {
+                    continue;
+                }
+
+                $next = null;
+                for ($j = $i + 1; $j < $count; $j++) {
+                    if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
+                        continue;
+                    }
+                    $next = $tokens[$j];
+
+                    break;
+                }
+                if ($next !== '(') {
+                    continue;
+                }
+
+                $hits[] = (str_starts_with($file, $base . '/') ? substr($file, \strlen($base) + 1) : $file) . ':' . $token[2];
+            }
+        }
+
+        return $hits;
+    }
+
+    /**
+     * `Runtime.php`'s statement of how many `Agent::systemPrompt()` call sites
+     * pay the un-suppressed git cost must be the number the TREE produces.
+     *
+     * WHY A TEST AND NOT A CORRECTED WORD. The sentence said "nine". MEASURED,
+     * it is EIGHT - and the "nine" was not a typo: prompt_plan.md's own P3.S5
+     * and P3.S6 sections both say "nine live sites", so the doc-block
+     * faithfully inherited a figure from the brief, inside the very commit
+     * whose purpose was to record a gap accurately. §16.8 rule 2 says ship the
+     * generator, not the count; rule 44 says a brief carries more authority
+     * than a review because nothing downstream is asked to falsify it. This is
+     * the downstream thing that falsifies it, and P3.S6 needs the number.
+     *
+     * IT PINS AGREEMENT, NOT A LITERAL. There is no `assertSame(8, ...)` here:
+     * the census derives the count and the assertion is that the PROSE says
+     * what the census found, so a ninth call site reds this with both numbers
+     * named rather than silently ageing the sentence. That is the shape
+     * prompt_plan.md §17.1 corrected an earlier census into.
+     */
+    public function testTheAgentAssemblerCallSiteCountInThisDocblockIsDerivedFromTheTree(): void
+    {
+        // THE INSTRUMENT, ON A KNOWN ANSWER, BEFORE ANYTHING IT REPORTS IS
+        // GRADED (§1.4 check 13). Four decoys and one real call.
+        $probeDir = $this->makeTempRepo();
+        file_put_contents($probeDir . '/Probe.php', <<<'PROBE'
+            <?php
+            final class Probe
+            {
+                // $agent->systemPrompt() in a comment.
+                /** {@see systemPrompt()} in a doc-block. */
+                public function systemPrompt(): string
+                {
+                    return 'systemPrompt(' . 'not a call';
+                }
+
+                public function go(Probe $other): string
+                {
+                    return $other->systemPrompt();
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            ['Probe.php:13'],
+            array_map(
+                static fn(string $hit): string => basename($hit),
+                self::invocationsOf('systemPrompt', [$probeDir]),
+            ),
+            'the call-site census reports the wrong set on a known answer - it is broken, do not read its verdict',
+        );
+
+        // THE CENSUS. `Agents/Agent.php` declares the only `systemPrompt()` in
+        // production source, so every invocation the scan finds is one of its.
+        $declarations = 0;
+        foreach (['src/Agents/Agent.php'] as $file) {
+            $declarations += substr_count((string) file_get_contents(dirname(__DIR__) . '/' . $file), 'public function systemPrompt(');
+        }
+        $this->assertSame(1, $declarations, 'Agents\Agent no longer declares systemPrompt() - this census is measuring something else');
+
+        $sites = self::invocationsOf('systemPrompt', ['src', 'bin']);
+
+        $this->assertNotEmpty($sites, 'the census found no call sites at all - a dead scan answers the same way as a wired one');
+
+        $word = self::NUMBER_WORDS[\count($sites)] ?? ('(' . \count($sites) . ')');
+        $runtime = (string) file_get_contents(dirname(__DIR__) . '/src/Runtime.php');
+
+        $this->assertSame(
+            1,
+            substr_count($runtime, 'every one of its ' . $word . ' `Agent::systemPrompt()` call sites'),
+            'src/Runtime.php must say "every one of its ' . $word . ' `Agent::systemPrompt()` call sites" - the '
+            . 'tree has ' . \count($sites) . ' of them: ' . implode(', ', $sites),
         );
     }
 

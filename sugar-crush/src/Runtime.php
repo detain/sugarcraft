@@ -239,12 +239,38 @@ final class Runtime
      * presented as new. `PermissionGate::isWriteTool()` answers exactly this
      * question — MEASURED at `src/Permissions/PermissionGate.php:687`, it
      * holds `['Bash', 'Edit', 'Write']` plus the same `mcp__` prefix rule —
-     * and this constant repeats it. Two NEIGHBOURING tool-name rosters answer
-     * DIFFERENT questions and are deliberately not reconciled with it:
-     * `ProtectFilesHook`'s `^(Bash|Edit|Write|Read)$` (`:121`) and
-     * `PermissionRule::PATH_SUBJECT_TOOLS` (`:220`) both include `Read`,
-     * because they are about which calls carry a path subject, not about which
-     * calls change one. prompt_plan.md §16.8 rule 15 forbids a hand-maintained
+     * and this constant repeats it. THREE NEIGHBOURING tool-name rosters answer
+     * DIFFERENT questions and are deliberately not reconciled with it — and
+     * this census said TWO until a reviewer found the third, which is the one
+     * that matters most because it is in the same file this classifier's drift
+     * test already parses:
+     *
+     *  - `ProtectFilesHook`'s `^(Bash|Edit|Write|Read)$` (`:121`) and
+     *    `PermissionRule::PATH_SUBJECT_TOOLS` (`:220`) both include `Read`,
+     *    because they are about which calls carry a path subject, not about
+     *    which calls change one.
+     *  - `PermissionGate::isReadOnlyTool()` — declared at
+     *    `src/Permissions/PermissionGate.php:665`, its roster literal on
+     *    `:667` — holds FIVE names, `['Read', 'Grep', 'Glob', 'WebFetch',
+     *    'Lsp']`, twenty lines above the `isWriteTool()` the drift test
+     *    extracts out of that same file. It is the nearest neighbour of the
+     *    OTHER hand-maintained roster this classifier acquired, the eight-name
+     *    read-only list in
+     *    {@see \SugarCraft\Crush\Tests\RuntimeTest::readOnlyBuiltInToolNames()},
+     *    and the two DISAGREE by exactly three names: `WebSearch`, `Skill` and
+     *    `doctor` are read-only to this classifier and absent from the gate's
+     *    list. THEY MUST NOT BE RECONCILED. The gate's own doc-block at `:646`
+     *    says so in terms — "A DECISION, NOT A CENSUS OF `src/Tools/BuiltIn/`"
+     *    — and gives the reason: each of those three reaches something outside
+     *    the process, so leaving them to Ask costs a prompt while listing them
+     *    would spend a judgement that class cannot make. "Did the working tree
+     *    move" and "may this call be denied without asking" are different
+     *    questions, and the answer differs on three tools. Naming it here is
+     *    the whole point: a census that enumerated neighbours, stopped at two,
+     *    and had already read that file sends the next reader to
+     *    `ProtectFilesHook` instead of to the list twenty lines away.
+     *
+     * prompt_plan.md §16.8 rule 15 forbids a hand-maintained
      * roster standing on its own, so this one does not:
      * {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheWriteToolRosterDoesNotDriftFromThePermissionGate()}
      * derives `PermissionGate::isWriteTool()`'s list out of that file's source
@@ -314,10 +340,55 @@ final class Runtime
      * a tool that is correctly on the read-only list. The honest fix is a cheap tree
      * fingerprint rather than a longer roster, and it is not this step's.
      *
-     * The built-in half of the roster hole is closed by
-     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheWriteToolRosterDoesNotDriftFromThePermissionGate()},
-     * which reds when a new `src/Tools/BuiltIn/` tool is classified by
-     * neither roster; the embedder half is not closed and has no owner yet.
+     * THE BUILT-IN HALF OF THE ROSTER HOLE IS NARROWED, NOT CLOSED, AND THIS
+     * PARAGRAPH SAID "CLOSED". The claim was that
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheWriteToolRosterDoesNotDriftFromThePermissionGate()}
+     * closes it "by reddening when a new `src/Tools/BuiltIn/` tool is
+     * classified by NEITHER roster". That sentence is literally true and it is
+     * not what "closed" means to a reader, because the hole named three
+     * paragraphs up is "a prompt that silently stops showing a diff". MEASURED
+     * by a reviewer and REPRODUCED verbatim by the fix agent at the merged
+     * tree: add a genuinely write-capable `src/Tools/BuiltIn/MultiEdit.php`
+     * whose `execute()` calls `file_put_contents()`, then take the easy path a
+     * hurried author takes and type `'MultiEdit'` into the READ-ONLY list
+     * rather than into this constant — `tests/RuntimeTest.php` came back
+     * `OK (112 tests, 398 assertions)`, fully green, while the engine now
+     * permanently suppresses the working diff after every `MultiEdit` write.
+     * The drift test forces *a* decision, not a *correct* one, and its
+     * assertion message ("decide which, in this commit") does not say which
+     * direction fails silently.
+     *
+     * WHAT IS PINNED NOW, exactly. Two tests, two different questions:
+     *
+     *  - the drift test above still forces a decision: a `Tool` implementor
+     *    anywhere under `src/` that neither roster classifies reds, naming
+     *    itself;
+     *  - {@see \SugarCraft\Crush\Tests\RuntimeTest::testEveryToolOnTheReadOnlyListCallsNoWritePrimitiveInItsOwnSource()}
+     *    checks that the decision is TRUE: every name on the read-only list is
+     *    resolved to its class through `BuiltInToolCorpus`, and that class's
+     *    OWN source is scanned with `token_get_all()` for a call to any of
+     *    twenty-eight filesystem- and subprocess-mutating functions. The
+     *    experiment above now REDS there, with
+     *    `MultiEdit calls file_put_contents() at MultiEdit.php:29` in its own
+     *    failure output.
+     *
+     * WHAT IS STILL NOT PINNED, said plainly rather than left inside the word
+     * "closed". The scan is SAME-FILE and DIRECT-CALL. A tool that writes
+     * through a collaborator is invisible to it — `src/Tools/BuiltIn/Bash.php`
+     * calls none of those twenty-eight itself and is on the write roster on
+     * judgement alone, and `Lsp` writes by proxy through the language server
+     * it spawns, which the paragraph above already records. The EMBEDDER half
+     * — a write-capable tool this application never sees the source of — is
+     * untouched by any of it and still has no owner.
+     *
+     * THE HONEST FIXES ARE BOTH OUT OF SCOPE HERE AND ARE ESCALATED RATHER
+     * THAN IMPLIED: a per-tool `writesTree(): bool` capability on the
+     * {@see \SugarCraft\Crush\Tools\Tool} interface, which moves the
+     * judgement to the only place that can make it and covers the embedder
+     * half too; or the cheap working-tree fingerprint this doc-block already
+     * names, which answers "did the tree move" directly and makes every roster
+     * on this page advisory. Both need `src/Tools/Tool.php` and every
+     * implementor, which is outside this step's declared file list.
      *
      * @var list<string>
      */
@@ -420,12 +491,42 @@ final class Runtime
      * NOT `with*()`, DELIBERATELY. prompt_plan.md §17.3's immutable-and-fluent
      * rule is about value objects; this class is a mutable per-turn service
      * that already memoises three blocks in place, and a `withX()` returning a
-     * clone would hand the loop a SECOND Runtime whose memoised
-     * {@see EnvironmentBlock}, {@see MemoryBlock} and {@see RepoMapBlock} were
-     * all freshly captured — re-reading the memory directory and re-walking
-     * the repository map every step, which is precisely the cost those memos
-     * exist to avoid. A mutator is the honest shape for a signal that belongs
-     * to the run, not to a value.
+     * new instance would hand the loop a SECOND Runtime that has to re-read
+     * the memory directory and re-walk the repository map on its next render
+     * — precisely the cost those memos exist to avoid. A mutator is the honest
+     * shape for a signal that belongs to the run, not to a value.
+     *
+     * THE REASON ABOVE USED TO NAME THREE BLOCKS AND CLONE SEMANTICS, AND BOTH
+     * HALVES WERE WRONG. It said a `withX()` "returning a clone would hand the
+     * loop a SECOND Runtime whose memoised `EnvironmentBlock`, `MemoryBlock`
+     * and `RepoMapBlock` were ALL freshly captured". This repo's `with*()`
+     * convention is not `clone` at all, and the count is two, not three.
+     * MEASURED on PHP 8.3.6 by building the hypothetical rather than reasoning
+     * about it — a throwaway class with `Runtime`'s exact field shape (one
+     * promoted constructor parameter standing for {@see $environmentBlock} at
+     * `:400`, two class-body fields standing for {@see $memoryBlock} at `:186`
+     * and {@see $repoMapBlock} at `:188`), memoised, then put through each of
+     * the two canonical mutator forms in this monorepo:
+     *
+     *  - `candy-core/src/Concerns/Mutable.php`'s
+     *    `new static(...array_merge(get_object_vars($this), $changes))` does
+     *    not merely reset the memos on this shape — it FATALS,
+     *    `Error: Unknown named parameter $memoryBlock`, because
+     *    `get_object_vars()` returns the class-body fields too and they are
+     *    not constructor parameters. On `Runtime` that trait is unusable
+     *    without overriding `mutate()`.
+     *  - `src/App/App.php:1264`'s hand-written `new self(...)` over the
+     *    promoted parameters CARRIES `environmentBlock` — it is a constructor
+     *    parameter — and resets `memoryBlock` and `repoMapBlock` to null.
+     *
+     * So exactly TWO memos would be recaptured, not three, and the mechanism
+     * is constructor re-entry rather than cloning. THE CONCLUSION IS
+     * UNCHANGED and that is why the paragraph is corrected in place rather
+     * than dropped (§16.8 rule 42): the memory-directory read and the
+     * repository-map walk really would repeat every step, which is the cost
+     * the argument was about. Only its arithmetic and its mechanism were
+     * wrong, and a near-miss inside a paragraph is what makes a reader trust
+     * the next claim in it.
      *
      * WHAT IT ACTUALLY BUYS, MEASURED — because the sentence the lever shipped
      * with is FALSE and this is the step that made it live, so it is corrected
@@ -537,7 +638,7 @@ final class Runtime
      *     because it is the API this class consumes, and it is the last place
      *     the falsified motivation would be noticed. Listed separately from
      *     the class docblock because they are two edits, not one.
-     *  2. CLOSED. `Integration\SystemPromptWiringTest::testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt()`
+     *  2. CLOSED. `Integration\SystemPromptWiringTest::testEveryStepOfOneTurnGetsAByteIdenticalPromptExceptTheTwoGitDiffSectionsWhichAreTheOnlyLicensedDifference()`
      *     pinned the invariant this method deliberately INVERTS — that every
      *     step of one turn is handed a byte-identical prompt. The orchestrator
      *     widened P3.S5's declared file list to that one test file, and the
@@ -593,8 +694,36 @@ final class Runtime
      *     {@see EnvironmentBlock::withWriteSinceLastRender()} — MEASURED, zero
      *     hits across `src/Agents/`, `src/Cli/` and `src/App/` — so it can
      *     never reach the suppressed state and pays FIVE git subprocesses on
-     *     every one of its nine `systemPrompt()` call sites, per render rather
-     *     than per turn. `Bootstrap.php:1462` memoises the CAPTURE onto each
+     *     every one of its EIGHT `Agent::systemPrompt()` call sites, per render
+     *     rather than per turn.
+     *
+     *     THAT FIGURE SAID "NINE" AND NINE WAS WRONG, and the correction is
+     *     recorded rather than quietly applied because of where the wrong one
+     *     came from: prompt_plan.md's own P3.S5 and P3.S6 sections both say
+     *     "nine live sites", this doc-block inherited the word from the brief,
+     *     and §16.8 rule 44 is that a brief carries more authority than a
+     *     review precisely because nothing downstream is asked to falsify it.
+     *     Two readers have now falsified it. MEASURED by a `token_get_all()`
+     *     census over `src/` and `bin/` — comments and string literals
+     *     excluded, method DECLARATIONS excluded, receiver required to be
+     *     `->`/`?->`/`::` or a bare call — there are EIGHT invocations:
+     *     `App/App.php:569`, `Agents/ProcessExecutor.php:473`,
+     *     `Agents/AgentManager.php:433` and `Workflows/WorkflowEngine.php`
+     *     at `:1042`, `:1152`, `:1252`, `:1294` and `:1397`. A plain
+     *     `/usr/bin/grep -rn '>systemPrompt(' src bin` returns the same eight
+     *     plus ONE comment line, `App/App.php:527`, which is where a ninth
+     *     most plausibly came from. There is exactly one declaration
+     *     (`Agents/Agent.php:415`) and no dynamic dispatch on the name —
+     *     every `'systemPrompt'` string in `src/` is an array key or a named
+     *     argument, never a method name handed to a variable call.
+     *
+     *     AND THE NUMBER IS NOW DERIVED RATHER THAN TRUSTED (§16.8 rule 2:
+     *     ship the generator, not the count).
+     *     {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheAgentAssemblerCallSiteCountInThisDocblockIsDerivedFromTheTree()}
+     *     re-runs that census on every suite run and reds unless the word in
+     *     the sentence above is the word the tree produces, so a ninth call
+     *     site lands here as a failure naming both numbers instead of as a
+     *     sentence nobody re-measures. `Bootstrap.php:1462` memoises the CAPTURE onto each
      *     agent, which costs nothing: capture() runs ZERO subprocesses
      *     (MEASURED with a logging `git` shim: ten captures with no render, 0
      *     invocations) and `render()` pays the bill on every call. The gap is
