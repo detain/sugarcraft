@@ -347,19 +347,24 @@ Next step:        **BATCH P3.CLOSE.B1 IS IN FLIGHT.** Queue items (a) and (b) ar
                      then F2 and F6 (wrong-green fixture holes), then F1, then the
                      comment-accuracy set F3/F4/F7/F8.
 
-                  b. **P3.S5-fix-1, WITH THE USER-APPROVED TEST RENAME FOLDED IN.**
-                     Fold rather than split: the rename touches src/Runtime.php, which
-                     this fix already declares, so a separate step would collide there.
-                     THREE rename sites:
-                       tests/Integration/SystemPromptWiringTest.php:261  the method
-                       tests/Integration/SystemPromptWiringTest.php:710  self-reference
-                       src/Runtime.php:540                              prose citation
-                     testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt asserts the
-                     OPPOSITE of its name. MEASURED TWICE: nothing in the tree catches a
-                     stranded citation — fabricating the cited METHOD name leaves
+                  b. **P3.S5-fix-1 — THE RENAME IS DONE. See `In-flight batch` for the
+                     rest.** WHAT THIS ENTRY USED TO SAY: that the rename was pending,
+                     with three line-numbered sites to change. WHAT IS TRUE NOW: it landed
+                     in commit 2a197ed20 on branch prompt/P3.S5-fix-1, and an independent
+                     reviewer verified it — exactly three sites carry the new name, the
+                     method body is byte-identical to base, 8 assertions before and after,
+                     still collected under --filter, and the old token survives nowhere in
+                     sugar-crush/ outside the gitignored .phpunit.cache. The new name is
+                       testEveryStepOfOneTurnGetsAByteIdenticalPromptExceptTheTwoGitDiff
+                       SectionsWhichAreTheOnlyLicensedDifference
+                     (one identifier, wrapped here only for the margin).
+                     WHY THIS PARAGRAPH STILL EARNS ITS PLACE: the reason the rename had
+                     to move all three sites in ONE diff is still live for every future
+                     citation edit. MEASURED TWICE: nothing in the tree catches a stranded
+                     citation — fabricating the cited METHOD name leaves
                      SymbolCitationDriftTest OK (7 tests, 2952 assertions), and
-                     fabricating the cited CLASS name does too. So all three move in ONE
-                     diff; there is no guard to lean on. The docblock paragraph arguing
+                     fabricating the cited CLASS name does too. There is no guard to lean
+                     on; hand-verify with /usr/bin/grep. The docblock paragraph arguing
                      to keep the name is spent — rewrite it, do not delete it.
                      Then cycle-6 findings 1-4 in Runtime.php and 5 in RuntimeTest.php.
                      Full review: /home/sites/sugarcraft/.sugar-crush-prompt/P3.S5-cycle6-review.txt
