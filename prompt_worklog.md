@@ -372,8 +372,60 @@ hardlink; it detected and restored it at the time and re-verified at wind-down. 
 all twelve most recent commits are authored `Joe Huss <detain@interserver.net>`. Siblings `gt2`/`gt3`/
 `tprobe` carry the correct identity. **The rule held this time.** UNVERIFIED which agent created `gt`.
 
-**HANDOFF** Run a fresh FOURTH reviewer over `5a0ff8e12` — it has never been reviewed — then merge behind
-`P3.S4-fix-1` per the declared order.
+**!!! P3.S5-fix-1 IS RED AT HEAD. ORCHESTRATOR-MEASURED, AND NOBODY ELSE HAD RUN IT. !!!**
+
+```
+cwd /home/sites/prompt-step-P3.S5-fix-1 (worktree root), ambient, SERIAL, stdin </dev/null
+php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never
+Tests: 10506, Assertions: 162036, Failures: 1, Skipped: 1.
+```
+
+**The failing test is `Support\InterpolationOpenerTokenTest::testEveryBraceWalkingScannerNamesEveryOpener`
+(`tests/Support/InterpolationOpenerTokenTest.php:653`) — a PRE-EXISTING tree-wide census test that
+EXISTS ON MASTER, is NOT in this diff, and is GREEN on master.** Verbatim:
+
+```
+this scanner walks braces but does not handle every token the running PHP uses to OPEN one. A missed
+opener does not crash: the walk loses a level and the scanner silently stops matching after the first
+interpolated string, which is how two separate guards in tests/Support/ came to report correct code as
+broken. Add the token beside T_CURLY_OPEN wherever the depth is counted.
+Failed asserting that two arrays are identical.
+-Array &0 []
++Array &0 [
++    0 => 'tests/RuntimeTest.php does not name T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES',
++]
+```
+
+**THIS IS THE ELEVENTH DEFEAT OF THE SCANNER, and the tree found it, not a reviewer.** The brace-walking
+machinery cycle 3 built (`writePrimitivesCalledIn()` / `sourceFilesOf()` / the argument-aware analysis)
+counts brace depth without naming `T_CURLY_OPEN` or `T_DOLLAR_OPEN_CURLY_BRACES`. A tool whose source
+contains an interpolated string — `"{$path}"`, `"${path}"` — makes the walk LOSE A LEVEL, after which the
+scanner silently stops matching. **So a write primitive appearing after any interpolated string in a
+read-only tool's source is missed, and the roster goes wrong-green again — the exact defect class this
+whole finding exists to close.**
+
+**Why nobody caught it.** The step agent's last full suite was at `68a0c3c5d`, the CYCLE-2 commit
+(`Tests: 10506, Assertions: 162030, Skipped: 1`, green). Cycle 3's ten fixes landed in `5a0ff8e12` and
+**the suite was never run again** — the wind-down order arrived first, and all three reviewers scoped
+themselves to the diff rather than the tree. §5 warns in as many words that *"every test file this plan
+adds can red one of [the tree-wide census tests]"*, and this is that warning coming true.
+**It is also the plain case for the rule that the orchestrator runs its own tests**: four agents looked at
+this branch and all four would have handed it over green.
+
+P3.S4-fix-1 is CLEAN on the same census — `OK (6 tests, 164 assertions)` in its worktree — so the red is
+specific to P3.S5-fix-1's cycle-3 scanner, not to the batch or the box.
+
+**CONSEQUENCE: `P3.S5-fix-1` MUST NOT BE MERGED until this is fixed.** The fix is small and local
+(name the two tokens wherever depth is counted in `tests/RuntimeTest.php`) but it MUST come with the
+acceptance mutation: a read-only tool whose source interpolates a string BEFORE calling a write primitive
+must red. Until that mutation is shown red, the eleventh defeat is closed only by assertion.
+
+**HANDOFF, REVISED — three things, in this order.**
+1. **Fix the interpolation-opener red in `tests/RuntimeTest.php`** and prove it with the mutation above.
+2. **Then run a fresh FOURTH reviewer over the result** — `5a0ff8e12` has never been reviewed at all, and
+   the fix will add to it.
+3. **Then re-run the FULL SUITE from the worktree root, serially, and only then merge**, behind
+   `P3.S4-fix-1` per the declared order. Master's figure to beat: `10500 / 161982 / 1`.
 
 ---
 
