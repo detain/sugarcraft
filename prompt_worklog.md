@@ -253,6 +253,133 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 (cycle-3 fix) — `log.abbrevCommit` reclassified, and control B stops blaming the scanner for a broken `git diff`   ·   2026-08-31   ·   `2d5f14835`, NOT MERGED
+
+**Status** `in review` — review cycle 4 of a maximum five is IN FLIGHT.
+**Worktree** `/home/sites/prompt-step-P3.S4-fix-1` — LEFT IN PLACE.
+**Base** master `1267e6fbb`. Branch `prompt/P3.S4-fix-1`, now 5 commits.
+
+**Goal** Dispose of the two cycle-3 findings that survived the previous session's context loss:
+the roster declaring `log.abbrevCommit` inert when it is not (F-2), and control B reddening with
+"the scanner is dead" when a host knob has broken `git diff` (F-4).
+
+**THE HEADLINE: THE ORCHESTRATOR'S OWN PRESCRIPTION WAS MEASURED FALSE AND CORRECTLY REFUSED.**
+My brief told the fix agent, in as many words, to *"move `log.abbrevCommit` to the valid value only
+bullet and PIN it."* The agent measured that prescription and it does not work. `log.abbrevCommit` is
+**validated at parse time**, so an invalid value in a *lower*-precedence config file is fatal even
+across a *higher*-precedence repo-local pin. A `foreach` pin row would have satisfied my instruction
+honestly and pinned **nothing** — and worse, would have reproduced the exact failure this file's own
+completeness paragraph exists to record: *a list that NAMES a hazard and pins a key that does not
+cover it.* §16.8 rule 43 (a prescription is a hypothesis) and rule 45 (it can be honestly satisfied
+and pin nothing), both arriving in one step.
+
+**I RE-DERIVED IT MYSELF rather than take the correction on trust — I wrote the wrong prescription,
+so I am the wrong person to be its only check.** Scratch repo in my own scratchpad, git 2.43.0:
+
+```
+$ git config log.abbrevCommit false                      # repo-local pin, HIGHER precedence
+$ GIT_CONFIG_GLOBAL=<hostile: abbrevCommit = nonsense> git config --get log.abbrevCommit
+false                                                    exit=0     <- the pin answers
+$ GIT_CONFIG_GLOBAL=<hostile>                          git log --oneline -1
+fatal: bad boolean config value 'nonsense' for 'log.abbrevcommit'
+                                                         exit=128   <- and the command dies anyway
+$ GIT_CONFIG_GLOBAL=<valid: abbrevCommit = false>      git log --oneline -1   -> 7514dc8 one, exit=0
+$ GIT_CONFIG_GLOBAL=/dev/null                          git log --oneline -1   -> 7514dc8 one, exit=0
+```
+And the control that proves this is a property of the KNOB and not of the method — `log.date`, the
+family that IS defendable:
+```
+$ git config log.date default ; GIT_CONFIG_GLOBAL=<hostile: date = true> git log --oneline -1
+7514dc8 one                                              exit=0     (pinned — defended)
+$ git config --unset log.date ; GIT_CONFIG_GLOBAL=<hostile: date = true> git log --oneline -1
+fatal: unknown date format true                          exit=128   (unpinned — fatal)
+```
+**The agent is right; I was wrong. Disposition ENDORSED.** The knob got its own bullet — *"Inert only
+for a VALID value AND UNDEFENDABLE BY PINNING"* — corrected in place per §16.8 rule 42, left
+UNPINNED, with the reasoning argued in the file rather than only in a report. And because prose reds
+nothing, the fact is now pinned by an assertion.
+
+**What changed** — one file, `sugar-crush/tests/Providers/PromptStabilityTest.php`, +228/−4.
+- `:2519-2546` the corrected roster bullet. `:2493-2509` the completeness paragraph now records that
+  its own prediction came true — a seventh review found the fourteenth knob, in a family the list
+  already named — and that the answer held: the rendered-field guard reds on it.
+- `:2043-2181` NEW `testLogAbbrevCommitIsParseTimeValidatedSoNoRepoLocalPinDefendsIt`, 16 assertions.
+  Builds a repo that **pins** the knob repo-locally, then measures both polarities against
+  lower-precedence global files: `assertSame(128, …)` for an invalid value, `assertSame(0, …)` plus
+  `assertSame($withNone, $withValid)` for a valid one, and `assertSame(['false'], $pinned)` for
+  `git config --get` **under the same hostile file**. That last pair is the load-bearing one: it
+  separates "undefendable by pinning" from "nobody pinned it".
+- `:1873-1899` control B now asserts its own fixture's `git diff --shortstat --patch` exited 0
+  BEFORE asserting liveness, with a message carrying the real exit code and git's own stderr.
+- `:2645-2661` `self::git()` takes an optional 4th `?string $globalConfig`, prefixing
+  `GIT_CONFIG_GLOBAL=` for one command — the GLOBAL slot deliberately, because it is BELOW
+  repo-local and that is the only arrangement that can show whether a pin defends anything.
+  Additive; ~25 existing call sites unchanged. A second helper was rejected on purpose:
+  `DuplicatedTestHelperDriftTest` is in the census set.
+
+**Deletion experiment — THREE, each from a committed tree (§16.8 rule 51), each restore verified
+with an empty `git status --porcelain`.**
+1. Removed control B's new guard, ran under a hostile `diff.external` → RED with the FALSE message
+   *"…The scanner is dead"*. Restored → RED with *"git diff failed, exit 128 — the binary-diff
+   control fixture cannot produce a diff at all, so nothing below this line is a statement about the
+   scanner"*, carrying `fatal: external diff died`. **The point of this fix is the MESSAGE, not the
+   colour, and the experiment shows the message.**
+2. Removed the repo-local pin row from the new test's fixture → RED, `['nonsense']` where `['false']`
+   was expected: without the pin the fatal would have been measured against an UNPINNED repository
+   and would prove nothing.
+3. Changed the hostile global from `nonsense` to `false` → RED, "did not exit 128": the 128 is
+   measuring the hazard, not a constant (§16.8 rule 12).
+**Stated plainly, and the agent stated it first:** the PROSE half of the F-2 fix reds nothing when
+reverted — a comment cannot. That is exactly why the fix ships the test; the false claim survived six
+reviews because nothing could fail on it.
+
+**MEASURED — ORCHESTRATOR'S OWN RUNS**, cwd `/home/sites/prompt-step-P3.S4-fix-1`, tree at
+`2d5f14835`, `git status --porcelain` empty, stdin `</dev/null`:
+```
+--filter PromptStabilityTest                    OK (15 tests, 391 assertions)
+the seven tree-wide census files                OK (109 tests, 9632 assertions)
+git diff --name-only 1267e6fbb..HEAD            sugar-crush/tests/Providers/PromptStabilityTest.php
+git diff --stat 1267e6fbb..HEAD -- src/         EMPTY — no production code, as required
+md5sum of the two goldens                       32ea749d… / ef0326dd…   UNMOVED
+git log -1 --format='%an <%ae>'                 Joe Huss <detain@interserver.net>
+```
+Both figures agree with the agent's EXACTLY. Progression 13/229 (base) → 14/374 (`bdef57632`) →
+**15/391** (+1 test, +17 assertions: 16 from the new test, 1 from control B's guard). The census set
+is byte-for-byte unmoved by this change, `InterpolationOpenerTokenTest` included (6/164) — this
+branch stays clean on the census the sibling step was red on.
+
+**FULL SUITE NOT YET RUN AT THIS HEAD.** The only figure that exists is AGENT-REPORTED at
+`bdef57632`: `Tests: 10501, Assertions: 162127, Skipped: 1`. **Nobody may write a figure for
+`2d5f14835` until it is measured serially.**
+
+**Second surprise, smaller and worth keeping:** the `-diff` gitattribute does **NOT** stop git
+invoking an external differ. MEASURED — `git diff --shortstat --patch` on a fixture whose attributes
+say `* -diff`, under a `diff.external` naming a non-existent command, still exits 128 on
+`fatal: external diff died`. That is *why* control B — the one control built on `-diff` — is the one
+that masks.
+
+**Follow-up created, OBSERVED and deliberately not fixed:** control C (the coloured control,
+escape-byte liveness) has no equivalent subprocess guard. Judged benign because control B's new guard
+now intercepts the `diff.external` case before C is reached and C's own message already names its own
+hazards — but the cycle-4 reviewer has been asked specifically whether C is reachable with a broken
+subprocess by some route B does not intercept.
+
+**Subagents** One fix agent. Complete seven-section report, not blank, not truncated. Answered
+ORCHESTRATION-RULE-2 **NO** — its one scratch repo was inside its own `scratchpad/P3.S4-fix-1/`
+subdirectory, `git config` was run only *inside that scratch repo*, and the real commit took its
+identity from per-command `-c user.name=… -c user.email=…` which does not persist. I re-checked
+`git config user.name` / `user.email` in the main repo afterwards: still `Joe Huss` /
+`detain@interserver.net`. ORCHESTRATION-RULE-3 held.
+
+**HANDOFF** Review cycle 4 is in flight with a BRAND-NEW reviewer (never re-use one; never hand it
+the earlier cycles' findings — §1.4). It was asked, as its highest-value contribution, to find the
+**fifteenth** knob, and — because I wrote the prescription that turned out to be wrong — to re-derive
+the whole `log.abbrevCommit` classification independently and tell me if either of us is wrong. Two
+cycles remain. On a clean review: run the full suite SERIALLY from the worktree root, then merge
+**FIRST**, ahead of `P3.S5-fix-1`.
+
+---
+
 ### P3.S5-fix-1 (fix cycle) — the write-primitive scanner lost a brace level on every interpolated argument   ·   2026-08-31   ·   `842cc59b3`, NOT MERGED
 
 **Status** `in review` — the RED is closed; review cycle 4 of a maximum five is IN FLIGHT.
