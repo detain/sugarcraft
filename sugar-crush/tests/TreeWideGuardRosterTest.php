@@ -127,8 +127,13 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * directory taint the same parameter. MEASURED on this tree: that rule promotes
  * SEVEN files and only THREE of the seven are genuinely tree-wide, so it buys
  * three members at the price of four wrong ones and of a roster nobody can
- * check by reading. The three it gets right are declared by hand instead, in
- * {@see DECLARED_TREE_WIDE_GUARDS}, each with the reason - which is rule 15's
+ * check by reading. The ones it gets right are declared by hand instead, in
+ * {@see DECLARED_TREE_WIDE_GUARDS} - which now holds FOUR rows rather than the
+ * three that rule promoted correctly, because `BaseSystemPromptTest.php` was
+ * later reclassified into it for an unrelated and separately measured reason. The
+ * sentence used to say "the three it gets right are declared by hand", which read
+ * as though the constant WAS those three. Each row carries its own reason, which
+ * is rule 15's
  * actual instruction: derive what can be derived, and declare the remainder
  * where a human has looked, rather than hand-maintaining the whole list.
  *
@@ -240,11 +245,33 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * alone, it would absorb every future walk in that file. Keyed on both, moving a
  * licensed walk anywhere costs a row, which is the point.
  *
- * WHAT THIS FILE DOES NOT DO. It does not edit `prompt_plan.md` - the roster it
- * derives is reported by
+ * WHAT THIS FILE DOES NOT DO. It does not edit `prompt_plan.md`; the plan
+ * document is the orchestrator's to update.
+ *
+ * AND IT DOES NOT REPORT THE ROSTER ON A GREEN RUN. That is a real gap and the
+ * sentence here used to deny it: it said the derived roster "is reported by
  * {@see testTheHandMaintainedCensusSetIsASubsetOfTheDerivedRoster()}'s failure
- * message and by the P3.audit-fix-2 report, and the plan document is the
- * orchestrator's to update.
+ * message". MEASURED FALSE, and false twice over. That test's first message is
+ * {@see describeRosterGap()}, whose text is the hand-maintained members MISSING
+ * from the derivation - the COMPLEMENT of the roster, empty precisely when the
+ * derivation is working; its second names no file at all. And PHPUnit prints an
+ * assertion message only on FAILURE, so no message of any wording would emit the
+ * roster on a green run.
+ *
+ * SO THE ROUTE IS THE GENERATOR, WHICH IS THE ONLY KIND OF ROUTE THAT CANNOT GO
+ * STALE. From `<worktree>/sugar-crush`:
+ *
+ *     php -r 'require "vendor/autoload.php";
+ *       $m = (new ReflectionClass(\SugarCraft\Crush\Tests\TreeWideGuardRosterTest::class))
+ *           ->getMethod("derivation");
+ *       $m->setAccessible(true);
+ *       echo implode("\n", $m->invoke(null)["roster"]), "\n";'
+ *
+ * That prints the 67 members whenever anybody wants them, needs no artefact, and
+ * is the answer `prompt_plan.md` section 1.2 action 7b's list should be checked
+ * against. A test that printed 67 lines on every green run would be noise the
+ * suite has to carry forever; a test that printed them only on failure would not
+ * be reporting at all. Neither is preferable to one command.
  *
  * AND IT DOES NOT CLAIM THAT "NOTHING THAT WALKS THE TREE ESCAPES CLASSIFICATION
  * SILENTLY", which is what this paragraph used to end with and which the file
@@ -347,8 +374,12 @@ final class TreeWideGuardRosterTest extends TestCase
      * EVERY ROW HAS THE SAME CAUSE, and it is stated rather than implied: the
      * root reaches the walker through a function PARAMETER, and parameter taint
      * is not in the derivation for the measured reason the class doc-block
-     * gives. A human has read each of these three and confirmed the walk is over
-     * the package's own files.
+     * gives. A human has read each of these FOUR ROWS and confirmed the walk is
+     * over the package's own files. (This said "each of these three" and was
+     * correct until `BaseSystemPromptTest.php` was reclassified into the constant
+     * a commit later - the sentence did not travel with the row it describes,
+     * which is rule 40. MEASURED at HEAD: four rows, and `why` agrees with
+     * declared = 4.)
      *
      * IT ADDS A FILE, AND IT ALSO EXEMPTS THAT FILE'S REMAINING SITES - both
      * halves, because the sentence here used to claim only the first. It said
@@ -540,20 +571,29 @@ final class TreeWideGuardRosterTest extends TestCase
      * `$cases[$name]` and truncated forms like `$aliases]`. A malformed spelling
      * can only ever match by accident, so it is not consulted.
      *
-     * THE CENSUS, WITH ITS GENERATOR AND ITS UNITS, because the pair that stood
-     * here - "8,264 well-formed spellings and 481 distinct malformed ones" -
-     * reproduces under no reading and was WRONG IN ITS UNITS: it paired
-     * OCCURRENCES on the left with DISTINCT spellings on the right, out of a
-     * standalone probe whose pattern was not this constant. GENERATOR: for each
-     * `.php` file `everyTestFile()` returns, run {@see rootAnchoredNames()} over
-     * {@see significant()} and classify every name it yields by this pattern.
-     * MEASURED over 472 files - well-formed 5,685 occurrences across 4,731
-     * distinct spellings; malformed 437 occurrences across 312 distinct spellings.
-     * Rule 2 says ship the generator, not the count, so the DIRECTION of the claim
-     * - that malformed spellings really are produced and really are rejected - is
-     * asserted from the tree by
-     * {@see testTheRootTaintResolverMatchesAtNameBoundariesAndIgnoresMalformedSpellings()}
-     * and does not rest on these four figures at all.
+     * THE CENSUS IS THE GENERATOR AND NOTHING ELSE - NO CARDINALITY, on the third
+     * attempt, and the third attempt is the one that had to stop counting.
+     * GENERATOR: for each `.php` file `everyTestFile()` returns, run
+     * {@see rootAnchoredNames()} over {@see significant()} and classify every name
+     * it yields by this pattern.
+     *
+     * WHY NO NUMBER GOES HERE. Attempt one paired OCCURRENCES with DISTINCT
+     * spellings out of a probe whose pattern was not this constant, and reproduced
+     * under no reading. Attempt two fixed the units and gave four figures measured
+     * correctly at the commit that wrote them - and they were STALE TWO COMMITS
+     * LATER, because THIS FILE IS ONE OF THE 472 the generator reads. Every
+     * paragraph added to it moves its own census. MEASURED: substituting the
+     * earlier revision of this one file back into the population reproduces those
+     * four figures exactly, and the current file gives four different ones.
+     *
+     * A self-referential census cannot be pinned in prose by anybody, however
+     * carefully they measure - which is rule 2 not as a style preference but as
+     * the only option. So the DIRECTION of the claim, which is all the pattern
+     * needs, is asserted from the tree instead by
+     * {@see testTheRootTaintResolverMatchesAtNameBoundariesAndIgnoresMalformedSpellings()}:
+     * malformed spellings really are produced, they really are rejected, and they
+     * really are the minority. Run the generator above if you want today's four
+     * numbers; do not write them down.
      *
      * THE SHAPES ALLOWED ARE THE ONES {@see spellingsOf()} PRODUCES, and I
      * measured that list rather than guessing it: a plain local `$root`, a
@@ -579,8 +619,13 @@ final class TreeWideGuardRosterTest extends TestCase
      * `dirname(__DIR__)` at any depth, `__DIR__` concatenated with a path that
      * climbs, and `dirname(__FILE__)` at any depth. The third is here because a
      * reviewer defeated the derivation with it and it costs one alternative;
-     * MEASURED, it matches 0 files under `tests/` and `src/` today, so it is a
-     * closed door rather than a behaviour change.
+     * MEASURED, it matches 0 files under `tests/` and `src/` OTHER THAN THIS ONE
+     * today, so it is a closed door rather than a behaviour change. (The
+     * exclusion is the correction the class doc-block already carries, and this
+     * copy of the same claim did not get it - rule 40, a correction must travel to
+     * its neighbours, missed on the neighbour 370 lines away. The one match is
+     * this file: the blind-spot table carries `dirname(__FILE__` as FIXTURE
+     * SOURCE. At `bb4a311d0` it was genuinely 0.)
      *
      * A bare `__DIR__ . '/fixtures'` is deliberately NOT an anchor - it names a
      * directory beside the test, which is how a fixture is addressed rather than
@@ -1490,6 +1535,23 @@ final class TreeWideGuardRosterTest extends TestCase
             );
         }
 
+        // THE DECLARATION ALPHABET, all four spellings, because a helper whose
+        // name declaredTypeNames() cannot read contributes nothing and is missed
+        // in silence - the same failure mode this whole method is about, one
+        // token class down. `enum` is in the list BECAUSE it was not: MEASURED,
+        // 0 of the 32 helper files under tests/ declare one today, so this is a
+        // door closed before anybody walks through it.
+        foreach (['class' => 'C', 'trait' => 'T', 'interface' => 'I', 'enum' => 'E'] as $keyword => $name) {
+            $declaration = ['Support/D.php' => "<?php\nnamespace X;\n" . $keyword . ' ' . $name . " { use Walks; }\n"];
+            $this->assertArrayHasKey(
+                strtolower($name),
+                self::closeOverDelegates($declaration, $seed),
+                'a helper declared with the "' . $keyword . '" keyword contributes no name, so channel '
+                    . 'A cannot key on it and every test reaching the tree only through it is missed '
+                    . 'silently - declaredTypeNames() must read all four declaration spellings',
+            );
+        }
+
         // AND THE NEGATIVE HALF. Without it every assertion above passes against
         // a closure that adds everything it is handed.
         $unrelated = [
@@ -1867,12 +1929,24 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
-     * The class/trait/interface names DECLARED in one source.
+     * The class/trait/interface/enum names DECLARED in one source.
      *
      * `Foo::class` IS EXCLUDED - `T_CLASS` is the same token there, and taking
      * the token after it would nominate whatever followed the expression. An
      * anonymous `new class` is excluded by the same test, since the token after
      * it is `(` or `{` rather than a name.
+     *
+     * `T_ENUM` IS IN THE LIST AND WAS NOT. The doc-block said
+     * "class/trait/interface" and the filter matched it, so a walking - or
+     * DELEGATING - helper declared as an `enum` contributed no name at all,
+     * channel A could not key on it, and by {@see closeOverDelegates()}'s own
+     * argument the tests reaching the tree only through it would be missed in
+     * SILENCE, having no walker call site of their own to land in the residue.
+     * That is the A4 defect one file over: a token class missing from an alphabet
+     * AND from that alphabet's own statement of what it cannot express (rule 31).
+     * MEASURED LATENT: of the 32 non-`*Test.php` files under `tests/`, 0 declare
+     * an enum, so closing it changes no verdict today - it removes a future one,
+     * for the cost of one token constant.
      *
      * @return list<string>
      */
@@ -1882,7 +1956,7 @@ final class TreeWideGuardRosterTest extends TestCase
         $names = [];
 
         foreach ($tokens as $i => $token) {
-            if (!\is_array($token) || !\in_array($token[0], [T_CLASS, T_TRAIT, T_INTERFACE], true)) {
+            if (!\is_array($token) || !\in_array($token[0], [T_CLASS, T_TRAIT, T_INTERFACE, T_ENUM], true)) {
                 continue;
             }
             $previous = $tokens[$i - 1] ?? null;
