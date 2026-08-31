@@ -2,16 +2,59 @@
 
 > **This file has two jobs, and which one it is doing depends on when you read it.**
 >
-> 1. **Before the plan starts** (its current state) it is a **start prompt**: hand this file to a
->    fresh agent with no prior conversation and the plan begins correctly.
-> 2. **After the plan starts** it is **rewritten after every step** so that it becomes a **resume
->    prompt**: hand it to a fresh agent and the plan picks up from wherever it actually is and runs
->    to the end.
+> 1. **Before the plan starts** it is a **start prompt**: hand it to a fresh agent with no prior
+>    conversation and the plan begins correctly.
+> 2. **After the plan starts — which is where it is now** — it is **rewritten after every step** so
+>    that it becomes a **resume prompt**: hand it to a fresh agent with no prior conversation and the
+>    plan picks up from exactly where it is and runs to the end. That is this file's job today, and
+>    §0 is the instruction that makes it run to the END rather than to the next question.
 >
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3. NO AGENTS RUNNING, NO WORKTREES, NO OPEN BRANCHES — everything verified and merged. Master @ e0d00b6db is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter. CI's last red test is fixed. ONE NEW user decision (Gemini tool calling). Next work is the Phase 3 close queue. Start at §8 'Next step'.**
+**Current state: Phase 3, nothing in flight — no agents, no worktrees, no open branches. Master @ 179b13746 is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter. YOUR JOB IS TO RUN THE PLAN TO COMPLETION: finish Phase 3's close queue, close Phase 3, then keep going through Phases 4-11 without stopping at the boundaries. Read §0 first, then §8.**
+
+---
+
+## 0. STANDING ORDER — run to completion
+
+**The user has asked for this file to be handed to a fresh agent that then runs the plan to the end.
+That is your instruction. Do not stop at a phase boundary to ask whether to continue.**
+
+Concretely:
+
+1. Work the queue in §8 in order. When Phase 3's close review passes, **immediately open Phase 4**
+   and keep going. Same at every later boundary. `prompt_plan.md` has twelve phases (0-11) and 63
+   steps; Phases 0-2 are closed, Phase 3 is nearly closed, Phases 4-11 remain:
+   **4** Token accounting and cache observability · **5** The PromptSection architecture ·
+   **6** The rules tier and the trigger union · **7** Wire the dormant seams ·
+   **8** Rebuild the compaction prompt · **9** Tool descriptions as prompt ·
+   **10** Cache breakpoints · **11** Docs, sweep, final audit.
+2. **Rewrite this file and append to `prompt_worklog.md` after EVERY step and EVERY phase close.**
+   Not at the end of a session — after each one. If you are running out of context, doing this is the
+   last and highest-value thing you do (§R).
+3. **Decide the ordinary things yourself.** Batch composition, merge order, whether a finding is worth
+   a fix step, whether an agent's work meets the bar, whether to schedule a follow-up as its own step
+   or fold it into a queued one. You are the orchestrator; that is the job.
+
+**STOP AND ASK only for these.** Everything else, keep moving.
+
+- A **§1.10 dormant-code escalation** — you or an agent would have to REMOVE unfinished, dormant,
+  unwired or unreachable code, or the only way forward is a redesign. Record it verbatim under
+  `Awaiting user decision:` with `file:line`, what calls it (or that nothing does), and the options.
+  **Escalating is a COMPLETED step, not a failed one — record it and MOVE ON to the next step.** Never
+  block the queue on an unanswered escalation.
+- A **genuine blocker**: the work cannot proceed without an answer, and no assumption is safe.
+- Anything that would need a **`git push`**, or would touch `/home/sites/crush-lane-{a,b,c}` or
+  `docs/plans/crush_code_*.md` / `left_steps.md`.
+- **Before starting Phase 5 or Phase 6**, check §5's collision table. The `src/` file-count census
+  reason is RESOLVED and no longer serialises those phases, but per-file collisions with the other
+  plan are still live. If a lane has a round in flight on a file a step declares, ask the supervisor
+  rather than reading the lane worktrees — and in the meantime run the steps that do not touch it.
+
+**One decision is outstanding right now and it does NOT block anything** — Gemini function calling,
+described under `Awaiting user decision:` in §8. Carry it forward unanswered, every rewrite, until the
+user answers. Do not decide it yourself and do not let it hold up the queue.
 
 ---
 
@@ -52,9 +95,12 @@ shape of the code:
    `tests/Providers/SystemPromptTransmissionMatrixTest.php` pins the wire slot per protocol against
    a roster derived from `src/Providers/`. A cross-phase reviewer traced one prompt end to end and
    measured **assembled 5099 B == golden 5099 B == wire 5099 B** with `messages[0].role = 'system'`.
-2. **The seventh provider's transmission fix is MERGED** (`P1.audit-fix-1`, `03d8fed37`) — but two
-   design questions it surfaced are still open and are the user's to answer, not yours. See
-   `Awaiting user decision` in §8; they block nothing.
+2. **All seven providers now transmit, and Vertex has THREE arms.** `P1.audit-fix-1` (`03d8fed37`)
+   hoisted the prompt into the Google `instances[0].context` slot; `P1.audit-fix-3` (`e0d00b6db`,
+   user-authorised) then built a real Gemini `:generateContent` arm with `systemInstruction` and
+   streaming, because the id both Vertex test files pinned as "the Google model" was never served by
+   that envelope. Routing is by model FAMILY, not publisher. The legacy `instances` arm stays for
+   `chat-bison` and friends. **Gemini still cannot call tools** — see `Awaiting user decision`.
 3. **The prompt is deterministic and golden-pinned.** Clock, platform and cwd are injectable;
    `tests/fixtures/prompt/golden-system-prompt.txt` pins the assembly byte-for-byte,
    `golden-agent-prompt.txt` pins `Agent::systemPrompt()`, and `tests/Prompt/PromptFixture.php` is
@@ -74,30 +120,38 @@ shape of the code:
    is **not** stable either: a turn that creates a `.php` file diverges at byte 3,188, ahead of
    everything P3.S1 lifted. Memoisation saves that within a turn, not across turns.
 
-## 4. How to resume (replaces "Your first actions" once the plan has started)
+## 4. How to resume
+
+**Nothing is in flight.** No agents are running, no worktrees exist besides the main repo, and no
+`prompt/*` branches remain. So this is a clean pick-up, not a recovery. Do these six things, then go
+to §8.
 
 1. Confirm you are in `/home/sites/sugarcraft` on `master` with a clean tree
-   (`git status --porcelain` — nothing should be dirty; untracked files outside the plan's own
-   bookkeeping are possible, inspect before trusting).
-2. Confirm the last step entry in `prompt_worklog.md` (under `## ENTRIES`, newest first) matches the
-   plan's last commit in `git log`. If it does not — a step is missing its entry, or an entry has no
-   commit — **reconstruct the missing entry before doing anything else** (`prompt_plan.md` §3.3).
-   Note: a step's bookkeeping commit (this file + the worklog entry) can sit on top of the step's
-   own commit; both belong to the same step. P0.S1's step commit is `19533373e`; its bookkeeping
-   commit carries the worklog entry and this resume.
-3. Confirm the commit identity (silent failure otherwise):
+   (`git status --porcelain`). Untracked files outside the plan's own bookkeeping are possible —
+   inspect before trusting.
+2. Confirm the commit identity, which fails silently otherwise and cannot be repaired afterwards
+   without rewriting history:
    ```sh
    git -C /home/sites/sugarcraft config user.name    # must print: Joe Huss
    git -C /home/sites/sugarcraft config user.email   # must print: detain@interserver.net
    ```
-4. **Audit for stale worktrees before you spawn anything.** `git -C /home/sites/sugarcraft worktree
-   list`. For every `/home/sites/prompt-step-<ID>` listed, run the status/log checks of
-   `prompt_plan.md` §1.12. **A worktree listed here that is not a step you spawned in this session
-   is stale by definition.** `/home/sites/crush-lane-{a,b,c}` will also appear if they are
-   worktrees — they belong to the other plan. Leave them completely alone.
-5. Confirm you will not modify `docs/plans/crush_code_*.md` or `left_steps.md`. They are read-only to
-   you, in both directions: you take knowledge out, you put nothing in.
-6. Then read §8 below and do exactly what `Next step` says.
+   Re-check this **after every step**, not only before committing — see ORCHESTRATION-RULE-2 in §7.
+3. Confirm the newest entry in `prompt_worklog.md` (under `## ENTRIES`, newest first) matches the
+   plan's last commit in `git log`. A step's bookkeeping commit sits on top of its own commit; both
+   belong to the same step. If an entry is missing, **reconstruct it before doing anything else**
+   (`prompt_plan.md` §3.3).
+4. `git worktree list` — expect ONLY `/home/sites/sugarcraft`. Any `/home/sites/prompt-step-*` that
+   appears is stale by definition; run §1.12's checks before removing it, and **check it for ignored
+   files worth rescuing first** — P3.S5's worktree held the only copy of a review its follow-up step
+   needed, and it survived only because that check was run.
+   `/home/sites/crush-lane-{a,b,c}` belong to the other plan. Leave them completely alone.
+5. Take a baseline measurement before you change anything, so a later regression has something to be
+   measured against, and **record the cwd beside every number**:
+   ```sh
+   php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null | tail -4
+   ```
+   Expect `Tests: 10500, Assertions: 161982, Skipped: 1.` If it differs, find out why before starting.
+6. Then read §8 and do exactly what `Next step` says.
 
 ## 5. The sequencing gate — checked
 
@@ -314,13 +368,26 @@ Next step:        **NOTHING IS IN FLIGHT. Start the Phase 3 close queue at (a).*
 
                   d. **THEN the Phase 3 close review** (§1.7), cap three cycles.
 
+                  e. **THEN OPEN PHASE 4 IMMEDIATELY AND KEEP GOING.** Do not stop at
+                     the boundary to ask — §0 is the standing order. Phase 4 is "Token
+                     accounting and cache observability" (prompt_plan.md:1575), and it
+                     starts at P4.S1 (`E17: give Usage real buckets`). Read the phase's
+                     own concurrency note before composing a batch, then run §1.7's phase
+                     loop exactly as for Phase 3. Then Phase 5, and so on to Phase 11.
+                     The ONLY extra check is at Phases 5 and 6: re-read §5's collision
+                     table first. The src/ file-count census that used to serialise them
+                     is RESOLVED, but per-file collisions with the other plan are live —
+                     if a lane holds a file a step declares, run the steps that do not
+                     touch it and ask the supervisor about the rest.
+
 Steps done:       22 of 63 merged, plus audit-fix sub-steps (not counted in the 63):
                   P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
                   P3.S5 405252a41 · P3.audit-fix-1 6aff0bad1 · P1.audit-fix-1 03d8fed37 ·
                   P2.audit-fix-1 33df838d0 + f95546b10 · CI-fix-1 72686c380 ·
                   P1.audit-fix-3 e0d00b6db.
 Phases done:      3 of 12  (Phase 3 is NOT closed — see the queue above)
-Last commit:      run `git -C /home/sites/sugarcraft log --oneline -1`.
+Last commit:      179b13746 (bookkeeping). Always re-derive with
+                  `git -C /home/sites/sugarcraft log --oneline -1` rather than trusting this line.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
 
 Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers for weeks without
@@ -472,7 +539,7 @@ there instead.
 
 ### What must survive every rewrite, unchanged in substance
 
-Sections **1, 2, 6, 6a, 7** and this section **§R**. They are the operating instructions and they do not
+Sections **0, 1, 2, 6, 6a, 7** and this section **§R**. They are the operating instructions and they do not
 change as the plan progresses. Copy them forward verbatim. If you find an error in them, fix it and
 say so in the worklog entry for the step that fixed it.
 

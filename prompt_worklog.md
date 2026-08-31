@@ -253,6 +253,46 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### BOOKKEEPING — the resume becomes a run-to-completion prompt   ·   2026-08-31   ·   (this commit)
+
+**Status** `merged`. No `src/` or `tests/` change. Recorded because it changes HOW the plan is
+executed, not what it builds.
+
+**Why.** The user is about to hand `prompt_resume.md` to a fresh agent with no prior conversation and
+say "read and follow it", expecting that agent to pick up the current state, run Phase 3's close
+queue, close Phase 3, and then continue through Phases 4-11 without coming back to ask whether to
+carry on. The file already reconstructed STATE well; what it did not carry was the INSTRUCTION to
+keep going past a phase boundary, so a literal-minded reader would have finished Phase 3 and stopped.
+
+**What changed.** A new **§0 STANDING ORDER** at the top, above everything else, added to §R's
+carry-forward list so later rewrites cannot drop it. It says: work §8's queue in order; open the next
+phase immediately when one closes; name all twelve phases so "the rest of the plan" is concrete
+rather than a gesture; rewrite this file and append to the worklog after EVERY step and EVERY phase
+close; and **decide the ordinary things yourself** — batch composition, merge order, whether a
+finding earns its own step, whether an agent's work meets the bar.
+
+It then enumerates the ONLY four reasons to stop: a §1.10 dormant-code escalation (recorded and moved
+past, never blocking — "escalating is a COMPLETED step"), a genuine blocker where no assumption is
+safe, anything needing a `git push` or touching the other plan's files, and the Phase 5/6 collision
+re-check. Everything else: keep moving.
+
+**§4 was rewritten from a recovery procedure into a clean pick-up**, because nothing is in flight for
+the first time in this plan — no agents, no worktrees, no `prompt/*` branches. It now ends with a
+BASELINE MEASUREMENT step (`Tests: 10500, Assertions: 161982, Skipped: 1`, cwd named) so a later
+regression has something to be measured against, and it carries forward the lesson that a stale
+worktree must be checked for IGNORED FILES before removal — P3.S5's worktree held the only copy of a
+review its own follow-up step needs, and it survived only because that check was run.
+
+**§3 was refreshed** to describe Vertex's three arms rather than the single defect it used to lead
+with, and the file's own header no longer claims the plan has not started.
+
+**The one outstanding decision is explicitly marked non-blocking** in both §0 and §8: Gemini function
+calling. §R already required an unanswered escalation to be carried forward every rewrite; §0 now
+also says not to let it hold up the queue, because "awaiting a decision" and "blocked" had been
+running together in practice.
+
+---
+
 ### P1.audit-fix-3 — VertexProvider gets a real Gemini `:generateContent` arm   ·   2026-08-31   ·   merged e0d00b6db (branch HEAD 59e0d16c2, 1 commit)
 
 **Status** `merged`. **USER-AUTHORISED FEATURE** — the user was offered three options for the Google
