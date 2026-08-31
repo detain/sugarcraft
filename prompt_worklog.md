@@ -253,6 +253,106 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 — dispose of P3.S4's eight standing findings   ·   2026-08-31   ·   NOT MERGED, branch HEAD `bdef57632`
+
+**Status** `blocked (review-cycle)` — **PAUSED at the user's request, not at a cap.** Three of five review
+cycles used. Cycle 3's ten findings are STANDING and untouched (§ below). Two cycles remain.
+**Worktree `/home/sites/prompt-step-P3.S4-fix-1` LEFT IN PLACE — do not delete it.**
+**Base** master `1267e6fbb`. Branch `prompt/P3.S4-fix-1`, 4 commits.
+
+**Goal** Dispose of the eight findings P3.S4's sixth review left standing when it hit its cap. All eight
+live in `tests/Providers/PromptStabilityTest.php`.
+
+**ORCHESTRATOR-VERIFIED, my own commands, not the agent's**
+- `git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/` → **EMPTY**. No production code changed.
+- `git diff --name-only` → exactly one file, `sugar-crush/tests/Providers/PromptStabilityTest.php`.
+- `git status --porcelain` → EMPTY.
+- Goldens UNMOVED: `32ea749d84938811ac9331419cae7380` (system), `ef0326dd38535aaa2f1d715919bff26e` (agent).
+- `--filter PromptStabilityTest` from the worktree root → **`OK (14 tests, 374 assertions)`**.
+  Base was `OK (13 tests, 229 assertions)`. **13 → 14 tests, 229 → 374 assertions.**
+- **NOT yet orchestrator-verified: the full suite.** The agent reports `Tests: 10501, Assertions: 162127,
+  Skipped: 1` from the worktree root, twice, with a reviewer's independent run agreeing. I have not run it
+  myself, because the other step agent was still working and Surprise 5 below says the total is not
+  run-stable under contention. **The next session must re-run it SERIALLY before merging.**
+
+**All eight findings DISPOSED — the headline measurements, each re-derived by the agent**
+- **F5** the doc-block clause licensing the equality pin was false. MEASURED at strict value granularity:
+  **289 B (18.3 %) fixture-authored, 1,286 B (81.7 %) production-authored**. Repaired by SPLITTING the two
+  properties: layer membership and order now pinned by a loop with **no byte literal at all** (prose-immune),
+  size pinned per layer and fixture-side vs production-side separately. The four-byte prose edit now reds one
+  assertion naming `RepoMapBlock` as the owner and stating the fixture assertion stayed green — a name, not a menu.
+- **F2** both halves of the `status.showUntrackedFiles` row were false. A new assertion now reds FIRST and
+  names the cause, replacing the opaque `Failed asserting that two strings are not identical`.
+- **F6** every claim reproduced. `core.attributesFile`, `init.templateDir` and a bare `XDG_CONFIG_HOME` all
+  give 4,749/4,672; `log.date=true` and `format.pretty=true` exit 128 with the suite GREEN. Beaten by writing
+  `.git/info/attributes`, the top of that precedence chain. Byte-neutral: 4,844/4,670 unchanged.
+- **F1** taken by a DIFFERENT route than the reviewer prescribed, and the reason is argued in the file:
+  **no `putenv` was used** (verified by the agent and three reviewers — no process-wide leak). Neutralising
+  the environment HIDES the hazard; the file instead asserts the RENDERED git fields, which reds for any
+  member of these families whether or not anyone enumerated the knob.
+- **F3** 1 and 3 are incomparable; what is implied is assertion 2, by 1 and 3 together. MEASURED.
+- **F4** corrected: a demotion moves layers WITHIN the shared prefix so it cannot move the first differing
+  byte; `MIN_STABLE_PREFIX_BYTES` passes and the GAIN floor is what reds (727 vs 1,500).
+- **F7** rewritten as a derivation: status 4,096, capped 4,097, nice 4,513.
+- **F8** the generator is now written out as a diff hunk, and it gives **4,423, not 4,421** — reproducing the
+  earlier reviewer's figure exactly. **4,421 is not reachable by that mutation.**
+
+**Eighteen deletion experiments**, each `cp`-backed and restored, each with its verbatim red output in the
+agent's report. Production md5s confirmed back to baseline after every one:
+`EnvironmentBlock.php` `85bee61d…`, `Runtime.php` `a436db7b…`, `RepoMapBlock.php` `b84f3490…`.
+
+**STANDING FINDINGS — cycle 3, TEN, verbatim in the agent's report, NOTHING DONE ABOUT THEM.**
+The two the agent nominates as highest-value:
+- **F-2** `log.abbrevCommit` is the **fourteenth** knob — the file predicted a seventh review would find one and
+  it did. `[log] abbrevCommit = nonsense` → `git log` exits 128, prompt 4,844 → 4,841, prefix 4,670 → 4,667.
+  At HEAD `Failures: 1`; at the branch base **silently green**. The roster this same diff rewrote declares the
+  knob inert and leaves it unpinned.
+- **F-4** control B still masks: under a hostile `diff.external`, control B reds FIRST with "the scanner is
+  dead", which is false — a host knob broke `git diff` — and the placeholder assertion below it is never reached.
+Full text of all ten is in the agent's report; the next session must work from that text, not this summary.
+
+**Escalations (§1.10) — production NOT touched**
+1. `src/Context/EnvironmentBlock.php:855` — `'unavailable (shell_exec is disabled on this build)'` is an INLINE
+   LITERAL where its sibling at `:327` is the constant `NO_PROCESS_REASON`, under a doc-block on that constant
+   arguing a model "should not have to learn a second" wording. MEASURED: renaming it alone leaves the file green.
+2. `tests/RuntimeTest.php:2926-2939` — a THIRD scratch-repository fixture carrying the config roster this file
+   had BEFORE this step: no `log.date`, no `format.pretty`, no `.git/info/attributes`. Under a hostile
+   `core.attributesFile`, `PromptStabilityTest` stays green and `RuntimeTest` reds. Needs its own step.
+3. Carried from P3.S4 and still open: `EnvironmentBlock`'s branch read swallows a non-zero exit; `color.ui` /
+   `color.diff` inject raw ANSI because it shells out without `--no-color`. The new test DETECTS both; the
+   production defect is untouched.
+
+**Surprises — three that change how this plan should work**
+1. **A repo-local pin cannot defend against an invalid value in a lower-precedence config file.** MEASURED and
+   independently reproduced by two reviewers: with `color.branch.current=normal` repo-local and `=true` global,
+   `git config --get` answers `normal` and `git branch --show-current` still dies `fatal: bad config variable`,
+   exit 128. **git parses the whole chain before using any of it.** So the entire invalid-value hazard class is
+   UNDEFENDABLE BY PINNING and detectable only — which is why F1's rendered-field guard, not a fourteenth pin,
+   is the right answer to the file's own "a seventh review will find a fourteenth knob" prediction. Reviewer 3
+   then promptly found the fourteenth.
+2. **The full-suite assertion total is NOT run-stable under contention.** Two runs of the IDENTICAL tree
+   `b6d683179` gave 162,075 and 162,057 — 18 apart. Two sequential uncontended runs at `bdef57632` both gave
+   162,127, and a third independent run agreed. OBSERVED, not explained; the variance appeared only while two
+   full suites ran concurrently. **Anyone comparing full-suite assertion totals across sessions must run them
+   serially.** This plan compares those totals constantly.
+3. **F5's own headline figure does not travel without its granularity.** The brief said 1,224/1,575 (78 %).
+   Whole-line granularity gives 324/1,251 (79.4 %); strict value granularity gives 289/1,286 (81.7 %); a third
+   consistent reading gives 334/1,241. The CONCLUSION holds at every granularity; the figure does not.
+
+**Process, the agent's own, self-reported:** during cycle 2 it ran `git checkout -- <the test file>` to restore
+a deletion experiment while ~200 lines of uncommitted cycle-2 fixes were live, and destroyed all of them. It
+re-applied them from a script and committed before resuming. **§16.8 rule 51 arriving the hard way: commit
+before every deletion experiment, without exception.**
+
+**Subagents** Three review agents, all completed, none blank, none hung. All three confirmed cleanup with
+proof; all three answered ORCHESTRATION-RULE-2 **NO**. Cycle 3's only `git init` was inside its own scratchpad.
+Reviewer 1 re-notified twice with stale wait-loop messages — duplicates of one completed review, not new work.
+
+**HANDOFF** Fix cycle 3's ten standing findings, starting with F-2 and F-4, committing before each deletion
+experiment, then spawn review cycle 4 of a maximum five.
+
+---
+
 ### ORCHESTRATION-RULE-3 — agents share one flat scratchpad and were clobbering each other   ·   2026-08-31
 
 **Found by a P3.S5-fix-1 review agent, self-reported. Nothing in the process detects this.**
