@@ -253,6 +253,127 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S6 · RECOVERED AND REPORTED · 2026-08-31 — the seam is REAL, and the step is COMPLETE AS ESCALATED
+
+The rescued agent came back and delivered a complete report — **"No session-limit truncation: this
+report is complete."** Committed `1461e1685` on `prompt/P3.S6`, 4 commits above base `c7e5a6454`,
+tree clean, author `Joe Huss <detain@interserver.net>`.
+
+**OUTCOME: NEITHER (a) NOR (b) — a §1.1 DECLARED-SCOPE ESCALATION, and the agent refused to round it
+to either.** Its words: *"This step is complete as escalated, incomplete as recorded."*
+- Not (a): nothing was wired; `writeSinceLastRender` still defaults to `true`.
+- Not (b): (b) required *"the measurement showing the Agent path has NO per-step seam"*. Its first
+  commit claimed exactly that and **its own review cycle 1 falsified it.** The seam is real, live, and
+  in `Workflows/WorkflowEngine.php`.
+- **(b) was LITERALLY UNSATISFIABLE as briefed** — it requires landing a §18 row in `prompt_plan.md`,
+  a file the same brief puts on the never-edited list. **That is a defect in the step text I wrote**,
+  not a choice the agent made. It wrote the row to a scratchpad file and left it for me.
+
+**MY OWN VERIFICATION — two figures in its report are WRONG, and the error runs in the SAFE direction.**
+```
+git diff --numstat c7e5a6454..HEAD
+  348   0   sugar-crush/src/Agents/Agent.php
+  1193  0   sugar-crush/tests/Agents/AgentTest.php
+per commit: 23fd87096 +537-0 · c4cb9492c +896-0 · b3a5e578e +1185-0 · 1461e1685 +1541-0
+```
+The report says **"1541 insertions, 42 deletions"** and then enumerates *"the 42 deletions are, in
+full: …"*. **There are ZERO deletions from base, at every commit.** Its enumeration describes churn
+between its own intermediate commits, not the base→HEAD diff. So the §1.10 conclusion is not merely
+true but STRONGER than claimed — nothing was removed at all — while the figure backing it is
+unreliable. Same for `Agent.php`: reported +382/−24, actual **+348/−0**.
+**Recorded because a figure nobody re-derives is exactly what this plan keeps catching**, and this
+one would have been trusted.
+
+**CONFIRMED INDEPENDENTLY, with my own token-strip script:** `src/Agents/Agent.php` is
+**executable-identical to base — 1270 tokens both sides, element-by-element**. The 348 added lines are
+doc-block, every one. The claim *"doc-block only; not one executable line changed"* holds.
+Goldens `32ea749d…` / `ef0326dd…` UNMOVED. Scope = the two declared files (`Bootstrap.php` and
+`App/App.php` were declared but not needed). Added-line scan for `markTestSkipped|@deprecated|
+assertNotNull|assertIsArray` → **0**.
+
+**THE §18 ROW WAS STALE AND I DID NOT LAND IT VERBATIM.** The agent's prepared row is marked
+*"REVISED after review cycle 1"* and still asserts *"the parent has no channel to derive the signal …
+'Did this stage write?' is unanswerable on this path today."* **Its own cycle 2 falsified that**, and
+its final report says so plainly: the disposition *"rests on declared scope, not underivability."*
+Landing the row as written would have put a claim the step itself refuted into the plan of record.
+I verified both halves myself before rewriting it:
+```
+src/Agents/ProcessExecutor.php:985     tools: null,            <- literal, no tools on that arm
+src/Agents/AgentWorkerPool.php:410     tools: $request->tools, <- forwards them on this one
+src/Agents/AgentResult.php:15-24       agentId, status, output, error, tokensUsed, costUsd,
+                                       startedAt, completedAt  <- 8 params, NO tool-call field
+```
+So "unanswerable" is too strong on either reading. **The row I landed rests the disposition on
+DECLARED SCOPE, records the derivability question as CONTESTED with both measurements, and keeps the
+`AgentResult` shape as the pin** — because that is the fact that is not contested and it is the one
+that fires when the blocker lifts.
+
+**THE MEASUREMENTS, all shim-derived on a real repository and all ASSERTED rather than merely recorded:**
+| operation | git subprocesses |
+|---|---|
+| `capture()` × 10, no render | 0 |
+| one `systemPrompt()` | 5 |
+| …with `withWriteSinceLastRender(false)` | 3 |
+| three calls on one agent (`render()` NOT memoised) | 15 |
+| one `ProcessExecutor` dispatch (renders **twice**) | 10 |
+| K-stage workflow, pipeline or sequential | **5 × K** |
+Eight call sites: **5 live in WorkflowEngine, 2 dormant, 1 ProcessExecutor. Four of eight are driven
+by a test; four are classified BY READING** — stated plainly rather than implied away.
+
+**THE MIDNIGHT FLAKE, and the fix is better than the flake.** The pipeline test asserted every stage's
+render byte-identical, but `EnvironmentBlock::render()` emits `Current date: ` + `format('Y-m-d')`, so
+a run straddling midnight yields two distinct renders and reds for a reason unrelated to the behaviour
+under test. **It surfaced because the date actually rolled over during reviewer-2's session.** The fix
+normalises the date line before uniquing **and** adds a separate exact assertion that the date line is
+present exactly once per render — so the normalisation cannot blind the test to a vanished line. Both
+polarities proven.
+
+**A PROVENANCE CORRECTION TO A FIGURE I RECORDED.** `--filter AgentTest` is a regex that **also matches
+`SubAgentTest`** (30 tests / 85 assertions, untouched). So the baseline `OK (56 tests, 278 assertions)`
+in this plan's own records is 26 + 30 **across two files**. Per file, `AgentTest.php` went
+**26 → 33 tests**. The step added **7 tests, not 7-of-63**. That conflation was inherited from my brief
+and propagated; it is corrected here and inside the test file's prose.
+
+**TWO ORCHESTRATION-RULE-2 DISCLOSURES, both volunteered:**
+1. **reviewer-2 ran two read-only `git config user.name`/`user.email` queries inside the worktree.**
+   No value argument, nothing written. The step agent counted it a violation *in spirit* and tightened
+   later briefs to *"not even a read-only query"*. Correct call.
+2. **`AgentTest::ensureFixtureRepo()` (PRE-EXISTING) will `git init` + repo-local `git config` under
+   the gitignored `vendor/prompt-fixture/agent-repo` if that fixture is absent.** It was present
+   (dated 2026-08-28) so neither ran. **But on a fresh clone, running this suite does `git init` inside
+   `vendor/`.** Not introduced here; recorded because a step brief forbids exactly that shape.
+
+**FIGURES, AGENT-REPORTED — MINE ARE PENDING:** `AgentTest.php` 33/327 · `--filter AgentTest` 63/412 ·
+census set 109/**9636** (was 9632; +4 from `SymbolCitationDriftTest` resolving four new `{@see}`
+tokens) · Workflows+WorkflowExecutionTest 236/866 · 7 wiring suites 262/1856.
+
+**REVIEW LOOP: 3 OF 5 CYCLES, AND IT NEVER REACHED "NO FINDINGS".** Cycle 3's fixes are UNREVIEWED.
+The agent says so itself and does not claim the diff is clean. **Two cycles remain available — the cap
+is NOT reached here, unlike both fix branches.**
+
+**THE STEP'S OWN LIST OF WHAT IT DID NOT CLOSE** (verbatim in substance, because it is the useful half):
+4 of 8 call sites classified by reading not by a driving test; `WorkflowEngine.php:1252/1294/1397`
+verified by READING, not execution, and `:1397`'s N+1 shape is inference; the event-loop latency
+figure (K × 399 ms) is **reviewer-3's reasoning plus a doc-block — the agent never measured it and
+says so**; PSR-12 unverified (`php-cs-fixer` absent from this box); and **cycle-3's fixes were checked
+by the step agent at diff-and-test level but its mutations were re-run by the fix agent, not by it**.
+It names **E5c** as the one thing to double-check before merge.
+
+**FOLLOW-UPS THIS STEP CREATED, all carried:**
+- **ESCALATION (user/orchestrator):** wire the write signal on the workflow path — a build-it-out
+  across `WorkflowEngine.php` + `AgentResult.php` + the worker IPC frame. Cost today: 5 git
+  subprocesses and one re-sent diff pair per stage.
+- `src/Runtime.php:589` cites `Agents/Agent.php:417` for an `EnvironmentBlock::capture(` site; **this
+  step moved that call three times — 417 → 638 → 765 — and nothing red**, because
+  `SymbolCitationDriftTest` polices `{@see}` and backticked SYMBOLS, never `file:line`.
+  **There is no file:line drift guard anywhere in `tests/`.** Surprise 5 is that hole firing three
+  times in three rounds inside one step.
+- `src/Runtime.php:596` says NINE call sites; measured **eight**.
+- `ProcessExecutor.php:473` renders the agent prompt a SECOND time per dispatch — two unmemoised
+  renders of a live git section that can disagree, while `App.php:524-527` says the two consumers
+  *"must agree"* and nothing makes them. **Pinned, not repaired: repairing means dropping a call site,
+  which §1.10 prohibits without a decision.**
+
 ### P3.S6 · AGENT DEATH AND RESCUE · 2026-08-31 — killed by an API session limit with 398 uncommitted lines in the tree
 
 **The `P3.S6` step agent DIED.** Not a blank return, not a truncation this time — an explicit harness
