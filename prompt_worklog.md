@@ -529,6 +529,39 @@ experiment, then spawn review cycle 4 of a maximum five.
 
 ---
 
+### A SPAWNED AGENT RESUMED ~1 HOUR AFTER ITS WIND-DOWN, and had to be stopped   ·   2026-08-31
+
+**Carry this: a wound-down agent is not necessarily a stopped agent.** After both step agents had
+reported, the bookkeeping was written and all three trees verified clean, `ListAgents` showed a subagent
+still `running` — `Review P3.S4-fix-1 diff (cycle 2)`, started an hour earlier. It had **already delivered
+its review in full** (8 findings, every one addressed in `bdef57632`); what it had never answered was the
+wind-down query. It then resumed on its own and reported mid-sentence:
+*"Finding 2 correctly disposed (2 of 3 pinned, third escalated — verified accurate). Finding 3 fixed. Now
+checking for weakening in the follow-up."*
+
+**Stopped with `TaskStop`, deliberately.** Reasoning, recorded because the trade is not obvious: its
+review was already fully incorporated, so nothing was lost — but reviewers on this plan work by MUTATION,
+and a reviewer waking into a worktree that has since been frozen, reported on, and written into a handoff
+document can dirty it with an experiment nobody is left to restore. The handoff state was verified clean
+at that moment; the only thing that agent could still change was that.
+
+**RE-VERIFIED AFTER THE STOP, all three trees:**
+```
+/home/sites/sugarcraft                HEAD=86a47c114  CLEAN
+/home/sites/prompt-step-P3.S4-fix-1   HEAD=bdef57632  CLEAN
+/home/sites/prompt-step-P3.S5-fix-1   HEAD=5a0ff8e12  CLEAN
+```
+Goldens `32ea749d…` / `ef0326dd…` unmoved in BOTH worktrees. Exactly eleven files in each
+`src/Tools/BuiltIn/` — no stray `MultiEdit.php`. Main repo identity `Joe Huss / detain@interserver.net`.
+
+**The lesson for the next orchestrator:** after winding agents down, run `ListAgents` and confirm the list
+is empty before you call the state final. A completed report is not proof the agent has finished; three of
+the four agents this session reported and then went quiet, and the fourth reported, went quiet, and came
+back. Note also that this one's earlier silence was recorded as UNANSWERED rather than as "nothing to
+report" — which was the right call, and this is why.
+
+---
+
 ### ORCHESTRATION-RULE-3 — agents share one flat scratchpad and were clobbering each other   ·   2026-08-31
 
 **Found by a P3.S5-fix-1 review agent, self-reported. Nothing in the process detects this.**

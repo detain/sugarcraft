@@ -448,7 +448,12 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                   php-cs-fixer is NOT installed on this box and NOT vendored anywhere in
                   the tree — the style gate cannot be run locally.
 
-In-flight batch:  **NONE RUNNING — but batch P3.CLOSE.B1 is OPEN and INCOMPLETE.**
+In-flight batch:  **NONE RUNNING — VERIFIED with `ListAgents`, not assumed. Do the same before you
+                  trust any state you inherit: one agent this session delivered its full report,
+                  went quiet, and RESUMED AN HOUR LATER; it was stopped with `TaskStop` and all
+                  three trees re-verified clean afterwards. A completed report is not proof an
+                  agent has finished.**
+                  **Batch P3.CLOSE.B1 is OPEN and INCOMPLETE.**
                   Both its steps are built, committed, and paused mid-review at the user's
                   request. NOTHING IS SPAWNED. Do not re-spawn either step from scratch;
                   their work is on their branches and is substantial (4 commits each).
