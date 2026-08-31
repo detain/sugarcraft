@@ -253,6 +253,88 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 · REVIEW CYCLE 5 (THE CAP) · 2026-08-31 — fail-closed on the walk did not buy fail-closed on the alphabet
+
+Cycle 5 is the fifth and last review cycle. It returned **five findings**, and F1 is critical.
+Findings file: `<scratchpad>/P3.S5-fix-1/review-cycle-5/findings-cycle-5.md`.
+
+**SAME ORCHESTRATOR DECISION AS `P3.S4-fix-1`, and for the same reason: ONE FINAL FIX PASS, NO
+CYCLE-6 REVIEW.** The §1.2 cap is honoured — what it exhausts is the value of another *review*, not
+of a fix that arrives already measured. I verify personally and run the full suite before merging,
+and I am accepting that a fix made in this pass is unreviewed by anyone but me. Written down rather
+than implied.
+
+**F1 (CRITICAL) — the alias channel fails OPEN and *SUBTRACTS* detections.** `tests/RuntimeTest.php:2891`
+and `:2991`. `importedFunctionAliases()` regexes `use function … ;` out of **raw source** and the
+resulting map **REWRITES the matched name** — so any text of that shape, in a comment, a doc-block, a
+string constant, or a `namespace` block the call is not in, **deletes a primitive from the alphabet
+for the whole file**.
+
+That is worse than a missed detection: a one-line comment
+```php
+// use function Nope\writeit as file_put_contents;
+```
+turns a real, executed write into `[]`. Seven green defeats MEASURED end-to-end through the shipped
+`writePrimitivesCalledIn()` by reflection, against a real copy of `src/Tools/BuiltIn/Read.php` (a tool
+on the read-only roster), each `php -l` clean and each **actually run**: the comment form · the
+doc-block form (`unlink`, and the file was gone afterwards) · a `const` string (`mkdir`) · an import
+plus a leading-backslash call, which ignores imports entirely (a 21-byte file became `DEFEAT-A1`) ·
+the import in `namespace A` with the call in `namespace B` of the same file · one that kills the
+`new SplFileObject` exception.
+
+It also **falsifies the method's own doc-block at `:2984`**, which claims *"a `use function` that
+appears inside a string or a comment contributes nothing"*.
+
+**The structural lesson, and it is the one to carry:** this channel runs BEFORE the argument walk, so
+the `$complete` fail-closed flag this step just built **cannot reach it**. Fail-closed on the walk did
+not buy fail-closed on the alphabet. The reviewer's fix is given verbatim and IS measured — closes six
+of seven, tree-wide verdict over all 768 files byte-identical (diff = 0 lines), suite green.
+
+**F2 (HIGH) — the class-alias twin, and F1's patch does not close it (measured).**
+`use SplFileObject as Handle; new Handle($p, 'w');` scans as `[]` while genuinely truncating the file.
+One keyword over from the function-alias case this step already closed.
+
+**F3 (MEDIUM)** — the fail-closed claim is bought only for the argument walk. The reviewer
+independently re-derived the opener census (every array token in `src`/`tests`/`bin` ending in
+`(`/`[`/`{` — only `T_ATTRIBUTE`, `T_CURLY_OPEN`, `T_DOLLAR_OPEN_CURLY_BRACES`, all declared) and
+**confirms that walk IS genuinely fail-closed**. F1 is simply a channel it cannot reach, and it is
+absent from the doc-block's "structurally out of reach" list.
+**F4 (LOW)** — three private copies of `[T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]` in `RuntimeTest.php`
+alone (`:2833`, `:4339`, `:4483`), in a tree that already extracted that and the unreadable-source
+refusal into traits. `DuplicatedTestHelperDriftTest` is structurally blind to it. Consolidation is a
+MOVE, which §1.10 permits.
+**F5 (NIT)** — `:2724` says *"MEASURED at 21 sites in `src/`"*; the reviewer measures **23**, and it is
+21 only if `fopen` is excluded — a domain the sentence does not give, in a doc-block that invokes the
+"figure without its domain" rule twice.
+
+**THE REVIEWER GOT ONE THING WRONG, AND IT IS CORRECTED HERE SO NOBODY UNDOES A GOOD FIX.** It
+reported that `prompt_plan.md:1466` *"says 'nine live sites' while enumerating eight"*. **FALSE at
+HEAD.** That was corrected on 2026-08-31 by `344b85550`; line 1466 now says **eight**, and the word
+"nine" survives only inside the dated parenthetical recording what it used to say. The reviewer read
+quoted historical text as a live claim. Everything else in its report checked out, and this is the
+kind of error the plan's own §16.8 rule about narrative-vs-claim exists for.
+
+**WHAT THE STEP GOT RIGHT — re-derived by the reviewer, not taken, and NOT to be re-done:**
+`src/Runtime.php` **is** comment-only across the branch (its own token strip: **4366** executable
+tokens both sides, streams identical — now four independent derivations agreeing). Tree-wide
+before/after: **768 scanned, 260 reporting, verdict diff 0 lines** — the fix-cycle-4 claim HOLDS.
+**8, not 9** `Agent::systemPrompt()` call sites, distribution (1,1,1,5). All three
+`SymbolCitationDriftTest` rows reproduce including the green `…TestClass` hole. Stranded-reference
+census: 0 hits under `sugar-crush/`. Goal 3 verified from both sides — `missingOpenersIn()` returns
+both openers for the pre-fix file and `[]` at HEAD, census file diff vs master 0, no `KNOWN_GAPS` row.
+**14 mutants run, every one reds exactly the test it should, control green** — the new tests are real,
+not decorative. Cited coordinates all correct (`PermissionGate:687`, `ProtectFilesHook:121`,
+`PermissionRule:220`, `Bootstrap:1462`, `App.php:1264`, `grep -c mkdir` = 3). No out-of-scope file, no
+subtraction, no weakened test, no `composer`/`phpunit.xml`/hook-bypass edit.
+
+**Figures reproduce exactly:** 142/686 filtered · 6/164 census file · 103/9468 six-file census set.
+It created no git repository at all — plain directories sufficed. **FULL suite still NOT RUN.**
+
+**F1 and F2 are further evidence for escalation N1** (per-tool `writesTree(): bool` vs a working-tree
+fingerprint). The fix brief says so explicitly and forbids the agent from resolving N1 or arguing the
+scanner away: if its honest conclusion is that F1 or F2 cannot be closed by any name-based means, that
+answer attaches to N1 and is a COMPLETED outcome.
+
 ### P3.S4-fix-1 · REVIEW CYCLE 5 (THE CAP) · 2026-08-31 — the step's own defect, left half-closed
 
 Cycle 5 is the fifth and last review cycle. It returned **seven findings**, and one of them is not a

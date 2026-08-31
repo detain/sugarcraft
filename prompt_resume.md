@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, THREE AGENTS RUNNING — `P3.S4-fix-1` HIT ITS FIVE-CYCLE CAP; cycle 5 found the step's OWN defect left half-closed, so a FINAL FIX PASS is out with NO cycle-6 review and the orchestrator verifying personally. `P3.S5-fix-1` @ `ab9a7dcdc` is in its cycle-5 (cap) review. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue, THREE AGENTS RUNNING — BOTH fix branches HIT THEIR FIVE-CYCLE CAP and both cap reviews found a real defect, so BOTH are in a FINAL FIX PASS with NO cycle-6 review and the orchestrator verifying personally. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -367,17 +367,20 @@ Next step:        **CALL `ListAgents` FIRST. Three agents are out. Do not re-spa
                      IT FIRST. It stays first because it changes no production code at all.
                      **Do NOT open a cycle 6** — the cap is honoured; what it exhausts is the
                      value of another review, not of a measured fix.
-                  B) **P3.S5-fix-1 — cycle 4 REPORTED EIGHT FINDINGS; a FIX AGENT is out.**
-                     When it reports: verify its figures yourself, then spawn a BRAND-NEW
-                     cycle-5 reviewer that has NEVER seen cycle 4's findings (§1.4 — a
-                     reviewer given a list checks the list). **Cycle 5 is the CAP.** If it
-                     comes back clean, run the FULL SUITE SERIALLY and merge SECOND, after A
-                     has merged and a full suite has run in between. If cycle 5 finds a
-                     thirteenth defeat, the step is at its cap: do NOT open a cycle 6 — record
-                     the finding against escalation N1 (which already asks the user to choose
-                     between a per-tool `writesTree(): bool` and a working-tree fingerprint,
-                     precisely because a name-based scanner is structurally incompletable) and
-                     merge on the fail-closed guarantee rather than on a complete scanner.
+                  B) **P3.S5-fix-1 — CAP REACHED. FINAL FIX PASS OUT, NO CYCLE-6 REVIEW.**
+                     Cycle 5 found F1, a CRITICAL fail-open that SUBTRACTS detections: a
+                     one-line COMMENT of the shape `use function X as file_put_contents;`
+                     deletes a primitive from the alphabet for the whole file, turning a real
+                     executed write into []. Seven green defeats measured end-to-end. When the
+                     fix agent reports: **verify it YOURSELF — nobody else will.** Re-derive
+                     the tree-wide before/after (768 scanned, 260 reporting, verdict diff 0),
+                     confirm scope is the three declared files, confirm the census file's diff
+                     vs base is STILL EMPTY, confirm src/Runtime.php is STILL comment-only
+                     (4366 tokens), then run the FULL SUITE SERIALLY and merge SECOND — after
+                     A has merged and a full suite has run in between. **Do NOT open a cycle 6.**
+                     If the fix agent's honest answer is that F1/F2 cannot be closed by any
+                     name-based means, that attaches to escalation N1 and is a COMPLETED
+                     outcome — merge on the fail-closed guarantee, not a complete scanner.
                   C) **P3.S6 step agent** -> runs its own review loop internally and reports
                      once at the end. Verify its numbers yourself, then MERGE THIRD.
 
@@ -536,10 +539,28 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      A SECOND sweep — 18 more knobs beyond the ~65 — again found NO new
                      wrong-green mover; all left the prompt at 4844.
 
-                  2. **P3.S5-fix-1 — cycle 4 FIXED. CYCLE-5 REVIEWER OUT — THIS IS THE CAP.**
+                  2. **P3.S5-fix-1 — CAP REACHED. FINAL FIX PASS OUT. NO CYCLE-6 REVIEW.**
                      Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,
-                     HEAD **ab9a7dcdc** (6 commits, base 1267e6fbb). All seven live cycle-4
-                     findings FIXED in one commit; nothing escalated, nothing removed.
+                     HEAD **ab9a7dcdc** (6 commits, base 1267e6fbb).
+                     **ORCHESTRATOR DECISION — same as item 1 and for the same reason.** The
+                     §1.2 five-cycle cap is HONOURED; what it exhausts is the value of another
+                     REVIEW, not of a fix that arrives measured. I verify personally and accept
+                     that this pass is unreviewed by anyone but me.
+                     **F1 is CRITICAL and it SUBTRACTS detections.** importedFunctionAliases()
+                     (:2891, :2991) regexes `use function … ;` out of RAW SOURCE and the map
+                     REWRITES the matched name — so that text in a comment, doc-block, string
+                     constant, or a namespace block the call is not in DELETES a primitive from
+                     the alphabet for the whole file. A one-line comment turns a real executed
+                     write into []. Seven green defeats measured through the shipped method by
+                     reflection against a real copy of src/Tools/BuiltIn/Read.php, each run for
+                     real. It also falsifies the method's OWN doc-block at :2984.
+                     **The structural lesson: this channel runs BEFORE the argument walk, so
+                     the $complete flag this step just built CANNOT REACH IT. Fail-closed on
+                     the walk did not buy fail-closed on the alphabet.**
+                     F2 (HIGH) is the class-alias twin — `use SplFileObject as Handle;
+                     new Handle($p,'w')` -> [] while truncating — and F1's patch does NOT close
+                     it (measured). F3/F4/F5 to the fix agent's judgement.
+                     All seven cycle-4 findings were disposed of at ab9a7dcdc.
                      Declared files: src/Runtime.php · tests/RuntimeTest.php ·
                      tests/Integration/SystemPromptWiringTest.php.
                      **ORCHESTRATOR-VERIFIED AT ab9a7dcdc — do NOT re-measure these:**
@@ -564,9 +585,21 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      refused (intval('0o3',0)===0; stripcslashes is not PHP's alphabet; the
                      `[,;]` terminator reaches only the first comma-list item), and the fix
                      agent found one defect the review missed (a `b'…'` binary-string prefix).
-                     **STILL OWED and NOT re-derived by me:** the fix agent's tree-wide
-                     before/after claim — 260 files, zero gained or lost a primitive name. The
-                     cycle-5 reviewer is told to re-derive it rather than take it.
+                     **The tree-wide before/after claim HELD** — cycle 5 re-derived it
+                     independently: 768 scanned, 260 reporting, verdict diff 0 lines.
+                     **Cycle 5's other non-findings, NOT to be re-done:** src/Runtime.php
+                     comment-only at 4366 tokens (now FOUR independent derivations agreeing);
+                     8-not-9 Agent::systemPrompt() call sites at distribution (1,1,1,5); all
+                     three SymbolCitationDriftTest rows including the green …TestClass hole;
+                     0 stranded refs under sugar-crush/; goal 3 verified from both sides;
+                     **14 mutants, each redding exactly the test it should, control green**;
+                     every cited coordinate correct; no subtraction, no weakened test.
+                     **THE CYCLE-5 REVIEWER GOT ONE THING WRONG — do NOT act on it.** It
+                     reported prompt_plan.md:1466 "says nine live sites while enumerating
+                     eight". FALSE at HEAD: 344b85550 corrected that on 2026-08-31 and :1466
+                     now says EIGHT. The word "nine" survives only inside the dated
+                     parenthetical recording what it used to say. The reviewer read quoted
+                     historical text as a live claim. Do not "fix" the plan backwards.
                      **FULL suite at ab9a7dcdc NOT RUN. No figure exists.**
 
                   3. **P3.S6 — STEP agent out.** NEW THIS SESSION.
