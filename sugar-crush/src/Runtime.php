@@ -503,10 +503,10 @@ final class Runtime
      * convention is not `clone` at all, and the count is two, not three.
      * MEASURED on PHP 8.3.6 by building the hypothetical rather than reasoning
      * about it — a throwaway class with `Runtime`'s exact field shape (one
-     * promoted constructor parameter standing for {@see $environmentBlock} at
-     * `:400`, two class-body fields standing for {@see $memoryBlock} at `:186`
-     * and {@see $repoMapBlock} at `:188`), memoised, then put through each of
-     * the two canonical mutator forms in this monorepo:
+     * promoted constructor parameter standing for {@see $environmentBlock},
+     * two class-body fields standing for {@see $memoryBlock} and
+     * {@see $repoMapBlock}), memoised, then put through each of the two
+     * canonical mutator forms in this monorepo:
      *
      *  - `candy-core/src/Concerns/Mutable.php`'s
      *    `new static(...array_merge(get_object_vars($this), $changes))` does
@@ -515,12 +515,24 @@ final class Runtime
      *    `get_object_vars()` returns the class-body fields too and they are
      *    not constructor parameters. On `Runtime` that trait is unusable
      *    without overriding `mutate()`.
-     *  - `src/App/App.php:1264`'s hand-written `new self(...)` over the
-     *    promoted parameters CARRIES `environmentBlock` — it is a constructor
-     *    parameter — and resets `memoryBlock` and `repoMapBlock` to null.
+     *  - `App::mutate()`'s hand-written `new self(...)` over the promoted
+     *    parameters CARRIES `environmentBlock` — it is a constructor parameter
+     *    — and resets `memoryBlock` and `repoMapBlock` to null.
      *
      * So exactly TWO memos would be recaptured, not three, and the mechanism
-     * is constructor re-entry rather than cloning. THE CONCLUSION IS
+     * is constructor re-entry rather than cloning.
+     *
+     * NO LINE NUMBERS IN EITHER BULLET, AND THAT IS THE SECOND CORRECTION IN
+     * THIS PARAGRAPH. Its first draft cited `$environmentBlock` at `:400` and
+     * `App::mutate()` at `:1264`. Both were wrong: `:400` was that parameter's
+     * line in the file BEFORE this doc-block grew, and it had moved by the
+     * time the sentence shipped; `App.php:1264` is the bare `{` between the
+     * declaration and the `new self(`. A paragraph whose whole subject is "the
+     * reason given was wrong" carrying two fresh wrong citations is §16.8 rule
+     * 7 arriving inside its own correction. The repair is not a third set of
+     * line numbers: the three field names and the two method names are
+     * greppable, they do not move when a doc-block above them grows, and they
+     * are what a reader actually needs. THE CONCLUSION IS
      * UNCHANGED and that is why the paragraph is corrected in place rather
      * than dropped (§16.8 rule 42): the memory-directory read and the
      * repository-map walk really would repeat every step, which is the cost
@@ -709,11 +721,27 @@ final class Runtime
      *     `->`/`?->`/`::` or a bare call — there are EIGHT invocations:
      *     `App/App.php:569`, `Agents/ProcessExecutor.php:473`,
      *     `Agents/AgentManager.php:433` and `Workflows/WorkflowEngine.php`
-     *     at `:1042`, `:1152`, `:1252`, `:1294` and `:1397`. A plain
-     *     `/usr/bin/grep -rn '>systemPrompt(' src bin` returns the same eight
-     *     plus ONE comment line, `App/App.php:527`, which is where a ninth
-     *     most plausibly came from. There is exactly one declaration
-     *     (`Agents/Agent.php:415`) and no dynamic dispatch on the name —
+     *     at `:1042`, `:1152`, `:1252`, `:1294` and `:1397` — LINE NUMBERS AS
+     *     OF THIS COMMIT, a navigation aid that rots on any edit above them.
+     *     What the test below pins is the COUNT and the per-file distribution
+     *     (1/1/1/5), both of which survive a line move; §16.8 rule 9, the
+     *     epistemic status of a row is part of the row.
+     *
+     *     A plain `/usr/bin/grep -rn '>systemPrompt(' src bin` returned, AT
+     *     THE COMMIT BEFORE THIS PARAGRAPH EXISTED, the same eight plus ONE
+     *     comment line, `App/App.php:527`, which is where a ninth most
+     *     plausibly came from. THE DOMAIN IS LOAD-BEARING AND WAS MISSING:
+     *     that grep matches this sentence too, so from the commit that wrote
+     *     it the same command returns TEN. A claim about a command's output
+     *     that the claim itself falsifies is §16.8 rule 1 — a figure
+     *     travelling without its domain — and it is corrected rather than
+     *     deleted because the comment line at `App/App.php:527` is the actual
+     *     explanation for the wrong figure.
+     *
+     *     There is exactly one DECLARATION of the name in `src/`+`bin/` — in
+     *     `Agents/Agent.php` — which is what makes it sound to attribute all
+     *     eight invocations to `Agent`, and it is derived by a census rather
+     *     than asserted about one file. And there is no dynamic dispatch:
      *     every `'systemPrompt'` string in `src/` is an array key or a named
      *     argument, never a method name handed to a variable call.
      *

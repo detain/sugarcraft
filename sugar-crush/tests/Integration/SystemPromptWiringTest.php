@@ -294,9 +294,21 @@ final class SystemPromptWiringTest extends TestCase
      * the policed form, and that is what moved the answer. The path-prefix
      * hole is real and still open elsewhere in the tree — escalation 2 of
      * P3.S5's worklog entry — but it is NOT the state of this citation, so the
-     * rename was covered by a guard after all. It was still verified by hand
-     * with `/usr/bin/grep -rn` over the whole worktree, and the "TestClass"
-     * row above is exactly why that was worth doing.
+     * rename was covered by a guard after all. It was still verified by hand,
+     * and the "TestClass" row above is exactly why that was worth doing.
+     *
+     * THE SCOPE OF THAT HAND VERIFICATION, because "over the whole worktree"
+     * was the first wording and it is not what was checked.
+     * `/usr/bin/grep -rn` for the old token over `sugar-crush/` returns ZERO
+     * hits outside the generated `.phpunit.cache`. Over the WORKTREE it
+     * returns four, all in this plan's own bookkeeping and all outside this
+     * step's declared file list: `prompt_worklog.md:797`, `:2874` and `:2881`
+     * are historical narrative describing the state at the time and are
+     * correct as they stand, while `prompt_resume.md:345` is a LIVE
+     * instruction block that still names the old method in the present tense
+     * alongside now-stale line coordinates. That one is a real stranded
+     * reference; it is ESCALATED to the orchestrator rather than edited here,
+     * because `prompt_resume.md` is not this step's to touch.
      */
     public function testEveryStepOfOneTurnGetsAByteIdenticalPromptExceptTheTwoGitDiffSectionsWhichAreTheOnlyLicensedDifference(): void
     {

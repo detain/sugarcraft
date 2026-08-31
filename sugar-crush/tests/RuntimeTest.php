@@ -2530,6 +2530,59 @@ final class RuntimeTest extends TestCase
      * excluded - a method on some other object is that object's business, and
      * classifying it here would red on correct code.
      *
+     * BOTH SPELLINGS OF A GLOBAL CALL, and the second one is a CORRECTION.
+     * This read `T_STRING` only, and PHP 8 tokenises `\file_put_contents` as
+     * ONE `T_NAME_FULLY_QUALIFIED` token - so every leading-backslash global
+     * call was invisible. That is not a hypothetical spelling: it is this
+     * tree's dominant idiom, MEASURED at 21+ sites including
+     * `src/Cli/NonInteractive.php` (`\fwrite` x7),
+     * `src/Sessions/BackgroundSessionRunner.php` (`@\file_put_contents`,
+     * `@\unlink`), `src/Agents/TaskList.php` (`\mkdir`) and
+     * `src/Hooks/BuiltIn/AuditHook.php` (`@\file_put_contents`). A reviewer
+     * defeated the whole verdict below by adding ONE backslash to the probe
+     * tool's `file_put_contents` call: `OK (116 tests, 413 assertions)`, fully
+     * green, with a write-capable tool sitting on the read-only roster.
+     * {@see testTheWritePrimitiveScannerFindsTheLeadingBackslashSpellingToo()}
+     * is the known-positive over real tree files that keeps it closed.
+     *
+     * `T_NAME_QUALIFIED` IS DELIBERATELY NOT ACCEPTED: `Foo\copy(...)` is a
+     * namespaced function, a different symbol from the global one, and
+     * counting it would red on correct code.
+     *
+     * ATTRIBUTES ARE SKIPPED. `#[Copy(1)]` tokenises as `T_ATTRIBUTE` then a
+     * `T_STRING` followed by `(`, which is indistinguishable from a call at
+     * the token level and was reported as one. An attribute NAME is a class
+     * reference, never a function call, so the whole `#[...]` group is stepped
+     * over by bracket depth - structural, not textual (§16.8 rule 34).
+     *
+     * THE BACKTICK OPERATOR IS `shell_exec` WITH NO NAME TOKEN, so it is
+     * matched on the `` ` `` character and reported under that name. Without
+     * it a tool could spawn a shell - the thing `Bash` is on the WRITE roster
+     * for - with the one syntax that has no identifier to find.
+     *
+     * WHAT THIS ALPHABET CANNOT EXPRESS (§16.8 rule 31), stated rather than
+     * discovered, and pinned as test rows in
+     * {@see testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames()} so the
+     * blind spots are written down rather than implied:
+     *
+     *  - INDIRECTION. `$f = 'unlink'; $f($p);`, `array_map('unlink', …)` and
+     *    `call_user_func('file_put_contents', …)` all pass a primitive as a
+     *    STRING, and a string is where this scanner deliberately does not
+     *    look. Closing that means constant-folding, which is a different
+     *    instrument.
+     *  - COLLABORATORS. A call into another class is that class's business
+     *    (`src/Tools/BuiltIn/Bash.php` calls none of these itself and is on
+     *    the WRITE roster on judgement alone).
+     *  - `fopen`, for the mode-dependence reason
+     *    {@see WRITE_PRIMITIVES} gives; the handle-write functions that ARE on
+     *    the list cover the same ground structurally.
+     *  - OVER-CLASSIFICATION IS ACCEPTED AND IS THE SAFE DIRECTION. A
+     *    read-only tool that writes a log line with `fwrite(STDERR, …)` is
+     *    reported here, and the working tree did not move. That reds the
+     *    verdict and forces a human to say so in the roster, which is the
+     *    failure mode this whole pair of tests exists to produce; the
+     *    dangerous direction is the silent one.
+     *
      * @return array<string, list<int>>
      */
     private static function writePrimitivesCalledIn(string $file): array
@@ -2538,13 +2591,62 @@ final class RuntimeTest extends TestCase
         $count = \count($tokens);
         $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
         $found = [];
+        $attributeDepth = 0;
+        $line = 1;
 
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
-            if (!\is_array($token) || $token[0] !== T_STRING) {
+
+            if (\is_array($token)) {
+                $line = $token[2];
+            }
+
+            // STEP OVER `#[ … ]`. T_ATTRIBUTE IS the opening `#[`, so depth
+            // starts at one and the matching `]` closes it; nested `[` inside
+            // an attribute argument is counted so it cannot close early.
+            if ($attributeDepth > 0) {
+                if ($token === '[' || (\is_array($token) && $token[0] === T_ATTRIBUTE)) {
+                    $attributeDepth++;
+                } elseif ($token === ']') {
+                    $attributeDepth--;
+                }
+
                 continue;
             }
+            if (\is_array($token) && $token[0] === T_ATTRIBUTE) {
+                $attributeDepth = 1;
+
+                continue;
+            }
+
+            // THE BACKTICK OPERATOR. `` `cmd` `` is shell_exec() with no
+            // identifier anywhere in the token stream.
+            if ($token === '`') {
+                $found['shell_exec'][] = $line;
+                // Consume to the closing backtick so the pair reports once.
+                for ($j = $i + 1; $j < $count; $j++) {
+                    if ($tokens[$j] === '`') {
+                        $i = $j;
+
+                        break;
+                    }
+                }
+
+                continue;
+            }
+
+            if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED], true)) {
+                continue;
+            }
+            // A FULLY QUALIFIED name is the global one only when it is exactly
+            // `\name`; `\Foo\copy` is a namespaced function, a different symbol.
             $name = strtolower($token[1]);
+            if ($token[0] === T_NAME_FULLY_QUALIFIED) {
+                if (substr_count($name, '\\') !== 1) {
+                    continue;
+                }
+                $name = ltrim($name, '\\');
+            }
             if (!\in_array($name, self::WRITE_PRIMITIVES, true)) {
                 continue;
             }
@@ -2671,13 +2773,19 @@ final class RuntimeTest extends TestCase
 
     /**
      * The scanner reads CODE. A mention in a comment, a match inside a string,
-     * a method DECLARATION and a call on some other object are all not calls.
+     * a method DECLARATION, a call on some other object and an ATTRIBUTE NAME
+     * are all not calls; a leading backslash and a backtick both are.
      *
      * SYNTHETIC AND NOT LINE NUMBERS IN `src/`, deliberately: the natural
      * counterexample this tree ships (`Write.php` says `mkdir()` in a comment
      * on one line and calls it on another) is real evidence but its line
      * numbers move, and a control keyed on a moving number is a control that
      * gets "fixed" by deleting it. The fixture below cannot move.
+     *
+     * THE LAST BLOCK IS THE ALPHABET, WRITTEN DOWN AS ASSERTIONS. Indirection
+     * through a string is a KNOWN blind spot, so it is asserted as `[]` rather
+     * than left unstated - §16.8 rule 31, an alphabet is coverage, and a limit
+     * nobody wrote down is a limit the next reader assumes away.
      */
     public function testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames(): void
     {
@@ -2689,16 +2797,18 @@ final class RuntimeTest extends TestCase
 
             declare(strict_types=1);
 
+            #[Copy(1)]
             final class Probe
             {
                 // A comment saying mkdir() and unlink() and calling neither.
                 /** A doc-block saying file_put_contents() and calling nothing. */
+                #[Rename('touch(')]
                 public function copy(): string
                 {
                     $other = new \stdClass();
                     $prose = 'proc_open() inside a string literal';
 
-                    return $prose . self::rename() . $other->touch();
+                    return $prose . self::rename() . $other->touch() . \Foo\copy();
                 }
 
                 private static function rename(): string
@@ -2710,14 +2820,21 @@ final class RuntimeTest extends TestCase
                 {
                     fwrite(STDERR, 'x');
                     file_put_contents($path, 'y');
+                    \unlink($path);
+                    $out = `ls -la`;
                 }
             }
             PROBE);
 
         $this->assertSame(
-            ['file_put_contents' => [25], 'fwrite' => [24]],
+            [
+                'file_put_contents' => [27],
+                'fwrite' => [26],
+                'shell_exec' => [29],
+                'unlink' => [28],
+            ],
             self::writePrimitivesCalledIn($file),
-            'the scanner must report exactly the two real calls, on their own lines, and nothing else',
+            'the scanner must report exactly the four real calls, on their own lines, and nothing else',
         );
 
         // BOTH POLARITIES THROUGH THE SAME INSTRUMENT (§16.8 rule 18): a
@@ -2725,9 +2842,65 @@ final class RuntimeTest extends TestCase
         // from offenders, and one that reports nothing passes one built only
         // from clean input.
         $clean = $dir . '/Clean.php';
-        file_put_contents($clean, "<?php\n\ndeclare(strict_types=1);\n\n// mkdir() unlink() proc_open()\n\$s = 'file_put_contents()';\n");
+        file_put_contents($clean, "<?php\n\ndeclare(strict_types=1);\n\n// mkdir() unlink() proc_open()\n\$s = 'file_put_contents()';\n#[Link(2)]\nfinal class Clean {}\n");
 
         $this->assertSame([], self::writePrimitivesCalledIn($clean));
+
+        // THE DECLARED BLIND SPOT, ASSERTED. A primitive reached through a
+        // string is invisible to a scanner that does not look inside strings.
+        // This is the alphabet, not a bug report: closing it means constant
+        // folding, which is a different instrument.
+        $indirect = $dir . '/Indirect.php';
+        file_put_contents($indirect, "<?php\n\n\$f = 'unlink';\n\$f('/tmp/x');\narray_map('unlink', []);\ncall_user_func('file_put_contents', '/tmp/x', 'y');\n");
+
+        $this->assertSame(
+            [],
+            self::writePrimitivesCalledIn($indirect),
+            'the indirection blind spot moved - update the alphabet paragraph, this row is what states it',
+        );
+    }
+
+    /**
+     * THE BACKSLASH SPELLING, over REAL FILES this suite does not own.
+     *
+     * A KNOWN-POSITIVE THAT IS NOT SYNTHETIC, because the defect it guards was
+     * found by a reviewer defeating the synthetic one: the scanner read
+     * `T_STRING` only, PHP 8 tokenises `\file_put_contents` as a single
+     * `T_NAME_FULLY_QUALIFIED`, and adding ONE backslash to a probe tool's
+     * write call left the whole verdict green with a write-capable tool on the
+     * read-only roster.
+     *
+     * ASSERTED ON FILES WHOSE SPELLING IS THE POINT, and on the KEYS only -
+     * the primitives each file calls, not the lines, which move on any edit.
+     * These four are `src/` files outside this step's declared list: if a
+     * legitimate refactor removes one of these calls the assertion reds, and
+     * the correct repair is to re-point it at another live backslash site, not
+     * to delete it.
+     */
+    public function testTheWritePrimitiveScannerFindsTheLeadingBackslashSpellingToo(): void
+    {
+        $src = dirname(__DIR__) . '/src';
+
+        $this->assertSame(
+            ['fwrite'],
+            array_keys(self::writePrimitivesCalledIn($src . '/Cli/NonInteractive.php')),
+            'NonInteractive.php spells its writes `\fwrite(...)`; a scanner that reads T_STRING only sees none of them',
+        );
+        $this->assertSame(
+            ['file_put_contents', 'fwrite', 'unlink'],
+            array_keys(self::writePrimitivesCalledIn($src . '/Sessions/BackgroundSessionRunner.php')),
+            'BackgroundSessionRunner.php spells its writes `@\file_put_contents(...)` / `@\unlink(...)`',
+        );
+        $this->assertSame(
+            ['mkdir'],
+            array_keys(self::writePrimitivesCalledIn($src . '/Agents/TaskList.php')),
+            'TaskList.php spells its directory creation `\mkdir(...)`',
+        );
+        $this->assertSame(
+            ['file_put_contents', 'mkdir'],
+            array_keys(self::writePrimitivesCalledIn($src . '/Hooks/BuiltIn/AuditHook.php')),
+            'AuditHook.php spells its write `@\file_put_contents(...)`',
+        );
     }
 
     /**
@@ -2759,35 +2932,37 @@ final class RuntimeTest extends TestCase
     private static function invocationsOf(string $method, array $roots): array
     {
         $base = dirname(__DIR__);
-        $files = [];
-        foreach ($roots as $root) {
-            $path = str_starts_with($root, '/') ? $root : $base . '/' . $root;
-            if (is_file($path)) {
-                $files[] = $path;
-
-                continue;
-            }
-            /** @var iterable<\SplFileInfo> $walk */
-            $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS));
-            foreach ($walk as $entry) {
-                if ($entry->isFile()) {
-                    $files[] = $entry->getPathname();
-                }
-            }
-        }
-        sort($files);
-
         $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
         $hits = [];
-        foreach ($files as $file) {
+        foreach (self::phpFilesUnder($roots) as $file) {
             $source = (string) file_get_contents($file);
             if (!str_contains($source, $method)) {
                 continue;
             }
-            $tokens = @token_get_all($source);
+            $tokens = token_get_all($source);
             $count = \count($tokens);
+            $attributeDepth = 0;
             for ($i = 0; $i < $count; $i++) {
                 $token = $tokens[$i];
+
+                // `#[systemPrompt(1)]` is a class reference, not a call - the
+                // same structural skip {@see writePrimitivesCalledIn()} makes,
+                // and for the same measured reason.
+                if ($attributeDepth > 0) {
+                    if ($token === '[' || (\is_array($token) && $token[0] === T_ATTRIBUTE)) {
+                        $attributeDepth++;
+                    } elseif ($token === ']') {
+                        $attributeDepth--;
+                    }
+
+                    continue;
+                }
+                if (\is_array($token) && $token[0] === T_ATTRIBUTE) {
+                    $attributeDepth = 1;
+
+                    continue;
+                }
+
                 if (!\is_array($token) || $token[0] !== T_STRING || $token[1] !== $method) {
                     continue;
                 }
@@ -2825,6 +3000,94 @@ final class RuntimeTest extends TestCase
         }
 
         return $hits;
+    }
+
+    /**
+     * Every DECLARATION of $method under $roots, as `relative/path.php:line`.
+     *
+     * THE SIBLING OF {@see invocationsOf()}, and it exists because that one
+     * cannot tell whose method it is counting: it excludes `T_FUNCTION`, so a
+     * `systemPrompt()` on some unrelated class contributes to a figure the
+     * doc-block attributes to `Agents\Agent`. The two together are the claim.
+     *
+     * VISIBILITY-BLIND on purpose - a `private`/`protected`/`static`
+     * declaration is still a second declaration, and keying on the modifier
+     * would exempt exactly the ones nobody notices.
+     *
+     * @param list<string> $roots directories or files, relative to
+     *                            `sugar-crush/` unless already absolute
+     *
+     * @return list<string>
+     */
+    private static function declarationsOf(string $method, array $roots): array
+    {
+        $base = dirname(__DIR__);
+        $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
+        $hits = [];
+
+        foreach (self::phpFilesUnder($roots) as $file) {
+            $source = (string) file_get_contents($file);
+            if (!str_contains($source, $method)) {
+                continue;
+            }
+            $tokens = token_get_all($source);
+            $count = \count($tokens);
+            for ($i = 0; $i < $count; $i++) {
+                if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FUNCTION) {
+                    continue;
+                }
+                for ($j = $i + 1; $j < $count; $j++) {
+                    $next = $tokens[$j];
+                    if (\is_array($next) && \in_array($next[0], $skip, true)) {
+                        continue;
+                    }
+                    // `function &foo()` - a by-reference return is still a
+                    // declaration of `foo`.
+                    if ($next === '&') {
+                        continue;
+                    }
+                    if (\is_array($next) && $next[0] === T_STRING && $next[1] === $method) {
+                        $hits[] = (str_starts_with($file, $base . '/') ? substr($file, \strlen($base) + 1) : $file) . ':' . $next[2];
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        return $hits;
+    }
+
+    /**
+     * Every `.php` file under $roots, sorted. Shared by the two censuses so a
+     * disagreement between them can never be a difference in what they walked.
+     *
+     * @param list<string> $roots
+     *
+     * @return list<string>
+     */
+    private static function phpFilesUnder(array $roots): array
+    {
+        $base = dirname(__DIR__);
+        $files = [];
+        foreach ($roots as $root) {
+            $path = str_starts_with($root, '/') ? $root : $base . '/' . $root;
+            if (is_file($path)) {
+                $files[] = $path;
+
+                continue;
+            }
+            /** @var iterable<\SplFileInfo> $walk */
+            $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS));
+            foreach ($walk as $entry) {
+                if ($entry->isFile()) {
+                    $files[] = $entry->getPathname();
+                }
+            }
+        }
+        sort($files);
+
+        return $files;
     }
 
     /**
@@ -2878,17 +3141,55 @@ final class RuntimeTest extends TestCase
             'the call-site census reports the wrong set on a known answer - it is broken, do not read its verdict',
         );
 
-        // THE CENSUS. `Agents/Agent.php` declares the only `systemPrompt()` in
-        // production source, so every invocation the scan finds is one of its.
-        $declarations = 0;
-        foreach (['src/Agents/Agent.php'] as $file) {
-            $declarations += substr_count((string) file_get_contents(dirname(__DIR__) . '/' . $file), 'public function systemPrompt(');
-        }
-        $this->assertSame(1, $declarations, 'Agents\Agent no longer declares systemPrompt() - this census is measuring something else');
+        // THE SAFETY CONDITION, DERIVED FROM THE TREE RATHER THAN ASSERTED
+        // ABOUT ONE FILE. The verdict below attributes EVERY `systemPrompt()`
+        // invocation in `src/`+`bin/` to `Agents\Agent`, which is only sound
+        // while that class declares the only one.
+        //
+        // AN EARLIER REVISION CHECKED THAT BY COUNTING THE STRING
+        // `'public function systemPrompt('` IN `src/Agents/Agent.php` ALONE -
+        // a guard that structurally cannot see a second declaration anywhere
+        // else, which is the whole thing it was supposed to rule out. MEASURED
+        // by a reviewer: adding `src/Zzz/Unrelated.php` with its own
+        // `systemPrompt()` and one call to it left that guard GREEN while the
+        // verdict demanded the doc-block be changed to say NINE - i.e. the
+        // instrument prescribed a FALSE correction. It is a census now.
+        $declarations = self::declarationsOf('systemPrompt', ['src', 'bin']);
+
+        $this->assertSame(
+            ['src/Agents/Agent.php'],
+            array_values(array_unique(array_map(
+                static fn(string $site): string => explode(':', $site)[0],
+                $declarations,
+            ))),
+            'a second systemPrompt() declaration exists in src/ or bin/ - this census is attributing its call '
+            . 'sites to Agents\\Agent. Found: ' . implode(', ', $declarations),
+        );
 
         $sites = self::invocationsOf('systemPrompt', ['src', 'bin']);
 
         $this->assertNotEmpty($sites, 'the census found no call sites at all - a dead scan answers the same way as a wired one');
+
+        // THE PER-FILE DISTRIBUTION, which the doc-block also states and which
+        // the word alone does not pin. It survives a line move, so it is the
+        // half of the enumeration worth asserting; the line numbers beside it
+        // are explicitly marked as a navigation aid that rots.
+        $perFile = [];
+        foreach ($sites as $site) {
+            $perFile[explode(':', $site)[0]] = ($perFile[explode(':', $site)[0]] ?? 0) + 1;
+        }
+        ksort($perFile);
+
+        $this->assertSame(
+            [
+                'src/Agents/AgentManager.php' => 1,
+                'src/Agents/ProcessExecutor.php' => 1,
+                'src/App/App.php' => 1,
+                'src/Workflows/WorkflowEngine.php' => 5,
+            ],
+            $perFile,
+            'the Agent-assembler call sites moved between files - src/Runtime.php enumerates them and must be re-read',
+        );
 
         $word = self::NUMBER_WORDS[\count($sites)] ?? ('(' . \count($sites) . ')');
         $runtime = (string) file_get_contents(dirname(__DIR__) . '/src/Runtime.php');
