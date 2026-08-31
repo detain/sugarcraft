@@ -420,6 +420,25 @@ A review agent is told, verbatim:
 >     updates it. If the diff updates none, that is a finding — name the roster you expected. §16.6
 >     records that this is the thing reviews of this tree most often miss.
 >
+>     **The second half, and it is the half that bites — ADDED 2026-08-31 after P3.S4-fix-1.**
+>     Everything above is about what a diff **ADDS**. A roster can also be broken by a **REMOVAL**:
+>     *a diff that removes the LAST instance of something a roster defers on must update that roster
+>     in the same change-set.* This tree keeps rosters of things that are **not yet** fixed —
+>     `ChildStderrCaptureTest`'s `OUT_OF_SCOPE`, `ACCEPTED_DISCARDED_STDERR`, `KNOWN_GAPS` and their
+>     kin — and each carries a guard asserting the deferral is still WARRANTED. Repair the last
+>     offender under a deferred prefix and that guard reds, correctly: **a deferral that has been
+>     overtaken is how a directory silently stops being guarded.**
+>     MEASURED: five review cycles and the orchestrator's own verification all performed the
+>     ADDS-half honestly and **could not have found it** — `P3.S4-fix-1` replaced one unchecked
+>     `shell_exec()` with a checked helper, added no category at all, and red the tree-wide census at
+>     `ChildStderrCaptureTest.php:1059` only when the FULL suite ran. So when a diff makes something
+>     *better*, ask which roster was deferring on the thing it just fixed.
+>     **Two corollaries the same episode earned.** (i) A step-scoped `--filter` set is NOT a
+>     substitute for the full suite — the census tests that catch this are in no step's file list.
+>     (ii) Check the **assertion count**, not just the green: a roster that stops iterating still
+>     prints `OK`. Master's isolated figure was 343, the red branch 322, the fix 345. A figure
+>     materially BELOW the baseline is a guard quietly un-guarding.
+>
 > **Run the code. Do not only read it.** You have the worktree; use it.
 > - Run the step's own test file(s) and paste the **actual** counts:
 >   `cd <worktree>/sugar-crush && vendor/bin/phpunit tests/<Path>/<TheTest>.php`

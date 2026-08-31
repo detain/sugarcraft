@@ -253,6 +253,113 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 — the stability test made honest, and Providers/ adopted into the stderr guard   ·   2026-08-31   ·   `1279d91cf`
+
+**Status** `MERGED`
+**Worktree** /home/sites/prompt-step-P3.S4-fix-1  (removed after merge)
+**Base** 1267e6fbb
+
+**Goal (restated in one sentence)**
+P3.S4's `<env>`-vs-git-config stability test had to red for the RIGHT reason under every hostile
+config it claims to cover — instead of naming mechanisms that had not fired.
+
+**What changed**
+- `sugar-crush/tests/Providers/PromptStabilityTest.php`: control B given a second guard (git's exit
+  code AND its output), so a global `[diff] external` or `[core] excludesFile` can no longer drive it
+  red while git exits 0; the unchecked `shell_exec(… 'init -q 2>/dev/null')` at `:483` replaced with a
+  checked `self::git()`, because a partial `.git` still satisfied the `is_dir` guard;
+  `GIT_SAID_MAX_BYTES = 2048` + `gitSaid()` so every failure message quotes git's OWN output as
+  evidence; four claims narrowed to their evidence.
+- `sugar-crush/tests/Support/ChildStderrCaptureTest.php`: `'Providers/'` moved from `OUT_OF_SCOPE`
+  into `SCOPE` and its deferral row deleted, in the same change-set; the `Tools/` row no longer
+  cites `Providers/` as a fellow-deferred.
+- **NO production code.** `git diff 1267e6fbb..HEAD -- sugar-crush/src/` is EMPTY.
+
+**Tests added or changed**
+- `PromptStabilityTest` 13 → 16 methods, base a strict subset. New probe at `:1962` catches a
+  `GIT_CONFIG_COUNT` colour override that the old code blamed on "the scanner is dead".
+- `ChildStderrCaptureTest::testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn` — unchanged code,
+  now satisfied by a roster that matches reality.
+**Deletion experiment**: the fix agent reverted `ChildStderrCaptureTest.php` to the pre-fix version
+and re-ran: red again at `:1059`, identical message, `Tests: 6, Assertions: 322, Failures: 1`;
+restored (md5 `e0628a94adb588c5eb820ba5808640a5` before and after) and green at 6/345.
+Independently, the ORCHESTRATOR ran a positive-controlled probe: injecting a discarding spawn under
+`Providers/` (control printed `injected=YES`) makes the guard red and NAME it —
+`'Providers/TransientFailureTest.php:34 (exec -> discarded)'`. SCOPE membership is load-bearing.
+
+**MEASURED** (orchestrator-run; cwd `/home/sites/prompt-step-P3.S4-fix-1`; serial; box confirmed to
+hold exactly one phpunit for the whole run; `</dev/null`)
+```
+$ php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never
+Tests: 10503, Assertions: 162166, Skipped: 1.          (06:50.415)
+
+$ --filter ChildStderrCaptureTest          OK (6 tests, 345 assertions)
+$ --filter PromptStabilityTest             OK (16 tests, 399 assertions)
+$ --filter ForkedChildReaperAdoptionTest   OK (6 tests, 30 assertions)   sibling, unaffected
+
+$ git diff --name-only 1267e6fbb..HEAD
+sugar-crush/tests/Providers/PromptStabilityTest.php
+sugar-crush/tests/Support/ChildStderrCaptureTest.php
+$ git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/     (empty)
+$ md5sum goldens   32ea749d84938811ac9331419cae7380 / ef0326dd38535aaa2f1d715919bff26e   UNMOVED
+
+hostile [diff] external = /bin/true          16 tests, Failures: 3, honest message, git quoted
+hostile [core] excludesFile -> Alpha.php     16 tests, Failures: 3, honest message, git quote empty
+```
+
+**Suite result**
+```
+$ cd /home/sites/prompt-step-P3.S4-fix-1 && php sugar-crush/vendor/bin/phpunit …
+Tests: 10503, Assertions: 162166, Skipped: 1.
+```
+Baseline for comparison: master `c7e5a6454` = `Tests: 10500, Assertions: 161982, Skipped: 1`.
+Delta: **+3 tests, +184 assertions, no new skip** — and the +184 reconciles EXACTLY with no
+remainder: `PromptStabilityTest` 229→399 (+170), `ChildStderrCaptureTest` 343→345 (+2),
+`SymbolCitationDriftTest` 2972→2984 (+12, doc-block prose, the movement `prompt_plan.md:3316`
+documents). Every assertion is accounted for by name.
+
+**Review loop**
+- Cycles 1-4 — findings disposed of at `707c30685` and `6e7308938`.
+- Cycle 5 — six findings; F-A left the step's own defect half-closed (control C got two guards,
+  control B only one).
+- **CAP REACHED.** §1.2 caps at five review cycles. One final fix pass went in with NO sixth
+  reviewer; the orchestrator substituted its own verification and reproduced both hostile runs
+  personally. Recorded as a deliberate decision with the accepted risk stated: that pass is
+  unreviewed by anyone but the orchestrator.
+- **Cycle 6-equivalent, forced by the full suite**: RED at `ChildStderrCaptureTest:1059`. A fix agent
+  closed it at `4ac10894b` with the declared list deliberately WIDENED to two files.
+Total cycles: 5 reviews + 2 orchestrator-verified fix passes.
+
+**Invariants touched**
+No file added under `sugar-crush/src/`, so §17.1's census figures are unmoved. Goldens unmoved.
+§17.2's two-assembler split untouched.
+
+**Surprises / things the plan got wrong**
+1. **`prompt_plan.md` §1.4 check 19 has a hole, and this step fell in it.** Five review cycles and
+   all of the orchestrator's own verification performed check 19 HONESTLY and could not have found
+   this. Check 19 asks for the roster of categories a diff **ADDS**. This diff added nothing — it
+   **REMOVED the last instance** of something a roster defers on, and no roster in check 19's list
+   enumerates absences. **Check 19 needs a second half: a diff that removes the last instance of
+   something a roster defers on must update that roster in the same change-set.**
+2. **The guard fired because the change was GOOD.** `testEveryOutOfScopeDirectoryStillHasAnOffending
+   Spawn` asserts every deferred prefix STILL has an offender. The `:483` repair removed the last one
+   under `Providers/`. A deferral that has been overtaken is how a directory silently stops being
+   guarded — the guard is well built, and it names the required edit and the same-change-set
+   constraint in its own failure message.
+3. **A step-scoped filter set is not a substitute for the full suite.** Every review cycle ran
+   `--filter <step files>` plus the seven-file census set. `ChildStderrCaptureTest` is in NEITHER.
+4. **The assertion count is the signal, not the green.** Master isolated is 343; the red branch was
+   322. The fix landed at 345 — *above* master. A figure materially BELOW would have been a guard
+   quietly un-guarding while still printing OK.
+
+**Follow-ups created**
+- The twelve remaining `OUT_OF_SCOPE` rows are untouched and still argued.
+- `Context/` and `Tools/` still carry the git-fixture cluster `Providers/` was originally deferred to
+  be settled with. That round is still outstanding, and the `Tools/` row now says so accurately.
+- Land check 19's second half in `prompt_plan.md` §1.4.
+
+---
+
 ### P3.S4-fix-1 · FULL SUITE RED · 2026-08-31 — the first full suite of the batch caught a roster miss, which is what it is for
 
 **The first owed full suite was run, SERIALLY on a verified-quiet box, and it is RED.** This is the
