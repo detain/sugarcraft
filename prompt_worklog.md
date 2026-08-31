@@ -253,6 +253,80 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 · REVIEW CYCLE 4 · 2026-08-31 — the question I asked came back "yes", and the branch's own judgement was wrong
+
+Cycle 4 of 5 returned **five findings**. Findings file on disk:
+`<scratchpad>/P3.S4-fix-1/review-cycle-4/findings-cycle-4.md`. A fix agent is out; a brand-new
+cycle-5 reviewer follows it. **Cycle 5 is the cap.**
+
+**F3 is the one that matters, and it is the answer to the question the brief asked.** The previous
+cycle noticed control C (the coloured control, escape-byte liveness) has no "did the subprocess
+succeed" guard and **judged it benign**, reasoning that control B's new guard intercepts the
+`diff.external` case before C is reached. I asked this reviewer specifically whether C is reachable
+with a broken subprocess by a route B does not intercept. MEASURED: a `GIT_CONFIG_COUNT` colour
+override drives control C from **21 escapes to 0** while control B stays green (`diffExit=0`,
+`Binary files`=1). One failure, at `:1915`, whose message offers two causes and **neither of them is
+what happened**. A test that reds for a reason its own message denies is worse than one that does not
+red at all. The reviewer measured its fix in BOTH polarities — clean `OK (15 tests, 393 assertions)`,
+hostile reds at a new probe naming `GIT_CONFIG_COUNT` — which makes it the rare prescription that
+arrives verified rather than hypothesised.
+
+**F1, F2, F4, F5 are false claims in prose, inside the file whose entire subject is claims wider than
+their evidence.**
+
+- **F1** `:2514-2516` — the *"Inert for ANY value, MEASURED"* bullet is false for **all five** of its
+  members. `core.quotePath` and `core.autocrlf` exit 128 on all four subprocesses;
+  `diff.indentHeuristic`/`diff.algorithm` on log/status/diff; `status.relativePaths` on status. They
+  are the SAME family as `log.abbrevCommit`; what differs is the DOMAIN — they also red
+  `git init`/`git commit`, so the fixture build fails LOUDLY (`Failures: 6`) instead of silently.
+  **Loud is not inert**, and silent-vs-loud is the distinction this whole file is built on. §16.8
+  rule 40: last cycle's correction to `log.abbrevCommit` did not travel to its neighbours.
+- **F2** `:2328-2329`, repeated `:1747-1754` and in the new test's premise at `:2043` —
+  *"git parses every config file before it uses any of them"* is FALSE; the mechanism is per-command.
+  MEASURED: `log.abbrevCommit=nonsense` kills only `log`; `color.branch.current=true` kills only
+  `branch`. **The verdict it was used to justify still stands** — `log.abbrevCommit` really is
+  undefendable by a repo-local pin, now confirmed three times (previous fix agent, orchestrator in a
+  scratch repo, this reviewer). What is over-broad is the leap to *"the whole invalid-value hazard
+  class is UNDEFENDABLE"*. Same shape as the AuditHook item: the reason is false, the conclusion is
+  not. Correct the reason without discarding the finding.
+- **F4** `:2561-2563` — two of three knobs in the "moves the bytes but REDs" bullet do neither.
+  `core.bigFileThreshold=1` moves NOTHING now, defeated by the `* diff` the method itself writes
+  (verified with and without in a scratch repo); `core.excludesFile` naming the TRACKED file is inert
+  because gitignore never applies to tracked paths — its real reach is the untracked `src/Gamma.php`.
+- **F5** `:1976-1978` — the untracked-status message names one cause; `core.excludesFile` produces the
+  same red with the `status.showUntrackedFiles` pin intact.
+
+**THE FIFTEENTH KNOB WAS NOT FOUND, and that is a result, not a gap.** Six previous reviews each
+found another. This one swept ~65 config keys and env vars through the real fixture: every mover also
+red something, and all the new movers it did find are detected — `color.decorate.branch=true`
+(4,841/4,667, a new member of the invalid-value family), `diff.orderFile`,
+`diff.external`/`GIT_EXTERNAL_DIFF`, and three `GIT_CONFIG_COUNT` rows that reproduce the file's own
+recorded figures exactly. The fix brief explicitly tells the fix agent not to go hunting.
+
+**One UNVERIFIED item, deliberately left unverified:** a possible git-locale hazard on the
+untranslated `--shortstat` line. Untestable on this host — zero git `.mo` catalogues installed. The
+brief tells the fix agent NOT to write a guard whose premise it never observed, and not to write a
+comment claiming a measurement it did not take.
+
+**Every headline figure in the file was re-derived from the tree and every one reproduced exactly:**
+4,844/4,844/4,670 · 12,751/12,751/4,583 · 4,844/5,083/4,403 · old-order 3,095 (gain 1,575 =
+4,056−2,481) · across-turn 3,188 · the `Recent commits:` fence at 4,402 (+18 → 4,420, so 4,423 and
+the mutated `$diffAt` 4,516 both check out) · generatedLines 23,924/24,224 · coloured control 21
+escapes/4,921 B · binary control 4,749 B. The base file at `1267e6fbb` is **silently green** under
+both `log.abbrevCommit=nonsense` and `GIT_DIFF_OPTS=-u10` at `OK (13 tests, 229 assertions)` — the
+deletion experiment holds.
+
+**MY OWN BRIEF CARRIED AN ERROR, corrected here so it stops propagating:** it said this file has
+*"~25 `self::git()` call sites"*. The real figure is **12 at HEAD, 3 at base**. The 4th `self::git()`
+parameter added last cycle is additive and `DuplicatedTestHelperDriftTest` is green. I did not
+measure the ~25 before writing it — which is the same failure mode §7 forbids for worklog numbers,
+committed in a brief instead.
+
+**Figures unchanged and orchestrator-matched:** `--filter PromptStabilityTest` `OK (15 tests, 391
+assertions)`; the seven census files `OK (109 tests, 9632 assertions)`; goldens unmoved;
+`git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/` EMPTY; one file in the diff. The FULL suite at
+`2d5f14835` remains unmeasured and no figure is written for it.
+
 ### P3.S5-fix-1 · REVIEW CYCLE 4 · 2026-08-31 — the twelfth defeat, and the class behind all twelve
 
 Cycle 4 of 5 returned **eight findings**, not a clean review. Findings file on disk, per the rule

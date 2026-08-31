@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, THREE AGENTS RUNNING — `P3.S5-fix-1`'s cycle-4 reviewer CAME BACK WITH EIGHT FINDINGS and a FIX AGENT is now out on it (cycle 5 is the LAST); `P3.S4-fix-1`'s cycle-4 reviewer is still out (`2d5f14835`); the `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue, THREE AGENTS RUNNING — BOTH cycle-4 reviewers have now REPORTED FINDINGS (eight on `P3.S5-fix-1`, five on `P3.S4-fix-1`) and a FIX AGENT is out on each; cycle 5 is the LAST on both. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -350,10 +350,14 @@ Next step:        **CALL `ListAgents` FIRST. Three agents are out. Do not re-spa
                   Each of the three is described under `In-flight batch` with exactly what
                   to do when it reports. The short form:
 
-                  A) **P3.S4-fix-1 cycle-4 reviewer** -> if NO FINDINGS: run the FULL SUITE
-                     SERIALLY from /home/sites/prompt-step-P3.S4-fix-1, then MERGE IT FIRST.
-                     If findings: fix agent -> a BRAND-NEW cycle-5 reviewer. One cycle left
-                     after that.
+                  A) **P3.S4-fix-1 — cycle 4 REPORTED FIVE FINDINGS; a FIX AGENT is out.**
+                     When it reports: verify its figures yourself, then spawn a BRAND-NEW
+                     cycle-5 reviewer that has NEVER seen cycle 4's findings (§1.4). **Cycle 5
+                     is the CAP.** If clean, run the FULL SUITE SERIALLY and MERGE IT FIRST —
+                     it stays first because it changes no production code at all. If cycle 5
+                     finds more prose defects, weigh them: this file's job is guarding <env>
+                     against git config, and the reviewer swept ~65 knobs WITHOUT finding a
+                     fifteenth. Do not open a cycle 6.
                   B) **P3.S5-fix-1 — cycle 4 REPORTED EIGHT FINDINGS; a FIX AGENT is out.**
                      When it reports: verify its figures yourself, then spawn a BRAND-NEW
                      cycle-5 reviewer that has NEVER seen cycle 4's findings (§1.4 — a
@@ -453,19 +457,33 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                   `NO FINDINGS` and never a finished step.** Never write a dead agent's
                   missing report yourself. Blank returns get five attempts (§1.8).
 
-                  1. **P3.S4-fix-1 — cycle-4 REVIEW agent out.**
+                  1. **P3.S4-fix-1 — cycle 4 DONE (FIVE findings). FIX agent out.**
                      Worktree /home/sites/prompt-step-P3.S4-fix-1, branch prompt/P3.S4-fix-1,
-                     HEAD **2d5f14835**, 5 commits, base 1267e6fbb.
-                     Three cycles were used before this one, so **TWO REMAIN** (this is 4 of 5).
+                     HEAD **2d5f14835**, 5 commits, base 1267e6fbb. **Cycle 5 is the CAP.**
                      Declared file: tests/Providers/PromptStabilityTest.php — that one only.
                      Changes NO production code and must continue to change none.
-                     The reviewer was asked, as its highest-value contribution, to find the
-                     FIFTEENTH git config knob that degrades <env> with this file's guards
-                     still green (six previous reviews each found another), and — because the
-                     orchestrator wrote a prescription that turned out to be wrong — to
-                     re-derive the whole log.abbrevCommit classification independently.
-                     It writes its findings to
-                     <scratchpad>/P3.S4-fix-1/review-cycle-4/findings-cycle-4.md.
+                     Findings file, ON DISK and the authority:
+                     <scratchpad>/P3.S4-fix-1/review-cycle-4/findings-cycle-4.md
+                     **F3 is the behavioural one and it REFUTES this branch's own recorded
+                     judgement.** Last cycle called control C's missing subprocess guard benign
+                     because control B intercepts diff.external first. It does not: a
+                     GIT_CONFIG_COUNT colour override drives C from 21 escapes to 0 while B
+                     stays green, and C then reds at :1915 with a message naming two causes,
+                     NEITHER of which happened. The reviewer measured its fix in BOTH
+                     polarities (clean 15/393; hostile reds at a new probe naming
+                     GIT_CONFIG_COUNT) — the rare prescription that arrives verified.
+                     F1/F2/F4/F5 are FALSE CLAIMS IN PROSE inside the file whose whole subject
+                     is claims wider than their evidence. F2 matters most: "git parses every
+                     config file before it uses any of them" is FALSE (per-command), but the
+                     verdict it justified — log.abbrevCommit undefendable by a repo-local pin —
+                     STANDS, now confirmed three times. Correct the reason, keep the finding.
+                     **THE FIFTEENTH KNOB WAS NOT FOUND and that is a RESULT.** ~65 keys and
+                     env vars swept; every mover also red something; all new movers detected.
+                     Do not send anyone hunting for it again.
+                     **UNVERIFIED, deliberately:** a possible git-locale hazard on the
+                     untranslated --shortstat line. This host has ZERO git .mo catalogues, so
+                     it cannot be tested here. Nobody may write a guard for it or a comment
+                     claiming a measurement of it.
 
                   2. **P3.S5-fix-1 — cycle 4 DONE (EIGHT findings). FIX agent out.**
                      Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,
@@ -621,13 +639,12 @@ Open follow-ups:  **PROCESS RULE ADOPTED THIS SESSION, ALREADY IN EVERY BRIEF: a
                   parameter — and that is a DECLARATION, which callArguments() never enters
                   because the T_FUNCTION guard excludes it.
 
-                  **NEW, from P3.S4-fix-1's fix agent — OBSERVED, not fixed:** control C (the
-                  coloured control, escape-byte liveness) in PromptStabilityTest has no
-                  equivalent "did the subprocess succeed" guard. Judged benign because control
-                  B's new guard now intercepts the diff.external case before C is reached and
-                  C's own message already names its own hazards. The cycle-4 reviewer was asked
-                  specifically whether C is reachable with a broken subprocess by some route B
-                  does not intercept.
+                  **RESOLVED — and the answer was NO, the judgement was wrong.** The
+                  "control C has no subprocess guard, judged benign because control B
+                  intercepts first" item is now cycle-4 finding F3, MEASURED reachable by a
+                  GIT_CONFIG_COUNT colour override that leaves B green. It is in the fix
+                  agent's hands. Kept here as the record that a benign-by-reasoning verdict
+                  survived one cycle and was then measured false.
 
                   **NEW, MEASURED THIS SESSION AND WORTH KEEPING:** the `-diff` gitattribute
                   does NOT stop git invoking an external differ. `git diff --shortstat --patch`
