@@ -32,6 +32,7 @@ use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Tests\Prompt\PromptFixture;
+use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\Tool;
@@ -45,6 +46,7 @@ use DateTimeImmutable;
  */
 final class RuntimeTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
     use HomeSandboxTrait;
 
     private ProviderInterface $provider;
@@ -2721,11 +2723,27 @@ final class RuntimeTest extends TestCase
      * BOTH SPELLINGS OF A GLOBAL CALL, AND ITS IMPORT ALIAS. This read
      * `T_STRING` only, and PHP 8 tokenises `\file_put_contents` as ONE
      * `T_NAME_FULLY_QUALIFIED` token, so every leading-backslash global call
-     * was invisible — this tree's dominant idiom, MEASURED at 21 sites in
-     * `src/`. Separately, `use function file_put_contents as persist;` renames
-     * the symbol at the call site, so the file's `use function` statements are
-     * read first and the alias resolved back
-     * ({@see importedFunctionAliases()}).
+     * was invisible — this tree's dominant idiom. MEASURED over `src/` on this
+     * tree, WITH ITS DOMAIN, because the figure that stood here carried none
+     * and was read as the whole population: **21** leading-backslash call
+     * sites whose name is on {@see TREE_MUTATING_PRIMITIVES}
+     * (`fwrite` 14, `mkdir` 3, `file_put_contents` 2, `unlink` 2), and **23**
+     * across all three rosters — the extra two are `\fopen`, a
+     * {@see CONDITIONAL_PRIMITIVES} entry. Neither number is the other's
+     * correction; they count different sets, and the sentence that gives one
+     * without saying which is §16.8 rule 1.
+     *
+     * AN IMPORT ALIAS ADDS A SPELLING AND NEVER REPLACES ONE. Both
+     * `use function file_put_contents as persist;` and `use SplFileObject as
+     * Handle;` rename a symbol at its use site, so the file's import
+     * statements are read first ({@see importedSymbolAliases()}) and BOTH
+     * spellings — the one written and the one imported — are tested against
+     * the rosters. It used to REPLACE the written name with the imported one,
+     * and that direction was a fail-open that SUBTRACTED: one
+     * `use … as <a-write-primitive>;` anywhere in the file deleted that
+     * primitive from the alphabet for the whole file. Pinned in
+     * {@see testAnAliasNeverSubtractsAPrimitiveFromTheScannersAlphabet()} and
+     * {@see testAClassImportAliasDoesNotHideAWriteConstruction()}.
      *
      * `T_NAME_QUALIFIED` IS DELIBERATELY NOT ACCEPTED: `Foo\copy(...)` is a
      * namespaced function, a different symbol from the global one, and
@@ -2752,7 +2770,11 @@ final class RuntimeTest extends TestCase
      * interpolated string in an argument; an ATTRIBUTE in an argument; a
      * comma-list, group and leading-backslash `use function`; `error_log`'s
      * message type in any radix but decimal; a `fopen` mode written with an
-     * escape sequence; and a spread argument.
+     * escape sequence; a spread argument; a `use function … as <primitive>;`
+     * written in a COMMENT, in a DOC-BLOCK or inside a STRING CONSTANT; a real
+     * `use function` import the CALL SITE ignores, either through a leading
+     * backslash or by sitting in a second `namespace` block of the same file;
+     * and a plain `use SplFileObject as Handle;` CLASS alias.
      *
      * THAT LIST IS THE ONLY PLACE THE HISTORY IS KEPT, and it carries no
      * cardinality — §16.8 rule 2, ship the generator not the count. It used to
@@ -2768,11 +2790,26 @@ final class RuntimeTest extends TestCase
      * THE LESSON IS NOT THAT THE NEXT ONE DOES NOT EXIST. A roster of function
      * NAMES cannot be complete, because the alphabet is a transcript of the
      * cases its authors already knew. What CAN be made complete is the
-     * DIRECTION the unknown case fails in: an argument list this scanner
-     * cannot read is now a write in every rule
-     * ({@see argumentsMeanAWrite()}), so the next unknown bracket spelling
-     * costs a false positive a human must dismiss rather than a silent pass.
-     * What is structurally out of reach here:
+     * DIRECTION the unknown case fails in, and this scanner now has TWO
+     * channels that answer that way rather than one:
+     *
+     *  - THE ARGUMENT WALK. An argument list this scanner cannot read is a
+     *    write in every rule ({@see argumentsMeanAWrite()}), so the next
+     *    unknown bracket spelling costs a false positive a human must dismiss
+     *    rather than a silent pass.
+     *  - THE ALIAS CHANNEL, which runs BEFORE that walk and which the walk's
+     *    `$complete` flag therefore cannot reach. NAMING ITS DOMAIN IS THE
+     *    POINT: "fail-closed" was claimed for the scanner while it held only
+     *    for the walk, and for one full round the alias map was a fail-open
+     *    channel that SUBTRACTED primitives from the alphabet — strictly worse
+     *    than omitting one, because it silently retired detections the scanner
+     *    already had. It is additive now, so an import misread — in the wrong
+     *    namespace scope, or one the call site's leading backslash ignores —
+     *    costs an extra spelling to test rather than a lost primitive.
+     *
+     * Both directions are OVER-classification, and a fail-closed claim that
+     * does not say WHICH CHANNEL it is about is the shape of the defect it is
+     * claiming to have fixed. What is structurally out of reach here:
      *
      *  - METHOD CALLS ON OBJECTS. `$zip->addFile()`, `$writer->save()`,
      *    `$fs->dumpFile()` — excluding `->` is what stops the scanner reporting
@@ -2803,6 +2840,16 @@ final class RuntimeTest extends TestCase
      * tree did not move. That reds and forces a human to say so; the dangerous
      * direction is the silent one.
      *
+     * THE STREAM IS THE SHARED SIGNIFICANT-TOKEN ONE
+     * ({@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait}),
+     * not a private strip. This walk reads `$tokens[$i - 1]` and
+     * `$tokens[$i + 1]`, and whitespace, a comment or a doc-block is legal in
+     * exactly those two positions; the trait's doc-block carries the argument
+     * for why that alphabet is ONE list and what a divergent private copy has
+     * already cost this tree. Three copies of the literal lived in this file
+     * alone before this. ONE REMAINS, in {@see callArguments()}, and it is
+     * named there rather than swept.
+     *
      * @return array<string, list<int>>
      */
     private static function writePrimitivesCalledIn(string $file): array
@@ -2819,6 +2866,21 @@ final class RuntimeTest extends TestCase
         // negative control below would have reported through the warning
         // channel rather than through this exception, which is a different
         // verdict wearing the same colour.
+        //
+        // AND THAT IS WHY THIS IS NOT `RefusesAnUnreadableSourceTrait`, which
+        // exists precisely to stop a second private copy of this arm and which
+        // this file otherwise ought to be using. MEASURED, swapping it in:
+        // `FAILURES! Tests: 129, Assertions: 488, Failures: 1, Warnings: 1` -
+        // the trait's `readOrFail()` has no is_file/is_readable pre-check, so
+        // the read warns before it asserts (the Warnings: 1), and it refuses
+        // with a PHPUnit AssertionFailedError rather than the
+        // `\RuntimeException('… could not read …')` that
+        // testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames() pins. The
+        // repair is to give the TRAIT the pre-check, which is a file outside
+        // this step's declared list; the alternative is to weaken an existing
+        // assertion to make a consolidation pass, which §1.10 forbids outright.
+        // Recorded here rather than done, on the precedent the trait's own
+        // doc-block sets for the three copies IT left in place.
         if (!is_file($file) || !is_readable($file)) {
             throw new \RuntimeException('write-primitive scan could not read ' . $file);
         }
@@ -2827,10 +2889,16 @@ final class RuntimeTest extends TestCase
             throw new \RuntimeException('write-primitive scan could not read ' . $file);
         }
 
-        $aliases = self::importedFunctionAliases($source);
-        $tokens = token_get_all($source);
+        // THE SIGNIFICANT-TOKEN STREAM, not the raw one, and shared rather
+        // than privately re-declared: every neighbour test below reads
+        // `$tokens[$i - 1]` / `$tokens[$i + 1]`, and whitespace, a comment or a
+        // doc-block is legal in exactly those two positions.
+        // {@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait}
+        // owns that alphabet and the argument for why it is one list.
+        $tokens = self::significantTokens($source);
+        $functionAliases = self::importedFunctionAliases($tokens);
+        $classAliases = self::importedClassAliases($tokens);
         $count = \count($tokens);
-        $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
         $found = [];
         $attributeDepth = 0;
         $line = 1;
@@ -2880,7 +2948,8 @@ final class RuntimeTest extends TestCase
             }
 
             $name = strtolower($token[1]);
-            if ($token[0] === T_NAME_FULLY_QUALIFIED) {
+            $qualified = $token[0] === T_NAME_FULLY_QUALIFIED;
+            if ($qualified) {
                 // The global symbol only when the token is exactly `\name`;
                 // `\Foo\copy` is a namespaced function, a different symbol.
                 if (substr_count($name, '\\') !== 1) {
@@ -2888,36 +2957,52 @@ final class RuntimeTest extends TestCase
                 }
                 $name = ltrim($name, '\\');
             }
-            $name = $aliases[$name] ?? $name;
 
-            $previous = null;
-            for ($j = $i - 1; $j >= 0; $j--) {
-                if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
-                    continue;
-                }
-                $previous = $tokens[$j];
-
-                break;
-            }
+            $previous = $i > 0 ? $tokens[$i - 1] : null;
             $afterNew = \is_array($previous) && $previous[0] === T_NEW;
 
-            $next = null;
-            for ($j = $i + 1; $j < $count; $j++) {
-                if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
-                    continue;
-                }
-                $next = $tokens[$j];
-                $nextIndex = $j;
-
-                break;
-            }
+            $next = $tokens[$i + 1] ?? null;
+            $nextIndex = $i + 1;
             if ($next !== '(') {
                 continue;
             }
 
+            // THE ALIAS CHANNEL ADDS A SPELLING AND NEVER REMOVES ONE, and
+            // that direction is the whole finding. This used to read
+            // `$name = $aliases[$name] ?? $name;` - a REWRITE - so any
+            // `use ... as <a-write-primitive>;` deleted that primitive from the
+            // alphabet for the whole file. MEASURED through this method against
+            // a real copy of `src/Tools/BuiltIn/Read.php`, every row `php -l`
+            // clean and every row RUN for real: an import aliasing anything to
+            // `file_put_contents` plus a leading-backslash `\file_put_contents`
+            // call left a 21-byte file written and the scan `[]`; the same
+            // import in one `namespace` block with the call in another block of
+            // the same file deleted the target and scanned `[]`. Fail-open by
+            // SUBTRACTION, which no fail-closed flag on the argument walk can
+            // reach - see the alphabet paragraph in this method's doc-block.
+            //
+            // A FULLY-QUALIFIED TOKEN IS NEVER ALIAS-RESOLVED, because a
+            // leading backslash IGNORES imports: PHP calls the global symbol,
+            // so the alias target is the wrong name to judge. That guard is a
+            // PRECISION guard, not a safety one - dropping it only adds a
+            // spelling - and it is pinned by the `\helper()` row of
+            // testAnAliasNeverSubtractsAPrimitiveFromTheScannersAlphabet().
+            // The `!== $name` clause beside it is neither: it drops an
+            // identity alias that would be tested twice, and deleting it is
+            // MEASURED equivalent. Named rather than left to look load-bearing.
+            $spellings = [$name];
+            $aliases = $afterNew ? $classAliases : $functionAliases;
+            if (!$qualified && isset($aliases[$name]) && $aliases[$name] !== $name) {
+                $spellings[] = $aliases[$name];
+            }
+
             if ($afterNew) {
-                if (\in_array($name, self::WRITE_CONSTRUCTIONS, true)) {
-                    $found[$name][] = $token[2];
+                foreach ($spellings as $spelling) {
+                    if (\in_array($spelling, self::WRITE_CONSTRUCTIONS, true)) {
+                        $found[$spelling][] = $token[2];
+
+                        break;
+                    }
                 }
 
                 continue;
@@ -2926,18 +3011,31 @@ final class RuntimeTest extends TestCase
                 continue;
             }
 
-            if (\in_array($name, self::TREE_MUTATING_PRIMITIVES, true) || \in_array($name, self::SUBPROCESS_PRIMITIVES, true)) {
-                $found[$name][] = $token[2];
+            $unconditional = null;
+            foreach ($spellings as $spelling) {
+                if (\in_array($spelling, self::TREE_MUTATING_PRIMITIVES, true) || \in_array($spelling, self::SUBPROCESS_PRIMITIVES, true)) {
+                    $unconditional = $spelling;
+
+                    break;
+                }
+            }
+            if ($unconditional !== null) {
+                $found[$unconditional][] = $token[2];
 
                 continue;
             }
-            $rule = self::CONDITIONAL_PRIMITIVES[$name] ?? null;
-            if ($rule === null) {
-                continue;
-            }
-            $parse = self::callArguments($tokens, $nextIndex);
-            if (self::argumentsMeanAWrite($rule, $parse['arguments'], $parse['complete'])) {
-                $found[$name][] = $token[2];
+
+            foreach ($spellings as $spelling) {
+                $rule = self::CONDITIONAL_PRIMITIVES[$spelling] ?? null;
+                if ($rule === null) {
+                    continue;
+                }
+                $parse = self::callArguments($tokens, $nextIndex);
+                if (self::argumentsMeanAWrite($rule, $parse['arguments'], $parse['complete'])) {
+                    $found[$spelling][] = $token[2];
+                }
+
+                break;
             }
         }
 
@@ -2988,34 +3086,200 @@ final class RuntimeTest extends TestCase
      *
      * @return array<string, string>
      */
-    private static function importedFunctionAliases(string $source): array
+    private static function importedFunctionAliases(array $tokens): array
     {
-        if (!preg_match_all('/\buse\s+function\s+([^;]+);/i', $source, $matches, PREG_SET_ORDER)) {
-            return [];
-        }
+        return self::importedSymbolAliases($tokens, true);
+    }
 
+    /**
+     * `use <Fqn> as <Alias>;` and `use <Fqn>;`, as `alias => short name`.
+     *
+     * THE CLASS-ALIAS TWIN OF {@see importedFunctionAliases()}, and it exists
+     * because {@see WRITE_CONSTRUCTIONS} keys on the lowercased token text of a
+     * `new` expression. MEASURED on PHP 8.3.6 through the shipped
+     * {@see writePrimitivesCalledIn()}, against a real copy of
+     * `src/Tools/BuiltIn/Read.php` - a tool on {@see readOnlyBuiltInToolNames()} -
+     * with `use SplFileObject as Handle;` added and `new Handle($p, 'w')`
+     * called: the scan came back `[]` and the 21-byte target file came back
+     * truncated. `php -l` clean, run for real. Exactly the shape of the
+     * function-alias defeat one keyword over, and the additive-spelling repair
+     * on the FUNCTION channel does not close it - a class alias is a different
+     * map.
+     *
+     * RESOLVED ONLY IN THE `new` BRANCH. A class import does not rename a
+     * function, so feeding these names to the function rules would be a
+     * widening with no defeat behind it.
+     *
+     * A TRAIT-USE INSIDE A CLASS BODY (`use SomeTrait;`) IS INDISTINGUISHABLE
+     * FROM AN IMPORT at this level and is deliberately not distinguished: it
+     * contributes `sometrait => sometrait`, an identity row the caller drops,
+     * and the only way it could matter is a trait literally named
+     * `SplFileObject`. The conflict-resolution block form (`use T { m as n; }`)
+     * ends the statement at its `{` - see {@see importedSymbolAliases()}.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens the
+     *                                                              significant-token stream
+     *
+     * @return array<string, string>
+     */
+    private static function importedClassAliases(array $tokens): array
+    {
+        return self::importedSymbolAliases($tokens, false);
+    }
+
+    /**
+     * The import map of one KIND, read off the TOKEN STREAM.
+     *
+     * A REGEX OVER RAW SOURCE IS WHAT THIS REPLACED, AND THE REGEX WAS A
+     * FAIL-OPEN CHANNEL. It matched `\buse\s+function\s+([^;]+);` anywhere in
+     * the file, so text of that shape in a COMMENT, in a DOC-BLOCK or inside a
+     * STRING CONSTANT entered the map. Because the caller then REWROTE the
+     * matched call-site name, one such line deleted a primitive from the
+     * scanner's alphabet for the whole file. MEASURED through the shipped
+     * {@see writePrimitivesCalledIn()} against a real copy of
+     * `src/Tools/BuiltIn/Read.php`, each row `php -l` clean and each row RUN:
+     *
+     *   `// use function Nope\writeit as file_put_contents;` + a real
+     *   `file_put_contents($p, 'x')`                        => [], file written
+     *   the same text inside a `/** … *\/` + `unlink($p)`   => [], file GONE
+     *   the same text inside a `const … = '…';` + `mkdir()` => [], dir created
+     *
+     * The old method's own doc-block claimed "a `use function` that appears
+     * inside a string or a comment contributes nothing", on the grounds that
+     * each item was shape-validated. Shape validation checks the shape of the
+     * CLAUSE, not whether the clause is code; the three rows above measured
+     * that sentence false. `token_get_all()` makes it true by construction - a
+     * whole comment is ONE token and a string literal is ONE token, so neither
+     * can contain a `T_USE`.
+     *
+     * TWO SPELLINGS THIS DOES NOT SCOPE, AND WHY THAT IS SAFE HERE. An import
+     * is scoped to its `namespace` block, and this walk reads the whole file;
+     * it also cannot see that a leading backslash at the CALL SITE ignores
+     * imports entirely. Both were live defeats while the caller SUBSTITUTED the
+     * alias target for the call-site name. The caller now ADDS a spelling and
+     * never removes one, and skips alias resolution for a fully-qualified
+     * token, so an import read in the wrong scope costs at most an extra
+     * spelling to test - the over-classifying direction - and never a lost
+     * primitive.
+     *
+     * EVERY SPELLING `use` ACCEPTS, and each was a separate defeat before it
+     * was handled: a comma LIST, the braced GROUP form, and a LEADING
+     * BACKSLASH. The group brace is told apart from a trait-use block by the
+     * token before it - `Ns\{` has a `T_NS_SEPARATOR` there and `use T {` has a
+     * name - and a closure's `use ( … )`, which imports VARIABLES rather than
+     * symbols, is told apart by the token after it.
+     *
+     * ONLY THE LAST SEGMENT IS KEPT, so an alias of a NAMESPACED symbol maps to
+     * that symbol's short name, which the roster then treats as the global one.
+     * Over-classification in the same direction the bare import spelling
+     * already is, and stated rather than left to be discovered.
+     *
+     * TWO OF THE GUARDS BELOW ARE MEASURED-EQUIVALENT TODAY, and saying so is
+     * the point (§16.8 rule 16 — an unfired guard and a dead one produce
+     * identical silence, so an undeclared one invites the next reader to trust
+     * a protection that is not being tested). Deleting the closure `use ( … )`
+     * arm, and deleting the `use const` arm, each leaves the whole file green:
+     * the item loop breaks on `(` and on a `T_CONST` token anyway, because
+     * neither is a name, an `as`, a separator or a bracket. They are kept as
+     * statements of intent and because the item loop's fall-through is an
+     * accident of its alphabet rather than a decision about `use`, but they
+     * are not pinned and must not be counted as though they were. Everything
+     * else here IS pinned:
+     * {@see testTheImportReaderSeparatesFunctionImportsClassImportsAndProse()}
+     * reds when the group-brace discriminator goes (`use T { m as n; }` then
+     * eats its own statement), when `T_NAME_QUALIFIED` is dropped from the
+     * item alphabet, and when the reader is reverted to a raw-source regex.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens    the
+     *                                                                 significant-token stream
+     * @param bool                                          $functions `use function …` when true,
+     *                                                                 plain `use …` when false
+     *
+     * @return array<string, string>
+     */
+    private static function importedSymbolAliases(array $tokens, bool $functions): array
+    {
         $aliases = [];
-        foreach ($matches as $match) {
-            $clause = $match[1];
-            if (preg_match('/^.*?\\\\?\{(.*)\}\s*$/s', $clause, $group) === 1) {
-                // `use function Ns\{a as b, c};` - the namespace prefix is
-                // discarded for the same reason the ungrouped namespaced form
-                // discards it: ONLY THE LAST SEGMENT IS KEPT, above.
-                $clause = $group[1];
+        $count = \count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_USE) {
+                continue;
             }
 
-            foreach (explode(',', $clause) as $item) {
-                if (preg_match(
-                    '/^\s*([\\\\A-Za-z_\x80-\xff][\\\\A-Za-z0-9_\x80-\xff]*)(?:\s+as\s+([A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*))?\s*$/i',
-                    $item,
-                    $parts,
-                ) !== 1) {
+            $head = $tokens[$i + 1] ?? null;
+            // A CLOSURE'S `use ( … )` imports VARIABLES, not symbols.
+            if ($head === '(') {
+                continue;
+            }
+            $isFunction = \is_array($head) && $head[0] === T_FUNCTION;
+            $isConst = \is_array($head) && $head[0] === T_CONST;
+            if ($isConst || $isFunction !== $functions) {
+                continue;
+            }
+
+            $name = null;
+            $alias = null;
+            $sawAs = false;
+            $previous = null;
+
+            for ($j = $i + ($isFunction ? 2 : 1); $j < $count; $j++) {
+                $item = $tokens[$j];
+
+                // `Ns\{a as b, c}` - the GROUP brace is the one preceded by the
+                // namespace separator. A trait-use block (`use T { m as n; }`)
+                // is not, and it ends the statement.
+                if ($item === '{' && \is_array($previous) && $previous[0] === T_NS_SEPARATOR) {
+                    $name = null;
+                    $alias = null;
+                    $sawAs = false;
+                    $previous = $item;
+
                     continue;
                 }
-                $segments = explode('\\', trim($parts[1], '\\'));
-                $real = strtolower((string) end($segments));
-                $alias = strtolower(($parts[2] ?? '') !== '' ? $parts[2] : $real);
-                $aliases[$alias] = $real;
+
+                if ($item === '{' || $item === '}' || $item === ',' || $item === ';') {
+                    if ($name !== null) {
+                        $segments = explode('\\', trim($name, '\\'));
+                        $short = strtolower((string) end($segments));
+                        $aliases[strtolower($alias ?? $short)] = $short;
+                    }
+                    $name = null;
+                    $alias = null;
+                    $sawAs = false;
+                    if ($item === ';' || $item === '{') {
+                        break;
+                    }
+                    $previous = $item;
+
+                    continue;
+                }
+
+                if (\is_array($item) && $item[0] === T_AS) {
+                    $sawAs = true;
+                    $previous = $item;
+
+                    continue;
+                }
+                if (\is_array($item) && $item[0] === T_NS_SEPARATOR) {
+                    $previous = $item;
+
+                    continue;
+                }
+                if (\is_array($item) && \in_array($item[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                    if ($sawAs) {
+                        $alias = $item[1];
+                    } else {
+                        $name = $item[1];
+                    }
+                    $previous = $item;
+
+                    continue;
+                }
+
+                // Anything else cannot be part of an import list.
+                break;
             }
         }
 
@@ -3080,6 +3344,20 @@ final class RuntimeTest extends TestCase
      * RUNNING OFF THE END OF THE TOKEN STREAM IS THE SAME VERDICT, and it was
      * previously indistinguishable from a clean return because both returned
      * the same bare list.
+     *
+     * THE LAST PRIVATE COPY OF THE INSIGNIFICANT-TOKEN ALPHABET IN THIS FILE
+     * IS THE ONE BELOW, and it is kept rather than folded into
+     * {@see \SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait}
+     * because this method is the only one here that is called with a RAW
+     * stream: {@see testTheArgumentWalkReportsWhetherItMetItsOwnClosingParenthesis()}
+     * hands it `token_get_all()` output directly, precisely so the mismatch
+     * branch can be reached by a hand-lexed row no valid PHP produces. Its
+     * other caller passes the trait's stripped stream, over which this filter
+     * is a no-op. Folding it in would mean either that fixture stops fitting
+     * or the trait grows an accessor for the alphabet — a change to a file
+     * outside this step's declared list. Recorded here rather than done, on
+     * the precedent the trait's own doc-block sets for the copies IT left in
+     * place.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      *
@@ -4185,6 +4463,270 @@ final class RuntimeTest extends TestCase
     }
 
     /**
+     * AN ALIAS ADDS A SPELLING AND NEVER REMOVES ONE.
+     *
+     * THE DEFECT THIS PINS IS A FAIL-OPEN THAT SUBTRACTS, which is worse than
+     * one that omits. The alias map used to be applied as a REWRITE
+     * (`$name = $aliases[$name] ?? $name;`) over a map scraped out of RAW
+     * SOURCE by regex, so any text of the shape
+     * `use function <anything> as <a-write-primitive>;` — in a COMMENT, in a
+     * DOC-BLOCK, inside a STRING CONSTANT, or in a `namespace` block the call
+     * is not in — deleted that primitive from the scanner's alphabet FOR THE
+     * WHOLE FILE. A one-line comment turned a real, executed
+     * `file_put_contents()` into `[]`.
+     *
+     * MEASURED, not reasoned. Every row below was reproduced through the
+     * shipped {@see writePrimitivesCalledIn()} by reflection against a real
+     * copy of `src/Tools/BuiltIn/Read.php` — a tool on
+     * {@see readOnlyBuiltInToolNames()} — each probe `php -l` clean and each
+     * probe RUN FOR REAL: the comment form left the file written; the
+     * doc-block form left the target GONE; the `const` string form left the
+     * directory created; the import-plus-leading-backslash form wrote a
+     * 21-byte file; and the two-namespace form deleted the target. All five
+     * scanned `[]`.
+     *
+     * TWO REPAIRS, AND EACH IS PINNED BY A DIFFERENT ROW. The resolution is
+     * ADDITIVE, which is what saves every row where the prose or the ignored
+     * import maps a REAL primitive to something else: `mkdir` stays `mkdir`
+     * whatever a comment says about it. And the map is read off the TOKEN
+     * STREAM ({@see importedSymbolAliases()}), which is what saves the OTHER
+     * direction — prose that maps something benign TO a primitive. Line 26's
+     * `measure()` is a real alias of `strlen`, and the doc-block on line 16
+     * also says `use function unlink as measure;`: a reader that scrapes raw
+     * source would report an `unlink()` this file never calls, additively and
+     * on a green suite. MEASURED — reverting only the reader to the old
+     * raw-source regex, with the additive resolution kept, reds on exactly
+     * that row and on nothing else.
+     *
+     * THE NEGATIVE CONTROLS ARE IN THE SAME MAP (§16.8 rule 18). Line 22 is a
+     * REAL alias of a REAL write and must still resolve, so a "fix" that
+     * simply stopped consulting the map reds here. Line 26 is a real alias of
+     * `strlen` and must stay absent, so a "fix" that reports every aliased
+     * call reds on the same assertion. Line 27 is the control for the
+     * `!$qualified` guard, which is a PRECISION guard and not a safety one now
+     * that resolution is additive: `\helper()` carries a leading backslash, so
+     * PHP ignores the `use function … unlink as helper;` import above it and
+     * calls a global `helper` — and a resolver that consulted the map anyway
+     * would report an `unlink()` this file never calls.
+     */
+    public function testAnAliasNeverSubtractsAPrimitiveFromTheScannersAlphabet(): void
+    {
+        $file = $this->makeTempRepo() . '/Aliased.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace P3S5AliasA {
+                use function P3S5AliasA\stash as file_put_contents;
+                use function P3S5AliasA\stash as unlink;
+                use function file_put_contents as persistReal;
+                use function strlen as measure;
+                use function P3S5AliasA\unlink as helper;
+
+                const PROSE = 'use function Nope\writeit as mkdir;';
+
+                // use function Nope\writeit as rmdir;
+
+                /** use function Nope\writeit as touch; use function unlink as measure; */
+                final class ProbeA
+                {
+                    public function run(string $p): void
+                    {
+                        \file_put_contents($p, 'x');
+                        persistReal($p, 'x');
+                        mkdir($p);
+                        rmdir($p);
+                        touch($p);
+                        measure($p);
+                        \helper($p);
+                    }
+                }
+            }
+
+            namespace P3S5AliasB {
+                final class ProbeB
+                {
+                    public function run(string $p): void
+                    {
+                        unlink($p);
+                    }
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            [
+                'file_put_contents' => [21, 22],
+                'mkdir' => [23],
+                'rmdir' => [24],
+                'touch' => [25],
+                'unlink' => [37],
+            ],
+            self::writePrimitivesCalledIn($file),
+            'an alias must ADD a spelling and never remove one. Lines 23-25 are disarmed by an '
+            . 'alias written in a const STRING, in a `//` COMMENT and in a DOC-BLOCK; line 21 is '
+            . 'disarmed by a real import a leading backslash makes PHP ignore; line 37 is '
+            . 'disarmed by a real import in another `namespace` block of the same file. Every '
+            . 'one of the five really moves the tree. Line 22 is a real alias of a real write '
+            . 'that must still resolve; line 26 is an alias of strlen that must stay absent; and '
+            . 'line 27 calls `\\helper()`, whose import a leading backslash makes PHP ignore, so '
+            . 'alias-resolving a FULLY-QUALIFIED token would report an `unlink` nothing calls. '
+            . 'Line 16\'s doc-block also aliases `measure` to `unlink`: a reader that scrapes raw '
+            . 'source rather than the token stream reports that call as an unlink.',
+        );
+    }
+
+    /**
+     * A CLASS IMPORT ALIAS DOES NOT DEFEAT {@see WRITE_CONSTRUCTIONS}.
+     *
+     * THE SAME DEFEAT ONE KEYWORD OVER. `new SplFileObject($p, 'w')` is a
+     * NAMED exception to the `new` exclusion, keyed on the lowercased token
+     * text — so an ordinary `use SplFileObject as Handle;` renamed it out of
+     * reach. MEASURED through the shipped scanner against a real copy of
+     * `src/Tools/BuiltIn/Read.php` with `new Handle($p, 'w')` spliced in:
+     * `[]`, on a `php -l`-clean probe that was RUN and left the 21-byte target
+     * truncated. The additive repair on the FUNCTION-alias channel does not
+     * close it — measured, still `[]` — because a class import is a different
+     * map ({@see importedClassAliases()}).
+     *
+     * BOTH POLARITIES IN THE ONE MAP. `P3S5NotAWriter` and `P3S5GroupedInfo`
+     * are aliases of `SplFileInfo`, which constructs nothing and writes
+     * nothing, so a repair that reports every aliased `new` reds on the same
+     * assertion as one that reports none. The GROUP form is here because it is
+     * the spelling the function channel was defeated by twice.
+     */
+    public function testAClassImportAliasDoesNotHideAWriteConstruction(): void
+    {
+        $file = $this->makeTempRepo() . '/Constructed.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            use SplFileObject as P3S5Handle;
+            use SplTempFileObject as P3S5Temp;
+            use SplFileInfo as P3S5NotAWriter;
+            use Some\Space\{SplFileObject as P3S5Grouped, SplFileInfo as P3S5GroupedInfo};
+
+            final class Constructed
+            {
+                public function run(string $p): void
+                {
+                    $a = new P3S5Handle($p, 'w');
+                    $b = new P3S5Temp();
+                    $c = new P3S5NotAWriter($p);
+                    $d = new P3S5Grouped($p, 'w');
+                    $e = new P3S5GroupedInfo($p);
+                    $f = new \SplFileObject($p, 'w');
+                    $g = new SplFileObject($p, 'w');
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            [
+                'splfileobject' => [14, 17, 19, 20],
+                'spltempfileobject' => [15],
+            ],
+            self::writePrimitivesCalledIn($file),
+            'a `use X as Y;` class alias renames a WRITE_CONSTRUCTIONS entry at the construction '
+            . 'site. Lines 14 and 17 construct an SplFileObject under an alias - one plain, one '
+            . 'from the braced group form - and both truncate the target. Lines 16 and 18 alias '
+            . 'SplFileInfo, which writes nothing, and must stay absent.',
+        );
+    }
+
+    /**
+     * THE IMPORT READER READS CODE, SEPARATES THE TWO KINDS, AND KEEPS
+     * NEITHER OF THE THINGS THAT ARE NOT IMPORTS.
+     *
+     * THE SCANNER-LEVEL TESTS ABOVE PIN THE CONSEQUENCE; THIS PINS THE
+     * INSTRUMENT, and the two are not the same unit (§16.8 rule 28). Every
+     * spelling below was a separate defeat or a separate near-miss: a comma
+     * LIST, the braced GROUP form and a LEADING BACKSLASH each defeated the
+     * regex this replaced, and the regex additionally read the three PROSE
+     * lines as imports — which is the fail-open channel
+     * {@see testAnAliasNeverSubtractsAPrimitiveFromTheScannersAlphabet()}
+     * measures end to end.
+     *
+     * THE THREE NON-IMPORT `use` SPELLINGS ARE THE POLARITY CONTROLS, because
+     * a reader that simply collected every `T_USE` would pass a test built
+     * only from real imports. A closure's `use ( … )` imports VARIABLES; a
+     * `use const` imports neither a function nor a class; and a trait-use
+     * CONFLICT BLOCK (`use SomeTrait { m as protected n; }`) uses the same
+     * `as` keyword for something that is not an import at all — its `{` must
+     * end the statement, while the group form's `Ns\{` must not.
+     */
+    public function testTheImportReaderSeparatesFunctionImportsClassImportsAndProse(): void
+    {
+        $source = <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            use function Alpha\one as fnPlain;
+            use function \Beta\two as fnSlash;
+            use function Gamma\{three as fnGrouped, four};
+            use function five as fnListedA, Delta\six as fnListedB;
+            use const Epsilon\SEVEN as CONST_SEVEN;
+            use Zeta\Eight as ClassEight;
+            use \Eta\Nine;
+            use Theta\{Ten as ClassTen, Eleven};
+
+            // use function Iota\twelve as fnCommented;
+
+            /** use Kappa\Thirteen as ClassDocBlocked; */
+            final class Probe
+            {
+                use SomeTrait { m as protected n; }
+
+                public const PROSE = 'use function Lambda\fourteen as fnStringed;';
+
+                public function run(int $x): callable
+                {
+                    return function () use ($x): int {
+                        return $x;
+                    };
+                }
+            }
+            PROBE;
+
+        $tokens = self::significantTokens($source);
+
+        $this->assertSame(
+            [
+                'function' => [
+                    'fnplain' => 'one',
+                    'fnslash' => 'two',
+                    'fngrouped' => 'three',
+                    'four' => 'four',
+                    'fnlisteda' => 'five',
+                    'fnlistedb' => 'six',
+                ],
+                'class' => [
+                    'classeight' => 'eight',
+                    'nine' => 'nine',
+                    'classten' => 'ten',
+                    'eleven' => 'eleven',
+                    'sometrait' => 'sometrait',
+                ],
+            ],
+            [
+                'function' => self::importedFunctionAliases($tokens),
+                'class' => self::importedClassAliases($tokens),
+            ],
+            'the import reader must read the token stream and not the prose. `fnCommented`, '
+            . '`ClassDocBlocked` and `fnStringed` are written in a comment, a doc-block and a '
+            . 'string constant and must contribute nothing; `CONST_SEVEN` is a const import and '
+            . 'belongs to neither map; the closure\'s `use ($x)` imports a variable; and the '
+            . 'trait-use block\'s `{` ends its statement while the group form\'s `Ns\\{` does not.',
+        );
+    }
+
+    /**
      * A TRAIT AND A PARENT CLASS ARE THE TOOL'S OWN CODE, and the scan follows
      * both, transitively.
      *
@@ -4336,14 +4878,13 @@ final class RuntimeTest extends TestCase
     private static function invocationsOf(string $method, array $roots): array
     {
         $base = dirname(__DIR__);
-        $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
         $hits = [];
         foreach (self::phpFilesUnder($roots) as $file) {
             $source = (string) file_get_contents($file);
             if (!str_contains($source, $method)) {
                 continue;
             }
-            $tokens = token_get_all($source);
+            $tokens = self::significantTokens($source);
             $count = \count($tokens);
             $attributeDepth = 0;
             for ($i = 0; $i < $count; $i++) {
@@ -4371,15 +4912,7 @@ final class RuntimeTest extends TestCase
                     continue;
                 }
 
-                $previous = null;
-                for ($j = $i - 1; $j >= 0; $j--) {
-                    if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
-                        continue;
-                    }
-                    $previous = $tokens[$j];
-
-                    break;
-                }
+                $previous = $i > 0 ? $tokens[$i - 1] : null;
                 // A DECLARATION IS NOT A CALL. Everything else - a member
                 // fetch, a static call, a bare call - is.
                 //
@@ -4389,29 +4922,13 @@ final class RuntimeTest extends TestCase
                 // stops `function &systemPrompt()` being counted as a call -
                 // MEASURED, it was.
                 if (self::isDeclarationAmpersand($previous)) {
-                    for ($j--; $j >= 0; $j--) {
-                        if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
-                            continue;
-                        }
-                        $previous = $tokens[$j];
-
-                        break;
-                    }
+                    $previous = $i > 1 ? $tokens[$i - 2] : null;
                 }
                 if (\is_array($previous) && \in_array($previous[0], [T_FUNCTION, T_NEW], true)) {
                     continue;
                 }
 
-                $next = null;
-                for ($j = $i + 1; $j < $count; $j++) {
-                    if (\is_array($tokens[$j]) && \in_array($tokens[$j][0], $skip, true)) {
-                        continue;
-                    }
-                    $next = $tokens[$j];
-
-                    break;
-                }
-                if ($next !== '(') {
+                if (($tokens[$i + 1] ?? null) !== '(') {
                     continue;
                 }
 
@@ -4480,7 +4997,6 @@ final class RuntimeTest extends TestCase
     private static function declarationsOf(string $method, array $roots): array
     {
         $base = dirname(__DIR__);
-        $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
         $hits = [];
 
         foreach (self::phpFilesUnder($roots) as $file) {
@@ -4488,7 +5004,7 @@ final class RuntimeTest extends TestCase
             if (!str_contains($source, $method)) {
                 continue;
             }
-            $tokens = token_get_all($source);
+            $tokens = self::significantTokens($source);
             $count = \count($tokens);
             for ($i = 0; $i < $count; $i++) {
                 if (!\is_array($tokens[$i]) || $tokens[$i][0] !== T_FUNCTION) {
@@ -4496,9 +5012,6 @@ final class RuntimeTest extends TestCase
                 }
                 for ($j = $i + 1; $j < $count; $j++) {
                     $next = $tokens[$j];
-                    if (\is_array($next) && \in_array($next[0], $skip, true)) {
-                        continue;
-                    }
                     // `function &foo()` - a by-reference return is still a
                     // declaration of `foo`.
                     if (self::isDeclarationAmpersand($next)) {

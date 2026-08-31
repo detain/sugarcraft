@@ -394,6 +394,22 @@ final class Runtime
      * another file; and a further run of them since. That history — not
      * modesty — is why the verb here is NARROWED.
      *
+     * ONE OF THEM WAS A DIFFERENT KIND AND IS WORTH NAMING AS A KIND rather
+     * than as another row. Every defeat above is an OMISSION: a spelling the
+     * scanner never learned. The import-alias channel was a SUBTRACTION — the
+     * alias map replaced the name written at the call site with the name it
+     * was imported under, so one `use … as <a-write-primitive>;` anywhere in
+     * the file, INCLUDING IN A COMMENT, A DOC-BLOCK OR A STRING CONSTANT,
+     * deleted that primitive from the scanner's alphabet for the whole file.
+     * A fail-open that retires detections the scanner already had is strictly
+     * worse than one that never had them, and it is invisible in exactly the
+     * way this paragraph exists to warn about: the suite stays green and the
+     * verdict gets shorter. It is closed — the map is read off the token
+     * stream and applied additively — but the LESSON generalises past the
+     * instance: "this scanner fails closed" was true of its ARGUMENT WALK and
+     * was being read as a claim about the scanner, and a channel that runs
+     * before the walk inherits none of that flag's protection.
+     *
      * THE ENUMERATION IS NOT REPEATED HERE, for the same reason the roster is
      * not, two paragraphs up. This sentence used to open "IT HAS BEEN DEFEATED
      * THREE TIMES" and name three; the test's own doc-block named ten of the
