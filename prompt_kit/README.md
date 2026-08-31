@@ -67,6 +67,13 @@ into, and shortening one re-opens whichever trap the deleted paragraph closed.
 - **Findings files are append-only history**, like `prompt_worklog.md`. Correct one with a dated
   `CORRECTED:` note rather than a rewrite; a quietly rewritten findings file is indistinguishable
   from a fabricated one.
-- **`CONTEXT.md` is generated.** If the upstream memory store changes, regenerate rather than
-  hand-editing, and keep the generator's assertions — they are what stopped a silently-empty file
+- **`CONTEXT.md` is generated, and the generator now ships beside it** —
+  `tools/context-gen.py`, with the prose header split out as `tools/context-header.md`. Regenerate
+  rather than hand-editing:
+  ```sh
+  python3 prompt_kit/tools/context-gen.py            # rewrite CONTEXT.md from the memory store
+  python3 prompt_kit/tools/context-gen.py --check    # exit 1 if it is out of date; writes nothing
+  ```
+  It defaults to `~/.claude/projects/-home-sites-sugarcraft/memory`; `--memory-dir` points it
+  elsewhere. Keep its assertions — they are what stopped a silently-empty file
   from shipping.

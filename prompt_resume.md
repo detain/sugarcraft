@@ -352,6 +352,19 @@ Specifically, these do not apply here and should not be attempted:
   worktree with a continuation brief).
 - OpenCode's `task` vs `delegate` spawn routing. Use the normal Agent tool.
 
+**And do not POLL a running agent.** When a spawned agent is working, produce **no output and take
+no action** until the harness delivers its completion notification — it always does, with the
+agent's full report. Do not emit a stream of short marker messages (`a1`, `a2`, `a3`… or any
+`<letter><incrementing id>` sequence) every second or few seconds, do not re-run `ListAgents` on a
+timer, do not read the agent's partial-output file to check on it, and do not schedule a short
+wake-up to look again. The user has reported this filler **three separate times** across sessions;
+it is pure waste, it buries real output, and because it looks like progress it disguises an
+orchestrator that is doing nothing. Say once what you are waiting for and what you will do when it
+lands, then stop. **This is the same substitution as the rest of §6a**: the OpenCode-era liveness
+machinery in `prompt_plan.md` §1.8.6 and §19 exists because that harness had no completion
+notification. Keep every rule about *what must be true* — a blank return means the agent DIED, is
+never `NO FINDINGS`, and is never a finished step — and drop the polling.
+
 Everything §1.8 says about *what must be true* still holds without change: a blank, truncated, or
 aborted response means the agent **died** and is never a result; a reviewer that returns nothing has
 **not** returned `NO FINDINGS`; the orchestrator runs its own tests and records its own numbers;
