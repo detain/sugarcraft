@@ -857,14 +857,26 @@ final class PromptStabilityTest extends TestCase
      * The prefix every degraded `<env>` field shares.
      *
      * {@see \SugarCraft\Crush\Context\EnvironmentBlock} renders three of
-     * them — `unavailable (git exited N)` from `gitField()` and
-     * `gitDiffSection()`, `unavailable (proc_open is disabled on this build)`
-     * and `unavailable (shell_exec is disabled on this build)`. Scanning the
-     * shared prefix covers all three; scanning the git-exit spelling alone,
-     * which an earlier revision did, covered one under a heading claiming
-     * every field. The spelling is pinned by a control that renders it from
-     * production rather than typing it, so a rename over there reds the
-     * control instead of silently blinding the scan.
+     * them — `unavailable (git exited N)` from `gitField()`:907 and
+     * `gitDiffSection()`:969, `NO_PROCESS_REASON`:327, and an inline
+     * `'unavailable (shell_exec is disabled on this build)'` at :855. Scanning
+     * the shared prefix covers all three at RENDER time; scanning the git-exit
+     * spelling alone, which an earlier revision did, covered one under a
+     * heading claiming every field.
+     *
+     * WHAT IS PINNED AGAINST A RENAME, AND WHAT IS NOT — an earlier revision of
+     * this paragraph claimed all three and had measured one. Two are pinned:
+     * the git-exit family, by control A, which renders it; and
+     * `NO_PROCESS_REASON`, by an assertion on its VALUE. The THIRD, the
+     * `shell_exec` literal at :855, is pinned by NOTHING here. MEASURED,
+     * renaming it and its `proc_open` sibling together to `no-subprocess (…)`
+     * left this file green. It is reachable only on a build with `shell_exec`
+     * in `disable_functions`, which this suite cannot produce, and it is an
+     * inline literal where its sibling is a constant — under a doc-block on
+     * that very constant arguing the two must say the same thing. Giving it a
+     * constant is a production change, so it is escalated rather than made
+     * here; until then this scan sees it at render time and nothing sees a
+     * rename of it.
      */
     private const GIT_UNAVAILABLE_MARKER = 'unavailable (';
 
@@ -1159,11 +1171,26 @@ final class PromptStabilityTest extends TestCase
         // they are asserted to be the same list. Two hand-maintained constants,
         // not one derived from the other: this catches an edit to one of them,
         // and nothing about the assembler.
-        $this->assertSame(
-            self::STABLE_LAYER_MARKERS,
-            array_keys(self::STABLE_LAYER_WIDTHS),
-            'STABLE_LAYER_MARKERS and STABLE_LAYER_WIDTHS have drifted apart',
-        );
+        //
+        // ALL FOUR of the keyed rosters are checked, not one of them. An
+        // earlier revision guarded only STABLE_LAYER_WIDTHS. MEASURED: adding a
+        // `<bogus-layer>` key to the other three left the file at
+        // `OK (14 tests, 368 assertions)`, and DELETING a key from
+        // STABLE_LAYER_OWNERS turned the owner-naming failure message into a
+        // PHP `Undefined array key` warning — the message this file's whole F5
+        // repair rests on, rendered as `written by `.
+        foreach ([
+            'STABLE_LAYER_WIDTHS' => self::STABLE_LAYER_WIDTHS,
+            'STABLE_LAYER_FIXTURE_WIDTHS' => self::STABLE_LAYER_FIXTURE_WIDTHS,
+            'STABLE_LAYER_FIXTURE_FRAGMENTS' => self::STABLE_LAYER_FIXTURE_FRAGMENTS,
+            'STABLE_LAYER_OWNERS' => self::STABLE_LAYER_OWNERS,
+        ] as $name => $roster) {
+            $this->assertSame(
+                self::STABLE_LAYER_MARKERS,
+                array_keys($roster),
+                $name . ' and STABLE_LAYER_MARKERS have drifted apart: ' . json_encode(array_keys($roster)),
+            );
+        }
         $this->assertSame(
             self::STABLE_LAYERS_BYTES,
             array_sum(self::STABLE_LAYER_WIDTHS),
@@ -1253,6 +1280,11 @@ final class PromptStabilityTest extends TestCase
                     . 'assertion above stayed green, so this file did not cause it',
             );
 
+            // FORCED by the two assertions above — their conjunction IS this
+            // one — and labelled rather than left reading like a third
+            // independent check, the same way the region total below is. Kept
+            // because it is the per-layer figure a reader looks up in
+            // {@see STABLE_LAYER_WIDTHS}, stated in the units that table uses.
             $this->assertSame(
                 self::STABLE_LAYER_WIDTHS[$marker],
                 $measured,
@@ -1784,9 +1816,22 @@ final class PromptStabilityTest extends TestCase
         //    output, so a production rename reds HERE, on the control, which is
         //    the message that says the scanner needs updating.
 
+        //    THE CONTROLS ARE LIVENESS CHECKS AND NOTHING ELSE — `> 0`, not an
+        //    exact count — and an earlier revision of this block got that wrong
+        //    in a way that broke the very ordering the paragraph above argues
+        //    for. It asserted `21` escape bytes and `4` placeholder fields, and
+        //    both of those are FUNCTIONS OF THE HAZARDS UNDER TEST. MEASURED:
+        //    under `GIT_DIFF_OPTS=-u10` the coloured control renders 22 escapes,
+        //    not 21, so the control red FIRST and assertion 7 below — the one
+        //    that names `GIT_DIFF_OPTS` — was never reached; under
+        //    `log.date=true` it renders 19, and the placeholder absence
+        //    assertion was never reached either. The exact counts are still
+        //    asserted, at the END of this test where they cannot mask anything,
+        //    with messages that name their own causes.
+
         //    A. Every git subprocess failing: a directory that HAS a `.git` (so
         //       EnvironmentBlock's `file_exists` gate opens) but is not a
-        //       repository. MEASURED: four `unavailable (git exited N)` fields.
+        //       repository.
         $brokenRepo = $this->tempDir();
         $this->assertTrue(mkdir($brokenRepo . '/.git', 0o700, true), 'could not build the broken-repo control');
         $degraded = (new EnvironmentBlock(
@@ -1796,13 +1841,26 @@ final class PromptStabilityTest extends TestCase
             self::FIXTURE_PLATFORM,
         ))->render();
 
-        $this->assertSame(
-            4,
+        $this->assertGreaterThan(
+            0,
             substr_count($degraded, self::GIT_UNAVAILABLE_MARKER),
             'the placeholder scanner is looking for ' . json_encode(self::GIT_UNAVAILABLE_MARKER)
-                . ' and EnvironmentBlock no longer renders it for a git that cannot run. The scanner is dead: '
-                . 'update GIT_UNAVAILABLE_MARKER to whatever EnvironmentBlock::gitField() and gitDiffSection() '
+                . ' and EnvironmentBlock renders nothing containing it for a git that cannot run at all. The '
+                . 'scanner is dead: update GIT_UNAVAILABLE_MARKER to whatever gitField() and gitDiffSection() '
                 . 'emit now, or the absence assertion below passes on every input',
+        );
+
+        //    A2. The SECOND spelling that shares the marker, pinned by its VALUE
+        //        rather than by a control, because it is reachable only on a
+        //        build with `proc_open` in `disable_functions` and this suite
+        //        cannot produce one. Reflection is used to READ it; the
+        //        assertion is on what it says, not on whether it exists (§1.11).
+        $noProcess = new \ReflectionClassConstant(EnvironmentBlock::class, 'NO_PROCESS_REASON');
+        $this->assertStringStartsWith(
+            self::GIT_UNAVAILABLE_MARKER,
+            (string) $noProcess->getValue(),
+            'EnvironmentBlock::NO_PROCESS_REASON no longer starts with '
+                . json_encode(self::GIT_UNAVAILABLE_MARKER) . ', so the absence scan below cannot see it',
         );
 
         //    B. A binary-rendered working diff, from a real `-diff` attribute.
@@ -1811,10 +1869,11 @@ final class PromptStabilityTest extends TestCase
             file_put_contents($binary->root() . '/.git/info/attributes', "* -diff\n"),
             'could not build the binary-diff control',
         );
+        $binaryPrompt = $binary->systemPrompt();
 
-        $this->assertSame(
-            1,
-            substr_count($binary->systemPrompt(), 'Binary files '),
+        $this->assertGreaterThan(
+            0,
+            substr_count($binaryPrompt, 'Binary files '),
             'the binary-diff scanner found nothing in a fixture whose attributes say `* -diff`, so either git '
                 . 'stopped honouring $GIT_DIR/info/attributes or the rendering changed. The scanner is dead',
         );
@@ -1823,14 +1882,14 @@ final class PromptStabilityTest extends TestCase
         $coloured = $this->dirtyRepoFixtureWithEveryStableLayer();
         $this->assertSame(0, self::git($coloured->root(), ['config', 'color.diff', 'always']));
         $this->assertSame(0, self::git($coloured->root(), ['config', 'color.ui', 'always']));
+        $colouredPrompt = $coloured->systemPrompt();
 
-        $this->assertSame(
-            21,
-            substr_count($coloured->systemPrompt(), "\x1b"),
-            'the escape-byte scanner did not find the 21 escapes MEASURED for a fixture with '
-                . '`color.diff=always`. Either the scanner is dead, or EnvironmentBlock started passing '
-                . '`--no-color` - which would be the fix for worklog escalation 2 and makes this control, not '
-                . 'the absence assertion, the thing to rewrite',
+        $this->assertGreaterThan(
+            0,
+            substr_count($colouredPrompt, "\x1b"),
+            'the escape-byte scanner found no escapes in a fixture with `color.diff=always`. Either the scanner '
+                . 'is dead, or EnvironmentBlock started passing `--no-color` - which would be the fix for '
+                . 'worklog escalation 2 and makes this control, not the absence assertion, the thing to rewrite',
         );
 
         // 1. No field degraded to a placeholder. The scan is on the PREFIX
@@ -1916,6 +1975,39 @@ final class PromptStabilityTest extends TestCase
             1,
             preg_match('/\nindex [0-9a-f]{7}\.\.[0-9a-f]{7} 100644\n/', $prompt),
             'the diff index line is not two 7-hex blobs, so core.abbrev is not 7 for this subprocess',
+        );
+
+        // 8. THE EXACT CONTROL COUNTS, LAST. These are the figures the worklog
+        //    escalations quote and they are worth pinning, but they are pinned
+        //    HERE rather than beside the controls because neither is a fact
+        //    about a scanner: one is the number of git FIELDS `<env>` renders
+        //    and the other is a function of the WIDTH of the diff git colours.
+        //    At the end, nothing they red can hide an assertion above them.
+        //
+        //    They are also this file's only equality pins on a figure GIT
+        //    produces rather than this repository, and {@see MIN_STABLE_PREFIX_BYTES}
+        //    argues the opposite policy for host-dependent figures. The
+        //    exception is argued rather than taken quietly: both are read off a
+        //    fixture whose git config is fully pinned; both moved in this
+        //    session only when a hazard moved them; and a red on a different git
+        //    version is cheap, because it names this line and this line says so.
+        $this->assertSame(
+            4,
+            substr_count($degraded, self::GIT_UNAVAILABLE_MARKER),
+            'the broken-repo control renders ' . substr_count($degraded, self::GIT_UNAVAILABLE_MARKER)
+                . ' degraded fields, not 4. That is the COUNT OF GIT FIELDS in <env> - branch, status, log, '
+                . 'staged diff, unstaged diff, of which four degrade to the placeholder and the branch read '
+                . 'renders EMPTY instead (worklog escalation 3) - and not a fact about the scanner. A step that '
+                . 'adds or removes a git field re-measures this',
+        );
+        $this->assertSame(
+            21,
+            substr_count($colouredPrompt, "\x1b"),
+            'the coloured control renders ' . substr_count($colouredPrompt, "\x1b") . ' escape bytes, not the '
+                . '21 MEASURED for worklog escalation 2. Three things move this and none of them is the '
+                . 'scanner: the diff CONTEXT WIDTH (MEASURED, GIT_DIFF_OPTS=-u10 makes it 22), a field that '
+                . 'stopped rendering (MEASURED, log.date=true makes it 19), and a different git version '
+                . 'colouring differently',
         );
     }
 
@@ -2136,6 +2228,21 @@ final class PromptStabilityTest extends TestCase
         //                                   repository, which is exactly the
         //                                   "a claim never travels without its
         //                                   domain" failure.)
+        //                                   AND THERE IS A THIRD SITE, which
+        //                                   the sentence above framed as if
+        //                                   there were two: `tests/RuntimeTest.php`
+        //                                   builds its own scratch repository
+        //                                   with a fourteen-row config roster
+        //                                   identical to the ELEVEN-hazard set
+        //                                   this file carried before this step —
+        //                                   no `log.date`, no `format.pretty`,
+        //                                   no `.git/info/attributes`. MEASURED
+        //                                   with a hostile `core.attributesFile`
+        //                                   saying `*.php -diff`: this file is
+        //                                   green and `RuntimeTest` reds at
+        //                                   `RuntimeTest.php:1918`. That file is
+        //                                   outside this step's declared list,
+        //                                   so it is REPORTED, not edited.
         //   `log.decorate=full`             prompt 4,844 -> 4,872 B, prefix -> 4,698
         //   `i18n.logOutputEncoding=UTF-16` prompt 4,844 -> 4,821 B, prefix -> 4,647.
         //                                   `--oneline` does NOT override it, and the
@@ -2294,8 +2401,17 @@ final class PromptStabilityTest extends TestCase
         // returned false and reddened FOUR tests at once with a message about
         // the attributes pin rather than about the host. That is the same
         // wrong-domain failure this whole knob list exists to record.
+        // The return is CHECKED, and saying why is the point: an unchecked
+        // mkdir() on a `.git` this process cannot write emits a PHP warning
+        // naming mkdir and then reds the assertion below with "the gitattributes
+        // family is unpinned" — a message about the pin rather than about the
+        // host, which is the exact defect the paragraph above narrates.
         if (!is_dir($root . '/.git/info')) {
-            mkdir($root . '/.git/info', 0o700, true);
+            $this->assertTrue(
+                mkdir($root . '/.git/info', 0o700, true),
+                'could not create ' . $root . '/.git/info on the scratch repository - the fixture repository is '
+                    . 'not writable, which is a fact about this host and not about the attributes pin below',
+            );
         }
 
         $this->assertNotFalse(
