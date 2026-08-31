@@ -39,10 +39,32 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * TWO CHANNELS, BOTH STRUCTURAL, AND THEIR PRECISION IS MEASURED RATHER THAN
  * ASSERTED.
  *
- *  - CHANNEL A: the file uses the shared walker trait
- *    {@see \SugarCraft\Crush\Tests\Support\TestFileWalkTrait}, whose
- *    `everyTestFile()` walks the whole of `tests/`. Sound by construction, since
- *    the trait IS the walk.
+ *  - CHANNEL A: the file names a `tests/` HELPER that itself carries a
+ *    root-anchored walk. Sound by construction, since the helper IS the walk.
+ *    THE HELPER SET IS DERIVED, not named: {@see walkingHelperNames()} runs every
+ *    non-`*Test.php` file under `tests/` through the same
+ *    {@see classifyWalkSites()} that grades the tests, and keeps the declared
+ *    class/trait names of those whose walk resolves to a source root.
+ *    WHAT THIS SAID UNTIL NOW: channel A was one literal name,
+ *    `str_ends_with($token, 'TestFileWalkTrait')`. WHAT IS TRUE: that is a
+ *    hand-written name inside a file whose whole subject is that a hand-written
+ *    name inherits its own omissions, and it fails OPEN - a test that walks the
+ *    tree only through some other helper is missed by channel A AND cannot land
+ *    in the residue bucket, because it has no walker call site of its own to be
+ *    unaccounted for. HOW MEASURED: driving every non-`*Test.php` file under
+ *    `tests/` through the shipped classifier finds TWO helpers with a
+ *    root-anchored walk - `Support/TestFileWalkTrait.php` (over `tests/`) and
+ *    `Tools/BuiltInToolCorpus.php` (over `src/`) - and the second was invisible
+ *    to the literal. MEASURED effect on this tree: the derived roster goes from
+ *    65 to 67, gaining `Providers/ToolSchemaEncodingTest.php` and
+ *    `Tools/BuiltInToolTest.php`, and three more files change only the REASON
+ *    they were already members. I PREDICTED THREE NEW MEMBERS AND GOT TWO, and
+ *    the third is worth the sentence: `Context/RepoMapBlockTest.php` came off a
+ *    `/usr/bin/grep -rln BuiltInToolCorpus` and names it only inside a
+ *    `{@see}`, and only as the DIFFERENT class `BuiltInToolCorpusTest`. So the
+ *    prediction was made by exactly the grep this method exists to replace, and
+ *    the token matcher rejecting it is the mechanism working. Pinned by
+ *    {@see testTheHelperSetChannelAKeysOnIsDerivedFromTheTreeItself()}.
  *  - CHANNEL B: the file constructs a directory walker whose ROOT resolves to
  *    the package root. Resolution is a small same-file dataflow: an anchor
  *    (`dirname(__DIR__…)`, or `__DIR__` followed by a `/..` segment) written
@@ -100,9 +122,18 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * {@see ROOT_ANCHOR} does not match. Those produce NO site, so the residue is
  * empty and {@see derivation()} exits at its root-anchor gate in silence.
  * MEASURED by a reviewer driving {@see classifyWalkSites()} against nine
- * synthesised guards: EIGHT were skipped silently and only the declared
- * parameter-taint gap reported. So the fail-open is real, and it is in the
- * alphabet rather than in the bucket logic.
+ * synthesised guards, which is how the fail-open was found: it is in the
+ * alphabet rather than in the bucket logic. THAT REVIEWER'S TALLY WAS EIGHT
+ * SILENT AND ONE REPORTED, AND IT IS OFF BY ONE. Re-measured by shipping the
+ * same nine shapes as an executable table in
+ * {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()}: SIX are
+ * silent, TWO are reported, and ONE now resolves to the package root because
+ * closing it cost one alternative in {@see ROOT_ANCHOR}. The shape the tally
+ * mis-filed is the root computed by reflection - `glob()` IS in the alphabet
+ * there, so the site is seen and the ROOT is what cannot be resolved, which is
+ * precisely the residue bucket doing its job. Before that one door was closed
+ * the split was seven silent and two reported. The direction of the finding
+ * stands either way; the cardinality is the table's, not the paragraph's.
  *
  * WHY IT IS PINNED RATHER THAN CLOSED - a decision, with the measurement behind
  * it. The gap is LATENT on this tree: `dirname(__FILE__` appears in 0 files, a
@@ -369,6 +400,9 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     private static ?array $derivation = null;
 
+    /** @var array<string, string>|null */
+    private static ?array $helpers = null;
+
     /**
      * CHANNEL A, AND THIS FILE'S OWN MEMBERSHIP.
      *
@@ -584,10 +618,17 @@ final class TreeWideGuardRosterTest extends TestCase
      * WHY THIS TEST EXISTS. The class doc-block used to claim that "the accepted
      * direction for anything unreadable is a report, not a pass". A reviewer
      * drove the shipped classifier against nine synthesised new guards and
-     * measured EIGHT of them skipped in SILENCE - not reported - because a shape
+     * measured most of them skipped in SILENCE - not reported - because a shape
      * this alphabet cannot see as a walk produces no site at all, so the residue
      * is empty and nothing reds. The claim was false in the fail-open direction,
      * which is the only direction that matters here.
+     *
+     * THAT REVIEWER SAID EIGHT OF THE NINE WERE SILENT, AND THE TABLE BELOW SAYS
+     * SEVEN WERE. The disagreement is one row: the root computed by reflection
+     * is REPORTED, because `glob()` is in the alphabet and it is the ROOT that
+     * cannot be resolved. This test is the reason that is now a fact rather than
+     * a recollection - it drives the shapes rather than describing them, so the
+     * figure below is whatever the classifier actually does.
      *
      * WHAT THIS TEST DOES ABOUT IT. It pins the bucket each shape ACTUALLY lands
      * in, including the ones that land nowhere. So the gap is declared, is
@@ -596,15 +637,16 @@ final class TreeWideGuardRosterTest extends TestCase
      * because closing one changes the roster and the plan's census set with it.
      *
      * `dirname(__FILE__)` IS IN THE TABLE AS A CLOSED DOOR. It was one of the
-     * eight and it now resolves to the package root, because it cost one
-     * alternative in {@see ROOT_ANCHOR} and MEASURED 0 live uses, so closing it
-     * could not change any verdict on this tree. The other six stay open
+     * seven silent rows and it now resolves to the package root, because it cost
+     * one alternative in {@see ROOT_ANCHOR} and MEASURED 0 live uses, so closing
+     * it could not change any verdict on this tree. The other six stay open
      * deliberately; the class doc-block carries the measurement that rejected a
      * subprocess channel.
      *
-     * BOTH POLARITIES, THROUGH THE SAME CLASSIFIER (section 16.8 rule 18): two
-     * rows must REPORT and six must not, and a classifier that answered the same
-     * way for every input would fail one half or the other.
+     * BOTH POLARITIES, THROUGH THE SAME CLASSIFIER (section 16.8 rule 18): of the
+     * nine rows two must REPORT, six must be SILENT and one must RESOLVE, and a
+     * classifier that answered the same way for every input would fail two of
+     * those three assertions.
      */
     public function testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre(): void
     {
@@ -720,6 +762,115 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
+     * CHANNEL A'S ALPHABET IS DERIVED FROM THE TREE, AND ON TOKENS RATHER THAN
+     * TEXT.
+     *
+     * WHY THIS EXISTS. Channel A used to be one literal name inside a file whose
+     * whole subject is that a hand-written name inherits its own omissions - the
+     * defect one method over. {@see walkingHelperNames()} replaces the literal,
+     * and this pins the three properties that make the replacement worth having
+     * rather than merely different.
+     *
+     * (1) IT FINDS MORE THAN THE LITERAL DID. At least two distinct helpers must
+     *     be carrying roster members. Rule 19: one helper carrying eleven members
+     *     is one SHAPE, and a derivation that had silently collapsed back to the
+     *     single trait would satisfy every other assertion in this file.
+     * (2) BOTH POLARITIES THROUGH THE SAME MATCHER (rule 18). A helper that walks
+     *     must be in the alphabet; a `tests/` helper that walks nothing must not.
+     *     `Support/TokenFunctionRanges.php` is the known negative and it is a real
+     *     file, not a synthetic one: it reads token streams and opens no
+     *     directory.
+     * (3) THE STRING TRAP IS CLOSED, and it is not hypothetical - it is the
+     *     reason this matcher reads tokens. THIS FILE would match a text search
+     *     for `BuiltInToolCorpus`, purely because
+     *     {@see HAND_MAINTAINED_CENSUS_SET} holds the literal
+     *     `'Tools/BuiltInToolCorpusTest.php'`, and matching text would put every
+     *     file that merely NAMES a roster entry into the roster. Asserted in both
+     *     directions against synthesised sources, so the assertion cannot be
+     *     satisfied by a matcher that answers `null` for everything.
+     */
+    public function testTheHelperSetChannelAKeysOnIsDerivedFromTheTreeItself(): void
+    {
+        $helpers = self::walkingHelperNames();
+
+        // (2) The positive half: the two helpers this tree actually has. Named,
+        // because a derivation that found some OTHER pair would be answering a
+        // different question and should say so out loud.
+        $this->assertArrayHasKey(
+            'testfilewalktrait',
+            $helpers,
+            'the shared whole-tests/ walker is no longer derived as a walking helper, so channel A '
+                . 'has stopped seeing the mechanism this whole file is built on',
+        );
+        $this->assertArrayHasKey(
+            'builtintoolcorpus',
+            $helpers,
+            'the src/ tool corpus is no longer derived as a walking helper. It walks src/ through a '
+                . 'RecursiveDirectoryIterator, so either that walk was rewritten - in which case say '
+                . 'so here - or the classifier narrowed.',
+        );
+
+        // (2) The negative half, through the same derivation: a tests/ helper
+        // that reads token streams and opens no directory must NOT be an
+        // alphabet entry. Without this, `walkingHelperNames()` returning every
+        // helper would pass the two assertions above.
+        $this->assertArrayNotHasKey(
+            'tokenfunctionranges',
+            $helpers,
+            'a tests/ helper that performs no directory walk has been promoted into channel A\'s '
+                . 'alphabet, which would make every file that names it a roster member on no evidence',
+        );
+
+        // (1) At least two DISTINCT helpers carry members. Derived from `why`,
+        // with no file named.
+        $carrying = [];
+        foreach (self::derivation()['why'] as $sites) {
+            if (\count($sites) === 1 && str_starts_with($sites[0], 'HELPER:')) {
+                $carrying[substr($sites[0], \strlen('HELPER:'))] = true;
+            }
+        }
+        $this->assertGreaterThan(
+            1,
+            \count($carrying),
+            'only one walking helper is carrying roster members (' . implode(', ', array_keys($carrying))
+                . '), so channel A has collapsed back to the single hardcoded trait it replaced. '
+                . 'Rule 19: that is one shape, and one shape cannot show a narrowing.',
+        );
+
+        // (3) The string trap, both ways, against the real matcher.
+        $inAString = "<?php\nnamespace X;\nclass P { private const R = ['Tools/BuiltInToolCorpusTest.php']; }\n";
+        $inADocBlock = "<?php\nnamespace X;\n/** {@see \\A\\B\\BuiltInToolCorpus} */\nclass P {}\n";
+        $asAUse = "<?php\nnamespace X;\nuse SugarCraft\\Crush\\Tests\\Tools\\BuiltInToolCorpus;\nclass P { function go() { BuiltInToolCorpus::instances(); } }\n";
+
+        $this->assertNull(
+            self::walkingHelperUsedIn($inAString),
+            'a source that names a helper only inside a string literal is being read as a consumer '
+                . 'of it. This file is the file that would break: its own roster constants hold '
+                . 'those names as strings.',
+        );
+        $this->assertNull(
+            self::walkingHelperUsedIn($inADocBlock),
+            'a source that names a helper only in a doc-block is being read as a consumer of it - '
+                . 'the matcher is reading comments',
+        );
+        $this->assertSame(
+            'builtintoolcorpus',
+            self::walkingHelperUsedIn($asAUse),
+            'a source that imports and calls a walking helper is not detected, so channel A is '
+                . 'blind in the one direction it exists for',
+        );
+
+        // And the exact-segment rule: a longer name that merely ENDS with a
+        // helper's name is a different class and must not answer for it.
+        $lookalike = "<?php\nnamespace X;\nclass P { function go() { \\X\\MyBuiltInToolCorpus::instances(); } }\n";
+        $this->assertNull(
+            self::walkingHelperUsedIn($lookalike),
+            'a class whose name merely ends with a helper\'s name is answering for that helper, so '
+                . 'the matcher is testing a suffix rather than the last namespace segment',
+        );
+    }
+
+    /**
      * A SHRINK IN EITHER HALF OF THE WALKER ALPHABET IS DETECTED.
      *
      * WHY THIS EXISTS, and it is a real hole a reviewer found in this file's own
@@ -741,7 +892,7 @@ final class TreeWideGuardRosterTest extends TestCase
         $classOnly = [];
 
         foreach (self::derivation()['why'] as $member => $sites) {
-            if ($sites === ['TRAIT'] || $sites === ['DECLARED']) {
+            if (\count($sites) === 1 && ($sites[0] === 'DECLARED' || str_starts_with($sites[0], 'HELPER:'))) {
                 continue;
             }
             $viaFunction = false;
@@ -791,7 +942,10 @@ final class TreeWideGuardRosterTest extends TestCase
      * without pinning a cardinality anywhere - section 16.8 rule 2.
      *
      * `why` maps each member to the walker sites that qualified it, or to the
-     * single entry `TRAIT` for a channel-A member. It is what lets
+     * single entry `HELPER:<name>` for a channel-A member - NAMING the helper
+     * rather than just the channel, so
+     * {@see testTheHelperSetChannelAKeysOnIsDerivedFromTheTreeItself()} can ask
+     * whether more than one helper is carrying members. It is what lets
      * {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
      * ask whether both halves of the alphabet are still carrying members, which
      * a nine-member known-positive list cannot see.
@@ -835,9 +989,10 @@ final class TreeWideGuardRosterTest extends TestCase
                 $walkerFiles++;
             }
 
-            if (self::usesTheSharedWalker($source)) {
+            $helper = self::walkingHelperUsedIn($source);
+            if ($helper !== null) {
                 $roster[] = $relative;
-                $why[$relative] ??= ['TRAIT'];
+                $why[$relative] ??= ['HELPER:' . $helper];
 
                 continue;
             }
@@ -887,14 +1042,28 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
-     * Does this source use the shared whole-`tests/` walker?
+     * Which `tests/` walking helper, if any, does this source name?
      *
-     * ON THE TOKEN STREAM AND NOT ON A GREP, because a grep cannot tell a
-     * `use` of the trait from a doc-block that names it - and this file's own
-     * doc-blocks name it four times.
+     * ON THE TOKEN STREAM AND NOT ON A GREP, and the token filter is doing two
+     * different jobs. A grep cannot tell a `use` of a helper from a doc-block
+     * that names it - and this file's own doc-blocks name the trait several
+     * times. Nor can it tell a use from a STRING: `/usr/bin/grep -rln
+     * BuiltInToolCorpus tests/` reports THIS file, and the only reason is that
+     * {@see HAND_MAINTAINED_CENSUS_SET} holds the literal
+     * `'Tools/BuiltInToolCorpusTest.php'`. Accepting only NAME tokens excludes
+     * `T_CONSTANT_ENCAPSED_STRING` by construction, so every roster constant in
+     * this file stops being a reference to itself. Both directions are pinned by
+     * {@see testTheHelperSetChannelAKeysOnIsDerivedFromTheTreeItself()}.
+     *
+     * THE LAST SEGMENT IS MATCHED EXACTLY, not by suffix: a suffix test would let
+     * a class named `MyBuiltInToolCorpus` answer for `BuiltInToolCorpus`, and the
+     * imported and short spellings of one helper already differ only by
+     * namespace.
      */
-    private static function usesTheSharedWalker(string $source): bool
+    private static function walkingHelperUsedIn(string $source): ?string
     {
+        $helpers = self::walkingHelperNames();
+
         foreach (token_get_all($source) as $token) {
             if (!\is_array($token) || \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
                 continue;
@@ -902,12 +1071,88 @@ final class TreeWideGuardRosterTest extends TestCase
             if (!\in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true)) {
                 continue;
             }
-            if (str_ends_with(ltrim($token[1], '\\'), 'TestFileWalkTrait')) {
-                return true;
+            $segments = explode('\\', $token[1]);
+            $last = strtolower((string) end($segments));
+            if (isset($helpers[$last])) {
+                return $last;
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /**
+     * The `tests/` helpers that carry a root-anchored walk, by declared type
+     * name, lower-cased. Computed once.
+     *
+     * THIS IS CHANNEL A'S ALPHABET AND IT IS DERIVED BY THE SAME CLASSIFIER THAT
+     * GRADES THE TESTS, which is the whole point: a helper added tomorrow enters
+     * channel A without anybody editing this file, and a helper that stops
+     * walking leaves it. Only `$sites['root']` counts - a helper whose walk this
+     * resolver cannot place is NOT promoted to an alphabet entry, because that
+     * would make every file naming it a roster member on a guess.
+     *
+     * SELF-EXCLUSION IS BY CONSTRUCTION, not by a name check: only
+     * non-`*Test.php` files are considered, so no test file can nominate itself
+     * or its neighbours as a helper.
+     *
+     * @return array<string, string> lower-cased name => the file that declared it
+     */
+    private static function walkingHelperNames(): array
+    {
+        if (self::$helpers !== null) {
+            return self::$helpers;
+        }
+
+        $helpers = [];
+        foreach (self::everyTestFile() as $relative => $absolute) {
+            $relative = str_replace('\\', '/', $relative);
+            if (str_ends_with($relative, 'Test.php')) {
+                continue;
+            }
+            $source = (string) file_get_contents($absolute);
+            if (self::classifyWalkSites($source)['root'] === []) {
+                continue;
+            }
+            foreach (self::declaredTypeNames($source) as $name) {
+                $helpers[strtolower($name)] ??= $relative;
+            }
+        }
+        ksort($helpers);
+
+        return self::$helpers = $helpers;
+    }
+
+    /**
+     * The class/trait/interface names DECLARED in one source.
+     *
+     * `Foo::class` IS EXCLUDED - `T_CLASS` is the same token there, and taking
+     * the token after it would nominate whatever followed the expression. An
+     * anonymous `new class` is excluded by the same test, since the token after
+     * it is `(` or `{` rather than a name.
+     *
+     * @return list<string>
+     */
+    private static function declaredTypeNames(string $source): array
+    {
+        $tokens = self::significant($source);
+        $names = [];
+
+        foreach ($tokens as $i => $token) {
+            if (!\is_array($token) || !\in_array($token[0], [T_CLASS, T_TRAIT, T_INTERFACE], true)) {
+                continue;
+            }
+            $previous = $tokens[$i - 1] ?? null;
+            if (\is_array($previous) && $previous[0] === T_DOUBLE_COLON) {
+                continue;
+            }
+            $next = $tokens[$i + 1] ?? null;
+            if (\is_array($next) && $next[0] === T_STRING) {
+                $names[] = $next[1];
+            }
+        }
+
+        return $names;
     }
 
     /**
