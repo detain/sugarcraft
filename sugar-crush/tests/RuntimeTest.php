@@ -2357,6 +2357,60 @@ final class RuntimeTest extends TestCase
             $unclassified,
             'a Tool implementor is classified by NEITHER the write rule nor the read-only list - decide which, in this commit',
         );
+
+        // THE THIRD ROSTER, DERIVED RATHER THAN DESCRIBED. `Runtime.php`'s
+        // census names `PermissionGate::isReadOnlyTool()` as the nearest
+        // neighbour of our read-only list and states that the two DISAGREE BY
+        // EXACTLY THREE NAMES. That was prose, hand-checked once, in the
+        // paragraph whose own subject is §16.8 rule 15 - and this method
+        // already parses that file. Both sides are derived now.
+        $this->assertSame(
+            1,
+            preg_match(
+                '/function isReadOnlyTool\(ToolCall \$\w+\): bool\s*\{\s*return in_array\(\$\w+->name, \[([^\]]*)\], true\)/',
+                $source,
+                $readOnlyMatch,
+            ),
+            'PermissionGate::isReadOnlyTool() no longer has the shape this census reads',
+        );
+        preg_match_all("/'([^']+)'/", $readOnlyMatch[1], $gateReadOnly);
+
+        $this->assertNotEmpty(
+            $gateReadOnly[1],
+            'the read-only extraction found no names - the instrument is dead, not the roster empty',
+        );
+
+        $ours = self::readOnlyBuiltInToolNames();
+        $theirs = $gateReadOnly[1];
+        $onlyOurs = array_values(array_diff($ours, $theirs));
+        $onlyTheirs = array_values(array_diff($theirs, $ours));
+        sort($onlyOurs);
+
+        // THE DIVERGENCE IS DELIBERATE AND MUST NOT BE RECONCILED. The gate's
+        // own doc-block says so in terms - "A DECISION, NOT A CENSUS OF
+        // `src/Tools/BuiltIn/`" - because each of these three reaches
+        // something outside the process, so leaving them to Ask costs a prompt
+        // while listing them would spend a judgement that class cannot make.
+        // "Did the working tree move" and "may this call be denied without
+        // asking" are different questions and the answers differ here.
+        $this->assertSame(
+            ['Skill', 'WebSearch', 'doctor'],
+            $onlyOurs,
+            'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
+            . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
+            . 'census paragraph in src/Runtime.php, not to reconcile the two rosters.',
+        );
+
+        // AND THE RELATIONSHIP IS CONTAINMENT, not overlap: everything the
+        // gate calls read-only, this classifier calls read-only too. A name
+        // the gate has and we do not would mean a tool the permission layer
+        // waves through while the engine re-arms the diff after it - a
+        // disagreement in the direction nobody has argued for.
+        $this->assertSame(
+            [],
+            $onlyTheirs,
+            'PermissionGate::isReadOnlyTool() names a tool this classifier does not treat as read-only',
+        );
     }
 
 
@@ -2445,14 +2499,48 @@ final class RuntimeTest extends TestCase
             'the config path still resolves outside the sandbox',
         );
         $this->assertNotSame($realHome, $home, 'the sandbox HOME must not be the real one');
+        $this->assertFalse(
+            str_starts_with((string) $realHome, $home),
+            'the sandbox must not be an ANCESTOR of the real home either - a redirect that still '
+            . 'resolves into the developer\'s tree is not a sandbox',
+        );
+
+        // AND THE TWO ENGINE-LOOP TESTS ACTUALLY INSTALL IT. Without this the
+        // pin is deletable in silence: MEASURED, removing
+        // `pinDispatchConfigToASandboxHome()` from both of them leaves the
+        // whole file `OK`, because they are insensitive to the config today -
+        // which is the whole reason the pin is precautionary rather than
+        // load-bearing. A precaution nothing asserts is a comment.
+        foreach ([
+            'testTheEngineLoopSuppressesTheDiffAfterAReadOnlyStepAndRestoresItAfterAWrite',
+            'testTwoConsecutiveNoWriteStepsBothAssembleASuppressedPrompt',
+        ] as $method) {
+            $reflected = new \ReflectionMethod(self::class, $method);
+            $body = implode('', \array_slice(
+                file((string) $reflected->getFileName()),
+                $reflected->getStartLine(),
+                $reflected->getEndLine() - $reflected->getStartLine(),
+            ));
+
+            $this->assertStringContainsString(
+                'pinDispatchConfigToASandboxHome()',
+                $body,
+                $method . '() drives EngineBackend::complete(), which reads the developer\'s real '
+                . '~/.sugar-crush - it must install the sandbox first',
+            );
+        }
 
         // AND THE RESTORE WORKS, because a sandbox that never comes down
-        // leaks into every test that runs after it in this process.
+        // leaks into every test that runs after it in this process. Asserted
+        // by VALUE on the path, not by `assertNotSame` on the merged config:
+        // that form passes for any value including `[]`, so on a machine with
+        // no ~/.sugar-crush/config.json it asserted nothing at all.
         $this->restoreHomeSandbox();
+
         $this->assertSame($realHome, getenv('HOME'));
-        $this->assertNotSame(
-            ['marker' => self::SANDBOX_CONFIG_MARKER],
-            Bootstrap::readUserConfig(),
+        $this->assertSame(
+            $realHome . '/.sugar-crush/config.json',
+            Bootstrap::userConfigPath(),
             'the sandbox did not come down - later tests are still reading the fixture',
         );
     }
@@ -2468,15 +2556,16 @@ final class RuntimeTest extends TestCase
      * to force - and the claim each entry makes is then checked by
      * {@see testEveryToolOnTheReadOnlyListCallsNoWritePrimitiveInItsOwnSource()}.
      *
-     * DELIBERATELY NOT `PermissionGate::isReadOnlyTool()`'s list, which holds
-     * FIVE (`src/Permissions/PermissionGate.php:667`) and is missing
-     * `WebSearch`, `Skill` and `doctor`. That gate's own doc-block at `:646`
+     * DELIBERATELY NOT `PermissionGate::isReadOnlyTool()`'s list, which is
+     * missing `WebSearch`, `Skill` and `doctor`. That gate's own doc-block
      * says the divergence is "A DECISION, NOT A CENSUS" and gives the reason:
      * those three each reach something outside this process, so leaving them
      * to Ask costs a prompt while listing them would spend a judgement that
      * class cannot make. "Did the working tree move" and "may this call be
-     * denied without asking" are different questions and the answers differ on
-     * three tools, so the two lists must NOT be reconciled.
+     * denied without asking" are different questions and the answers differ,
+     * so the two lists must NOT be reconciled — a relationship
+     * {@see testTheWriteToolRosterDoesNotDriftFromThePermissionGate()} now
+     * derives from BOTH sources rather than restating.
      *
      * @return list<string>
      */
@@ -2486,35 +2575,97 @@ final class RuntimeTest extends TestCase
     }
 
     /**
-     * Functions that MUTATE THE TREE. A tool claiming to be read-only must
-     * call none of them.
+     * Functions that MUTATE THE TREE unconditionally — whatever their
+     * arguments, a call is a write.
      *
      * THREE GROUPS: writing bytes through a path or a handle, moving or
      * removing a path, and changing a path's metadata or minting a new one.
+     * The compression writers are here because a reviewer defeated the verdict
+     * with `gzopen` + `gzwrite` while the roster named only the plain ones.
      *
-     * `vfprintf` IS ON THE LIST BECAUSE ITS ABSENCE FALSIFIED THE SENTENCE
-     * BELOW. The `fopen` paragraph claimed "nothing can be written through a
-     * handle without one of" the handle writers named here — and a reviewer
-     * defeated the whole verdict with `fopen($p,'w')` + `vfprintf($h,…)`:
-     * `OK (117 tests, 419 assertions)`, fully green, with a write-capable tool
-     * on the read-only roster. `socket_write` and `stream_socket_sendto` were
-     * added in the same pass rather than waiting to be found the same way.
-     *
-     * `fopen` ITSELF IS ABSENT AND ITS ABSENCE IS THE DESIGN, not an
-     * oversight: it is write-capable only for some modes, and
-     * `src/Tools/BuiltIn/Read.php:213` legitimately opens `'rb'`. Classifying
-     * it would need literal-argument mode analysis and would red on correct
-     * code. What makes that safe is the handle-writer group above — a handle
-     * opened for writing is useless without one of them.
+     * THE ARGUMENT-DEPENDENT ONES ARE NOT HERE. `fopen`, the image writers and
+     * `error_log` write or do not write depending on an argument, and putting
+     * them on this list would red on correct code — `src/Tools/BuiltIn/Read.php`
+     * opens `'rb'` and `src/Tools/BuiltIn/Doctor.php` calls `imagepng($image)`
+     * with no path at all, both correctly read-only. They live in
+     * {@see CONDITIONAL_PRIMITIVES}, which reads the argument.
      *
      * @var list<string>
      */
     private const TREE_MUTATING_PRIMITIVES = [
         'file_put_contents', 'fwrite', 'fputs', 'fputcsv', 'fprintf', 'vfprintf',
         'stream_copy_to_stream', 'socket_write', 'stream_socket_sendto',
+        'gzwrite', 'gzputs', 'bzwrite',
         'unlink', 'rmdir', 'mkdir', 'rename', 'copy', 'touch', 'ftruncate', 'symlink', 'link',
         'chmod', 'chown', 'chgrp', 'move_uploaded_file', 'tempnam', 'tmpfile',
     ];
+
+    /**
+     * Functions whose write-ness is decided by an ARGUMENT, mapped to the rule
+     * that reads it.
+     *
+     * EVERY ONE OF THESE WAS A GREEN DEFEAT OF THE VERDICT, demonstrated by a
+     * reviewer against a fully green `OK (118 tests, 427 assertions)`:
+     *
+     *  - `mode` — `fopen($p, 'w')` TRUNCATES THE TARGET TO ZERO BYTES AT OPEN
+     *    TIME. The roster's earlier doc-block justified omitting `fopen` with
+     *    "a handle opened for writing is useless without one of" the handle
+     *    writers, and that sentence was simply false: `$h = fopen($p,'w');
+     *    fclose($h);` destroys a file with no writer anywhere. Measured on a
+     *    21-byte file: `after=0`. `gzopen`/`bzopen` take a mode in the same
+     *    position.
+     *  - `target` — `imagepng($im, $path)` writes a file; `imagepng($im)` writes
+     *    the output buffer, which is exactly what `Doctor` does. The argument
+     *    is the whole difference, and a roster entry could only get one of the
+     *    two right.
+     *  - `errorlog` — `error_log($msg, 3, $path)` appends to a file. Message
+     *    types 0, 1, 2 and 4 do not.
+     *
+     * AN UNREADABLE ARGUMENT IS REPORTED, NEVER PASSED (§16.8 rule 32). A mode
+     * or a target that is not a literal cannot be classified here, and the
+     * classifier says so by counting it as a write: a verdict a harness cannot
+     * compute must be a discard or a failure, and "pass" is the direction that
+     * silently retires a finding.
+     *
+     * @var array<string, string> function => rule
+     */
+    private const CONDITIONAL_PRIMITIVES = [
+        'fopen' => 'mode',
+        'gzopen' => 'mode',
+        'bzopen' => 'mode',
+        'imagepng' => 'target',
+        'imagejpeg' => 'target',
+        'imagegif' => 'target',
+        'imagewebp' => 'target',
+        'imagebmp' => 'target',
+        'imagewbmp' => 'target',
+        'imagexbm' => 'target',
+        'imagegd' => 'target',
+        'imagegd2' => 'target',
+        'error_log' => 'errorlog',
+    ];
+
+    /**
+     * Classes whose CONSTRUCTION counts as a write.
+     *
+     * `new` IS OTHERWISE EXCLUDED, and this is the deliberate exception. A
+     * reviewer wrote `$f = new \SplFileObject($p, 'w'); $f->fwrite('x');` and
+     * the verdict stayed green twice over: `new` suppressed the class name and
+     * `->` suppressed the method. Both exclusions are right in general — a
+     * method on some other object is that object's business — so the repair is
+     * a NAMED exception rather than a widening.
+     *
+     * UNCONDITIONAL, unlike {@see CONDITIONAL_PRIMITIVES}, even though
+     * `SplFileObject`'s default mode is `'r'`. The object exposes `fwrite()`,
+     * `ftruncate()` and `fputcsv()` and this scanner cannot follow a method
+     * call on it, so constructing one is where the decision has to be made.
+     * That over-classifies a read-only tool that constructs one to READ —
+     * accepted, and the safe direction: it reds and a human says why.
+     * MEASURED: no built-in tool constructs either class today.
+     *
+     * @var list<string>
+     */
+    private const WRITE_CONSTRUCTIONS = ['splfileobject', 'spltempfileobject'];
 
     /**
      * Functions that SPAWN A PROCESS — which is NOT the same claim, and
@@ -2525,9 +2676,9 @@ final class RuntimeTest extends TestCase
      * {@see Runtime::WRITE_CAPABLE_TOOL_NAMES}. Then the scan was widened to a
      * tool's traits and parents (see {@see sourceFilesOf()}) and MEASURED:
      * `Grep`, which is correctly read-only, reaches `proc_open()` at
-     * `src/Tools/Concerns/CapturesProcessOutput.php:82` through a trait it
-     * shares with `Bash`. A guard reddening on correct code is where the next
-     * real offender gets waved through, and rule 33 says that when the code is
+     * `src/Tools/Concerns/CapturesProcessOutput.php` through a trait it shares
+     * with `Bash`. A guard reddening on correct code is where the next real
+     * offender gets waved through, and rule 33 says that when the code is
      * right the CLASSIFIER is the defect.
      *
      * AND IT IS: spawning is a capability, not a write. Whether it moves the
@@ -2549,89 +2700,114 @@ final class RuntimeTest extends TestCase
     ];
 
     /**
-     * Every {@see TREE_MUTATING_PRIMITIVES} or {@see SUBPROCESS_PRIMITIVES}
-     * member CALLED in $file, mapped to the lines it is called on.
+     * Every write primitive CALLED in $file, mapped to the lines it is called
+     * on.
      *
      * `token_get_all()` AND NOT A REGEX, because a regex cannot tell an
      * offender from a description of one (§16.8 rule 38) and this tree ships
      * the counterexample: `src/Tools/BuiltIn/Write.php` calls `mkdir()` on one
      * line and mentions it in comments on two others — MEASURED,
      * `/usr/bin/grep -c mkdir src/Tools/BuiltIn/Write.php` is 3 and exactly
-     * one of the three is a call. This reports the call alone
-     * ({@see testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames()} pins
-     * that on a synthetic fixture rather than on those line numbers, which
-     * move).
+     * one of the three is a call.
      *
      * A NAME COUNTS ONLY AS A CALL. The token must be followed by `(` and must
-     * NOT be preceded by `->`, `?->`, `::`, `function` or `new`, so a method
-     * named `copy()`, `new Link(...)`, and `$this->rename(...)` are all
-     * excluded - a method on some other object is that object's business, and
-     * classifying it here would red on correct code.
+     * NOT be preceded by `->`, `?->`, `::`, `function` or `new` — so a method
+     * named `copy()`, a `Rename::class` constant, a `Link $l` type hint and
+     * `$this->rename(...)` are all excluded. The `(` requirement is doing more
+     * work than it looks: MEASURED, deleting it makes `Copy`/`Link`/`Rename`/
+     * `Touch` used as a TYPE HINT or in `::class` into four false positives.
+     * The one exception to the `new` rule is {@see WRITE_CONSTRUCTIONS}.
      *
-     * BOTH SPELLINGS OF A GLOBAL CALL, and the second one is a CORRECTION.
-     * This read `T_STRING` only, and PHP 8 tokenises `\file_put_contents` as
-     * ONE `T_NAME_FULLY_QUALIFIED` token - so every leading-backslash global
-     * call was invisible. That is not a hypothetical spelling: it is this
-     * tree's dominant idiom, MEASURED at 21+ sites including
-     * `src/Cli/NonInteractive.php` (`\fwrite` x7),
-     * `src/Sessions/BackgroundSessionRunner.php` (`@\file_put_contents`,
-     * `@\unlink`), `src/Agents/TaskList.php` (`\mkdir`) and
-     * `src/Hooks/BuiltIn/AuditHook.php` (`@\file_put_contents`). A reviewer
-     * defeated the whole verdict by adding ONE backslash to the probe tool's
-     * write call: `OK (116 tests, 413 assertions)`, fully green.
-     * {@see testTheWritePrimitiveScannerFindsTheLeadingBackslashSpellingToo()}
-     * is the known-positive over real tree files that keeps it closed.
+     * BOTH SPELLINGS OF A GLOBAL CALL, AND ITS IMPORT ALIAS. This read
+     * `T_STRING` only, and PHP 8 tokenises `\file_put_contents` as ONE
+     * `T_NAME_FULLY_QUALIFIED` token, so every leading-backslash global call
+     * was invisible — this tree's dominant idiom, MEASURED at 21 sites in
+     * `src/`. Separately, `use function file_put_contents as persist;` renames
+     * the symbol at the call site, so the file's `use function` statements are
+     * read first and the alias resolved back
+     * ({@see importedFunctionAliases()}).
      *
      * `T_NAME_QUALIFIED` IS DELIBERATELY NOT ACCEPTED: `Foo\copy(...)` is a
      * namespaced function, a different symbol from the global one, and
-     * counting it would red on correct code. THE IMPORT SPELLING OF THE SAME
-     * SYMBOL IS NOT EXCLUDED — MEASURED, `use function Foo\unlink;` followed by
-     * a bare `unlink("a")` IS reported, because at the call site the token is
-     * indistinguishable from the global one. That is over-classification, the
-     * safe direction, and it is stated here rather than presented as a rule
-     * the scanner keeps and does not.
+     * counting it would red on correct code. The BARE import spelling
+     * (`use function Foo\unlink;` then `unlink("a")`) IS counted, because at
+     * the call site the token is indistinguishable from the global one — that
+     * is over-classification, the safe direction.
      *
      * ATTRIBUTES ARE SKIPPED. `#[Copy(1)]` tokenises as `T_ATTRIBUTE` then a
      * `T_STRING` followed by `(`, which is indistinguishable from a call at
      * the token level and was reported as one. An attribute NAME is a class
      * reference, never a function call, so the whole `#[...]` group is stepped
-     * over by bracket depth - structural, not textual (§16.8 rule 34).
+     * over by bracket depth — structural, not textual (§16.8 rule 34).
      *
      * THE BACKTICK OPERATOR IS `shell_exec` WITH NO NAME TOKEN, so it is
      * matched on the `` ` `` character and reported under that name.
      *
-     * WHAT THIS ALPHABET CANNOT EXPRESS (§16.8 rule 31), stated rather than
-     * discovered, and pinned as test rows in
-     * {@see testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames()} so the
-     * blind spots are written down rather than implied:
+     * WHAT THIS ALPHABET CANNOT EXPRESS (§16.8 rule 31). THIS SCANNER HAS BEEN
+     * DEFEATED BY FOUR SUCCESSIVE REVIEWERS, TEN TIMES, EACH ON A FULLY GREEN
+     * SUITE — a leading backslash, `vfprintf`, a trait in another file,
+     * `fopen('w')`, `error_log(…,3,…)`, `gzwrite`, `imagepng($im,$p)`,
+     * `new SplFileObject($p,'w')`, `fopen($p,'x')`, and an import alias. All
+     * ten are closed above. The lesson is NOT that the eleventh does not
+     * exist: a roster of function NAMES cannot be complete, because the
+     * alphabet is a transcript of the cases its authors already knew. What is
+     * structurally out of reach here:
      *
+     *  - METHOD CALLS ON OBJECTS. `$zip->addFile()`, `$writer->save()`,
+     *    `$fs->dumpFile()` — excluding `->` is what stops the scanner reporting
+     *    every unrelated method in the tree, and it is also what hides any
+     *    write behind an object this scanner did not construct-check.
      *  - INDIRECTION. `$f = 'unlink'; $f($p);`, `array_map('unlink', …)`,
-     *    `call_user_func('file_put_contents', …)` and `eval()` all reach a
-     *    primitive through a STRING, and a string is where this scanner
-     *    deliberately does not look. Closing that means constant folding,
-     *    which is a different instrument.
-     *  - COLLABORATORS THAT ARE NOT TRAITS OR ANCESTORS. A call into an
-     *    unrelated class is that class's business. Traits and parent classes
-     *    ARE followed — they are the tool's own code — see
-     *    {@see sourceFilesOf()}; a helper reached by `new Foo()` or by
-     *    injection is not, and `Lsp` writes by proxy exactly that way.
-     *  - ARGV. A subprocess that runs `sed -i` writes the tree and a
-     *    subprocess that runs `grep` does not; this scanner sees neither
-     *    argument. That is why {@see SUBPROCESS_PRIMITIVES} is inventoried
-     *    rather than judged.
-     *  - OVER-CLASSIFICATION IS ACCEPTED AND IS THE SAFE DIRECTION. A
-     *    read-only tool that writes a log line with `fwrite(STDERR, …)` is
-     *    reported here, and the working tree did not move. That reds the
-     *    verdict and forces a human to say so in the roster, which is the
-     *    failure mode this whole pair of tests exists to produce; the
-     *    dangerous direction is the silent one.
+     *    `call_user_func(...)`, `eval()` — a primitive reached through a
+     *    STRING, and a string is where this scanner deliberately does not
+     *    look. Closing it means constant folding, a different instrument.
+     *  - COLLABORATORS THAT ARE NOT TRAITS OR ANCESTORS. Traits and parents
+     *    ARE followed ({@see sourceFilesOf()}) because they are the tool's own
+     *    code; a helper reached by `new` or by injection is not, and `Lsp`
+     *    writes by proxy exactly that way.
+     *  - ARGV. A subprocess running `sed -i` writes and one running `grep`
+     *    does not; this scanner sees neither. Hence
+     *    {@see SUBPROCESS_PRIMITIVES} is inventoried rather than judged.
+     *  - EXTENSION FUNCTIONS NOT ENUMERATED. `dba_open`, `ZipArchive`,
+     *    `pg_copy_from`, an FFI call — any of them writes and none is named.
+     *
+     * THAT IS WHY `src/Runtime.php` SAYS NARROWED AND NOT CLOSED, and why the
+     * real fix — a per-tool `writesTree()` on the
+     * {@see \SugarCraft\Crush\Tools\Tool} interface, which moves the judgement
+     * to the only place that can make it — is escalated rather than
+     * approximated here.
+     *
+     * OVER-CLASSIFICATION IS ACCEPTED AND IS THE SAFE DIRECTION throughout: a
+     * read-only tool logging with `fwrite(STDERR, …)` is reported, and the
+     * tree did not move. That reds and forces a human to say so; the dangerous
+     * direction is the silent one.
      *
      * @return array<string, list<int>>
      */
     private static function writePrimitivesCalledIn(string $file): array
     {
-        $primitives = [...self::TREE_MUTATING_PRIMITIVES, ...self::SUBPROCESS_PRIMITIVES];
-        $tokens = token_get_all((string) file_get_contents($file));
+        // NOT `(string) file_get_contents(...)`. A file this census cannot
+        // read casts to '' and contributes nothing - which is exactly what a
+        // clean file contributes, so an unreadable tool source would have been
+        // silently classified read-only (§16.8 rule 32, the same rule that got
+        // the `@` removed from `token_get_all`).
+        //
+        // THE READABILITY CHECK COMES FIRST so the throw is the ONLY signal.
+        // `file_get_contents()` on a missing or unreadable path also emits a
+        // PHP warning, and `phpunit.xml` sets `failOnWarning="true"` - so the
+        // negative control below would have reported through the warning
+        // channel rather than through this exception, which is a different
+        // verdict wearing the same colour.
+        if (!is_file($file) || !is_readable($file)) {
+            throw new \RuntimeException('write-primitive scan could not read ' . $file);
+        }
+        $source = file_get_contents($file);
+        if ($source === false) {
+            throw new \RuntimeException('write-primitive scan could not read ' . $file);
+        }
+
+        $aliases = self::importedFunctionAliases($source);
+        $tokens = token_get_all($source);
         $count = \count($tokens);
         $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT];
         $found = [];
@@ -2667,7 +2843,6 @@ final class RuntimeTest extends TestCase
             // identifier anywhere in the token stream.
             if ($token === '`') {
                 $found['shell_exec'][] = $line;
-                // Consume to the closing backtick so the pair reports once.
                 for ($j = $i + 1; $j < $count; $j++) {
                     if ($tokens[$j] === '`') {
                         $i = $j;
@@ -2682,18 +2857,17 @@ final class RuntimeTest extends TestCase
             if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED], true)) {
                 continue;
             }
-            // A FULLY QUALIFIED name is the global one only when it is exactly
-            // `\name`; `\Foo\copy` is a namespaced function, a different symbol.
+
             $name = strtolower($token[1]);
             if ($token[0] === T_NAME_FULLY_QUALIFIED) {
+                // The global symbol only when the token is exactly `\name`;
+                // `\Foo\copy` is a namespaced function, a different symbol.
                 if (substr_count($name, '\\') !== 1) {
                     continue;
                 }
                 $name = ltrim($name, '\\');
             }
-            if (!\in_array($name, $primitives, true)) {
-                continue;
-            }
+            $name = $aliases[$name] ?? $name;
 
             $previous = null;
             for ($j = $i - 1; $j >= 0; $j--) {
@@ -2704,9 +2878,7 @@ final class RuntimeTest extends TestCase
 
                 break;
             }
-            if (\is_array($previous) && \in_array($previous[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION, T_NEW], true)) {
-                continue;
-            }
+            $afterNew = \is_array($previous) && $previous[0] === T_NEW;
 
             $next = null;
             for ($j = $i + 1; $j < $count; $j++) {
@@ -2714,6 +2886,7 @@ final class RuntimeTest extends TestCase
                     continue;
                 }
                 $next = $tokens[$j];
+                $nextIndex = $j;
 
                 break;
             }
@@ -2721,12 +2894,195 @@ final class RuntimeTest extends TestCase
                 continue;
             }
 
-            $found[$name][] = $token[2];
+            if ($afterNew) {
+                if (\in_array($name, self::WRITE_CONSTRUCTIONS, true)) {
+                    $found[$name][] = $token[2];
+                }
+
+                continue;
+            }
+            if (\is_array($previous) && \in_array($previous[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION], true)) {
+                continue;
+            }
+
+            if (\in_array($name, self::TREE_MUTATING_PRIMITIVES, true) || \in_array($name, self::SUBPROCESS_PRIMITIVES, true)) {
+                $found[$name][] = $token[2];
+
+                continue;
+            }
+            $rule = self::CONDITIONAL_PRIMITIVES[$name] ?? null;
+            if ($rule !== null && self::argumentsMeanAWrite($rule, self::callArguments($tokens, $nextIndex))) {
+                $found[$name][] = $token[2];
+            }
         }
 
         ksort($found);
 
         return $found;
+    }
+
+    /**
+     * `use function <ns>\<name> as <alias>;` and `use function <ns>\<name>;`,
+     * as `alias => name`.
+     *
+     * BECAUSE AN ALIAS RENAMES THE SYMBOL AT THE CALL SITE, and a scanner that
+     * matches on the call-site token alone is defeated by one `as` clause.
+     * MEASURED: `use function file_put_contents as persist;` plus
+     * `persist($p, 'x')` in a tool on the read-only roster left the verdict
+     * `OK (118 tests, 427 assertions)`, fully green, while genuinely writing
+     * the file.
+     *
+     * ONLY THE LAST SEGMENT IS KEPT, so an alias of a NAMESPACED function maps
+     * to that function's short name — which the roster then treats as the
+     * global one. Over-classification in the same direction the bare import
+     * spelling already is, and stated rather than left to be discovered.
+     *
+     * @return array<string, string>
+     */
+    private static function importedFunctionAliases(string $source): array
+    {
+        if (!preg_match_all(
+            '/\buse\s+function\s+([A-Za-z_\x80-\xff][\\\\A-Za-z0-9_\x80-\xff]*)(?:\s+as\s+([A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*))?\s*;/i',
+            $source,
+            $matches,
+            PREG_SET_ORDER,
+        )) {
+            return [];
+        }
+
+        $aliases = [];
+        foreach ($matches as $match) {
+            $segments = explode('\\', trim($match[1], '\\'));
+            $real = strtolower(end($segments));
+            $alias = strtolower(($match[2] ?? '') !== '' ? $match[2] : $real);
+            $aliases[$alias] = $real;
+        }
+
+        return $aliases;
+    }
+
+    /**
+     * The top-level argument groups of the call whose `(` is at $openIndex.
+     *
+     * TOP-LEVEL ONLY: a comma inside a nested call, array or brace belongs to
+     * that construct, so `imagepng($im, foo($a, $b))` has TWO arguments and not
+     * three. Depth is counted over `(`, `[`, `{` and their closers.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     *
+     * @return list<list<array{0: int, 1: string, 2: int}|string>>
+     */
+    private static function callArguments(array $tokens, int $openIndex): array
+    {
+        $depth = 0;
+        $arguments = [];
+        $current = [];
+        $count = \count($tokens);
+
+        for ($i = $openIndex; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            if ($token === '(' || $token === '[' || $token === '{') {
+                $depth++;
+                if ($depth === 1) {
+                    continue;
+                }
+            } elseif ($token === ')' || $token === ']' || $token === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    if ($current !== []) {
+                        $arguments[] = $current;
+                    }
+
+                    return $arguments;
+                }
+            } elseif ($token === ',' && $depth === 1) {
+                $arguments[] = $current;
+                $current = [];
+
+                continue;
+            }
+            $current[] = $token;
+        }
+
+        if ($current !== []) {
+            $arguments[] = $current;
+        }
+
+        return $arguments;
+    }
+
+    /**
+     * Whether $arguments make a {@see CONDITIONAL_PRIMITIVES} call a write.
+     *
+     * UNREADABLE MEANS WRITE, in every branch. A mode or a target this cannot
+     * resolve to a literal is reported rather than passed — §16.8 rule 32, a
+     * verdict the harness cannot compute must never come out as "pass",
+     * because pass is the direction that silently retires a finding.
+     *
+     * @param list<list<array{0: int, 1: string, 2: int}|string>> $arguments
+     */
+    private static function argumentsMeanAWrite(string $rule, array $arguments): bool
+    {
+        if ($rule === 'mode') {
+            // fopen/gzopen/bzopen: no mode at all is a syntax error, so an
+            // absent one means the scan mis-parsed - report it.
+            $literal = self::literalStringArgument($arguments[1] ?? null);
+            if ($literal === null) {
+                return true;
+            }
+
+            // Every write mode carries one of these; 'r'/'rb'/'rt' carry none.
+            return preg_match('/[waxc+]/i', $literal) === 1;
+        }
+
+        if ($rule === 'target') {
+            // imagepng($im) writes the output buffer - what Doctor does.
+            // imagepng($im, $path) writes a file. An explicit null is the
+            // buffer form spelled out.
+            if (!isset($arguments[1])) {
+                return false;
+            }
+            $tokens = $arguments[1];
+
+            return !(\count($tokens) === 1 && \is_array($tokens[0]) && strtolower($tokens[0][1]) === 'null');
+        }
+
+        // error_log($msg, 3, $path) appends to a file; types 0/1/2/4 do not.
+        if (!isset($arguments[1])) {
+            return false;
+        }
+        $tokens = $arguments[1];
+        if (\count($tokens) === 1 && \is_array($tokens[0]) && $tokens[0][0] === T_LNUMBER) {
+            return $tokens[0][1] === '3';
+        }
+
+        return true;
+    }
+
+    /**
+     * The value of $argument when it is exactly one quoted string literal,
+     * else null.
+     *
+     * ONE TOKEN, DELIBERATELY. `'w' . $suffix` and `$mode` are both
+     * unresolvable here, and {@see argumentsMeanAWrite()} treats unresolvable
+     * as a write rather than guessing.
+     *
+     * @param ?list<array{0: int, 1: string, 2: int}|string> $argument
+     */
+    private static function literalStringArgument(?array $argument): ?string
+    {
+        if ($argument === null || \count($argument) !== 1) {
+            return null;
+        }
+        $token = $argument[0];
+        if (!\is_array($token) || $token[0] !== T_CONSTANT_ENCAPSED_STRING) {
+            return null;
+        }
+
+        return substr($token[1], 1, -1);
     }
 
     /**
@@ -2846,17 +3202,27 @@ final class RuntimeTest extends TestCase
         foreach (self::readOnlyBuiltInToolNames() as $name) {
             foreach ($corpus[$name] as $file) {
                 foreach (self::writePrimitivesCalledIn($file) as $primitive => $lines) {
-                    $row = $name . ' calls ' . $primitive . '() at ' . basename($file) . ':' . implode(',', $lines);
                     if (\in_array($primitive, self::SUBPROCESS_PRIMITIVES, true)) {
-                        $subprocess[] = $row;
-                    } else {
-                        $offenders[] = $row;
+                        // NO LINE NUMBER. This inventory names a file OUTSIDE
+                        // this step's declared list, and a line pin there reds
+                        // on a comment inserted above the call - MEASURED, one
+                        // added line moved `:82` to `:83` and reported it under
+                        // "the set of read-only tools that reach a subprocess
+                        // changed", which is a false diagnosis of a pure move.
+                        $subprocess[$name][] = $primitive;
+
+                        continue;
                     }
+                    $offenders[] = $name . ' calls ' . $primitive . '() at ' . basename($file) . ':' . implode(',', $lines);
                 }
             }
         }
         sort($offenders);
-        sort($subprocess);
+        ksort($subprocess);
+        foreach ($subprocess as &$primitives) {
+            sort($primitives);
+        }
+        unset($primitives);
 
         $this->assertSame(
             [],
@@ -2875,7 +3241,7 @@ final class RuntimeTest extends TestCase
         // exactly means a NEW read-only tool that spawns anything reds here and
         // its author has to say why, while a correct one does not red at all.
         $this->assertSame(
-            ['Grep calls proc_open() at CapturesProcessOutput.php:82'],
+            ['Grep' => ['proc_open']],
             $subprocess,
             'the set of read-only tools that reach a subprocess changed. Spawning is not itself a write, '
             . 'but the argv decides and this scan cannot read it - so a new entry needs a stated reason, '
@@ -2885,9 +3251,9 @@ final class RuntimeTest extends TestCase
 
     /**
      * The scanner reads CODE. A mention in a comment, a match inside a string,
-     * a method DECLARATION, a call on some other object, a `new` expression
-     * and an ATTRIBUTE NAME are all not calls; a leading backslash and a
-     * backtick both are.
+     * a method DECLARATION, a call on some other object, a `new` expression, a
+     * TYPE HINT, a `::class` constant and an ATTRIBUTE NAME are all not calls;
+     * a leading backslash, an import alias and a backtick all are.
      *
      * SYNTHETIC AND NOT LINE NUMBERS IN `src/`, deliberately: the natural
      * counterexample this tree ships (`Write.php` calls `mkdir()` on one line
@@ -2895,14 +3261,15 @@ final class RuntimeTest extends TestCase
      * numbers move, and a control keyed on a moving number is a control that
      * gets "fixed" by deleting it. The fixture below cannot move.
      *
-     * A ROW PER `return`, NOT PER CLASSIFICATION (§16.8 rule 29): the scanner
-     * has five reasons to reject a token - comment/doc-block, string, `->`
-     * or `::`, `function`, `new` - and every one of them appears below.
-     *
-     * THE LAST BLOCK IS THE ALPHABET, WRITTEN DOWN AS ASSERTIONS. Indirection
-     * through a string is a KNOWN blind spot, so it is asserted as `[]` rather
-     * than left unstated - §16.8 rule 31, an alphabet is coverage, and a limit
-     * nobody wrote down is a limit the next reader assumes away.
+     * A ROW PER `return`, NOT PER CLASSIFICATION (§16.8 rule 29), AND THAT
+     * CLAIM WAS FALSE WHEN IT WAS FIRST WRITTEN. It said the scanner "has five
+     * reasons to reject a token … and every one of them appears below" while
+     * TWO had no row: the `$next !== '('` guard and the `?->` arm of the
+     * receiver exclusion. Both mutants are non-equivalent — MEASURED, deleting
+     * the `(` guard turns `Copy`/`Link`/`Rename`/`Touch` used as a TYPE HINT
+     * or in `::class` into four false positives, and dropping
+     * `T_NULLSAFE_OBJECT_OPERATOR` turns `$l?->unlink(…)` into a fifth — and
+     * both deletions left the whole file green. They have rows now.
      */
     public function testTheWritePrimitiveScannerReadsCodeAndNotProseOrNames(): void
     {
@@ -2914,19 +3281,25 @@ final class RuntimeTest extends TestCase
 
             declare(strict_types=1);
 
+            use function Some\Space\file_put_contents as persist;
+
             #[Copy(1)]
             final class Probe
             {
+                public const K = Rename::class;
+
                 // A comment saying mkdir() and unlink() and calling neither.
                 /** A doc-block saying file_put_contents() and calling nothing. */
                 #[Rename('touch(')]
-                public function copy(): string
+                public function copy(Link $hint, ?Copy $maybe): string
                 {
                     $other = new \stdClass();
                     $never = new Link($this);
                     $prose = 'proc_open() inside a string literal';
+                    $nullsafe = $maybe?->unlink('/tmp/x');
 
-                    return $prose . self::rename() . $other->touch() . \Foo\copy() . (string) $never;
+                    return $prose . self::rename() . $other->touch() . \Foo\copy()
+                        . (string) $never . (string) $nullsafe . Touch::class . $hint::class;
                 }
 
                 private static function rename(): string
@@ -2936,11 +3309,17 @@ final class RuntimeTest extends TestCase
 
                 public function realWrite(string $path): void
                 {
+                    $reading = fopen($path, 'rb');
                     $h = fopen($path, 'w');
                     vfprintf($h, '%s', ['y']);
                     fwrite(STDERR, 'x');
-                    file_put_contents($path, 'y');
+                    persist($path, 'y');
                     \unlink($path);
+                    error_log('to a file', 3, $path);
+                    error_log('to the log');
+                    imagepng($path);
+                    imagepng($path, $path);
+                    $spl = new \SplFileObject($path, 'r');
                     $out = `ls -la`;
                 }
             }
@@ -2948,14 +3327,20 @@ final class RuntimeTest extends TestCase
 
         $this->assertSame(
             [
-                'file_put_contents' => [30],
-                'fwrite' => [29],
-                'shell_exec' => [32],
-                'unlink' => [31],
-                'vfprintf' => [28],
+                'error_log' => [39],
+                'file_put_contents' => [37],
+                'fopen' => [34],
+                'fwrite' => [36],
+                'imagepng' => [42],
+                'shell_exec' => [44],
+                'splfileobject' => [43],
+                'unlink' => [38],
+                'vfprintf' => [35],
             ],
             self::writePrimitivesCalledIn($file),
-            'the scanner must report exactly the five real calls, on their own lines, and nothing else',
+            'the scanner must report exactly the nine real writes, on their own lines, and nothing else. '
+            . 'The read-mode fopen, the buffer-form imagepng, the non-file error_log, the type hints, the '
+            . '::class constants, the nullsafe call and the attribute names are all NOT writes.',
         );
 
         // BOTH POLARITIES THROUGH THE SAME INSTRUMENT (§16.8 rule 18): a
@@ -2963,27 +3348,46 @@ final class RuntimeTest extends TestCase
         // from offenders, and one that reports nothing passes one built only
         // from clean input.
         $clean = $dir . '/Clean.php';
-        file_put_contents($clean, "<?php\n\ndeclare(strict_types=1);\n\n// mkdir() unlink() proc_open()\n\$s = 'file_put_contents()';\n#[Link(2)]\nfinal class Clean {}\n");
+        file_put_contents($clean, "<?php\n\ndeclare(strict_types=1);\n\n// mkdir() unlink() proc_open()\n\$s = 'file_put_contents()';\n#[Link(2)]\nfinal class Clean { public const C = Copy::class; }\n");
 
         $this->assertSame([], self::writePrimitivesCalledIn($clean));
+
+        // AN UNREADABLE ARGUMENT IS A WRITE, NEVER A PASS (§16.8 rule 32). A
+        // mode this cannot resolve to a literal is the shape a `fopen` escape
+        // would take, and "cannot decide" must not come out as "clean".
+        $dynamic = $dir . '/Dynamic.php';
+        file_put_contents($dynamic, "<?php\n\n\$mode = 'r';\n\$h = fopen('/tmp/x', \$mode);\n\$g = fopen('/tmp/x', 'r' . 'b');\n");
+
+        $this->assertSame(
+            ['fopen' => [4, 5]],
+            self::writePrimitivesCalledIn($dynamic),
+            'a mode the scanner cannot read must be reported, not passed - a verdict a harness cannot '
+            . 'compute is a discard or a failure, never a pass',
+        );
 
         // THE DECLARED BLIND SPOT, ASSERTED. A primitive reached through a
         // string is invisible to a scanner that does not look inside strings.
         // This is the alphabet, not a bug report: closing it means constant
         // folding, which is a different instrument.
         $indirect = $dir . '/Indirect.php';
-        file_put_contents($indirect, "<?php\n\n\$f = 'unlink';\n\$f('/tmp/x');\narray_map('unlink', []);\ncall_user_func('file_put_contents', '/tmp/x', 'y');\neval(\"unlink('/tmp/x');\");\n");
+        file_put_contents($indirect, "<?php\n\n\$f = 'unlink';\n\$f('/tmp/x');\narray_map('unlink', []);\ncall_user_func('file_put_contents', '/tmp/x', 'y');\neval(\"unlink('/tmp/x');\");\n\$zip->addFile('/tmp/x');\n");
 
         $this->assertSame(
             [],
             self::writePrimitivesCalledIn($indirect),
             'the indirection blind spot moved - update the alphabet paragraph, this row is what states it',
         );
+
+        // AND AN UNREADABLE FILE IS AN ERROR, not an empty result that reads
+        // exactly like a clean one.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('could not read');
+        self::writePrimitivesCalledIn($dir . '/NoSuchProbe.php');
     }
 
     /**
      * A TRAIT AND A PARENT CLASS ARE THE TOOL'S OWN CODE, and the scan follows
-     * both.
+     * both, transitively.
      *
      * THE CONTROL FOR {@see sourceFilesOf()}, built because the widening it
      * performs is invisible in every green run: on today's tree only `Grep`'s
@@ -2992,8 +3396,15 @@ final class RuntimeTest extends TestCase
      * quietly stopped following traits tomorrow (§16.8 rule 16 - an unfired
      * instrument and a dead one produce identical silence).
      *
-     * BOTH POLARITIES, over REAL classes rather than a fixture, so the walk is
-     * exercised on the shapes it actually meets.
+     * THE PARENT HALF NEEDED A SYNTHETIC HIERARCHY, and saying why is the
+     * point. An earlier cut of this test asserted only over the twelve corpus
+     * tools and called that "both polarities, over REAL classes … the shapes
+     * it actually meets" - MEASURED, ZERO of the twelve has a parent class and
+     * ZERO has a trait-of-trait, so deleting the parent branch of the walk
+     * left the whole file green. The half the test is named after was
+     * unexercised, in a test whose own doc-block invokes rule 16. The fixture
+     * below carries the missing shapes: a probe extending a base that uses a
+     * trait which itself uses a second trait.
      */
     public function testTheSourceFileWalkFollowsTraitsAndParents(): void
     {
@@ -3002,23 +3413,67 @@ final class RuntimeTest extends TestCase
             $tools[$tool->name()] = array_map('basename', self::sourceFilesOf($tool));
         }
 
-        // POSITIVE: a tool with traits contributes more than one file, and the
-        // trait file is the one carrying the primitive the verdict reads.
+        // POSITIVE, on the real tree: a tool with traits contributes more than
+        // one file, and the trait file is the one carrying the primitive the
+        // verdict reads.
         $this->assertSame(
             ['Grep.php', 'CapturesProcessOutput.php', 'TruncatesOutput.php'],
             $tools['Grep'],
             'the walk stopped following traits - the verdict is back to reading declaring files only',
         );
         $this->assertSame(
-            ['proc_open' => [82]],
-            self::writePrimitivesCalledIn(dirname(__DIR__) . '/src/Tools/Concerns/CapturesProcessOutput.php'),
-            'the trait that makes the widening observable no longer calls what it used to',
+            ['proc_open'],
+            array_keys(self::writePrimitivesCalledIn(dirname(__DIR__) . '/src/Tools/Concerns/CapturesProcessOutput.php')),
+            'the trait that makes the trait-following observable no longer calls what it used to',
         );
 
-        // NEGATIVE: a tool with no traits and no parent contributes exactly
-        // one file, so the walk is not simply returning everything it can find.
+        // NEGATIVE, on the real tree: a tool with no traits and no parent
+        // contributes exactly one file, so the walk is not simply returning
+        // everything it can find.
         $this->assertSame(['SkillTool.php'], $tools['Skill']);
         $this->assertSame(['WebFetch.php'], $tools['WebFetch']);
+
+        // THE PARENT AND TRAIT-OF-TRAIT SHAPES, WHICH THE TREE DOES NOT HAVE,
+        // AND EACH IN ITS OWN FILE - because a hierarchy declared in ONE file
+        // would be satisfied by a walk that read the declaring file and
+        // stopped, which is the defect this test exists to catch.
+        $dir = $this->makeTempRepo();
+        file_put_contents($dir . '/DeepestWrite.php', "<?php\n\nnamespace SugarCraft\\Crush\\Tests\\WalkProbe;\n\ntrait DeepestWrite\n{\n    public function persist(string \$p): void\n    {\n        file_put_contents(\$p, 'x');\n    }\n}\n");
+        file_put_contents($dir . '/MiddleTrait.php', "<?php\n\nnamespace SugarCraft\\Crush\\Tests\\WalkProbe;\n\ntrait MiddleTrait\n{\n    use DeepestWrite;\n}\n");
+        file_put_contents($dir . '/ProbeBase.php', "<?php\n\nnamespace SugarCraft\\Crush\\Tests\\WalkProbe;\n\nabstract class ProbeBase\n{\n    use MiddleTrait;\n}\n");
+        file_put_contents($dir . '/ProbeLeaf.php', "<?php\n\nnamespace SugarCraft\\Crush\\Tests\\WalkProbe;\n\nfinal class ProbeLeaf extends ProbeBase\n{\n}\n");
+
+        foreach (['DeepestWrite', 'MiddleTrait', 'ProbeBase', 'ProbeLeaf'] as $symbol) {
+            require_once $dir . '/' . $symbol . '.php';
+        }
+
+        $leaf = new \SugarCraft\Crush\Tests\WalkProbe\ProbeLeaf();
+        $walked = array_map('basename', self::sourceFilesOf($leaf));
+        sort($walked);
+
+        $this->assertSame(
+            ['DeepestWrite.php', 'MiddleTrait.php', 'ProbeBase.php', 'ProbeLeaf.php'],
+            $walked,
+            'the walk must reach the leaf, its abstract PARENT in another file, that parent\'s trait, and '
+            . 'that trait\'s own trait - four files, and a walk that stops at the declaring file finds one',
+        );
+
+        // AND THE WRITE TWO LEVELS DOWN THE CHAIN IS WHAT THE VERDICT WOULD
+        // READ, so the walk is connected to the thing it feeds rather than
+        // merely returning a longer list (§16.8 rule 28: split the scanner
+        // from the arm, then check the arm).
+        $primitives = [];
+        foreach (self::sourceFilesOf($leaf) as $file) {
+            foreach (array_keys(self::writePrimitivesCalledIn($file)) as $primitive) {
+                $primitives[] = $primitive;
+            }
+        }
+
+        $this->assertSame(
+            ['file_put_contents'],
+            $primitives,
+            'a write two trait-hops and one parent-hop away from the tool class must reach the verdict',
+        );
     }
 
     /**
@@ -3053,9 +3508,9 @@ final class RuntimeTest extends TestCase
             'BackgroundSessionRunner.php spells its writes `@\file_put_contents(...)` / `@\unlink(...)`',
         );
         $this->assertSame(
-            ['mkdir'],
+            ['fopen', 'mkdir'],
             array_keys(self::writePrimitivesCalledIn($src . '/Agents/TaskList.php')),
-            'TaskList.php spells its directory creation `\mkdir(...)`',
+            'TaskList.php spells its directory creation `\mkdir(...)` and its append handle `\fopen($p, \'a\')`',
         );
         $this->assertSame(
             ['file_put_contents', 'mkdir'],
@@ -3063,17 +3518,6 @@ final class RuntimeTest extends TestCase
             'AuditHook.php spells its write `@\file_put_contents(...)`',
         );
     }
-
-    /**
-     * Number words this suite is willing to read out of prose.
-     *
-     * @var array<int, string>
-     */
-    private const NUMBER_WORDS = [
-        0 => 'ZERO', 1 => 'ONE', 2 => 'TWO', 3 => 'THREE', 4 => 'FOUR', 5 => 'FIVE',
-        6 => 'SIX', 7 => 'SEVEN', 8 => 'EIGHT', 9 => 'NINE', 10 => 'TEN',
-        11 => 'ELEVEN', 12 => 'TWELVE', 13 => 'THIRTEEN', 14 => 'FOURTEEN', 15 => 'FIFTEEN',
-    ];
 
     /**
      * Every invocation of $method under $roots, as `relative/path.php:line`.
@@ -3446,14 +3890,23 @@ final class RuntimeTest extends TestCase
             'the Agent-assembler call sites moved between files - src/Runtime.php enumerates them and must be re-read',
         );
 
-        $word = self::NUMBER_WORDS[\count($sites)] ?? ('(' . \count($sites) . ')');
+        // THE DIGIT, NOT THE WORD, and that is a correction. This used to read
+        // the count out of a private `NUMBER_WORDS` map so the prose could say
+        // "EIGHT" - a THIRD divergent copy of a number-word table in a tree
+        // that already had two (`tests/Cli/StderrEmitterCensusTest.php` and
+        // `tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php`, both
+        // private, both a different shape) and whose
+        // `Support/DuplicatedTestHelperDriftTest` does not police the category.
+        // A digit needs no table, so the duplication is not created rather
+        // than deduplicated.
         $runtime = (string) file_get_contents(dirname(__DIR__) . '/src/Runtime.php');
+        $sentence = 'every one of its ' . \count($sites) . ' `Agent::systemPrompt()` call sites';
 
         $this->assertSame(
             1,
-            substr_count($runtime, 'every one of its ' . $word . ' `Agent::systemPrompt()` call sites'),
-            'src/Runtime.php must say "every one of its ' . $word . ' `Agent::systemPrompt()` call sites" - the '
-            . 'tree has ' . \count($sites) . ' of them: ' . implode(', ', $sites),
+            substr_count($runtime, $sentence),
+            'src/Runtime.php must say "' . $sentence . '" exactly once - the tree has '
+            . \count($sites) . ' of them: ' . implode(', ', $sites),
         );
     }
 

@@ -249,26 +249,36 @@ final class Runtime
      *    `PermissionRule::PATH_SUBJECT_TOOLS` (`:220`) both include `Read`,
      *    because they are about which calls carry a path subject, not about
      *    which calls change one.
-     *  - `PermissionGate::isReadOnlyTool()` — declared at
-     *    `src/Permissions/PermissionGate.php:665`, its roster literal on
-     *    `:667` — holds FIVE names, `['Read', 'Grep', 'Glob', 'WebFetch',
-     *    'Lsp']`, twenty lines above the `isWriteTool()` the drift test
-     *    extracts out of that same file. It is the nearest neighbour of the
-     *    OTHER hand-maintained roster this classifier acquired, the eight-name
-     *    read-only list in
+     *  - `PermissionGate::isReadOnlyTool()`, a few lines above the
+     *    `isWriteTool()` the drift test already extracts OUT OF THAT SAME
+     *    FILE. It is the nearest neighbour of the OTHER hand-maintained roster
+     *    this classifier acquired, the read-only list in
      *    {@see \SugarCraft\Crush\Tests\RuntimeTest::readOnlyBuiltInToolNames()},
-     *    and the two DISAGREE by exactly three names: `WebSearch`, `Skill` and
-     *    `doctor` are read-only to this classifier and absent from the gate's
-     *    list. THEY MUST NOT BE RECONCILED. The gate's own doc-block at `:646`
-     *    says so in terms — "A DECISION, NOT A CENSUS OF `src/Tools/BuiltIn/`"
-     *    — and gives the reason: each of those three reaches something outside
-     *    the process, so leaving them to Ask costs a prompt while listing them
-     *    would spend a judgement that class cannot make. "Did the working tree
-     *    move" and "may this call be denied without asking" are different
-     *    questions, and the answer differs on three tools. Naming it here is
-     *    the whole point: a census that enumerated neighbours, stopped at two,
-     *    and had already read that file sends the next reader to
-     *    `ProtectFilesHook` instead of to the list twenty lines away.
+     *    and the two DISAGREE: `WebSearch`, `Skill` and `doctor` are read-only
+     *    to this classifier and absent from the gate's list, which otherwise
+     *    contains a strict subset of ours. THEY MUST NOT BE RECONCILED. The
+     *    gate's own doc-block says so in terms — "A DECISION, NOT A CENSUS OF
+     *    `src/Tools/BuiltIn/`" — and gives the reason: each of those three
+     *    reaches something outside the process, so leaving them to Ask costs a
+     *    prompt while listing them would spend a judgement that class cannot
+     *    make. "Did the working tree move" and "may this call be denied
+     *    without asking" are different questions, and the answers differ.
+     *
+     *    NEITHER THE NAMES NOR THE DIVERGENCE ARE ASSERTED HERE ANY MORE, and
+     *    that is the second correction to this bullet. It first stated the
+     *    gate's five names, two line numbers and "exactly three" as prose,
+     *    hand-checked once — a hand-maintained census of hand-maintained
+     *    rosters, in the paragraph whose own subject is §16.8 rule 15. The
+     *    drift test now extracts BOTH rosters from source and asserts the
+     *    divergence and the containment, so this bullet says what the
+     *    relationship MEANS and the test says what it IS. Line numbers are
+     *    gone for the reason the `Agent::systemPrompt()` paragraph below
+     *    gives: the failure output prints them, where they cannot be stale.
+     *
+     *    Naming it here at all is still the point: a census that enumerated
+     *    neighbours, stopped at two, and had already read that file sends the
+     *    next reader to `ProtectFilesHook` instead of to the list a few lines
+     *    away.
      *
      * prompt_plan.md §16.8 rule 15 forbids a hand-maintained
      * roster standing on its own, so this one does not:
@@ -724,7 +734,7 @@ final class Runtime
      *     {@see EnvironmentBlock::withWriteSinceLastRender()} — MEASURED, zero
      *     hits across `src/Agents/`, `src/Cli/` and `src/App/` — so it can
      *     never reach the suppressed state and pays FIVE git subprocesses on
-     *     every one of its EIGHT `Agent::systemPrompt()` call sites, per render
+     *     every one of its 8 `Agent::systemPrompt()` call sites, per render
      *     rather than per turn.
      *
      *     THAT FIGURE SAID "NINE" AND NINE WAS WRONG, and the correction is
@@ -743,7 +753,9 @@ final class Runtime
      *     `Workflows/WorkflowEngine.php`.
      *
      *     THE COUNT APPEARS EXACTLY ONCE IN THIS PARAGRAPH, IN THE SENTENCE
-     *     ABOVE, AND THAT IS DELIBERATE. It used to appear four times, and the
+     *     ABOVE, AND AS A DIGIT. Both are deliberate. A word would need a
+     *     number-word table on the test side, and this tree already carries
+     *     two private, divergent copies of one; a digit needs none. It used to appear four times, and the
      *     test can only pin one of them — so the other three would have rotted
      *     silently while an author corrected the sentence the failure message
      *     named. §16.8 rule 2 is "never pin a cardinality in prose"; where a
