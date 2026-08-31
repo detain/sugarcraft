@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, TWO OF THREE MERGED. `P3.S4-fix-1` merged at `1279d91cf` and `P3.S5-fix-1` at `5cabca4a8`; master is `10519 / 162241 / 1` GREEN, which was PREDICTED before the second merge and hit exactly. Only `P3.S6` remains. IT IS NOT MERGEABLE AS IT STANDS — the orchestrator's own census run reds it, and a cycle-4 reviewer is out. Then the Phase 3 close review, then Phase 4 opens immediately.**
+**Current state: Phase 3's SIX STEPS ARE ALL MERGED — `P3.S4-fix-1` `1279d91cf`, `P3.S5-fix-1` `5cabca4a8`, `P3.S6` `f958ba8e6`. NOTHING IS IN FLIGHT and no agent is running. The ONE remaining thing before Phase 4 is the **Phase 3 close review** (§1.7, cap three cycles). Then Phase 4 opens immediately — §0 is the standing order, do not stop at the boundary to ask.**
 
 ---
 
@@ -86,8 +86,8 @@ changes that feel too small to be worth spawning for.
 
 ## 3. What has been built so far
 
-Phases 0-2 are closed; Phase 3 is one step from closing. Six things a fresh agent needs about the
-**current** shape of the code:
+Phases 0-2 are closed and Phase 3's six steps are all merged; only its close review remains. Six
+things a fresh agent needs about the **current** shape of the code:
 
 1. **The prompt reaches the model.** `Runtime::buildSystemPrompt()` (`sugar-crush/src/Runtime.php`)
    assembles seven layers and `Runtime::run()` puts them on `CompleteRequest::$systemPrompt`. All
@@ -96,22 +96,25 @@ Phases 0-2 are closed; Phase 3 is one step from closing. Six things a fresh agen
    roster derived from `src/Providers/`. Measured end to end: **assembled 5099 B == golden 5099 B ==
    wire 5099 B**, `messages[0].role = 'system'`.
 2. **Vertex has THREE arms.** `P1.audit-fix-1` (`03d8fed37`) hoisted the prompt into the Google
-   `instances[0].context` slot; `P1.audit-fix-3` (`e0d00b6db`) then built a real Gemini
+   `instances[0].context` slot; `P1.audit-fix-3` (`e0d00b6db`) built a real Gemini
    `:generateContent` arm with `systemInstruction` and streaming. Routing is by model FAMILY, not
-   publisher. The legacy `instances` arm stays for `chat-bison` and friends. **Gemini still cannot
-   call tools** — see `Awaiting user decision`.
+   publisher; the legacy `instances` arm stays for `chat-bison`. **Gemini still cannot call tools** —
+   see `Awaiting user decision`.
 3. **The prompt is deterministic and golden-pinned.** Clock, platform and cwd are injectable;
-   `tests/fixtures/prompt/golden-system-prompt.txt` (md5 `32ea749d…`) pins the assembly
-   byte-for-byte and `golden-agent-prompt.txt` (`ef0326dd…`) pins `Agent::systemPrompt()`. Both have
-   been unmoved through all of Phase 3.
-4. **`<env>` is LAST.** P3.S1 moved it from layer 2 to layer 7 — stable layers first, volatile last.
-   `Agent::systemPrompt()` deliberately uses the **opposite** order: two assemblers, `prompt_plan.md`
-   §17.2.
-5. **The write-signal is WIRED on the Runtime path only.** P3.S5 (`405252a41`) marks the `Runtime`
-   from `EngineBackend`'s per-step loop. `EnvironmentBlock`'s other three construction sites feed
-   `Agents\Agent::systemPrompt()` and keep the old default-emit behaviour. **P3.S6 dispositioned
-   that gap as a §1.1 declared-scope ESCALATION** — the seam is real and live, but in
-   `Workflows/WorkflowEngine.php`, outside its declared file list. The §18 row is landed.
+   `golden-system-prompt.txt` (md5 `32ea749d…`) pins the assembly byte-for-byte and
+   `golden-agent-prompt.txt` (`ef0326dd…`) pins `Agent::systemPrompt()`. **Both unmoved through the
+   whole of Phase 3** — required, because `writeSinceLastRender` defaults to `true` and a moved
+   golden would mean default behaviour changed.
+4. **`<env>` is LAST.** P3.S1 moved it from layer 2 to layer 7. `Agent::systemPrompt()` deliberately
+   uses the **opposite** order: two assemblers, `prompt_plan.md` §17.2.
+5. **The write-signal is WIRED on the Runtime path, and MEASURED-BUT-NOT-WIRED on the Agent path.**
+   P3.S5 (`405252a41`) marks the `Runtime` from `EngineBackend`'s per-step loop. P3.S6 (`f958ba8e6`)
+   then established that the Agent path's per-step seam **is real and live** — but in
+   `Workflows/WorkflowEngine.php`, outside its declared scope — and pinned the cost instead: one
+   render = 5 git subprocesses (3 suppressed), a K-stage workflow = 5×K, one `ProcessExecutor`
+   dispatch = 10 because it renders twice, and the stages see ONE DISTINCT PROMPT. A §18 row records
+   this as **escalated, not waived**, and an exact-list assertion over `AgentResult::__construct`
+   reds the day a tool-call field is added — the change that unblocks it.
 6. **The scanner that polices all this now fails CLOSED.** `P3.S5-fix-1` (`5cabca4a8`) closed an
    alias channel that had been failing OPEN by *subtracting* primitives from its own alphabet — a
    one-line comment could turn a real executed write into `[]`. Eleven defeats across three
@@ -120,10 +123,10 @@ Phases 0-2 are closed; Phase 3 is one step from closing. Six things a fresh agen
 ## 4. How to resume
 
 **Everything below was measured by the orchestrator on 2026-08-31, and each row names the sha it was
-measured at. Re-run a check ONLY if the sha it names has moved.**
+measured at. Re-run a check ONLY if the sha it names has moved. Do not spend seven minutes
+re-measuring a suite this file already gives you the answer to.**
 
-**ONE AGENT IS RUNNING: a cycle-4 review on `P3.S6`. Your first action is `ListAgents`, not a test
-run.** See §8.
+**NO AGENT IS RUNNING and NOTHING IS IN FLIGHT.** Confirm with `ListAgents`, then go straight to §8.
 
 ### Verified this session — do NOT redo unless the sha moved
 
@@ -131,44 +134,63 @@ run.** See §8.
 |---|---|---|
 | cwd, branch, clean tree | `/home/sites/sugarcraft`, `master`, porcelain empty | every commit |
 | commit identity | `Joe Huss` / `detain@interserver.net` | every commit |
-| **MASTER full suite**, checkout root, `</dev/null`, serial | **`Tests: 10519, Assertions: 162241, Skipped: 1`** (06:57.747) | `614524675` |
-| `P3.S4-fix-1` full suite before merge | `10503 / 162166 / 1` GREEN; +3/+184 vs base, reconciling EXACTLY (PromptStability +170, ChildStderrCapture +2, SymbolCitationDrift +12) | `4ac10894b` |
-| `P3.S4-fix-1` roster probe, **my own, positive-controlled** | injecting a discarding spawn under `Providers/` reds and NAMES it (`'Providers/TransientFailureTest.php:34 (exec -> discarded)'`); control printed `injected=YES` | `4ac10894b` |
-| `P3.S5-fix-1` full suite before merge, **RUN TWICE** | `10516 / 162057 / 1` GREEN, byte-identical both runs | `6acba5f9e` |
-| `P3.S5-fix-1` delta attribution | +16/+75 vs base, reconciled per class by JUnit diff: `RuntimeTest +52/+16`, `Config\GlobFigureDriftTest +23`. **NO remainder** | `6acba5f9e` |
-| the `+23`, attributed by DELETION EXPERIMENT not reasoning | reverting `src/Runtime.php` ALONE drops `GlobFigureDriftTest` 21166 → exactly **21143**; reverting either other declared file moves it by **zero** | `6acba5f9e` |
-| master after merge 1 | `10503 / 162166 / 1` — identical to the branch figure, clean merge | `1279d91cf` |
-| master after merge 2 | `10519 / 162241 / 1` — **exactly the figure PREDICTED before merging**. Both merges cleanly additive | `5cabca4a8` |
-| **`P3.S6` @ `1461e1685` — CENSUS RED** | `ChildStderrCaptureTest::testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites` fails: `'Agents/AgentTest.php:2543 (shell_exec -> discarded)'` | `1461e1685` |
-| `P3.S6` filtered | `tests/Agents/AgentTest.php` **OK (33 tests, 327 assertions)**; `--filter AgentTest` 63/412 (the regex also matches `SubAgentTest`) | `1461e1685` |
-| `P3.S6` `src/Agents/Agent.php` doc-block-only | **my own script**: executable-identical to base, **1270 tokens both sides** | `1461e1685` |
-| `P3.S6` deletions | `--numstat` = `348/0` and `1193/0`, **ZERO deletions**. Its report's "42 deletions" is wrong | `1461e1685` |
+| **MASTER full suite**, checkout root, `</dev/null`, serial | **`Tests: 10526, Assertions: 162447, Skipped: 1`** | `f958ba8e6` |
+| master tree == the tree that figure was measured on | `git diff prompt/P3.S6 master -- sugar-crush/` EMPTY before the branch was deleted | `f958ba8e6` |
+| goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — UNMOVED through all of Phase 3 | `f958ba8e6` |
+| `P3.S4-fix-1` before merge | `10503 / 162166 / 1`; +3/+184 reconciling exactly | `4ac10894b` |
+| `P3.S5-fix-1` before merge, **RUN TWICE** | `10516 / 162057 / 1`, byte-identical both runs | `6acba5f9e` |
+| `P3.S6` before merge | `10526 / 162447 / 1`; +7/+206 reconciling exactly, no remainder | `db0243771` |
+| both P3.S6 `src/` files doc-block only | **my own token census**: `Agent.php` 1270 tokens both sides, `Runtime.php` 4366, matching md5s | `db0243771` |
+| nine-file census set | `OK (176 tests, 31215 assertions)` | `db0243771` |
+| mutation **E5c** | independently verified: reds EXACTLY ONE test (6 vs 10), sibling green; mirror mutation reds only the sibling | `1461e1685` |
 
-### TWO METHOD CHANGES THAT ARE NOW PART OF THE PLAN — use them
+### PROGRESSION, all checkout root, all serial — the only comparable series
 
-1. **The census set is NINE files, not six.** `prompt_plan.md` §1.2 action 7b was widened this
-   session. `InterpolationOpenerTokenTest` was always being run but never written down;
-   `ChildStderrCaptureTest` and `GlobFigureDriftTest` were BOTH outside the list and BOTH bit inside
-   one batch. **The list is explicitly NOT claimed complete.**
-2. **Reconcile a moved total with a per-class JUnit diff, FIRST — not last.** PHPUnit's JUnit
+```
+c7e5a6454  10500 / 161982 / 1   pre-merge master
+1279d91cf  10503 / 162166 / 1   + P3.S4-fix-1
+5cabca4a8  10519 / 162241 / 1   + P3.S5-fix-1   (PREDICTED exactly before merging)
+<master>   10526 / 162447 / 1   + P3.S6         (test count predicted exactly; +12 assertions found and attributed)
+```
+
+### THREE METHOD CHANGES THAT ARE NOW PART OF THE PLAN — use them
+
+1. **Reconcile a moved total with a per-class JUnit diff, FIRST — not last.** PHPUnit's JUnit
    `<testcase>` carries an `assertions` attribute. Run both sides with `--log-junit` and diff per
-   class. On `P3.S5-fix-1` this named the mover in one pass after twenty-five guards had been
-   measured one at a time and every one came back identical. The script is at
-   `<scratchpad>/ORCH-P3.S5/cmp.py`; it takes two junit XMLs (branch first, master second).
+   class. Script: `<scratchpad>/ORCH-P3.S5/cmp.py <branch-junit> <master-junit>`. On P3.S5-fix-1 it
+   named the mover in ONE pass after twenty-five guards had been measured one at a time and every one
+   came back identical. **This is the single highest-leverage tool this session produced — keep it.**
+2. **The census set is NINE files** (`prompt_plan.md` §1.2 action 7b, widened this session) **and it
+   is STILL NOT COMPLETE.** Three different tree-wide guards outside it moved or red inside one
+   batch: `ChildStderrCaptureTest` (red P3.S4-fix-1), `GlobFigureDriftTest` (moved P3.S5-fix-1),
+   `Support\AssertionSwallowingCatchTest` (moved P3.S6 — and note it is a DIFFERENT file from
+   `tests/SwallowingCatchCensusTest.php`, which IS in the set). Hand-maintaining this list is a
+   losing game. Follow-up F1 in §8 is to DERIVE it.
+3. **State a prediction BEFORE running a suite, then check it.** Done twice: P3.S5-fix-1's
+   post-merge figure was predicted exactly, and P3.S6's test count was predicted exactly while its
+   assertion count came in +12 high — which is what sent me looking and found the tenth guard. A
+   prediction that misses is information; a figure with nothing to compare against is not.
 
-**A FIGURE OF MINE THAT WAS WRONG, corrected so it stops propagating:** `--filter AgentTest` is a
-regex that **also matches `SubAgentTest`**. Per file, `AgentTest.php` went **26 → 33 tests**; P3.S6
-added **7 tests**.
+### TWO CORRECTIONS SO THEY STOP PROPAGATING
 
-**A CAVEAT THAT IS NARROWER THAN RECORDED.** Assertion totals are **deterministic** across sequential
-uncontended runs — proved twice on `P3.S5-fix-1` (162057 both times). The 18-assertion spread this
-plan records came from two **concurrent** full suites. Keep the box quiet for a merge-deciding figure;
-do not treat single-run totals as generally noisy.
+- **`--filter AgentTest` is a regex that ALSO matches `SubAgentTest`.** Per file, `AgentTest.php`
+  went 26 → 33 tests; P3.S6 added **7**, not 7-of-63. Prefer a path (`… sugar-crush/tests/Agents/AgentTest.php`)
+  over `--filter` when you want one file.
+- **The "contention" caveat is narrower than this plan recorded.** Assertion totals are
+  **deterministic** across sequential uncontended runs — proved twice on P3.S5-fix-1 (162057 both
+  times). The 18-assertion spread came from two **concurrent** full suites. Keep the box quiet for a
+  merge-deciding figure (`ps -eo pid,cmd | /usr/bin/grep -c '[v]endor/bin/phpunit'` must print 0);
+  do not treat single-run totals as generally noisy.
+- **BEWARE BACKTICKS IN A `git commit -m "…"`.** Bash runs them as command substitution. It corrupted
+  the P3.S6 merge message in two places (`` `command -v git 2>&1` `` was EXECUTED and replaced with
+  its output; `` `catch` `` failed and vanished), and it was only caught because one of them printed
+  `catch: command not found`. Fixed by `git commit --amend -F <file>` with a quoted heredoc. **Write
+  commit messages to a file and use `-F`.**
 
 ### If the tree HAS moved, or you distrust any of the above
 
 1. Confirm `/home/sites/sugarcraft`, `master`, `git status --porcelain` empty.
-2. Confirm identity — it fails silently and cannot be repaired without rewriting history:
+2. Confirm the identity — it fails silently and cannot be repaired later without rewriting history:
    ```sh
    git -C /home/sites/sugarcraft config user.name    # must print: Joe Huss
    git -C /home/sites/sugarcraft config user.email   # must print: detain@interserver.net
@@ -176,9 +198,10 @@ do not treat single-run totals as generally noisy.
    Re-check after every step, not only before committing — ORCHESTRATION-RULE-2 in §7.
 3. Confirm the newest entry in `prompt_worklog.md` matches the last plan commit in `git log`. If one
    is missing, **reconstruct it before doing anything else** (`prompt_plan.md` §3.3).
-4. `git worktree list` — **expect TWO**: `/home/sites/sugarcraft` and
-   `/home/sites/prompt-step-P3.S6`. The latter holds committed work not on master and MAY NOT be
-   removed. Any OTHER `/home/sites/prompt-step-*` is stale; run §1.12's checks before removing it.
+4. `git worktree list` — **expect exactly ONE**, `/home/sites/sugarcraft`. All three Phase 3
+   worktrees were removed after merging, §1.12 checks passed, branches deleted. Any
+   `/home/sites/prompt-step-*` you find is stale by definition; run §1.12's checks before removing
+   it, and check it for ignored files worth rescuing first.
    `/home/sites/crush-lane-{a,b,c}` belong to the other plan. Leave them completely alone.
 5. Re-take the master baseline SERIALLY, and record the cwd beside the number:
    ```sh
@@ -343,150 +366,133 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            3. TWO OF THREE remaining steps MERGED this session. P3.S6 is the last one
-                  and it is NOT mergeable as it stands. Phase 3 NOT closed.
+Phase:            3 — ALL SIX STEPS MERGED. Only the close review remains.
 
-Next step:        **P3.S6 — a cycle-4 reviewer is OUT. Call `ListAgents` FIRST.**
-                  Do not re-spawn it; if `ListAgents` shows nothing, it finished at a context
-                  boundary — read its findings file at
-                  <scratchpad>/P3.S6-review-c4/findings-cycle-4.md, and if that is absent,
-                  read the worktree (§1.8.4) and relaunch a NEW agent there with a
-                  continuation brief. **A blank or truncated response means the agent DIED.
-                  It is never NO FINDINGS.** Blank returns get five attempts (§1.8).
+Next step:        **(a) THE PHASE 3 CLOSE REVIEW — §1.7.** Then (b) OPEN PHASE 4 IMMEDIATELY.
+                  Call `ListAgents` first to confirm nothing is running (nothing should be).
 
-                  **P3.S6 IS RED AND THE ORCHESTRATOR FOUND IT, not a reviewer.** The
-                  tree-wide census set reds on its branch:
+                  (a) Spawn a PHASE reviewer over ALL of Phase 3's commits TOGETHER, as one
+                      change-set. Its brief is §1.4 PLUS the §1.7 additions (prompt_plan.md
+                      line ~572). Cap THREE cycles. The change-set is:
+                        git diff <phase-3-start>..HEAD -- sugar-crush/
+                      Phase 3's merged steps, in order:
+                        P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f ·
+                        P3.S4 f2af06eaa · P3.S5 405252a41 · P3.audit-fix-1 6aff0bad1 ·
+                        P3.S4-fix-1 1279d91cf · P3.S5-fix-1 5cabca4a8 · P3.S6 f958ba8e6
+                      **GIVE THE PHASE REVIEWER THE NINE-FILE CENSUS SET AND THE JUNIT
+                      METHOD** (§4 above). Three tree-wide guards outside that set bit inside
+                      the last batch alone; a phase reviewer running only step-scoped filters
+                      will miss the same class of thing.
+                      Findings -> fix agent -> a BRAND-NEW phase reviewer -> loop, cap 3.
+                  (b) **OPEN PHASE 4 WITHOUT ASKING.** §0 is the standing order. Batch 1 is
+                      **P4.S1 ALONE** — everything in the phase depends on it, and its files
+                      (src/Usage.php, tests/UsageTest.php) are disjoint from every lane claim,
+                      so it is safe the moment the close review passes. Phase 4 is pre-read
+                      below; you do not need to re-read prompt_plan.md for it.
+
+                  THE STEP LOOP, in short (full detail §1.2, summary §6):
                   ```
-                  ChildStderrCaptureTest::testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites
-                    'Agents/AgentTest.php:2543 (shell_exec -> discarded)'
+                  git -C /home/sites/sugarcraft worktree add \
+                    /home/sites/prompt-step-<ID> -b prompt/<ID> master
+                  cp -al /home/sites/sugarcraft/sugar-crush/vendor \
+                         /home/sites/prompt-step-<ID>/sugar-crush/vendor
+                  cd /home/sites/prompt-step-<ID>/sugar-crush && php -r '
+                    $p = require "vendor/composer/autoload_psr4.php";
+                    echo $p["SugarCraft\\Crush\\"][0], PHP_EOL;'
+                  # MUST print /home/sites/prompt-step-<ID>/sugar-crush/src
                   ```
-                  The offender is in gitSubprocessesDuring():
-                    $real = trim((string) shell_exec('command -v git 2>/dev/null'));
-                  `Agents/` is in that guard's SCOPE, and this fails against the branch's OWN
-                  copy of the guard — so it is P3.S6's own defect, NOT an artefact of anything
-                  merged this session. Five internal review cycles missed it because the OLD
-                  six-file census set did not contain that guard.
-                  **THE TRAP IN THE OBVIOUS FIX:** `command -v git 2>&1` folds error text INTO
-                  $real, so a naive redirect makes `assertNotSame('', $real, ...)` pass with
-                  garbage instead of a path. The honest fix must also assert the result IS an
-                  executable path. Do NOT accept /dev/null in any form.
-                  Per prompt_plan.md §1.2 (the paragraph after action 7c): an orchestrator run
-                  that fails after a clean review loop sends the step back through the loop as
-                  another review cycle, with a brand-new reviewer briefed with §1.4 + the
-                  failing output + nothing else, and **that cycle counts toward the five-cycle
-                  cap**. That is exactly what the running reviewer is. Cycle 4 of 5.
+                  **NEVER `ln -s` the vendor** — a symlinked vendor makes the autoloader
+                  resolve to the MAIN repo's src/, so the agent's own edits never load and
+                  every test result is about the wrong code.
 
-                  WHEN IT REPORTS:
-                   a) Findings -> spawn a FIX agent (declared list: the four P3.S6 files; in
-                      practice tests/Agents/AgentTest.php). Then a BRAND-NEW cycle-5 reviewer.
-                      Cap is 5 — after cycle 5 you may substitute your own verification, as was
-                      done for both fix branches, but RECORD the accepted risk.
-                   b) Re-run the NINE-file census set yourself. It must be green.
-                   c) Then the FULL SUITE. **P3.S6 has NEVER had one.** Master's figure to beat
-                      is 10519 / 162241 / 1 from the CHECKOUT ROOT.
-                   d) **SYNC FIRST, THEN SUITE.** P3.S6's base c7e5a6454 is now two merges
-                      behind master. Merge master INTO prompt/P3.S6 in its worktree, THEN run
-                      the full suite there, so the figure describes the tree you are about to
-                      create. §6's between-batches sync step, applied to one branch.
-                   e) Merge, then run master's suite again, then remove the worktree (§1.12
-                      checks first) and delete the branch.
+                  MERGE RECIPE, per step:
+                  ```
+                  # branch full suite FIRST, from the worktree root, box quiet:
+                  cd /home/sites/prompt-step-<ID> && php sugar-crush/vendor/bin/phpunit \
+                    -c sugar-crush/phpunit.xml --colors=never --log-junit <junit> </dev/null
+                  # then, from /home/sites/sugarcraft:
+                  git merge --no-ff prompt/<ID>     # message via -F <file>, NOT -m "..."
+                  php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml \
+                    --colors=never </dev/null       # master suite BETWEEN merges
+                  git worktree remove /home/sites/prompt-step-<ID>   # §1.12 checks FIRST
+                  git branch -d prompt/<ID>
+                  ```
+                  **A full suite between each merge is not optional** — a regression measured
+                  after two merges cannot be attributed to either. **If a branch is behind
+                  master, SYNC IT FIRST** (`git merge --no-ff master` in its worktree) and run
+                  the suite on the SYNCED tree, so the figure describes the tree you are about
+                  to create. P3.S6 conflicted on that sync and merging blind would have hit the
+                  same conflict with a dirtier tree. **DO NOT PUSH.**
 
-                  THEN: (f) the **Phase 3 close review** — §1.7, a phase reviewer over ALL of
-                  Phase 3's commits together, cap three cycles.
-                  THEN: (g) **OPEN PHASE 4 IMMEDIATELY.** §0 is the standing order; do not stop
-                  at the boundary to ask. Phase 4's shape is pre-read below.
-
-                  **BEWARE THE API SESSION LIMIT.** It killed the P3.S6 agent mid-sentence once
-                  already (HTTP 429, "resets 4am America/New_York"). If an agent dies that way:
-                  SECURE ITS UNCOMMITTED WORK FIRST (patch + full file copies to the scratchpad,
-                  then verify the backup BY RECONSTRUCTION — `git apply --check` against the
-                  live dirty tree FAILS by design, which reads like a broken backup and is not),
-                  leave the worktree untouched, and only then try rung 1 (SendMessage to the
-                  same agent). That sequence worked.
-
-Steps done:       24 of 63 MERGED. One remains in this phase (P3.S6, red).
-                  Merged this session: P3.S4-fix-1 `1279d91cf` · P3.S5-fix-1 `5cabca4a8`.
-                  Earlier: P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
-                  P3.S5 405252a41 · P3.audit-fix-1 6aff0bad1 · P1.audit-fix-1 03d8fed37 ·
+Steps done:       25 of 63 MERGED. Phase 3's six are complete.
+                  P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
+                  P3.S5 405252a41 · P3.S6 f958ba8e6
+                  Fix/audit sub-steps (not counted in the 63): P3.audit-fix-1 6aff0bad1 ·
+                  P3.S4-fix-1 1279d91cf · P3.S5-fix-1 5cabca4a8 · P1.audit-fix-1 03d8fed37 ·
                   P2.audit-fix-1 33df838d0 + f95546b10 · CI-fix-1 72686c380 ·
-                  P1.audit-fix-3 e0d00b6db.
-Phases done:      3 of 12  (Phase 3 is NOT closed)
-Last commit:      re-derive with `git -C /home/sites/sugarcraft log --oneline -1` rather than
-                  trusting this line. Newest CODE commit is 5cabca4a8 (the P3.S5-fix-1 merge).
-Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
+                  P1.audit-fix-3 e0d00b6db
+Phases done:      3 of 12 merged; Phase 3 CLOSES when its close review passes.
+Last commit:      re-derive with `git -C /home/sites/sugarcraft log --oneline -1`. Newest CODE
+                  commit is f958ba8e6 (the P3.S6 merge); everything after is `prompt:`
+                  bookkeeping.
+Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, NEVER edited)
 
 Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIALLY.** This
                   plan recorded numbers for weeks without naming the cwd, and that is exactly
                   what hid CI being red for five days.
 
-                  **MASTER — GREEN. ORCHESTRATOR-RUN at 614524675, checkout root (= CI's cwd),
-                  stdin </dev/null, serial:
-                    Tests: 10519, Assertions: 162241, Skipped: 1.   (06:57.747)**
-                  This figure was PREDICTED from the per-class attribution before the second
-                  merge and hit exactly, so both merges are known cleanly additive.
-
-                  Progression this session, all checkout root, all serial:
-                    c7e5a6454  10500 / 161982 / 1   (pre-merge master)
-                    1279d91cf  10503 / 162166 / 1   (+ P3.S4-fix-1)
-                    5cabca4a8  10519 / 162241 / 1   (+ P3.S5-fix-1)
+                  **MASTER — GREEN. ORCHESTRATOR-RUN, checkout root (= CI's cwd), stdin
+                  </dev/null, serial, box confirmed to hold zero other phpunit:
+                    Tests: 10526, Assertions: 162447, Skipped: 1**
+                  See §4 for the full progression and the per-class attribution of every delta.
 
                   **CI/local assertion counts are NOT comparable.** The two environments gate
                   different tests (FFI/pty/extension paths) and a failing test stops accruing
                   where it dies. TEST counts agree exactly. Compare assertions between the two
                   CWDS on one box; never between this box and CI.
-                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — UNMOVED throughout.
-                  Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from the wrong
-                  cwd php cannot find tools/check-path-repos.php and all three "fail". That
-                  misread has happened twice.
+                  Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from the
+                  wrong cwd php cannot find tools/check-path-repos.php and all three "fail".
+                  That misread has happened twice.
                   Two tests fail ONLY under a pty with a live terminal
                   (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect stdin
                   from /dev/null.
-                  php-cs-fixer is NOT installed on this box and NOT vendored — the style gate
-                  cannot be run locally.
+                  php-cs-fixer is NOT installed on this box and NOT vendored anywhere in the
+                  tree — the style gate cannot be run locally.
 
-In-flight batch:  **BATCH P3.CLOSE.B1 — two of three closed. ONE AGENT RUNNING: the P3.S6
-                  cycle-4 reviewer. VERIFY WITH `ListAgents` BEFORE TRUSTING THIS LINE.**
-                  It was briefed with §1.4's full nineteen checks (including the new check-19
-                  second half), the P3.S6 step text, the orchestrator's own figures, and the
-                  failing census output. It was NOT given any previous reviewer's findings.
-                  It was also asked to verify one thing the orchestrator has not: **mutation
-                  E5c** — hoist a shared suppressed EnvironmentBlock above the foreach at
-                  WorkflowEngine.php:875 and pass it into the render at :1042; the step claims
-                  this reds ONLY testARealWorkflowEngineSequentialStageChainRendersTheAgent
-                  AssemblerOncePerStage, 6 against an expected 10 at K=2. Verify or refute.
+In-flight batch:  **NONE. Batch P3.CLOSE.B1 is CLOSED — all three of its branches merged,
+                  all three worktrees removed, all three branches deleted.** Write this field
+                  the moment you spawn the next batch, not when you start merging it: every
+                  other field here describes work already recoverable from `git log` and the
+                  worklog, but five agents in five worktrees with a merge order you decided in
+                  your head is recoverable from nothing.
 
-Live worktrees:   /home/sites/sugarcraft            master, clean, at the commit above.
-                  /home/sites/prompt-step-P3.S6     **KEEP** — 4 commits, reviewer out, RED.
-                  Its vendor/ is `cp -al` hard-linked and VERIFIED to resolve the PSR-4 root
-                  into its OWN src/. Branch prompt/P3.S6 exists and is UNMERGED.
-                  /home/sites/prompt-step-P3.S4-fix-1 and -P3.S5-fix-1 were REMOVED after
-                  merging, §1.12 checks passed, branches deleted.
+Live worktrees:   /home/sites/sugarcraft   master, clean, at the commit above. THE ONLY ONE.
                   /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
 
-Blocked on:       P3.S6's census RED. A cycle-4 reviewer is out. NO USER decision is owed —
-                  this is ordinary work. Nothing else is blocked; Phase 3 cannot close until
-                  P3.S6 lands and the close review passes.
+Blocked on:       NOTHING. No user decision is owed to proceed. Phase 3 closes on its review;
+                  Phase 4 opens straight after.
 
-Awaiting user decision: TWO. Neither blocks the queue. Carry both forward on every rewrite
+Awaiting user decision: TWO. **NEITHER BLOCKS THE QUEUE.** Carry both forward on every rewrite
                   until the user answers, and do not decide either yourself.
 
                   **(1) GEMINI FUNCTION CALLING IS NOT BUILT.** P1.audit-fix-3 built the
-                  :generateContent arm, so Gemini now gets a request it would accept and streams
-                  properly — but `setTools()` is vendored and Gemini supports tool calling, and
-                  no shaper was written. So `supportsFunctionCalling()` honestly reports FALSE
-                  for Gemini and the body carries no `tools` key, with that absence PINNED by
-                  testAGeminiBodyCarriesNoToolsKeyEvenWhenToolsAreOffered. This is NOT a
-                  regression — every Google model already reported false — but sugar-crush is an
-                  agent app, so **a model that cannot call tools cannot drive a turn.** It is
-                  the one thing between "Gemini works" and "Gemini is usable here".
+                  :generateContent arm, so Gemini now gets a request it would accept and
+                  streams properly — but `setTools()` is vendored and Gemini supports tool
+                  calling, and no shaper was written. So `supportsFunctionCalling()` honestly
+                  reports FALSE for Gemini and the body carries no `tools` key, with that
+                  absence PINNED by testAGeminiBodyCarriesNoToolsKeyEvenWhenToolsAreOffered.
+                  NOT a regression — every Google model already reported false — but
+                  sugar-crush is an agent app, so **a model that cannot call tools cannot drive
+                  a turn.** It is the one thing between "Gemini works" and "Gemini is usable
+                  here".
                   DECIDE: schedule a follow-up step building the Gemini tools shaper (setTools
                   + functionDeclarations + parsing functionCall parts back into the tool-call
                   shape Runtime expects), or record in §18 that Gemini is deliberately a
                   non-tool-calling model in this provider.
 
-                  **(2) WIRE THE WRITE SIGNAL ON THE WORKFLOW PATH.** The per-step seam P3.S5
-                  left open on the Agent assembler IS REAL and IS LIVE, in
-                  `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
+                  **(2) WIRE THE WRITE SIGNAL ON THE WORKFLOW PATH — P3.S6's escalation.**
+                  The per-step seam P3.S5 left open on the Agent assembler IS REAL and IS LIVE,
+                  in `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
                   which `:1105` and `:875` re-render once per stage and `:1252`/`:1294` render
                   twice in one verification stage. MEASURED with a logging git shim: one render
                   = 5 git subprocesses (3 suppressed), a K-stage workflow = 5*K (10 at K=2, 25
@@ -497,14 +503,13 @@ Awaiting user decision: TWO. Neither blocks the queue. Carry both forward on eve
                   `Agents/AgentResult.php` + the worker IPC frame, because the carrier does not
                   exist: `AgentResult::__construct` is 8 params with NO tool-call field
                   (VERIFIED) and the worker's `complete` frame carries only
-                  output/tokensUsed/costUsd. All of it is outside P3.S6's declared file list,
-                  which is why P3.S6 escalated rather than widened — a §1.1 declared-scope
-                  escalation, and a COMPLETED step.
-                  The §18 row is ALREADY LANDED in prompt_plan.md recording this as escalated,
-                  not waived. DECIDE: schedule the build-it-out as its own step, or leave the
-                  cost standing with the measurement pinned.
+                  output/tokensUsed/costUsd. The §18 row is ALREADY LANDED recording this as
+                  escalated, NOT waived, and an exact-list reflection assertion over that
+                  constructor REDS THE DAY A TOOL-CALL FIELD IS ADDED.
+                  DECIDE: schedule the build-it-out as its own step, or leave the cost standing
+                  with the measurement pinned.
 
-Open follow-ups:  **PROCESS RULES ADOPTED, ALREADY IN EVERY BRIEF:**
+Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                   - A review's findings are written to a FILE the moment they are received
                     (`<scratchpad>/<STEP_ID>/<role>/findings-cycle-<n>.md`), never only
                     summarised. EIGHT of P3.S4-fix-1's ten cycle-3 findings were LOST to a
@@ -512,50 +517,56 @@ Open follow-ups:  **PROCESS RULES ADOPTED, ALREADY IN EVERY BRIEF:**
                   - **A step agent must NEVER leave a sub-agent's work uncommitted.** "Do not
                     commit, I will review first" is safe when the reviewer is a live
                     orchestrator and catastrophic when the only reader is an agent that can be
-                    killed mid-sentence by a rate limit. Commit to the step branch immediately
-                    and amend or revert if the review objects — a commit is recoverable, a dirty
-                    worktree owned by a dead agent is not.
-                  - Every agent gets its OWN scratchpad subdirectory (ORCHESTRATION-RULE-3, §7).
+                    killed mid-sentence by a rate limit — which is exactly what happened to
+                    P3.S6. Commit to the step branch immediately and amend or revert if the
+                    review objects: a commit is recoverable, a dirty worktree owned by a dead
+                    agent is not.
+                  - Every agent gets its OWN scratchpad subdirectory (ORCHESTRATION-RULE-3).
 
-                  **NEW THIS SESSION, and worth scheduling:**
-                  - **(F1) The nine-file census set is still not provably complete.** Two of its
-                    three new members were found only because they bit. Consider deriving the
-                    set — every test that walks src/ or tests/ wholesale — rather than
-                    hand-maintaining it. §16.8 rule 15 says exactly this about rosters
-                    ("derive the roster; never hand-maintain it") and this list is a roster.
-                  - **(F2) `gitSubprocessesDuring()` will exist in more than one file.** The
-                    same logging-git-shim helper shape is now in tests/Agents/AgentTest.php and
-                    the pattern is attractive; DuplicatedTestHelperDriftTest normalises comments
-                    away, so doc-block divergence between copies is invisible to it.
+                  **NEW, and worth scheduling:**
+                  - **(F1) DERIVE the census set** — every test that walks `src/` or `tests/`
+                    wholesale — instead of hand-maintaining a list. §16.8 rule 15 says exactly
+                    this about rosters and this list IS a roster. Evidence: THREE guards outside
+                    the list bit or moved in one batch (ChildStderrCaptureTest red P3.S4-fix-1;
+                    GlobFigureDriftTest moved P3.S5-fix-1; Support\AssertionSwallowingCatchTest
+                    moved P3.S6).
+                  - **(F2) `gitSubprocessesDuring()`** is an attractive helper now in
+                    AgentTest.php; DuplicatedTestHelperDriftTest normalises comments away, so
+                    doc-block divergence between future copies is invisible to it. Same shape as
+                    P2.audit-fix-1's open follow-up 4 — fold them together.
+                  - **A deliberate non-edit, reported not done:** a pointer comment at
+                    `Bootstrap.php:1462` was written, MEASURED to shift 15
+                    `Bootstrap.php:<line>` citations in four `docs/plans/*.md` files outside any
+                    declared list, and REVERTED. Needs a lane that owns `docs/plans/`.
 
-                  **STANDING ITEMS, unchanged:**
+                  **STANDING ITEMS:**
                   **(N1) A per-tool `writesTree(): bool` on `src/Tools/Tool.php:20`**, ESCALATED
-                  by P3.S5-fix-1 and UNAFFECTED by its merge. Grounds are strong: three
-                  reviewers defeated a token scanner over function NAMES **eleven** times, each
-                  on a fully green suite. A name-based scanner is structurally incompletable.
-                  `writesTree()` moves the judgement to the only place that can make it. The
-                  alternative the code already names is a working-tree fingerprint. **Needs a
-                  user decision on which.**
+                  by P3.S5-fix-1 and unaffected by its merge. Three reviewers defeated a token
+                  scanner over function NAMES **eleven** times, each on a fully green suite. A
+                  name-based scanner is structurally incompletable. The alternative the code
+                  already names is a working-tree fingerprint. **Needs a user decision on
+                  which** — but note it is NOT blocking: the scanner now fails CLOSED.
                   **(N2) `SymbolCitationDriftTest` has TWO holes**, both letting a fabricated
                   citation pass green: the backtick scraper at `:290` has no `/` in its class
                   part so a PATH-PREFIXED citation matches nothing; and `looksLikeATestSymbol()`
                   at `:335` keeps a citation only when the short class name ends in `Test`, so a
-                  fabricated `…TestClass` is discarded before resolution. One step should close
-                  both. (Correction to an older entry: it is NOT true that nothing catches a
-                  stranded citation — fabricating the P3.S5 method name DOES red it.)
-                  **(N3) `tests/RuntimeTest.php:2926-2939` — a THIRD scratch-repository fixture**
-                  carrying the config roster PromptStabilityTest had BEFORE P3.S4-fix-1: no
-                  `log.date`, no `format.pretty`, no `.git/info/attributes`. MEASURED under a
-                  hostile `core.attributesFile`: PromptStabilityTest green, RuntimeTest RED.
-                  Its own step. **Line numbers moved when P3.S5-fix-1 merged — re-derive.**
+                  fabricated `…TestClass` is discarded before resolution. One step closes both.
+                  MEASURED this session: it polices only TEST-symbol citations — a bogus
+                  production `{@see}` leaves it green.
+                  **(N3) `tests/RuntimeTest.php` — a THIRD scratch-repository fixture** carrying
+                  the config roster PromptStabilityTest had BEFORE P3.S4-fix-1: no `log.date`,
+                  no `format.pretty`, no `.git/info/attributes`. MEASURED under a hostile
+                  `core.attributesFile`: PromptStabilityTest green, RuntimeTest RED. Its own
+                  step. **RE-DERIVE THE LINE NUMBERS — P3.S5-fix-1 and P3.S6 both moved this
+                  file.**
                   **(N4) `src/Context/EnvironmentBlock.php:855`** — `'unavailable (shell_exec is
                   disabled on this build)'` is an INLINE LITERAL where its sibling at `:327` is
                   the constant `NO_PROCESS_REASON`. MEASURED: renaming it alone leaves the tree
                   green.
-                  **(N5) Two loose ends from P3.S5-fix-1's reviewers:** `tests/RuntimeTest.php`
-                  asserts trait file order from `ReflectionClass::getTraits()`, so swapping two
-                  `use` lines in `Grep.php` — a semantic no-op — would red it; and
-                  `phpFilesUnder()` follows directory symlinks, unbounded only latently.
+                  **(N5) Two loose ends:** `tests/RuntimeTest.php` asserts trait file order from
+                  `ReflectionClass::getTraits()`, so swapping two `use` lines in `Grep.php` — a
+                  semantic no-op — would red it; and `phpFilesUnder()` follows directory
+                  symlinks, unbounded only latently.
 
                   **HIGH / SECURITY, LIVE IN PRODUCTION — see commit f571e59b5.** The `<env>`
                   diff sections are an UNROSTERED `</env>` fence-escape vector.
@@ -581,8 +592,8 @@ Open follow-ups:  **PROCESS RULES ADOPTED, ALREADY IN EVERY BRIEF:**
                   calls `setParameters()`, so `temperature`/`maxOutputTokens` are DISCARDED for
                   every legacy Google model — NOT fixed, but PINNED at the wire by
                   `testTheLegacyPredictCallSiteStillDropsItsParameters`, so whoever repairs it
-                  reds that test BY DESIGN. Also still unrouted: `publishers/mistralai`, `meta`,
-                  `ai21`.
+                  reds that test BY DESIGN. Also still unrouted: `publishers/mistralai`,
+                  `meta`, `ai21`.
 
                   **AuditHook carries a measurement that is now known false.**
                   src/Hooks/BuiltIn/AuditHook.php:103-105 says putenv('TMPDIR=…') followed by
@@ -596,13 +607,13 @@ Open follow-ups:  **PROCESS RULES ADOPTED, ALREADY IN EVERY BRIEF:**
                   DuplicatedTestHelperDriftTest normalises comments away, so doc-block
                   divergence between the two copies of hostPathLeaks() is INVISIBLE to it.
                   Wants a tests/Support/ helper; that directory is lane-owned (§5), so it needs
-                  its own step. See also (F2) above, which is the same shape.
+                  its own step. Fold with (F2).
 
                   **RR3 F5** — the golden pins a DOUBLED separator before every skill body and
                   this ships to the model (Skill.php:109 already returns "\n\n"; Runtime.php
-                  prepends another). Deferred because it needed src/Runtime.php, which
-                  prompt/P3.S5 held — **that branch is merged and the file is FREE.**
-                  Re-measure the line number before citing it; P3.S5-fix-1 moved things again.
+                  prepends another). Was blocked on src/Runtime.php; **that file is now FREE**.
+                  Re-measure the line number before citing it — P3.S5-fix-1 and P3.S6 both
+                  moved it.
 
                   Items previously queued and still open: P1.audit-fix-2 (RR2 F1/F3/F4/F7);
                   P3.audit-fix-2 (RR4 F2/F5/F7 plus P3.S4 escalations 2-3 and P3.S5 escalations
@@ -613,15 +624,18 @@ Open follow-ups:  **PROCESS RULES ADOPTED, ALREADY IN EVERY BRIEF:**
                   guards are UNPROVEN until re-run); §17.2 citation rot; doc edits +
                   progress.json (dormant machinery — wire it or build it out, NEVER delete).
 
-Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-31. Phase 3 is serial S1->S6.
-                  The src/ file-count census is RESOLVED — it never applied to this plan (§5),
-                  so Phases 5/6/10 are NOT serialised by it. Still live before Phase 5/6:
-                  EngineBackend.php held by a lane and also edited by merged P3.S5 (wanted by
-                  P7.S3); Chat.php + ContextCompactor.php for P4.S4/P4.S5 and P8; Bash.php
-                  behaviour vs P9.S3 description; AgentDefinition C7 for P7.S5; tests/Support/
-                  wholesale — now wanted by THREE queued follow-ups.
+Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-31. Phase 3 ran serial S1->S6 and is
+                  done. The src/ file-count census is RESOLVED — it never applied to this plan
+                  (§5) — so Phases 5/6/10 are NOT serialised by it.
+                  Still live before Phase 5/6: EngineBackend.php held by a lane and also edited
+                  by merged P3.S5 (wanted by P7.S3); Chat.php + ContextCompactor.php for
+                  P4.S4/P4.S5 and P8; Bash.php behaviour vs P9.S3 description; AgentDefinition
+                  C7 for P7.S5; tests/Support/ wholesale — now wanted by THREE queued
+                  follow-ups.
                   src/Providers/VertexProvider.php is a hot file — P1.audit-fix-2 and both
                   legacy-arm follow-ups all want it. Serialise them.
+                  **src/Runtime.php and src/Agents/Agent.php are now FREE** — no branch holds
+                  them.
 ```
 
 **Phase 4 is pre-read, so you do not have to re-read `prompt_plan.md` when Phase 3 closes.**
@@ -629,25 +643,25 @@ Phase 4 = "Token accounting and cache observability", `prompt_plan.md` lines 158
 
 - **P4.S1** Give `Usage` real buckets — inputTokens / outputTokens / cacheReadTokens /
   cacheCreationTokens, total = cacheRead + cacheCreation + input. Files: `src/Usage.php`,
-  `tests/UsageTest.php`. Hard constraint from the backlog: do **NOT** simply raise the 95%
-  threshold; that hides the unit mismatch instead of naming it.
+  `tests/UsageTest.php`. **Hard constraint from the backlog: do NOT simply raise the 95% threshold** —
+  that hides the unit mismatch instead of naming it.
 - **P4.S2** Providers populate the buckets. Files: Sglang/Custom/OpenAI/Bedrock/Vertex providers +
-  `tests/Integration/UsageWiringTest.php`. Each provider needs a REAL-SHAPED usage payload copied
-  from an actual response and pasted into the worklog — a hand-invented shape proves only that the
+  `tests/Integration/UsageWiringTest.php`. **Each provider needs a REAL-SHAPED usage payload copied
+  from an actual response and pasted into the worklog** — a hand-invented shape proves only that the
   parser parses your invention.
 - **P4.S3** Cache health in the status line. Files: `Config/StatusLineCommand.php`, `Renderer.php` +
-  their two tests. Hard constraint: renders into the STATUS LINE PANE, never the transcript, and a
+  their two tests. **Hard constraint:** renders into the STATUS LINE PANE, never the transcript, and a
   test must assert rendering it adds ZERO messages to the session transcript.
 - **P4.S4** E18 — one exchange larger than the tier is refused five times with a RISING estimate
   (200,148 -> 200,660). Files: `Context/ContextCompactor.php`, `Chat.php` + two tests.
-- **P4.S5** E23 — `exchangeKey()` collapses byte-identical exchanges. Measure FIRST, then fix or
+- **P4.S5** E23 — `exchangeKey()` collapses byte-identical exchanges. **Measure FIRST**, then fix or
   close as measured.
 
 **Concurrency:** Batch 1 = **P4.S1 ALONE** (everything depends on it). Batch 2 = **P4.S2 + P4.S3**
 concurrently (disjoint). Batch 3 = **P4.S4 -> P4.S5 SERIAL** (both own `ContextCompactor.php`).
 **§5 collision:** `Chat.php` and `ContextCompactor.php` are the other plan's long-standing backlog —
 re-check with the supervisor before Batch 3. P4.S1's files are disjoint from every lane claim, so it
-is safe to open the moment the Phase 3 close review passes.
+is safe to open the moment the close review passes.
 
 ---
 

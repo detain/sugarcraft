@@ -253,6 +253,152 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S6 — the second-assembler write-signal gap, dispositioned as a declared-scope escalation   ·   2026-08-31   ·   `f958ba8e6`
+
+**Status** `MERGED` (outcome: **§1.1 DECLARED-SCOPE ESCALATION**, a completed step under §1.10)
+**Worktree** /home/sites/prompt-step-P3.S6  (removed after merge)
+**Base** c7e5a6454, then synced to master mid-step (see Review loop)
+
+**Goal (restated in one sentence)**
+Either wire the per-step write signal into `Agents\Agent::systemPrompt()` — the second assembler —
+or land the measurement showing there is no per-step seam to wire.
+
+**What changed**
+- `sugar-crush/src/Agents/Agent.php` — **doc-block only**, +435 lines, 0 deletions.
+- `sugar-crush/src/Runtime.php` — **doc-block only**, the conflict resolution + three stale-claim
+  repairs.
+- `sugar-crush/tests/Agents/AgentTest.php` — +1222 lines, 7 new tests, 0 deletions.
+- **Both `src/` files are executable-identical to master.** ORCHESTRATOR-VERIFIED with my own token
+  census: `Agent.php` 1270 executable tokens both sides (md5 `2e55257ad98dc0e9`), `Runtime.php` 4366
+  both sides (md5 `c0b8403d9ec5ab0d`).
+
+**THE OUTCOME — neither (a) nor (b).** The step allowed wiring, or a §18 row plus the measurement.
+It landed a third thing: the per-step seam **IS real and IS live**, in `Workflows/WorkflowEngine.php`,
+**outside the declared file list**. Its own cycle 1 falsified its first claim that no seam existed;
+its own cycle 2 falsified a later claim that the signal was underivable there. Wiring it is a
+**build-it-out** across `WorkflowEngine.php` + `Agents/AgentResult.php` + the worker IPC frame,
+because the carrier does not exist: `AgentResult::__construct` is eight parameters with **no
+tool-call field** and the worker's `complete` frame carries only `output`/`tokensUsed`/`costUsd`.
+So it escalated rather than widened. **(b) was also literally unsatisfiable as briefed** — it
+required landing a §18 row in `prompt_plan.md`, a file the same brief puts on the never-edited list.
+That is a defect in the step text, not the agent's doing. The §18 row was landed by the orchestrator,
+**not** the agent's text: its draft still asserted the signal was "unanswerable on this path today",
+which its own cycle 2 had falsified.
+
+**Tests added or changed** — 7 new methods in `AgentTest.php`, all pinning pre-existing behaviour,
+which is the correct shape for an escalation step:
+- the **eight** call sites, DERIVED by a token census, with the per-file distribution (1/1/1/5)
+  pinned because unlike a line number it survives an edit above it;
+- the cost: one render = **5** git subprocesses, **3** suppressed, `capture()` alone = **0**,
+  measured with a logging `git` shim on `PATH`;
+- a K-stage workflow = 5×K; one `ProcessExecutor` dispatch = **10** because it renders TWICE; and in
+  every case the stages see **ONE DISTINCT PROMPT**, the two git-diff sections re-sent per stage;
+- an exact-list reflection assertion over `AgentResult::__construct`, **so the day a tool-call field
+  is added — the change that unblocks this — the test reds and names it.**
+
+**Deletion experiment** — mutation **E5c**, INDEPENDENTLY VERIFIED by the cycle-4 reviewer after the
+orchestrator flagged it as the one unverified claim: hoisting a shared suppressed `EnvironmentBlock`
+above the `foreach` at `WorkflowEngine.php:875` and passing it into the render at `:1042` reds
+**exactly one** test — `testARealWorkflowEngineSequentialStageChainRenders…`, *"Failed asserting that
+6 is identical to 10"* — sibling and rest of file green. **The mirror mutation at
+`executePipelineStage` reds only the sibling**, which the step had never established. The roster test
+is mutation-live too: `if (false) { $subAgent->agent?->systemPrompt(); }` reds it.
+
+**MEASURED** (orchestrator-run; cwd `/home/sites/prompt-step-P3.S6`; serial; box confirmed to hold
+zero other phpunit; `</dev/null`)
+```
+FULL SUITE          Tests: 10526, Assertions: 162447, Skipped: 1   (06:50.507)
+master              Tests: 10519, Assertions: 162241, Skipped: 1
+tests/Agents/AgentTest.php               OK (33 tests, 327 assertions)
+tests/RuntimeTest.php                    OK (128 tests, 450 assertions)
+the pinned derived-count test            OK (1 test, 8 assertions)
+NINE-file census set                     OK (176 tests, 31215 assertions)
+git diff --name-only master..HEAD  = the 3 files above
+goldens 32ea749d… / ef0326dd…      UNMOVED
+```
+**Delta: +7 tests, +206 assertions.** The **test** count hit the pre-stated prediction exactly. The
+assertion count came in **+12 ABOVE** prediction, and that gap was attributed rather than shrugged
+at — per-class JUnit diff, **no remainder**:
+```
+Agents\AgentTest                        193 ->   327   (+134, +7 tests)
+Config\GlobFigureDriftTest            21166 -> 21222   (+56)
+Support\AssertionSwallowingCatchTest   3256 ->  3268   (+12)   <- the miss
+SymbolCitationDriftTest                2984 ->  2988   (+4)
+```
+The +12 is a **TENTH tree-wide guard, outside the census set**. Attributed by DELETION EXPERIMENT:
+reverting `AgentTest.php` alone drops it back to exactly 3256. It polices `catch` blocks wrapping an
+assertion (which would swallow the assertion's own failure), and this step's new `try/finally` test
+code gives it twelve more sites. Movement is UPWARD — the safe direction.
+
+**Review loop**
+- Cycles 1-3 internal to the step agent. Cycle 3's fixes were left UNCOMMITTED on instruction; the
+  agent was then killed mid-sentence by an API rate limit (HTTP 429). The work was rescued by patch
+  backup + verification-by-reconstruction, and the agent recovered via §1.8 rung 1 (`SendMessage`).
+- **Cycle 4 was MANDATED, not discretionary.** The orchestrator's own run of the widened census set
+  red the branch: `ChildStderrCaptureTest::testNoChildLaunchedInScopeLeavesItsStderrOnTheSuites`,
+  `'Agents/AgentTest.php:2543 (shell_exec -> discarded)'`. §1.2 requires an orchestrator failure
+  after a clean review loop to re-enter the loop with a brand-new reviewer briefed with §1.4 + the
+  failing output + nothing else. **Five earlier cycles missed it because the OLD six-file census set
+  did not contain that guard.**
+- Cycle 4 returned six findings; five closed at `8f52d6942`:
+  **F1** the guard defect — fixed with `2>&1` plus a compound assertion on the shape of a usable
+  binary, because the redirect folds error text INTO the captured value and the old
+  `assertNotSame('', …)` passed on `sh: 1: command: not found`. Measured on five polarities.
+  **F2/F3** three more off-by-one MEASURED figures, all self-inflicted by this step's own added
+  prose (13 not 12 occurrences; 4 not 3 in `Agent.php`; TWO hits not "exactly ONE").
+  **F4** a live citation this diff staled in `src/Runtime.php` — `Agent.php:417` was the `capture()`
+  statement at base and is doc-block prose at the tip. **The declared list was WIDENED by one file**
+  to repair collateral this change-set caused: required completion, not scope creep.
+  **F5** `Bootstrap.php:1462` given the same considered-and-declined treatment `App.php` had.
+  **F6** disclosure only — the `src/` half is executable-null, so "would the test fail if reverted"
+  is vacuous there; no coverage was manufactured to answer it.
+- A **third** stale claim was found and fixed unprompted in the same paragraph: a *"MEASURED, zero
+  hits"* for `withWriteSinceLastRender` that this branch's own prose had falsified (0 → 4 hits, all
+  prose, still no call).
+- **The merge into master CONFLICTED** in `src/Runtime.php` and was resolved as **neither side
+  wholesale**. Master's sentence there is pinned by
+  `RuntimeTest::testTheAgentAssemblerCallSiteCountInThisDocblockIsDerivedFromTheTree()`, which
+  derives the count from the tree and requires it written **as a digit with an `Agent::` prefix** —
+  this branch's "EIGHT `systemPrompt()`" wording would have zeroed that `substr_count` and red it.
+  But this branch carried two corrections master needed. Both survive; nothing was deleted.
+Total cycles: 4 of 5 (cap not reached), plus one orchestrator-verified fix pass and one sync.
+
+**Invariants touched**
+No file added under `sugar-crush/src/`, so §17.1's census figures are unmoved. Goldens unmoved —
+required, since `writeSinceLastRender` still defaults to `true` and a moved golden would mean default
+behaviour changed. §17.2's two-assembler split is untouched and is in fact what this step measures.
+
+**Surprises / things the plan got wrong**
+1. **The step text was WRONG, and its own diff had already corrected it.** The Goal called
+   `bin/sugarcrush → … → AgentManager.php:433` live "today" and said the eight sites are all live.
+   **Six are live; two are dormant; and `AgentManager.php:433` is one of the dormant two.**
+   ORCHESTRATOR-RE-DERIVED: the `--exclude=Agent.php` form of `->executeSubAgent(` produces no output
+   and exits 1, and so does the same form for `->dispatchSkill(`. Corrected on master at `fb4eeffc7`
+   in §16.8 rule 42's three-part form. This is exactly the asymmetry §1.4 check 14 exists to catch —
+   nothing downstream is asked to falsify a brief.
+2. **The census set is STILL not complete — a third guard outside it moved today.**
+   `ChildStderrCaptureTest` red P3.S4-fix-1; `GlobFigureDriftTest` moved P3.S5-fix-1;
+   `Support\AssertionSwallowingCatchTest` moved this one. Note it is a DIFFERENT file from
+   `tests/SwallowingCatchCensusTest.php`, which IS in the set — a confusion waiting to happen.
+   **Hand-maintaining this list is a losing game; the per-class JUnit diff is the durable method.**
+3. **A step that changes NO executable code can still red a tree-wide guard**, because these censuses
+   scan prose and test structure, not behaviour. "Doc-block only" is not "cannot break anything".
+
+**Follow-ups created**
+- **(F1)** Derive the census set — every test that walks `src/` or `tests/` wholesale — rather than
+  hand-maintaining it. §16.8 rule 15 says exactly this about rosters, and this list is a roster.
+  Three misses in one batch is the evidence.
+- **(F2)** `gitSubprocessesDuring()` is an attractive helper shape now present in `AgentTest.php`;
+  `DuplicatedTestHelperDriftTest` normalises comments away, so doc-block divergence between future
+  copies would be invisible to it. Same shape as P2.audit-fix-1's open follow-up 4.
+- **A deliberate non-edit, reported not done:** a pointer comment at `Bootstrap.php:1462` was
+  written, MEASURED to shift 15 `Bootstrap.php:<line>` citations in four `docs/plans/*.md` files
+  outside any declared list, and REVERTED. The reasoning lives in `Agent.php`'s doc-block instead.
+  If the pointer is wanted, it needs a lane that owns `docs/plans/`.
+- **ESCALATION (2) in `prompt_resume.md` §8 is this step's** and remains open for the user.
+
+---
+
 ### P3.S5-fix-1 — the alias channel that failed OPEN by SUBTRACTING write primitives   ·   2026-08-31   ·   `5cabca4a8`
 
 **Status** `MERGED`
