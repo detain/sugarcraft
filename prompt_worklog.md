@@ -253,6 +253,133 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 (fix cycle) — the write-primitive scanner lost a brace level on every interpolated argument   ·   2026-08-31   ·   `842cc59b3`, NOT MERGED
+
+**Status** `in review` — the RED is closed; review cycle 4 of a maximum five is IN FLIGHT.
+**Worktree** `/home/sites/prompt-step-P3.S5-fix-1` — LEFT IN PLACE.
+**Base** master `1267e6fbb`. Branch `prompt/P3.S5-fix-1`, now 5 commits.
+
+**Goal** `InterpolationOpenerTokenTest::testEveryBraceWalkingScannerNamesEveryOpener` — a PRE-EXISTING
+tree-wide census that is GREEN on master — had to go green **because this step's scanner actually
+handles every token PHP uses to OPEN a brace**, not because a `KNOWN_GAPS` row deferred it.
+
+**What changed** — one file, `sugar-crush/tests/RuntimeTest.php`, +107/−1.
+`callArguments()` (`:3002-3005`, `:3017-3018`) counted brace depth on the bare one-byte strings `{`
+and `}` alone. PHP opens an interpolated expression with an **array** token — `T_CURLY_OPEN` (text
+`{$`), and `T_DOLLAR_OPEN_CURLY_BRACES` (text `${`) where the running PHP still defines it — and
+closes it with the bare `}`. So every interpolation handed the walk a closer whose opener it had never
+taken, and the argument list ended a level early. Both openers are now counted; the deprecated one is
+reached only under `\defined('T_DOLLAR_OPEN_CURLY_BRACES')`, the same shape the census itself uses.
+
+**THE DEFECT MEASURED THROUGH THE SHIPPED METHOD BEFORE ANY TEST WAS WRITTEN** — by reflection over
+eight one-line fixtures. This is what established it rather than assuming it:
+
+```
+                        BEFORE              AFTER
+errorlog-interp-first   []                  {"error_log":[4]}
+errorlog-plain          {"error_log":[3]}   {"error_log":[3]}
+errorlog-nonfile        []                  []
+errorlog-dollar-brace   []                  {"error_log":[4]}
+imagepng-interp         []                  {"imagepng":[3]}
+imagepng-buffer         []                  []
+fopen-interp            {"fopen":[3]}       []
+fopen-plain-read        []                  []
+```
+
+`error_log("boom {$e}", 3, $path)` and `imagepng(make("{$p}"), $p)` really do write a file and came
+out READ-ONLY — the **fail-OPEN** direction, because the truncated walk left `argumentsMeanAWrite()`
+with no `$arguments[1]` and both the `errorlog` and `target` rules answer false on an absent one. The
+closed direction was there too: `fopen("{$p}/x", 'rb')` was reported as a write it is not, because the
+mode argument had been swallowed.
+
+**Test added** `tests/RuntimeTest.php::testTheWritePrimitiveScannerSurvivesAnInterpolatedArgument`
+(`:3456`) — feeds a synthetic nowdoc fixture through the shipped `writePrimitivesCalledIn()` and pins
+the exact primitive→line map `['error_log' => [9, 11], 'imagepng' => [10]]` with ONE `assertSame`.
+BOTH POLARITIES THROUGH THE SAME INSTRUMENT: lines 9-11 are real file writes that must be reported;
+line 12 `fopen("{$path}/x", 'rb')`, line 13 `error_log(…)` with no file argument, and line 14's
+buffer-form `imagepng` must NOT be. A classifier that reports everything reds on the same line as one
+that reports nothing.
+
+**Deletion experiment — THREE mutations, each on a committed tree, each restore verified with an
+empty `git status --porcelain`.**
+1. Revert the whole depth clause → RED. Expected `error_log[9,11]` + `imagepng[10]`, actual
+   `fopen[12]`. Every real write lost AND a non-write gained, from the one missing token.
+2. Keep the clause, drop `T_DOLLAR_OPEN_CURLY_BRACES` → RED, line 11 alone disappears.
+3. Keep the deprecated opener, drop `T_CURLY_OPEN` → RED, lines 9 and 10 disappear and `fopen[12]`
+   returns.
+The two halves of the opener list are pinned **independently**; neither is an equivalent mutant of the
+other. Restored: `OK (1 test, 1 assertion)`.
+
+**MEASURED — ORCHESTRATOR'S OWN RUNS, not the agent's**, from cwd `/home/sites/prompt-step-P3.S5-fix-1`,
+tree at `842cc59b3`, `git status --porcelain` empty, stdin `</dev/null`:
+
+```
+--filter 'InterpolationOpenerTokenTest|RuntimeTest|SystemPromptWiringTest'
+  OK (136 tests, 679 assertions)      <- agent reported 6/164 + 119/440 + 11/75 = 136/679. AGREES EXACTLY.
+the six tree-wide census files
+  OK (103 tests, 9468 assertions)     <- agent reported the same. AGREES EXACTLY.
+git diff --name-only 1267e6fbb..HEAD
+  exactly the three declared files
+git diff --stat 1267e6fbb..HEAD -- sugar-crush/tests/Support/InterpolationOpenerTokenTest.php
+  EMPTY — the census test itself is untouched
+md5sum of the two goldens
+  32ea749d84938811ac9331419cae7380 / ef0326dd38535aaa2f1d715919bff26e   UNMOVED
+```
+RuntimeTest went 118/439 → 119/440 (+1 test, +1 assertion — the new test). SystemPromptWiringTest
+unchanged at 11/75. `InterpolationOpenerTokenTest` 6/164, and **green for the right reason**: measured
+through the census's own private methods by reflection, `missingOpenersIn('tests/RuntimeTest.php')`
+returns `[]` and **not** `null` — the file is still SELECTED as a brace walker and has merely stopped
+having a gap — and `KNOWN_GAPS` still holds exactly its three pre-existing rows.
+
+**FULL SUITE NOT YET RUN AT THIS HEAD.** Baseline to beat: `Tests: 10506, Assertions: 162036,
+Failures: 1, Skipped: 1` at `5a0ff8e12` (orchestrator, serial, worktree root). Expected `Failures: 0`
+and +1/+1 — **UNVERIFIED, and nobody may write that figure down until it is measured serially.**
+
+**SURPRISE — THE BRIEF'S OWN CHARACTERISATION OF THE FAILURE WAS WRONG, AND WRONG IN A WAY THAT WOULD
+HAVE PRODUCED A GREEN TEST THAT PINNED NOTHING.** My brief (copying the census's own message) said the
+scanner *"silently stops matching after the first interpolated string."* That is true of
+`callArguments()`'s internal walk but **NOT** of the enclosing `writePrimitivesCalledIn()` loop, which
+is linear and keeps scanning. The real damage is narrower and worse-shaped: the argument list is
+**TRUNCATED**, and `argumentsMeanAWrite()` reads the absent `$arguments[1]` as "not a write" — a silent
+RECLASSIFICATION of a real write to read-only, not a halt. A fixture built on the brief's wording — a
+write placed *after* an interpolation — comes out green and proves nothing. **Same lesson as last
+session's, one layer down: a message quoted from a guard is a description of the class, not of this
+instance. Re-derive the instance.**
+
+**Follow-ups created — recorded, NOT fixed (minimal-edit scope)**
+1. `tests/RuntimeTest.php:3015-3060` — the doc-block on `argumentsMeanAWrite()` says UNREADABLE MEANS
+   WRITE *"in every branch"*. **It does not.** Two of its three rules return `false` when
+   `$arguments[1]` is absent — exactly the state a mis-parse produces. Those `false` returns are
+   correct for the shapes they were written for (`imagepng($im)` really is the buffer form,
+   `error_log($m)` really does go to the log), so this is not fixed by inverting them: it is a claim
+   in prose wider than the code, and the safety it promised was being carried by the walk. The walk is
+   now correct so the claim is no longer load-bearing, but it is still overstated. Either correct the
+   prose in §16.8 rule 42's three-part form, or make the rules distinguish "argument genuinely absent
+   in the source" from "argument the walk failed to produce" — the second is the real repair and needs
+   `callArguments()` to report a truncated parse rather than a short list.
+2. `tests/RuntimeTest.php:3017` — `callArguments()` counts the bare `[` but not `T_ATTRIBUTE`, the
+   array-token opener for `#[`, closed by a bare `]`. Identical class of defect one bracket over, and
+   OUTSIDE `InterpolationOpenerTokenTest`'s alphabet (its predicate requires a dispatch on both `{`
+   and `}`). **Latent, not live**, MEASURED: over every `.php` under `src/` and `tests/`, exactly ONE
+   `T_ATTRIBUTE` sits after a `(` or `,` — `src/ToolRegistry.php:43`, `#[\SensitiveParameter]` on a
+   promoted constructor parameter — and that is a DECLARATION, which `callArguments()` never enters
+   because the `T_FUNCTION` guard excludes it.
+3. The two attribute-skip walks in this file (`:2828-2830`, `:3663-3665`) count `[`/`]` only and both
+   already name `T_ATTRIBUTE`. Deliberately left alone; recorded so the next reader does not
+   re-derive it.
+
+**Subagents** One fix agent. Complete seven-section report, not blank, not truncated. Answered
+ORCHESTRATION-RULE-2 **NO** — no `git init`, no `git config` write, anywhere. All scratch files inside
+its own `scratchpad/P3.S5-fix-1/` subdirectory under a `p3s5fix1` name prefix; nothing at the
+scratchpad root, no generic names, no `rm -rf`. ORCHESTRATION-RULE-3 held.
+
+**HANDOFF** Review cycle 4 is in flight with a BRAND-NEW reviewer (never re-use one; never hand it the
+earlier cycles' findings — §1.4). It was asked, as its highest-value contribution, to construct the
+**twelfth** defeat of this scanner and measure it. Two cycles remain. On a clean review: run the full
+suite SERIALLY from the worktree root, then merge — **second**, after `P3.S4-fix-1`.
+
+---
+
 ### BATCH P3.CLOSE.B1 RE-OPEN · 2026-08-31 (fix cycle) — two fix agents spawned
 Steps: `P3.S5-fix-1` (red-fix + cycle 4), `P3.S4-fix-1` (cycle-3 findings + cycle 4)
 Merge order: `P3.S4-fix-1` first, then `P3.S5-fix-1` — UNCHANGED from the original declaration.
