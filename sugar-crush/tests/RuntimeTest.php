@@ -2968,12 +2968,42 @@ final class RuntimeTest extends TestCase
      * that construct, so `imagepng($im, foo($a, $b))` has TWO arguments and not
      * three. Depth is counted over `(`, `[`, `{` and their closers.
      *
+     * NOT EVERY `{` IS THE ONE-BYTE STRING `{`. An interpolated string opens
+     * its expression with an ARRAY token — `T_CURLY_OPEN`, whose text is `{$`,
+     * and, where the running PHP still defines it,
+     * `T_DOLLAR_OPEN_CURLY_BRACES`, whose text is `${` — while the CLOSER comes
+     * back as the bare `}` either way. A walk that counted only the one-byte
+     * strings therefore took a closer it had never taken the opener for and
+     * LOST A LEVEL, ending the argument list early. MEASURED on PHP 8.3.6
+     * through the shipped {@see writePrimitivesCalledIn()} before this was
+     * fixed: `error_log("boom {$e}", 3, $path)` and
+     * `imagepng(make("{$p}"), $p)` each came back `[]` — READ-ONLY, the
+     * fail-OPEN direction — because the walk returned one truncated argument
+     * and no `$arguments[1]` for {@see argumentsMeanAWrite()} to judge. In the
+     * other direction `fopen("{$dir}/x", 'rb')` was reported as a write it is
+     * not, because the mode argument had been swallowed.
+     *
+     * THE DEPRECATED SPELLING IS LOOKED UP, NOT NAMED UNCONDITIONALLY. `${…}`
+     * interpolation is deprecated as of PHP 8.2 and slated for removal, so
+     * `T_DOLLAR_OPEN_CURLY_BRACES` is a constant a future PHP may stop
+     * defining — at which point a list naming it outright is an
+     * `Error: Undefined constant` rather than a scanner bug. On such a PHP the
+     * lexer also stops producing the token, so there is nothing left to count.
+     * Same shape as {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest},
+     * the tree-wide census that exists because this exact defeat has now
+     * happened to several scanners here.
+     *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      *
      * @return list<list<array{0: int, 1: string, 2: int}|string>>
      */
     private static function callArguments(array $tokens, int $openIndex): array
     {
+        $interpolationOpeners = [T_CURLY_OPEN];
+        if (\defined('T_DOLLAR_OPEN_CURLY_BRACES')) {
+            $interpolationOpeners[] = T_DOLLAR_OPEN_CURLY_BRACES;
+        }
+
         $depth = 0;
         $arguments = [];
         $current = [];
@@ -2984,7 +3014,8 @@ final class RuntimeTest extends TestCase
             if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
                 continue;
             }
-            if ($token === '(' || $token === '[' || $token === '{') {
+            if ($token === '(' || $token === '[' || $token === '{'
+                || (\is_array($token) && \in_array($token[0], $interpolationOpeners, true))) {
                 $depth++;
                 if ($depth === 1) {
                     continue;
@@ -3383,6 +3414,81 @@ final class RuntimeTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('could not read');
         self::writePrimitivesCalledIn($dir . '/NoSuchProbe.php');
+    }
+
+    /**
+     * AN INTERPOLATED STRING IN AN ARGUMENT DOES NOT END THE ARGUMENT LIST.
+     *
+     * THE DEFEAT THIS PINS, and it is the eleventh this scanner has taken. PHP
+     * opens an interpolated expression with an ARRAY token — `T_CURLY_OPEN`
+     * (`{$`), or `T_DOLLAR_OPEN_CURLY_BRACES` (`${`) where the running PHP
+     * still defines it — and closes it with the BARE one-byte string `}`.
+     * {@see callArguments()} counted depth on the one-byte strings alone, so
+     * every interpolation handed it a closer whose opener it had never seen
+     * and the walk lost a level, returning early with a truncated argument
+     * list.
+     *
+     * IT FAILS IN BOTH DIRECTIONS AND THE OPEN ONE IS FIRST. With no
+     * `$arguments[1]` to judge, {@see argumentsMeanAWrite()}'s `errorlog` and
+     * `target` rules both answer FALSE — so `error_log("boom {$e}", 3, $path)`
+     * and `imagepng(make("{$p}"), $p)`, which really do write a file, came out
+     * READ-ONLY. MEASURED on PHP 8.3.6 through the shipped private method:
+     * both returned `[]`. The closed direction is here too — the swallowed
+     * mode made `fopen("{$p}/x", 'rb')` a reported write it is not — and it is
+     * in the SAME assertion, so a "fix" that classifies everything as writing
+     * reds on the same line as one that classifies nothing.
+     *
+     * A SYNTHETIC FIXTURE, NOT A REAL TOOL. No built-in interpolates inside a
+     * conditional primitive's arguments today, which is precisely why this was
+     * latent, and a control keyed on a tool that might grow one is a control
+     * whose absence is indistinguishable from a fix.
+     *
+     * THE DEPRECATED SPELLING IS DATA HERE. `${e}` lives inside a NOWDOC and
+     * is written to a file this suite only ever tokenises, never compiles — so
+     * it cannot emit the 8.2 deprecation, the same argument
+     * {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest::INTERPOLATIONS}
+     * makes for holding its spellings as source strings. On a PHP that has
+     * removed the syntax the lexer stops producing the opener, `${e}` becomes
+     * ordinary text, the argument list is intact for a different reason and
+     * the expected value below is unchanged — that row then pins nothing and
+     * says so, rather than reddening.
+     */
+    public function testTheWritePrimitiveScannerSurvivesAnInterpolatedArgument(): void
+    {
+        $dir = $this->makeTempRepo();
+        $file = $dir . '/Interpolated.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Interpolated
+            {
+                public function run(string $path, string $e): void
+                {
+                    error_log("boom {$e}", 3, $path);
+                    imagepng(make("{$path}"), $path);
+                    error_log("legacy ${e}", 3, $path);
+                    $reading = fopen("{$path}/x", 'rb');
+                    error_log("to the log {$e}");
+                    imagepng(make("{$path}"));
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            [
+                'error_log' => [9, 11],
+                'imagepng' => [10],
+            ],
+            self::writePrimitivesCalledIn($file),
+            'an interpolated string in an argument must not end the argument list. Counting depth '
+            . 'on the bare `{` alone loses a level on every interpolation, and the truncated list '
+            . 'leaves argumentsMeanAWrite() with no $arguments[1] - which it reads as "not a '
+            . 'write". The two file-writing calls above then disappear (fail OPEN) while the '
+            . 'read-mode fopen appears (fail closed), both from the one missing token.',
+        );
     }
 
     /**
