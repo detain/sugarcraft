@@ -480,10 +480,37 @@ final class PromptStabilityTest extends TestCase
         // premise.
         $dir = $this->tempDir();
 
-        shell_exec('git -C ' . escapeshellarg($dir) . ' init -q 2>/dev/null');
+        // THE INIT IS CHECKED, and the skip is narrowed to the one condition
+        // it was ever meant to cover. This used to be an unchecked
+        // `shell_exec(... 'init -q 2>/dev/null')` whose only guard was
+        // `is_dir($dir . '/.git')`. MEASURED on git 2.43.0: under a global
+        // `[core] quotePath = nonsense`, `git init` exits 128 AND STILL LEAVES
+        // a partial `.git` (branches/description/hooks/info; no
+        // HEAD/config/objects/refs), so that guard passed, the exit code and
+        // stderr were discarded, and this test red two assertions later at the
+        // `status.showUntrackedFiles` pin with `fatal: not in a git directory`
+        // — naming neither `git init` nor the hostile config. The skip stays
+        // keyed on the DIRECTORY, not on the exit code, because a host with no
+        // git at all creates no `.git` and must still skip rather than fail;
+        // a nonzero exit that DID create one is a real failure and now says so.
+        $initOutput = [];
+        $initExit = self::git($dir, ['init', '-q'], $initOutput);
         if (!is_dir($dir . '/.git')) {
-            $this->markTestSkipped('git is unavailable in this environment');
+            $this->markTestSkipped(
+                'git is unavailable in this environment: `git init` exit ' . $initExit . ', '
+                    . self::gitSaid($initOutput),
+            );
         }
+
+        $this->assertSame(
+            0,
+            $initExit,
+            'git init failed on the scratch repository, exit ' . $initExit . ' - nothing below this line is a '
+                . 'statement about live polling. MEASURED cause: an INVALID value for a key `git init` itself '
+                . 'reads, anywhere in the config precedence chain (e.g. a global `[core] quotePath = nonsense`), '
+                . 'which leaves a PARTIAL `.git` behind so the skip above cannot see it. git said: '
+                . self::gitSaid($initOutput),
+        );
 
         // The write below is an UNTRACKED file, and `status.showUntrackedFiles`
         // decides whether `git status --porcelain` can see one — this block
@@ -879,6 +906,26 @@ final class PromptStabilityTest extends TestCase
      * rename of it.
      */
     private const GIT_UNAVAILABLE_MARKER = 'unavailable (';
+
+    /**
+     * The cap on captured git output quoted into a PHPUnit failure message.
+     *
+     * Production caps the same stream: {@see EnvironmentBlock::DIFF_MAX_BYTES}
+     * is 8,192 B and every diff that reaches a prompt is truncated to it. The
+     * guards in this file interpolate the SAME capture into their messages with
+     * no bound of their own, and the bound that matters is not the fixture's
+     * (small, and measured) but the host git's — an external diff or a locale
+     * catalogue can put arbitrary bytes there. 2,048 is a quarter of the
+     * production cap and still carries every capture MEASURED at the four call
+     * sites in this file WHOLE, on git 2.43.0 and this fixture: the coloured
+     * control's own patch, the largest, is 342 B; the binary control's is
+     * 178 B; the longest fatal — the shortstat line plus `fatal: external diff
+     * died, stopping at src/Alpha.php` — is 102 B. So the cap never fires here
+     * today, which is why {@see
+     * testCapturedGitOutputIsCappedBeforeItReachesAFailureMessage()} asserts it
+     * directly rather than leaving it to a fixture that cannot reach it.
+     */
+    private const GIT_SAID_MAX_BYTES = 2048;
 
     /** The fixture's PSR-4 source directory, as `RepoMapBlock` renders it. */
     private const FIXTURE_SOURCE_DIR = 'src/';
@@ -1916,7 +1963,36 @@ final class PromptStabilityTest extends TestCase
             'git diff failed, exit ' . $binaryDiffExit . ' - the binary-diff control fixture cannot produce a '
                 . 'diff at all, so nothing below this line is a statement about the scanner. MEASURED cause: a '
                 . '`diff.external` naming a command that cannot exec, anywhere in the config precedence chain. '
-                . 'git said: ' . implode("\n", $binaryDiffOutput),
+                . 'git said: ' . self::gitSaid($binaryDiffOutput),
+        );
+
+        //       AND THEN GIT'S OWN `Binary files ` LINE, STILL BEFORE THE
+        //       PROMPT'S. The exit code above is only half the guard, and the
+        //       half it left out is the one that was actually reachable.
+        //       MEASURED on git 2.43.0, each as a GLOBAL config file, both
+        //       leaving `git diff --shortstat --patch` at EXIT 0 so the
+        //       assertion above stays GREEN: `[diff] external = /bin/true` — an
+        //       external diff that SUCCEEDS and prints nothing — yields
+        //       ` 1 file changed, 0 insertions(+), 0 deletions(-)` and no patch
+        //       body; `[core] excludesFile` naming this fixture's `Alpha.php`
+        //       yields NO OUTPUT AT ALL, because the exclude is already in
+        //       force when the fixture's own `git add -A` runs below, so the
+        //       file is never tracked. Under EITHER, the liveness assertion
+        //       below red with "The scanner is dead" while the scanner was
+        //       alive — the exact wrong-domain failure the exit-code block was
+        //       written to stop, left standing in the one domain that does not
+        //       raise the exit code. Control C carries both halves; this is
+        //       control B's second half.
+        $this->assertGreaterThan(
+            0,
+            substr_count(implode("\n", $binaryDiffOutput), 'Binary files '),
+            'git itself rendered no `Binary files ` line in the binary-diff control fixture, so nothing below '
+                . 'this line is a statement about the scanner. MEASURED causes, BOTH of which leave `git diff` '
+                . 'at exit 0 so the guard above cannot see them: a `diff.external` / `GIT_EXTERNAL_DIFF` that '
+                . 'succeeds and prints nothing, which keeps the shortstat line and drops the patch body; and a '
+                . '`core.excludesFile` naming `Alpha.php`, which is in force before the fixture\'s own '
+                . '`git add -A` so the file is never tracked and git prints nothing at all. git said: '
+                . self::gitSaid($binaryDiffOutput),
         );
 
         $this->assertGreaterThan(
@@ -1949,7 +2025,13 @@ final class PromptStabilityTest extends TestCase
         //       code, because a `diff.external` that cannot exec breaks this
         //       fixture exactly as it breaks control B's, and then git's OWN
         //       escape bytes, because that is the half a colour override kills
-        //       while leaving the exit code at 0.
+        //       while leaving the exit code at 0. The escape half has a SECOND
+        //       cause and the message below names it: MEASURED, a global
+        //       `[diff] external = /bin/true` also takes this probe to exit 0
+        //       with ZERO escapes, because there is no patch body left to
+        //       colour. Control B's `Binary files ` guard reds first under that
+        //       knob today, but ordering is not a licence to name one cause -
+        //       that is the argument this control's own repair rests on.
         $colourProbe = [];
         $colourExit = self::git($coloured->root(), ['diff', '--shortstat', '--patch'], $colourProbe);
         $this->assertSame(
@@ -1957,15 +2039,18 @@ final class PromptStabilityTest extends TestCase
             $colourExit,
             'git diff failed, exit ' . $colourExit . ' - the coloured control fixture cannot produce a diff at '
                 . 'all, so nothing below this line is a statement about the scanner. git said: '
-                . implode("\n", $colourProbe),
+                . self::gitSaid($colourProbe),
         );
         $this->assertGreaterThan(
             0,
             substr_count(implode("\n", $colourProbe), "\x1b"),
             'git itself emitted no escape bytes in the coloured control fixture, so nothing below this line is a '
-                . 'statement about the scanner. MEASURED cause: a colour setting the repo-local `color.diff=always` '
-                . 'cannot outrank - GIT_CONFIG_COUNT / GIT_CONFIG_PARAMETERS in the environment beats every config '
-                . 'file. git said: ' . implode("\n", $colourProbe),
+                . 'statement about the scanner. MEASURED causes, BOTH at exit 0: a colour setting the repo-local '
+                . '`color.diff=always` cannot outrank - GIT_CONFIG_COUNT / GIT_CONFIG_PARAMETERS in the '
+                . 'environment beats every config file; or a `diff.external` / `GIT_EXTERNAL_DIFF` that succeeds '
+                . 'and prints nothing, which leaves exit 0 with no patch body to colour - MEASURED on git 2.43.0, '
+                . 'a global `[diff] external = /bin/true` takes THIS probe to ZERO escape bytes while the repo '
+                . 'keeps `color.diff=always`. git said: ' . self::gitSaid($colourProbe),
         );
 
         $this->assertGreaterThan(
@@ -1988,8 +2073,12 @@ final class PromptStabilityTest extends TestCase
             0,
             substr_count($prompt, self::GIT_UNAVAILABLE_MARKER),
             'a git subprocess exited nonzero and <env> rendered the placeholder. MEASURED causes: `log.date` or '
-                . '`format.pretty` set to a value that is not a format, and any INVALID value anywhere in the '
-                . 'config precedence chain, which git treats as fatal at parse time whatever overrides it',
+                . '`format.pretty` set to a value that is not a format, and an INVALID value anywhere in the '
+                . 'config precedence chain FOR A KEY THE FAILING SUBPROCESS ITSELF READS - git converts that '
+                . 'key as it walks the chain and rejects it there, whatever a higher-precedence file says. NOT '
+                . 'every invalid value anywhere: MEASURED on git 2.43.0, a global `log.abbrevCommit = nonsense` '
+                . 'kills `log --oneline` (128) and leaves `status --porcelain`, `branch --show-current` and '
+                . '`diff --shortstat --patch` at 0',
         );
 
         // 2. The working diff is a patch, not a binary difference.
@@ -2093,8 +2182,10 @@ final class PromptStabilityTest extends TestCase
             'the coloured control renders ' . substr_count($colouredPrompt, "\x1b") . ' escape bytes, not the '
                 . '21 MEASURED for worklog escalation 2. Three things move this and none of them is the '
                 . 'scanner: the diff CONTEXT WIDTH (MEASURED, GIT_DIFF_OPTS=-u10 makes it 22), a field that '
-                . 'stopped rendering (MEASURED, log.date=true makes it 19), and a different git version '
-                . 'colouring differently',
+                . 'stopped rendering (MEASURED, `log.date=true` IN THE ENVIRONMENT - GIT_CONFIG_COUNT - makes '
+                . 'it 19; the same key in a global config FILE leaves it at 21, because this fixture pins '
+                . '`log.date default` repo-locally and a file loses to that pin while the environment does '
+                . 'not - boundary (a)), and a different git version colouring differently',
         );
     }
 
@@ -2124,8 +2215,16 @@ final class PromptStabilityTest extends TestCase
      * one assertion that separates "undefendable by pinning" from "nobody
      * pinned it". The repository below sets `log.abbrevCommit=false` in its own
      * config, at HIGHER precedence than the hostile global file: `git config
-     * --get` answers `false`, and `git log` dies anyway, because git parses
-     * every file in the chain before it uses any of them. That is boundary (b)
+     * --get` answers `false`, and `git log` dies anyway, because `log` READS
+     * this key and CONVERTS the value it meets in every file it walks, so the
+     * global's `nonsense` is rejected on the way past whatever the repo-local
+     * file says afterwards. NOT because "git parses every file in the chain
+     * before it uses any of them" — this doc-block used to give that as the
+     * mechanism and it is FALSE; it would predict that every git subprocess
+     * dies on every invalid value anywhere. MEASURED on git 2.43.0, this exact
+     * repository and this exact global: `log --oneline` 128, `status
+     * --porcelain` 0, `branch --show-current` 0, `diff --shortstat --patch` 0.
+     * That is boundary (b)
      * of the roster comment, the same shape as `color.branch.current`, and NOT
      * the `log.date`/`format.pretty` shape whose values reach a formatter
      * rather than a parser and which pinning therefore does defend. So the knob
@@ -2240,6 +2339,56 @@ final class PromptStabilityTest extends TestCase
             'the repo-local pin does not answer `false` under the hostile global file, so the fatal above was '
                 . 'measured against an UNPINNED repository and proves nothing about whether pinning defends: '
                 . json_encode($pinned),
+        );
+    }
+
+    /**
+     * Captured git output is capped before it is quoted into a failure message.
+     *
+     * WHY THIS IS A TEST AND NOT A COMMENT: the guards in
+     * {@see testEveryGitFieldRendersARealValueRatherThanADegradedPlaceholder()}
+     * interpolate a whole `git` capture into their messages, and production
+     * caps the SAME stream at {@see EnvironmentBlock::DIFF_MAX_BYTES} = 8,192 B
+     * before it reaches a prompt. The fixture's own captures are small and
+     * MEASURED, so the cap never fires on this host and nothing else in this
+     * file can red if it is removed — which is exactly the shape of a bound
+     * that quietly stops holding. The bound is asserted here directly.
+     *
+     * BOTH POLARITIES. Under the cap the text passes through byte-identical,
+     * because a truncation marker on a 30 B `fatal:` line would be its own
+     * wrong-domain read; over it the result is capped AND announces the
+     * truncation with the original length, so a reader can tell "git said
+     * nothing more" from "the message stops here".
+     */
+    public function testCapturedGitOutputIsCappedBeforeItReachesAFailureMessage(): void
+    {
+        $short = ['fatal: external diff died, stopping at src/Alpha.php'];
+        $this->assertSame(
+            'fatal: external diff died, stopping at src/Alpha.php',
+            self::gitSaid($short),
+            'a capture well under the cap was altered on its way into a failure message, so the messages in '
+                . 'this file no longer quote git verbatim',
+        );
+
+        $long = [str_repeat('x', 10000)];
+        $capped = self::gitSaid($long);
+        $this->assertSame(
+            2048,
+            substr_count($capped, 'x'),
+            'a 10,000 B capture did not truncate to exactly ' . self::GIT_SAID_MAX_BYTES . ' bytes of git output '
+                . 'in a failure message, so the cap that mirrors EnvironmentBlock::DIFF_MAX_BYTES is not holding',
+        );
+        $this->assertSame(
+            2048 + \strlen(' [truncated at 2048 B of 10000]'),
+            \strlen($capped),
+            'the truncated message is not the capped output plus its announcement, so either the cap or the '
+                . 'marker moved: ' . substr($capped, 2040),
+        );
+        $this->assertStringEndsWith(
+            ' [truncated at 2048 B of 10000]',
+            $capped,
+            'a truncated git capture no longer announces that it was truncated, so a reader cannot tell a '
+                . 'message that stops early from git having said nothing more',
         );
     }
 
@@ -2601,11 +2750,23 @@ final class PromptStabilityTest extends TestCase
         //       `diff.algorithm` (myers)        128 / 128 /   0 / 128
         //       `status.relativePaths` (true)     0 / 128 /   0 /   0
         //     e.g. `fatal: bad boolean config value 'nonsense' for
-        //     'core.quotepath'`. MEASURED end to end, a global
+        //     'core.quotepath'`. MEASURED end to end at this commit, a global
         //     `[core] quotePath = nonsense` reds this file at `Failures: 6`,
-        //     every one of them `git init -q failed: fatal: bad boolean config
-        //     value 'nonsense' for 'core.quotepath'` — the fixture's own
-        //     `assertSame(0, self::git(...))` below, not a rendered field.
+        //     all six on a CHECKED `git init` exit code quoting git's own
+        //     `fatal: bad boolean config value 'nonsense' for 'core.quotepath'`
+        //     — not a rendered field. FIVE of them are the fixture's own
+        //     `assertSame(0, self::git(...))` below, spelled `git init -q
+        //     failed: …`; the SIXTH is the scratch repository in
+        //     {@see testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture()},
+        //     spelled `git init failed on the scratch repository, exit 128 …`.
+        //     AND THAT SIXTH IS NEW. This bullet used to say "every one of
+        //     them" and it was FIVE OF SIX: that test's `git init` was
+        //     UNCHECKED, guarded only by `is_dir($dir . '/.git')`, and MEASURED
+        //     a failed `init` still leaves a partial `.git`, so the guard
+        //     passed and the test red two assertions later on
+        //     `could not pin status.showUntrackedFiles … fatal: not in a git
+        //     directory` — naming neither `git init` nor the hostile config.
+        //     The init is checked there now, so the claim is true as it reads.
         //     `log.abbrevCommit` is the contrast: it leaves the build GREEN and
         //     degrades only `Recent commits:`, which is why it needed a test.
         //   - Inert only for a VALID value: `log.date`, `format.pretty`. An
@@ -2664,8 +2825,15 @@ final class PromptStabilityTest extends TestCase
         //     `unavailable (git exited 128)` — 4,844 -> 4,599, renders
         //     identical, `Failures: 3`. `GIT_EXTERNAL_DIFF` reproduces both
         //     figures exactly and is an ENVIRONMENT variable, so no pin reaches
-        //     it. The 128 domain is the one control B's own subprocess guard
-        //     above was built for.
+        //     it. The 128 domain is the one control B's exit-code guard above
+        //     was built for; the EXIT-0 domain slipped straight past it and red
+        //     the liveness assertion with "The scanner is dead", which is why
+        //     control B now also asserts git's OWN `Binary files ` line.
+        //     MEASURED at this commit, `[diff] external = /bin/true` reds at
+        //     that second guard quoting git's ` 1 file changed, 0 insertions(+),
+        //     0 deletions(-)`, and `/bin/false` still reds at the exit-code
+        //     guard quoting `fatal: external diff died` — both still
+        //     `Failures: 3`.
         //   - `core.bigFileThreshold=1` USED TO belong on that line and no
         //     longer does. MEASURED at this commit it moves NOTHING —
         //     4,844/4,670, byte-for-byte the clean figures — because the
@@ -2691,7 +2859,13 @@ final class PromptStabilityTest extends TestCase
         //     never tracked in the first place. MEASURED in a scratch repo,
         //     excluded before the `add`: `git ls-files` EMPTY, status empty.
         //     In the rendered prompt both `Status:` and the unstaged diff go
-        //     `(none)`.
+        //     `(none)`. AND WHICH MESSAGE IT REDS WITH IS NOW READ, not just
+        //     the count: this bullet used to justify the line by `Failures: 3`
+        //     alone, and MEASURED, one of those three was the liveness
+        //     assertion saying "The scanner is dead" about a live scanner —
+        //     `git diff` exits 0 here and simply prints NOTHING, because the
+        //     file was never tracked. Control B's second guard covers it now
+        //     and reds with git's own empty output.
         //   - `core.excludesFile` naming the UNTRACKED `src/Gamma.php` is a
         //     SECOND hazard the line above never covered. It moves nothing in
         //     this fixture's own byte figures — `Gamma.php` is written by the
@@ -2790,6 +2964,28 @@ final class PromptStabilityTest extends TestCase
         $fixture->write('src/Alpha.php', self::ALPHA_FIRST_EDIT);
 
         return $fixture;
+    }
+
+    /**
+     * Captured git output, capped before it is quoted into a failure message.
+     *
+     * See {@see GIT_SAID_MAX_BYTES} for why there is a cap at all. The
+     * truncation is ANNOUNCED rather than silent, and carries the original
+     * length, because a message that stops mid-sentence with no marker sends
+     * the reader looking for a cause git never printed — the same wrong-domain
+     * read every guard in this file exists to stop.
+     *
+     * @param list<string> $output Combined stdout/stderr as {@see git()} handed it back
+     */
+    private static function gitSaid(array $output): string
+    {
+        $text = implode("\n", $output);
+        if (\strlen($text) <= self::GIT_SAID_MAX_BYTES) {
+            return $text;
+        }
+
+        return substr($text, 0, self::GIT_SAID_MAX_BYTES)
+            . ' [truncated at ' . self::GIT_SAID_MAX_BYTES . ' B of ' . \strlen($text) . ']';
     }
 
     /**
