@@ -365,20 +365,38 @@ final class Runtime
      *    itself;
      *  - {@see \SugarCraft\Crush\Tests\RuntimeTest::testEveryToolOnTheReadOnlyListCallsNoWritePrimitiveInItsOwnSource()}
      *    checks that the decision is TRUE: every name on the read-only list is
-     *    resolved to its class through `BuiltInToolCorpus`, and that class's
-     *    OWN source is scanned with `token_get_all()` for a call to any of
-     *    twenty-eight filesystem- and subprocess-mutating functions. The
-     *    experiment above now REDS there, with
+     *    resolved to its class through `BuiltInToolCorpus`, and THAT CLASS'S
+     *    OWN CODE — its declaring file plus every trait it uses and class it
+     *    extends, transitively — is scanned with `token_get_all()` for a call
+     *    to any tree-mutating function. The roster of those lives in the test
+     *    and is not restated here as a count: a cardinality in prose is stale
+     *    the next time one is added, and this one grew twice in three days.
+     *    The experiment above now REDS there, with
      *    `MultiEdit calls file_put_contents() at MultiEdit.php:29` in its own
      *    failure output.
      *
+     * IT HAS BEEN DEFEATED THREE TIMES SINCE IT WAS WRITTEN, each by a
+     * different spelling of the same write, each on a fully green suite:
+     * `\file_put_contents` (PHP 8 emits one `T_NAME_FULLY_QUALIFIED` token,
+     * and the scanner filtered on `T_STRING`); `fopen` + `vfprintf` (a handle
+     * writer the roster did not name, in a paragraph claiming the roster
+     * closed handle writes); and a `file_put_contents` inside a `use`d trait
+     * in another file. All three are closed and all three are recorded in the
+     * test's own doc-block. That history — not modesty — is why the verb here
+     * is NARROWED.
+     *
      * WHAT IS STILL NOT PINNED, said plainly rather than left inside the word
-     * "closed". The scan is SAME-FILE and DIRECT-CALL. A tool that writes
-     * through a collaborator is invisible to it — `src/Tools/BuiltIn/Bash.php`
-     * calls none of those twenty-eight itself and is on the write roster on
-     * judgement alone, and `Lsp` writes by proxy through the language server
-     * it spawns, which the paragraph above already records. The EMBEDDER half
-     * — a write-capable tool this application never sees the source of — is
+     * "closed". The scan is DIRECT-CALL over the tool's own code. A tool that
+     * writes through a collaborator it does not inherit from is invisible to
+     * it — `Lsp` writes by proxy through the language server it spawns, which
+     * the paragraph above already records — and neither is a subprocess's
+     * ARGV: `src/Tools/BuiltIn/Bash.php` calls no mutating primitive itself
+     * and is on the write roster on judgement alone, while `Grep` reaches
+     * `proc_open()` through a trait it shares with `Bash` and is correctly
+     * read-only. Spawning is a capability, not a write, so the test
+     * INVENTORIES which read-only tools reach a subprocess rather than judging
+     * them — a new one reds and its author must say why. The EMBEDDER half — a
+     * write-capable tool this application never sees the source of — is
      * untouched by any of it and still has no owner.
      *
      * THE HONEST FIXES ARE BOTH OUT OF SCOPE HERE AND ARE ESCALATED RATHER
@@ -717,41 +735,55 @@ final class Runtime
      *     review precisely because nothing downstream is asked to falsify it.
      *     Two readers have now falsified it. MEASURED by a `token_get_all()`
      *     census over `src/` and `bin/` — comments and string literals
-     *     excluded, method DECLARATIONS excluded, receiver required to be
-     *     `->`/`?->`/`::` or a bare call — there are EIGHT invocations:
-     *     `App/App.php:569`, `Agents/ProcessExecutor.php:473`,
-     *     `Agents/AgentManager.php:433` and `Workflows/WorkflowEngine.php`
-     *     at `:1042`, `:1152`, `:1252`, `:1294` and `:1397` — LINE NUMBERS AS
-     *     OF THIS COMMIT, a navigation aid that rots on any edit above them.
-     *     What the test below pins is the COUNT and the per-file distribution
-     *     (1/1/1/5), both of which survive a line move; §16.8 rule 9, the
-     *     epistemic status of a row is part of the row.
+     *     excluded, method DECLARATIONS excluded (including the by-reference
+     *     `function &name()` shape, which is a separate token and defeated an
+     *     earlier cut of the census), receiver required to be `->`/`?->`/`::`
+     *     or a bare call. The invocations are in `App/App.php`,
+     *     `Agents/ProcessExecutor.php`, `Agents/AgentManager.php` and
+     *     `Workflows/WorkflowEngine.php`.
+     *
+     *     THE COUNT APPEARS EXACTLY ONCE IN THIS PARAGRAPH, IN THE SENTENCE
+     *     ABOVE, AND THAT IS DELIBERATE. It used to appear four times, and the
+     *     test can only pin one of them — so the other three would have rotted
+     *     silently while an author corrected the sentence the failure message
+     *     named. §16.8 rule 2 is "never pin a cardinality in prose"; where a
+     *     figure must be written, write it once. The per-file DISTRIBUTION is
+     *     pinned too (one, one, one, five), because unlike a line number it
+     *     survives an edit above it. Line numbers are deliberately NOT given
+     *     here: the census prints them in its own failure output, where they
+     *     cannot be stale.
      *
      *     A plain `/usr/bin/grep -rn '>systemPrompt(' src bin` returned, AT
-     *     THE COMMIT BEFORE THIS PARAGRAPH EXISTED, the same eight plus ONE
+     *     THE COMMIT BEFORE THIS PARAGRAPH EXISTED, that same set plus ONE
      *     comment line, `App/App.php:527`, which is where a ninth most
      *     plausibly came from. THE DOMAIN IS LOAD-BEARING AND WAS MISSING:
      *     that grep matches this sentence too, so from the commit that wrote
-     *     it the same command returns TEN. A claim about a command's output
-     *     that the claim itself falsifies is §16.8 rule 1 — a figure
-     *     travelling without its domain — and it is corrected rather than
-     *     deleted because the comment line at `App/App.php:527` is the actual
-     *     explanation for the wrong figure.
+     *     it the same command returns two more than it did. A claim about a
+     *     command's output that the claim itself falsifies is §16.8 rule 1 — a
+     *     figure travelling without its domain — and it is corrected rather
+     *     than deleted because the comment line at `App/App.php:527` is the
+     *     actual explanation for the wrong figure.
      *
      *     There is exactly one DECLARATION of the name in `src/`+`bin/` — in
-     *     `Agents/Agent.php` — which is what makes it sound to attribute all
-     *     eight invocations to `Agent`, and it is derived by a census rather
-     *     than asserted about one file. And there is no dynamic dispatch:
-     *     every `'systemPrompt'` string in `src/` is an array key or a named
-     *     argument, never a method name handed to a variable call.
+     *     `Agents/Agent.php` — which is what makes it sound to attribute every
+     *     invocation to `Agent`, and it is derived by a census rather than
+     *     asserted about one file. And there is no dynamic dispatch: every
+     *     `'systemPrompt'` string in `src/` OUTSIDE THIS DOC-BLOCK is an array
+     *     key or a named argument, never a method name handed to a variable
+     *     call. THE EXCLUSION IS NOT A HEDGE — the same rule-1 defect the
+     *     paragraph above corrects for the `grep` claim applies here verbatim:
+     *     this sentence contains the quoted string it is making a claim about,
+     *     so without its domain the claim falsifies itself. It was written
+     *     without one, fifteen lines below the correction that names the
+     *     defect.
      *
      *     AND THE NUMBER IS NOW DERIVED RATHER THAN TRUSTED (§16.8 rule 2:
      *     ship the generator, not the count).
      *     {@see \SugarCraft\Crush\Tests\RuntimeTest::testTheAgentAssemblerCallSiteCountInThisDocblockIsDerivedFromTheTree()}
      *     re-runs that census on every suite run and reds unless the word in
      *     the sentence above is the word the tree produces, so a ninth call
-     *     site lands here as a failure naming both numbers instead of as a
-     *     sentence nobody re-measures. `Bootstrap.php:1462` memoises the CAPTURE onto each
+     *     site lands here as a failure naming both numbers and every site it
+     *     found, instead of as a sentence nobody re-measures. `Bootstrap.php:1462` memoises the CAPTURE onto each
      *     agent, which costs nothing: capture() runs ZERO subprocesses
      *     (MEASURED with a logging `git` shim: ten captures with no render, 0
      *     invocations) and `render()` pays the bill on every call. The gap is
