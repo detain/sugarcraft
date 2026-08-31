@@ -1552,10 +1552,24 @@ no-write step on a dirty tree.
 **Goal** P3.S5 wired the per-step write signal into ONE of `EnvironmentBlock`'s four production
 construction sites — the `Runtime` one. The other three feed `Agents\Agent::systemPrompt()`, the
 second assembler §17.2 keeps deliberately separate from `Runtime`'s. That path is live in production
-today (`bin/sugarcrush` → `Bootstrap::chat()` → `Bootstrap.php:1044` `agentManager()` →
-`Bootstrap.php:1462` capture-per-agent → `AgentManager.php:433`) and its `systemPrompt()` is consumed
-at **eight** live sites (corrected 2026-08-31 — see the enumeration above; it is now pinned by a
-test that derives it). **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
+today, and its `systemPrompt()` is consumed at **eight** sites (corrected 2026-08-31 — see the
+enumeration above; it is now pinned by a test that derives it).
+
+**CORRECTION, 2026-08-31, from P3.S6's cycle-4 review — this Goal named a DORMANT terminus as the
+live path.** It said the path is live "today (`bin/sugarcrush` → `Bootstrap::chat()` →
+`Bootstrap.php:1044` `agentManager()` → `Bootstrap.php:1462` capture-per-agent →
+`AgentManager.php:433`)" and that the eight sites are all "live". **What is true:** SIX of the eight
+are live and TWO are dormant — and `AgentManager.php:433`, the terminus this Goal named, is one of
+the dormant two. **How it was measured** (re-derived by the orchestrator, not taken from the review):
+`/usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/ bin/` produces no output and
+exits 1, and so does the same form for `->dispatchSkill(`; both callees therefore have NO production
+caller anywhere in `src/` or `bin/`. The genuinely live path, walked hop by hop, is
+`bin/sugarcrush:423 → Bootstrap::app → Bootstrap.php:1887 chat() → workflowEngine: at :1058 (built
+:1183) → Chat.php:7725 /workflow run → workflowRun():7820 → engine->run() at :7844 inside the Fiber
+at :7842 → WorkflowEngine::run():348 → foreach :875 → :1042/:1152/:1252/:1294/:1397`, with all four
+stage types dispatching at :885/:897/:909/:921. The step agent's own diff had already corrected this
+and the correction was right; the BRIEF was left standing, which is exactly the asymmetry §1.4
+check 14 exists to catch — nothing downstream is asked to falsify a brief. **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
 not memoised there (`Bootstrap.php:1458-1460`), so the git shell-out happens once per
 `systemPrompt()` call — MEASURED with a logging `git` shim on `PATH`, **five** subprocesses when the
 diff is emitted (branch, status, log, `diff --cached`, `diff`) and **three** when it is suppressed.
