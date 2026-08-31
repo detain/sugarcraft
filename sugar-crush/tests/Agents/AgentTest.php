@@ -23,6 +23,7 @@ use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 use SugarCraft\Crush\Workflows\Tasks;
 use SugarCraft\Crush\Workflows\WorkflowBuilder;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
@@ -33,6 +34,8 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  */
 final class AgentTest extends TestCase
 {
+    use FlattensSourceProseTrait;
+
     /**
      * Structural landmarks that must survive anywhere in the MIDDLE of the
      * committed agent-prompt golden.
@@ -1627,14 +1630,37 @@ final class AgentTest extends TestCase
         $this->assertSame($derived['distinct'] + 1, $novel['distinct'], 'a new citation did not move the distinct count');
         $this->assertSame($derived['occurrences'] + 1, $novel['occurrences'], 'a new citation did not move the occurrence count');
 
-        $repeat = self::citationCensusOf($source . "\n// WorkflowEngine.php:875\n");
+        // THE DUPLICATE IS DERIVED FROM THE SOURCE, not typed. This control used
+        // to append the literal `WorkflowEngine.php:875` — a citation the
+        // doc-block under test explicitly promises will rot. The first time
+        // anybody re-derives that line number, the "duplicate" stops being a
+        // duplicate, this control silently becomes the NOVEL-citation case, and
+        // it reds with a message about duplicates that is no longer describing
+        // what it did. Taking the first citation the census itself found cannot
+        // go stale.
+        preg_match('~[A-Za-z/]+[.]php:[0-9]+(?:-[0-9]+)?~', $source, $firstCitation);
+        $this->assertNotSame([], $firstCitation, 'no citation was found to duplicate, so the control below would be appending nothing');
+
+        $repeat = self::citationCensusOf($source . "\n// " . $firstCitation[0] . "\n");
         $this->assertSame($derived['distinct'], $repeat['distinct'], 'a DUPLICATE citation moved the distinct count, so the two figures are not counting different sets');
         $this->assertSame($derived['occurrences'] + 1, $repeat['occurrences'], 'a DUPLICATE citation did not move the occurrence count');
 
         // THE PROSE IS THE THING UNDER TEST. Flattened first, because prose
         // matching is line-oriented and a doc-block wraps mid-phrase (§16.8
         // rule 39).
-        $flat = (string) preg_replace('~\n\s*\*\s?~', ' ', $source);
+        //
+        // THROUGH THE SHARED FLATTENER, not an inline regex. This line used to be
+        // `preg_replace('~\n\s*\*\s?~', ' ', $source)` — a private
+        // re-declaration of FlattensSourceProseTrait::flattened(), which exists
+        // for this and has other consumers. Its `\*(?!/)` is the difference that
+        // matters: the inline version's bare `\*` also eats the `*` of a
+        // TERMINATOR, running the end of one doc-block into the start of the next,
+        // so a pattern could match a "sentence" spanning two blocks and present
+        // in neither. MEASURED not exploitable here — no `s` modifier and a
+        // newline survives between the blocks — so this is de-duplication, and
+        // the reason it is still worth doing is that the local copy cannot
+        // inherit the trait's next fix.
+        $flat = self::flattened($source);
         $this->assertSame(
             1,
             preg_match('~carries (\d+) distinct citations of the form file-dot-php-colon-line in (\d+) occurrences~', $flat, $claimed),

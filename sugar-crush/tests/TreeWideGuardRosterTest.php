@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
+use SugarCraft\Crush\Tests\Support\RefusesAnUnreadableSourceTrait;
 use SugarCraft\Crush\Tests\Support\TestFileWalkTrait;
 use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
 
@@ -242,10 +244,29 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * derives is reported by
  * {@see testTheHandMaintainedCensusSetIsASubsetOfTheDerivedRoster()}'s failure
  * message and by the P3.audit-fix-2 report, and the plan document is the
- * orchestrator's to update. It also does not claim the roster is COMPLETE: what
- * it claims is that the roster is derived, that the hand-maintained nine are all
- * inside it, and that nothing that walks the tree escapes classification
- * silently.
+ * orchestrator's to update.
+ *
+ * AND IT DOES NOT CLAIM THAT "NOTHING THAT WALKS THE TREE ESCAPES CLASSIFICATION
+ * SILENTLY", which is what this paragraph used to end with and which the file
+ * contradicts in three places of its own. The blind-spot paragraph above says a
+ * shape the alphabet cannot see is skipped in silence, and
+ * {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()} ASSERTS that
+ * six of its nine shapes land in the `silent` bucket. A summary sentence that
+ * contradicts an assertion two hundred lines away is worse than no summary, and
+ * it is the A1 defect - a doc-block claiming the opposite of the code - recurring
+ * in the file written to close it.
+ *
+ * WHAT IT DOES CLAIM, all three parts asserted:
+ *  - the roster is DERIVED, not hand-maintained, and so is each channel's
+ *    alphabet;
+ *  - every one of the nine hand-maintained census files comes out of the
+ *    derivation ({@see testTheHandMaintainedCensusSetIsASubsetOfTheDerivedRoster()});
+ *  - every file with a walk this alphabet CAN see, and cannot place, is either a
+ *    roster member or licensed by name
+ *    ({@see testEveryFileWithAnUnresolvedWalkIsARosterMemberOrFullyLicensed()}).
+ * The gap between "a walk this alphabet can see" and "a walk" is the blind-spot
+ * table, and it is a table precisely so that the gap has a size and a shape
+ * instead of a summary sentence.
  *
  * THIS FILE IS ITSELF A MEMBER, through channel A, and
  * {@see testTheDerivationIncludesItselfAndTheGuardsTheNineFileListOmits()} asserts it -
@@ -256,6 +277,8 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  */
 final class TreeWideGuardRosterTest extends TestCase
 {
+    use DropsInsignificantTokensTrait;
+    use RefusesAnUnreadableSourceTrait;
     use TestFileWalkTrait;
 
     /**
@@ -473,7 +496,12 @@ final class TreeWideGuardRosterTest extends TestCase
      * (`$finder->in($root)`), by a subprocess (`find`, `git ls-files`), by
      * `SplFileObject` over a manifest, or through a name reached from a string,
      * is out of reach here - and so is a root that arrives from ANOTHER file, a
-     * base class or a trait other than the one channel A already keys on.
+     * base class, or a helper channel A's derived alphabet does not contain -
+     * that last phrase used to read "a trait other than THE ONE channel A already
+     * keys on", stale since channel A stopped being one hardcoded trait five
+     * commits into this change-set. MEASURED at HEAD: two derived helpers, and
+     * {@see closeOverDelegates()} now follows delegation chains from them, so the
+     * residual gap is a helper that neither walks nor names one that does.
      *
      * A SENTENCE HERE USED TO CLAIM that "the accepted direction for anything
      * unreadable is a report, not a pass". IT WAS FALSE, and the class
@@ -1162,7 +1190,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 continue;
             }
 
-            $source = (string) file_get_contents($everyFile[$file]);
+            $source = self::readOrFail($everyFile[$file]);
             $unresolved = self::classifyWalkSites($source)['unresolved'];
             foreach ($expressions as $expression) {
                 if (!\in_array($expression, $unresolved, true)) {
@@ -1253,7 +1281,7 @@ final class TreeWideGuardRosterTest extends TestCase
         $malformedFromTheTree = [];
         $wellFormedFromTheTree = 0;
         foreach (self::everyTestFile() as $absolute) {
-            foreach (self::rootAnchoredNames(self::significant((string) file_get_contents($absolute))) as $name) {
+            foreach (self::rootAnchoredNames(self::significant(self::readOrFail($absolute))) as $name) {
                 if (preg_match(self::NAME_SPELLING, $name) === 1) {
                     $wellFormedFromTheTree++;
 
@@ -1410,6 +1438,72 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
+     * THE HELPER CLOSURE FOLLOWS A DELEGATION CHAIN OF ANY LENGTH.
+     *
+     * WHY THIS IS DRIVEN RATHER THAN OBSERVED. This tree contains no delegating
+     * helper - MEASURED, `walkingHelperNames()` returns exactly the two that walk
+     * for themselves - so the fixpoint loop in {@see closeOverDelegates()} does
+     * ZERO work on the real population and is invisible to every other assertion
+     * in this file. That is the definition of a branch that reads as working. So
+     * it is driven with synthesised sources instead, which is also why the helper
+     * closure is a pure function taking the texts.
+     *
+     * THREE THINGS ARE PINNED, and the third is the reason this is a fixpoint.
+     * (1) A ONE-HOP delegate joins the set. (2) A THREE-HOP chain joins it -
+     * a single pass would find only the first link, so this is what distinguishes
+     * a loop from an `if`. (3) A helper that names NOTHING in the set stays OUT,
+     * or the closure would be adding every non-test file under `tests/` and every
+     * test that mentions any of them.
+     */
+    public function testTheHelperClosureFollowsADelegationChainOfAnyLength(): void
+    {
+        // name => declaring file, which is the shape walkingHelperNames() keeps.
+        $seed = ['walks' => 'Support/Walks.php'];
+
+        $oneHop = [
+            'Support/A.php' => "<?php\nnamespace X;\ntrait A { use Walks; }\n",
+        ];
+        $this->assertArrayHasKey(
+            'a',
+            self::closeOverDelegates($oneHop, $seed),
+            'a helper that delegates straight to a walking helper does not join the alphabet, so '
+                . 'every test reaching the tree only through it is missed - and missed silently, '
+                . 'because a delegating helper has no walker call site to be unaccounted for',
+        );
+
+        // THREE HOPS, and deliberately in an order where a single pass would stop
+        // after the first: C names B, B names A, A names the seed.
+        $chain = [
+            'Support/C.php' => "<?php\nnamespace X;\ntrait C { use B; }\n",
+            'Support/B.php' => "<?php\nnamespace X;\ntrait B { use A; }\n",
+            'Support/A.php' => "<?php\nnamespace X;\ntrait A { use Walks; }\n",
+        ];
+        $closed = self::closeOverDelegates($chain, $seed);
+
+        foreach (['a', 'b', 'c'] as $link) {
+            $this->assertArrayHasKey(
+                $link,
+                $closed,
+                'the delegation chain stopped before "' . $link . '", so closeOverDelegates() is '
+                    . 'resolving one hop rather than iterating to a fixpoint - and the chain has no '
+                    . 'bound, so one hop is not enough',
+            );
+        }
+
+        // AND THE NEGATIVE HALF. Without it every assertion above passes against
+        // a closure that adds everything it is handed.
+        $unrelated = [
+            'Support/Unrelated.php' => "<?php\nnamespace X;\nfinal class Unrelated { public function go(): void {} }\n",
+        ];
+        $this->assertSame(
+            $seed,
+            self::closeOverDelegates($unrelated, $seed),
+            'a helper that names nothing in the set was added to it, so the closure is enrolling '
+                . 'every non-test file under tests/ and, through them, every test that mentions one',
+        );
+    }
+
+    /**
      * A SHRINK IN EITHER HALF OF THE WALKER ALPHABET IS DETECTED.
      *
      * WHY THIS EXISTS, and it is a real hole a reviewer found in this file's own
@@ -1526,7 +1620,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 continue;
             }
             $relative = str_replace('\\', '/', $relative);
-            $source = (string) file_get_contents($absolute);
+            $source = self::readOrFail($absolute);
             $testFiles++;
 
             $sites = self::classifyWalkSites($source);
@@ -1633,8 +1727,21 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     private static function walkingHelperUsedIn(string $source): ?string
     {
-        $helpers = self::walkingHelperNames();
+        return self::namesOneOf($source, self::walkingHelperNames());
+    }
 
+    /**
+     * Which of `$helpers`, if any, does this source name as a TYPE?
+     *
+     * SPLIT OUT OF {@see walkingHelperUsedIn()} so that
+     * {@see walkingHelperNames()} can use the same matcher while it is still
+     * BUILDING the helper set - calling `walkingHelperUsedIn()` from there would
+     * recurse into the memo it is computing.
+     *
+     * @param array<string, string> $helpers lower-cased name => declaring file
+     */
+    private static function namesOneOf(string $source, array $helpers): ?string
+    {
         foreach (token_get_all($source) as $token) {
             if (!\is_array($token) || \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
                 continue;
@@ -1675,23 +1782,88 @@ final class TreeWideGuardRosterTest extends TestCase
             return self::$helpers;
         }
 
-        $helpers = [];
+        $candidates = [];
         foreach (self::everyTestFile() as $relative => $absolute) {
             $relative = str_replace('\\', '/', $relative);
             if (str_ends_with($relative, 'Test.php')) {
                 continue;
             }
-            $source = (string) file_get_contents($absolute);
+            $candidates[$relative] = self::readOrFail($absolute);
+        }
+
+        // PASS 1: a helper that performs the walk itself.
+        $helpers = [];
+        $contributed = [];
+        foreach ($candidates as $relative => $source) {
             if (self::classifyWalkSites($source)['root'] === []) {
                 continue;
             }
+            $contributed[$relative] = true;
             foreach (self::declaredTypeNames($source) as $name) {
                 $helpers[strtolower($name)] ??= $relative;
             }
         }
+
+        // PASS 2 TO A FIXPOINT: helpers that DELEGATE to one.
+        $helpers = self::closeOverDelegates($candidates, $helpers, $contributed);
         ksort($helpers);
 
         return self::$helpers = $helpers;
+    }
+
+    /**
+     * Extend a helper set with the helpers that DELEGATE to it, to a fixpoint.
+     *
+     * WHY THIS EXISTS, and it was a silent miss of exactly the shape this file is
+     * about. A trait that does `use TestFileWalkTrait;` and returns
+     * `self::everyTestFile()` walks the whole tree, but performs NO walk of its
+     * own - so pass 1 of {@see walkingHelperNames()} cannot see it, because
+     * {@see classifyWalkSites()} finds no site to root. And the residue cannot
+     * catch the tests that use it either, for the same reason: a delegating helper
+     * has no walker call site to be unaccounted FOR. So a real whole-`tests/`
+     * guard reached through two hops was missed in SILENCE.
+     *
+     * MEASURED, by planting exactly that shape - a trait that consumes
+     * `TestFileWalkTrait` and re-exports its walk, plus one test that uses only
+     * the new trait. With pass 2 disabled: `testFiles` 440 -> 441, so the file was
+     * SEEN, and roster 67, unaccounted 0 - in no bucket at all, and the roster
+     * test stayed green. With pass 2: the trait joins the alphabet, roster 68, and
+     * the planted test is a member.
+     *
+     * A FIXPOINT AND NOT ONE HOP, because the chain has no bound: a trait that
+     * delegates to a trait that delegates. The loop terminates because each
+     * iteration either adds a file to `$contributed` or sets `$added` false, and
+     * `$candidates` is finite.
+     *
+     * PURE ON PURPOSE - it takes the sources rather than reading them, so
+     * {@see testTheHelperClosureFollowsADelegationChainOfAnyLength()} can drive
+     * chains this tree does not contain without planting files in `tests/`.
+     *
+     * @param  array<string, string> $candidates  relative path => source text
+     * @param  array<string, string> $helpers     lower-cased name => declaring file
+     * @param  array<string, bool>   $contributed files already in the set
+     * @return array<string, string>
+     */
+    private static function closeOverDelegates(array $candidates, array $helpers, array $contributed = []): array
+    {
+        do {
+            $added = false;
+            foreach ($candidates as $relative => $source) {
+                if (isset($contributed[$relative])) {
+                    continue;
+                }
+                if (self::namesOneOf($source, $helpers) === null) {
+                    continue;
+                }
+                $contributed[$relative] = true;
+                $added = true;
+                foreach (self::declaredTypeNames($source) as $name) {
+                    $helpers[strtolower($name)] ??= $relative;
+                }
+            }
+        } while ($added);
+
+        return $helpers;
     }
 
     /**
@@ -1993,15 +2165,27 @@ final class TreeWideGuardRosterTest extends TestCase
      * The token stream without the three classes that are legal between any two
      * tokens this walk reads as neighbours.
      *
+     * DELEGATED, NOT DECLARED. The body here used to be its own
+     * `array_filter(token_get_all(...))` over exactly
+     * `[T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]` - a private re-declaration of
+     * {@see DropsInsignificantTokensTrait::significantTokens()}, which is the
+     * consolidated helper for precisely this and has other consumers, one of them
+     * `tests/RuntimeTest.php` in this same change-set, whose own comment says
+     * "shared rather than privately re-declared".
+     *
+     * WHY THE WRAPPER STAYS instead of the call sites moving. The name
+     * `significant()` is what a dozen doc-blocks in this file cite, and a
+     * one-line delegation cannot drift from the trait the way a copied body can.
+     * That is the whole point: `DuplicatedTestHelperDriftTest` keys on the method
+     * NAME, so a RENAMED copy is out of reach of the guard by construction -
+     * which is exactly the shape this was, and the only reason it went unreported
+     * until somebody read the two bodies side by side.
+     *
      * @return list<array{0: int, 1: string, 2: int}|string>
      */
     private static function significant(string $source): array
     {
-        return array_values(array_filter(
-            token_get_all($source),
-            static fn (array|string $token): bool => !\is_array($token)
-                || !\in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true),
-        ));
+        return array_values(self::significantTokens($source));
     }
 
     /**
