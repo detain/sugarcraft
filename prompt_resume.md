@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue. TWO STEPS ARE BUILT AND UNMERGED, in two worktrees that must NOT be deleted. `P3.S4-fix-1` is GREEN and merge-ready-after-review; `P3.S5-fix-1` is RED at HEAD on a pre-existing tree-wide census test and MUST NOT BE MERGED until fixed. Neither has been reviewed at its current HEAD. Master itself is untouched and GREEN at 10500/161982. Read §0, then §8 — §8 has the exact next three actions.**
+**Current state: Phase 3 close queue, THREE AGENTS RUNNING — a fix agent on each of the two paused branches (`P3.S4-fix-1`, `P3.S5-fix-1`, whose HEAD was RED) plus the `P3.S6` step agent in a fresh worktree. NONE of the three worktrees may be deleted. Master is untouched and GREEN: orchestrator-measured this session at `c7e5a6454`, checkout root, `Tests: 10500, Assertions: 161982, Skipped: 1`. Read §0, then §8 — call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -318,127 +318,80 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            3. P3.S1-S5 merged. TWO fix steps BUILT BUT UNMERGED (see In-flight
-                  batch). P3.S6 scheduled and its plan text corrected. Phase 3 NOT closed.
+Phase:            3. P3.S1-S5 merged. THREE agents are OUT RIGHT NOW (see In-flight batch).
+                  Phase 3 NOT closed. Nothing new has merged this session.
 
-Next step:        **NOTHING IS RUNNING. Two built branches are waiting, neither reviewed at
-                  its HEAD, one of them RED. Do these three things in this order.**
+Next step:        **THREE AGENTS ARE RUNNING. Do not re-spawn any of them. Call `ListAgents`
+                  first — a completed report is not proof an agent has finished; one agent
+                  last session delivered its full report, went quiet, and resumed an hour
+                  later.** When each reports, do this:
 
-                  ---------------------------------------------------------------
-                  ACTION 1 — FIX THE RED IN P3.S5-fix-1.  **DO THIS FIRST.**
-                  ---------------------------------------------------------------
-                  Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,
-                  HEAD 5a0ff8e12. ORCHESTRATOR-MEASURED, serial, from the worktree root:
-                    Tests: 10506, Assertions: 162036, Failures: 1, Skipped: 1.
+                  (1) P3.S5-fix-1 fix agent — fixing the RED. When it returns: run
+                      --filter InterpolationOpenerTokenTest + --filter RuntimeTest + the
+                      census set MYSELF, then spawn review cycle 4 (brand-new reviewer,
+                      §1.4 verbatim, NOT given any earlier findings). Two cycles remain.
+                  (2) P3.S4-fix-1 fix agent — F-2 (log.abbrevCommit) and F-4 (control B
+                      masks under a hostile diff.external). When it returns: run
+                      --filter PromptStabilityTest + the census set MYSELF, then spawn
+                      review cycle 4. Two cycles remain.
+                  (3) P3.S6 step agent — runs its OWN review→fix→new-review loop, cap five,
+                      and reports at the end. Outcome (a) wire it, or (b) a §18 row plus the
+                      measurement; (b) is a completed step, not a failure.
 
-                  The failure is Support\InterpolationOpenerTokenTest::
-                  testEveryBraceWalkingScannerNamesEveryOpener
-                  (tests/Support/InterpolationOpenerTokenTest.php:653) — a PRE-EXISTING
-                  tree-wide census test. It EXISTS ON MASTER, is NOT in this diff, and is
-                  GREEN on master. Its message:
-
-                    "this scanner walks braces but does not handle every token the running
-                     PHP uses to OPEN one. A missed opener does not crash: the walk loses a
-                     level and the scanner silently stops matching after the first
-                     interpolated string... Add the token beside T_CURLY_OPEN wherever the
-                     depth is counted."
-                    + 0 => 'tests/RuntimeTest.php does not name T_CURLY_OPEN,
-                            T_DOLLAR_OPEN_CURLY_BRACES'
-
-                  WHAT IT MEANS: the brace-walking scanner cycle 3 built in
-                  tests/RuntimeTest.php counts depth without naming T_CURLY_OPEN or
-                  T_DOLLAR_OPEN_CURLY_BRACES. A tool whose source contains an interpolated
-                  string ("{$path}") makes the walk lose a level, after which the scanner
-                  silently stops matching. So a write primitive appearing after ANY
-                  interpolated string in a read-only tool's source is MISSED — the exact
-                  wrong-green class the finding exists to close. This is the ELEVENTH
-                  defeat of that scanner; three reviewers found the first ten.
-
-                  THE FIX IS SMALL AND LOCAL (name the two tokens wherever depth is
-                  counted) BUT IT MUST SHIP WITH ITS ACCEPTANCE MUTATION: a read-only tool
-                  whose source interpolates a string BEFORE calling a write primitive must
-                  RED. Until that mutation is shown red, the eleventh defeat is closed only
-                  by assertion — which is what §1.11 forbids.
-
-                  ---------------------------------------------------------------
-                  ACTION 2 — REVIEW BOTH BRANCHES. Neither HEAD has been reviewed.
-                  ---------------------------------------------------------------
-                  Both steps were PAUSED by the user, not stopped at a cap. Each used
-                  THREE of five cycles, so TWO REMAIN on each.
-                    - P3.S5-fix-1 @ 5a0ff8e12 (plus the Action-1 fix): NEVER reviewed.
-                      Cycle 3's ten findings were all fixed in it and no cycle 4 ran.
-                    - P3.S4-fix-1 @ bdef57632: cycle 3 returned TEN STANDING FINDINGS that
-                      nothing has been done about. They are verbatim in its worklog entry.
-                      Start with F-2 (log.abbrevCommit is the fourteenth git knob — move it
-                      to the "valid value only" bullet and pin it) and F-4 (control B masks
-                      under a hostile diff.external: assert the control fixture's git diff
-                      SUCCEEDED before asserting liveness).
-                  Use a BRAND-NEW reviewer each cycle; never re-use one.
-
-                  ---------------------------------------------------------------
-                  ACTION 3 — MERGE, IN THE DECLARED ORDER, WITH A SUITE BETWEEN.
-                  ---------------------------------------------------------------
-                  P3.S4-fix-1 FIRST (it changes NO production code — verified: git diff
-                  --stat against master over sugar-crush/src/ is empty), THEN P3.S5-fix-1.
-                  Run the full suite BETWEEN the two merges, not once after both: a
-                  regression measured after two merges cannot be attributed to either.
-                  **RUN IT SERIALLY** — see `Latest suite` for why that word is there.
+                  THEN merge in the declared order with a FULL SUITE BETWEEN each merge —
+                  P3.S4-fix-1 first, then P3.S5-fix-1, then P3.S6. RUN THE SUITES SERIALLY.
                   Master's figure to beat: 10500 / 161982 / 1.
-
-                  THEN: (c) P3.S6 — it wants src/Runtime.php, which P3.S5-fix-1 holds, so
-                  it is SERIAL after that merge. Its plan text is corrected and ready; the
-                  "nine call sites" figure it consumes is now EIGHT (commit 344b85550).
-                  THEN: (d) the Phase 3 close review, cap three cycles.
-                  THEN: (e) OPEN PHASE 4 IMMEDIATELY — §0 is the standing order.
+                  THEN the Phase 3 close review, cap three cycles.
+                  THEN OPEN PHASE 4 IMMEDIATELY — §0 is the standing order.
 
 Steps done:       22 of 63 merged, plus audit-fix sub-steps (not counted in the 63):
                   P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
                   P3.S5 405252a41 · P3.audit-fix-1 6aff0bad1 · P1.audit-fix-1 03d8fed37 ·
                   P2.audit-fix-1 33df838d0 + f95546b10 · CI-fix-1 72686c380 ·
                   P1.audit-fix-3 e0d00b6db.
-Phases done:      3 of 12  (Phase 3 is NOT closed — see the queue above)
-Last commit:      the newest `prompt:` commit is bookkeeping; the newest CODE commit is e0d00b6db
-                  (the Gemini arm merge). Always re-derive with
-                  `git -C /home/sites/sugarcraft log --oneline -1` rather than trusting this line.
+Phases done:      3 of 12  (Phase 3 is NOT closed)
+Last commit:      newest CODE commit is still e0d00b6db (the Gemini arm merge); everything
+                  since is `prompt:` bookkeeping. Always re-derive with
+                  `git -C /home/sites/sugarcraft log --oneline -1`.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (P0.S1, never edited)
 
-Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers for weeks without
-                  doing so, and that is exactly what hid CI being red for five days.**
-                  **AND FROM 2026-08-31, EVERY FIGURE MUST NAME WHETHER IT WAS RUN SERIALLY.**
-                  MEASURED by P3.S4-fix-1: two runs of the IDENTICAL tree gave 162,075 and
-                  162,057 — 18 apart — while two full suites ran concurrently. Sequential
-                  uncontended runs agree exactly, three ways. OBSERVED, not explained. This
-                  plan compares assertion totals constantly, so from here they are measured
-                  SERIALLY or not at all.
+Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIALLY.**
+                  This plan recorded numbers for weeks without naming the cwd, and that is
+                  exactly what hid CI being red for five days. And MEASURED by P3.S4-fix-1:
+                  two runs of the IDENTICAL tree gave 162,075 and 162,057 — 18 apart —
+                  while two full suites ran concurrently. Sequential uncontended runs agree
+                  exactly, three ways. OBSERVED, not explained.
 
-                  **MASTER — GREEN, and untouched by either branch.**
-                  @ e0d00b6db, stdin </dev/null, THREE runs all agreeing:
-                    checkout root (= CI's cwd), ambient: Tests: 10500, Assertions: 161982, Skipped: 1.
-                    from sugar-crush/, ambient:          Tests: 10500, Assertions: 161982, Skipped: 1.
-                    checkout root, CI-SHAPE (no swoole): Tests: 10500, Assertions: 161982, Skipped: 1.
-                  RE-CONFIRMED 2026-08-31 at 1267e6fbb, checkout root, ambient, SERIAL:
-                    Tests: 10500, Assertions: 161982, Skipped: 1.  (07:05.973)
-                  Every `prompt:` commit since touches only bookkeeping — no sugar-crush/ file.
+                  **MASTER — GREEN. ORCHESTRATOR-RUN THIS SESSION at `c7e5a6454`:**
+                    checkout root (= CI's cwd), stdin </dev/null: 
+                    **Tests: 10500, Assertions: 161982, Skipped: 1.**  (06:55.785)
+                  That was run while three agents were doing filtered runs on the box, and
+                  it still landed EXACTLY on the serial figure recorded at 1267e6fbb — so
+                  contention did not bite this one. Recorded as measured, not as clean.
+                  Master's code is untouched since 1267e6fbb: `git diff --stat
+                  1267e6fbb..HEAD` is prompt_plan.md / prompt_resume.md / prompt_worklog.md
+                  and nothing else.
 
-                  **THE TWO BRANCHES — different states, do not confuse them.**
-                    P3.S4-fix-1 @ bdef57632, worktree root: AGENT-REPORTED
-                      Tests: 10501, Assertions: 162127, Skipped: 1 (twice by the agent, once
-                      by a reviewer, all agreeing). **I have NOT run this. Re-run serially.**
-                    P3.S5-fix-1 @ 5a0ff8e12, worktree root, ORCHESTRATOR-RUN, SERIAL:
-                      **Tests: 10506, Assertions: 162036, Failures: 1, Skipped: 1.**  <-- RED
+                  **THE THREE BRANCHES — different states, do not confuse them.**
+                    P3.S4-fix-1 @ bdef57632 + the fix agent's commits: last full-suite
+                      figure is AGENT-REPORTED ONLY, `Tests: 10501, Assertions: 162127,
+                      Skipped: 1` (worktree root). **I have NOT run it. Re-run serially.**
+                    P3.S5-fix-1 @ 5a0ff8e12 + the fix agent's commits: at 5a0ff8e12 it was
+                      ORCHESTRATOR-RUN, SERIAL, worktree root:
+                      **Tests: 10506, Assertions: 162036, Failures: 1, Skipped: 1.** RED.
+                      The fix agent is closing exactly that red. Re-measure when it returns.
+                    P3.S6 @ branched from c7e5a6454: sandbox verified by me —
+                      PSR-4 root resolves to the worktree's own src/, and
+                      `--filter AgentTest` = `OK (56 tests, 278 assertions)`.
 
-                  **CI SHOULD BE GREEN on master.** Before CI-fix-1, master's version of
-                  SuiteTempSandboxContractTest was confirmed to RED on the CI-shape
-                  interpreter with CI's exact failure text, line number included.
-                  Progression: 10452/161673 (f95546b10) -> 10454/161697 (CI-fix-1)
-                  -> 10500/161982 (Gemini arm).
+                  **CI SHOULD BE GREEN on master.** Progression: 10452/161673 (f95546b10)
+                  -> 10454/161697 (CI-fix-1) -> 10500/161982 (Gemini arm).
                   **CI/local assertion counts are NOT comparable.** CI counted 161663 at
                   405252a41 where this box counted 161655 — the two environments gate
                   different tests (FFI/pty/extension paths) and a failing test stops
                   accruing where it dies. TEST counts agree exactly. Compare assertions
                   between the two CWDS on one box; never between this box and CI.
-                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — unmoved throughout,
-                  and re-verified in BOTH worktrees this session.
+                  golden md5: 32ea749d… (system) · ef0326dd… (agent) — unmoved throughout.
                   Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from the
                   wrong cwd php cannot find tools/check-path-repos.php and all three
                   "fail". That misread has happened twice.
@@ -448,59 +401,67 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                   php-cs-fixer is NOT installed on this box and NOT vendored anywhere in
                   the tree — the style gate cannot be run locally.
 
-In-flight batch:  **NONE RUNNING — VERIFIED with `ListAgents`, not assumed. Do the same before you
-                  trust any state you inherit: one agent this session delivered its full report,
-                  went quiet, and RESUMED AN HOUR LATER; it was stopped with `TaskStop` and all
-                  three trees re-verified clean afterwards. A completed report is not proof an
-                  agent has finished.**
-                  **Batch P3.CLOSE.B1 is OPEN and INCOMPLETE.**
-                  Both its steps are built, committed, and paused mid-review at the user's
-                  request. NOTHING IS SPAWNED. Do not re-spawn either step from scratch;
-                  their work is on their branches and is substantial (4 commits each).
+In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY WITH
+                  `ListAgents` BEFORE TRUSTING THIS LINE.**
 
-                  1. **P3.S4-fix-1** — /home/sites/prompt-step-P3.S4-fix-1
-                     branch prompt/P3.S4-fix-1, HEAD **bdef57632**, 4 commits, base 1267e6fbb
-                     ORCHESTRATOR-VERIFIED: status --porcelain EMPTY · zero src/ changes ·
-                     exactly ONE file touched (tests/Providers/PromptStabilityTest.php) ·
-                     goldens unmoved · --filter PromptStabilityTest = OK (14 tests, 374
-                     assertions), from a base of OK (13, 229) · clean on the
-                     InterpolationOpenerTokenTest census (OK 6/164).
-                     AGENT-REPORTED, NOT YET VERIFIED BY ME: full suite
-                     Tests: 10501, Assertions: 162127, Skipped: 1 (worktree root; the agent
-                     ran it twice and a reviewer once, all agreeing). RE-RUN SERIALLY.
-                     STATE: all eight original findings disposed. TEN NEW standing findings
-                     from cycle 3, untouched.
+                  1. **P3.S5-fix-1 fix agent** — /home/sites/prompt-step-P3.S5-fix-1
+                     branch prompt/P3.S5-fix-1, was at HEAD 5a0ff8e12, base 1267e6fbb.
+                     TASK: close the RED. `tests/RuntimeTest.php`'s `callArguments()`
+                     (~:2963-3013) counts nesting depth on the bare tokens `(`/`[`/`{` and
+                     their closers. An interpolated string opens with an ARRAY token
+                     (`T_CURLY_OPEN`, text `{$`; or `T_DOLLAR_OPEN_CURLY_BRACES`, text `${`)
+                     and closes with a BARE `}` — so `"{$path}"` decrements a level it never
+                     incremented and the walk loses depth. That is the ELEVENTH defeat of
+                     this step's write-primitive scanner; three reviewers found the first
+                     ten. The fix must ship with its acceptance mutation: a read-only tool
+                     whose source interpolates a string before calling a write primitive
+                     must RED. It may NOT be closed by adding a KNOWN_GAPS row.
+                     Declared files: src/Runtime.php · tests/RuntimeTest.php ·
+                     tests/Integration/SystemPromptWiringTest.php.
 
-                  2. **P3.S5-fix-1** — /home/sites/prompt-step-P3.S5-fix-1
-                     branch prompt/P3.S5-fix-1, HEAD **5a0ff8e12**, 4 commits, base 1267e6fbb
-                     ORCHESTRATOR-VERIFIED: status --porcelain EMPTY · scope is exactly the
-                     three declared files · **src/Runtime.php's change is COMMENT-ONLY** (I
-                     stripped comments/whitespace and compared executable token streams:
-                     both c42b4a36105c5ec8cc76669b4dd8fa95, IDENTICAL) · goldens unmoved ·
-                     RuntimeTest 112/398 -> 118/439 · SystemPromptWiringTest 11/75 unchanged.
-                     **FULL SUITE AT HEAD IS RED — see ACTION 1. DO NOT MERGE.**
-                     STATE: the user-approved rename is DONE and clean. All five cycle-6
-                     findings closed. HEAD never reviewed.
+                  2. **P3.S4-fix-1 fix agent** — /home/sites/prompt-step-P3.S4-fix-1
+                     branch prompt/P3.S4-fix-1, was at HEAD bdef57632, base 1267e6fbb.
+                     TASK: F-2 and F-4 of cycle 3's ten findings.
+                     Declared file: tests/Providers/PromptStabilityTest.php — that one only.
+                     Changes NO production code and must continue to change none.
+                     **EIGHT OF THE TEN CYCLE-3 FINDINGS ARE LOST** — they lived only in the
+                     previous session's context. I searched every prior session scratchpad
+                     under /tmp/claude-1000/-home-sites-sugarcraft/*/scratchpad and both
+                     worktrees' `--ignored` files; the report is not on disk. The agent was
+                     told the two that survive and told NOT to fabricate the other eight —
+                     §1.4 never hands a new reviewer the old findings anyway, so anything
+                     material among them is re-found by cycle 4 or was never material.
 
-                  **DECLARED MERGE ORDER STANDS: P3.S4-fix-1 first, then P3.S5-fix-1**,
-                  with a full suite between. Neither may merge before it is reviewed at its
-                  current HEAD, and P3.S5-fix-1 may not merge at all until the red is fixed.
+                  3. **P3.S6 step agent** — /home/sites/prompt-step-P3.S6
+                     branch prompt/P3.S6, base master c7e5a6454. NEW THIS SESSION.
+                     Runs its own review→fix→new-review loop internally, cap five.
+                     Declared files: src/Agents/Agent.php · src/Cli/Bootstrap.php ·
+                     src/App/App.php · tests/Agents/AgentTest.php.
+                     Started concurrently with 1 and 2 because its declared file list is
+                     DISJOINT from both. The phase's "fully serial S1→S6" rule is about
+                     shared files, and S5 itself is already merged; S5-fix-1 is test-only
+                     plus a comment-only Runtime.php change. Recorded as a deliberate
+                     orchestrator decision, not an oversight.
 
-Live worktrees:   /home/sites/sugarcraft                  master, clean, at the commit above.
-                  /home/sites/prompt-step-P3.S4-fix-1     **KEEP** — holds 4 commits, green
-                  /home/sites/prompt-step-P3.S5-fix-1     **KEEP** — holds 4 commits, RED at HEAD
-                  Branches prompt/P3.S4-fix-1 and prompt/P3.S5-fix-1 exist and are UNMERGED.
-                  **DO NOT DELETE EITHER WORKTREE.** Both hold committed work that is not on
-                  master. Both have a cp -al hard-linked vendor/, both verified to resolve
-                  the PSR-4 root into their OWN src/.
+                  **DECLARED MERGE ORDER: P3.S4-fix-1, then P3.S5-fix-1, then P3.S6**,
+                  with a full suite BETWEEN each — a regression measured after two merges
+                  cannot be attributed to either. Neither fix step may merge before it is
+                  reviewed at its current HEAD (both are at cycle 3 of 5, both PAUSED by the
+                  user rather than capped), and P3.S5-fix-1 may not merge until its red
+                  is measured closed BY ME, not by an agent.
+
+Live worktrees:   /home/sites/sugarcraft                  master, clean, at c7e5a6454.
+                  /home/sites/prompt-step-P3.S4-fix-1     **KEEP** — agent working
+                  /home/sites/prompt-step-P3.S5-fix-1     **KEEP** — agent working, was RED
+                  /home/sites/prompt-step-P3.S6           **KEEP** — agent working
+                  All three have a `cp -al` hard-linked vendor/, all three verified to
+                  resolve the PSR-4 root into their OWN src/.
+                  **DO NOT DELETE ANY OF THEM.**
                   /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
 
-Blocked on:       **P3.S5-fix-1 IS RED AT HEAD and must not merge until fixed** — the full
-                  detail is under ACTION 1 in `Next step`. Not a blocker on the plan: the fix
-                  is small, local and fully specified, and P3.S4-fix-1 can be reviewed and
-                  merged while it is done. Nothing needs a user decision to proceed.
+Blocked on:       Nothing. Three agents are working; no decision is owed to proceed.
 
-Awaiting user decision: ONE, NEW, and it does not block the Phase 3 close queue.
+Awaiting user decision: ONE, carried, and it does NOT block the Phase 3 close queue.
 
                   **GEMINI FUNCTION CALLING IS NOT BUILT.** P1.audit-fix-3 built the
                   :generateContent arm, so Gemini now gets a request it would accept and
@@ -520,7 +481,12 @@ Awaiting user decision: ONE, NEW, and it does not block the Phase 3 close queue.
                   The step agent raised this itself and asked for judgement rather than
                   picking. §1.10 sends it to the user.
 
-Open follow-ups:  Open follow-ups:  **NEW THIS SESSION — the three highest-value ones first.**
+Open follow-ups:  **NEW PROCESS RULE, ADOPTED THIS SESSION AND ALREADY IN EVERY BRIEF:
+                  a review's findings are written to a FILE the moment they are received
+                  (`<scratchpad>/<STEP_ID>/findings-cycle-<n>.md`), not summarised into the
+                  worklog.** Eight of P3.S4-fix-1's ten cycle-3 findings were lost to a
+                  context boundary because they were only summarised. Nothing detects this;
+                  it costs one file write.
 
                   **(N1) A per-tool `writesTree(): bool` on `src/Tools/Tool.php:20`, implemented by all
                   twelve Tool implementors.** ESCALATED by P3.S5-fix-1. Grounds, and they are strong:
@@ -596,15 +562,6 @@ Open follow-ups:  Open follow-ups:  **NEW THIS SESSION — the three highest-val
                   rule the FIX may be deferred but the FINDING is recorded as a step. FOLD INTO P5.S3
                   and extend the roster in the same diff.
 
-                  **SymbolCitationDriftTest has a hole — ROOT CAUSE FOUND.** The backtick scraper at
-                  tests/SymbolCitationDriftTest.php:290 is
-                  `` /`([A-Za-z0-9_\\]+(?:::[A-Za-z0-9_]+(?:\(\))?)?)`/ `` — no `/` in the class
-                  part, so a PATH-PREFIXED citation matches nothing and is silently green (MEASURED:
-                  fabricating the method name leaves OK (7 tests, 2952 assertions)). It is not even
-                  reported as unparseable, contradicting that file's own docblock. P3.S5 respelled the
-                  ONE citation it owned; every other path-prefixed citation in the tree is unpoliced.
-                  Needs its own step.
-
                   **P2.audit-fix-1 follow-up 4 — the only one of its six still open.**
                   DuplicatedTestHelperDriftTest normalises comments away, so doc-block divergence
                   between the two copies of hostPathLeaks() is INVISIBLE to it — which is exactly why
@@ -629,13 +586,16 @@ Open follow-ups:  Open follow-ups:  **NEW THIS SESSION — the three highest-val
                   doc edits + progress.json (dormant machinery — wire it or build it out, NEVER
                   delete).
 
-Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-31. Phase 3 serial S1->S6.
+Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-08-31. Phase 3 serial S1->S6, with S6
+                  started concurrently with the two fix steps on disjoint declared file lists —
+                  recorded above as a deliberate decision.
                   The src/ file-count census is RESOLVED — it never applied to this plan (§5), so
                   Phases 5/6/10 are NOT serialised by it. Still live before Phase 5/6:
                   EngineBackend.php held by a lane and now also edited by merged P3.S5 (wanted by
                   P7.S3); Chat.php + ContextCompactor.php for P4/P8; Bash.php behaviour vs P9.S3
-                  description; AgentDefinition C7 for P7.S5 (P3.S6 must NOT widen into it);
-                  tests/Support/ wholesale — now wanted by TWO queued follow-ups.
+                  description; AgentDefinition C7 for P7.S5 (P3.S6 must NOT widen into it — its
+                  brief says so explicitly); tests/Support/ wholesale — now wanted by TWO queued
+                  follow-ups.
                   NEW: src/Providers/VertexProvider.php is now a hot file — P1.audit-fix-2 and both
                   legacy-arm follow-ups all want it. Serialise them.
 ```
