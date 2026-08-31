@@ -417,24 +417,6 @@ final class TreeWideGuardRosterTest extends TestCase
     private const WALKER_FUNCTIONS = ['glob', 'scandir', 'readdir'];
 
     /**
-     * An expression that names the package root.
-     *
-     * THE TWO SPELLINGS THIS TREE USES, plus one it does not use yet:
-     * `dirname(__DIR__)` at any depth, `__DIR__` concatenated with a path that
-     * climbs, and `dirname(__FILE__)` at any depth. The third is here because a
-     * reviewer defeated the derivation with it and it costs one alternative;
-     * MEASURED, it matches 0 files under `tests/` and `src/` today, so it is a
-     * closed door rather than a behaviour change.
-     *
-     * A bare `__DIR__ . '/fixtures'` is deliberately NOT an anchor - it names a
-     * directory beside the test, which is how a fixture is addressed rather than
-     * how a source root is. An earlier revision of this paragraph claimed that
-     * treating it as a root "put 30 more files in the roster"; that figure was
-     * never measured and a reviewer's reproduction produced 0 extra files, so
-     * the claim is withdrawn rather than corrected - the REASON stands on what
-     * `__DIR__ . '/fixtures'` denotes, and needs no cardinality.
-     */
-    /**
      * A spelling the taint resolver is willing to look for at a use site.
      *
      * WHY THIS EXISTS AND WHY IT IS A FIX RATHER THAN A TIGHTENING.
@@ -474,6 +456,24 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     private const NAME_SPELLING = '~^(\\$[A-Za-z_][A-Za-z0-9_]*|(\\$this->|self::|static::)[A-Za-z_][A-Za-z0-9_]*\\(?)$~';
 
+    /**
+     * An expression that names the package root.
+     *
+     * THE TWO SPELLINGS THIS TREE USES, plus one it does not use yet:
+     * `dirname(__DIR__)` at any depth, `__DIR__` concatenated with a path that
+     * climbs, and `dirname(__FILE__)` at any depth. The third is here because a
+     * reviewer defeated the derivation with it and it costs one alternative;
+     * MEASURED, it matches 0 files under `tests/` and `src/` today, so it is a
+     * closed door rather than a behaviour change.
+     *
+     * A bare `__DIR__ . '/fixtures'` is deliberately NOT an anchor - it names a
+     * directory beside the test, which is how a fixture is addressed rather than
+     * how a source root is. An earlier revision of this paragraph claimed that
+     * treating it as a root "put 30 more files in the roster"; that figure was
+     * never measured and a reviewer's reproduction produced 0 extra files, so
+     * the claim is withdrawn rather than corrected - the REASON stands on what
+     * `__DIR__ . '/fixtures'` denotes, and needs no cardinality.
+     */
     private const ROOT_ANCHOR = '~dirname\(__DIR__|dirname\(__FILE__|__DIR__\.[\'"]/\.\.~i';
 
     /**
