@@ -1463,8 +1463,18 @@ sites, not one, and the list above reaches only the first:
 MEASURED: there is **no fifth** site (`/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/` and
 `'new EnvironmentBlock('` → the four above and zero direct constructions). The other three all feed
 the **Agent** assembler — the one §17.2 keeps deliberately separate from `Runtime`'s — whose
-`systemPrompt()` is consumed at nine live sites: `App/App.php:569`, `Agents/ProcessExecutor.php:473`,
-`Agents/AgentManager.php:433`, and `Workflows/WorkflowEngine.php:1042/1152/1252/1294/1397`. That path
+`systemPrompt()` is consumed at **eight** live sites: `App/App.php:569`,
+`Agents/ProcessExecutor.php:473`, `Agents/AgentManager.php:433`, and
+`Workflows/WorkflowEngine.php:1042/1152/1252/1294/1397`. (CORRECTED 2026-08-31: this said "nine" and
+then enumerated eight — 1+1+1+5 — and P3.S5 copied the wrong word into `src/Runtime.php`'s docblock,
+where a reviewer caught it. §16.8 rule 44: a figure that contradicts its own adjacent enumeration is
+the cheapest kind of error to catch and the easiest to propagate. RE-MEASURED five times
+independently — a `token_get_all` census by the step agent, three reviewers, and the orchestrator's
+own — all agreeing on **8 call sites and exactly 1 declaration**, `Agents/Agent.php:415`. No dynamic
+dispatch: every other `'systemPrompt'` string in `src/` is an array key or a named argument. The
+ninth candidate, `App/App.php:527`, is a COMMENT. The count is now *derived* rather than trusted, by
+`RuntimeTest::testTheAgentAssemblerCallSiteCountInThisDocblockIsDerivedFromTheTree()`, which re-runs
+the census and asserts the digit in the docblock is the digit the tree produces.) That path
 is live in production today: `bin/sugarcrush` → `Bootstrap::chat()` → `Bootstrap.php:1044`
 `agentManager()` → `Bootstrap.php:1462` capture-per-agent → `AgentManager.php:433`.
 
@@ -1506,7 +1516,8 @@ construction sites — the `Runtime` one. The other three feed `Agents\Agent::sy
 second assembler §17.2 keeps deliberately separate from `Runtime`'s. That path is live in production
 today (`bin/sugarcrush` → `Bootstrap::chat()` → `Bootstrap.php:1044` `agentManager()` →
 `Bootstrap.php:1462` capture-per-agent → `AgentManager.php:433`) and its `systemPrompt()` is consumed
-at nine live sites. **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
+at **eight** live sites (corrected 2026-08-31 — see the enumeration above; it is now pinned by a
+test that derives it). **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
 not memoised there (`Bootstrap.php:1458-1460`), so the git shell-out happens once per
 `systemPrompt()` call — MEASURED with a logging `git` shim on `PATH`, **five** subprocesses when the
 diff is emitted (branch, status, log, `diff --cached`, `diff`) and **three** when it is suppressed.
@@ -1553,7 +1564,7 @@ lane claim on `Agent.php`, `Bootstrap.php` or `App.php`, but `Agents/AgentDefini
 the second `systemPrompt()`'s env block carries no diff section, with a stated deletion experiment
 that reds when the marking call is removed, the golden agent prompt byte-identical, and the
 subprocess count re-measured with the `git` shim and recorded; or (b) the step lands a §18 row and
-the measurement showing the Agent path has no per-step seam to wire, with the nine call sites
+the measurement showing the Agent path has no per-step seam to wire, with the **eight** call sites
 classified per-step vs once-per-agent. In both cases the full suite is green from BOTH cwds and the
 worklog records which outcome it was and why.
 
