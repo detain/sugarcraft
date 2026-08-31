@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, THREE AGENTS RUNNING — `P3.S5-fix-1` is at `ab9a7dcdc` with all seven cycle-4 findings FIXED and its CYCLE-5 REVIEWER (the cap) out; `P3.S4-fix-1`'s fix agent is out on five cycle-4 findings; the `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue, THREE AGENTS RUNNING — BOTH fix branches are now FIXED and in their CYCLE-5 (cap) REVIEW: `P3.S4-fix-1` @ `707c30685` (15/393) and `P3.S5-fix-1` @ `ab9a7dcdc` (142/686), both orchestrator-verified. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -148,8 +148,14 @@ See §8 `In-flight batch` for exactly what each one is doing and what to do when
 | `P3.S6` sandbox | PSR-4 root resolves to `/home/sites/prompt-step-P3.S6/sugar-crush/src`; `--filter AgentTest` = `OK (56 tests, 278 assertions)` | base `c7e5a6454` |
 | `log.abbrevCommit` is parse-time validated | independently re-derived by the orchestrator in a scratch repo — see §8 | git 2.43.0 |
 
-**Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `2d5f14835`, and
-the FULL suite at `P3.S5-fix-1` HEAD `ab9a7dcdc`. Both must be run **serially, from the worktree
+**Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `707c30685`, and
+the FULL suite at `P3.S5-fix-1` HEAD `ab9a7dcdc`.
+
+**THE CENSUS SET IS SEVEN FILES, NOT SIX.** `prompt_plan.md` §1.2 action 7b names only six, which
+cost an agent a search to recover. The seventh is `sugar-crush/tests/Support/InterpolationOpenerTokenTest.php`
+(6 tests, 164 assertions). The six alone are `103 / 9468`; all seven are `109 / 9632`.
+103+6 = 109 and 9468+164 = 9632, so the two figures reconcile exactly. Use whichever the step needs,
+but say which one you ran. Both must be run **serially, from the worktree
 root, with nothing else heavy on the box**, immediately before that branch merges. Do not write a
 figure for either until you have run it.
 
@@ -406,9 +412,10 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIA
                   merges.
 
                   **THE THREE BRANCHES — ORCHESTRATOR-MEASURED, filtered only.**
-                    P3.S4-fix-1 @ 2d5f14835, cwd /home/sites/prompt-step-P3.S4-fix-1:
-                      --filter PromptStabilityTest      OK (15 tests, 391 assertions)
+                    P3.S4-fix-1 @ **707c30685**, cwd /home/sites/prompt-step-P3.S4-fix-1:
+                      --filter PromptStabilityTest      OK (15 tests, 393 assertions)
                       the seven census files            OK (109 tests, 9632 assertions)
+                      (at the older 2d5f14835 the filtered figure was 15/391)
                       git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/   EMPTY
                       scope: exactly tests/Providers/PromptStabilityTest.php
                       goldens 32ea749d… / ef0326dd…, author Joe Huss <detain@interserver.net>
@@ -458,33 +465,39 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                   `NO FINDINGS` and never a finished step.** Never write a dead agent's
                   missing report yourself. Blank returns get five attempts (§1.8).
 
-                  1. **P3.S4-fix-1 — cycle 4 DONE (FIVE findings). FIX agent out.**
+                  1. **P3.S4-fix-1 — cycle 4 FIXED. CYCLE-5 REVIEWER OUT — THIS IS THE CAP.**
                      Worktree /home/sites/prompt-step-P3.S4-fix-1, branch prompt/P3.S4-fix-1,
-                     HEAD **2d5f14835**, 5 commits, base 1267e6fbb. **Cycle 5 is the CAP.**
+                     HEAD **707c30685**, base 1267e6fbb. All five cycle-4 findings disposed of.
                      Declared file: tests/Providers/PromptStabilityTest.php — that one only.
                      Changes NO production code and must continue to change none.
-                     Findings file, ON DISK and the authority:
-                     <scratchpad>/P3.S4-fix-1/review-cycle-4/findings-cycle-4.md
-                     **F3 is the behavioural one and it REFUTES this branch's own recorded
-                     judgement.** Last cycle called control C's missing subprocess guard benign
-                     because control B intercepts diff.external first. It does not: a
-                     GIT_CONFIG_COUNT colour override drives C from 21 escapes to 0 while B
-                     stays green, and C then reds at :1915 with a message naming two causes,
-                     NEITHER of which happened. The reviewer measured its fix in BOTH
-                     polarities (clean 15/393; hostile reds at a new probe naming
-                     GIT_CONFIG_COUNT) — the rare prescription that arrives verified.
-                     F1/F2/F4/F5 are FALSE CLAIMS IN PROSE inside the file whose whole subject
-                     is claims wider than their evidence. F2 matters most: "git parses every
-                     config file before it uses any of them" is FALSE (per-command), but the
-                     verdict it justified — log.abbrevCommit undefendable by a repo-local pin —
-                     STANDS, now confirmed three times. Correct the reason, keep the finding.
+                     **ORCHESTRATOR-VERIFIED AT 707c30685 — do NOT re-measure:**
+                       --filter PromptStabilityTest    OK (15 tests, 393 assertions)
+                       scope = exactly the one declared file; src/ diff EMPTY; goldens
+                       32ea749d…/ef0326dd… UNMOVED; author Joe Huss; porcelain empty.
+                       Progression 13/229 (base) -> 14/374 -> 15/391 -> 15/393.
+                     **The F3 fix was verified by REPRODUCING THE HOSTILE RUN MYSELF**, not by
+                     reading the report: under GIT_CONFIG_COUNT with color.diff/color.ui=never
+                     it now reds at :1962 — the NEW probe — with a message naming
+                     GIT_CONFIG_COUNT and QUOTING git's own uncoloured diff as evidence
+                     (15/381/Failures: 1). Before the fix the same environment red at :1935
+                     blaming "the scanner is dead, or EnvironmentBlock started passing
+                     --no-color", NEITHER of which happened.
+                     **One prescription REFUSED and the reasoning is worth carrying:** the
+                     reviewer said core.excludesFile naming the TRACKED file moves nothing,
+                     premise "gitignore never applies to a tracked path". The premise is TRUE
+                     and IRRELEVANT — the exclude is in force when the fixture's own git add -A
+                     runs, so the file is never tracked. MEASURED 4,844 -> 4,561, Failures: 3.
+                     F4 was also WIDENED: diff.external has TWO domains, succeed-silently
+                     (/bin/true, exit 0, patch body lost, 4,617) and fail (/bin/false, exit 128,
+                     "unavailable (git exited 128)", 4,599).
                      **THE FIFTEENTH KNOB WAS NOT FOUND and that is a RESULT.** ~65 keys and
-                     env vars swept; every mover also red something; all new movers detected.
-                     Do not send anyone hunting for it again.
-                     **UNVERIFIED, deliberately:** a possible git-locale hazard on the
-                     untranslated --shortstat line. This host has ZERO git .mo catalogues, so
-                     it cannot be tested here. Nobody may write a guard for it or a comment
-                     claiming a measurement of it.
+                     env vars swept; every mover also red something. Do not send anyone hunting.
+                     **UNVERIFIED, deliberately, and NOT guarded:** a possible git-locale hazard
+                     on the untranslated --shortstat line. Untestability was verified — no
+                     git .mo catalogues on this host, no de_DE/fr_FR in locale -a,
+                     LC_ALL=de_DE.UTF-8 git diff --shortstat renders English. A CLAIMED
+                     measurement of it would itself be a finding.
+                     **FULL suite at 707c30685 NOT RUN. No figure exists.**
 
                   2. **P3.S5-fix-1 — cycle 4 FIXED. CYCLE-5 REVIEWER OUT — THIS IS THE CAP.**
                      Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,

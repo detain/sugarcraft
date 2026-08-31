@@ -253,6 +253,91 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 · FIX CYCLE 4 · 2026-08-31 — a refused prescription whose premise was true and irrelevant
+
+Commit `707c30685` on `prompt/P3.S4-fix-1`, base `1267e6fbb`. All five cycle-4 findings disposed of.
+A brand-new cycle-5 reviewer is out — **the cap**.
+
+**F3, the only behaviour change, and the one the previous cycle got wrong.** Cycle 3 saw that control
+C (coloured control, escape-byte liveness) had no "did the subprocess succeed" guard and judged it
+benign because control B intercepts `diff.external` first. Cycle 4 measured that false, and the fix
+agent reproduced it exactly before changing anything. Two assertions now precede the liveness one —
+the exit code, and git's OWN escape-byte count.
+
+**ORCHESTRATOR-VERIFIED, hostile run reproduced myself** (not taken from the agent):
+```
+GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=color.diff GIT_CONFIG_VALUE_0=never \
+GIT_CONFIG_KEY_1=color.ui GIT_CONFIG_VALUE_1=never \
+  php sugar-crush/vendor/bin/phpunit ... --filter PromptStabilityTest </dev/null
+
+REDS AT :1962 — the NEW probe — with:
+  "git itself emitted no escape bytes in the coloured control fixture, so nothing below this
+   line is a statement about the scanner. MEASURED cause: a colour setting the repo-local
+   color.diff=always cannot outrank - GIT_CONFIG_COUNT / GIT_CONFIG_PARAMETERS in the
+   environment beats every config file."
+and it QUOTES git's own uncoloured diff as evidence.   Tests: 15, Assertions: 381, Failures: 1
+```
+Before the fix the same environment red at `:1935` blaming *"the scanner is dead, or EnvironmentBlock
+started passing --no-color"* — **neither of which happened**. A control that reds for a reason its own
+message denies is worse than one that does not red, and that is now fixed rather than argued away.
+
+**ONE PRESCRIPTION REFUSED, and the reasoning is the entry worth keeping.** The reviewer said
+`core.excludesFile` naming the TRACKED file *"moves nothing and reds nothing"*, on the premise that
+gitignore never applies to a tracked path. **The premise is TRUE — the fix agent confirmed it in
+isolation, exclude-after-commit still shows ` M src/Alpha.php` — and it is IRRELEVANT here, because
+of ORDER.** The exclude is already in force when the fixture's own `git add -A` runs, so the file is
+never tracked at all (`git ls-files` empty). MEASURED: prompt 4,844 → **4,561**, `Failures: 3`.
+Accepting the prescription would have written a false claim into the file whose entire subject is
+claims wider than their evidence. This is the fourth prescription in this batch refused on a
+measurement, and the first refused because a true premise did not apply.
+
+**F4 also WIDENED rather than copied.** The reviewer measured `diff.external` in one domain; there are
+two. An external diff that **succeeds silently** (`/bin/true`) → exit 0, patch body lost, **4,617**.
+One that **fails** (`/bin/false`) → exit 128, field degrades to `unavailable (git exited 128)`,
+**4,599**. Both `Failures: 3`; `GIT_EXTERNAL_DIFF` reproduces both. Both are now recorded.
+`core.bigFileThreshold=1` confirmed TRUE (4,844/4,670 unchanged) — but only on the REAL fixture:
+synthetic stand-in repos did not reproduce it at that file size, so it was run on the fixture itself.
+
+**F1** — the *"Inert for ANY value, MEASURED"* bullet now states the DOMAIN distinction that was
+missing: these five keys fail the build **loudly** (`[core] quotePath = nonsense` → `Tests: 15,
+Assertions: 50, Failures: 6`, every one `git init -q failed`), where `log.abbrevCommit` degrades a
+rendered field **silently**. Loud is not inert, and silent-vs-loud is what this whole file is built on.
+
+**F2** — the mechanism claim is corrected in both places and **the verdict it supported is kept**,
+scope narrowed to *"undefendable for a key a subprocess READS; inert otherwise"*. `log.date`
+re-confirmed defendable (128 unpinned, 0 with `log.date = default` pinned).
+
+**F5** — fixed and EXTENDED: the reviewer named one message, the same defect sat on a second
+(`:1675`, the across-turn test), which also blamed the healthy `status.showUntrackedFiles` pin. Both
+now name the gitignore family as a second cause, verified in the hostile run.
+
+**The locale hazard is recorded as UNKNOWN and NOT guarded.** The fix agent verified untestability
+itself — `find / -name git.mo` finds none, no `de_DE`/`fr_FR` in `locale -a`, and
+`LC_ALL=de_DE.UTF-8 git diff --shortstat` renders English. A labelled UNVERIFIED note is in the file;
+no guard, no claimed measurement. The cycle-5 reviewer is told that a *claimed* measurement of it
+would itself be a finding.
+
+**ORCHESTRATOR-VERIFIED AT `707c30685`:**
+```
+cwd /home/sites/prompt-step-P3.S4-fix-1, stdin </dev/null
+--filter PromptStabilityTest         OK (15 tests, 393 assertions)    was 391
+git diff --name-only 1267e6fbb..HEAD exactly tests/Providers/PromptStabilityTest.php
+git diff --stat … -- sugar-crush/src/  EMPTY
+goldens                              32ea749d… / ef0326dd… UNMOVED
+author                               Joe Huss <detain@interserver.net>
+git status --porcelain               empty
+```
+Progression 13/229 (base) → 14/374 → 15/391 → **15/393**.
+
+**A GAP IN `prompt_plan.md` §1.2 action 7b, found by the fix agent and recorded here because it cost
+it a search:** action 7b names **six** census files, but the census set this step has been running is
+**seven** and sums to 109/9632. The seventh is
+`sugar-crush/tests/Support/InterpolationOpenerTokenTest.php` (6 tests, 164 assertions); the six alone
+are 103/9468, and 103+6 = 109, 9468+164 = 9632 exactly. Recorded in `prompt_resume.md` §8 so no
+future agent has to re-derive it.
+
+**FULL suite at `707c30685`: NOT RUN. No figure exists for it and none may be written.**
+
 ### P3.S5-fix-1 · FIX CYCLE 4 · 2026-08-31 — fail-OPEN to fail-CLOSED, and three refused prescriptions
 
 Commit `ab9a7dcdc` on `prompt/P3.S5-fix-1`, one commit on top of `842cc59b3`. All seven live
