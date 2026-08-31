@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, THREE AGENTS RUNNING — BOTH fix branches HIT THEIR FIVE-CYCLE CAP and both cap reviews found a real defect, so BOTH are in a FINAL FIX PASS with NO cycle-6 review and the orchestrator verifying personally. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue. `P3.S4-fix-1` @ `6e7308938` is FIXED, ORCHESTRATOR-VERIFIED and MERGE-READY (16/399) — held only for a quiet box to run its full suite serially. TWO AGENTS STILL RUNNING: the `P3.S5-fix-1` final fix pass and the `P3.S6` step agent. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -148,8 +148,15 @@ See §8 `In-flight batch` for exactly what each one is doing and what to do when
 | `P3.S6` sandbox | PSR-4 root resolves to `/home/sites/prompt-step-P3.S6/sugar-crush/src`; `--filter AgentTest` = `OK (56 tests, 278 assertions)` | base `c7e5a6454` |
 | `log.abbrevCommit` is parse-time validated | independently re-derived by the orchestrator in a scratch repo — see §8 | git 2.43.0 |
 
-**Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `707c30685`, and
-the FULL suite at `P3.S5-fix-1` HEAD `ab9a7dcdc`.
+**Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `6e7308938`
+(the branch is otherwise DONE — this is the only thing between it and its merge), and the FULL suite
+at whatever head `P3.S5-fix-1`'s final fix pass lands on.
+
+**WHY THEY HAVE NOT BEEN RUN YET, so nobody reads it as an oversight:** both must run SERIALLY with
+nothing else heavy on the box. Agents have been working continuously, and the `P3.S5-fix-1` fix pass
+runs mutants and tree-wide scans. Measured on this box: two runs of an IDENTICAL tree gave 162,075
+and 162,057 — 18 apart — under concurrency, while sequential uncontended runs agree exactly. Running
+now would produce a figure needing a caveat, and nothing is gained: merges are sequential anyway.
 
 **THE CENSUS SET IS SEVEN FILES, NOT SIX.** `prompt_plan.md` §1.2 action 7b names only six, which
 cost an agent a search to recover. The seventh is `sugar-crush/tests/Support/InterpolationOpenerTokenTest.php`
@@ -356,17 +363,17 @@ Next step:        **CALL `ListAgents` FIRST. Three agents are out. Do not re-spa
                   Each of the three is described under `In-flight batch` with exactly what
                   to do when it reports. The short form:
 
-                  A) **P3.S4-fix-1 — CAP REACHED. FINAL FIX PASS OUT, NO CYCLE-6 REVIEW.**
-                     Cycle 5 returned seven findings; F-A is the step's OWN defect left
-                     half-closed (control C got two guards, control B got one). When the fix
-                     agent reports: **verify it YOURSELF — nobody else will.** Reproduce the
-                     hostile runs (a global `[diff] external = /bin/true` and a global
-                     `[core] excludesFile` listing Alpha.php must red with an HONEST message,
-                     and the clean run must stay green), confirm scope is still the one file
-                     and the src/ diff still EMPTY, then run the FULL SUITE SERIALLY and MERGE
-                     IT FIRST. It stays first because it changes no production code at all.
-                     **Do NOT open a cycle 6** — the cap is honoured; what it exhausts is the
-                     value of another review, not of a measured fix.
+                  A) **P3.S4-fix-1 @ 6e7308938 — DONE, VERIFIED, MERGE-READY. HELD ONLY FOR
+                     A QUIET BOX.** Nothing further is owed on this branch except its full
+                     suite. **THE MOMENT the other two agents finish**, run:
+                       cd /home/sites/prompt-step-P3.S4-fix-1 && php sugar-crush/vendor/bin/\
+                         phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
+                     SERIALLY, nothing else heavy on the box, then MERGE IT FIRST into master
+                     with `git -C /home/sites/sugarcraft merge --no-ff prompt/P3.S4-fix-1` and
+                     a §1.6 WHY/WHAT/MEASURED/REVIEW message. Master's figure to beat:
+                     10500 / 161982 / 1 from the CHECKOUT ROOT. Then remove the worktree,
+                     delete the branch, append the worklog entry, rewrite this file.
+                     It merges first because it changes NO production code at all.
                   B) **P3.S5-fix-1 — CAP REACHED. FINAL FIX PASS OUT, NO CYCLE-6 REVIEW.**
                      Cycle 5 found F1, a CRITICAL fail-open that SUBTRACTS detections: a
                      one-line COMMENT of the shape `use function X as file_put_contents;`
@@ -471,9 +478,26 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                   `NO FINDINGS` and never a finished step.** Never write a dead agent's
                   missing report yourself. Blank returns get five attempts (§1.8).
 
-                  1. **P3.S4-fix-1 — CAP REACHED. FINAL FIX PASS OUT. NO CYCLE-6 REVIEW.**
+                  1. **P3.S4-fix-1 — COMPLETE AND VERIFIED. NO AGENT IS OUT ON IT.**
                      Worktree /home/sites/prompt-step-P3.S4-fix-1, branch prompt/P3.S4-fix-1,
-                     HEAD **707c30685**, base 1267e6fbb.
+                     HEAD **6e7308938**, base 1267e6fbb. All six cycle-5 findings closed.
+                     **ORCHESTRATOR-VERIFIED — I RAN EVERY ONE OF THESE MYSELF:**
+                       CLEAN                         OK (16 tests, 399 assertions)  was 15/393
+                       scope = the one declared file; src/ diff EMPTY; goldens unmoved;
+                       author Joe Huss; porcelain clean.
+                       F-A hostile [diff] external=/bin/true        16 tests, Failures: 3
+                       F-A hostile [core] excludesFile -> Alpha.php 16 tests, Failures: 3
+                       Both red with the HONEST message; "The scanner is dead" is GONE from
+                       both. The message quotes git's own output and the two quotes DIFFER
+                       exactly as the two mechanisms predict — " 1 file changed, 0 insertions"
+                       for the external differ, NOTHING AT ALL for the never-tracked file.
+                       F-E NOT LIVE, checked in the direction that could have broken: a colour
+                       override still reaches CONTROL C (16 tests, 387 assertions, Failures: 1)
+                       — B's new guard does not swallow it.
+                       F-C by COUNT: quotePath=nonsense -> Failures: 6, SIX of six name
+                       `git init`, and the old misleading "not in a git directory" appears ZERO
+                       times.
+                     **FULL SUITE AT 6e7308938 STILL NOT RUN** — deliberately held, see A.
                      **ORCHESTRATOR DECISION, deliberate and recorded:** §1.2 caps this loop at
                      five review cycles and the cap is HONOURED — no sixth reviewer. Cycle 5's
                      F-A is not a new hazard, it is THE STEP'S OWN DEFECT left half-closed:
@@ -524,7 +548,7 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      git .mo catalogues on this host, no de_DE/fr_FR in locale -a,
                      LC_ALL=de_DE.UTF-8 git diff --shortstat renders English. A CLAIMED
                      measurement of it would itself be a finding.
-                     **FULL suite NOT RUN at any head of this branch. No figure exists.**
+                     **No full-suite figure exists for this branch at any head.**
                      **Cycle 5's NON-findings are worth as much as its findings and must NOT be
                      re-done:** every byte figure exact (clean 4844/4670, core.abbrev=20
                      4883/4696, diff.context=10 4851, color.diff=always 4921/4689 at 21

@@ -253,6 +253,80 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 · FINAL FIX PASS · 2026-08-31 — VERIFIED BY THE ORCHESTRATOR, MERGE-READY, HELD FOR A QUIET BOX
+
+Commit `6e7308938` on `prompt/P3.S4-fix-1`. All six findings F-A..F-F closed. **No cycle-6 review by
+design** — I verified this pass personally, and below is what I actually ran, not what was reported.
+
+**MY OWN VERIFICATION — every hostile case reproduced by me, not read from the report:**
+```
+cwd /home/sites/prompt-step-P3.S4-fix-1, stdin </dev/null
+CLEAN                                    OK (16 tests, 399 assertions)      was 15/393
+scope                                    exactly tests/Providers/PromptStabilityTest.php
+git diff --stat … -- sugar-crush/src/    EMPTY
+goldens                                  32ea749d… / ef0326dd… UNMOVED
+author / porcelain                       Joe Huss <detain@interserver.net> / clean
+
+F-A hostile 1  GIT_CONFIG_GLOBAL=[diff] external = /bin/true       Tests: 16, Failures: 3
+F-A hostile 2  GIT_CONFIG_GLOBAL=[core] excludesFile -> Alpha.php  Tests: 16, Failures: 3
+```
+**Both now red with the HONEST message and "The scanner is dead" is GONE from both.** The message
+names both exit-0 mechanisms and then quotes git's own output — and the two quotes differ exactly as
+the mechanisms predict: hostile 1 prints ` 1 file changed, 0 insertions(+), 0 deletions(-)` (external
+differ succeeded, shortstat kept, patch body dropped), hostile 2 prints **nothing at all** (the file
+was never tracked). That correspondence is what convinces me the guard is reading reality rather than
+a coincidence.
+
+**F-E is NOT live — checked in the reverse direction, which is the check that could have gone wrong.**
+Giving control B a second guard could have made it swallow the colour case before control C ever ran.
+It does not: `GIT_CONFIG_COUNT` with `color.diff`/`color.ui=never` still reaches **control C** and reds
+at its escape guard (`Tests: 16, Assertions: 387, Failures: 1`), because a colour override does not
+touch control B's `Binary files ` line. Control C's message now names both of its causes anyway — the
+file's own ordering argument forbids relying on which control fires first.
+
+**F-C verified by COUNT, not by reading:** under a global `[core] quotePath = nonsense`,
+`Failures: 6`, **6 of 6 name `git init`**, and the old misleading
+`could not pin status.showUntrackedFiles … fatal: not in a git directory` appears **0 times**. The
+unchecked `shell_exec` at `:483` is now a checked `self::git()` whose skip stays keyed on the
+directory, so a git-less host still skips rather than fails.
+
+**THE FIX AGENT CORRECTED ITS OWN PROSE MID-PASS, and that is worth recording as the standard.** Its
+new byte-cap doc-block first claimed the largest capture in the file was 84 B. It then measured the
+four real call sites — coloured probe **342 B**, binary probe **178 B**, longest fatal **102 B** —
+and rewrote the doc-block. Its own words: *"The 84 was wrong; that is the same defect class this step
+exists to close, caught in my own prose."*
+
+**F-B gained a FOURTH site the review never flagged:** the placeholder guard's own failure message
+said *"any INVALID value anywhere in the config precedence chain, which git treats as fatal at parse
+time whatever overrides it"* — the same over-wide claim, in a LIVE message. Narrowed to *"FOR A KEY
+THE FAILING SUBPROCESS ITSELF READS"*, with the exit table quoted.
+**F-D** measured both channels: `GIT_CONFIG_COUNT log.date=true` → 4,910 B / **19** escapes;
+`GIT_CONFIG_GLOBAL [log] date = true` → 4,921 B / **21** (unchanged), because the fixture pins
+`log.date default` repo-locally and a FILE loses to that pin where the ENVIRONMENT does not. The
+message now names the channel. Sibling figure re-verified: `GIT_DIFF_OPTS=-u10` → 22.
+**F-F** got a real cap (`GIT_SAID_MAX_BYTES = 2048`, `gitSaid()`) plus a test asserting both
+polarities with `assertSame`, deletion-experiment confirmed.
+
+**THREE GAPS THE FIX AGENT NAMED RATHER THAN PAPERED OVER — all carried, none of them blockers:**
+1. **F-F is closed only at the sites the finding named.** Ten other failure messages in the same file
+   still interpolate git output uncapped — lines 527, 2244, 2266, 2289, 2297, 2315, 2321, 2334, 2473,
+   2917, all pre-existing. Routing them through `gitSaid()` is mechanical but touches assertions no
+   finding named, so it was left. **Queued as a follow-up.**
+2. **The `:483` skip is keyed on `is_dir($dir/.git)`, deliberately.** A git-less CI runner must skip.
+   But that means one narrow class of init failure — one creating no `.git` at all yet not "git is
+   missing" — would still skip silently. The agent could not construct such a case to measure it and
+   **named it rather than claiming it cannot happen.** That is the correct disposition.
+3. **The git-locale hazard stays a declared UNKNOWN.** No guard, no manufactured measurement. The
+   agent did not re-verify the absence of `.mo` catalogues and says so, taking the file's existing
+   twice-verified statement as standing.
+
+**MERGE-READY, AND DELIBERATELY HELD.** `P3.S4-fix-1` merges FIRST and needs a FULL SUITE run
+SERIALLY at `6e7308938` immediately before it. Two agents are still working this box — the
+`P3.S5-fix-1` final fix pass runs mutants and tree-wide scans, which is exactly the "something else
+heavy" the serial rule is about. Measured contention on this box is 18 assertions between runs of an
+identical tree. **So the full suite waits for a quiet box rather than producing a figure that needs a
+caveat.** Nothing is lost: merges are sequential anyway and this one is first in line.
+
 ### P3.S5-fix-1 · REVIEW CYCLE 5 (THE CAP) · 2026-08-31 — fail-closed on the walk did not buy fail-closed on the alphabet
 
 Cycle 5 is the fifth and last review cycle. It returned **five findings**, and F1 is critical.
