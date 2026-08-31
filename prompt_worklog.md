@@ -253,6 +253,54 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### BATCH P3.CLOSE.B1 · STATE · 2026-08-31 — both fix steps fixed and in cycle-4 review, P3.S6 in flight
+
+Written as a checkpoint, not a close. Nothing has merged; master's `sugar-crush/` tree is still
+byte-identical to `1267e6fbb`.
+
+| Step | Worktree | HEAD | Cycles used | State |
+|---|---|---|---|---|
+| `P3.S4-fix-1` | `/home/sites/prompt-step-P3.S4-fix-1` | `2d5f14835` | 3 of 5, cycle 4 IN FLIGHT | F-2 + F-4 fixed, orchestrator-verified |
+| `P3.S5-fix-1` | `/home/sites/prompt-step-P3.S5-fix-1` | `842cc59b3` | 3 of 5, cycle 4 IN FLIGHT | RED CLOSED, orchestrator-verified |
+| `P3.S6` | `/home/sites/prompt-step-P3.S6` | base `c7e5a6454` | its own loop, internal | step agent working |
+
+**Merge order UNCHANGED: `P3.S4-fix-1` → `P3.S5-fix-1` → `P3.S6`, with a FULL SERIAL SUITE between
+each.** `P3.S4-fix-1` goes first because it changes no production code at all
+(`git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/` is empty — re-verified this session).
+
+**ORCHESTRATOR-MEASURED THIS SESSION — these are the numbers, and they do not need re-taking.**
+```
+master @ c7e5a6454, checkout root, </dev/null   Tests: 10500, Assertions: 161982, Skipped: 1  (06:55.785)
+P3.S4-fix-1 @ 2d5f14835, worktree root
+  --filter PromptStabilityTest                  OK (15 tests, 391 assertions)
+  the seven census files                        OK (109 tests, 9632 assertions)
+P3.S5-fix-1 @ 842cc59b3, worktree root
+  --filter 'InterpolationOpener|Runtime|SystemPromptWiring'Test
+                                                OK (136 tests, 679 assertions)
+  the six census files                          OK (103 tests, 9468 assertions)
+P3.S6 @ base c7e5a6454, worktree root
+  --filter AgentTest                            OK (56 tests, 278 assertions)
+```
+Goldens `32ea749d…` / `ef0326dd…` re-verified UNMOVED in all three worktrees. Every worktree's
+`vendor/` is a `cp -al` hard-link copy verified to resolve the PSR-4 root into its OWN `src/`.
+
+**NOT MEASURED, AND NOBODY MAY WRITE A FIGURE FOR THEM:** the FULL suite at `2d5f14835`, and the FULL
+suite at `842cc59b3`. Each is owed immediately before its own merge, run SERIALLY from that worktree
+root with nothing else heavy on the box. The only full-suite figure that exists for either branch is
+AGENT-REPORTED at the older `bdef57632` (`10501 / 162127 / 1`) and the orchestrator's own RED at the
+older `5a0ff8e12` (`10506 / 162036 / Failures: 1`).
+
+**Two process lessons this batch produced, both now in every brief:**
+1. **A review's findings are written to a FILE the moment they arrive** —
+   `<scratchpad>/<STEP_ID>/<role>/findings-cycle-<n>.md`. Eight of `P3.S4-fix-1`'s ten cycle-3
+   findings were lost to a context boundary because they were only summarised into this worklog.
+2. **A prescription in an orchestrator brief is a hypothesis, and an agent that measures it false and
+   refuses it has done the job right.** `P3.S4-fix-1`'s fix agent refused my instruction to pin
+   `log.abbrevCommit`; I re-derived it myself and the agent was right. Recorded in that step's own
+   entry with the commands.
+
+---
+
 ### P3.S4-fix-1 (cycle-3 fix) — `log.abbrevCommit` reclassified, and control B stops blaming the scanner for a broken `git diff`   ·   2026-08-31   ·   `2d5f14835`, NOT MERGED
 
 **Status** `in review` — review cycle 4 of a maximum five is IN FLIGHT.
