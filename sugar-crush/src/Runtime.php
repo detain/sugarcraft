@@ -385,15 +385,25 @@ final class Runtime
      *    `MultiEdit calls file_put_contents() at MultiEdit.php:29` in its own
      *    failure output.
      *
-     * IT HAS BEEN DEFEATED THREE TIMES SINCE IT WAS WRITTEN, each by a
-     * different spelling of the same write, each on a fully green suite:
+     * IT HAS BEEN DEFEATED REPEATEDLY SINCE IT WAS WRITTEN, each time by a
+     * different spelling of the same write, each time on a fully green suite:
      * `\file_put_contents` (PHP 8 emits one `T_NAME_FULLY_QUALIFIED` token,
      * and the scanner filtered on `T_STRING`); `fopen` + `vfprintf` (a handle
      * writer the roster did not name, in a paragraph claiming the roster
-     * closed handle writes); and a `file_put_contents` inside a `use`d trait
-     * in another file. All three are closed and all three are recorded in the
-     * test's own doc-block. That history — not modesty — is why the verb here
-     * is NARROWED.
+     * closed handle writes); a `file_put_contents` inside a `use`d trait in
+     * another file; and a further run of them since. That history — not
+     * modesty — is why the verb here is NARROWED.
+     *
+     * THE ENUMERATION IS NOT REPEATED HERE, for the same reason the roster is
+     * not, two paragraphs up. This sentence used to open "IT HAS BEEN DEFEATED
+     * THREE TIMES" and name three; the test's own doc-block named ten of the
+     * same population on the same day, and by the end of that cycle the list
+     * was longer than either. Two prose counts of one population cannot both
+     * stay true, so the list lives in exactly one place —
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::writePrimitivesCalledIn()} —
+     * and this paragraph keeps only the part that is load-bearing here: that
+     * the history exists, and that it is why this says NARROWED and not
+     * CLOSED.
      *
      * WHAT IS STILL NOT PINNED, said plainly rather than left inside the word
      * "closed". The scan is DIRECT-CALL over the tool's own code. A tool that

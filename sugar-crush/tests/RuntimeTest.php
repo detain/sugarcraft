@@ -2743,15 +2743,36 @@ final class RuntimeTest extends TestCase
      * THE BACKTICK OPERATOR IS `shell_exec` WITH NO NAME TOKEN, so it is
      * matched on the `` ` `` character and reported under that name.
      *
-     * WHAT THIS ALPHABET CANNOT EXPRESS (§16.8 rule 31). THIS SCANNER HAS BEEN
-     * DEFEATED BY FOUR SUCCESSIVE REVIEWERS, TEN TIMES, EACH ON A FULLY GREEN
-     * SUITE — a leading backslash, `vfprintf`, a trait in another file,
-     * `fopen('w')`, `error_log(…,3,…)`, `gzwrite`, `imagepng($im,$p)`,
-     * `new SplFileObject($p,'w')`, `fopen($p,'x')`, and an import alias. All
-     * ten are closed above. The lesson is NOT that the eleventh does not
-     * exist: a roster of function NAMES cannot be complete, because the
-     * alphabet is a transcript of the cases its authors already knew. What is
-     * structurally out of reach here:
+     * WHAT THIS ALPHABET CANNOT EXPRESS (§16.8 rule 31). THIS SCANNER HAS
+     * BEEN DEFEATED BY SUCCESSIVE REVIEWERS, EACH TIME ON A FULLY GREEN
+     * SUITE. The defeats, in the order they were found and every one of them
+     * closed above: a leading backslash; `vfprintf`; a trait in another file;
+     * `fopen('w')`; `error_log(…,3,…)`; `gzwrite`; `imagepng($im,$p)`;
+     * `new SplFileObject($p,'w')`; `fopen($p,'x')`; an import alias; an
+     * interpolated string in an argument; an ATTRIBUTE in an argument; a
+     * comma-list, group and leading-backslash `use function`; `error_log`'s
+     * message type in any radix but decimal; a `fopen` mode written with an
+     * escape sequence; and a spread argument.
+     *
+     * THAT LIST IS THE ONLY PLACE THE HISTORY IS KEPT, and it carries no
+     * cardinality — §16.8 rule 2, ship the generator not the count. It used to
+     * say "DEFEATED BY FOUR SUCCESSIVE REVIEWERS, TEN TIMES … All ten are
+     * closed", and it was stale by one within its own file the day it was
+     * written: `testTheWritePrimitiveScannerSurvivesAnInterpolatedArgument()`,
+     * three hundred lines below, closed an eleventh in the same commit.
+     * `src/Runtime.php` carried a second, smaller count of the SAME
+     * population and now defers here instead. The paragraph earns its place
+     * because the list is the argument — see the next one — not because the
+     * number was.
+     *
+     * THE LESSON IS NOT THAT THE NEXT ONE DOES NOT EXIST. A roster of function
+     * NAMES cannot be complete, because the alphabet is a transcript of the
+     * cases its authors already knew. What CAN be made complete is the
+     * DIRECTION the unknown case fails in: an argument list this scanner
+     * cannot read is now a write in every rule
+     * ({@see argumentsMeanAWrite()}), so the next unknown bracket spelling
+     * costs a false positive a human must dismiss rather than a silent pass.
+     * What is structurally out of reach here:
      *
      *  - METHOD CALLS ON OBJECTS. `$zip->addFile()`, `$writer->save()`,
      *    `$fs->dumpFile()` — excluding `->` is what stops the scanner reporting
@@ -2911,7 +2932,11 @@ final class RuntimeTest extends TestCase
                 continue;
             }
             $rule = self::CONDITIONAL_PRIMITIVES[$name] ?? null;
-            if ($rule !== null && self::argumentsMeanAWrite($rule, self::callArguments($tokens, $nextIndex))) {
+            if ($rule === null) {
+                continue;
+            }
+            $parse = self::callArguments($tokens, $nextIndex);
+            if (self::argumentsMeanAWrite($rule, $parse['arguments'], $parse['complete'])) {
                 $found[$name][] = $token[2];
             }
         }
@@ -2937,25 +2962,61 @@ final class RuntimeTest extends TestCase
      * global one. Over-classification in the same direction the bare import
      * spelling already is, and stated rather than left to be discovered.
      *
+     * THE STATEMENT IS SPLIT BEFORE THE ITEMS ARE READ, because `use function`
+     * takes a LIST and not a single name. A single-clause pattern anchored on
+     * `;` reads only the first import of a comma list and nothing at all of
+     * the braced group form, and both are ordinary PHP. MEASURED on PHP 8.3.6
+     * through the shipped {@see writePrimitivesCalledIn()}, against a real
+     * copy of a tool on {@see readOnlyBuiltInToolNames()} with one write
+     * added, before this was split in two:
+     *
+     *   `use function strlen as len, file_put_contents as persist;`  => []
+     *   `use function \file_put_contents as persist;`                => []
+     *   `use function Some\Space\{file_put_contents as persist};`    => []
+     *   `use function file_put_contents as persist;`      (CONTROL)  => write
+     *
+     * The first three all write the file — `php -l` clean, run and measured —
+     * and all three came back READ-ONLY on a green suite. A LEADING BACKSLASH
+     * IS LEGAL IN A `use` STATEMENT too, and the old name pattern required a
+     * letter first, which is the same one-backslash defeat this scanner has
+     * already taken twice at the call site.
+     *
+     * EACH ITEM IS VALIDATED SEPARATELY rather than trusted, so a `use
+     * function` that appears inside a string or a comment contributes nothing:
+     * the coarse split takes everything up to `;`, and any piece that is not
+     * exactly a name with an optional `as` clause is dropped.
+     *
      * @return array<string, string>
      */
     private static function importedFunctionAliases(string $source): array
     {
-        if (!preg_match_all(
-            '/\buse\s+function\s+([A-Za-z_\x80-\xff][\\\\A-Za-z0-9_\x80-\xff]*)(?:\s+as\s+([A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*))?\s*;/i',
-            $source,
-            $matches,
-            PREG_SET_ORDER,
-        )) {
+        if (!preg_match_all('/\buse\s+function\s+([^;]+);/i', $source, $matches, PREG_SET_ORDER)) {
             return [];
         }
 
         $aliases = [];
         foreach ($matches as $match) {
-            $segments = explode('\\', trim($match[1], '\\'));
-            $real = strtolower(end($segments));
-            $alias = strtolower(($match[2] ?? '') !== '' ? $match[2] : $real);
-            $aliases[$alias] = $real;
+            $clause = $match[1];
+            if (preg_match('/^.*?\\\\?\{(.*)\}\s*$/s', $clause, $group) === 1) {
+                // `use function Ns\{a as b, c};` - the namespace prefix is
+                // discarded for the same reason the ungrouped namespaced form
+                // discards it: ONLY THE LAST SEGMENT IS KEPT, above.
+                $clause = $group[1];
+            }
+
+            foreach (explode(',', $clause) as $item) {
+                if (preg_match(
+                    '/^\s*([\\\\A-Za-z_\x80-\xff][\\\\A-Za-z0-9_\x80-\xff]*)(?:\s+as\s+([A-Za-z_\x80-\xff][A-Za-z0-9_\x80-\xff]*))?\s*$/i',
+                    $item,
+                    $parts,
+                ) !== 1) {
+                    continue;
+                }
+                $segments = explode('\\', trim($parts[1], '\\'));
+                $real = strtolower((string) end($segments));
+                $alias = strtolower(($parts[2] ?? '') !== '' ? $parts[2] : $real);
+                $aliases[$alias] = $real;
+            }
         }
 
         return $aliases;
@@ -2993,18 +3054,51 @@ final class RuntimeTest extends TestCase
      * the tree-wide census that exists because this exact defeat has now
      * happened to several scanners here.
      *
+     * A COUNTER CANNOT NOTICE THAT IT LOST A LEVEL; A STACK CAN. Widening the
+     * opener list closed the `{$`/`${` instance and left the CLASS open — the
+     * very next spelling to arrive was `#[`, which is `T_ATTRIBUTE`, an array
+     * token closed by the bare `]` the walk already decremented on. Under a
+     * plain depth counter that is indistinguishable from a balanced parse:
+     * the walk simply returns one closer early, at a `)` that belongs to
+     * something else, and hands {@see argumentsMeanAWrite()} a truncated list
+     * with no signal that anything went wrong. MEASURED on PHP 8.3.6 through
+     * the shipped {@see writePrimitivesCalledIn()}, all rows `php -l` clean:
+     *
+     *   `error_log((#[Pure] fn(): string => "m")(), 3, $p);`   => []
+     *   `error_log(#[Pure] fn(): string => "m", 3, $p);`       => []
+     *   `imagepng((#[Pure] fn() => $im)(), $p);`               => []
+     *   `error_log((fn(): string => "m")(), 3, $p);` (CONTROL) => error_log
+     *
+     * The control differs from the first row by exactly the eight characters
+     * `#[Pure] `. So EVERY OPENER IS PUSHED WITH THE CLOSER IT TAKES and every
+     * closer must match the top of the stack. A mismatch is not repaired and
+     * not guessed at — the walk stops and reports `complete: false`, which
+     * {@see argumentsMeanAWrite()} reads as a write. That is what turns the
+     * next unknown spelling of this defect from fail-OPEN into fail-CLOSED:
+     * the thirteenth one costs a false positive, not a silent pass.
+     *
+     * RUNNING OFF THE END OF THE TOKEN STREAM IS THE SAME VERDICT, and it was
+     * previously indistinguishable from a clean return because both returned
+     * the same bare list.
+     *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      *
-     * @return list<list<array{0: int, 1: string, 2: int}|string>>
+     * @return array{arguments: list<list<array{0: int, 1: string, 2: int}|string>>, complete: bool}
      */
     private static function callArguments(array $tokens, int $openIndex): array
     {
-        $interpolationOpeners = [T_CURLY_OPEN];
+        $closerForString = ['(' => ')', '[' => ']', '{' => '}'];
+
+        // `{$` and `${` open an interpolated expression and `#[` opens an
+        // attribute group; all three arrive as ARRAY tokens and all three
+        // close on a bare one-byte string, so each is declared by the closer
+        // it takes rather than by its own text.
+        $closerForToken = [T_CURLY_OPEN => '}', T_ATTRIBUTE => ']'];
         if (\defined('T_DOLLAR_OPEN_CURLY_BRACES')) {
-            $interpolationOpeners[] = T_DOLLAR_OPEN_CURLY_BRACES;
+            $closerForToken[T_DOLLAR_OPEN_CURLY_BRACES] = '}';
         }
 
-        $depth = 0;
+        $stack = [];
         $arguments = [];
         $current = [];
         $count = \count($tokens);
@@ -3014,22 +3108,31 @@ final class RuntimeTest extends TestCase
             if (\is_array($token) && \in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
                 continue;
             }
-            if ($token === '(' || $token === '[' || $token === '{'
-                || (\is_array($token) && \in_array($token[0], $interpolationOpeners, true))) {
-                $depth++;
-                if ($depth === 1) {
+
+            $closer = \is_array($token)
+                ? ($closerForToken[$token[0]] ?? null)
+                : ($closerForString[$token] ?? null);
+
+            if ($closer !== null) {
+                $stack[] = $closer;
+                if (\count($stack) === 1) {
                     continue;
                 }
             } elseif ($token === ')' || $token === ']' || $token === '}') {
-                $depth--;
-                if ($depth === 0) {
+                if (array_pop($stack) !== $token) {
+                    // A CLOSER WHOSE OPENER THIS WALK NEVER TOOK. Everything
+                    // after this point is misaligned, so no verdict is
+                    // computed from it.
+                    return ['arguments' => $arguments, 'complete' => false];
+                }
+                if ($stack === []) {
                     if ($current !== []) {
                         $arguments[] = $current;
                     }
 
-                    return $arguments;
+                    return ['arguments' => $arguments, 'complete' => true];
                 }
-            } elseif ($token === ',' && $depth === 1) {
+            } elseif ($token === ',' && \count($stack) === 1) {
                 $arguments[] = $current;
                 $current = [];
 
@@ -3042,21 +3145,61 @@ final class RuntimeTest extends TestCase
             $arguments[] = $current;
         }
 
-        return $arguments;
+        return ['arguments' => $arguments, 'complete' => false];
     }
 
     /**
      * Whether $arguments make a {@see CONDITIONAL_PRIMITIVES} call a write.
      *
-     * UNREADABLE MEANS WRITE, in every branch. A mode or a target this cannot
-     * resolve to a literal is reported rather than passed — §16.8 rule 32, a
-     * verdict the harness cannot compute must never come out as "pass",
-     * because pass is the direction that silently retires a finding.
+     * UNREADABLE MEANS WRITE, and the three ways a list can be unreadable are
+     * handled HERE, before any rule runs, because the rules themselves cannot
+     * all express it. A mode or a target that does not resolve to a literal is
+     * reported rather than passed — §16.8 rule 32: a verdict the harness
+     * cannot compute must never come out as "pass", because pass is the
+     * direction that silently retires a finding.
+     *
+     * THE PROSE HERE USED TO SAY "in every branch" AND THAT WAS FALSE. Only
+     * the `mode` branch implemented it. `target` and `errorlog` both answered
+     * `false` on an absent `$arguments[1]`, and THAT — not the walk bug — is
+     * what made the eleventh defeat (interpolation) dangerous rather than
+     * merely wrong: a truncated list has no `$arguments[1]`, so two of the
+     * three rules read "the walk gave up" as "the caller wrote the one-argument
+     * form". Every walk defect of that class inherited the fail-OPEN direction
+     * for free. It is closed by the `$complete` flag rather than by a blanket
+     * `return true`, because `imagepng($im)` really is the output-buffer form
+     * and `error_log($m)` really does go to the log; those two must stay
+     * absent, and they are pinned in
+     * {@see testTheWritePrimitiveScannerSurvivesAnInterpolatedArgument()}.
+     *
+     * A SPREAD HIDES BOTH THE ARITY AND THE VALUES and needs no walk bug at
+     * all. MEASURED on PHP 8.3.6 before this was added, with
+     * `$a = ["msg\n", 3, $p]`:
+     *
+     *   `error_log(...$a);` => []   <- REALLY WRITES: run for real, the file
+     *                                  exists afterwards and holds the message
+     *   `imagepng(...$a);`  => []
+     *   `fopen(...$a);`     => fopen (right answer, by accident - the `mode`
+     *                                  branch already reports an unresolvable
+     *                                  second argument)
+     *
+     * `$arguments` is positional, a spread is not, so the position of the
+     * write-deciding argument is unknown: unknown is a write.
      *
      * @param list<list<array{0: int, 1: string, 2: int}|string>> $arguments
+     * @param bool                                                $complete    whether {@see callArguments()} met its own balanced `)`
      */
-    private static function argumentsMeanAWrite(string $rule, array $arguments): bool
+    private static function argumentsMeanAWrite(string $rule, array $arguments, bool $complete): bool
     {
+        if (!$complete) {
+            return true;
+        }
+
+        foreach ($arguments as $argument) {
+            if (isset($argument[0]) && \is_array($argument[0]) && $argument[0][0] === T_ELLIPSIS) {
+                return true;
+            }
+        }
+
         if ($rule === 'mode') {
             // fopen/gzopen/bzopen: no mode at all is a syntax error, so an
             // absent one means the scan mis-parsed - report it.
@@ -3082,15 +3225,55 @@ final class RuntimeTest extends TestCase
         }
 
         // error_log($msg, 3, $path) appends to a file; types 0/1/2/4 do not.
+        //
+        // THE COMPARISON IS ON THE VALUE, NOT ON THE SOURCE TEXT. `T_LNUMBER`
+        // carries whatever the author typed, and `3` has five spellings PHP
+        // accepts. MEASURED on PHP 8.3.6, all five run for real and all five
+        // wrote the destination file, while the text comparison `=== '3'`
+        // called four of them read-only: `0x3`, `03`, `0b11`, `0o3` (and
+        // `0b1_1`, since a numeric literal may carry `_` separators).
         if (!isset($arguments[1])) {
             return false;
         }
         $tokens = $arguments[1];
         if (\count($tokens) === 1 && \is_array($tokens[0]) && $tokens[0][0] === T_LNUMBER) {
-            return $tokens[0][1] === '3';
+            return self::integerLiteralValue($tokens[0][1]) === 3;
         }
 
         return true;
+    }
+
+    /**
+     * The value of a `T_LNUMBER` source text, in whichever radix it is written.
+     *
+     * `intval($text, 0)` IS NOT ENOUGH and was measured so before this was
+     * written: on PHP 8.3.6 it reads `0b11` as 3 but reads `0o3` — the
+     * explicit-octal spelling PHP 8.1 added — as 0, which is the fail-open
+     * direction for {@see argumentsMeanAWrite()}'s `errorlog` rule. `octdec()`
+     * is not enough either: it SKIPS characters it does not recognise, so it
+     * reads `0b11` as 9.
+     *
+     * A LEADING ZERO IS OCTAL, so `013` is 11 and not 13 — the row that stops
+     * a decimal fallback being mistaken for a fix.
+     */
+    private static function integerLiteralValue(string $text): int
+    {
+        $text = str_replace('_', '', $text);
+
+        if (preg_match('/^0[xX]([0-9A-Fa-f]+)$/', $text, $m) === 1) {
+            return (int) hexdec($m[1]);
+        }
+        if (preg_match('/^0[bB]([01]+)$/', $text, $m) === 1) {
+            return (int) bindec($m[1]);
+        }
+        if (preg_match('/^0[oO]([0-7]+)$/', $text, $m) === 1) {
+            return (int) octdec($m[1]);
+        }
+        if (preg_match('/^0([0-7]+)$/', $text, $m) === 1) {
+            return (int) octdec($m[1]);
+        }
+
+        return (int) $text;
     }
 
     /**
@@ -3100,6 +3283,20 @@ final class RuntimeTest extends TestCase
      * ONE TOKEN, DELIBERATELY. `'w' . $suffix` and `$mode` are both
      * unresolvable here, and {@see argumentsMeanAWrite()} treats unresolvable
      * as a write rather than guessing.
+     *
+     * THE VALUE, NOT THE SOURCE BYTES BETWEEN THE QUOTES. The `mode` rule
+     * matches `/[waxc+]/i`, and an escape sequence puts different characters
+     * in the source than in the value — in BOTH directions. MEASURED on PHP
+     * 8.3.6, each row run for real as well as scanned:
+     *
+     *   `fopen($p, "\167")`  => []      <- `\167` IS `w`. The file was
+     *                                      truncated: 22 bytes before, 0 after.
+     *   `fopen($p, "\u{77}")` => []     <- same, `\u{77}` is `w`.
+     *   `fopen($p, "\x72")`  => fopen   <- `\x72` is `r`. Read-only: `fwrite()`
+     *                                      on the handle returned false and the
+     *                                      contents were unchanged.
+     *
+     * The middle one is the direction this scanner promises never to take.
      *
      * @param ?list<array{0: int, 1: string, 2: int}|string> $argument
      */
@@ -3113,7 +3310,120 @@ final class RuntimeTest extends TestCase
             return null;
         }
 
-        return substr($token[1], 1, -1);
+        return self::unescapedStringLiteral($token[1]);
+    }
+
+    /**
+     * The value of a quoted `T_CONSTANT_ENCAPSED_STRING`, escapes resolved.
+     *
+     * THE TWO QUOTE STYLES HAVE DIFFERENT ALPHABETS and conflating them fails
+     * in both directions: `'\x72'` in SINGLE quotes is four literal characters
+     * — one of which is the `x` the `mode` rule counts as a write — while
+     * `"\x72"` in double quotes is the single character `r`, which is not.
+     * Single quotes escape exactly `\\` and `\'`; everything else keeps its
+     * backslash.
+     *
+     * `stripcslashes()` IS NOT PHP'S DOUBLE-QUOTE ALPHABET and was measured so
+     * before this was written: it reads `\u{77}` as the six characters
+     * `u{77}` where PHP reads `w`, and it reads `\a` as a BEL where PHP keeps
+     * the two characters `\a`. Both divergences are in the fail-open
+     * direction for a mode string, so the escapes are walked here instead.
+     *
+     * AN UNRECOGNISED ESCAPE KEEPS ITS BACKSLASH, which is what PHP does.
+     *
+     * THE BINARY PREFIX IS STRIPPED FIRST. `b'…'` and `B"…"` are legal and
+     * arrive in the same token, so reading `$literal[0]` as the quote makes a
+     * single-quoted `b'\x72'` look double-quoted — and that one resolves to
+     * `r`, the fail-OPEN direction, where the true value keeps the `x`.
+     */
+    private static function unescapedStringLiteral(string $literal): string
+    {
+        if ($literal[0] === 'b' || $literal[0] === 'B') {
+            $literal = substr($literal, 1);
+        }
+        $quote = $literal[0];
+        $body = (string) substr($literal, 1, -1);
+        $length = \strlen($body);
+        $simple = ['n' => "\n", 't' => "\t", 'r' => "\r", 'v' => "\v", 'e' => "\e", 'f' => "\f", '\\' => '\\', '$' => '$', '"' => '"'];
+        $out = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            if ($body[$i] !== '\\' || $i + 1 >= $length) {
+                $out .= $body[$i];
+
+                continue;
+            }
+            $next = $body[$i + 1];
+
+            if ($quote === "'") {
+                if ($next === '\\' || $next === "'") {
+                    $out .= $next;
+                    $i++;
+
+                    continue;
+                }
+                $out .= '\\';
+
+                continue;
+            }
+
+            if (isset($simple[$next])) {
+                $out .= $simple[$next];
+                $i++;
+
+                continue;
+            }
+            if (preg_match('/\G[0-7]{1,3}/', $body, $m, 0, $i + 1) === 1) {
+                $out .= \chr((int) octdec($m[0]) & 0xFF);
+                $i += \strlen($m[0]);
+
+                continue;
+            }
+            if (preg_match('/\Gx[0-9A-Fa-f]{1,2}/', $body, $m, 0, $i + 1) === 1) {
+                $out .= \chr((int) hexdec(substr($m[0], 1)));
+                $i += \strlen($m[0]);
+
+                continue;
+            }
+            if (preg_match('/\Gu\{([0-9A-Fa-f]+)\}/', $body, $m, 0, $i + 1) === 1) {
+                $out .= self::utf8Encoded((int) hexdec($m[1]));
+                $i += \strlen($m[0]);
+
+                continue;
+            }
+
+            $out .= '\\';
+        }
+
+        return $out;
+    }
+
+    /**
+     * One Unicode code point as UTF-8 bytes.
+     *
+     * WRITTEN OUT RATHER THAN CALLED. `mb_chr()` would do this, but
+     * `ext-mbstring` is not in `sugar-crush/composer.json`'s `require` block,
+     * and a test that reaches for an undeclared extension fails on the one
+     * machine that does not have it — with a fatal, not with a verdict.
+     */
+    private static function utf8Encoded(int $codePoint): string
+    {
+        if ($codePoint < 0x80) {
+            return \chr($codePoint);
+        }
+        if ($codePoint < 0x800) {
+            return \chr(0xC0 | $codePoint >> 6) . \chr(0x80 | $codePoint & 0x3F);
+        }
+        if ($codePoint < 0x10000) {
+            return \chr(0xE0 | $codePoint >> 12)
+                . \chr(0x80 | ($codePoint >> 6) & 0x3F)
+                . \chr(0x80 | $codePoint & 0x3F);
+        }
+
+        return \chr(0xF0 | $codePoint >> 18)
+            . \chr(0x80 | ($codePoint >> 12) & 0x3F)
+            . \chr(0x80 | ($codePoint >> 6) & 0x3F)
+            . \chr(0x80 | $codePoint & 0x3F);
     }
 
     /**
@@ -3419,7 +3729,10 @@ final class RuntimeTest extends TestCase
     /**
      * AN INTERPOLATED STRING IN AN ARGUMENT DOES NOT END THE ARGUMENT LIST.
      *
-     * THE DEFEAT THIS PINS, and it is the eleventh this scanner has taken. PHP
+     * THE DEFEAT THIS PINS — one of the list in {@see writePrimitivesCalledIn()}'s
+     * own doc-block, which is where the history is kept and where it is kept
+     * WITHOUT an ordinal, because this sentence said "the eleventh" and three
+     * more were closed in the cycle that followed. PHP
      * opens an interpolated expression with an ARRAY token — `T_CURLY_OPEN`
      * (`{$`), or `T_DOLLAR_OPEN_CURLY_BRACES` (`${`) where the running PHP
      * still defines it — and closes it with the BARE one-byte string `}`.
@@ -3488,6 +3801,386 @@ final class RuntimeTest extends TestCase
             . 'leaves argumentsMeanAWrite() with no $arguments[1] - which it reads as "not a '
             . 'write". The two file-writing calls above then disappear (fail OPEN) while the '
             . 'read-mode fopen appears (fail closed), both from the one missing token.',
+        );
+    }
+
+    /**
+     * A CLOSER WHOSE OPENER THE WALK NEVER TOOK IS AN UNREADABLE ARGUMENT
+     * LIST, and an unreadable argument list is a write.
+     *
+     * THE CLASS, NOT THE INSTANCE. Widening {@see callArguments()}'s opener
+     * list closed `{$`/`${` and left every other spelling of the same defect
+     * open, because a depth COUNTER cannot tell a balanced parse from one that
+     * silently lost a level — it returns at a `)` either way, hands
+     * {@see argumentsMeanAWrite()} a truncated list, and two of that method's
+     * three rules read an absent `$arguments[1]` as "not a write". The next
+     * spelling arrived immediately: `#[` is `T_ATTRIBUTE`, an array token
+     * closed by the bare `]` the walk already decremented on. The fix is a
+     * stack of expected closers plus a `complete` flag, so an unmatched closer
+     * fails CLOSED — which is the part that also covers the spelling nobody
+     * has found yet.
+     *
+     * BOTH DIRECTIONS ARE IN THE ONE MAP. Lines 9-11 are attribute rows that
+     * really write and were reported READ-ONLY; line 12 is the same call
+     * without the attribute, the control that differs by eight characters;
+     * line 13 is a read-mode `fopen` whose mode the lost level swallowed, so
+     * it was reported as a write it is not, and it must now be ABSENT. Lines
+     * 14-15 are the legitimate one-argument forms — `error_log($m)` goes to
+     * the log and `imagepng($im)` writes the output buffer — which a blanket
+     * "absent second argument means write" would turn into false positives.
+     */
+    public function testTheWritePrimitiveScannerFailsClosedOnAnUnmatchedCloser(): void
+    {
+        $file = $this->makeTempRepo() . '/Attributed.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Attributed
+            {
+                public function run(string $path, $im): void
+                {
+                    error_log((#[Pure] fn(): string => 'm')(), 3, $path);
+                    error_log(#[Pure] fn(): string => 'm', 3, $path);
+                    imagepng((#[Pure] fn() => $im)(), $path);
+                    error_log((fn(): string => 'm')(), 3, $path);
+                    $reading = fopen((#[Pure] fn(): string => $path)(), 'rb');
+                    error_log('to the log');
+                    imagepng($im);
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            [
+                'error_log' => [9, 10, 12],
+                'imagepng' => [11],
+            ],
+            self::writePrimitivesCalledIn($file),
+            'an attribute in an argument list must not end the argument list. `#[` is T_ATTRIBUTE '
+            . 'and closes on the bare `]` the walk decrements on, so a depth counter loses a level '
+            . 'and returns early at a `)` belonging to something else - with no signal that '
+            . 'anything went wrong. Lines 9-11 really write and were reported read-only; line 13 '
+            . 'is a read-mode fopen that was reported as a write; lines 14-15 are the correct '
+            . 'one-argument forms and must stay absent.',
+        );
+    }
+
+    /**
+     * THE WALK REPORTS WHETHER IT MET ITS OWN CLOSING `)`, AND AN INCOMPLETE
+     * PARSE IS A WRITE.
+     *
+     * THIS IS THE GUARD, NOT THE INSTANCE. The attribute row above is one
+     * spelling; this pins the mechanism that makes the NEXT unknown spelling
+     * fail closed instead of open, which is the whole difference between the
+     * eleventh defeat being embarrassing and it being dangerous. Two things
+     * can go wrong and both must answer the same way:
+     *
+     *  - A CLOSER WHOSE OPENER THE WALK NEVER TOOK. Everything after it is
+     *    misaligned. A depth counter cannot see this at all — it just returns
+     *    one closer early, at a `)` belonging to something else.
+     *  - RUNNING OFF THE END of the token stream, which used to return the
+     *    same bare list a clean parse returns.
+     *
+     * THE MISMATCH BRANCH IS UNREACHABLE FROM VALID PHP TODAY and that is
+     * exactly why it is asserted directly here rather than through a fixture
+     * (§16.8 rule 16 — an unfired instrument and a dead one produce identical
+     * silence). Once `{`, `[`, `(`, `{$`, `${` and `#[` are all declared with
+     * the closer they take, no PHP 8.3 source reaches it; the row that fires
+     * it is hand-lexed, and it stops being hand-lexed the day PHP adds a
+     * seventh bracket.
+     *
+     * THE SECOND ASSERTION IS THE CONSEQUENCE, and its last two rows are the
+     * ones that stop a blanket `return true`: a COMPLETE parse with exactly
+     * one argument is `imagepng($im)` and `error_log($m)`, which are not file
+     * writes and must stay `false`.
+     */
+    public function testTheArgumentWalkReportsWhetherItMetItsOwnClosingParenthesis(): void
+    {
+        $walk = static function (string $code): array {
+            $tokens = token_get_all($code);
+            $open = 0;
+            foreach ($tokens as $index => $token) {
+                if ($token === '(') {
+                    $open = $index;
+
+                    break;
+                }
+            }
+            $parse = self::callArguments($tokens, $open);
+
+            return [\count($parse['arguments']), $parse['complete']];
+        };
+
+        $this->assertSame(
+            [
+                'balanced' => [3, true],
+                'nested' => [2, true],
+                'ran off the end' => [1, false],
+                'unmatched closer' => [0, false],
+            ],
+            [
+                'balanced' => $walk('<?php error_log("m", 3, $p);'),
+                'nested' => $walk('<?php imagepng(make($a, $b), $p);'),
+                'ran off the end' => $walk('<?php imagepng($im'),
+                'unmatched closer' => $walk('<?php imagepng($im]);'),
+            ],
+            'callArguments() must say whether it met its own balanced `)`. Without that flag a '
+            . 'walk that lost a level returns the same shape as a clean one, and every future '
+            . 'bracket spelling this scanner does not know inherits the fail-OPEN direction.',
+        );
+
+        $message = [[T_CONSTANT_ENCAPSED_STRING, "'m'", 1]];
+        $this->assertSame(
+            [
+                'errorlog, incomplete' => true,
+                'target, incomplete' => true,
+                'mode, incomplete' => true,
+                'errorlog, complete, one argument' => false,
+                'target, complete, one argument' => false,
+            ],
+            [
+                'errorlog, incomplete' => self::argumentsMeanAWrite('errorlog', [], false),
+                'target, incomplete' => self::argumentsMeanAWrite('target', [], false),
+                'mode, incomplete' => self::argumentsMeanAWrite('mode', [], false),
+                'errorlog, complete, one argument' => self::argumentsMeanAWrite('errorlog', [$message], true),
+                'target, complete, one argument' => self::argumentsMeanAWrite('target', [[[T_VARIABLE, '$im', 1]]], true),
+            ],
+            'an argument list the walk could not read is a write in EVERY rule, not just in '
+            . '`mode`. The last two rows are the reason this cannot be a blanket true: a complete '
+            . 'parse with one argument is imagepng($im) writing the output buffer and '
+            . 'error_log($m) going to the log, and neither touches the working tree.',
+        );
+    }
+
+    /**
+     * A SPREAD HIDES THE ARITY, AND UNKNOWN ARITY IS A WRITE.
+     *
+     * NO WALK BUG IS NEEDED FOR THIS ONE. `error_log(...$a)` parses cleanly to
+     * a single argument, so {@see argumentsMeanAWrite()}'s `errorlog` and
+     * `target` rules saw an absent `$arguments[1]` and answered "not a write"
+     * — while `$a = ["msg\n", 3, $path]` really does append to the file, which
+     * was run for real and measured. `$arguments` is positional and a spread
+     * is not, so the position of the write-deciding argument is not knowable
+     * here.
+     *
+     * THE CONTROLS ARE THE POINT. Lines 13-15 are the one-argument and
+     * explicit-null forms that are genuinely not file writes, and they are in
+     * this same map so that a "fix" answering `true` whenever `$arguments[1]`
+     * is absent reds on the same line as one that answers `false`.
+     */
+    public function testTheWritePrimitiveScannerReadsASpreadArgumentAsUnknownArity(): void
+    {
+        $file = $this->makeTempRepo() . '/Spread.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Spread
+            {
+                public function run(array $a, $im): void
+                {
+                    error_log(...$a);
+                    imagepng(...$a);
+                    fopen(...$a);
+                    error_log('m', ...$a);
+                    error_log('to the log');
+                    imagepng($im);
+                    imagepng($im, null);
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            [
+                'error_log' => [9, 12],
+                'fopen' => [11],
+                'imagepng' => [10],
+            ],
+            self::writePrimitivesCalledIn($file),
+            'a spread argument makes the arity unknowable, and unknown is a write. '
+            . 'error_log(...$a) with $a = ["msg", 3, $path] appends to the file - measured by '
+            . 'running it - and was reported read-only because the rule looked for $arguments[1] '
+            . 'and found nothing. Lines 13-15 are the real one-argument and explicit-null forms '
+            . 'and must stay absent.',
+        );
+    }
+
+    /**
+     * `error_log($msg, 3, $path)` IS A WRITE IN EVERY RADIX THREE HAS.
+     *
+     * THE RULE COMPARED SOURCE TEXT, NOT VALUE. `T_LNUMBER` carries whatever
+     * the author typed, so `=== '3'` answered "not a write" for `0x3`, `03`,
+     * `0b11`, `0o3` and `0b1_1` — all five of which were run for real on PHP
+     * 8.3.6 and all five of which wrote the destination file.
+     *
+     * LINE 18 IS THE ROW THAT REFUTES A LAZY FIX. `013` is octal ELEVEN, not
+     * thirteen and not three, so a decimal cast or a bare `octdec()` over the
+     * whole text is caught here rather than in production. `intval($t, 0)` is
+     * refuted by line 13: it reads `0o3` as 0 on 8.3.6, measured.
+     */
+    public function testTheWritePrimitiveScannerReadsAnErrorLogMessageTypeInEveryRadix(): void
+    {
+        $file = $this->makeTempRepo() . '/Radix.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Radix
+            {
+                public function run(string $path): void
+                {
+                    error_log('m', 3, $path);
+                    error_log('m', 0x3, $path);
+                    error_log('m', 03, $path);
+                    error_log('m', 0b11, $path);
+                    error_log('m', 0o3, $path);
+                    error_log('m', 0b1_1, $path);
+                    error_log('m', 1, $path);
+                    error_log('m', 0x1, $path);
+                    error_log('m', 11, $path);
+                    error_log('m', 013, $path);
+                    error_log('m');
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            ['error_log' => [9, 10, 11, 12, 13, 14]],
+            self::writePrimitivesCalledIn($file),
+            'message type 3 is a file append however it is spelled. Lines 9-14 are 3 in decimal, '
+            . 'hex, legacy octal, binary, explicit octal and binary-with-a-separator, and every '
+            . 'one of them wrote the file when run. Lines 15-19 are types 1, 1, 11, 11 (013 is '
+            . 'octal eleven) and no type at all, and none of them is a file write.',
+        );
+    }
+
+    /**
+     * A FILE MODE IS ITS VALUE, NOT THE SOURCE BYTES BETWEEN THE QUOTES.
+     *
+     * THE `mode` RULE MATCHES `/[waxc+]/i`, so an escape sequence puts
+     * different characters in the source than in the value and the rule reads
+     * the wrong ones — IN BOTH DIRECTIONS, measured on PHP 8.3.6 with each row
+     * also run for real:
+     *
+     *  - line 9, `"\167"` is `w`. Reported read-only; the file it opened went
+     *    from 22 bytes to 0.
+     *  - line 13, `"\x72"` is `r`. Reported as a WRITE because the source text
+     *    contains an `x`; `fwrite()` on the handle returned false.
+     *
+     * THE TWO QUOTE STYLES HAVE DIFFERENT ALPHABETS and line 17 is why they
+     * cannot share one unescaper: `'\x72'` in SINGLE quotes is four literal
+     * characters, one of which is the `x` that means "create exclusively", so
+     * it stays a reported write while its double-quoted twin on line 13 does
+     * not. Line 12 pins the other half of that rule — PHP has no `\a` escape,
+     * so the value keeps its backslash AND its `a`, and `stripcslashes()`
+     * (which would turn it into a BEL and lose the `a`) is refuted here.
+     *
+     * LINES 18-19 ARE THE SAME PAIR UNDER A BINARY-STRING PREFIX. `b'…'` and
+     * `b"…"` arrive in the same token, so an implementation that reads the
+     * first byte as the quote character reads line 18 as double-quoted and
+     * resolves it to `r` — the fail-open direction, from one letter.
+     */
+    public function testTheWritePrimitiveScannerResolvesEscapesInAFileModeLiteral(): void
+    {
+        $file = $this->makeTempRepo() . '/Escaped.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            final class Escaped
+            {
+                public function run(string $path): void
+                {
+                    $a = fopen($path, "\167");
+                    $b = fopen($path, "\x77");
+                    $c = fopen($path, "\u{77}");
+                    $d = fopen($path, "\a");
+                    $e = fopen($path, "\x72");
+                    $f = fopen($path, "\162b");
+                    $g = fopen($path, 'w');
+                    $h = fopen($path, 'rb');
+                    $i = fopen($path, '\x72');
+                    $j = fopen($path, b'\x72');
+                    $k = fopen($path, b"\x72");
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            ['fopen' => [9, 10, 11, 12, 15, 17, 18]],
+            self::writePrimitivesCalledIn($file),
+            'the mode rule must read the string VALUE. Lines 9-11 are octal, hex and codepoint '
+            . 'spellings of `w` and every one of them truncated the file when run; line 12 is an '
+            . 'escape PHP does not define, so the value keeps its backslash and its `a`; lines 13 '
+            . 'and 14 are `r` and `rb` written with escapes and open read-only; line 17 is single '
+            . 'quoted, where `\x72` is four literal characters including the exclusive-create `x`. '
+            . 'Lines 18-19 are the same two under a binary-string prefix, which arrives in the '
+            . 'same token and must not be mistaken for the quote character.',
+        );
+    }
+
+    /**
+     * EVERY SPELLING OF `use function` THAT PHP ACCEPTS IS RESOLVED.
+     *
+     * `use function` TAKES A LIST, and a pattern anchored on a single name
+     * followed by `;` reads only the first import of a comma list and nothing
+     * at all of the braced group form. Both are ordinary PHP; both were
+     * measured through the shipped scanner against a real copy of a tool on
+     * {@see readOnlyBuiltInToolNames()} with one write added, and both came
+     * back `[]` — a fully green suite over a tool that writes the working tree
+     * on every call. A LEADING BACKSLASH is legal in a `use` statement too,
+     * and the old name pattern required a letter first.
+     *
+     * THE NEGATIVE CONTROL IS `measure` ON LINE 20. It is a real alias of a
+     * real function, imported by the same comma list that carries line 19's
+     * write, and `strlen` is not a write primitive — so an implementation that
+     * resolved the list by reporting every alias in it reds here.
+     */
+    public function testTheWritePrimitiveScannerResolvesEveryUseFunctionImportSpelling(): void
+    {
+        $file = $this->makeTempRepo() . '/Imported.php';
+
+        file_put_contents($file, <<<'PROBE'
+            <?php
+
+            declare(strict_types=1);
+
+            use function file_put_contents as persistPlain;
+            use function \file_put_contents as persistSlash;
+            use function Some\Space\file_put_contents as persistNamespaced;
+            use function Some\Space\{file_put_contents as persistGrouped};
+            use function strlen as measure, file_put_contents as persistListed;
+
+            final class Imported
+            {
+                public function run(string $path): void
+                {
+                    persistPlain($path, 'x');
+                    persistSlash($path, 'x');
+                    persistNamespaced($path, 'x');
+                    persistGrouped($path, 'x');
+                    persistListed($path, 'x');
+                    measure($path);
+                }
+            }
+            PROBE);
+
+        $this->assertSame(
+            ['file_put_contents' => [15, 16, 17, 18, 19]],
+            self::writePrimitivesCalledIn($file),
+            'an alias renames the symbol at the call site, so every import spelling has to be '
+            . 'resolved or the write is invisible. Line 16 carries a leading backslash, line 18 is '
+            . 'the braced group form and line 19 is the second item of a comma list - all three '
+            . 'were read as read-only. Line 20 is an alias of strlen and must stay absent.',
         );
     }
 
