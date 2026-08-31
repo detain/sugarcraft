@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue, THREE AGENTS RUNNING — BOTH fix branches are now FIXED and in their CYCLE-5 (cap) REVIEW: `P3.S4-fix-1` @ `707c30685` (15/393) and `P3.S5-fix-1` @ `ab9a7dcdc` (142/686), both orchestrator-verified. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue, THREE AGENTS RUNNING — `P3.S4-fix-1` HIT ITS FIVE-CYCLE CAP; cycle 5 found the step's OWN defect left half-closed, so a FINAL FIX PASS is out with NO cycle-6 review and the orchestrator verifying personally. `P3.S5-fix-1` @ `ab9a7dcdc` is in its cycle-5 (cap) review. The `P3.S6` step agent is still out. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -356,14 +356,17 @@ Next step:        **CALL `ListAgents` FIRST. Three agents are out. Do not re-spa
                   Each of the three is described under `In-flight batch` with exactly what
                   to do when it reports. The short form:
 
-                  A) **P3.S4-fix-1 — cycle 4 REPORTED FIVE FINDINGS; a FIX AGENT is out.**
-                     When it reports: verify its figures yourself, then spawn a BRAND-NEW
-                     cycle-5 reviewer that has NEVER seen cycle 4's findings (§1.4). **Cycle 5
-                     is the CAP.** If clean, run the FULL SUITE SERIALLY and MERGE IT FIRST —
-                     it stays first because it changes no production code at all. If cycle 5
-                     finds more prose defects, weigh them: this file's job is guarding <env>
-                     against git config, and the reviewer swept ~65 knobs WITHOUT finding a
-                     fifteenth. Do not open a cycle 6.
+                  A) **P3.S4-fix-1 — CAP REACHED. FINAL FIX PASS OUT, NO CYCLE-6 REVIEW.**
+                     Cycle 5 returned seven findings; F-A is the step's OWN defect left
+                     half-closed (control C got two guards, control B got one). When the fix
+                     agent reports: **verify it YOURSELF — nobody else will.** Reproduce the
+                     hostile runs (a global `[diff] external = /bin/true` and a global
+                     `[core] excludesFile` listing Alpha.php must red with an HONEST message,
+                     and the clean run must stay green), confirm scope is still the one file
+                     and the src/ diff still EMPTY, then run the FULL SUITE SERIALLY and MERGE
+                     IT FIRST. It stays first because it changes no production code at all.
+                     **Do NOT open a cycle 6** — the cap is honoured; what it exhausts is the
+                     value of another review, not of a measured fix.
                   B) **P3.S5-fix-1 — cycle 4 REPORTED EIGHT FINDINGS; a FIX AGENT is out.**
                      When it reports: verify its figures yourself, then spawn a BRAND-NEW
                      cycle-5 reviewer that has NEVER seen cycle 4's findings (§1.4 — a
@@ -465,9 +468,30 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                   `NO FINDINGS` and never a finished step.** Never write a dead agent's
                   missing report yourself. Blank returns get five attempts (§1.8).
 
-                  1. **P3.S4-fix-1 — cycle 4 FIXED. CYCLE-5 REVIEWER OUT — THIS IS THE CAP.**
+                  1. **P3.S4-fix-1 — CAP REACHED. FINAL FIX PASS OUT. NO CYCLE-6 REVIEW.**
                      Worktree /home/sites/prompt-step-P3.S4-fix-1, branch prompt/P3.S4-fix-1,
-                     HEAD **707c30685**, base 1267e6fbb. All five cycle-4 findings disposed of.
+                     HEAD **707c30685**, base 1267e6fbb.
+                     **ORCHESTRATOR DECISION, deliberate and recorded:** §1.2 caps this loop at
+                     five review cycles and the cap is HONOURED — no sixth reviewer. Cycle 5's
+                     F-A is not a new hazard, it is THE STEP'S OWN DEFECT left half-closed:
+                     control C was given two guards last cycle (exit code + git's own escape
+                     count), control B was given only the exit code, and a global
+                     `[diff] external = /bin/true` or `[core] excludesFile` naming Alpha.php
+                     drives control B red with "The scanner is dead" WHILE GIT EXITS 0. The
+                     diff even documents both configs and keeps one on the "moves and reds"
+                     line because it "reds at Failures: 3" — never reading WHICH MESSAGE.
+                     What the cap exhausts is the value of another REVIEW, not of a fix that
+                     arrives measured in both polarities. **I am substituting my own
+                     verification for the sixth review, and accepting that a fix made in this
+                     pass is unreviewed by anyone but me.**
+                     Also in the pass: F-B (the commit says the false mechanism claim "was
+                     stated three times" and fixed TWO — the survivor at :2128 is in the
+                     doc-block of the very test that measures the mechanism), F-C ("every one
+                     of them" is five of six, over an unchecked `git init` at :483 that leaves
+                     a PARTIAL .git so the `is_dir` guard passes), and F-D/F-E/F-F to its
+                     judgement — with "I judged it benign" named as the verdict that has
+                     already failed twice in this step.
+                     All five cycle-4 findings were disposed of at 707c30685.
                      Declared file: tests/Providers/PromptStabilityTest.php — that one only.
                      Changes NO production code and must continue to change none.
                      **ORCHESTRATOR-VERIFIED AT 707c30685 — do NOT re-measure:**
@@ -497,7 +521,20 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      git .mo catalogues on this host, no de_DE/fr_FR in locale -a,
                      LC_ALL=de_DE.UTF-8 git diff --shortstat renders English. A CLAIMED
                      measurement of it would itself be a finding.
-                     **FULL suite at 707c30685 NOT RUN. No figure exists.**
+                     **FULL suite NOT RUN at any head of this branch. No figure exists.**
+                     **Cycle 5's NON-findings are worth as much as its findings and must NOT be
+                     re-done:** every byte figure exact (clean 4844/4670, core.abbrev=20
+                     4883/4696, diff.context=10 4851, color.diff=always 4921/4689 at 21
+                     escapes, log.decorate=full 4872/4698, i18n.logOutputEncoding=UTF-16
+                     4821/4647, GIT_DIFF_OPTS=-u10 4851, log.abbrevCommit=nonsense 4841/4667,
+                     diff.external 4617/4599, core.bigFileThreshold=1 4844 = moves nothing,
+                     core.excludesFile/Alpha 4561); all 20 cells of the five-key exit table
+                     reproduce; the base file is SILENTLY GREEN at OK (13, 229) where HEAD
+                     reds; no test deleted, renamed out, skipped-out or narrowed (13 -> 15
+                     methods, base a strict subset); conventions clean; EnvironmentBlock::
+                     capture() live at src/Cli/Bootstrap.php:1462 and src/App/App.php:553.
+                     A SECOND sweep — 18 more knobs beyond the ~65 — again found NO new
+                     wrong-green mover; all left the prompt at 4844.
 
                   2. **P3.S5-fix-1 — cycle 4 FIXED. CYCLE-5 REVIEWER OUT — THIS IS THE CAP.**
                      Worktree /home/sites/prompt-step-P3.S5-fix-1, branch prompt/P3.S5-fix-1,

@@ -253,6 +253,93 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 · REVIEW CYCLE 5 (THE CAP) · 2026-08-31 — the step's own defect, left half-closed
+
+Cycle 5 is the fifth and last review cycle. It returned **seven findings**, and one of them is not a
+new hazard at all — it is the defect this step was opened to fix, closed on one control and left open
+on the other. Findings file:
+`<scratchpad>/P3.S4-fix-1/review-cycle-5/findings-cycle-5.md`.
+
+**ORCHESTRATOR DECISION, recorded deliberately: I am running ONE FINAL FIX PASS AND NO CYCLE-6
+REVIEW.** §1.2 caps this loop at five cycles, and I am honouring that cap — what the cap exhausts is
+the value of another *review*, not the value of a fix that arrives already measured in both
+polarities. I am substituting my own verification for the sixth review: I will reproduce the hostile
+runs myself, as I did for the F3 fix at `707c30685`, and run the full suite before merging. The risk
+I am accepting is that a fix introduced in this pass goes unreviewed by anyone but me, and I am
+writing that down rather than leaving it implied.
+
+**F-A (MAJOR, behaviour) `:1922` — control B still reds "The scanner is dead" when the scanner is
+alive.** MEASURED: a global `[diff] external = /bin/true`, and a global `[core] excludesFile` listing
+`Alpha.php`, each drive control B red at `:1922` with that message while **git exits 0**, so the
+exit-code guard at `:1913` never fires. Last cycle gave control C two guards — exit code AND git's own
+escape-byte count. Control B got only the first. And the same diff *documents* both configurations at
+`:2655-2666` and `:2678-2690`, keeping one on the "moves and reds" line purely because it "reds this
+file at `Failures: 3`" — **without ever reading which message it red with**. That is the step's whole
+subject, one control over. The reviewer measured its mutation in both polarities (clean
+`OK (1 test, 86 assertions)`; `/bin/true` reds at the new line quoting git's own
+` 1 file changed, 0 insertions(+), 0 deletions(-)`; `excludesFile` reds with empty git output).
+
+**F-B (MAJOR, prose) `:2128` — the commit message says the false claim "was stated three times" and
+fixed two.** MEASURED: at `2d5f1483` the sites were `:1747`, `:2069`, `:2328`; at HEAD `:1757` and
+`:2392` carry the correction and the third (now `:2128`) **falls in no hunk of the HEAD commit**. So
+the file says the claim is false at `:1757` and then uses it as the explanation at `:2128` — inside
+the doc-block of `testLogAbbrevCommitIsParseTimeValidatedSoNoRepoLocalPinDefendsIt`, the very test
+named as the measurement of that mechanism.
+
+**F-C (MODERATE) `:2605-2608` — "every one of them" is five of six, and there is a real defect
+underneath.** Failure 1 of the six is `testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture`
+at `:497` with `could not pin status.showUntrackedFiles … fatal: not in a git directory`, not the
+quoted `git init -q failed:`. Cause, inside the declared file: that test's `git init` at `:483` is an
+unchecked `shell_exec(… 'init -q 2>/dev/null')` guarded only by `is_dir($dir.'/.git')`. MEASURED —
+under a bad global config `git init` exits 128 **but still leaves a partial `.git`** (branches,
+description, hooks, info; no HEAD, config, objects or refs), so the guard passes, the exit code and
+stderr are discarded, and the red names neither `git init` nor the hostile config. `:483` predates the
+branch, but the new claim walked into it, and an unchecked subprocess whose failure produces a
+misleading red is the same class as F-A.
+
+**F-D/F-E/F-F (minor), handed to the fix agent's judgement with the instruction that "I judged it
+benign" is the verdict that has already failed twice in this step.**
+F-D `:2096` — *"log.date=true makes it 19"* is TRUE via `GIT_CONFIG_COUNT` and **FALSE via
+`GIT_CONFIG_GLOBAL` (21)**, because the fixture pins `log.date default` repo-locally; the message
+names no channel while the file's own boundary (a) IS that distinction.
+F-E `:1962-1969` — control C's brand-new guard names only a colour override, but a repo-local
+`color.diff=always` plus a global `[diff] external = /bin/true` also gives exit 0 with zero escapes;
+masked today only because control B reds first, an ordering accident. **The fix agent is explicitly
+asked whether closing F-A makes F-E live.**
+F-F — captured git output interpolated into failure messages uncapped, where production caps the same
+stream at `DIFF_MAX_BYTES = 8192`.
+
+**F-G is the census-roster gap I already recorded** (`prompt_plan.md` action 7b lists six, the set is
+seven). Not the fix agent's.
+
+**THE REVIEWER'S NON-FINDINGS ARE WORTH AS MUCH AS ITS FINDINGS, and none of this needs re-doing.**
+Every byte figure it checked is exact: clean 4844/4670 · `core.abbrev=20` 4883/4696 · `diff.context=10`
+4851 · `color.diff=always` 4921/4689 at 21 escapes · `diff.suppressBlankEmpty` 4842 · `log.decorate=full`
+4872/4698 · `i18n.logOutputEncoding=UTF-16` 4821/4647 · `GIT_DIFF_OPTS=-u10` 4851 · `log.abbrevCommit=nonsense`
+4841/4667 · `diff.external` 4617 / 4599 · **`core.bigFileThreshold=1` 4844, moves nothing, confirmed**
+· `core.excludesFile`/Alpha 4561. All twenty cells of the five-key exit table reproduce; so does
+`log.abbrevCommit` 128/0/0/0 and `color.branch.current` killing only `branch --show-current`. The
+cross-file escalation is exact: a hostile `core.attributesFile` leaves this file `OK (15, 393)` and
+reds `RuntimeTest.php:1918`. Deletion experiments hold in both directions — the base file under
+`log.abbrevCommit=nonsense` is **silently green** at `OK (13, 229)` where HEAD reds. No test deleted,
+renamed out, skipped-out or narrowed (13 → 15 methods, base a strict subset). Conventions clean.
+Reachability named: `EnvironmentBlock::capture()` is live at `src/Cli/Bootstrap.php:1462` and
+`src/App/App.php:553`.
+
+It also ran a **targeted 18-knob sweep** beyond the ~65 already swept —
+`diff.srcPrefix/dstPrefix/wsErrorHighlight/statGraphWidth/renames/dirstat/ignoreSubmodules/noprefix`,
+`log.showSignature/follow/initialDecorationSet`, `format.subjectPrefix`, `status.branch/short`,
+`core.ignoreCase/untrackedCache/precomposeUnicode/commentChar` — and found **no new wrong-green
+mover**; all left the prompt at 4844. Two independent sweeps have now failed to find one.
+
+It left the locale hazard alone, did not manufacture a measurement, and confirmed the file claims
+none. Worktree restored by md5 `1f4a2ca30452782509de1a124c8408ca`, `git status --porcelain` empty,
+and it created no git repository outside its own scratchpad.
+
+**Figures unchanged and orchestrator-matched:** `--filter PromptStabilityTest` `OK (15 tests, 393
+assertions)`; seven census files `OK (109 tests, 9632 assertions)`; scope exactly one file; `src/`
+diff EMPTY. **FULL suite still NOT RUN at any head of this branch.**
+
 ### P3.S4-fix-1 · FIX CYCLE 4 · 2026-08-31 — a refused prescription whose premise was true and irrelevant
 
 Commit `707c30685` on `prompt/P3.S4-fix-1`, base `1267e6fbb`. All five cycle-4 findings disposed of.
