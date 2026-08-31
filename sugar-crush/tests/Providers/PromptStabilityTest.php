@@ -1676,8 +1676,10 @@ final class PromptStabilityTest extends TestCase
             "\n?? src/Gamma.php\n",
             $stepTwo,
             'the untracked src/Gamma.php did not reach `git status --porcelain`, so the two renders have '
-                . 'nothing to differ about. The repo-local `status.showUntrackedFiles=normal` pin in '
-                . 'dirtyRepoFixtureWithEveryStableLayer() is what makes this fixture see it',
+                . 'nothing to differ about. TWO MEASURED causes, not one: the repo-local '
+                . '`status.showUntrackedFiles=normal` pin in dirtyRepoFixtureWithEveryStableLayer() is gone or '
+                . 'was overridden - OR a gitignore source (an in-tree `.gitignore`, `.git/info/exclude`, or a '
+                . 'global `core.excludesFile`) is excluding the path, which no `status.*` pin defends',
         );
 
         $withinTurn = self::commonPrefixLength($stepOne, $stepTwo);
@@ -1743,17 +1745,35 @@ final class PromptStabilityTest extends TestCase
      * `git/attributes`: MEASURED, all three give 4,749/4,672.
      *
      * A NOTE ON WHAT A PIN CAN AND CANNOT REACH, because it is the reason this
-     * test is not replaceable by more rows in that `foreach`. MEASURED: git
-     * PARSES every config file in the precedence chain before it uses any of
-     * them, so an INVALID value in a lower-precedence file is fatal even when a
+     * test is not replaceable by more rows in that `foreach`.
+     *
+     * An INVALID value in a lower-precedence file is fatal even when a
      * higher-precedence file overrides it — with `color.branch.current=normal`
      * set repo-locally, `git config --get color.branch.current` answers
      * `normal` and `git branch --show-current` still dies with
-     * `fatal: bad config variable 'color.branch.current' ... exit 128`. The
-     * whole invalid-value hazard class is therefore UNDEFENDABLE by pinning,
-     * and only detectable. `log.date` and `format.pretty` are the exception
-     * that proves it: their values are not validated at parse time, so pinning
-     * them repo-locally does work, and they are pinned.
+     * `fatal: bad config variable 'color.branch.current' ... exit 128`.
+     *
+     * THE REASON USED TO BE WRITTEN HERE AS "git PARSES every config file in
+     * the precedence chain before it uses any of them", AND THAT IS FALSE. If
+     * it were true every git subprocess would die on any invalid value
+     * anywhere; MEASURED on git 2.43.0, they do not. The conversion is per
+     * COMMAND and per KEY: a command's config callback converts the value of
+     * each key IT consumes as it walks the chain, so a bad value is fatal for
+     * the commands that read that key and inert for the ones that do not.
+     * MEASURED, invalid in a global with a VALID value pinned repo-locally —
+     * `log.abbrevCommit = nonsense` kills `log --oneline` (128) and leaves
+     * `status --porcelain`, `branch --show-current` and
+     * `diff --shortstat --patch` at 0; `color.branch.current = true` does the
+     * exact reverse, killing only `branch --show-current`.
+     *
+     * SO THE SCOPE OF THE VERDICT IS NARROWER THAN IT USED TO READ: an invalid
+     * value for a key a subprocess READS is undefendable by pinning and only
+     * detectable; for a key it does not read it is inert. `log.date` and
+     * `format.pretty` are the exception that proves the mechanism: their
+     * handlers STORE the string and parse the format later, last value wins,
+     * so pinning them repo-locally does work and they are pinned. MEASURED,
+     * `log.date=nonsense` in a global is `fatal: unknown date format nonsense`
+     * (128) with no pin, and exit 0 with `log.date = default` pinned.
      *
      * The three absence assertions run FIRST, ahead of every positive one, and
      * each runs its scanner over a known-positive control **rendered by the
@@ -1912,6 +1932,42 @@ final class PromptStabilityTest extends TestCase
         $this->assertSame(0, self::git($coloured->root(), ['config', 'color.ui', 'always']));
         $colouredPrompt = $coloured->systemPrompt();
 
+        //       THE CONTROL'S OWN SUBPROCESS, BEFORE ITS LIVENESS — the same
+        //       repair control B carries two blocks up, for the same reason,
+        //       and the previous cycle judged this control safe because control
+        //       B's guard "intercepts first". MEASURED, it does not, for the
+        //       COLOUR family: `GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=color.diff
+        //       GIT_CONFIG_VALUE_0=never GIT_CONFIG_KEY_1=color.ui
+        //       GIT_CONFIG_VALUE_1=never` takes this control to ZERO escapes
+        //       while control B stays fully green — its `git diff` exits 0 and
+        //       `Binary files ` still renders — and the liveness assertion below
+        //       then reds ALONE, naming two causes, NEITHER of which happened.
+        //       The environment outranks every config file (boundary (a) in
+        //       {@see dirtyRepoFixtureWithEveryStableLayer()}), so the
+        //       repo-local `color.diff=always` written just above is not enough
+        //       to make this control fire. Both halves are asserted: the exit
+        //       code, because a `diff.external` that cannot exec breaks this
+        //       fixture exactly as it breaks control B's, and then git's OWN
+        //       escape bytes, because that is the half a colour override kills
+        //       while leaving the exit code at 0.
+        $colourProbe = [];
+        $colourExit = self::git($coloured->root(), ['diff', '--shortstat', '--patch'], $colourProbe);
+        $this->assertSame(
+            0,
+            $colourExit,
+            'git diff failed, exit ' . $colourExit . ' - the coloured control fixture cannot produce a diff at '
+                . 'all, so nothing below this line is a statement about the scanner. git said: '
+                . implode("\n", $colourProbe),
+        );
+        $this->assertGreaterThan(
+            0,
+            substr_count(implode("\n", $colourProbe), "\x1b"),
+            'git itself emitted no escape bytes in the coloured control fixture, so nothing below this line is a '
+                . 'statement about the scanner. MEASURED cause: a colour setting the repo-local `color.diff=always` '
+                . 'cannot outrank - GIT_CONFIG_COUNT / GIT_CONFIG_PARAMETERS in the environment beats every config '
+                . 'file. git said: ' . implode("\n", $colourProbe),
+        );
+
         $this->assertGreaterThan(
             0,
             substr_count($colouredPrompt, "\x1b"),
@@ -1973,9 +2029,12 @@ final class PromptStabilityTest extends TestCase
         $this->assertStringContainsString(
             "\n?? src/Gamma.php\n",
             $prompt,
-            'the <env> status field cannot see an untracked file, so `status.showUntrackedFiles` is not `normal` '
-                . 'for this repository - the repo-local pin in dirtyRepoFixtureWithEveryStableLayer() is gone or '
-                . 'was overridden',
+            'the <env> status field cannot see an untracked file. TWO MEASURED causes, not one: '
+                . '`status.showUntrackedFiles` is not `normal` for this repository, because the repo-local pin in '
+                . 'dirtyRepoFixtureWithEveryStableLayer() is gone or was overridden - OR a gitignore source (an '
+                . 'in-tree `.gitignore`, `.git/info/exclude`, or a global `core.excludesFile`) is excluding the '
+                . 'path, which no `status.*` pin defends. MEASURED, a global `core.excludesFile` listing '
+                . '`Gamma.php` reds exactly here with that pin fully intact',
         );
 
         // 6. The log field: a subject, and a 7-hex abbreviation. Pins the
@@ -2325,14 +2384,25 @@ final class PromptStabilityTest extends TestCase
         //     existed, MEASURED, the whole file stayed `OK (13 tests, 229
         //     assertions)` under `GIT_DIFF_OPTS=-u10`.
         // (b) AN INVALID VALUE ANYWHERE IN THE CHAIN IS FATAL, WHATEVER
-        //     OVERRIDES IT. git parses every config file it can reach before it
-        //     uses any of them. MEASURED with `color.branch.current=normal`
-        //     pinned repo-locally and `color.branch.current=true` in a global:
-        //     `git config --get` answers `normal`, and `git branch
-        //     --show-current` still dies `fatal: bad config variable
-        //     'color.branch.current' … exit 128`, which `EnvironmentBlock`
-        //     swallows into an empty `Current branch:`. A pin cannot defend
-        //     this class; only a test that reads the rendered field can see it.
+        //     OVERRIDES IT — FOR THE COMMANDS THAT READ THAT KEY, AND NO
+        //     OTHERS. A command's config callback CONVERTS the value of every
+        //     key it consumes as it walks the chain, so an invalid value is
+        //     fatal wherever it is read and inert everywhere else, whatever a
+        //     higher-precedence file says. An earlier revision of this bullet
+        //     gave the mechanism as "git parses every config file it can reach
+        //     before it uses any of them", which is FALSE and would predict
+        //     that every subprocess dies on every invalid value. MEASURED on
+        //     git 2.43.0, invalid in a global with a VALID value pinned
+        //     repo-locally: `log.abbrevCommit = nonsense` kills `log --oneline`
+        //     (128) and leaves `status --porcelain`, `branch --show-current`
+        //     and `diff --shortstat --patch` at 0; `color.branch.current=true`
+        //     does the exact reverse, killing ONLY `branch --show-current` on
+        //     `error: invalid color value: true` / `fatal: bad config variable
+        //     'color.branch.current' … exit 128` while `git config --get`
+        //     answers the pinned `normal`. `EnvironmentBlock` swallows that
+        //     exit into an empty `Current branch:`. A pin cannot defend a key a
+        //     subprocess READS; only a test that reads the rendered field can
+        //     see it.
         //
         // Neither boundary is defended by adding a row here — one is out of
         // reach and the other is unfixable by precedence — so both are covered
@@ -2511,9 +2581,33 @@ final class PromptStabilityTest extends TestCase
         // THE INERT LIST, WITH THE DOMAIN OF EACH ENTRY — an earlier revision
         // of it carried three entries without one, and one hazard with no entry
         // at all.
-        //   - Inert for ANY value, MEASURED: `core.quotePath`,
-        //     `diff.algorithm`, `diff.indentHeuristic`, `status.relativePaths`,
-        //     `core.autocrlf`.
+        //   - Inert for ANY value: NOTHING here is, and this bullet used to
+        //     name five keys as if they were. They are the SAME family as
+        //     `log.abbrevCommit` two bullets down — inert for a valid value,
+        //     fatal for an invalid one, undefendable by a repo-local pin. What
+        //     separates them is the DOMAIN of the failure, not the mechanism,
+        //     and that is the next bullet.
+        //   - Inert for any VALID value, and an invalid one reds the fixture
+        //     BUILD rather than a rendered field, because `git init` and
+        //     `git commit` consume these keys too — so they fail LOUDLY, in
+        //     git's own words, before a prompt is assembled. Loud is not inert.
+        //     MEASURED on git 2.43.0, each key pinned to the VALID value shown
+        //     repo-locally and set to `nonsense` in a lower-precedence global,
+        //     as exit codes for `log --oneline` / `status --porcelain` /
+        //     `branch --show-current` / `diff --shortstat --patch`:
+        //       `core.quotePath` (false)        128 / 128 / 128 / 128
+        //       `core.autocrlf` (false)         128 / 128 / 128 / 128
+        //       `diff.indentHeuristic` (true)   128 / 128 /   0 / 128
+        //       `diff.algorithm` (myers)        128 / 128 /   0 / 128
+        //       `status.relativePaths` (true)     0 / 128 /   0 /   0
+        //     e.g. `fatal: bad boolean config value 'nonsense' for
+        //     'core.quotepath'`. MEASURED end to end, a global
+        //     `[core] quotePath = nonsense` reds this file at `Failures: 6`,
+        //     every one of them `git init -q failed: fatal: bad boolean config
+        //     value 'nonsense' for 'core.quotepath'` — the fixture's own
+        //     `assertSame(0, self::git(...))` below, not a rendered field.
+        //     `log.abbrevCommit` is the contrast: it leaves the build GREEN and
+        //     degrades only `Recent commits:`, which is why it needed a test.
         //   - Inert only for a VALID value: `log.date`, `format.pretty`. An
         //     invalid one exits 128; see the paragraph above. Both are pinned.
         //   - Inert only for a VALID value AND UNDEFENDABLE BY PINNING:
@@ -2558,9 +2652,69 @@ final class PromptStabilityTest extends TestCase
         //     `XDG_CONFIG_HOME` holding `git/attributes`. All three are now
         //     beaten by the `.git/info/attributes` this fixture writes below,
         //     MEASURED back to 4,844/4,670 under each of them.
-        //   - `diff.external`, `core.bigFileThreshold=1` and a
-        //     `core.excludesFile` naming the tracked file all move the bytes
-        //     but RED, which is the harmless direction and needs no pin.
+        //   - `diff.external` moves the bytes and REDS, which is the harmless
+        //     direction and needs no pin — but it has TWO domains and only one
+        //     of them was ever measured here. MEASURED, git 2.43.0: an external
+        //     diff that SUCCEEDS and prints nothing (`/bin/true`) leaves
+        //     `git diff` at exit 0, so the `--shortstat` line survives and only
+        //     the patch body is lost — 4,844 -> 4,617, the two renders
+        //     IDENTICAL, `Failures: 3`. An external diff that FAILS
+        //     (`/bin/false`, or a path that cannot exec) takes `git diff` to
+        //     128 on `fatal: external diff died`, the whole field degrades to
+        //     `unavailable (git exited 128)` — 4,844 -> 4,599, renders
+        //     identical, `Failures: 3`. `GIT_EXTERNAL_DIFF` reproduces both
+        //     figures exactly and is an ENVIRONMENT variable, so no pin reaches
+        //     it. The 128 domain is the one control B's own subprocess guard
+        //     above was built for.
+        //   - `core.bigFileThreshold=1` USED TO belong on that line and no
+        //     longer does. MEASURED at this commit it moves NOTHING —
+        //     4,844/4,670, byte-for-byte the clean figures — because the
+        //     `.git/info/attributes` `* diff` written below forces the text
+        //     path. Verified on THIS fixture rather than on a stand-in, by
+        //     deleting that one file from a built fixture and re-running
+        //     `git diff --shortstat --patch`: with it, the ordinary patch;
+        //     without it, ` 1 file changed, 0 insertions(+), 0 deletions(-)`,
+        //     the binary path. So it belongs in the attributes family three
+        //     bullets up, beside `core.attributesFile`, `init.templateDir` and
+        //     XDG; its old domain, before that file existed, is what the line
+        //     it used to sit on still described.
+        //   - `core.excludesFile` NAMING THE FIXTURE'S TRACKED FILE stays on
+        //     the moves-and-reds line, and a review that moved it off was
+        //     REFUSED ON MEASUREMENT: a global `core.excludesFile` listing
+        //     `Alpha.php` (or `src/Alpha.php`) takes the prompt 4,844 -> 4,561
+        //     and reds this file at `Failures: 3`. The refused reasoning was
+        //     "gitignore never applies to a tracked path", which is TRUE in
+        //     isolation — MEASURED, exclude a path AFTER committing it and
+        //     `status --porcelain` still says ` M src/Alpha.php` — and beside
+        //     the point HERE, because of ORDER: the exclude is already in force
+        //     when the fixture's own `git add -A` runs below, so the file is
+        //     never tracked in the first place. MEASURED in a scratch repo,
+        //     excluded before the `add`: `git ls-files` EMPTY, status empty.
+        //     In the rendered prompt both `Status:` and the unstaged diff go
+        //     `(none)`.
+        //   - `core.excludesFile` naming the UNTRACKED `src/Gamma.php` is a
+        //     SECOND hazard the line above never covered. It moves nothing in
+        //     this fixture's own byte figures — `Gamma.php` is written by the
+        //     two tests that need it, not here — but MEASURED it reds this file
+        //     at `Failures: 2`, and BOTH failure messages used to blame the
+        //     healthy `status.showUntrackedFiles` pin; they now name the
+        //     gitignore family too. No `status.*` pin defends this: gitignore
+        //     is a different mechanism from `showUntrackedFiles`.
+        //
+        // ONE RECORDED UNKNOWN, LABELLED RATHER THAN GUARDED. `git diff
+        // --shortstat`'s " N files changed, X insertions(+), Y deletions(-)" is
+        // a gettext string, and nothing in this roster pins a locale. On a host
+        // carrying `git-l10n` a `LC_ALL`/`LANGUAGE` in the environment would
+        // therefore move the nice shape's bytes and red the capped shape's
+        // `insertions(+)` assertion under a message about the CAP rather than
+        // about the locale. That is a HYPOTHESIS, NOT A MEASUREMENT: this host
+        // has ZERO git catalogues installed (`find / -name git.mo` -> none, and
+        // no de_DE/fr_FR in `locale -a`), so `LC_ALL=de_DE.UTF-8 git diff
+        // --shortstat` renders the untranslated English here and the hypothesis
+        // cannot be confirmed or refuted on this box. No pin is added for it,
+        // because a guard whose premise was never observed is a claim wider
+        // than its evidence — which is the defect this whole roster exists to
+        // stop. It wants one measurement on a translated host.
         foreach ([
             ['init', '-q'],
             ['symbolic-ref', 'HEAD', 'refs/heads/master'],
