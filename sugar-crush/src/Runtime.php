@@ -585,19 +585,33 @@ final class Runtime
      *     silently. `EnvironmentBlock` has FOUR production construction sites;
      *     this step reaches ONE. MEASURED with
      *     `/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/ bin/`: this
-     *     class, plus `Cli/Bootstrap.php:1462`, `App/App.php:553` and
-     *     `Agents/Agent.php:417` — and those three all feed
-     *     `Agents\Agent::systemPrompt()`, the assembler prompt_plan.md §17.2
-     *     keeps deliberately separate from this one because the two order
-     *     `<env>` oppositely. Nothing on that path calls
-     *     {@see EnvironmentBlock::withWriteSinceLastRender()} — MEASURED, zero
-     *     hits across `src/Agents/`, `src/Cli/` and `src/App/` — so it can
-     *     never reach the suppressed state and pays FIVE git subprocesses on
-     *     every one of its nine `systemPrompt()` call sites, per render rather
-     *     than per turn. `Bootstrap.php:1462` memoises the CAPTURE onto each
-     *     agent, which costs nothing: capture() runs ZERO subprocesses
-     *     (MEASURED with a logging `git` shim: ten captures with no render, 0
-     *     invocations) and `render()` pays the bill on every call. The gap is
+     *     class, plus `Cli/Bootstrap.php:1462`, `App/App.php:553` and the
+     *     last-resort fallback inside `Agents\Agent::systemPrompt()` itself.
+     *     THE SYMBOL IS THE CITATION FOR THAT THIRD ONE and the line number
+     *     is only a direction (`Agents/Agent.php:852` at this commit),
+     *     because this is the figure in this paragraph that has already
+     *     rotted: it read `Agent.php:417`, which was exactly that statement
+     *     at `c7e5a6454` and was doc-block prose one commit later, with
+     *     nothing going red in between. Bootstrap's and App's both FEED that
+     *     method; it is the assembler prompt_plan.md §17.2 keeps deliberately
+     *     separate from this one because the two order `<env>` oppositely.
+     *     Nothing on that path CALLS
+     *     {@see EnvironmentBlock::withWriteSinceLastRender()}: MEASURED with
+     *     `/usr/bin/grep -rn 'withWriteSinceLastRender' src/Agents/ src/Cli/ src/App/`,
+     *     FOUR hits, every one of them doc-block prose in `Agents/Agent.php`
+     *     recording why the mark is declined there, and not one of them a
+     *     call. (That sentence read “zero hits” and was true when written;
+     *     P3.S6's own prose moved it, which is the second figure here this
+     *     branch staled and the reason both now name their generator.) So the
+     *     path can never reach the suppressed state, and it pays FIVE git
+     *     subprocesses on every one of its EIGHT `systemPrompt()` call sites
+     *     — EIGHT, not nine, per the roster derived and pinned by
+     *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()}
+     *     — per render rather than per turn. `Bootstrap.php:1462` memoises the
+     *     CAPTURE onto each agent, which costs nothing: capture() runs ZERO
+     *     subprocesses (MEASURED with a logging `git` shim: ten captures with
+     *     no render, 0 invocations) and `render()` pays the bill on every
+     *     call. The gap is
      *     deliberate scope, not an oversight, and it needs either a P3.S6 or a
      *     prompt_plan.md §18 row saying why the Agent path keeps the diff.
      *  3. The `bool $perStepRerender` caption variant `EnvironmentBlock`'s

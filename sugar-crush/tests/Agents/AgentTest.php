@@ -2406,17 +2406,36 @@ final class AgentTest extends TestCase
     /**
      * The line numbers of every live `->systemPrompt(` call in one PHP source.
      *
-     * Token-driven rather than textual, and the difference is four call sites.
-     * MEASURED on this tree with
-     * `/usr/bin/grep -ro -- '->systemPrompt(' src/ | wc -l`: TWELVE
-     * occurrences, against the EIGHT this scanner reports. The four extras are
-     * all prose - one comment inside `App::dispatchSkill()` describing the
-     * second render (`ProcessExecutor sends the request's systemPrompt AND,
-     * separately,` ...) and three inside `Agent::systemPrompt()`'s own
-     * doc-block - so a textual census of the agent assembler's callers would
-     * over-count by four, in two of the four files whose classification is the
-     * whole content of P3.S6. (That figure was NINE and one before the P3.S6
-     * doc-block was corrected in place; it is re-derived here rather than
+     * Token-driven rather than textual, and the difference is FIVE call sites.
+     * Every number in this paragraph is written beside the command that
+     * produces it, because a figure with no generator cannot be re-derived and
+     * this one has already gone stale twice.
+     *
+     * `cd sugar-crush && /usr/bin/grep -rno -- '->systemPrompt(' src/ | wc -l`
+     * answers THIRTEEN. This scanner reports EIGHT. The five extras are all
+     * prose, and
+     * `cd sugar-crush && /usr/bin/grep -rc -- '->systemPrompt(' src/ | /usr/bin/grep -v ':0$'`
+     * says where they sit: `App/App.php` 2, `Agents/Agent.php` 4,
+     * `Agents/ProcessExecutor.php` 1, `Agents/AgentManager.php` 1,
+     * `Workflows/WorkflowEngine.php` 5. One of App's two is the comment inside
+     * `App::dispatchSkill()` describing the second render (`ProcessExecutor
+     * sends the request's systemPrompt AND, separately,` ...); ALL FOUR of
+     * `Agent.php`'s are doc-block prose - one quoting a census command of its
+     * own in the roster header, the other three narrating the
+     * `WorkflowEngine` render seams (`$firstAgent->systemPrompt()` at the
+     * parallel stage, and the argument-position evaluation that makes the
+     * parent-side render synchronous). So a textual census of the agent
+     * assembler's callers over-counts by FIVE, in two of the four files whose
+     * classification is the whole content of P3.S6.
+     *
+     * WHY THE FIGURE MOVED, since it is the second correction: this step's own
+     * doc-block prose is what changed it. `git show c7e5a6454:sugar-crush/src/Agents/Agent.php
+     * | /usr/bin/grep -c -- '->systemPrompt('` answers ZERO at the base
+     * commit against 4 at this tip - the step wrote four textual occurrences
+     * into `Agent.php` and did not re-derive the total afterwards, which is
+     * exactly the failure mode the roster below is keyed by FILE to survive.
+     * (The figure read NINE/one before the P3.S6 doc-block landed and
+     * TWELVE/four immediately after; both are superseded, and neither is
      * carried forward.)
      *
      * WHAT THE ALPHABET COVERS, stated because an alphabet IS the coverage and
@@ -2540,8 +2559,18 @@ final class AgentTest extends TestCase
      */
     private static function gitSubprocessesDuring(callable $body): int
     {
-        $real = trim((string) shell_exec('command -v git 2>/dev/null'));
-        self::assertNotSame('', $real, 'no git on PATH: the subprocess census has nothing to shim');
+        // fd 2 joins the stdout this call already reads, rather than /dev/null:
+        // `Agents/` is in ChildStderrCaptureTest::SCOPE, and a discard there is the
+        // one destination that guard exists to refuse. Folding stderr in means an
+        // error line lands IN $real, so a non-empty answer no longer proves
+        // anything - `sh: 1: command: not found` is non-empty too. The assertion
+        // is therefore on the shape of a usable binary, not on emptiness, because
+        // the very next lines `exec` this path from inside the shim.
+        $real = trim((string) shell_exec('command -v git 2>&1'));
+        self::assertTrue(
+            $real !== '' && str_starts_with($real, '/') && is_file($real) && is_executable($real),
+            "no usable git on PATH: the subprocess census has nothing to shim (command -v answered: {$real})",
+        );
 
         $dir = sys_get_temp_dir() . '/sugarcrush-p3s6-' . getmypid() . '-' . bin2hex(random_bytes(6));
         self::assertTrue(mkdir($dir, 0o700, true), "could not create the shim directory {$dir}");

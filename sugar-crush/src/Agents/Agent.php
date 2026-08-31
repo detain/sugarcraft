@@ -574,14 +574,22 @@ final readonly class Agent
      *
      *     RE-DERIVE THE FIRST WITH THE EXCLUSION, WHICH IS LOAD-BEARING:
      *     `/usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/
-     *     bin/` prints nothing and exits 1. Without `--exclude=Agent.php` it
-     *     finds exactly ONE hit and exits 0 - THIS DOC-BLOCK'S OWN LINE, the
-     *     one you are reading, which contains the string it searches for.
-     *     That is not a quibble: an earlier revision wrote the command without
-     *     the exclusion and asserted that it "finds nothing", so the command
+     *     bin/` prints nothing and exits 1. Drop `--exclude=Agent.php` and it
+     *     exits 0 with TWO hits, both of them inside THIS DOC-BLOCK - the
+     *     wrapped command you are reading now, and the transcript that spells
+     *     it out again a few paragraphs below. The count is not a coincidence
+     *     and does not need a line number to check: it is exactly the number
+     *     of times this block writes the search string out, so it moves only
+     *     if an editor adds or removes a spelling, and never on line drift.
+     *     (An earlier revision said "exactly ONE hit ... THIS DOC-BLOCK'S OWN
+     *     LINE" and was wrong by one because the block had grown a second
+     *     spelling since; the revision before THAT wrote the command without
+     *     the exclusion at all and asserted it "finds nothing", so the command
      *     as printed falsified its own stated result the moment anybody ran
-     *     it. The exclusion is named here rather than quietly dropped so that
-     *     what is written is what reproduces.
+     *     it. Both are the same defect: prose about a command, not re-derived
+     *     after the prose around it changed.) The exclusion is named here
+     *     rather than quietly dropped so that what is written is what
+     *     reproduces.
      *
      * AND THE STEP TEXT SAYS OTHERWISE - recorded here because nothing else in
      * this diff can record it. prompt_plan.md's P3.S6 Goal names
@@ -759,6 +767,85 @@ final readonly class Agent
      * signal it would spend is one this path cannot derive. And
      * `dispatchSkill()` is dormant besides - `App.php:533` says so in its own
      * words - so the six-versus-ten saving is a saving on a path nothing runs.
+     *
+     * AND THE SECOND PROPOSED WIRING, IN THE OTHER DECLARED FILE - ALSO
+     * MEASURED, ALSO DECLINED. An earlier revision of this block dispositioned
+     * `App/App.php` and said nothing at all about `Cli/Bootstrap.php`, which
+     * left the reader to assume no attachment point was there. One is.
+     * `/usr/bin/grep -rn 'withEnvironment(' src/ bin/` finds exactly TWO
+     * production attachment points - `Bootstrap.php:1462`
+     * (`$manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)))`,
+     * inside `Bootstrap::agentManager()`'s roster loop) and `App.php:552`
+     * treated above; every other hit is this file's own, the setter's
+     * declaration and this doc-block's quotations of the two.
+     *
+     * IT IS LIVE AS A CONSTRUCTION POINT, which is why it needs an argued
+     * answer rather than a shrug: `Bootstrap::agentManager()` is reached from
+     * `bin/sugarcrush` through the `agentManager:` argument at
+     * `Bootstrap.php:1044`, the same construction call `chat()` takes its
+     * engine from. It is also, mechanically, the ONLY place a registered
+     * agent's block is built, so it is the only place a mark could be applied
+     * to one.
+     *
+     * IT IS NOT A VIABLE HOME FOR THE WRITE SIGNAL, and the two reasons are
+     * measured rather than asserted.
+     *
+     *   FIRST, IT REACHES NO LIVE RENDER.
+     *   `/usr/bin/grep -c 'environment:' src/Workflows/WorkflowEngine.php`
+     *   answers ZERO against `/usr/bin/grep -c 'new Agent(' ...` SEVEN: every
+     *   one of the five per-stage renders builds a fresh {@see Agent} and
+     *   passes no block at all, so each falls through to the last-resort
+     *   `EnvironmentBlock::capture((string) getcwd(), ...)` in the method
+     *   below. `ProcessExecutor::spawnWorker()`'s second render at
+     *   `ProcessExecutor.php:473` renders the SubAgent's OWN agent, which on
+     *   the live path is that same fresh one. The one consumer that does read
+     *   a registered agent's block is {@see AgentManager::executeSubAgent()}
+     *   at `AgentManager.php:433` - dormant, by the `--exclude=Agent.php`
+     *   command above, which prints nothing and exits 1. So the mark's whole
+     *   audience is a path with no caller.
+     *
+     *   SECOND, IT WOULD CHANGE DEFAULT BEHAVIOUR UNCONDITIONALLY, which is
+     *   the same ground `App.php:552` was declined on. A once-per-launch
+     *   roster loop has no step to key a per-step signal on; a mark placed
+     *   there is spent on every dispatch the launch ever makes. MEASURED with
+     *   the same logging-`git`-shim technique, against a throwaway fixture
+     *   repository with one modified and one staged file (a scratch repo built
+     *   for the measurement, NOT the committed tree - so read the byte figures
+     *   as this fixture's and the subprocess figures as the method's):
+     *
+     *       EnvironmentBlock::capture() alone           => 0 subprocesses
+     *       registered agent, block UNMARKED (today)    => 5 subprocesses,  864 bytes
+     *       registered agent, block MARKED false        => 3 subprocesses,  450 bytes
+     *       fresh Agent, no block (WorkflowEngine)      => 5 subprocesses,  864 bytes
+     *
+     *   The 0 is worth reading twice: `capture()` shells out to nothing, so
+     *   the mark is free AT the attachment point and pays back only where the
+     *   block is rendered - which line 4 shows is nowhere a Bootstrap mark can
+     *   reach, since the fresh-Agent shape is identical to the unmarked one.
+     *   Lines 2 and 3 are NOT byte-identical, 450 against 864: the two git
+     *   diff sections are gone. That is a moved default, and a diff that moves
+     *   the default is wrong here in the step text's own terms.
+     *
+     * SO THE HONEST DISPOSITION FOR `Bootstrap.php:1462` IS THE ESCALATED ONE.
+     * Carrying a real write signal to the renders that actually repeat needs
+     * `WorkflowEngine` to pass a block at all (it passes none, measured above),
+     * {@see AgentResult}'s constructor to carry what a stage did, and the
+     * worker's `complete` IPC frame to report it - the BUILD-IT-OUT named
+     * under reason 2, across `WorkflowEngine` + `AgentResult` + the worker IPC
+     * frame. `Bootstrap.php:1462` is downstream of none of that and cannot
+     * substitute for it.
+     *
+     * AND WHY THAT DISPOSITION IS RECORDED HERE AND NOT AT THE SITE, since a
+     * "do not just add the flag" note in the roster loop is exactly what the
+     * next reader of that line wants. It was written, measured, and taken back
+     * out: the comment ran 15 lines, and
+     * `/usr/bin/grep -rno 'Bootstrap[.]php:[0-9]\+' ../docs | sed 's/.*Bootstrap[.]php://' | awk '$1+0>1462' | wc -l`
+     * answers FIFTEEN citations past that line, in FOUR files under
+     * `docs/plans/` that this step's file list does not include. Inserting
+     * there would have staled every one of them, and staled them in files it
+     * may not repair - which is the same defect this paragraph's neighbours
+     * were opened to fix. So the site keeps its line number and the argument
+     * lives with the API it is about.
      */
     public function systemPrompt(?EnvironmentBlock $environment = null): string
     {
