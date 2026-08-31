@@ -1571,6 +1571,176 @@ final class AgentTest extends TestCase
     }
 
     /**
+     * THE SELF-CENSUS IN `Agent::systemPrompt()`'s DOC-BLOCK IS DERIVED, AND
+     * BOTH FIGURES ARE READ BACK OUT OF THE PROSE RATHER THAN TYPED HERE.
+     *
+     * WHAT WENT WRONG: that doc-block said it carried "THIRTY distinct
+     * file-dot-php-colon-line citations in FORTY-SIX occurrences" and offered
+     * one command to re-derive them. MEASURED at the merge that WROTE the
+     * sentence and again at this branch's base: 31 and 54, identical at both -
+     * so both figures were wrong the day they were typed rather than stale
+     * later, the second had no generator at all (the command given ends in
+     * `sort -u`, which yields distinct only), and the paragraph making the claim
+     * is the paragraph arguing that unpinned figures rot.
+     *
+     * WHY THIS SHAPE AND NOT "STATE NO CARDINALITY". Section 16.8 rule 2 says
+     * ship the generator, not the count, and the honest way to keep a count is
+     * to make it derived. So the two literals stay in the prose - the count IS
+     * the argument there, being the measure of how much of that doc-block is
+     * unpinned - and this test is what makes them derived: it recomputes both
+     * from the file, parses the sentence's own two numbers back out, and reds
+     * naming the new pair. A test asserting a literal 31 in this file would be
+     * the same defect one file over, so no cardinality of that census appears
+     * here at all.
+     *
+     * THE SELF-REFERENCE IS HANDLED RATHER THAN LUCKY. The pattern greps the
+     * file the sentence lives in, and the sentence names that file twice. It
+     * matches neither pipeline because neither spelling carries a colon-line
+     * suffix - and the DOMAIN assertion below turns that from an accident into
+     * a checked property by requiring every occurrence to fall inside the one
+     * doc-block the sentence is about.
+     *
+     * THE INSTRUMENT IS EXERCISED BEFORE IT IS TRUSTED, both polarities: one
+     * NEW citation appended to a copy of the source must move both figures by
+     * one; a DUPLICATE of an existing citation must move the occurrence count
+     * only; and a citation planted OUTSIDE the doc-block must break the domain
+     * claim. Without those three, a regex that matched nothing would pass every
+     * assertion here by agreeing with a prose figure of zero.
+     *
+     * THE DELETION EXPERIMENT, MEASURED: editing either literal in the
+     * doc-block by one reds this test and its message prints both the derived
+     * and the claimed pair. Recorded with counts in the P3.audit-fix-2 report.
+     */
+    public function testTheCitationCensusInThisDocBlockIsDerivedFromTheFileRatherThanWrittenDown(): void
+    {
+        $path = \dirname(__DIR__, 2) . '/src/Agents/Agent.php';
+        $source = (string) file_get_contents($path);
+        $this->assertNotSame('', $source, 'the assembler source could not be read, so every figure below would be zero');
+
+        $derived = self::citationCensusOf($source);
+
+        // THE INSTRUMENT, AGAINST KNOWN ANSWERS, BEFORE ANY VERDICT. A regex
+        // that matched nothing would agree with a prose figure of zero and read
+        // as working.
+        $this->assertGreaterThan(0, $derived['occurrences'], 'the citation pattern matched nothing at all - this census is dead, not clean');
+        $novel = self::citationCensusOf($source . "\n// Planted.php:424242\n");
+        $this->assertSame($derived['distinct'] + 1, $novel['distinct'], 'a new citation did not move the distinct count');
+        $this->assertSame($derived['occurrences'] + 1, $novel['occurrences'], 'a new citation did not move the occurrence count');
+
+        $repeat = self::citationCensusOf($source . "\n// WorkflowEngine.php:875\n");
+        $this->assertSame($derived['distinct'], $repeat['distinct'], 'a DUPLICATE citation moved the distinct count, so the two figures are not counting different sets');
+        $this->assertSame($derived['occurrences'] + 1, $repeat['occurrences'], 'a DUPLICATE citation did not move the occurrence count');
+
+        // THE PROSE IS THE THING UNDER TEST. Flattened first, because prose
+        // matching is line-oriented and a doc-block wraps mid-phrase (§16.8
+        // rule 39).
+        $flat = (string) preg_replace('~\n\s*\*\s?~', ' ', $source);
+        $this->assertSame(
+            1,
+            preg_match('~carries (\d+) distinct citations of the form file-dot-php-colon-line in (\d+) occurrences~', $flat, $claimed),
+            'the self-census sentence in Agent::systemPrompt()\'s doc-block was reworded out of this '
+                . 'test\'s reach. It is the sentence that states two cardinalities of that doc-block; '
+                . 'either keep a form this pattern reads, or drop both figures - do not leave them unpinned.',
+        );
+
+        $this->assertSame(
+            [$derived['distinct'], $derived['occurrences']],
+            [(int) $claimed[1], (int) $claimed[2]],
+            'src/Agents/Agent.php\'s doc-block census no longer matches the file. Derived '
+                . $derived['distinct'] . ' distinct in ' . $derived['occurrences'] . ' occurrences; the '
+                . 'sentence claims ' . $claimed[1] . ' in ' . $claimed[2] . '. Correct the two literals in '
+                . 'that paragraph - the two shell pipelines it prints beside them produce exactly these '
+                . 'two numbers, and a citation was almost certainly added to or removed from that block.',
+        );
+
+        // THE DOMAIN. "This doc-block carries N" is a claim about one
+        // doc-block, while both pipelines count the whole file, so the two
+        // coincide only while every occurrence sits inside it.
+        [$docStart, $docEnd] = self::censusDocBlockBounds($source);
+        foreach ($derived['offsets'] as $offset) {
+            $this->assertTrue(
+                $offset >= $docStart && $offset < $docEnd,
+                'a file-dot-php-colon-line citation at byte ' . $offset . ' of src/Agents/Agent.php is '
+                    . 'OUTSIDE the doc-block whose self-census claims it, which is between bytes '
+                    . $docStart . ' and ' . $docEnd . '. Either move the citation back in or scope the '
+                    . 'sentence to the file rather than to the block.',
+            );
+        }
+
+        // AND THE DOMAIN CHECK BITES: a citation planted outside the block is
+        // caught, so the loop above is not passing because it iterates nothing.
+        $planted = self::citationCensusOf($source . "\n// Outside.php:9\n");
+        $outside = array_filter($planted['offsets'], static fn (int $at): bool => $at < $docStart || $at >= $docEnd);
+        $this->assertCount(1, $outside, 'a citation planted after the class body was not seen as outside the doc-block');
+    }
+
+    /**
+     * Both halves of the self-census in one pass, plus the byte offset of each
+     * occurrence so the domain can be checked.
+     *
+     * THE PATTERN IS THE ONE THE DOC-BLOCK PRINTS, in PCRE rather than in
+     * `grep -oP`: letters and slashes, a literal dot, `php:`, a line number and
+     * an optional range. Distinct is the pipeline WITH `sort -u`, occurrences
+     * the same pipeline without it.
+     *
+     * @return array{distinct: int, occurrences: int, offsets: list<int>}
+     */
+    private static function citationCensusOf(string $source): array
+    {
+        preg_match_all('~[A-Za-z/]+[.]php:[0-9]+(?:-[0-9]+)?~', $source, $matches, PREG_OFFSET_CAPTURE);
+
+        $tokens = [];
+        $offsets = [];
+        foreach ($matches[0] as [$text, $at]) {
+            $tokens[] = $text;
+            $offsets[] = $at;
+        }
+
+        return [
+            'distinct' => \count(array_unique($tokens)),
+            'occurrences' => \count($tokens),
+            'offsets' => $offsets,
+        ];
+    }
+
+    /**
+     * The byte range of the ONE doc-block that makes the self-census claim.
+     *
+     * FOUND BY ITS OWN SENTENCE rather than by a line number, because a line
+     * number is exactly what that doc-block says about itself will rot. A
+     * `T_DOC_COMMENT` is a single token, so its text is the block verbatim and
+     * `strpos` gives the offset; a second block carrying the same sentence would
+     * mean the census has two subjects and that is a failure, not a tie-break.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private static function censusDocBlockBounds(string $source): array
+    {
+        $found = [];
+        foreach (token_get_all($source) as $token) {
+            if (!\is_array($token) || $token[0] !== T_DOC_COMMENT) {
+                continue;
+            }
+            if (!str_contains($token[1], 'distinct citations of the form')) {
+                continue;
+            }
+            $at = strpos($source, $token[1]);
+            if ($at === false) {
+                continue;
+            }
+            $found[] = [$at, $at + \strlen($token[1])];
+        }
+
+        if (\count($found) !== 1) {
+            throw new \RuntimeException(
+                'expected exactly one doc-block in src/Agents/Agent.php making the self-census claim, found ' . \count($found),
+            );
+        }
+
+        return $found[0];
+    }
+
+    /**
      * THE SEAM QUESTION, ANSWERED BY DRIVING IT: one sub-agent dispatch renders
      * the environment block exactly ONCE, however many chunks the provider
      * streams.
@@ -2039,9 +2209,17 @@ final class AgentTest extends TestCase
             ),
             'AgentResult::__construct()\'s parameter list moved. If a tool-call field was ADDED, the '
                 . 'parent can finally answer "did this stage write?" for a workflow stage, and the '
-                . 'P3.S6 disposition - that the per-step write signal is unwireable on the Agent '
-                . 'assembler path because no signal reaches the parent - must be revisited rather '
-                . 'than left standing.',
+                . 'P3.S6 disposition must be revisited rather than left standing. THE DISPOSITION '
+                . 'RESTS ON DECLARED SCOPE. The per-step seam is REAL, LIVE and PER-STAGE, in '
+                . 'Workflows/WorkflowEngine.php, which was outside P3.S6\'s declared file list; '
+                . 'wiring it is a build-it-out across WorkflowEngine.php + Agents/AgentResult.php + '
+                . 'the worker complete IPC frame, escalated to the user and awaiting a decision. It '
+                . 'is NOT waived and it is NOT underivable. THIS MESSAGE USED TO SAY the signal was '
+                . '"unwireable on the Agent assembler path because no signal reaches the parent"; '
+                . 'P3.S6\'s own review cycle 2 falsified that, prompt_plan.md section 18 and '
+                . 'prompt_worklog.md both record the falsification, and the correction did not reach '
+                . 'this message until P3.audit-fix-2 - which is the costliest place to miss one, '
+                . 'because this text is all the agent who adds the field will read.',
         );
     }
 

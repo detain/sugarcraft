@@ -768,7 +768,39 @@ final class Runtime
      *     symbol will not, which is why it is the citation and the number is
      *     not. Bootstrap's and App's both FEED that method; it is the
      *     assembler prompt_plan.md §17.2 keeps deliberately separate from
-     *     this one because the two order `<env>` oppositely.
+     *     this one.
+     *
+     *     WHAT THIS SAID: "…because the two order `<env>` oppositely."
+     *     WHAT IS TRUE: BOTH assemblers put `<env>` LAST, and their orders are
+     *     IDENTICAL rather than opposite. The last statement of
+     *     {@see buildSystemPrompt()} before its `return` appends
+     *     `environmentSnapshot($app)->render()`, under the comment "Volatile
+     *     content LAST"; the WHOLE body of
+     *     {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()} is one ternary
+     *     returning the rendered block, or the agent prompt followed by it.
+     *     Nothing follows the env render on either path.
+     *     HOW MEASURED: read both method bodies end to end, then checked the
+     *     bytes - both fixtures under `tests/fixtures/prompt/` END with the
+     *     closing env fence and carry no trailing newline
+     *     (`tail -c 30 <fixture> | cat -A` on each). The claim is now pinned
+     *     from the assemblers themselves rather than from the fixtures by
+     *     {@see \SugarCraft\Crush\Tests\RuntimeTest::testBothPromptAssemblersPutTheEnvironmentBlockLastAndAgreeOnTheTail()}.
+     *     P3.S1 is the step that made the old reason false - it moved `<env>`
+     *     from this assembler's layer 2 to its layer 7 - so the constraint was
+     *     already dead when P3.S5 copied the sentence into this file, and
+     *     §17.2's own three corrections in this phase all stopped one paragraph
+     *     short of it.
+     *     WHY TWO ASSEMBLERS ARE STILL RIGHT, which is what §17.2's conclusion
+     *     actually rests on, VERIFIED against the code rather than carried from
+     *     the plan: DIFFERENT LIFETIMES AND MEMOISATION - this one memoises the
+     *     block per `Runtime`, i.e. per turn, in {@see environmentSnapshot()},
+     *     and mints a replacement only when the write signal differs, while
+     *     `Agent::systemPrompt()` captures a fresh block on every call whenever
+     *     none is passed; and DIFFERENT LAYERS - this assembler carries a repo
+     *     map, `<project-instructions>` documents, the memory block, the
+     *     enabled skills' bodies and the discovered-skill listing, and the
+     *     agent assembler carries none of the five. Unifying them would have to
+     *     reconcile those, not an ordering that no longer differs.
      *
      *     Nothing on that path CALLS
      *     {@see EnvironmentBlock::withWriteSinceLastRender()}: MEASURED with

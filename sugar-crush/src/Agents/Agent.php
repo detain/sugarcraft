@@ -417,10 +417,43 @@ final readonly class Agent
      * question is about and this is where the next reader lands.
      *
      * READ THE LINE NUMBERS BELOW AS DIRECTIONS, NOT AS FACTS UNDER TEST. This
-     * block carries THIRTY distinct `<file>.php:<line>` citations in
-     * FORTY-SIX occurrences - re-derive that with
-     * `/usr/bin/grep -oP '[A-Za-z/]+[.]php:[0-9]+(-[0-9]+)?' src/Agents/Agent.php | sort -u | wc -l`
-     * - and NOT ONE of them is pinned by anything, which is the same argument
+     * doc-block carries 31 distinct citations of the form file-dot-php-colon-line
+     * in 54 occurrences. TWO figures need TWO commands, because one pipeline
+     * cannot produce both - the second is the first without its `sort -u`:
+     *
+     *   distinct:
+     *     /usr/bin/grep -oP '[A-Za-z/]+[.]php:[0-9]+(-[0-9]+)?' src/Agents/Agent.php | sort -u | wc -l
+     *   occurrences:
+     *     /usr/bin/grep -oP '[A-Za-z/]+[.]php:[0-9]+(-[0-9]+)?' src/Agents/Agent.php | wc -l
+     *
+     * WHAT THIS SAID: "THIRTY distinct ... in FORTY-SIX occurrences", with only
+     * the `sort -u` pipeline attached - so the second figure had no generator at
+     * all, which is the defect the paragraph is about happening inside the
+     * paragraph.
+     * WHAT IS TRUE: 31 and 54.
+     * HOW MEASURED: both commands above, run from `sugar-crush/`, at
+     * `f958ba8e6` - the merge that WROTE the wrong pair - and again at
+     * `bb4a311d0`. Identical at both, 31 / 54. So this is not later drift:
+     * both figures were wrong the day they were typed, and nothing went red.
+     * WHY THE SENTENCE STILL EARNS ITS PLACE: the count IS the argument - it is
+     * the measure of how much of this doc-block is unpinned - and it is no
+     * longer prose. Section 16.8 rule 2 says ship the generator, not the count;
+     * both generators are above, and
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheCitationCensusInThisDocBlockIsDerivedFromTheFileRatherThanWrittenDown()}
+     * re-derives both figures from this file, reads this sentence's own two
+     * numbers back out of it, and reds naming the new pair. One added citation
+     * now costs two two-digit edits here instead of rotting silently.
+     * ITS DOMAIN, spelled out because this sentence greps the file it lives in:
+     * both commands count the WHOLE of `src/Agents/Agent.php`, and every
+     * occurrence is INSIDE this one doc-block - which that test asserts as
+     * well, so the day a citation lands outside it the domain claim reds
+     * instead of drifting. This file's own name appears above without a
+     * colon-line suffix and therefore matches neither pipeline; before this
+     * correction that was luck, and now it is checked. `src/Runtime.php` spends
+     * twenty lines making exactly this correction for a different grep, in this
+     * same phase, and it did not travel here at the time.
+     *
+     * NOT ONE of the line numbers below is pinned by anything, which is the same argument
      * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::AGENT_ASSEMBLER_CALL_SITES}
      * makes for keying its roster on the FILE and not on `file:line`. They are
      * given anyway because the argument needs the reader to be able to find the
@@ -439,8 +472,41 @@ final readonly class Agent
      * diff sections on a step that wrote nothing. It reached ONE of
      * `EnvironmentBlock`'s four production construction sites; the other three
      * feed this method, the second assembler prompt_plan.md section 17.2 keeps
-     * deliberately separate because the two order `<env>` oppositely. The gap
+     * deliberately separate. The gap
      * was left open on purpose, to be closed or explained rather than to lapse.
+     *
+     * WHY §17.2 KEEPS THEM SEPARATE - CORRECTED IN PLACE (section 16.8 rule
+     * 42), because the reason this sentence used to give is FALSE and it was
+     * false before this doc-block was written.
+     *
+     * WHAT IT SAID: "…because the two order `<env>` oppositely."
+     *
+     * WHAT IS TRUE: both assemblers put the env block LAST, so their orders are
+     * IDENTICAL, not opposite. The whole body of {@see systemPrompt()} below is
+     * one ternary that returns the rendered block, or this agent's prompt
+     * followed by it - nothing follows the render. `Runtime::buildSystemPrompt()`
+     * appends its own `environmentSnapshot()->render()` as the last statement
+     * before its `return`, under a comment reading "Volatile content LAST".
+     *
+     * HOW MEASURED: read both method bodies end to end; both fixtures under
+     * `tests/fixtures/prompt/` end with the closing env fence and no trailing
+     * newline (`tail -c 30 <fixture> | cat -A`); and
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testBothPromptAssemblersPutTheEnvironmentBlockLastAndAgreeOnTheTail()}
+     * now derives it from the two assemblers rather than from the fixtures, so
+     * the corrected claim is load-bearing instead of decorative. P3.S1 is the
+     * step that made the old reason false, by moving the env block from
+     * `Runtime`'s layer 2 to its layer 7; P3.S6 then copied the dead reason
+     * into this file.
+     *
+     * WHY THE CONCLUSION SURVIVES ITS ARGUMENT, and this is the part worth
+     * keeping: the two assemblers have DIFFERENT LIFETIMES - `Runtime` memoises
+     * one block per turn and replaces it only when the write signal differs,
+     * while this method captures a fresh block on every call when none is
+     * passed - and the `Runtime` assembler carries FIVE layers this one has
+     * none of: a repo map, `<project-instructions>` documents, the memory
+     * block, the enabled skills' bodies, and the discovered-skill listing.
+     * Those are what unification would have to reconcile. Only §17.2's argument
+     * died; its answer did not.
      *
      * IT IS EXPLAINED, AND THE EXPLANATION IS A MEASUREMENT - CORRECTED IN
      * PLACE (prompt_plan.md section 16.8 rule 42), because the first revision
