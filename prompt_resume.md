@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue. BOTH fix branches are DONE, ORCHESTRATOR-VERIFIED and MERGE-READY — `P3.S4-fix-1` @ `6e7308938` (16/399) and `P3.S5-fix-1` @ `6acba5f9e` (145/689). `P3.S6`'s step agent was KILLED BY AN API SESSION LIMIT (resets 4am America/New_York) leaving **398 UNCOMMITTED LINES** in its worktree; the work is BACKED UP AND VERIFIED at `<scratchpad>/P3.S6-rescue/`, the worktree was NOT touched, and the agent has been RESUMED. Do not re-spawn it and do not clean that worktree. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue, ALL THREE BRANCHES READY. `P3.S4-fix-1` @ `6e7308938` (16/399) and `P3.S5-fix-1` @ `6acba5f9e` (145/689) are orchestrator-verified. `P3.S6` @ `1461e1685` was RECOVERED after a rate-limit kill, committed its work, and reported IN FULL — outcome is a §1.1 DECLARED-SCOPE ESCALATION (a completed step). Its §18 row is LANDED (corrected — the agent's draft carried a claim its own cycle 2 falsified). NO AGENTS ARE RUNNING. The owed full suites are being run SERIALLY now, starting with P3.S4-fix-1. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -682,9 +682,49 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      historical text as a live claim. Do not "fix" the plan backwards.
                      **FULL suite at ab9a7dcdc NOT RUN. No figure exists.**
 
-                  3. **P3.S6 — AGENT KILLED BY AN API SESSION LIMIT. WORK RESCUED. RESUMED.**
-                     **DO NOT RE-SPAWN IT, DO NOT WRITE ITS REPORT (§1.8), AND DO NOT CLEAN OR
-                     COMMIT ITS WORKTREE.**
+                  3. **P3.S6 @ 1461e1685 — RECOVERED, COMMITTED, REPORTED IN FULL, TREE CLEAN.**
+                     The rescue WORKED: rung 1 of §1.8 (SendMessage to the same agent) brought it
+                     back, it verified and committed its fix agent's 398 uncommitted lines, and
+                     delivered a complete report ending *"No session-limit truncation: this
+                     report is complete."* The <scratchpad>/P3.S6-rescue/ backup is now
+                     redundant but HARMLESS — leave it until the branch merges.
+                     **OUTCOME: NEITHER (a) NOR (b) — a §1.1 DECLARED-SCOPE ESCALATION, which is
+                     a COMPLETED STEP (§0/§1.10).** The per-step seam IS real and live, in
+                     Workflows/WorkflowEngine.php, outside its declared file list. Its own
+                     cycle 1 falsified its first claim that no seam existed.
+                     **(b) WAS LITERALLY UNSATISFIABLE AS BRIEFED** — it required landing a §18
+                     row in prompt_plan.md, a file the same brief puts on the never-edited list.
+                     **That is a defect in the step text, not the agent's doing.**
+                     **THE §18 ROW IS LANDED — and NOT the agent's text.** Its draft still
+                     asserted the signal is "unanswerable on this path today"; its OWN cycle 2
+                     falsified that. I verified both halves (ProcessExecutor.php:985 passes a
+                     literal `tools: null`; AgentWorkerPool.php:410 forwards
+                     `tools: $request->tools`) and landed a row resting on DECLARED SCOPE, with
+                     derivability recorded as CONTESTED and AgentResult's 8-param shape as the
+                     pin that fires when the blocker lifts.
+                     **ORCHESTRATOR-VERIFIED:** scope = the two declared files; goldens unmoved;
+                     author Joe Huss; tree clean; added-line scan for markTestSkipped/
+                     @deprecated/assertNotNull/assertIsArray = 0; **src/Agents/Agent.php is
+                     EXECUTABLE-IDENTICAL to base — 1270 tokens both sides, my own script** — so
+                     "doc-block only" holds.
+                     **TWO REPORTED FIGURES ARE WRONG, in the SAFE direction.** It says "1541
+                     insertions, 42 deletions" and enumerates the 42; `git diff --numstat
+                     c7e5a6454..HEAD` is **348/0 and 1193/0 — ZERO deletions at every commit**.
+                     Its enumeration describes churn between its OWN intermediate commits. The
+                     §1.10 conclusion is STRONGER than claimed; the figure is unreliable.
+                     **STILL OWED BEFORE IT MERGES (it merges THIRD):**
+                       (i) my own test figures at 1461e1685;
+                       (ii) **re-verify mutation E5c** — hoist a shared suppressed
+                           EnvironmentBlock above WorkflowEngine.php:875 and pass at :1042;
+                           expect the new test to red (6 vs 10) and ONLY that test. The agent
+                           names this as the one thing to double-check: the fix agent ran it,
+                           the step agent did not;
+                       (iii) **a decision on REVIEW CYCLE 4.** 3 of 5 cycles used and cycle 3's
+                           fixes are UNREVIEWED. **Unlike both fix branches, the cap is NOT
+                           reached here**, so skipping a cycle needs a positive reason, not the
+                           cap. Note the risk surface is small: zero executable change to src/.
+                     (superseded rescue detail follows, kept because the patch is still on disk)
+                     **AGENT KILLED BY AN API SESSION LIMIT. WORK RESCUED. RESUMED.**
                      It died with an explicit harness error — `rate_limit`, HTTP 429, *"You've
                      hit your session limit · resets 4am (America/New_York)"*, request id
                      req_011CeaEYSTbRPJjV9bzwk8o9 — mid-sentence, having just said its own fix
@@ -796,12 +836,11 @@ Phase 4 is pre-read: so you do not have to re-read prompt_plan.md when Phase 3 c
                   in-flight step AND from the lane claims, so it is safe to open the moment
                   the Phase 3 close review passes.
 
-Blocked on:       Nothing needing a user decision. But NOTHING MERGES until P3.S6 reports,
-                  because the merge order runs S4 -> S5 -> S6 and each merge needs a full
-                  serial suite after it. Both fix branches are verified and waiting.
-                  If P3.S6 cannot be recovered before the 4am America/New_York reset, the
-                  correct move is to WAIT rather than merge around it — its worktree holds
-                  398 uncommitted lines whose provenance only that agent knows.
+Blocked on:       Nothing. All three branches are ready and NO AGENTS ARE RUNNING.
+                  The box is quiet, so the owed FULL SUITES run now, SERIALLY, in the declared
+                  merge order: P3.S4-fix-1 (6e7308938) -> merge -> suite -> P3.S5-fix-1
+                  (6acba5f9e) -> merge -> suite -> P3.S6 (1461e1685) -> merge.
+                  Master's figure to beat: 10500 / 161982 / 1 from the CHECKOUT ROOT.
 
                   **PROCESS RULE THIS EPISODE EARNED, put it in every brief that spawns a
                   sub-agent: a step agent must NEVER leave a sub-agent's work uncommitted.**
