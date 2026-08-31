@@ -416,6 +416,24 @@ final readonly class Agent
      * recorded here rather than in a plan document because this is the API the
      * question is about and this is where the next reader lands.
      *
+     * READ THE LINE NUMBERS BELOW AS DIRECTIONS, NOT AS FACTS UNDER TEST. This
+     * block carries SEVENTEEN distinct `<file>.php:<line>` citations in
+     * nineteen occurrences - re-derive that with
+     * `/usr/bin/grep -oP '[A-Za-z/]+[.]php:[0-9]+(-[0-9]+)?' src/Agents/Agent.php | sort -u | wc -l`
+     * - and NOT ONE of them is pinned by anything, which is the same argument
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::AGENT_ASSEMBLER_CALL_SITES}
+     * makes for keying its roster on the FILE and not on `file:line`. They are
+     * given anyway because the argument needs the reader to be able to find the
+     * code, and prose that says "somewhere in WorkflowEngine" is not evidence.
+     * They will rot: `Runtime.php`'s own citation of this file's
+     * `EnvironmentBlock::capture(` call was correct at the base of this branch
+     * and stale by its tip, one commit later, without anything going red. So
+     * when a number here misses, re-derive it - the claims that are actually
+     * under test are the fixture-INDEPENDENT ones, and every one of them is a
+     * named test rather than a line number: the subprocess counts, the
+     * distinct-prompt count, the roster BY FILE, and
+     * `AgentResult::__construct`'s parameter list.
+     *
      * P3.S5 wired {@see EnvironmentBlock::withWriteSinceLastRender()} into
      * {@see \SugarCraft\Crush\Runtime}'s assembler, which suppresses the two git
      * diff sections on a step that wrote nothing. It reached ONE of
@@ -465,28 +483,65 @@ final readonly class Agent
      * different fixture. The subprocess counts and the distinct-prompt count
      * are the fixture-independent half, and they are the half that matters.
      *
+     * AND THE CALLER IS DRIVEN, NOT ONLY THE SHAPE. That test hand-rolls the
+     * per-stage loop, so it pins the assembler and never reaches
+     * `WorkflowEngine`; a review proved the gap by applying the hoisted-shared-
+     * block wiring described under reason 2 below and watching the whole file
+     * stay green. {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()}
+     * closes it: it registers a K-stage pipeline on a real {@see \SugarCraft\Crush\Workflows\WorkflowEngine}
+     * with a mock {@see ExecutorInterface} - in-process, nothing spawned, the
+     * parent-side render at `:1152` untouched - and asserts `5 * K` git
+     * subprocesses at K = 2 and K = 4. MEASURED under that same hoisted-shared-
+     * block mutation: 6 against an expected 10, red.
+     *
      * WHY THE DISPOSITION STILL STANDS. The seam is real and it is still not
-     * wireable here, for two independent reasons, and the second is decisive:
+     * wireable here, and reason 1 - declared scope - is the one the
+     * disposition rests on. Reason 2 is a narrower fact than an earlier
+     * revision of this paragraph claimed, and the correction is recorded in
+     * place (prompt_plan.md section 16.8 rule 42) rather than overwritten,
+     * because "decisive" was the word a future reader would have cited.
      *
      *   1. All five repeated-render sites are in
      *      `Workflows/WorkflowEngine.php`, which is not one of P3.S6's four
-     *      declared files.
-     *   2. THE PARENT HAS NO CHANNEL TO DERIVE THE SIGNAL.
-     *      {@see \SugarCraft\Crush\Runtime::markWriteSinceLastRender()}
-     *      derives it from the step's assistant tool calls; a workflow stage's
-     *      answer comes back as an {@see AgentResult}, whose constructor
-     *      (`src/Agents/AgentResult.php:15-23`) is exactly `agentId`, `status`,
-     *      `output`, `error`, `tokensUsed`, `costUsd`, `startedAt`,
+     *      declared files. This is the whole of the disposition.
+     *   2. THE SIGNAL CANNOT BE DERIVED FROM WHAT A STAGE DID - only from what
+     *      its worker is structurally incapable of doing.
+     *
+     *      WHAT THIS USED TO SAY: that "'Did this stage write?' is
+     *      UNANSWERABLE on this path today", and that this was decisive.
+     *
+     *      WHAT IS TRUE NOW: it is answerable, and the answer is a derivable
+     *      CONSTANT. A workflow stage's worker cannot execute a tool at all.
+     *      `ProcessExecutor`'s live worker script builds its request with
+     *      `tools: null` - "Deliberately null: the parent sends tool NAMES,
+     *      not tools", `ProcessExecutor.php:983-985` - and its body
+     *      (`ProcessExecutor.php:1003-1034`) is a single
+     *      `completeStream()`/`complete()` with NO tool-execution loop after
+     *      it. So for stages 2..N of one run the answer is a constant `false`,
+     *      not an unknown, and a review demonstrated exactly that: one hoisted
+     *      `EnvironmentBlock::capture(...)->withWriteSinceLastRender(false)`
+     *      above `WorkflowEngine.php:1105`, passed into the render at `:1152`,
+     *      green.
+     *
+     *      WHY THE DISPOSITION SURVIVES IT ANYWAY: that hoisted line is an
+     *      edit to `WorkflowEngine.php`, which reason 1 already puts outside
+     *      this step. And it would derive the signal from the WORKER'S
+     *      STRUCTURE rather than from what the stage actually DID - correct
+     *      only for as long as the worker has no tool loop, and silently wrong
+     *      the day it gains one. Deriving it from what the stage did is what
+     *      the `AgentResult`/IPC-frame gap blocks: a stage's answer comes back
+     *      as an {@see AgentResult}, whose constructor
+     *      (`src/Agents/AgentResult.php:15-23`) is exactly `agentId`,
+     *      `status`, `output`, `error`, `tokensUsed`, `costUsd`, `startedAt`,
      *      `completedAt` - NO TOOL CALLS - and the worker's own `complete`
      *      frame (`ProcessExecutor.php:1037-1042`) carries `output`,
-     *      `tokensUsed` and `costUsd` and nothing else. "Did this stage
-     *      write?" is unanswerable on this path today. Wiring it is a
+     *      `tokensUsed` and `costUsd` and nothing else. Wiring THAT is a
      *      BUILD-IT-OUT across `WorkflowEngine` + `AgentResult` + the worker
-     *      IPC frame, not a one-line mark. That absence is pinned as a
-     *      decision by the same test, which asserts
-     *      `AgentResult::__construct`'s parameter list exactly, so the day a
-     *      tool-call field appears it reds and says this seam has become
-     *      wireable.
+     *      IPC frame, not a one-line mark. It is pinned as a decision by the
+     *      same test, which asserts `AgentResult::__construct`'s parameter
+     *      list exactly, so the day a tool-call field appears it reds and says
+     *      this seam has become wireable from evidence rather than from
+     *      structure.
      *
      * So this is escalated to the orchestrator as a declared-scope event - not
      * silently widened, and not silently dropped.
@@ -500,12 +555,23 @@ final readonly class Agent
      *   - LIVE: the five in `WorkflowEngine` named above, and
      *     {@see ProcessExecutor::spawnWorker()} at `ProcessExecutor.php:473`,
      *     which those five reach through `AgentWorkerPool::executeOne()`.
-     *   - DORMANT: {@see AgentManager::executeSubAgent()} at
-     *     `AgentManager.php:433` - `/usr/bin/grep -rn -- '->executeSubAgent('
-     *     src/ bin/` finds nothing, as `Renderer.php:164-166` and
-     *     `AgentDefinition.php:137` already record - and `App::dispatchSkill()`
-     *     at `App/App.php:569`, whose own comment at `App.php:533` says
-     *     "Nothing calls dispatchSkill() in production yet".
+     *   - DORMANT, TWO OF THEM: {@see AgentManager::executeSubAgent()} at
+     *     `AgentManager.php:433`, which `Renderer.php:164-166` and
+     *     `AgentDefinition.php:137` already record as callerless; and
+     *     `App::dispatchSkill()` at `App/App.php:569`, whose own comment at
+     *     `App.php:533` says "Nothing calls dispatchSkill() in production
+     *     yet".
+     *
+     *     RE-DERIVE THE FIRST WITH THE EXCLUSION, WHICH IS LOAD-BEARING:
+     *     `/usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/
+     *     bin/` prints nothing and exits 1. Without `--exclude=Agent.php` it
+     *     finds exactly ONE hit and exits 0 - THIS DOC-BLOCK'S OWN LINE, the
+     *     one you are reading, which contains the string it searches for.
+     *     That is not a quibble: an earlier revision wrote the command without
+     *     the exclusion and asserted that it "finds nothing", so the command
+     *     as printed falsified its own stated result the moment anybody ran
+     *     it. The exclusion is named here rather than quietly dropped so that
+     *     what is written is what reproduces.
      *
      * (A review of this step wrote "five reachable, three dormant". That sums
      * to eight but splits it wrongly: `ProcessExecutor.php:473` is reached from

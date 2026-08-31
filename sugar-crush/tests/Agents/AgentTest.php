@@ -11,6 +11,9 @@ use SugarCraft\Crush\Agents\AgentDefinition;
 use SugarCraft\Crush\Agents\AgentManager;
 use SugarCraft\Crush\Agents\AgentPreset;
 use SugarCraft\Crush\Agents\AgentResult;
+use SugarCraft\Crush\Agents\AgentStatus;
+use SugarCraft\Crush\Agents\AgentWorkerPool;
+use SugarCraft\Crush\Agents\ExecutorInterface;
 use SugarCraft\Crush\Agents\ProcessExecutor;
 use SugarCraft\Crush\Agents\SubAgent;
 use SugarCraft\Crush\Context\EnvironmentBlock;
@@ -20,6 +23,10 @@ use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Workflows\Tasks;
+use SugarCraft\Crush\Workflows\WorkflowBuilder;
+use SugarCraft\Crush\Workflows\WorkflowEngine;
+use SugarCraft\Crush\Workflows\WorkflowRegistry;
 
 /**
  * Tests for Agent value object - represents a configured agent instance.
@@ -1433,15 +1440,30 @@ final class AgentTest extends TestCase
      * THE CONTROL IS NOT DECORATION. Every interesting thing this test says is
      * a statement about a count, and a scanner that has stopped matching
      * anything reports a count too - `[]` is what a dead instrument returns.
-     * The fixture below carries THREE live calls and SIX near-misses that a
+     * The fixture below carries THREE live calls and SEVEN near-misses that a
      * naive textual scan would take: the same call spelled inside a line
      * comment, inside a doc comment and inside a single-quoted string, the
      * method's own declaration, `buildSystemPrompt()` (the OTHER assembler,
-     * whose name ends in the one this matches), and the bare word in array-key
-     * position. The counts in this sentence used to say "one live call and six
-     * near-misses" while the fixture held one and FIVE - the declaration the
-     * scanner's own doc-block claimed to exclude was never in it, so that
-     * exclusion had no coverage at all. It does now.
+     * whose name ends in the one this matches), the bare word in array-key
+     * position, and a bare PROPERTY READ of the same name with no `(` after
+     * it (`$req->systemPrompt`). The counts in this sentence used to say "one
+     * live call and six near-misses" while the fixture held one and FIVE - the
+     * declaration the scanner's own doc-block claimed to exclude was never in
+     * it, so that exclusion had no coverage at all. It does now.
+     *
+     * THE PROPERTY READ IS THE ONE NEAR-MISS THAT ACTUALLY OCCURS IN `src/`,
+     * and it was the last one added, because the control passed without it
+     * while the instrument was broken. `CompleteRequest::$systemPrompt` is a
+     * public property and the providers read it constantly: MEASURED by this
+     * same tokeniser over `src/`, `$x->systemPrompt` with no `(` appears
+     * TWENTY-TWO times across EIGHT files (all six `Providers/*`, plus
+     * `AgentWorkerPool.php` and `ProcessExecutor.php`). So the paren guard in
+     * {@see agentAssemblerCallSites()} is load-bearing, and MEASURED: deleting
+     * it left this control GREEN and reddened only the census below, which
+     * went from 8 sites in 4 files to 30 in 11. A control that survives the
+     * removal of the guard it exists to protect is not a control; this fixture
+     * line is what makes that mutation red HERE, on the line whose own message
+     * says every count below it is worthless until it passes.
      *
      * THE THREE LIVE CALLS ARE THREE SPELLINGS, not three copies. `->`,
      * nullsafe `?->`, and a name separated from its `(` by a space are all
@@ -1462,6 +1484,7 @@ final class AgentTest extends TestCase
             . "/** \$b->systemPrompt() spelled in a doc comment */\n"
             . "\$s = '\$c->systemPrompt()';\n"
             . "\$live = \$agent->systemPrompt();\n"
+            . "\$f = \$req->systemPrompt;\n"
             . "\$other = \$agent->buildSystemPrompt();\n"
             . "\$key = ['systemPrompt' => 1];\n"
             . "function systemPrompt() {}\n"
@@ -1469,11 +1492,11 @@ final class AgentTest extends TestCase
             . "\$e->systemPrompt ();\n";
 
         $this->assertSame(
-            [5, 9, 10],
+            [5, 10, 11],
             self::agentAssemblerCallSites($fixture),
             'the call-site scanner no longer sees all three spellings of a live ->systemPrompt() call '
-                . '(plain, nullsafe, spaced), or it sees one of the six near-misses beside them - every '
-                . 'count below is worthless until this line passes',
+                . '(plain, nullsafe, spaced), or it sees one of the seven near-misses beside them - '
+                . 'every count below is worthless until this line passes',
         );
 
         $src = \dirname(__DIR__, 2) . '/src';
@@ -1857,9 +1880,14 @@ final class AgentTest extends TestCase
                 $this->assertSame(
                     5 * $stages,
                     $subprocesses,
-                    "a {$stages}-stage pipeline no longer costs five git subprocesses per stage. If it "
-                        . 'costs fewer, either render() became memoised or a caller started sharing one '
-                        . 'EnvironmentBlock across stages - both change the P3.S6 disposition.',
+                    "the {$stages}-stage pipeline SHAPE no longer costs five git subprocesses per "
+                        . 'render. This test hand-rolls the loop, so what it can detect is a change in '
+                        . 'the ASSEMBLER - render() becoming memoised, or the per-render git bill '
+                        . 'moving off five - and NOT a caller that started sharing one EnvironmentBlock '
+                        . 'across stages, which never reaches this code at all. The caller-level '
+                        . 'property is pinned by '
+                        . 'testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage(), which '
+                        . 'drives WorkflowEngine itself.',
                 );
 
                 $this->assertCount(
@@ -1868,15 +1896,42 @@ final class AgentTest extends TestCase
                     'the loop did not render once per stage, so the counts above describe something else',
                 );
 
+                // NORMALISED ON ONE LINE, AND ONLY ONE. `EnvironmentBlock::render()`
+                // emits `Current date: Y-m-d`, so a run that straddles midnight
+                // renders stage 0 on one date and stage 1 on the next and this
+                // uniqueness assertion reds on the clock rather than on the
+                // mechanism - a real flake, not a hypothetical: the date rolled
+                // over during a review session of this very test. Blanking that
+                // ONE line would blind the assertion to the line going missing
+                // altogether, so the exact `Current date: ` line is asserted
+                // present-and-once per stage in the loop below, and only its
+                // VALUE is normalised away here.
+                $dateInsensitive = array_map(
+                    static fn (string $render): string => (string) preg_replace(
+                        '/^Current date: .*$/m',
+                        'Current date: <normalised>',
+                        $render,
+                    ),
+                    $renders,
+                );
+
                 $this->assertSame(
                     1,
-                    \count(array_unique($renders)),
-                    "the {$stages} stages no longer see one byte-identical prompt. That is the whole "
-                        . 'reason the repeated render is waste rather than information: nothing between '
-                        . 'stages changed, and the block was re-shelled-out and re-sent anyway.',
+                    \count(array_unique($dateInsensitive)),
+                    "the {$stages} stages no longer see one prompt that is byte-identical everywhere "
+                        . 'except the calendar date. That is the whole reason the repeated render is '
+                        . 'waste rather than information: nothing between stages changed, and the '
+                        . 'block was re-shelled-out and re-sent anyway.',
                 );
 
                 foreach ($renders as $index => $render) {
+                    $this->assertSame(
+                        1,
+                        preg_match_all('/^Current date: \\d{4}-\\d{2}-\\d{2}$/m', $render),
+                        "stage {$index} did not emit exactly one `Current date: Y-m-d` line. The "
+                            . 'uniqueness assertion above normalises that line away, so this is the '
+                            . 'assertion that stops the normalisation from hiding the line vanishing.',
+                    );
                     $this->assertSame(
                         1,
                         substr_count($render, $staged),
@@ -1949,6 +2004,174 @@ final class AgentTest extends TestCase
                 . 'assembler path because no signal reaches the parent - must be revisited rather '
                 . 'than left standing.',
         );
+    }
+
+    /**
+     * THE CALLER-LEVEL PROPERTY, DRIVEN THROUGH A REAL {@see WorkflowEngine}:
+     * a K-stage pipeline calls the agent assembler K times, once per stage, and
+     * pays the full five-subprocess git bill on every one of them.
+     *
+     * WHY THIS EXISTS BESIDE
+     * {@see testTheWorkflowShapedPipelineReRendersTheSameEnvironmentBlockOncePerStageAndNothingCanTellItNotTo()}
+     * RATHER THAN INSTEAD OF IT. That test hand-rolls the loop - it constructs
+     * a fresh `Agent` per iteration and calls `systemPrompt()` itself - so what
+     * it pins is a property of the ASSEMBLER in isolation, which is real and
+     * stays. What it cannot see is the CALLER, and the caller is the whole
+     * subject of the P3.S6 disposition. MEASURED, and this is why this test was
+     * written: a review applied to `WorkflowEngine.php` exactly the wiring
+     * P3.S6 declines - hoisting
+     * `EnvironmentBlock::capture((string) getcwd(), $this->model)->withWriteSinceLastRender(false)`
+     * above the `foreach` at `WorkflowEngine.php:1105` and passing it into the
+     * render at `:1152` - and `--filter AgentTest` stayed OK at 61 tests and
+     * 351 assertions. The disposition this step exists to record was pinned by
+     * nothing, because nothing in this file reached `WorkflowEngine`.
+     *
+     * WHAT MAKES IT A MEASUREMENT AND NOT A RESTATEMENT. K is varied (2 and 4)
+     * and the answer must track it at `5 * K`. A single K cannot tell "renders
+     * once per stage" from "renders once and re-sends": both are one number.
+     *
+     * WHY THE EXECUTOR IS A MOCK AND THE COUNT IS STILL REAL. The render this
+     * counts happens in the PARENT, at `WorkflowEngine.php:1152`, before the
+     * `SubAgent` is handed to {@see AgentWorkerPool::executeOne()}. Injecting a
+     * mock {@see ExecutorInterface} keeps the whole run in-process - no
+     * `proc_open()`, no fork, no provider - while leaving that parent-side call
+     * exactly where it is. So the five-per-stage bill is the real one and the
+     * child's own second render ({@see ProcessExecutor::spawnWorker()}) is
+     * deliberately out of the frame: this test is about the LOOP, not about the
+     * double render, which {@see testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()}
+     * already pins.
+     *
+     * THE PROCESS DIRECTORY IS MOVED INSIDE THE COMMITTED FIXTURE REPOSITORY,
+     * because `WorkflowEngine` builds its per-stage `Agent` with `environment`
+     * left null and `Agent::systemPrompt()` then falls through to
+     * `EnvironmentBlock::capture((string) getcwd(), ...)`. Outside a repository
+     * the git section collapses and the bill is not five. `chdir()` is
+     * process-global, so the restore is in a `finally` for the same reason
+     * {@see inPackageRoot()} has one.
+     */
+    public function testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        $originalCwd = (string) getcwd();
+        $staged = 'Staged changes (git diff --cached, index vs HEAD):';
+
+        try {
+            $this->assertTrue(chdir($repo), "could not enter the fixture repository {$repo}");
+
+            foreach ([2, 4] as $stages) {
+                $name = "p3s6-engine-pipeline-{$stages}";
+
+                /** @var list<string> $systemPrompts */
+                $systemPrompts = [];
+
+                $executor = $this->getMockBuilder(ExecutorInterface::class)
+                    ->onlyMethods(['execute', 'executeStream', 'cancel', 'cancelAll'])
+                    ->getMock();
+                $executor
+                    ->method('execute')
+                    ->willReturnCallback(
+                        static function (SubAgent $agent, CompleteRequest $request) use (&$systemPrompts): AgentResult {
+                            $systemPrompts[] = (string) $request->systemPrompt;
+
+                            return new AgentResult(
+                                agentId: $agent->id,
+                                status: AgentStatus::Completed,
+                                output: 'stage-output-' . \count($systemPrompts),
+                                startedAt: new DateTimeImmutable(),
+                                completedAt: new DateTimeImmutable(),
+                            );
+                        },
+                    );
+
+                $tasks = [];
+                for ($stage = 0; $stage < $stages; $stage++) {
+                    $tasks[] = Tasks::agent("p3s6-step-{$stage}")->prompt("step {$stage}");
+                }
+
+                $registry = new WorkflowRegistry();
+                $registry->register(
+                    (new WorkflowBuilder())
+                        ->name($name)
+                        ->description('P3.S6: a real WorkflowEngine nested pipeline')
+                        ->pipeline('process', $tasks)
+                        ->build(),
+                );
+
+                $engine = new WorkflowEngine($registry, new AgentWorkerPool(5, $executor));
+
+                $subprocesses = self::gitSubprocessesDuring(
+                    static function () use ($engine, $name): void {
+                        $result = $engine->run($name, []);
+
+                        self::assertTrue(
+                            $result->isSuccess(),
+                            "the workflow {$name} did not complete, so the subprocess count below is "
+                                . 'a count of a run that did not happen',
+                        );
+                    },
+                );
+
+                $this->assertCount(
+                    $stages,
+                    $systemPrompts,
+                    "the {$stages}-stage pipeline handed the executor {$stages} requests worth of "
+                        . 'system prompt - if it did not, the loop under measurement is not the one '
+                        . 'this test names',
+                );
+
+                $this->assertSame(
+                    5 * $stages,
+                    $subprocesses,
+                    "a REAL WorkflowEngine pipeline of {$stages} stages no longer costs five git "
+                        . 'subprocesses per stage. If it costs fewer, the per-stage render is gone: a '
+                        . 'caller began sharing one EnvironmentBlock across stages (or stopped '
+                        . 'rendering per stage at all), which is EXACTLY the wiring P3.S6 declined and '
+                        . 'recorded as an escalation. That is the P3.S6 disposition changing, and it '
+                        . 'must be re-dispositioned - the write signal now has a per-stage seam a '
+                        . 'caller is using - rather than silenced by moving this number.',
+                );
+
+                // Byte-identity, normalised on the calendar date ONLY, for the
+                // same reason the sibling test normalises it: a run that
+                // straddles midnight renders two dates and would red on the
+                // clock. The `Current date:` line is asserted present-and-once
+                // per stage below so the normalisation cannot hide it vanishing.
+                $dateInsensitive = array_map(
+                    static fn (string $prompt): string => (string) preg_replace(
+                        '/^Current date: .*$/m',
+                        'Current date: <normalised>',
+                        $prompt,
+                    ),
+                    $systemPrompts,
+                );
+
+                $this->assertSame(
+                    1,
+                    \count(array_unique($dateInsensitive)),
+                    "the {$stages} engine-driven stages no longer see one prompt that is identical "
+                        . 'everywhere except the calendar date - nothing between stages changed the '
+                        . 'environment, so a second distinct prompt means the block stopped being '
+                        . 're-derived from the same unchanged tree',
+                );
+
+                foreach ($systemPrompts as $index => $prompt) {
+                    $this->assertSame(
+                        1,
+                        preg_match_all('/^Current date: \d{4}-\d{2}-\d{2}$/m', $prompt),
+                        "engine stage {$index} did not emit exactly one `Current date: Y-m-d` line",
+                    );
+                    $this->assertSame(
+                        1,
+                        substr_count($prompt, $staged),
+                        "engine stage {$index} did not emit the staged-diff section exactly once - "
+                            . 'the write signal is suppressed on this path, which is the wiring P3.S6 '
+                            . 'declined',
+                    );
+                }
+            }
+        } finally {
+            chdir($originalCwd);
+        }
     }
 
     /**
