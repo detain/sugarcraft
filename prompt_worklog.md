@@ -253,6 +253,34 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### BATCH P3.CLOSE.B1 RE-OPEN · 2026-08-31 (fix cycle) — two fix agents spawned
+Steps: `P3.S5-fix-1` (red-fix + cycle 4), `P3.S4-fix-1` (cycle-3 findings + cycle 4)
+Merge order: `P3.S4-fix-1` first, then `P3.S5-fix-1` — UNCHANGED from the original declaration.
+  `P3.S4-fix-1` changes no production code (verified again this session: `git diff --stat
+  1267e6fbb..prompt/P3.S4-fix-1` is one file, `tests/Providers/PromptStabilityTest.php`), so it is
+  the safer of the two to land first, and a full suite runs BETWEEN the two merges.
+Worktrees: /home/sites/prompt-step-P3.S4-fix-1 · /home/sites/prompt-step-P3.S5-fix-1 (both KEPT, both
+  pre-existing, both with a verified `cp -al` vendor/)
+Base: both branched from master `1267e6fbb`. Master is now `24cca965e`; every commit between the two
+  touches ONLY `prompt_plan.md` / `prompt_resume.md` / `prompt_worklog.md` — VERIFIED with
+  `git diff --stat 1267e6fbb..HEAD`. So the two branches' file sets are disjoint from master's drift
+  AND from each other, and no sync agent was needed. Recorded rather than assumed.
+Declared file lists, disjoint: `P3.S4-fix-1` = `tests/Providers/PromptStabilityTest.php` only.
+  `P3.S5-fix-1` = `src/Runtime.php`, `tests/RuntimeTest.php`, `tests/Integration/SystemPromptWiringTest.php`.
+
+**A BOOKKEEPING LOSS, RECORDED RATHER THAN PAPERED OVER.** `P3.S4-fix-1`'s cycle-3 reviewer returned
+TEN findings. Only two of them (F-2 `log.abbrevCommit`, F-4 control-B masking) were written into the
+worklog; the other eight lived only in the previous session's context and are GONE. I searched every
+prior session scratchpad under `/tmp/claude-1000/-home-sites-sugarcraft/*/scratchpad` and both
+worktrees' ignored files — `--ignored` shows only `.phpunit.cache/` in each — and the report is not on
+disk. The fix agent was told the two that survive, told NOT to fabricate the missing eight, and told
+why that is acceptable: `prompt_plan.md` §1.4 never hands a new reviewer the previous reviewer's
+findings anyway, so anything material among the eight is re-found by cycle 4 or it was never material.
+**The process lesson is the orchestrator's, not the agent's: a review's findings must be written to a
+file at the moment they are received, not summarised into the worklog.** Adopting that from here.
+
+---
+
 ### P3.S5-fix-1 — the rename, and five cycle-6 findings   ·   2026-08-31   ·   NOT MERGED, branch HEAD `5a0ff8e12`
 
 **Status** `paused (user stop)` — **not at a cap.** Three of five review cycles used. **HEAD `5a0ff8e12`
