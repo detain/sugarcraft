@@ -253,6 +253,1446 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 — the alias channel that failed OPEN by SUBTRACTING write primitives   ·   2026-08-31   ·   `5cabca4a8`
+
+**Status** `MERGED`
+**Worktree** /home/sites/prompt-step-P3.S5-fix-1  (removed after merge)
+**Base** 1267e6fbb
+
+**Goal (restated in one sentence)**
+P3.S5's write-primitive scanner had been defeated eleven times on a fully green suite; the alias
+channel had to stop DELETING primitives from its own alphabet.
+
+**What changed**
+- `sugar-crush/src/Runtime.php`: **comment only** — verified executable-identical, 4366 tokens both
+  sides, md5 `36ecb93cf7957cb77c9448aa6e16966e`. Fifth independent derivation.
+- `sugar-crush/tests/RuntimeTest.php`: three repairs, not the one prescribed — the alias map is read
+  off the **token stream** (a comment and a string literal are each ONE token, so neither can hold a
+  `T_USE`: the falsified doc-block claim is now true BY CONSTRUCTION); resolution is **additive**,
+  not substitutive; a qualified token is not alias-resolved. +16 test methods, 0 removed.
+- `sugar-crush/tests/Integration/SystemPromptWiringTest.php`: one method reshaped.
+
+**Tests added or changed**
+- 16 new methods in `RuntimeTest.php`, covering the seventh defeat (a plain class alias
+  `use SplFileObject as Handle;`), the binary-string prefix `b'…'`, and the additive-resolution
+  property.
+**Deletion experiment**: 13 mutants, 10 red. The three GREEN ones were recorded **in the source** as
+measured-equivalent rather than left looking load-bearing. The fail-closed property is proved by a
+MUTANT's output, not the fix's: M1 removes `T_ATTRIBUTE` but keeps the flag and the three attribute
+rows are STILL reported — the mutant's only error is an extra FALSE POSITIVE.
+
+**MEASURED** (orchestrator-run; cwd `/home/sites/prompt-step-P3.S5-fix-1`; serial; box confirmed to
+hold zero other phpunit processes; `</dev/null`)
+```
+$ php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never
+Tests: 10516, Assertions: 162057, Skipped: 1.        (06:52.326)
+$ … RE-RUN, second time                              (06:54.626)
+Tests: 10516, Assertions: 162057, Skipped: 1.        IDENTICAL
+```
+**The figure is DETERMINISTIC.** Two sequential uncontended runs agree exactly, which is what
+`prompt_plan.md` predicted and what the standing contention caveat (162,075 vs 162,057, 18 apart,
+recorded during two CONCURRENT full suites) does not apply to.
+
+**Suite result**
+```
+Tests: 10516, Assertions: 162057, Skipped: 1.
+```
+Baseline for comparison: base `1267e6fbb` = `10500 / 161982 / 1` (verified: `git diff 1267e6fbb
+c7e5a6454 -- sugar-crush/` is EMPTY, so the recorded master figure IS the base figure).
+Delta: **+16 tests, +75 assertions, no new skip.**
+
+**THE RECONCILIATION, and the tool that produced it.** The declared files accounted for only +52 of
+the +75. Rather than merge on a +23 remainder, the delta was attributed **per class** by running the
+suite with `--log-junit` on both sides — PHPUnit's JUnit `<testcase>` carries an `assertions`
+attribute — and diffing:
+```
+class                                            master   branch   delta  dTests
+Providers\PromptStabilityTest                       399      229    -170      -3   } S4's, absent
+RuntimeTest                                         398      450     +52     +16   } from this branch
+Config\GlobFigureDriftTest                        21143    21166     +23      +0
+SymbolCitationDriftTest                            2984     2972     -12      +0   }
+Support\ChildStderrCaptureTest                      345      343      -2      +0   }
+                                                                     -109     +13
+```
+`162057 - 162166 = -109` and `10516 - 10503 = +13` — both EXACT, no remainder.
+**The +23 was then attributed by DELETION EXPERIMENT, not by reasoning:** reverting
+`src/Runtime.php` ALONE drops `GlobFigureDriftTest` from 21166 to exactly **21143**. Reverting
+`RuntimeTest.php` alone changes it by **zero**; reverting `SystemPromptWiringTest.php` alone,
+**zero**. It is a per-paragraph figure-drift census picking up the new doc-block prose — 23 more
+figures are now POLICED, the healthy direction.
+**The script is kept and is reusable for every remaining step.**
+
+**Review loop**
+- Cycles 1-4 disposed of at `842cc59b3` / `ab9a7dcdc`.
+- Cycle 5 — findings F1/F2/F3/F5 fixed; F4 half fixed, half **REFUSED WITH A MEASUREMENT** (adopting
+  the shared trait yields `Failures: 1 + Warnings: 1` — the trait lacks an `is_file`/`is_readable`
+  pre-check and refuses with `AssertionFailedError` where an existing test pins `\RuntimeException`;
+  the repair belongs to the TRAIT, outside scope).
+- Three of one reviewer's five prescriptions were **MEASURED FALSE** and refused.
+- **CAP REACHED**; orchestrator verification substituted for a sixth review, with the accepted risk
+  recorded rather than implied.
+Total cycles: 5 reviews + 1 orchestrator-verified fix pass.
+
+**Invariants touched**
+No file added under `sugar-crush/src/`; census figures unmoved. Goldens unmoved. `src/Runtime.php` is
+comment-only, so §17's behavioural invariants are untouched by construction.
+
+**Surprises / things the plan got wrong**
+1. **The census set does not contain every tree-wide guard, and this is now the SECOND time that has
+   mattered in one batch.** `ChildStderrCaptureTest` (outside it) red P3.S4-fix-1; `GlobFigureDrift
+   Test` (also outside it) is what moved here. The §1.2 action 7b list is six files plus
+   `InterpolationOpenerTokenTest`; neither of these is in it. A step that runs only the census set
+   can still move, or break, a tree-wide guard.
+2. **A per-class JUnit diff makes reconciliation mechanical.** Twenty-five guards were measured
+   one at a time before this, and every one came back identical — the answer was a class nobody had
+   thought to check. This should be the FIRST tool reached for, not the last.
+3. **The contention caveat is narrower than recorded.** Assertion totals are deterministic across
+   sequential uncontended runs (proved twice here). The 18-assertion spread in the plan came from two
+   CONCURRENT full suites and should not be cited as general noise.
+
+**Follow-ups created**
+- Add `GlobFigureDriftTest` and `ChildStderrCaptureTest` to the §1.2 action 7b census set, or state
+  why the set is deliberately partial.
+- Escalation **N1** (`writesTree()` on `src/Tools/Tool.php:20`) is UNAFFECTED by this merge and
+  remains open, awaiting the user.
+
+---
+
+### P3.S4-fix-1 — the stability test made honest, and Providers/ adopted into the stderr guard   ·   2026-08-31   ·   `1279d91cf`
+
+**Status** `MERGED`
+**Worktree** /home/sites/prompt-step-P3.S4-fix-1  (removed after merge)
+**Base** 1267e6fbb
+
+**Goal (restated in one sentence)**
+P3.S4's `<env>`-vs-git-config stability test had to red for the RIGHT reason under every hostile
+config it claims to cover — instead of naming mechanisms that had not fired.
+
+**What changed**
+- `sugar-crush/tests/Providers/PromptStabilityTest.php`: control B given a second guard (git's exit
+  code AND its output), so a global `[diff] external` or `[core] excludesFile` can no longer drive it
+  red while git exits 0; the unchecked `shell_exec(… 'init -q 2>/dev/null')` at `:483` replaced with a
+  checked `self::git()`, because a partial `.git` still satisfied the `is_dir` guard;
+  `GIT_SAID_MAX_BYTES = 2048` + `gitSaid()` so every failure message quotes git's OWN output as
+  evidence; four claims narrowed to their evidence.
+- `sugar-crush/tests/Support/ChildStderrCaptureTest.php`: `'Providers/'` moved from `OUT_OF_SCOPE`
+  into `SCOPE` and its deferral row deleted, in the same change-set; the `Tools/` row no longer
+  cites `Providers/` as a fellow-deferred.
+- **NO production code.** `git diff 1267e6fbb..HEAD -- sugar-crush/src/` is EMPTY.
+
+**Tests added or changed**
+- `PromptStabilityTest` 13 → 16 methods, base a strict subset. New probe at `:1962` catches a
+  `GIT_CONFIG_COUNT` colour override that the old code blamed on "the scanner is dead".
+- `ChildStderrCaptureTest::testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn` — unchanged code,
+  now satisfied by a roster that matches reality.
+**Deletion experiment**: the fix agent reverted `ChildStderrCaptureTest.php` to the pre-fix version
+and re-ran: red again at `:1059`, identical message, `Tests: 6, Assertions: 322, Failures: 1`;
+restored (md5 `e0628a94adb588c5eb820ba5808640a5` before and after) and green at 6/345.
+Independently, the ORCHESTRATOR ran a positive-controlled probe: injecting a discarding spawn under
+`Providers/` (control printed `injected=YES`) makes the guard red and NAME it —
+`'Providers/TransientFailureTest.php:34 (exec -> discarded)'`. SCOPE membership is load-bearing.
+
+**MEASURED** (orchestrator-run; cwd `/home/sites/prompt-step-P3.S4-fix-1`; serial; box confirmed to
+hold exactly one phpunit for the whole run; `</dev/null`)
+```
+$ php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never
+Tests: 10503, Assertions: 162166, Skipped: 1.          (06:50.415)
+
+$ --filter ChildStderrCaptureTest          OK (6 tests, 345 assertions)
+$ --filter PromptStabilityTest             OK (16 tests, 399 assertions)
+$ --filter ForkedChildReaperAdoptionTest   OK (6 tests, 30 assertions)   sibling, unaffected
+
+$ git diff --name-only 1267e6fbb..HEAD
+sugar-crush/tests/Providers/PromptStabilityTest.php
+sugar-crush/tests/Support/ChildStderrCaptureTest.php
+$ git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/     (empty)
+$ md5sum goldens   32ea749d84938811ac9331419cae7380 / ef0326dd38535aaa2f1d715919bff26e   UNMOVED
+
+hostile [diff] external = /bin/true          16 tests, Failures: 3, honest message, git quoted
+hostile [core] excludesFile -> Alpha.php     16 tests, Failures: 3, honest message, git quote empty
+```
+
+**Suite result**
+```
+$ cd /home/sites/prompt-step-P3.S4-fix-1 && php sugar-crush/vendor/bin/phpunit …
+Tests: 10503, Assertions: 162166, Skipped: 1.
+```
+Baseline for comparison: master `c7e5a6454` = `Tests: 10500, Assertions: 161982, Skipped: 1`.
+Delta: **+3 tests, +184 assertions, no new skip** — and the +184 reconciles EXACTLY with no
+remainder: `PromptStabilityTest` 229→399 (+170), `ChildStderrCaptureTest` 343→345 (+2),
+`SymbolCitationDriftTest` 2972→2984 (+12, doc-block prose, the movement `prompt_plan.md:3316`
+documents). Every assertion is accounted for by name.
+
+**Review loop**
+- Cycles 1-4 — findings disposed of at `707c30685` and `6e7308938`.
+- Cycle 5 — six findings; F-A left the step's own defect half-closed (control C got two guards,
+  control B only one).
+- **CAP REACHED.** §1.2 caps at five review cycles. One final fix pass went in with NO sixth
+  reviewer; the orchestrator substituted its own verification and reproduced both hostile runs
+  personally. Recorded as a deliberate decision with the accepted risk stated: that pass is
+  unreviewed by anyone but the orchestrator.
+- **Cycle 6-equivalent, forced by the full suite**: RED at `ChildStderrCaptureTest:1059`. A fix agent
+  closed it at `4ac10894b` with the declared list deliberately WIDENED to two files.
+Total cycles: 5 reviews + 2 orchestrator-verified fix passes.
+
+**Invariants touched**
+No file added under `sugar-crush/src/`, so §17.1's census figures are unmoved. Goldens unmoved.
+§17.2's two-assembler split untouched.
+
+**Surprises / things the plan got wrong**
+1. **`prompt_plan.md` §1.4 check 19 has a hole, and this step fell in it.** Five review cycles and
+   all of the orchestrator's own verification performed check 19 HONESTLY and could not have found
+   this. Check 19 asks for the roster of categories a diff **ADDS**. This diff added nothing — it
+   **REMOVED the last instance** of something a roster defers on, and no roster in check 19's list
+   enumerates absences. **Check 19 needs a second half: a diff that removes the last instance of
+   something a roster defers on must update that roster in the same change-set.**
+2. **The guard fired because the change was GOOD.** `testEveryOutOfScopeDirectoryStillHasAnOffending
+   Spawn` asserts every deferred prefix STILL has an offender. The `:483` repair removed the last one
+   under `Providers/`. A deferral that has been overtaken is how a directory silently stops being
+   guarded — the guard is well built, and it names the required edit and the same-change-set
+   constraint in its own failure message.
+3. **A step-scoped filter set is not a substitute for the full suite.** Every review cycle ran
+   `--filter <step files>` plus the seven-file census set. `ChildStderrCaptureTest` is in NEITHER.
+4. **The assertion count is the signal, not the green.** Master isolated is 343; the red branch was
+   322. The fix landed at 345 — *above* master. A figure materially BELOW would have been a guard
+   quietly un-guarding while still printing OK.
+
+**Follow-ups created**
+- The twelve remaining `OUT_OF_SCOPE` rows are untouched and still argued.
+- `Context/` and `Tools/` still carry the git-fixture cluster `Providers/` was originally deferred to
+  be settled with. That round is still outstanding, and the `Tools/` row now says so accurately.
+- Land check 19's second half in `prompt_plan.md` §1.4.
+
+---
+
+### P3.S4-fix-1 · FULL SUITE RED · 2026-08-31 — the first full suite of the batch caught a roster miss, which is what it is for
+
+**The first owed full suite was run, SERIALLY on a verified-quiet box, and it is RED.** This is the
+whole reason the plan runs a full suite per branch before merging, and it is the first time in this
+batch that discipline has paid out.
+
+```
+cwd /home/sites/prompt-step-P3.S4-fix-1, HEAD 6e7308938, stdin </dev/null, uncontended
+  (verified: ps showed exactly ONE vendor/bin/phpunit on the box for the whole run)
+Tests: 10503, Assertions: 162131, Failures: 1, Skipped: 1
+  tests/Support/ChildStderrCaptureTest.php:1059   Failed asserting that false is true.
+```
+Master's figure at `c7e5a6454` was `10500 / 161982 / 1`, GREEN.
+
+**IT IS THE BRANCH'S DOING — MEASURED, not assumed.** The failing file is nowhere near the step's one
+declared file, so the first question was whether it is pre-existing or a flake. It is neither:
+```
+ChildStderrCaptureTest.php isolated, BRANCH 6e7308938   Tests: 6, Assertions: 322, Failures: 1
+ChildStderrCaptureTest.php isolated, MASTER            OK (6 tests, 343 assertions)
+```
+Reproduces in isolation, green on master. **Not a flake, not contention, not pre-existing.**
+
+**AND THE GUARD FIRED BECAUSE THE CHANGE WAS GOOD — the polarity is inverted from what I first
+assumed.** `testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn` asserts that every prefix recorded
+in `OUT_OF_SCOPE` **still has an offender**. It fails when a deferral has been **overtaken**. Verbatim:
+
+> `Providers/` is recorded in OUT_OF_SCOPE as holding a spawn whose stderr reaches the suite, and it
+> no longer does. Move the prefix into SCOPE and delete this row, **in the SAME change-set** — a
+> deferral that has been overtaken is how a directory silently stops being guarded, and a prefix left
+> in both maps is refused by `testScopeAndOutOfScopeDoNotClaimTheSameDirectory()`. **WHAT MOVING IT
+> INTO SCOPE COMMITS YOU TO**, because it is more than the sites you just fixed: from then on EVERY
+> spawn added anywhere under that prefix must capture fd 2, and any deliberate discard needs its own
+> `ACCEPTED_DISCARDED_STDERR` row carrying a COUNT. That is the intended cost. And check the sibling
+> guard in the same pass — `ForkedChildReaperAdoptionTest` keeps its own SCOPE/OUT_OF_SCOPE pair over
+> the same directories for a different offence, and cleaning a directory for one of them does not move
+> it in the other.
+
+**The cause is cycle 4's F-C repair**: replacing the unchecked `shell_exec(… 'init -q 2>/dev/null')`
+at `tests/Providers/PromptStabilityTest.php:483` with a checked `self::git()` removed the **last**
+offending spawn under `Providers/`. A genuinely good fix, tripping a guard built to notice exactly
+that. **That is a well-designed guard and it is worth saying so**: it does not merely fail, it names
+the prefix, the required edit, the same-change-set constraint, the ongoing cost of accepting it, and
+the sibling to check.
+
+**WHY NOBODY CAUGHT IT EARLIER, and the lesson is about the census set, not about the reviewers.**
+Five review cycles and my own verification all ran `--filter PromptStabilityTest` plus the SEVEN-file
+census set. **`ChildStderrCaptureTest` is not in that seven.** It is a tree-wide census that no
+step-scoped filter reaches. §1.4 check 19 (roster membership) is the check that should have caught
+it, cycle 5 says it performed check 19 — and check 19 as written asks the reviewer to find the roster
+for *categories the diff adds* (env var, settings key, slash command, fence spelling, tool, new
+`src/` file). **This diff added nothing; it REMOVED an offending spawn, and no roster in check 19's
+list enumerates absences.** So the check was performed honestly and could not have found this.
+**Check 19 needs a second half: a diff that REMOVES the last instance of something a roster defers on
+must update that roster too.** Recorded as a plan defect, not a reviewer failure.
+
+**DISPOSITION — I widened the declared file list by one, deliberately.** A fix agent is out with
+`tests/Providers/PromptStabilityTest.php` **and** `tests/Support/ChildStderrCaptureTest.php`.
+Widening is REQUIRED here rather than scope creep: §1.4 check 19 and the guard's own message both say
+the roster moves in the SAME change-set. **The branch still changes no production code** — the `src/`
+diff must stay EMPTY, and I re-check that before merging.
+
+**MEASURED, so the fix agent does not have to re-derive it:**
+```
+ChildStderrCaptureTest SCOPE        :119  ['Agents/','Backend/','Chat/','Integration/','MCP/','Support/']
+ChildStderrCaptureTest OUT_OF_SCOPE :152, with 'Providers/' at :188
+ForkedChildReaperAdoptionTest       NO 'Providers/' row; OK (6 tests, 30 assertions) — UNAFFECTED
+```
+
+**THE TRAP IS IN THE BRIEF, because the cheap greens here are all silent un-guardings:** putting
+`Providers/` back into `OUT_OF_SCOPE`, re-introducing a discarding spawn, or adding an
+`ACCEPTED_DISCARDED_STDERR` row for a spawn that does not actually discard. Each makes the suite pass
+while removing the guard — precisely what the test exists to prevent. The agent is told that if the
+honest fix is bigger than the brief, it stops and escalates.
+
+**The assertion count is itself a signal and the agent must explain it:** master isolated is
+**343**, the red branch was **322**. Assertions that stop accruing are how a guard quietly stops
+guarding, so a post-fix figure materially below 343 needs a reason, not a shrug.
+
+**NOTHING HAS MERGED. Master is untouched.** `P3.S5-fix-1` (`6acba5f9e`) and `P3.S6` (`1461e1685`)
+are unaffected by this and remain verified and merge-ready behind it — **but note that neither has had
+its full suite run yet either, and this RED is a direct warning that a step-scoped filter set is not
+a substitute for one.**
+
+### P3.S6 · RECOVERED AND REPORTED · 2026-08-31 — the seam is REAL, and the step is COMPLETE AS ESCALATED
+
+The rescued agent came back and delivered a complete report — **"No session-limit truncation: this
+report is complete."** Committed `1461e1685` on `prompt/P3.S6`, 4 commits above base `c7e5a6454`,
+tree clean, author `Joe Huss <detain@interserver.net>`.
+
+**OUTCOME: NEITHER (a) NOR (b) — a §1.1 DECLARED-SCOPE ESCALATION, and the agent refused to round it
+to either.** Its words: *"This step is complete as escalated, incomplete as recorded."*
+- Not (a): nothing was wired; `writeSinceLastRender` still defaults to `true`.
+- Not (b): (b) required *"the measurement showing the Agent path has NO per-step seam"*. Its first
+  commit claimed exactly that and **its own review cycle 1 falsified it.** The seam is real, live, and
+  in `Workflows/WorkflowEngine.php`.
+- **(b) was LITERALLY UNSATISFIABLE as briefed** — it requires landing a §18 row in `prompt_plan.md`,
+  a file the same brief puts on the never-edited list. **That is a defect in the step text I wrote**,
+  not a choice the agent made. It wrote the row to a scratchpad file and left it for me.
+
+**MY OWN VERIFICATION — two figures in its report are WRONG, and the error runs in the SAFE direction.**
+```
+git diff --numstat c7e5a6454..HEAD
+  348   0   sugar-crush/src/Agents/Agent.php
+  1193  0   sugar-crush/tests/Agents/AgentTest.php
+per commit: 23fd87096 +537-0 · c4cb9492c +896-0 · b3a5e578e +1185-0 · 1461e1685 +1541-0
+```
+The report says **"1541 insertions, 42 deletions"** and then enumerates *"the 42 deletions are, in
+full: …"*. **There are ZERO deletions from base, at every commit.** Its enumeration describes churn
+between its own intermediate commits, not the base→HEAD diff. So the §1.10 conclusion is not merely
+true but STRONGER than claimed — nothing was removed at all — while the figure backing it is
+unreliable. Same for `Agent.php`: reported +382/−24, actual **+348/−0**.
+**Recorded because a figure nobody re-derives is exactly what this plan keeps catching**, and this
+one would have been trusted.
+
+**CONFIRMED INDEPENDENTLY, with my own token-strip script:** `src/Agents/Agent.php` is
+**executable-identical to base — 1270 tokens both sides, element-by-element**. The 348 added lines are
+doc-block, every one. The claim *"doc-block only; not one executable line changed"* holds.
+Goldens `32ea749d…` / `ef0326dd…` UNMOVED. Scope = the two declared files (`Bootstrap.php` and
+`App/App.php` were declared but not needed). Added-line scan for `markTestSkipped|@deprecated|
+assertNotNull|assertIsArray` → **0**.
+
+**THE §18 ROW WAS STALE AND I DID NOT LAND IT VERBATIM.** The agent's prepared row is marked
+*"REVISED after review cycle 1"* and still asserts *"the parent has no channel to derive the signal …
+'Did this stage write?' is unanswerable on this path today."* **Its own cycle 2 falsified that**, and
+its final report says so plainly: the disposition *"rests on declared scope, not underivability."*
+Landing the row as written would have put a claim the step itself refuted into the plan of record.
+I verified both halves myself before rewriting it:
+```
+src/Agents/ProcessExecutor.php:985     tools: null,            <- literal, no tools on that arm
+src/Agents/AgentWorkerPool.php:410     tools: $request->tools, <- forwards them on this one
+src/Agents/AgentResult.php:15-24       agentId, status, output, error, tokensUsed, costUsd,
+                                       startedAt, completedAt  <- 8 params, NO tool-call field
+```
+So "unanswerable" is too strong on either reading. **The row I landed rests the disposition on
+DECLARED SCOPE, records the derivability question as CONTESTED with both measurements, and keeps the
+`AgentResult` shape as the pin** — because that is the fact that is not contested and it is the one
+that fires when the blocker lifts.
+
+**THE MEASUREMENTS, all shim-derived on a real repository and all ASSERTED rather than merely recorded:**
+| operation | git subprocesses |
+|---|---|
+| `capture()` × 10, no render | 0 |
+| one `systemPrompt()` | 5 |
+| …with `withWriteSinceLastRender(false)` | 3 |
+| three calls on one agent (`render()` NOT memoised) | 15 |
+| one `ProcessExecutor` dispatch (renders **twice**) | 10 |
+| K-stage workflow, pipeline or sequential | **5 × K** |
+Eight call sites: **5 live in WorkflowEngine, 2 dormant, 1 ProcessExecutor. Four of eight are driven
+by a test; four are classified BY READING** — stated plainly rather than implied away.
+
+**THE MIDNIGHT FLAKE, and the fix is better than the flake.** The pipeline test asserted every stage's
+render byte-identical, but `EnvironmentBlock::render()` emits `Current date: ` + `format('Y-m-d')`, so
+a run straddling midnight yields two distinct renders and reds for a reason unrelated to the behaviour
+under test. **It surfaced because the date actually rolled over during reviewer-2's session.** The fix
+normalises the date line before uniquing **and** adds a separate exact assertion that the date line is
+present exactly once per render — so the normalisation cannot blind the test to a vanished line. Both
+polarities proven.
+
+**A PROVENANCE CORRECTION TO A FIGURE I RECORDED.** `--filter AgentTest` is a regex that **also matches
+`SubAgentTest`** (30 tests / 85 assertions, untouched). So the baseline `OK (56 tests, 278 assertions)`
+in this plan's own records is 26 + 30 **across two files**. Per file, `AgentTest.php` went
+**26 → 33 tests**. The step added **7 tests, not 7-of-63**. That conflation was inherited from my brief
+and propagated; it is corrected here and inside the test file's prose.
+
+**TWO ORCHESTRATION-RULE-2 DISCLOSURES, both volunteered:**
+1. **reviewer-2 ran two read-only `git config user.name`/`user.email` queries inside the worktree.**
+   No value argument, nothing written. The step agent counted it a violation *in spirit* and tightened
+   later briefs to *"not even a read-only query"*. Correct call.
+2. **`AgentTest::ensureFixtureRepo()` (PRE-EXISTING) will `git init` + repo-local `git config` under
+   the gitignored `vendor/prompt-fixture/agent-repo` if that fixture is absent.** It was present
+   (dated 2026-08-28) so neither ran. **But on a fresh clone, running this suite does `git init` inside
+   `vendor/`.** Not introduced here; recorded because a step brief forbids exactly that shape.
+
+**FIGURES, AGENT-REPORTED — MINE ARE PENDING:** `AgentTest.php` 33/327 · `--filter AgentTest` 63/412 ·
+census set 109/**9636** (was 9632; +4 from `SymbolCitationDriftTest` resolving four new `{@see}`
+tokens) · Workflows+WorkflowExecutionTest 236/866 · 7 wiring suites 262/1856.
+
+**REVIEW LOOP: 3 OF 5 CYCLES, AND IT NEVER REACHED "NO FINDINGS".** Cycle 3's fixes are UNREVIEWED.
+The agent says so itself and does not claim the diff is clean. **Two cycles remain available — the cap
+is NOT reached here, unlike both fix branches.**
+
+**THE STEP'S OWN LIST OF WHAT IT DID NOT CLOSE** (verbatim in substance, because it is the useful half):
+4 of 8 call sites classified by reading not by a driving test; `WorkflowEngine.php:1252/1294/1397`
+verified by READING, not execution, and `:1397`'s N+1 shape is inference; the event-loop latency
+figure (K × 399 ms) is **reviewer-3's reasoning plus a doc-block — the agent never measured it and
+says so**; PSR-12 unverified (`php-cs-fixer` absent from this box); and **cycle-3's fixes were checked
+by the step agent at diff-and-test level but its mutations were re-run by the fix agent, not by it**.
+It names **E5c** as the one thing to double-check before merge.
+
+**FOLLOW-UPS THIS STEP CREATED, all carried:**
+- **ESCALATION (user/orchestrator):** wire the write signal on the workflow path — a build-it-out
+  across `WorkflowEngine.php` + `AgentResult.php` + the worker IPC frame. Cost today: 5 git
+  subprocesses and one re-sent diff pair per stage.
+- `src/Runtime.php:589` cites `Agents/Agent.php:417` for an `EnvironmentBlock::capture(` site; **this
+  step moved that call three times — 417 → 638 → 765 — and nothing red**, because
+  `SymbolCitationDriftTest` polices `{@see}` and backticked SYMBOLS, never `file:line`.
+  **There is no file:line drift guard anywhere in `tests/`.** Surprise 5 is that hole firing three
+  times in three rounds inside one step.
+- `src/Runtime.php:596` says NINE call sites; measured **eight**.
+- `ProcessExecutor.php:473` renders the agent prompt a SECOND time per dispatch — two unmemoised
+  renders of a live git section that can disagree, while `App.php:524-527` says the two consumers
+  *"must agree"* and nothing makes them. **Pinned, not repaired: repairing means dropping a call site,
+  which §1.10 prohibits without a decision.**
+
+### P3.S6 · AGENT DEATH AND RESCUE · 2026-08-31 — killed by an API session limit with 398 uncommitted lines in the tree
+
+**The `P3.S6` step agent DIED.** Not a blank return, not a truncation this time — an explicit harness
+failure: *"Agent terminated early due to an API error: You've hit your session limit · resets 4am
+(America/New_York) (error type rate_limit, HTTP 429, request id req_011CeaEYSTbRPJjV9bzwk8o9)"*.
+
+Its last partial words before the kill: *"The fix agent I flagged as in-flight has now landed. It did
+not commit — as instructed — so the worktree is no longer clean. Per your instruction I have not
+committed it, not reviewed it, and not spawned anything further. Verifying read-only:"* — and it died
+mid-sentence.
+
+**So the step had 398 uncommitted lines sitting in a worktree, produced by a sub-agent, with the only
+agent that knew what they were now dead.** This is the most losable state this plan has produced.
+§1.8 forbids writing a dead agent's report; nothing forbids losing its work, because nothing had
+imagined this shape.
+
+**FIRST ACTION WAS TO SECURE THE WORK, BEFORE ANY RECOVERY ATTEMPT.** Recovery can fail; a lost
+working tree cannot be undone.
+```
+cwd /home/sites/prompt-step-P3.S6, HEAD b3a5e578e (3 commits above base c7e5a6454)
+git status --porcelain     M sugar-crush/src/Agents/Agent.php
+                           M sugar-crush/tests/Agents/AgentTest.php
+git diff HEAD --stat       2 files changed, 398 insertions(+), 42 deletions(-)
+untracked (non-vendor)     NONE
+```
+Saved to `<scratchpad>/P3.S6-rescue/`: the patch (`uncommitted-at-b3a5e578e.patch`, md5
+`f6ea4b657bb9fb8e58fb75fbbe21f529`, 549 lines) **and** full copies of both files.
+
+**THE BACKUP WAS THEN VERIFIED RATHER THAN ASSUMED, and the first check was a false alarm I had to
+reason past.** `git apply --check` against the live worktree FAILS — correctly, because the patch is
+already applied there. A backup that "fails its own check" is exactly the kind of thing that gets
+discarded in a hurry. So I reconstructed from scratch instead: extracted both files at `b3a5e578e`
+into a clean directory, applied the patch there, and compared to the live tree.
+```
+OK: patch applies cleanly to HEAD b3a5e578e
+MATCH  sugar-crush/src/Agents/Agent.php       c81e1cd4ad65ff0584472d499964562f
+MATCH  sugar-crush/tests/Agents/AgentTest.php cbf0c8b46d570a4071ae4726e3ea3fd0
+```
+Byte-for-byte on both files. **The work cannot now be lost**, whatever happens to the agent.
+
+**NOTHING IN THE WORKTREE WAS TOUCHED.** No commit, no stash, no checkout, no `git add`. The dirty
+tree was left exactly as the dead agent left it so the resumed agent finds what it expects.
+
+**A NOTE ON `git stash list`:** it shows nine stashes, all `WIP on master` from the OTHER plan's
+lanes. **Stashes are shared across worktrees in git.** They are not this plan's and were not touched.
+Recording it because a future agent tidying up a rescue could very easily pop one.
+
+**RECOVERY: rung 1 of the §1.8 ladder, adapted per §6a** (Claude Code has no OpenCode resume; the
+equivalent is `SendMessage` to the same agent, which resumes it from its transcript). The agent was
+sent its state as I measured it — HEAD, the exact dirty file list, the diffstat, the backup location
+and the two md5s — plus an explicit instruction to pick up at verifying its fix agent's uncommitted
+diff, run the tests, commit, and report; and NOT to spawn another reviewer. **It was also told that if
+it hits the limit again it must stop and say so rather than truncate**, because a half-report from a
+dying agent is worse than waiting until the 4am reset.
+
+**The nine-question report is still owed and still not inferable.** Its three commit subjects say it
+measured eight once-per-dispatch call sites, then CORRECTED ITS OWN DISPOSITION to *"the seam IS real
+and lives in WorkflowEngine, outside this list"*, then pinned that against a real pipeline, and
+separately repaired **"the midnight flake"** — a time-dependent test. Which outcome it landed on, what
+it did instead of widening into `WorkflowEngine`, and what that flake was cannot be read off a subject
+line, and §1.8 says I do not write them for it.
+
+**PROCESS RULE THIS EPISODE EARNS — a step agent must never leave a sub-agent's work uncommitted.**
+The instruction "do not commit, I will review first" is safe when the reviewer is a live orchestrator
+and catastrophic when the only reader is an agent that can be killed mid-sentence by a rate limit.
+Sub-agent work should be COMMITTED to the step branch immediately and amended or reverted afterwards
+if the reviewer objects — a commit is recoverable, a dirty worktree owned by a dead agent is not.
+**Put this in every step brief that spawns a sub-agent.**
+
+### P3.S5-fix-1 · FINAL FIX PASS · 2026-08-31 — VERIFIED BY THE ORCHESTRATOR, MERGE-READY, HELD FOR A QUIET BOX
+
+Commit `6acba5f9e` on `prompt/P3.S5-fix-1`. F1, F2, F3, F5 FIXED; F4 half fixed and half
+REFUSED-WITH-MEASUREMENT. **No cycle-6 review by design** — I verified personally, and this entry
+records what I ran, including the part where my own instrument was wrong twice.
+
+**MY OWN F1 PROBE — BEFORE AND AFTER, built by me, run against the SHIPPED method by reflection
+over real copies of `src/Tools/BuiltIn/Read.php` (a tool on the read-only roster):**
+```
+PRE-FIX  ab9a7dcdc   CONTROL {"file_put_contents":[142]}  ·  B1 //-comment []  ·  B3 const-string []
+FIXED    6acba5f9e   CONTROL {"file_put_contents":[142]}  ·  B1 //-comment [143] ·  B3 const-string [143]
+```
+A `//` comment and a `const` string each turned a real, executed write into `[]` before the fix, and
+both report it after. **F1 and its fix are independently confirmed.**
+
+**MY PROBE WAS WRONG TWICE FIRST, AND THAT IS THE PART WORTH RECORDING.**
+1. I first injected `\file_put_contents(...)` — **fully qualified**. A leading backslash bypasses
+   import resolution entirely, so the alias map never touches it and the pre-fix scanner reported the
+   write. That looked like a refutation of the finding. It was a defect in my probe.
+2. I then anchored the alias injection on `/^(final class )/m`. `Read.php` declares
+   `final readonly class Read`, so the regex silently matched nothing and B1/B3 were **unmodified
+   copies of the control** — three identical rows that read exactly like "no defect here".
+**Only an `injected=yes/NO!` column caught it.** §1.4 check 13 says to run a scanner against
+known-answer input before grading what it reports, because *a scanner that answers the same way for
+every input reads as working*. That rule applies to the orchestrator's own probes, and here it was
+the difference between confirming a critical finding and wrongly dismissing it. **Every probe of this
+kind must carry a positive control that proves the mutation actually landed.**
+
+**ORCHESTRATOR-VERIFIED AT `6acba5f9e`:**
+```
+cwd /home/sites/prompt-step-P3.S5-fix-1, stdin </dev/null
+--filter 'InterpolationOpener|Runtime|SystemPromptWiring'Test   OK (145 tests, 689 assertions)  was 142/686
+tests/Support/InterpolationOpenerTokenTest.php                  OK (6 tests, 164 assertions)   unchanged
+scope                              exactly the three declared files
+census-test diff vs base           EMPTY (no KNOWN_GAPS row)
+fixtures diff vs base              EMPTY
+goldens                            32ea749d… / ef0326dd… UNMOVED
+author / porcelain                 Joe Huss <detain@interserver.net> / clean
+src/Runtime.php comment-only       MY OWN script: 4366 tokens both sides, element-identical,
+                                   md5 36ecb93cf7957cb77c9448aa6e16966e — FIFTH independent derivation
+```
+
+**THE FIX WAS THREE REPAIRS, NOT THE ONE PRESCRIBED.** The map is now read off the **token stream**
+(`importedSymbolAliases()` replacing the raw-source regex — a comment and a string literal are each
+ONE token, so neither can hold a `T_USE`, which makes the falsified doc-block claim **true by
+construction** rather than by assertion); resolution is **additive, never substitutive**; and a
+fully-qualified token is not alias-resolved. `importedClassAliases()` closes F2 in the `$afterNew`
+branch. **The seventh defeat is closed** — measured to be I1, the plain
+`use SplFileObject as Handle;` class alias, which the function-channel patch could never have reached.
+
+**Thirteen mutants, control `OK (128 tests, 450 assertions)`.** Ten red. **Three came back GREEN and
+were recorded as measured-equivalent IN THE SOURCE rather than left looking load-bearing** — the
+`use const` arm, the closure `use (` arm, and an identity filter, each already covered by a `break`
+the mutant did not remove. And **P5M2 was green on first pass**: additivity alone closes every prose
+row, so the token reader looked unnecessary until the agent added a doc-block line aliasing
+`measure` → `unlink` — prose that manufactures a **false positive**, which is the only shape that
+makes the token reader observable. That is a mutant designed to fail, which is the point of mutants.
+
+**F4 is the honest half-refusal.** The reviewer counted three copies of the significant-token filter;
+there were **four** — `callArguments()` has one too. Three are consolidated into
+`DropsInsignificantTokensTrait`. The fourth is KEPT and named in place, because
+`testTheArgumentWalkReportsWhetherItMetItsOwnClosingParenthesis()` feeds `callArguments()` a **raw**
+`token_get_all()` stream on purpose and must not assume a stripped input. The unreadable-source
+refusal is REFUSED WITH A MEASUREMENT: adopting `RefusesAnUnreadableSourceTrait::readOrFail()` gives
+`Failures: 1, Warnings: 1` — the trait has no `is_file`/`is_readable` pre-check, so the read warns
+before it asserts, and it refuses with an `AssertionFailedError` where an existing test pins
+`\RuntimeException`. The repair is to fix the **trait**, which is outside the declared file list; the
+alternative is weakening an existing assertion, which §1.10 forbids. **Correct call.**
+
+**Tree-wide re-derivation (the thing I explicitly told the reviewer not to take on trust):**
+HEAD scanner over a `git archive` of `ab9a7dcdc` vs this scanner over this tree — **768 scanned, 260
+reporting on both sides, primitive SET IDENTICAL for all 768.** One file's counts move:
+`tests/RuntimeTest.php`, `file_put_contents` 30 → 32, which is the two calls the new fixtures make.
+**Nothing in `src/` or `bin/` changes at all.**
+
+**FIVE GAPS THE AGENT NAMED RATHER THAN PAPERED OVER — all carried, none blocking:**
+1. **Namespace scoping is not modelled.** `importedSymbolAliases()` reads the whole file, so an import
+   in one `namespace` block applies in another. **Additivity makes that OVER-classify rather than lose
+   a primitive** — safe direction, not free.
+2. Trait-use inside a class body is not distinguished from a class import; could only matter for a
+   trait literally named `SplFileObject`.
+3. Two guards (`use const`, closure `use (`) are **unpinned and declared as such rather than counted**.
+4. **The three in-suite fixtures are only TOKENISED, never executed.** The "really writes" claim rests
+   on out-of-suite runs through `Read.php` copies, not on anything the suite itself executes. Said
+   plainly rather than implied.
+5. Still structurally open and enumerated in the doc-block: method calls on objects, indirection
+   through strings, non-trait/non-ancestor collaborators, subprocess argv, unenumerated extension
+   functions.
+
+**N1 IS NOW BETTER EVIDENCED.** Both F1 and F2 were name-based defeats on a green suite, and the
+class-alias case shows the alphabet must be maintained **per keyword**, not merely per function name.
+The agent did not resolve N1 and did not argue the scanner away — correct.
+
+**MERGE-READY AND DELIBERATELY HELD**, same as `P3.S4-fix-1`: its full suite must run SERIALLY, and
+`P3.S6` was still working the box. `P3.S5-fix-1` merges SECOND, after `P3.S4-fix-1` has merged and a
+full suite has run in between. **No full-suite figure exists for this branch at any head.**
+
+### P3.S4-fix-1 · FINAL FIX PASS · 2026-08-31 — VERIFIED BY THE ORCHESTRATOR, MERGE-READY, HELD FOR A QUIET BOX
+
+Commit `6e7308938` on `prompt/P3.S4-fix-1`. All six findings F-A..F-F closed. **No cycle-6 review by
+design** — I verified this pass personally, and below is what I actually ran, not what was reported.
+
+**MY OWN VERIFICATION — every hostile case reproduced by me, not read from the report:**
+```
+cwd /home/sites/prompt-step-P3.S4-fix-1, stdin </dev/null
+CLEAN                                    OK (16 tests, 399 assertions)      was 15/393
+scope                                    exactly tests/Providers/PromptStabilityTest.php
+git diff --stat … -- sugar-crush/src/    EMPTY
+goldens                                  32ea749d… / ef0326dd… UNMOVED
+author / porcelain                       Joe Huss <detain@interserver.net> / clean
+
+F-A hostile 1  GIT_CONFIG_GLOBAL=[diff] external = /bin/true       Tests: 16, Failures: 3
+F-A hostile 2  GIT_CONFIG_GLOBAL=[core] excludesFile -> Alpha.php  Tests: 16, Failures: 3
+```
+**Both now red with the HONEST message and "The scanner is dead" is GONE from both.** The message
+names both exit-0 mechanisms and then quotes git's own output — and the two quotes differ exactly as
+the mechanisms predict: hostile 1 prints ` 1 file changed, 0 insertions(+), 0 deletions(-)` (external
+differ succeeded, shortstat kept, patch body dropped), hostile 2 prints **nothing at all** (the file
+was never tracked). That correspondence is what convinces me the guard is reading reality rather than
+a coincidence.
+
+**F-E is NOT live — checked in the reverse direction, which is the check that could have gone wrong.**
+Giving control B a second guard could have made it swallow the colour case before control C ever ran.
+It does not: `GIT_CONFIG_COUNT` with `color.diff`/`color.ui=never` still reaches **control C** and reds
+at its escape guard (`Tests: 16, Assertions: 387, Failures: 1`), because a colour override does not
+touch control B's `Binary files ` line. Control C's message now names both of its causes anyway — the
+file's own ordering argument forbids relying on which control fires first.
+
+**F-C verified by COUNT, not by reading:** under a global `[core] quotePath = nonsense`,
+`Failures: 6`, **6 of 6 name `git init`**, and the old misleading
+`could not pin status.showUntrackedFiles … fatal: not in a git directory` appears **0 times**. The
+unchecked `shell_exec` at `:483` is now a checked `self::git()` whose skip stays keyed on the
+directory, so a git-less host still skips rather than fails.
+
+**THE FIX AGENT CORRECTED ITS OWN PROSE MID-PASS, and that is worth recording as the standard.** Its
+new byte-cap doc-block first claimed the largest capture in the file was 84 B. It then measured the
+four real call sites — coloured probe **342 B**, binary probe **178 B**, longest fatal **102 B** —
+and rewrote the doc-block. Its own words: *"The 84 was wrong; that is the same defect class this step
+exists to close, caught in my own prose."*
+
+**F-B gained a FOURTH site the review never flagged:** the placeholder guard's own failure message
+said *"any INVALID value anywhere in the config precedence chain, which git treats as fatal at parse
+time whatever overrides it"* — the same over-wide claim, in a LIVE message. Narrowed to *"FOR A KEY
+THE FAILING SUBPROCESS ITSELF READS"*, with the exit table quoted.
+**F-D** measured both channels: `GIT_CONFIG_COUNT log.date=true` → 4,910 B / **19** escapes;
+`GIT_CONFIG_GLOBAL [log] date = true` → 4,921 B / **21** (unchanged), because the fixture pins
+`log.date default` repo-locally and a FILE loses to that pin where the ENVIRONMENT does not. The
+message now names the channel. Sibling figure re-verified: `GIT_DIFF_OPTS=-u10` → 22.
+**F-F** got a real cap (`GIT_SAID_MAX_BYTES = 2048`, `gitSaid()`) plus a test asserting both
+polarities with `assertSame`, deletion-experiment confirmed.
+
+**THREE GAPS THE FIX AGENT NAMED RATHER THAN PAPERED OVER — all carried, none of them blockers:**
+1. **F-F is closed only at the sites the finding named.** Ten other failure messages in the same file
+   still interpolate git output uncapped — lines 527, 2244, 2266, 2289, 2297, 2315, 2321, 2334, 2473,
+   2917, all pre-existing. Routing them through `gitSaid()` is mechanical but touches assertions no
+   finding named, so it was left. **Queued as a follow-up.**
+2. **The `:483` skip is keyed on `is_dir($dir/.git)`, deliberately.** A git-less CI runner must skip.
+   But that means one narrow class of init failure — one creating no `.git` at all yet not "git is
+   missing" — would still skip silently. The agent could not construct such a case to measure it and
+   **named it rather than claiming it cannot happen.** That is the correct disposition.
+3. **The git-locale hazard stays a declared UNKNOWN.** No guard, no manufactured measurement. The
+   agent did not re-verify the absence of `.mo` catalogues and says so, taking the file's existing
+   twice-verified statement as standing.
+
+**MERGE-READY, AND DELIBERATELY HELD.** `P3.S4-fix-1` merges FIRST and needs a FULL SUITE run
+SERIALLY at `6e7308938` immediately before it. Two agents are still working this box — the
+`P3.S5-fix-1` final fix pass runs mutants and tree-wide scans, which is exactly the "something else
+heavy" the serial rule is about. Measured contention on this box is 18 assertions between runs of an
+identical tree. **So the full suite waits for a quiet box rather than producing a figure that needs a
+caveat.** Nothing is lost: merges are sequential anyway and this one is first in line.
+
+### P3.S5-fix-1 · REVIEW CYCLE 5 (THE CAP) · 2026-08-31 — fail-closed on the walk did not buy fail-closed on the alphabet
+
+Cycle 5 is the fifth and last review cycle. It returned **five findings**, and F1 is critical.
+Findings file: `<scratchpad>/P3.S5-fix-1/review-cycle-5/findings-cycle-5.md`.
+
+**SAME ORCHESTRATOR DECISION AS `P3.S4-fix-1`, and for the same reason: ONE FINAL FIX PASS, NO
+CYCLE-6 REVIEW.** The §1.2 cap is honoured — what it exhausts is the value of another *review*, not
+of a fix that arrives already measured. I verify personally and run the full suite before merging,
+and I am accepting that a fix made in this pass is unreviewed by anyone but me. Written down rather
+than implied.
+
+**F1 (CRITICAL) — the alias channel fails OPEN and *SUBTRACTS* detections.** `tests/RuntimeTest.php:2891`
+and `:2991`. `importedFunctionAliases()` regexes `use function … ;` out of **raw source** and the
+resulting map **REWRITES the matched name** — so any text of that shape, in a comment, a doc-block, a
+string constant, or a `namespace` block the call is not in, **deletes a primitive from the alphabet
+for the whole file**.
+
+That is worse than a missed detection: a one-line comment
+```php
+// use function Nope\writeit as file_put_contents;
+```
+turns a real, executed write into `[]`. Seven green defeats MEASURED end-to-end through the shipped
+`writePrimitivesCalledIn()` by reflection, against a real copy of `src/Tools/BuiltIn/Read.php` (a tool
+on the read-only roster), each `php -l` clean and each **actually run**: the comment form · the
+doc-block form (`unlink`, and the file was gone afterwards) · a `const` string (`mkdir`) · an import
+plus a leading-backslash call, which ignores imports entirely (a 21-byte file became `DEFEAT-A1`) ·
+the import in `namespace A` with the call in `namespace B` of the same file · one that kills the
+`new SplFileObject` exception.
+
+It also **falsifies the method's own doc-block at `:2984`**, which claims *"a `use function` that
+appears inside a string or a comment contributes nothing"*.
+
+**The structural lesson, and it is the one to carry:** this channel runs BEFORE the argument walk, so
+the `$complete` fail-closed flag this step just built **cannot reach it**. Fail-closed on the walk did
+not buy fail-closed on the alphabet. The reviewer's fix is given verbatim and IS measured — closes six
+of seven, tree-wide verdict over all 768 files byte-identical (diff = 0 lines), suite green.
+
+**F2 (HIGH) — the class-alias twin, and F1's patch does not close it (measured).**
+`use SplFileObject as Handle; new Handle($p, 'w');` scans as `[]` while genuinely truncating the file.
+One keyword over from the function-alias case this step already closed.
+
+**F3 (MEDIUM)** — the fail-closed claim is bought only for the argument walk. The reviewer
+independently re-derived the opener census (every array token in `src`/`tests`/`bin` ending in
+`(`/`[`/`{` — only `T_ATTRIBUTE`, `T_CURLY_OPEN`, `T_DOLLAR_OPEN_CURLY_BRACES`, all declared) and
+**confirms that walk IS genuinely fail-closed**. F1 is simply a channel it cannot reach, and it is
+absent from the doc-block's "structurally out of reach" list.
+**F4 (LOW)** — three private copies of `[T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]` in `RuntimeTest.php`
+alone (`:2833`, `:4339`, `:4483`), in a tree that already extracted that and the unreadable-source
+refusal into traits. `DuplicatedTestHelperDriftTest` is structurally blind to it. Consolidation is a
+MOVE, which §1.10 permits.
+**F5 (NIT)** — `:2724` says *"MEASURED at 21 sites in `src/`"*; the reviewer measures **23**, and it is
+21 only if `fopen` is excluded — a domain the sentence does not give, in a doc-block that invokes the
+"figure without its domain" rule twice.
+
+**THE REVIEWER GOT ONE THING WRONG, AND IT IS CORRECTED HERE SO NOBODY UNDOES A GOOD FIX.** It
+reported that `prompt_plan.md:1466` *"says 'nine live sites' while enumerating eight"*. **FALSE at
+HEAD.** That was corrected on 2026-08-31 by `344b85550`; line 1466 now says **eight**, and the word
+"nine" survives only inside the dated parenthetical recording what it used to say. The reviewer read
+quoted historical text as a live claim. Everything else in its report checked out, and this is the
+kind of error the plan's own §16.8 rule about narrative-vs-claim exists for.
+
+**WHAT THE STEP GOT RIGHT — re-derived by the reviewer, not taken, and NOT to be re-done:**
+`src/Runtime.php` **is** comment-only across the branch (its own token strip: **4366** executable
+tokens both sides, streams identical — now four independent derivations agreeing). Tree-wide
+before/after: **768 scanned, 260 reporting, verdict diff 0 lines** — the fix-cycle-4 claim HOLDS.
+**8, not 9** `Agent::systemPrompt()` call sites, distribution (1,1,1,5). All three
+`SymbolCitationDriftTest` rows reproduce including the green `…TestClass` hole. Stranded-reference
+census: 0 hits under `sugar-crush/`. Goal 3 verified from both sides — `missingOpenersIn()` returns
+both openers for the pre-fix file and `[]` at HEAD, census file diff vs master 0, no `KNOWN_GAPS` row.
+**14 mutants run, every one reds exactly the test it should, control green** — the new tests are real,
+not decorative. Cited coordinates all correct (`PermissionGate:687`, `ProtectFilesHook:121`,
+`PermissionRule:220`, `Bootstrap:1462`, `App.php:1264`, `grep -c mkdir` = 3). No out-of-scope file, no
+subtraction, no weakened test, no `composer`/`phpunit.xml`/hook-bypass edit.
+
+**Figures reproduce exactly:** 142/686 filtered · 6/164 census file · 103/9468 six-file census set.
+It created no git repository at all — plain directories sufficed. **FULL suite still NOT RUN.**
+
+**F1 and F2 are further evidence for escalation N1** (per-tool `writesTree(): bool` vs a working-tree
+fingerprint). The fix brief says so explicitly and forbids the agent from resolving N1 or arguing the
+scanner away: if its honest conclusion is that F1 or F2 cannot be closed by any name-based means, that
+answer attaches to N1 and is a COMPLETED outcome.
+
+### P3.S4-fix-1 · REVIEW CYCLE 5 (THE CAP) · 2026-08-31 — the step's own defect, left half-closed
+
+Cycle 5 is the fifth and last review cycle. It returned **seven findings**, and one of them is not a
+new hazard at all — it is the defect this step was opened to fix, closed on one control and left open
+on the other. Findings file:
+`<scratchpad>/P3.S4-fix-1/review-cycle-5/findings-cycle-5.md`.
+
+**ORCHESTRATOR DECISION, recorded deliberately: I am running ONE FINAL FIX PASS AND NO CYCLE-6
+REVIEW.** §1.2 caps this loop at five cycles, and I am honouring that cap — what the cap exhausts is
+the value of another *review*, not the value of a fix that arrives already measured in both
+polarities. I am substituting my own verification for the sixth review: I will reproduce the hostile
+runs myself, as I did for the F3 fix at `707c30685`, and run the full suite before merging. The risk
+I am accepting is that a fix introduced in this pass goes unreviewed by anyone but me, and I am
+writing that down rather than leaving it implied.
+
+**F-A (MAJOR, behaviour) `:1922` — control B still reds "The scanner is dead" when the scanner is
+alive.** MEASURED: a global `[diff] external = /bin/true`, and a global `[core] excludesFile` listing
+`Alpha.php`, each drive control B red at `:1922` with that message while **git exits 0**, so the
+exit-code guard at `:1913` never fires. Last cycle gave control C two guards — exit code AND git's own
+escape-byte count. Control B got only the first. And the same diff *documents* both configurations at
+`:2655-2666` and `:2678-2690`, keeping one on the "moves and reds" line purely because it "reds this
+file at `Failures: 3`" — **without ever reading which message it red with**. That is the step's whole
+subject, one control over. The reviewer measured its mutation in both polarities (clean
+`OK (1 test, 86 assertions)`; `/bin/true` reds at the new line quoting git's own
+` 1 file changed, 0 insertions(+), 0 deletions(-)`; `excludesFile` reds with empty git output).
+
+**F-B (MAJOR, prose) `:2128` — the commit message says the false claim "was stated three times" and
+fixed two.** MEASURED: at `2d5f1483` the sites were `:1747`, `:2069`, `:2328`; at HEAD `:1757` and
+`:2392` carry the correction and the third (now `:2128`) **falls in no hunk of the HEAD commit**. So
+the file says the claim is false at `:1757` and then uses it as the explanation at `:2128` — inside
+the doc-block of `testLogAbbrevCommitIsParseTimeValidatedSoNoRepoLocalPinDefendsIt`, the very test
+named as the measurement of that mechanism.
+
+**F-C (MODERATE) `:2605-2608` — "every one of them" is five of six, and there is a real defect
+underneath.** Failure 1 of the six is `testEnvironmentBlockGitSnapshotIsLivePolledNotFrozenAtCapture`
+at `:497` with `could not pin status.showUntrackedFiles … fatal: not in a git directory`, not the
+quoted `git init -q failed:`. Cause, inside the declared file: that test's `git init` at `:483` is an
+unchecked `shell_exec(… 'init -q 2>/dev/null')` guarded only by `is_dir($dir.'/.git')`. MEASURED —
+under a bad global config `git init` exits 128 **but still leaves a partial `.git`** (branches,
+description, hooks, info; no HEAD, config, objects or refs), so the guard passes, the exit code and
+stderr are discarded, and the red names neither `git init` nor the hostile config. `:483` predates the
+branch, but the new claim walked into it, and an unchecked subprocess whose failure produces a
+misleading red is the same class as F-A.
+
+**F-D/F-E/F-F (minor), handed to the fix agent's judgement with the instruction that "I judged it
+benign" is the verdict that has already failed twice in this step.**
+F-D `:2096` — *"log.date=true makes it 19"* is TRUE via `GIT_CONFIG_COUNT` and **FALSE via
+`GIT_CONFIG_GLOBAL` (21)**, because the fixture pins `log.date default` repo-locally; the message
+names no channel while the file's own boundary (a) IS that distinction.
+F-E `:1962-1969` — control C's brand-new guard names only a colour override, but a repo-local
+`color.diff=always` plus a global `[diff] external = /bin/true` also gives exit 0 with zero escapes;
+masked today only because control B reds first, an ordering accident. **The fix agent is explicitly
+asked whether closing F-A makes F-E live.**
+F-F — captured git output interpolated into failure messages uncapped, where production caps the same
+stream at `DIFF_MAX_BYTES = 8192`.
+
+**F-G is the census-roster gap I already recorded** (`prompt_plan.md` action 7b lists six, the set is
+seven). Not the fix agent's.
+
+**THE REVIEWER'S NON-FINDINGS ARE WORTH AS MUCH AS ITS FINDINGS, and none of this needs re-doing.**
+Every byte figure it checked is exact: clean 4844/4670 · `core.abbrev=20` 4883/4696 · `diff.context=10`
+4851 · `color.diff=always` 4921/4689 at 21 escapes · `diff.suppressBlankEmpty` 4842 · `log.decorate=full`
+4872/4698 · `i18n.logOutputEncoding=UTF-16` 4821/4647 · `GIT_DIFF_OPTS=-u10` 4851 · `log.abbrevCommit=nonsense`
+4841/4667 · `diff.external` 4617 / 4599 · **`core.bigFileThreshold=1` 4844, moves nothing, confirmed**
+· `core.excludesFile`/Alpha 4561. All twenty cells of the five-key exit table reproduce; so does
+`log.abbrevCommit` 128/0/0/0 and `color.branch.current` killing only `branch --show-current`. The
+cross-file escalation is exact: a hostile `core.attributesFile` leaves this file `OK (15, 393)` and
+reds `RuntimeTest.php:1918`. Deletion experiments hold in both directions — the base file under
+`log.abbrevCommit=nonsense` is **silently green** at `OK (13, 229)` where HEAD reds. No test deleted,
+renamed out, skipped-out or narrowed (13 → 15 methods, base a strict subset). Conventions clean.
+Reachability named: `EnvironmentBlock::capture()` is live at `src/Cli/Bootstrap.php:1462` and
+`src/App/App.php:553`.
+
+It also ran a **targeted 18-knob sweep** beyond the ~65 already swept —
+`diff.srcPrefix/dstPrefix/wsErrorHighlight/statGraphWidth/renames/dirstat/ignoreSubmodules/noprefix`,
+`log.showSignature/follow/initialDecorationSet`, `format.subjectPrefix`, `status.branch/short`,
+`core.ignoreCase/untrackedCache/precomposeUnicode/commentChar` — and found **no new wrong-green
+mover**; all left the prompt at 4844. Two independent sweeps have now failed to find one.
+
+It left the locale hazard alone, did not manufacture a measurement, and confirmed the file claims
+none. Worktree restored by md5 `1f4a2ca30452782509de1a124c8408ca`, `git status --porcelain` empty,
+and it created no git repository outside its own scratchpad.
+
+**Figures unchanged and orchestrator-matched:** `--filter PromptStabilityTest` `OK (15 tests, 393
+assertions)`; seven census files `OK (109 tests, 9632 assertions)`; scope exactly one file; `src/`
+diff EMPTY. **FULL suite still NOT RUN at any head of this branch.**
+
+### P3.S4-fix-1 · FIX CYCLE 4 · 2026-08-31 — a refused prescription whose premise was true and irrelevant
+
+Commit `707c30685` on `prompt/P3.S4-fix-1`, base `1267e6fbb`. All five cycle-4 findings disposed of.
+A brand-new cycle-5 reviewer is out — **the cap**.
+
+**F3, the only behaviour change, and the one the previous cycle got wrong.** Cycle 3 saw that control
+C (coloured control, escape-byte liveness) had no "did the subprocess succeed" guard and judged it
+benign because control B intercepts `diff.external` first. Cycle 4 measured that false, and the fix
+agent reproduced it exactly before changing anything. Two assertions now precede the liveness one —
+the exit code, and git's OWN escape-byte count.
+
+**ORCHESTRATOR-VERIFIED, hostile run reproduced myself** (not taken from the agent):
+```
+GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=color.diff GIT_CONFIG_VALUE_0=never \
+GIT_CONFIG_KEY_1=color.ui GIT_CONFIG_VALUE_1=never \
+  php sugar-crush/vendor/bin/phpunit ... --filter PromptStabilityTest </dev/null
+
+REDS AT :1962 — the NEW probe — with:
+  "git itself emitted no escape bytes in the coloured control fixture, so nothing below this
+   line is a statement about the scanner. MEASURED cause: a colour setting the repo-local
+   color.diff=always cannot outrank - GIT_CONFIG_COUNT / GIT_CONFIG_PARAMETERS in the
+   environment beats every config file."
+and it QUOTES git's own uncoloured diff as evidence.   Tests: 15, Assertions: 381, Failures: 1
+```
+Before the fix the same environment red at `:1935` blaming *"the scanner is dead, or EnvironmentBlock
+started passing --no-color"* — **neither of which happened**. A control that reds for a reason its own
+message denies is worse than one that does not red, and that is now fixed rather than argued away.
+
+**ONE PRESCRIPTION REFUSED, and the reasoning is the entry worth keeping.** The reviewer said
+`core.excludesFile` naming the TRACKED file *"moves nothing and reds nothing"*, on the premise that
+gitignore never applies to a tracked path. **The premise is TRUE — the fix agent confirmed it in
+isolation, exclude-after-commit still shows ` M src/Alpha.php` — and it is IRRELEVANT here, because
+of ORDER.** The exclude is already in force when the fixture's own `git add -A` runs, so the file is
+never tracked at all (`git ls-files` empty). MEASURED: prompt 4,844 → **4,561**, `Failures: 3`.
+Accepting the prescription would have written a false claim into the file whose entire subject is
+claims wider than their evidence. This is the fourth prescription in this batch refused on a
+measurement, and the first refused because a true premise did not apply.
+
+**F4 also WIDENED rather than copied.** The reviewer measured `diff.external` in one domain; there are
+two. An external diff that **succeeds silently** (`/bin/true`) → exit 0, patch body lost, **4,617**.
+One that **fails** (`/bin/false`) → exit 128, field degrades to `unavailable (git exited 128)`,
+**4,599**. Both `Failures: 3`; `GIT_EXTERNAL_DIFF` reproduces both. Both are now recorded.
+`core.bigFileThreshold=1` confirmed TRUE (4,844/4,670 unchanged) — but only on the REAL fixture:
+synthetic stand-in repos did not reproduce it at that file size, so it was run on the fixture itself.
+
+**F1** — the *"Inert for ANY value, MEASURED"* bullet now states the DOMAIN distinction that was
+missing: these five keys fail the build **loudly** (`[core] quotePath = nonsense` → `Tests: 15,
+Assertions: 50, Failures: 6`, every one `git init -q failed`), where `log.abbrevCommit` degrades a
+rendered field **silently**. Loud is not inert, and silent-vs-loud is what this whole file is built on.
+
+**F2** — the mechanism claim is corrected in both places and **the verdict it supported is kept**,
+scope narrowed to *"undefendable for a key a subprocess READS; inert otherwise"*. `log.date`
+re-confirmed defendable (128 unpinned, 0 with `log.date = default` pinned).
+
+**F5** — fixed and EXTENDED: the reviewer named one message, the same defect sat on a second
+(`:1675`, the across-turn test), which also blamed the healthy `status.showUntrackedFiles` pin. Both
+now name the gitignore family as a second cause, verified in the hostile run.
+
+**The locale hazard is recorded as UNKNOWN and NOT guarded.** The fix agent verified untestability
+itself — `find / -name git.mo` finds none, no `de_DE`/`fr_FR` in `locale -a`, and
+`LC_ALL=de_DE.UTF-8 git diff --shortstat` renders English. A labelled UNVERIFIED note is in the file;
+no guard, no claimed measurement. The cycle-5 reviewer is told that a *claimed* measurement of it
+would itself be a finding.
+
+**ORCHESTRATOR-VERIFIED AT `707c30685`:**
+```
+cwd /home/sites/prompt-step-P3.S4-fix-1, stdin </dev/null
+--filter PromptStabilityTest         OK (15 tests, 393 assertions)    was 391
+git diff --name-only 1267e6fbb..HEAD exactly tests/Providers/PromptStabilityTest.php
+git diff --stat … -- sugar-crush/src/  EMPTY
+goldens                              32ea749d… / ef0326dd… UNMOVED
+author                               Joe Huss <detain@interserver.net>
+git status --porcelain               empty
+```
+Progression 13/229 (base) → 14/374 → 15/391 → **15/393**.
+
+**A GAP IN `prompt_plan.md` §1.2 action 7b, found by the fix agent and recorded here because it cost
+it a search:** action 7b names **six** census files, but the census set this step has been running is
+**seven** and sums to 109/9632. The seventh is
+`sugar-crush/tests/Support/InterpolationOpenerTokenTest.php` (6 tests, 164 assertions); the six alone
+are 103/9468, and 103+6 = 109, 9468+164 = 9632 exactly. Recorded in `prompt_resume.md` §8 so no
+future agent has to re-derive it.
+
+**FULL suite at `707c30685`: NOT RUN. No figure exists for it and none may be written.**
+
+### P3.S5-fix-1 · FIX CYCLE 4 · 2026-08-31 — fail-OPEN to fail-CLOSED, and three refused prescriptions
+
+Commit `ab9a7dcdc` on `prompt/P3.S5-fix-1`, one commit on top of `842cc59b3`. All seven live
+findings FIXED, nothing escalated, nothing removed. A brand-new cycle-5 reviewer is out — **the cap**.
+
+**THE RESULT WORTH KEEPING, and it is the mutant's output, not the fix's.** The fix agent ran seven
+mutants, each reverting exactly one fix in a sandbox copy; each reds exactly one test and the control
+`M0` is green. The headline is **M1**, which removes `T_ATTRIBUTE` but keeps the fail-closed flag:
+
+```
+M1-drop-T_ATTRIBUTE  ->  the three attribute rows are STILL REPORTED.
+                         The mutant's only error is an extra FALSE POSITIVE, fopen at line 13.
+```
+
+That is the fail-open → fail-closed conversion demonstrated **on a live defect**: with the structural
+fix in place, an unknown thirteenth spelling costs a false positive a human must dismiss, instead of
+a silent pass. This is the property that survives whichever way escalation N1 is decided, and it is
+the reason this branch is mergeable without a complete scanner.
+
+**THREE OF THE REVIEWER'S FIVE PRESCRIPTIONS WERE MEASURED FALSE AND REFUSED.** §16.8 rules 43/45
+again, and this is now the third time in this batch that a prescription written by someone who did
+not measure it turned out to be wrong.
+
+- **F2 REFUSED.** The reviewer flagged `intval($s, 0)` as unverified and was right to.
+  MEASURED on 8.3.6: `intval('0b11', 0) === 3` ✓ but **`intval('0o3', 0) === 0`** ✗ — the
+  explicit-octal spelling PHP 8.1 added parses to ZERO, which is the fail-open direction. The
+  compound `octdec(…) || (int) || intval(…,0)` form is also wrong: `octdec()` skips characters it
+  does not recognise and reads `0b11` as **9**. A real radix parser was written instead. The
+  regression row is fixture line 18: `013` is octal **eleven**, which catches both a decimal cast and
+  a bare `octdec()`.
+- **F4 REFUSED.** The reviewer named its own `@eval()` prescription a *bad* fix; it also violates the
+  repo's no-`@`-suppression convention. The "small unescaper" it named as the honest repair was
+  written. MEASURED that the obvious shortcut is ALSO wrong: `stripcslashes()` is not PHP's
+  double-quote alphabet — it reads `\u{77}` as `u{77}` where PHP reads `w`, and eats the `a` in `\a`.
+  Both divergences are fail-open for a mode string.
+- **F1 INCOMPLETE, refused as written.** The prescribed `\s*[,;]` terminator reaches only the FIRST
+  item of a comma list, because `preg_match_all` still requires the `use function` prefix on each
+  match — `use function strlen as len, file_put_contents as persist;` stays invisible. MEASURED.
+  Splitting the statement and validating each item closes F7 (the grouped form) with the same code.
+- **F3 MEASURED TRUE, implemented differently.** Adding `T_ATTRIBUTE` is correct, but adding it to a
+  list named `$interpolationOpeners` while a bare depth counter does the work leaves the class open.
+  Implemented as a **matched-closer stack**.
+- **F5 MEASURED PARTLY FALSE.** The prescription said the flag should report *"returned on a balanced
+  `)` or ran off the end"*. **That would have caught neither F3 nor the eleventh defeat** — both
+  return on a `)`, just the wrong one, with the stack silently one level short. The signal that works
+  is **delimiter matching**, not arrival-at-a-paren. The prescription also omitted the spread case
+  entirely, which it had listed as a symptom two paragraphs earlier.
+
+**ONE DEFECT THE REVIEW DID NOT REPORT, found and closed by the fix agent:** a binary-string prefix
+(`b'…'`) makes `$literal[0]` the letter `b` rather than the quote, so `b'\x72'` was read as
+double-quoted and resolved to `r` — fail-open. Fixture lines 18-19, mutant `M7`.
+
+**F6 — both cardinalities deleted rather than corrected.** `RuntimeTest.php` said TEN, `src/Runtime.php`
+said THREE, about the same population. §16.8 rule 2 is *ship the generator, not the count*, and no
+generator exists for a historical defeat list — so both numbers are gone, the enumeration (now
+sixteen entries) lives in exactly ONE doc-block, and `src/Runtime.php` defers to it in rule-42
+three-part form. The interpolation test's *"it is the eleventh"* ordinal was stale for the same
+reason and is likewise de-ordinalised.
+
+**ORCHESTRATOR-VERIFIED, all of it re-run or re-derived, not taken:**
+```
+cwd /home/sites/prompt-step-P3.S5-fix-1, stdin </dev/null
+--filter 'InterpolationOpenerTokenTest|RuntimeTest|SystemPromptWiringTest'
+                                          OK (142 tests, 686 assertions)   was 136/679
+tests/Support/InterpolationOpenerTokenTest.php
+                                          OK (6 tests, 164 assertions)     unchanged
+git diff --name-only 1267e6fbb..HEAD      exactly the three declared files
+census test diff vs base                  EMPTY (no KNOWN_GAPS row added)
+tests/fixtures/ diff vs base              EMPTY
+goldens                                   32ea749d… / ef0326dd… UNMOVED
+author                                    Joe Huss <detain@interserver.net>
+git status --porcelain                    empty
+```
+**`src/Runtime.php` comment-only — re-derived with the orchestrator's OWN script**, not the agent's:
+stripping `T_COMMENT`/`T_DOC_COMMENT`/`T_WHITESPACE` from base and HEAD gives **4366 tokens on both
+sides, element-by-element identical**, md5 `36ecb93cf7957cb77c9448aa6e16966e` both. The token COUNT
+agrees with the two independent derivations (fix agent, cycle-4 reviewer) that used different
+serialisations and therefore different digests. The `src/` diff is 230 insertions / 19 deletions and
+every one of them is comment.
+
+**The fix agent's own tree-wide regression measurement, REPORTED not yet re-derived:** running the
+scanner over every PHP file in `sugar-crush/{src,tests,bin}` before and after, 260 files report a
+primitive in both states and **zero files gained or lost a primitive name** — the only map that
+changed at all is `tests/RuntimeTest.php`'s own line numbers. All 16 defeat rows reproduce at
+`842cc59b3` and all 16 close; all 21 control rows identical. **The cycle-5 reviewer is explicitly
+told to re-derive this rather than take it**, because a silent widening that happens not to bite
+today would still be a finding.
+
+**FULL suite at `ab9a7dcdc`: NOT RUN. No figure exists for it and none may be written.**
+
+### P3.S4-fix-1 · REVIEW CYCLE 4 · 2026-08-31 — the question I asked came back "yes", and the branch's own judgement was wrong
+
+Cycle 4 of 5 returned **five findings**. Findings file on disk:
+`<scratchpad>/P3.S4-fix-1/review-cycle-4/findings-cycle-4.md`. A fix agent is out; a brand-new
+cycle-5 reviewer follows it. **Cycle 5 is the cap.**
+
+**F3 is the one that matters, and it is the answer to the question the brief asked.** The previous
+cycle noticed control C (the coloured control, escape-byte liveness) has no "did the subprocess
+succeed" guard and **judged it benign**, reasoning that control B's new guard intercepts the
+`diff.external` case before C is reached. I asked this reviewer specifically whether C is reachable
+with a broken subprocess by a route B does not intercept. MEASURED: a `GIT_CONFIG_COUNT` colour
+override drives control C from **21 escapes to 0** while control B stays green (`diffExit=0`,
+`Binary files`=1). One failure, at `:1915`, whose message offers two causes and **neither of them is
+what happened**. A test that reds for a reason its own message denies is worse than one that does not
+red at all. The reviewer measured its fix in BOTH polarities — clean `OK (15 tests, 393 assertions)`,
+hostile reds at a new probe naming `GIT_CONFIG_COUNT` — which makes it the rare prescription that
+arrives verified rather than hypothesised.
+
+**F1, F2, F4, F5 are false claims in prose, inside the file whose entire subject is claims wider than
+their evidence.**
+
+- **F1** `:2514-2516` — the *"Inert for ANY value, MEASURED"* bullet is false for **all five** of its
+  members. `core.quotePath` and `core.autocrlf` exit 128 on all four subprocesses;
+  `diff.indentHeuristic`/`diff.algorithm` on log/status/diff; `status.relativePaths` on status. They
+  are the SAME family as `log.abbrevCommit`; what differs is the DOMAIN — they also red
+  `git init`/`git commit`, so the fixture build fails LOUDLY (`Failures: 6`) instead of silently.
+  **Loud is not inert**, and silent-vs-loud is the distinction this whole file is built on. §16.8
+  rule 40: last cycle's correction to `log.abbrevCommit` did not travel to its neighbours.
+- **F2** `:2328-2329`, repeated `:1747-1754` and in the new test's premise at `:2043` —
+  *"git parses every config file before it uses any of them"* is FALSE; the mechanism is per-command.
+  MEASURED: `log.abbrevCommit=nonsense` kills only `log`; `color.branch.current=true` kills only
+  `branch`. **The verdict it was used to justify still stands** — `log.abbrevCommit` really is
+  undefendable by a repo-local pin, now confirmed three times (previous fix agent, orchestrator in a
+  scratch repo, this reviewer). What is over-broad is the leap to *"the whole invalid-value hazard
+  class is UNDEFENDABLE"*. Same shape as the AuditHook item: the reason is false, the conclusion is
+  not. Correct the reason without discarding the finding.
+- **F4** `:2561-2563` — two of three knobs in the "moves the bytes but REDs" bullet do neither.
+  `core.bigFileThreshold=1` moves NOTHING now, defeated by the `* diff` the method itself writes
+  (verified with and without in a scratch repo); `core.excludesFile` naming the TRACKED file is inert
+  because gitignore never applies to tracked paths — its real reach is the untracked `src/Gamma.php`.
+- **F5** `:1976-1978` — the untracked-status message names one cause; `core.excludesFile` produces the
+  same red with the `status.showUntrackedFiles` pin intact.
+
+**THE FIFTEENTH KNOB WAS NOT FOUND, and that is a result, not a gap.** Six previous reviews each
+found another. This one swept ~65 config keys and env vars through the real fixture: every mover also
+red something, and all the new movers it did find are detected — `color.decorate.branch=true`
+(4,841/4,667, a new member of the invalid-value family), `diff.orderFile`,
+`diff.external`/`GIT_EXTERNAL_DIFF`, and three `GIT_CONFIG_COUNT` rows that reproduce the file's own
+recorded figures exactly. The fix brief explicitly tells the fix agent not to go hunting.
+
+**One UNVERIFIED item, deliberately left unverified:** a possible git-locale hazard on the
+untranslated `--shortstat` line. Untestable on this host — zero git `.mo` catalogues installed. The
+brief tells the fix agent NOT to write a guard whose premise it never observed, and not to write a
+comment claiming a measurement it did not take.
+
+**Every headline figure in the file was re-derived from the tree and every one reproduced exactly:**
+4,844/4,844/4,670 · 12,751/12,751/4,583 · 4,844/5,083/4,403 · old-order 3,095 (gain 1,575 =
+4,056−2,481) · across-turn 3,188 · the `Recent commits:` fence at 4,402 (+18 → 4,420, so 4,423 and
+the mutated `$diffAt` 4,516 both check out) · generatedLines 23,924/24,224 · coloured control 21
+escapes/4,921 B · binary control 4,749 B. The base file at `1267e6fbb` is **silently green** under
+both `log.abbrevCommit=nonsense` and `GIT_DIFF_OPTS=-u10` at `OK (13 tests, 229 assertions)` — the
+deletion experiment holds.
+
+**MY OWN BRIEF CARRIED AN ERROR, corrected here so it stops propagating:** it said this file has
+*"~25 `self::git()` call sites"*. The real figure is **12 at HEAD, 3 at base**. The 4th `self::git()`
+parameter added last cycle is additive and `DuplicatedTestHelperDriftTest` is green. I did not
+measure the ~25 before writing it — which is the same failure mode §7 forbids for worklog numbers,
+committed in a brief instead.
+
+**Figures unchanged and orchestrator-matched:** `--filter PromptStabilityTest` `OK (15 tests, 391
+assertions)`; the seven census files `OK (109 tests, 9632 assertions)`; goldens unmoved;
+`git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/` EMPTY; one file in the diff. The FULL suite at
+`2d5f14835` remains unmeasured and no figure is written for it.
+
+### P3.S5-fix-1 · REVIEW CYCLE 4 · 2026-08-31 — the twelfth defeat, and the class behind all twelve
+
+Cycle 4 of 5 returned **eight findings**, not a clean review. Findings file on disk, per the rule
+this batch adopted:
+`<scratchpad>/P3.S5-fix-1/review-cycle-4/findings-cycle-4.md`. A fix agent is out; a brand-new
+cycle-5 reviewer follows it. **That is the last cycle** — cap five.
+
+**Everything the brief asked the reviewer to falsify came back CORRECT**, and this is worth recording
+because it is the part that does not need re-doing: `src/Runtime.php` comment-only (re-derived
+independently — identical executable token stream, 4366 tokens both sides); goldens unmoved; exactly
+the three declared files; the rename pure (renamed body byte-identical, md5 `720184ae…`, 9848 bytes,
+three call sites in one diff, zero stranded refs); the branch's ONLY subtraction is the three-line
+`$readOnly` literal moved verbatim into `readOnlyBuiltInToolNames()`; the census green because the
+gap CLOSED (`missingOpenersIn('tests/RuntimeTest.php')` → `[]`, not `null`) and `KNOWN_GAPS` still
+holds its three pre-existing rows. The deletion experiment on the eleventh-defeat fix reproduces:
+FIXED → `{"error_log":[9,11],"imagepng":[10]}`, MUTANT → `{"fopen":[12]}`.
+
+**The findings, five of them measured live through the shipped method by reflection:**
+
+| # | Defeat | Measured |
+|---|---|---|
+| F1 | `use function \file_put_contents as p;` and `use function a as b, c as d;` — both legal, both write | `[]` vs control `{"file_put_contents":[204]}` |
+| F2 | `error_log($m, 0x3, $p)` — the rule compares the T_LNUMBER's SOURCE TEXT to `'3'`, so `0x3`/`03`/`0b11`/`0o3` all read read-only | `[]`; the hex form really creates the file |
+| F3 | `T_ATTRIBUTE` (`#[`) is an opener the walk never counts, closed by a `]` it already decrements on | `[]` vs control `{"error_log":[3]}` — **six characters apart** |
+| F4 | `fopen($p, "\167")` — mode matched against raw source bytes, not the string's value | `[]`, and it truncates 22 bytes to 0 |
+| F5 | `error_log(...$a)` fails OPEN with no walk bug at all | `[]` while genuinely writing |
+| F6 | Stale counts: `RuntimeTest.php:2747` says TEN, `src/Runtime.php:388` says THREE, same instrument | stale within one file |
+| F7 | grouped `use function Ns\{x as y};` unresolved while the ungrouped form resolves | `[]` vs `{"file_put_contents":[3]}` |
+| F8 | `prompt_resume.md` stale method name | **CLOSED by the orchestrator's §8 rewrite** — `/usr/bin/grep` now finds zero hits there |
+
+**F3 is the same defect the commit under review just fixed.** `842cc59b3` added `T_CURLY_OPEN` and
+`T_DOLLAR_OPEN_CURLY_BRACES` to the opener list and did not add `T_ATTRIBUTE`. Its own doc-block at
+`:2737-2741` claims the whole `#[...]` group is stepped over by bracket depth — true of the main
+loop, false of `callArguments()`, which never sees `T_ATTRIBUTE` at all. The census the step calls
+this "latent" on reproduces (64 `T_ATTRIBUTE`, exactly one after `(`/`,`, a declaration) — and
+*latent* is the same word the eleventh defeat wore right up until the tree caught it.
+
+**ORCHESTRATOR-VERIFIED BY READING THE CODE, because the brief depends on it:** `callArguments()`
+(`tests/RuntimeTest.php:3000-3045`) has two `return $arguments` statements — the early one at
+`$depth === 0` and the fall-through when the walk runs off the end — and they return the same shape.
+So `argumentsMeanAWrite()` cannot distinguish *"the caller supplied one argument"* from *"the walk
+gave up"*, and two of its three rules `return false` on an absent `$arguments[1]`.
+
+**That is the class, and F1-F4 and F7 are instances of it.** The eleventh defeat was dangerous only
+because of those two `return false`s; F3 is dangerous only because of them; F5 needs no walk bug at
+all. A walk that reports whether it terminated on a balanced closer, plus rules that treat an
+incomplete parse as a write, converts the whole family from fail-open to fail-closed — including the
+thirteenth defeat nobody has found yet. **The fix brief ranks that first and asks for the instance
+fixes as well**, because fail-closed on truncation does not make the walk correct and a correct walk
+does not make the next walk bug safe. The stated hazard: `imagepng($im)` and `error_log($m)` are
+correct one-argument calls already in the shipped expected values and must stay classified as they
+are, so the repair cannot be a blanket `return true`.
+
+**The reviewer wrote five "exact edit, verbatim" prescriptions and measured NONE of them, and said
+so.** The fix brief passes them through as hypotheses with two flagged explicitly: F2's leans on
+`intval($s, 0)` parsing `0b11`/`0o3` on 8.3.6, unverified; F4's is `@eval()` on fixture text, which
+the reviewer itself names as a bad fix. This is the same shape as the `log.abbrevCommit` prescription
+earlier in this batch that was measured false and correctly refused.
+
+**No test figures changed.** The reviewer re-ran the same filtered sets and matched the
+orchestrator's numbers exactly: `OK (136 tests, 679 assertions)` for the three filtered files,
+`OK (103 tests, 9468 assertions)` for the six census files. It did not run the full suite, by
+instruction. The two owed full suites remain unmeasured.
+
+### BATCH P3.CLOSE.B1 · STATE · 2026-08-31 — both fix steps fixed and in cycle-4 review, P3.S6 in flight
+
+Written as a checkpoint, not a close. Nothing has merged; master's `sugar-crush/` tree is still
+byte-identical to `1267e6fbb`.
+
+| Step | Worktree | HEAD | Cycles used | State |
+|---|---|---|---|---|
+| `P3.S4-fix-1` | `/home/sites/prompt-step-P3.S4-fix-1` | `2d5f14835` | 3 of 5, cycle 4 IN FLIGHT | F-2 + F-4 fixed, orchestrator-verified |
+| `P3.S5-fix-1` | `/home/sites/prompt-step-P3.S5-fix-1` | `842cc59b3` | 3 of 5, cycle 4 IN FLIGHT | RED CLOSED, orchestrator-verified |
+| `P3.S6` | `/home/sites/prompt-step-P3.S6` | base `c7e5a6454` | its own loop, internal | step agent working |
+
+**Merge order UNCHANGED: `P3.S4-fix-1` → `P3.S5-fix-1` → `P3.S6`, with a FULL SERIAL SUITE between
+each.** `P3.S4-fix-1` goes first because it changes no production code at all
+(`git diff --stat 1267e6fbb..HEAD -- sugar-crush/src/` is empty — re-verified this session).
+
+**ORCHESTRATOR-MEASURED THIS SESSION — these are the numbers, and they do not need re-taking.**
+```
+master @ c7e5a6454, checkout root, </dev/null   Tests: 10500, Assertions: 161982, Skipped: 1  (06:55.785)
+P3.S4-fix-1 @ 2d5f14835, worktree root
+  --filter PromptStabilityTest                  OK (15 tests, 391 assertions)
+  the seven census files                        OK (109 tests, 9632 assertions)
+P3.S5-fix-1 @ 842cc59b3, worktree root
+  --filter 'InterpolationOpener|Runtime|SystemPromptWiring'Test
+                                                OK (136 tests, 679 assertions)
+  the six census files                          OK (103 tests, 9468 assertions)
+P3.S6 @ base c7e5a6454, worktree root
+  --filter AgentTest                            OK (56 tests, 278 assertions)
+```
+Goldens `32ea749d…` / `ef0326dd…` re-verified UNMOVED in all three worktrees. Every worktree's
+`vendor/` is a `cp -al` hard-link copy verified to resolve the PSR-4 root into its OWN `src/`.
+
+**NOT MEASURED, AND NOBODY MAY WRITE A FIGURE FOR THEM:** the FULL suite at `2d5f14835`, and the FULL
+suite at `842cc59b3`. Each is owed immediately before its own merge, run SERIALLY from that worktree
+root with nothing else heavy on the box. The only full-suite figure that exists for either branch is
+AGENT-REPORTED at the older `bdef57632` (`10501 / 162127 / 1`) and the orchestrator's own RED at the
+older `5a0ff8e12` (`10506 / 162036 / Failures: 1`).
+
+**Two process lessons this batch produced, both now in every brief:**
+1. **A review's findings are written to a FILE the moment they arrive** —
+   `<scratchpad>/<STEP_ID>/<role>/findings-cycle-<n>.md`. Eight of `P3.S4-fix-1`'s ten cycle-3
+   findings were lost to a context boundary because they were only summarised into this worklog.
+2. **A prescription in an orchestrator brief is a hypothesis, and an agent that measures it false and
+   refuses it has done the job right.** `P3.S4-fix-1`'s fix agent refused my instruction to pin
+   `log.abbrevCommit`; I re-derived it myself and the agent was right. Recorded in that step's own
+   entry with the commands.
+
+---
+
+### P3.S4-fix-1 (cycle-3 fix) — `log.abbrevCommit` reclassified, and control B stops blaming the scanner for a broken `git diff`   ·   2026-08-31   ·   `2d5f14835`, NOT MERGED
+
+**Status** `in review` — review cycle 4 of a maximum five is IN FLIGHT.
+**Worktree** `/home/sites/prompt-step-P3.S4-fix-1` — LEFT IN PLACE.
+**Base** master `1267e6fbb`. Branch `prompt/P3.S4-fix-1`, now 5 commits.
+
+**Goal** Dispose of the two cycle-3 findings that survived the previous session's context loss:
+the roster declaring `log.abbrevCommit` inert when it is not (F-2), and control B reddening with
+"the scanner is dead" when a host knob has broken `git diff` (F-4).
+
+**THE HEADLINE: THE ORCHESTRATOR'S OWN PRESCRIPTION WAS MEASURED FALSE AND CORRECTLY REFUSED.**
+My brief told the fix agent, in as many words, to *"move `log.abbrevCommit` to the valid value only
+bullet and PIN it."* The agent measured that prescription and it does not work. `log.abbrevCommit` is
+**validated at parse time**, so an invalid value in a *lower*-precedence config file is fatal even
+across a *higher*-precedence repo-local pin. A `foreach` pin row would have satisfied my instruction
+honestly and pinned **nothing** — and worse, would have reproduced the exact failure this file's own
+completeness paragraph exists to record: *a list that NAMES a hazard and pins a key that does not
+cover it.* §16.8 rule 43 (a prescription is a hypothesis) and rule 45 (it can be honestly satisfied
+and pin nothing), both arriving in one step.
+
+**I RE-DERIVED IT MYSELF rather than take the correction on trust — I wrote the wrong prescription,
+so I am the wrong person to be its only check.** Scratch repo in my own scratchpad, git 2.43.0:
+
+```
+$ git config log.abbrevCommit false                      # repo-local pin, HIGHER precedence
+$ GIT_CONFIG_GLOBAL=<hostile: abbrevCommit = nonsense> git config --get log.abbrevCommit
+false                                                    exit=0     <- the pin answers
+$ GIT_CONFIG_GLOBAL=<hostile>                          git log --oneline -1
+fatal: bad boolean config value 'nonsense' for 'log.abbrevcommit'
+                                                         exit=128   <- and the command dies anyway
+$ GIT_CONFIG_GLOBAL=<valid: abbrevCommit = false>      git log --oneline -1   -> 7514dc8 one, exit=0
+$ GIT_CONFIG_GLOBAL=/dev/null                          git log --oneline -1   -> 7514dc8 one, exit=0
+```
+And the control that proves this is a property of the KNOB and not of the method — `log.date`, the
+family that IS defendable:
+```
+$ git config log.date default ; GIT_CONFIG_GLOBAL=<hostile: date = true> git log --oneline -1
+7514dc8 one                                              exit=0     (pinned — defended)
+$ git config --unset log.date ; GIT_CONFIG_GLOBAL=<hostile: date = true> git log --oneline -1
+fatal: unknown date format true                          exit=128   (unpinned — fatal)
+```
+**The agent is right; I was wrong. Disposition ENDORSED.** The knob got its own bullet — *"Inert only
+for a VALID value AND UNDEFENDABLE BY PINNING"* — corrected in place per §16.8 rule 42, left
+UNPINNED, with the reasoning argued in the file rather than only in a report. And because prose reds
+nothing, the fact is now pinned by an assertion.
+
+**What changed** — one file, `sugar-crush/tests/Providers/PromptStabilityTest.php`, +228/−4.
+- `:2519-2546` the corrected roster bullet. `:2493-2509` the completeness paragraph now records that
+  its own prediction came true — a seventh review found the fourteenth knob, in a family the list
+  already named — and that the answer held: the rendered-field guard reds on it.
+- `:2043-2181` NEW `testLogAbbrevCommitIsParseTimeValidatedSoNoRepoLocalPinDefendsIt`, 16 assertions.
+  Builds a repo that **pins** the knob repo-locally, then measures both polarities against
+  lower-precedence global files: `assertSame(128, …)` for an invalid value, `assertSame(0, …)` plus
+  `assertSame($withNone, $withValid)` for a valid one, and `assertSame(['false'], $pinned)` for
+  `git config --get` **under the same hostile file**. That last pair is the load-bearing one: it
+  separates "undefendable by pinning" from "nobody pinned it".
+- `:1873-1899` control B now asserts its own fixture's `git diff --shortstat --patch` exited 0
+  BEFORE asserting liveness, with a message carrying the real exit code and git's own stderr.
+- `:2645-2661` `self::git()` takes an optional 4th `?string $globalConfig`, prefixing
+  `GIT_CONFIG_GLOBAL=` for one command — the GLOBAL slot deliberately, because it is BELOW
+  repo-local and that is the only arrangement that can show whether a pin defends anything.
+  Additive; ~25 existing call sites unchanged. A second helper was rejected on purpose:
+  `DuplicatedTestHelperDriftTest` is in the census set.
+
+**Deletion experiment — THREE, each from a committed tree (§16.8 rule 51), each restore verified
+with an empty `git status --porcelain`.**
+1. Removed control B's new guard, ran under a hostile `diff.external` → RED with the FALSE message
+   *"…The scanner is dead"*. Restored → RED with *"git diff failed, exit 128 — the binary-diff
+   control fixture cannot produce a diff at all, so nothing below this line is a statement about the
+   scanner"*, carrying `fatal: external diff died`. **The point of this fix is the MESSAGE, not the
+   colour, and the experiment shows the message.**
+2. Removed the repo-local pin row from the new test's fixture → RED, `['nonsense']` where `['false']`
+   was expected: without the pin the fatal would have been measured against an UNPINNED repository
+   and would prove nothing.
+3. Changed the hostile global from `nonsense` to `false` → RED, "did not exit 128": the 128 is
+   measuring the hazard, not a constant (§16.8 rule 12).
+**Stated plainly, and the agent stated it first:** the PROSE half of the F-2 fix reds nothing when
+reverted — a comment cannot. That is exactly why the fix ships the test; the false claim survived six
+reviews because nothing could fail on it.
+
+**MEASURED — ORCHESTRATOR'S OWN RUNS**, cwd `/home/sites/prompt-step-P3.S4-fix-1`, tree at
+`2d5f14835`, `git status --porcelain` empty, stdin `</dev/null`:
+```
+--filter PromptStabilityTest                    OK (15 tests, 391 assertions)
+the seven tree-wide census files                OK (109 tests, 9632 assertions)
+git diff --name-only 1267e6fbb..HEAD            sugar-crush/tests/Providers/PromptStabilityTest.php
+git diff --stat 1267e6fbb..HEAD -- src/         EMPTY — no production code, as required
+md5sum of the two goldens                       32ea749d… / ef0326dd…   UNMOVED
+git log -1 --format='%an <%ae>'                 Joe Huss <detain@interserver.net>
+```
+Both figures agree with the agent's EXACTLY. Progression 13/229 (base) → 14/374 (`bdef57632`) →
+**15/391** (+1 test, +17 assertions: 16 from the new test, 1 from control B's guard). The census set
+is byte-for-byte unmoved by this change, `InterpolationOpenerTokenTest` included (6/164) — this
+branch stays clean on the census the sibling step was red on.
+
+**FULL SUITE NOT YET RUN AT THIS HEAD.** The only figure that exists is AGENT-REPORTED at
+`bdef57632`: `Tests: 10501, Assertions: 162127, Skipped: 1`. **Nobody may write a figure for
+`2d5f14835` until it is measured serially.**
+
+**Second surprise, smaller and worth keeping:** the `-diff` gitattribute does **NOT** stop git
+invoking an external differ. MEASURED — `git diff --shortstat --patch` on a fixture whose attributes
+say `* -diff`, under a `diff.external` naming a non-existent command, still exits 128 on
+`fatal: external diff died`. That is *why* control B — the one control built on `-diff` — is the one
+that masks.
+
+**Follow-up created, OBSERVED and deliberately not fixed:** control C (the coloured control,
+escape-byte liveness) has no equivalent subprocess guard. Judged benign because control B's new guard
+now intercepts the `diff.external` case before C is reached and C's own message already names its own
+hazards — but the cycle-4 reviewer has been asked specifically whether C is reachable with a broken
+subprocess by some route B does not intercept.
+
+**Subagents** One fix agent. Complete seven-section report, not blank, not truncated. Answered
+ORCHESTRATION-RULE-2 **NO** — its one scratch repo was inside its own `scratchpad/P3.S4-fix-1/`
+subdirectory, `git config` was run only *inside that scratch repo*, and the real commit took its
+identity from per-command `-c user.name=… -c user.email=…` which does not persist. I re-checked
+`git config user.name` / `user.email` in the main repo afterwards: still `Joe Huss` /
+`detain@interserver.net`. ORCHESTRATION-RULE-3 held.
+
+**HANDOFF** Review cycle 4 is in flight with a BRAND-NEW reviewer (never re-use one; never hand it
+the earlier cycles' findings — §1.4). It was asked, as its highest-value contribution, to find the
+**fifteenth** knob, and — because I wrote the prescription that turned out to be wrong — to re-derive
+the whole `log.abbrevCommit` classification independently and tell me if either of us is wrong. Two
+cycles remain. On a clean review: run the full suite SERIALLY from the worktree root, then merge
+**FIRST**, ahead of `P3.S5-fix-1`.
+
+---
+
+### P3.S5-fix-1 (fix cycle) — the write-primitive scanner lost a brace level on every interpolated argument   ·   2026-08-31   ·   `842cc59b3`, NOT MERGED
+
+**Status** `in review` — the RED is closed; review cycle 4 of a maximum five is IN FLIGHT.
+**Worktree** `/home/sites/prompt-step-P3.S5-fix-1` — LEFT IN PLACE.
+**Base** master `1267e6fbb`. Branch `prompt/P3.S5-fix-1`, now 5 commits.
+
+**Goal** `InterpolationOpenerTokenTest::testEveryBraceWalkingScannerNamesEveryOpener` — a PRE-EXISTING
+tree-wide census that is GREEN on master — had to go green **because this step's scanner actually
+handles every token PHP uses to OPEN a brace**, not because a `KNOWN_GAPS` row deferred it.
+
+**What changed** — one file, `sugar-crush/tests/RuntimeTest.php`, +107/−1.
+`callArguments()` (`:3002-3005`, `:3017-3018`) counted brace depth on the bare one-byte strings `{`
+and `}` alone. PHP opens an interpolated expression with an **array** token — `T_CURLY_OPEN` (text
+`{$`), and `T_DOLLAR_OPEN_CURLY_BRACES` (text `${`) where the running PHP still defines it — and
+closes it with the bare `}`. So every interpolation handed the walk a closer whose opener it had never
+taken, and the argument list ended a level early. Both openers are now counted; the deprecated one is
+reached only under `\defined('T_DOLLAR_OPEN_CURLY_BRACES')`, the same shape the census itself uses.
+
+**THE DEFECT MEASURED THROUGH THE SHIPPED METHOD BEFORE ANY TEST WAS WRITTEN** — by reflection over
+eight one-line fixtures. This is what established it rather than assuming it:
+
+```
+                        BEFORE              AFTER
+errorlog-interp-first   []                  {"error_log":[4]}
+errorlog-plain          {"error_log":[3]}   {"error_log":[3]}
+errorlog-nonfile        []                  []
+errorlog-dollar-brace   []                  {"error_log":[4]}
+imagepng-interp         []                  {"imagepng":[3]}
+imagepng-buffer         []                  []
+fopen-interp            {"fopen":[3]}       []
+fopen-plain-read        []                  []
+```
+
+`error_log("boom {$e}", 3, $path)` and `imagepng(make("{$p}"), $p)` really do write a file and came
+out READ-ONLY — the **fail-OPEN** direction, because the truncated walk left `argumentsMeanAWrite()`
+with no `$arguments[1]` and both the `errorlog` and `target` rules answer false on an absent one. The
+closed direction was there too: `fopen("{$p}/x", 'rb')` was reported as a write it is not, because the
+mode argument had been swallowed.
+
+**Test added** `tests/RuntimeTest.php::testTheWritePrimitiveScannerSurvivesAnInterpolatedArgument`
+(`:3456`) — feeds a synthetic nowdoc fixture through the shipped `writePrimitivesCalledIn()` and pins
+the exact primitive→line map `['error_log' => [9, 11], 'imagepng' => [10]]` with ONE `assertSame`.
+BOTH POLARITIES THROUGH THE SAME INSTRUMENT: lines 9-11 are real file writes that must be reported;
+line 12 `fopen("{$path}/x", 'rb')`, line 13 `error_log(…)` with no file argument, and line 14's
+buffer-form `imagepng` must NOT be. A classifier that reports everything reds on the same line as one
+that reports nothing.
+
+**Deletion experiment — THREE mutations, each on a committed tree, each restore verified with an
+empty `git status --porcelain`.**
+1. Revert the whole depth clause → RED. Expected `error_log[9,11]` + `imagepng[10]`, actual
+   `fopen[12]`. Every real write lost AND a non-write gained, from the one missing token.
+2. Keep the clause, drop `T_DOLLAR_OPEN_CURLY_BRACES` → RED, line 11 alone disappears.
+3. Keep the deprecated opener, drop `T_CURLY_OPEN` → RED, lines 9 and 10 disappear and `fopen[12]`
+   returns.
+The two halves of the opener list are pinned **independently**; neither is an equivalent mutant of the
+other. Restored: `OK (1 test, 1 assertion)`.
+
+**MEASURED — ORCHESTRATOR'S OWN RUNS, not the agent's**, from cwd `/home/sites/prompt-step-P3.S5-fix-1`,
+tree at `842cc59b3`, `git status --porcelain` empty, stdin `</dev/null`:
+
+```
+--filter 'InterpolationOpenerTokenTest|RuntimeTest|SystemPromptWiringTest'
+  OK (136 tests, 679 assertions)      <- agent reported 6/164 + 119/440 + 11/75 = 136/679. AGREES EXACTLY.
+the six tree-wide census files
+  OK (103 tests, 9468 assertions)     <- agent reported the same. AGREES EXACTLY.
+git diff --name-only 1267e6fbb..HEAD
+  exactly the three declared files
+git diff --stat 1267e6fbb..HEAD -- sugar-crush/tests/Support/InterpolationOpenerTokenTest.php
+  EMPTY — the census test itself is untouched
+md5sum of the two goldens
+  32ea749d84938811ac9331419cae7380 / ef0326dd38535aaa2f1d715919bff26e   UNMOVED
+```
+RuntimeTest went 118/439 → 119/440 (+1 test, +1 assertion — the new test). SystemPromptWiringTest
+unchanged at 11/75. `InterpolationOpenerTokenTest` 6/164, and **green for the right reason**: measured
+through the census's own private methods by reflection, `missingOpenersIn('tests/RuntimeTest.php')`
+returns `[]` and **not** `null` — the file is still SELECTED as a brace walker and has merely stopped
+having a gap — and `KNOWN_GAPS` still holds exactly its three pre-existing rows.
+
+**FULL SUITE NOT YET RUN AT THIS HEAD.** Baseline to beat: `Tests: 10506, Assertions: 162036,
+Failures: 1, Skipped: 1` at `5a0ff8e12` (orchestrator, serial, worktree root). Expected `Failures: 0`
+and +1/+1 — **UNVERIFIED, and nobody may write that figure down until it is measured serially.**
+
+**SURPRISE — THE BRIEF'S OWN CHARACTERISATION OF THE FAILURE WAS WRONG, AND WRONG IN A WAY THAT WOULD
+HAVE PRODUCED A GREEN TEST THAT PINNED NOTHING.** My brief (copying the census's own message) said the
+scanner *"silently stops matching after the first interpolated string."* That is true of
+`callArguments()`'s internal walk but **NOT** of the enclosing `writePrimitivesCalledIn()` loop, which
+is linear and keeps scanning. The real damage is narrower and worse-shaped: the argument list is
+**TRUNCATED**, and `argumentsMeanAWrite()` reads the absent `$arguments[1]` as "not a write" — a silent
+RECLASSIFICATION of a real write to read-only, not a halt. A fixture built on the brief's wording — a
+write placed *after* an interpolation — comes out green and proves nothing. **Same lesson as last
+session's, one layer down: a message quoted from a guard is a description of the class, not of this
+instance. Re-derive the instance.**
+
+**Follow-ups created — recorded, NOT fixed (minimal-edit scope)**
+1. `tests/RuntimeTest.php:3015-3060` — the doc-block on `argumentsMeanAWrite()` says UNREADABLE MEANS
+   WRITE *"in every branch"*. **It does not.** Two of its three rules return `false` when
+   `$arguments[1]` is absent — exactly the state a mis-parse produces. Those `false` returns are
+   correct for the shapes they were written for (`imagepng($im)` really is the buffer form,
+   `error_log($m)` really does go to the log), so this is not fixed by inverting them: it is a claim
+   in prose wider than the code, and the safety it promised was being carried by the walk. The walk is
+   now correct so the claim is no longer load-bearing, but it is still overstated. Either correct the
+   prose in §16.8 rule 42's three-part form, or make the rules distinguish "argument genuinely absent
+   in the source" from "argument the walk failed to produce" — the second is the real repair and needs
+   `callArguments()` to report a truncated parse rather than a short list.
+2. `tests/RuntimeTest.php:3017` — `callArguments()` counts the bare `[` but not `T_ATTRIBUTE`, the
+   array-token opener for `#[`, closed by a bare `]`. Identical class of defect one bracket over, and
+   OUTSIDE `InterpolationOpenerTokenTest`'s alphabet (its predicate requires a dispatch on both `{`
+   and `}`). **Latent, not live**, MEASURED: over every `.php` under `src/` and `tests/`, exactly ONE
+   `T_ATTRIBUTE` sits after a `(` or `,` — `src/ToolRegistry.php:43`, `#[\SensitiveParameter]` on a
+   promoted constructor parameter — and that is a DECLARATION, which `callArguments()` never enters
+   because the `T_FUNCTION` guard excludes it.
+3. The two attribute-skip walks in this file (`:2828-2830`, `:3663-3665`) count `[`/`]` only and both
+   already name `T_ATTRIBUTE`. Deliberately left alone; recorded so the next reader does not
+   re-derive it.
+
+**Subagents** One fix agent. Complete seven-section report, not blank, not truncated. Answered
+ORCHESTRATION-RULE-2 **NO** — no `git init`, no `git config` write, anywhere. All scratch files inside
+its own `scratchpad/P3.S5-fix-1/` subdirectory under a `p3s5fix1` name prefix; nothing at the
+scratchpad root, no generic names, no `rm -rf`. ORCHESTRATION-RULE-3 held.
+
+**HANDOFF** Review cycle 4 is in flight with a BRAND-NEW reviewer (never re-use one; never hand it the
+earlier cycles' findings — §1.4). It was asked, as its highest-value contribution, to construct the
+**twelfth** defeat of this scanner and measure it. Two cycles remain. On a clean review: run the full
+suite SERIALLY from the worktree root, then merge — **second**, after `P3.S4-fix-1`.
+
+---
+
 ### BATCH P3.CLOSE.B1 RE-OPEN · 2026-08-31 (fix cycle) — two fix agents spawned
 Steps: `P3.S5-fix-1` (red-fix + cycle 4), `P3.S4-fix-1` (cycle-3 findings + cycle 4)
 Merge order: `P3.S4-fix-1` first, then `P3.S5-fix-1` — UNCHANGED from the original declaration.

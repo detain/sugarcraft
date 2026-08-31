@@ -270,10 +270,29 @@ related. Where a command is given, run that command — not a variant you think 
         tests/Support/DuplicatedTestHelperDriftTest.php \
         tests/Support/ChildWallClockBudgetTest.php \
         tests/Config/EnvRosterDriftTest.php \
-        tests/Tools/BuiltInToolCorpusTest.php
+        tests/Tools/BuiltInToolCorpusTest.php \
+        tests/Support/InterpolationOpenerTokenTest.php \
+        tests/Support/ChildStderrCaptureTest.php \
+        tests/Config/GlobFigureDriftTest.php
       ```
       (Paths MEASURED on `master` 2026-08-25. If one has moved, find it with
       `find sugar-crush/tests -name '<Name>.php'` and record the new path in the worklog.)
+
+      **THE LAST THREE WERE ADDED 2026-08-31, AND THE LIST IS STILL NOT PROVABLY COMPLETE.**
+      `InterpolationOpenerTokenTest` was already being run in practice but had never been written
+      down, so a step following this list literally ran six files while the worklog recorded seven
+      (six = `103 / 9468`; seven = `109 / 9632` — they reconcile exactly, which is how the omission
+      was spotted). The other two were added because BOTH bit inside a single batch, and neither
+      was in this list:
+       - `ChildStderrCaptureTest` red `P3.S4-fix-1`'s FULL suite after five clean review cycles.
+       - `GlobFigureDriftTest` is what moved `P3.S5-fix-1`'s total by +23, and twenty-five other
+         guards were measured one at a time before anyone thought to check it.
+      **So do not treat this list as the set of tree-wide guards — treat it as the ones known to
+      bite.** The reliable method is not a longer list: run the step's suite with `--log-junit` on
+      both sides and diff assertions PER CLASS (PHPUnit's JUnit `<testcase>` carries an
+      `assertions` attribute). That names the mover in one pass instead of twenty-five, and it is
+      what §1.6's MEASURED block should be built from whenever a total moves and the declared files
+      do not account for all of it.
    c. **The full `sugar-crush` suite** at least once per phase. The phase review (§1.7) already runs
       it; that run is the phase's full-suite checkpoint. A step may skip the full suite only because
       the phase close will do it.
@@ -419,6 +438,25 @@ A review agent is told, verbatim:
 >     `sugar-crush/src/`, find the roster test that enumerates that category and confirm the diff
 >     updates it. If the diff updates none, that is a finding — name the roster you expected. §16.6
 >     records that this is the thing reviews of this tree most often miss.
+>
+>     **The second half, and it is the half that bites — ADDED 2026-08-31 after P3.S4-fix-1.**
+>     Everything above is about what a diff **ADDS**. A roster can also be broken by a **REMOVAL**:
+>     *a diff that removes the LAST instance of something a roster defers on must update that roster
+>     in the same change-set.* This tree keeps rosters of things that are **not yet** fixed —
+>     `ChildStderrCaptureTest`'s `OUT_OF_SCOPE`, `ACCEPTED_DISCARDED_STDERR`, `KNOWN_GAPS` and their
+>     kin — and each carries a guard asserting the deferral is still WARRANTED. Repair the last
+>     offender under a deferred prefix and that guard reds, correctly: **a deferral that has been
+>     overtaken is how a directory silently stops being guarded.**
+>     MEASURED: five review cycles and the orchestrator's own verification all performed the
+>     ADDS-half honestly and **could not have found it** — `P3.S4-fix-1` replaced one unchecked
+>     `shell_exec()` with a checked helper, added no category at all, and red the tree-wide census at
+>     `ChildStderrCaptureTest.php:1059` only when the FULL suite ran. So when a diff makes something
+>     *better*, ask which roster was deferring on the thing it just fixed.
+>     **Two corollaries the same episode earned.** (i) A step-scoped `--filter` set is NOT a
+>     substitute for the full suite — the census tests that catch this are in no step's file list.
+>     (ii) Check the **assertion count**, not just the green: a roster that stops iterating still
+>     prints `OK`. Master's isolated figure was 343, the red branch 322, the fix 345. A figure
+>     materially BELOW the baseline is a guard quietly un-guarding.
 >
 > **Run the code. Do not only read it.** You have the worktree; use it.
 > - Run the step's own test file(s) and paste the **actual** counts:
@@ -1514,10 +1552,24 @@ no-write step on a dirty tree.
 **Goal** P3.S5 wired the per-step write signal into ONE of `EnvironmentBlock`'s four production
 construction sites — the `Runtime` one. The other three feed `Agents\Agent::systemPrompt()`, the
 second assembler §17.2 keeps deliberately separate from `Runtime`'s. That path is live in production
-today (`bin/sugarcrush` → `Bootstrap::chat()` → `Bootstrap.php:1044` `agentManager()` →
-`Bootstrap.php:1462` capture-per-agent → `AgentManager.php:433`) and its `systemPrompt()` is consumed
-at **eight** live sites (corrected 2026-08-31 — see the enumeration above; it is now pinned by a
-test that derives it). **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
+today, and its `systemPrompt()` is consumed at **eight** sites (corrected 2026-08-31 — see the
+enumeration above; it is now pinned by a test that derives it).
+
+**CORRECTION, 2026-08-31, from P3.S6's cycle-4 review — this Goal named a DORMANT terminus as the
+live path.** It said the path is live "today (`bin/sugarcrush` → `Bootstrap::chat()` →
+`Bootstrap.php:1044` `agentManager()` → `Bootstrap.php:1462` capture-per-agent →
+`AgentManager.php:433`)" and that the eight sites are all "live". **What is true:** SIX of the eight
+are live and TWO are dormant — and `AgentManager.php:433`, the terminus this Goal named, is one of
+the dormant two. **How it was measured** (re-derived by the orchestrator, not taken from the review):
+`/usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/ bin/` produces no output and
+exits 1, and so does the same form for `->dispatchSkill(`; both callees therefore have NO production
+caller anywhere in `src/` or `bin/`. The genuinely live path, walked hop by hop, is
+`bin/sugarcrush:423 → Bootstrap::app → Bootstrap.php:1887 chat() → workflowEngine: at :1058 (built
+:1183) → Chat.php:7725 /workflow run → workflowRun():7820 → engine->run() at :7844 inside the Fiber
+at :7842 → WorkflowEngine::run():348 → foreach :875 → :1042/:1152/:1252/:1294/:1397`, with all four
+stage types dispatching at :885/:897/:909/:921. The step agent's own diff had already corrected this
+and the correction was right; the BRIEF was left standing, which is exactly the asymmetry §1.4
+check 14 exists to catch — nothing downstream is asked to falsify a brief. **It pays MORE for the diff than the Runtime path did**, not less: `render()` is
 not memoised there (`Bootstrap.php:1458-1460`), so the git shell-out happens once per
 `systemPrompt()` call — MEASURED with a logging `git` shim on `PATH`, **five** subprocesses when the
 diff is emitted (branch, status, log, `diff --cached`, `diff`) and **three** when it is suppressed.
@@ -3250,6 +3302,7 @@ building one, stop it.
 | A `<system-reminder>` channel inside user turns | §9.15, §4.15 | Prefer an appended `role: "system"` message: same caching profile, and it is the **non-spoofable** operator channel. Text inside user/tool content can be forged by anything that writes to user-visible input. If a reminder channel is ever added, it needs a tool-result sanitiser too, because tool output can forge the tag. |
 | Utility prompts (`away-recap`, `next-action-suggestion`, `tool-summary`) | §9.15 | Cheap polish, no defect behind them. Out of scope; note them for a later plan. |
 | A memory-consolidation prompt at `SessionEnd`/`PreCompact` | §9.15 | Depends on `SessionEnd`/`PreCompact` having dispatch sites, which Phase 7 only builds for `SessionStart`/`UserPromptSubmit`. Defer. |
+| Wiring the per-step write signal into `Agents\Agent::systemPrompt()` — the second assembler | §3.4, §9.2; P3.S5's open gap, dispositioned by P3.S6 (`1461e1685`) | **ESCALATED, NOT WAIVED — the seam exists and is live; it is simply not reachable from P3.S6's declared file list.** MEASURED at P3.S6 by a token census over `src/` and `bin/`: the agent assembler has **eight** call sites. **Five are in `Workflows/WorkflowEngine.php` and are production-reachable** (`bin/sugarcrush` → `Bootstrap::chat()` → `workflowEngine:` at `Bootstrap.php:1058`, the same construction point as `agentManager:` at `:1044` → `Chat::workflowRun()`); **two are dormant** (`AgentManager.php:433` in `executeSubAgent()`, whose production caller count is MEASURED zero — `/usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/ bin/` exits 1; and `App/App.php:569` in `dispatchSkill()`, which says of itself *"Nothing calls dispatchSkill() in production yet"*); one is `ProcessExecutor.php:473`. The path re-renders **within a single run**: `WorkflowEngine.php:1105` and `:875` each re-render once per stage, and `:1252`/`:1294` render twice in one verification stage. MEASURED with a logging `git` shim on a real repository: one render costs **5** git subprocesses (**3** with the diff suppressed), a K-stage workflow costs **5 × K** (10 at K=2, 25 at K=5), and one `ProcessExecutor` dispatch costs **10** because it renders twice. In every case the stages see **one distinct prompt** — each render byte-identical, the two git-diff sections re-sent unchanged per stage. **The disposition rests on DECLARED SCOPE, and deliberately not on underivability.** P3.S6's first draft of this row claimed the signal was *underivable* on this path; **its own review cycle 2 falsified that** and the claim is not repeated here. Whether a stage's write is derivable is genuinely contested and both halves are measured: `ProcessExecutor.php:985` passes a literal `tools: null`, while `AgentWorkerPool.php:410` forwards `tools: $request->tools`. What is NOT contested is the carrier: `AgentResult::__construct` is `agentId, status, output, error, tokensUsed, costUsd, startedAt, completedAt` — VERIFIED, eight parameters, **no tool-call field** — and the worker's `complete` IPC frame carries only `output`/`tokensUsed`/`costUsd`. So wiring this is a **build-it-out** across `WorkflowEngine.php` + `AgentResult.php` + the worker IPC frame, not a one-line mark, and it needs its own step. P3.S6 pins the measurement instead, in `tests/Agents/AgentTest.php`, including an exact-list reflection assertion over `AgentResult::__construct` **so the day a tool-call field is added — the change that unblocks this — the test reds and names it.** |
 | Anything in `docs/plans/crush_code_*.md` or `left_steps.md` | — | **Read-only to this plan.** No edits of any kind. |
 
 ---

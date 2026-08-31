@@ -239,26 +239,78 @@ final class SystemPromptWiringTest extends TestCase
      * across the two steps, and the two diff sections are the ONLY licensed
      * mid-turn difference.
      *
-     * THE METHOD NAME NOW OVERSTATES AND IS KEPT ANYWAY, and the reason first
-     * written here was wrong. It claimed
-     * {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest} would red on a
-     * renamed method because `src/Runtime.php` cites this test in a backticked
-     * doc-block reference. MEASURED, twice, against that census run from
-     * `sugar-crush/`: rewriting the cited METHOD name to one that was never
-     * written leaves it `OK (7 tests, 2952 assertions)`, and rewriting the
-     * cited CLASS name to one that does not exist leaves it `OK (7 tests, 2952
-     * assertions)` as well. That census does not police this citation form at
-     * all, so the constraint invoked did not exist.
+     * THE METHOD HAS BEEN RENAMED, AND THIS PARAGRAPH IS THE RECORD OF IT
+     * RATHER THAN THE ARGUMENT AGAINST IT (§16.8 rule 42: what it used to say,
+     * what is true now, why it still earns its place).
      *
-     * WHAT IS ACTUALLY TRUE is smaller and is not a census: the citing bullet
-     * in `Runtime.php` names this method in PROSE, `Runtime.php` is outside
-     * this step's one-file declared list, and nothing in the tree would catch
-     * the stranded reference — which is the argument for renaming BOTH in one
-     * diff rather than for renaming neither. That is a §1.10 outcome-3
-     * escalation, recorded for the orchestrator, not a decision this step may
-     * take on its own.
+     * WHAT IT USED TO SAY: "THE METHOD NAME NOW OVERSTATES AND IS KEPT
+     * ANYWAY". The name read, in words, *every step of one turn gets the
+     * identical system prompt* — which asserts the OPPOSITE of what the body
+     * pins once P3.S5 licensed the two git-diff sections as a mid-turn
+     * difference. Renaming it needed `src/Runtime.php` — outside P3.S5's
+     * declared file list — in the SAME diff, because the citing bullet there
+     * names this method, so the step escalated the rename under §1.10 outcome
+     * 3 instead of taking it. The old spelling is deliberately not reproduced
+     * here as a token: a historical mention and a stranded reference are
+     * indistinguishable to the grep that has to prove no stranded reference
+     * survives.
+     *
+     * WHAT IS TRUE NOW: the user answered that escalation and approved the
+     * rename, and P3.S5-fix-1 took it in ONE diff across all three sites —
+     * this declaration, the `{@see}` in {@see completeOneTurn()}, and item 2
+     * of the `markWriteSinceLastRender()` doc-block in `src/Runtime.php`. The
+     * name now says what the body asserts: every byte before the git-diff cut
+     * is identical across the steps of one turn, and the two diff sections are
+     * the only licensed difference. Nothing was weakened to do it — the method
+     * keeps its `test` prefix, stays collected, and keeps every assertion it
+     * had.
+     *
+     * WHY IT STILL EARNS ITS PLACE: because the measurement it carried was
+     * WRONG, and a reader who found only the new name would inherit the wrong
+     * belief about what guards a citation like this one. It said "that census
+     * does not police this citation form at all", quoting `OK (7 tests, 2952
+     * assertions)` for a fabricated method name AND for a fabricated class
+     * name. RE-MEASURED on the merged tree at the base of P3.S5-fix-1, PHP
+     * 8.3.6, run from `sugar-crush/` with stdin from /dev/null; the untouched
+     * baseline is `OK (7 tests, 2972 assertions)`:
+     *
+     *  - fabricate the cited METHOD name in `src/Runtime.php` →
+     *    `Tests: 7, Assertions: 2972, Failures: 1`. It IS policed.
+     *  - fabricate the cited CLASS to a name that does not exist but still
+     *    ends in the four letters T-e-s-t →
+     *    `Tests: 7, Assertions: 2972, Failures: 1`. Also policed.
+     *  - fabricate the cited CLASS to a name ending in "TestClass" instead →
+     *    `OK (7 tests, 2972 assertions)`, GREEN. That is the real hole, and it
+     *    is in {@see \SugarCraft\Crush\Tests\SymbolCitationDriftTest}'s
+     *    `looksLikeATestSymbol()`, which keeps a citation only when the SHORT
+     *    class name ends with those four letters, so such a token is discarded
+     *    before it is ever resolved — a verdict the harness declines to
+     *    compute, reported as a pass (§16.8 rule 32).
+     *
+     * WHY THE OLD MEASUREMENT DISAGREED, since a correction is itself a claim:
+     * it was taken while `Runtime.php` still spelled the citation with a PATH
+     * PREFIX, a form that census's backtick scraper cannot see at all (no `/`
+     * in its class character class). P3.S5's cycle-5 commit respelled it into
+     * the policed form, and that is what moved the answer. The path-prefix
+     * hole is real and still open elsewhere in the tree — escalation 2 of
+     * P3.S5's worklog entry — but it is NOT the state of this citation, so the
+     * rename was covered by a guard after all. It was still verified by hand,
+     * and the "TestClass" row above is exactly why that was worth doing.
+     *
+     * THE SCOPE OF THAT HAND VERIFICATION, because "over the whole worktree"
+     * was the first wording and it is not what was checked.
+     * `/usr/bin/grep -rn` for the old token over `sugar-crush/` returns ZERO
+     * hits outside the generated `.phpunit.cache`. Over the WORKTREE it
+     * returns four, all in this plan's own bookkeeping and all outside this
+     * step's declared file list: `prompt_worklog.md:797`, `:2874` and `:2881`
+     * are historical narrative describing the state at the time and are
+     * correct as they stand, while `prompt_resume.md:345` is a LIVE
+     * instruction block that still names the old method in the present tense
+     * alongside now-stale line coordinates. That one is a real stranded
+     * reference; it is ESCALATED to the orchestrator rather than edited here,
+     * because `prompt_resume.md` is not this step's to touch.
      */
-    public function testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt(): void
+    public function testEveryStepOfOneTurnGetsAByteIdenticalPromptExceptTheTwoGitDiffSectionsWhichAreTheOnlyLicensedDifference(): void
     {
         file_put_contents($this->tempDir . '/AGENTS.md', 'MULTI STEP INTEGRATION MARKER');
 
@@ -707,7 +759,7 @@ final class SystemPromptWiringTest extends TestCase
         // omits $root keeps the behaviour it had: the `EnvironmentBlock`
         // describes `getcwd()`. Only the caller that needs a DETERMINISTIC
         // git regime passes one -- see
-        // {@see testEveryStepOfOneTurnGetsTheIdenticalSystemPrompt()}.
+        // {@see testEveryStepOfOneTurnGetsAByteIdenticalPromptExceptTheTwoGitDiffSectionsWhichAreTheOnlyLicensedDifference()}.
         $this->backend($provider)->withRoot($root)->complete([Message::user('hello')]);
 
         return $provider;

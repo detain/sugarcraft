@@ -114,9 +114,32 @@ final class ChildStderrCaptureTest extends TestCase
      * row per prefix, and {@see testNoDirectoryWithAnUnguardedSpawnIsUnaccountedFor()}
      * is what makes the two lists jointly total over the offenders.
      *
+     * `Providers/` JOINED THE LIST rather than being adopted on purpose, and
+     * the distinction is the point of {@see OUT_OF_SCOPE}'s second direction.
+     * Its row deferred one `git init ... 2>/dev/null` to the round that would
+     * settle the `Context/` fixture cluster with it. Then a step whose subject
+     * was something else entirely - a hostile-`GIT_CONFIG_GLOBAL` scanner in
+     * `Providers/PromptStabilityTest.php` - replaced that unchecked
+     * `shell_exec()` with the checked `self::git()` helper, whose `2>&1` makes
+     * the child's stderr the text of the failure message. That was the LAST
+     * offender under the prefix, so
+     * {@see testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn()} went red
+     * and named the move: a deferral that has been overtaken is how a
+     * directory silently stops being guarded.
+     *
+     * THE CENSUS BEHIND THE MOVE, re-derived here rather than inherited from
+     * the step that triggered it. Two spawn sites exist under the prefix, and
+     * both are captures: `PromptStabilityTest::git()`'s `exec($command .
+     * ' 2>&1', ...)`, and `TransientFailureTest`'s `proc_open()` giving fd 2 a
+     * `['pipe', 'w']` whose contents are read back and asserted empty. So this
+     * widening, like round 48's, adds NO row to
+     * {@see ACCEPTED_DISCARDED_STDERR}. The `pcntl_fork()` a raw grep finds in
+     * `TransientFailureTest` is not a third site: it is heredoc text for the
+     * child script that same `proc_open()` launches.
+     *
      * @var list<string>
      */
-    private const SCOPE = ['Agents/', 'Backend/', 'Chat/', 'Integration/', 'MCP/', 'Support/'];
+    private const SCOPE = ['Agents/', 'Backend/', 'Chat/', 'Integration/', 'MCP/', 'Providers/', 'Support/'];
 
     /**
      * Directories that hold an offending spawn and are NOT yet guarded, each
@@ -185,10 +208,6 @@ final class ChildStderrCaptureTest extends TestCase
             'One `shell_exec()` reading `getconf PAGESIZE`, already `@`-suppressed and guarded '
             . 'by a `<= 0` check, so the inherited fd 2 is the only thing that can reach the '
             . 'suite. Cheap, deferred on ownership only.',
-        'Providers/' =>
-            'One `git init ... 2>/dev/null` behind a `markTestSkipped()` for a missing git - '
-            . 'the same fixture shape as Context/ and it should be settled with it rather than '
-            . 'piecemeal.',
         'Renderer/' =>
             'A POSITIONAL descriptor spec sending all three fds to /dev/null in a `runQuietly()` '
             . 'helper. Read as `inherited` until round 48 fixed the classifier, so this row '
@@ -201,7 +220,10 @@ final class ChildStderrCaptureTest extends TestCase
             . 'row.',
         'Tools/' =>
             'A `git init` fixture cluster with `2>/dev/null` plus one bare `exec()`. The git '
-            . 'half belongs with Context/ and Providers/.',
+            . 'half belongs with Context/. It used to say "with Context/ and Providers/" as '
+            . 'well; Providers/ has since been cleaned and moved into SCOPE, and naming an '
+            . 'adopted directory as a fellow-deferred is how a reader concludes this row is '
+            . 'waiting on a round that has already happened.',
         'Workflows/' =>
             'A single bare `exec()`. Cheap, deferred on ownership only.',
     ];
