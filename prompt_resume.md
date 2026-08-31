@@ -129,7 +129,10 @@ things a fresh agent needs about the **current** shape of the code:
 measured at. Re-run a check ONLY if the sha it names has moved. Do not spend seven minutes
 re-measuring a suite this file already gives you the answer to.**
 
-**NO AGENT IS RUNNING and NOTHING IS IN FLIGHT.** Confirm with `ListAgents`, then go straight to §8.
+**ONE AGENT IS IN FLIGHT** — the `P3.audit-fix-2` recovery agent (§1.8 rung 3, attempt 1 of 5).
+Confirm with `ListAgents`. If it is still running, WAIT for it; if `ListAgents` shows nothing
+running, it died without reporting — that is rung 2/3 again, NOT a result. Either way, §8's
+`In-flight batch` has the full state and the exact next actions.
 
 ### Verified this session — do NOT redo unless the sha moved
 
