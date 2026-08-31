@@ -1421,16 +1421,30 @@ final class AgentTest extends TestCase
      * and the counts in prose disagreed with each other: prompt_plan.md's
      * P3.S6 section says EIGHT and `Runtime::markWriteSinceLastRender()`'s
      * doc-block says NINE. MEASURED at P3.S6 by the scanner below, over
-     * `src/` entire: eight, in four files, and the doc-block's nine is the
-     * stale one.
+     * `src/` AND `bin/` entire: eight, in four files, and the doc-block's nine
+     * is the stale one.
+     *
+     * KEYED ON THE PATH FROM THE PACKAGE ROOT, `src/...` and `bin/...`, and
+     * that prefix is not cosmetic. An earlier revision of this roster keyed on
+     * the path relative to `src/` and the scanner walked `src/` ALONE, so
+     * `bin/sugarcrush` - THE production entrypoint, and the file the
+     * accompanying doc-block's own re-derivation command names - was outside
+     * the census entirely. `bin/` has zero call sites today (MEASURED: the
+     * re-derivation exits 1 there), so the roster was right; but a call site
+     * added to `bin/sugarcrush` would have left `assertSame(8, ...)` below
+     * GREEN while the true production count was nine, on the one question this
+     * test exists to settle. Both roots are walked now, and the walk does not
+     * filter on the `.php` extension alone, because `bin/sugarcrush` HAS no
+     * extension - it is a `#!/usr/bin/env php` script - and an extension-only
+     * filter steps over it in silence.
      *
      * @var array<string, int>
      */
     private const AGENT_ASSEMBLER_CALL_SITES = [
-        'Agents/AgentManager.php' => 1,
-        'Agents/ProcessExecutor.php' => 1,
-        'App/App.php' => 1,
-        'Workflows/WorkflowEngine.php' => 5,
+        'src/Agents/AgentManager.php' => 1,
+        'src/Agents/ProcessExecutor.php' => 1,
+        'src/App/App.php' => 1,
+        'src/Workflows/WorkflowEngine.php' => 5,
     ];
 
     /**
@@ -1456,8 +1470,18 @@ final class AgentTest extends TestCase
      * while the instrument was broken. `CompleteRequest::$systemPrompt` is a
      * public property and the providers read it constantly: MEASURED by this
      * same tokeniser over `src/`, `$x->systemPrompt` with no `(` appears
-     * TWENTY-TWO times across EIGHT files (all six `Providers/*`, plus
-     * `AgentWorkerPool.php` and `ProcessExecutor.php`). So the paren guard in
+     * TWENTY-TWO times across EIGHT files: SIX of the SEVEN provider
+     * implementations under `src/Providers/`, plus `AgentWorkerPool.php` and
+     * `ProcessExecutor.php`. NOT "all six `Providers/*`", which is what an
+     * earlier revision of this sentence said - a population that does not
+     * exist. `/usr/bin/grep -l 'implements ProviderInterface' src/Providers/*.php`
+     * lists SEVEN (Bedrock, ClaudeCode, Custom, Echo, OpenAI, Sglang, Vertex),
+     * and the seventh is `EchoProvider.php`, which contains no occurrence of
+     * the name at all - `/usr/bin/grep -c 'systemPrompt'
+     * src/Providers/EchoProvider.php` prints 0 and exits 1. So the guard's
+     * coverage of the provider layer is six-of-seven and the miss is a file
+     * with nothing to miss; "all six" asserted completeness over a miscount.
+     * So the paren guard in
      * {@see agentAssemblerCallSites()} is load-bearing, and MEASURED: deleting
      * it left this control GREEN and reddened only the census below, which
      * went from 8 sites in 4 files to 30 in 11. A control that survives the
@@ -1499,19 +1523,33 @@ final class AgentTest extends TestCase
                 . 'every count below is worthless until this line passes',
         );
 
-        $src = \dirname(__DIR__, 2) . '/src';
+        $root = \dirname(__DIR__, 2);
         $census = [];
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($src, \FilesystemIterator::SKIP_DOTS),
-        );
-        foreach ($iterator as $file) {
-            if ($file->getExtension() !== 'php') {
-                continue;
-            }
+        foreach ([$root . '/src', $root . '/bin'] as $scanRoot) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($scanRoot, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($iterator as $file) {
+                $path = $file->getPathname();
 
-            $sites = self::agentAssemblerCallSites((string) file_get_contents($file->getPathname()));
-            if ($sites !== []) {
-                $census[str_replace('\\', '/', substr($file->getPathname(), \strlen($src) + 1))] = \count($sites);
+                // NOT an extension test alone. `bin/sugarcrush` carries no
+                // extension at all, so `getExtension() !== 'php'` walks past
+                // the production entrypoint without reporting that it did -
+                // the failure mode this whole census exists to prevent, one
+                // directory over. A `#!` line naming php is the other way a
+                // PHP source announces itself in this tree, and it is read
+                // from the first 64 bytes rather than from the whole file.
+                if (
+                    $file->getExtension() !== 'php'
+                    && preg_match('/^#!.*\\bphp\\b/', (string) file_get_contents($path, false, null, 0, 64)) !== 1
+                ) {
+                    continue;
+                }
+
+                $sites = self::agentAssemblerCallSites((string) file_get_contents($path));
+                if ($sites !== []) {
+                    $census[str_replace('\\', '/', substr($path, \strlen($root) + 1))] = \count($sites);
+                }
             }
         }
         ksort($census);
@@ -1819,7 +1857,8 @@ final class AgentTest extends TestCase
      *
      * WHAT IS REPRODUCED HERE. A FRESH `Agent` per iteration with `environment`
      * null and `prompt` empty, rendered inside a loop with the process
-     * directory inside the committed git fixture - which is exactly how
+     * directory inside the GENERATED git fixture repository - which is exactly
+     * how
      * `WorkflowEngine` builds its per-stage agent, and which is what sends
      * `Agent::systemPrompt()` down its own
      * `EnvironmentBlock::capture(getcwd(), ...)` last resort every time.
@@ -2022,9 +2061,23 @@ final class AgentTest extends TestCase
      * P3.S6 declines - hoisting
      * `EnvironmentBlock::capture((string) getcwd(), $this->model)->withWriteSinceLastRender(false)`
      * above the `foreach` at `WorkflowEngine.php:1105` and passing it into the
-     * render at `:1152` - and `--filter AgentTest` stayed OK at 61 tests and
-     * 351 assertions. The disposition this step exists to record was pinned by
-     * nothing, because nothing in this file reached `WorkflowEngine`.
+     * render at `:1152` - and THIS FILE stayed green under it: at `c4cb9492c`,
+     * `vendor/bin/phpunit -c phpunit.xml tests/Agents/AgentTest.php` reported
+     * OK at 31 tests and 266 assertions with that mutation applied. The
+     * disposition this step exists to record was pinned by nothing, because
+     * nothing in this file reached `WorkflowEngine`.
+     *
+     * THE FIGURE IS QUOTED PER FILE, and that is a correction. An earlier
+     * revision cited the same measurement as "`--filter AgentTest` stayed OK
+     * at 61 tests and 351 assertions". That run is real, but `--filter` takes
+     * a REGEX and `AgentTest` also matches `SubAgentTest`:
+     * `tests/Agents/SubAgentTest.php` alone is 30 tests and 85 assertions -
+     * MEASURED, and that file is untouched by this branch and unreachable from
+     * a `WorkflowEngine` mutation - and 31 + 30 = 61, 266 + 85 = 351. So thirty of the
+     * sixty-one tests offered as evidence about THIS file were a different
+     * file's, and every `--filter AgentTest` total reported anywhere on this
+     * branch carries the same passenger. Name the file when the claim is about
+     * the file.
      *
      * WHAT MAKES IT A MEASUREMENT AND NOT A RESTATEMENT. K is varied (2 and 4)
      * and the answer must track it at `5 * K`. A single K cannot tell "renders
@@ -2041,8 +2094,21 @@ final class AgentTest extends TestCase
      * double render, which {@see testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()}
      * already pins.
      *
-     * THE PROCESS DIRECTORY IS MOVED INSIDE THE COMMITTED FIXTURE REPOSITORY,
-     * because `WorkflowEngine` builds its per-stage `Agent` with `environment`
+     * THE PROCESS DIRECTORY IS MOVED INSIDE THE GENERATED FIXTURE REPOSITORY -
+     * generated, NOT committed, and an earlier revision of this file said
+     * "committed" in three places. `git check-ignore -v
+     * sugar-crush/vendor/prompt-fixture/agent-repo` answers
+     * `.gitignore:6:` then the root ignore rule for `vendor/` (spelled with a
+     * leading double-star, which cannot be written literally inside a doc
+     * comment), and {@see ensureFixtureRepo()} builds the
+     * whole thing from scratch on any run that finds no `.git` under it. The
+     * distinction is load-bearing for anyone reading a figure derived from it:
+     * "committed" would mean the bytes are pinned in the repository and a
+     * number taken off them is reproducible by inspection, when in fact the
+     * repository is rebuilt by this suite and the numbers are reproducible
+     * only by running it.
+     *
+     * The directory moves because `WorkflowEngine` builds its per-stage `Agent` with `environment`
      * left null and `Agent::systemPrompt()` then falls through to
      * `EnvironmentBlock::capture((string) getcwd(), ...)`. Outside a repository
      * the git section collapses and the bill is not five. `chdir()` is
@@ -2166,6 +2232,169 @@ final class AgentTest extends TestCase
                         "engine stage {$index} did not emit the staged-diff section exactly once - "
                             . 'the write signal is suppressed on this path, which is the wiring P3.S6 '
                             . 'declined',
+                    );
+                }
+            }
+        } finally {
+            chdir($originalCwd);
+        }
+    }
+
+    /**
+     * THE OTHER PER-STEP SEAM THE DOC-BLOCK NAMES, DRIVEN RATHER THAN READ: a
+     * workflow of K PLAIN sequential stages calls the agent assembler K times,
+     * once per stage, through `WorkflowEngine::executeStage()`.
+     *
+     * WHY THIS EXISTS BESIDE
+     * {@see testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()}
+     * RATHER THAN INSTEAD OF IT. That test drives ONE of `WorkflowEngine`'s
+     * five render sites - `:1152`, enclosed by `executePipelineStage()`'s
+     * `foreach ($nestedStages as $nestedStage)` at `:1105`. The doc-block on
+     * {@see Agent::systemPrompt()} names a SECOND loop, the outer one:
+     * `foreach ($workflow->stages as $stageIndex => $stage)` at
+     * `WorkflowEngine.php:875`, reaching `:1042` once per stage through
+     * `executeStage()`. A whole pipeline is ONE entry in that outer loop, so
+     * the pipeline test never enters `executeStage()` and never touches
+     * `:1042` - which is why the workflow here is built with plain `->stage()`
+     * calls and NOT with `->pipeline()`. Everything else about the harness is
+     * the sibling's, deliberately.
+     *
+     * MEASURED, AND THAT MEASUREMENT IS WHY THIS TEST WAS WRITTEN. Hoisting a
+     * shared `EnvironmentBlock::capture((string) getcwd(), $this->model)
+     * ->withWriteSinceLastRender(false)` above the `foreach` at
+     * `WorkflowEngine.php:875` and passing it into the render at `:1042` -
+     * exactly the wiring P3.S6 declines, applied at the outer seam instead of
+     * the inner one - left the sibling test and the rest of this file GREEN,
+     * and reds only here: 6 against an expected 10 at K = 2.
+     *
+     * K IS VARIED (2 and 4) for the sibling's reason: at a single K, "renders
+     * once per stage" and "renders once and re-sends" are the same number.
+     *
+     * WHY THE EXECUTOR IS A MOCK AND THE COUNT IS STILL REAL, and why the
+     * process directory moves inside the generated fixture repository, are
+     * both the sibling's arguments unchanged - the render counted here happens
+     * in the PARENT at `:1042`, before the `SubAgent` reaches
+     * {@see AgentWorkerPool::executeOne()}, and `WorkflowEngine` builds its
+     * per-stage `Agent` with `environment` left null, so outside a repository
+     * the git section collapses and the bill is not five.
+     */
+    public function testARealWorkflowEngineSequentialStageChainRendersTheAgentAssemblerOncePerStage(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        $originalCwd = (string) getcwd();
+        $staged = 'Staged changes (git diff --cached, index vs HEAD):';
+
+        try {
+            $this->assertTrue(chdir($repo), "could not enter the fixture repository {$repo}");
+
+            foreach ([2, 4] as $stages) {
+                $name = "p3s6-engine-sequential-{$stages}";
+
+                /** @var list<string> $systemPrompts */
+                $systemPrompts = [];
+
+                $executor = $this->getMockBuilder(ExecutorInterface::class)
+                    ->onlyMethods(['execute', 'executeStream', 'cancel', 'cancelAll'])
+                    ->getMock();
+                $executor
+                    ->method('execute')
+                    ->willReturnCallback(
+                        static function (SubAgent $agent, CompleteRequest $request) use (&$systemPrompts): AgentResult {
+                            $systemPrompts[] = (string) $request->systemPrompt;
+
+                            return new AgentResult(
+                                agentId: $agent->id,
+                                status: AgentStatus::Completed,
+                                output: 'stage-output-' . \count($systemPrompts),
+                                startedAt: new DateTimeImmutable(),
+                                completedAt: new DateTimeImmutable(),
+                            );
+                        },
+                    );
+
+                // WorkflowBuilder::stage() takes ONE TaskBuilder, not a list -
+                // re-derived from the signature rather than copied from the
+                // sibling's ->pipeline(), which does take an array.
+                $builder = (new WorkflowBuilder())
+                    ->name($name)
+                    ->description('P3.S6: a real WorkflowEngine chain of plain sequential stages');
+                for ($stage = 0; $stage < $stages; $stage++) {
+                    $builder = $builder->stage(
+                        "s{$stage}",
+                        Tasks::agent("p3s6-seq-{$stage}")->prompt("step {$stage}"),
+                    );
+                }
+
+                $registry = new WorkflowRegistry();
+                $registry->register($builder->build());
+
+                $engine = new WorkflowEngine($registry, new AgentWorkerPool(5, $executor));
+
+                $subprocesses = self::gitSubprocessesDuring(
+                    static function () use ($engine, $name): void {
+                        $result = $engine->run($name, []);
+
+                        self::assertTrue(
+                            $result->isSuccess(),
+                            "the workflow {$name} did not complete, so the subprocess count below is "
+                                . 'a count of a run that did not happen',
+                        );
+                    },
+                );
+
+                $this->assertCount(
+                    $stages,
+                    $systemPrompts,
+                    "the {$stages}-stage sequential workflow handed the executor {$stages} requests "
+                        . 'worth of system prompt - if it did not, the loop under measurement is not '
+                        . 'the one this test names',
+                );
+
+                $this->assertSame(
+                    5 * $stages,
+                    $subprocesses,
+                    "a REAL WorkflowEngine chain of {$stages} plain sequential stages no longer costs "
+                        . 'five git subprocesses per stage. If it costs fewer, the per-stage render at '
+                        . 'WorkflowEngine.php:1042 is gone: a caller began sharing one EnvironmentBlock '
+                        . 'across the foreach at WorkflowEngine.php:875, which is EXACTLY the wiring '
+                        . 'P3.S6 declined and recorded as an escalation. That is the P3.S6 disposition '
+                        . 'changing - the write signal now has a per-stage seam a caller is using - and '
+                        . 'it must be re-dispositioned rather than silenced by moving this number.',
+                );
+
+                // Date-normalised byte identity, for the sibling's reason: a
+                // run that straddles midnight renders two dates and would red
+                // on the clock rather than on the mechanism.
+                $dateInsensitive = array_map(
+                    static fn (string $prompt): string => (string) preg_replace(
+                        '/^Current date: .*$/m',
+                        'Current date: <normalised>',
+                        $prompt,
+                    ),
+                    $systemPrompts,
+                );
+
+                $this->assertSame(
+                    1,
+                    \count(array_unique($dateInsensitive)),
+                    "the {$stages} sequential stages no longer see one prompt that is identical "
+                        . 'everywhere except the calendar date - nothing between stages changed the '
+                        . 'environment, so a second distinct prompt means the block stopped being '
+                        . 're-derived from the same unchanged tree',
+                );
+
+                foreach ($systemPrompts as $index => $prompt) {
+                    $this->assertSame(
+                        1,
+                        preg_match_all('/^Current date: \d{4}-\d{2}-\d{2}$/m', $prompt),
+                        "sequential stage {$index} did not emit exactly one `Current date: Y-m-d` line",
+                    );
+                    $this->assertSame(
+                        1,
+                        substr_count($prompt, $staged),
+                        "sequential stage {$index} did not emit the staged-diff section exactly once "
+                            . '- the write signal is suppressed on this path, which is the wiring '
+                            . 'P3.S6 declined',
                     );
                 }
             }

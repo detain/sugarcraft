@@ -417,8 +417,8 @@ final readonly class Agent
      * question is about and this is where the next reader lands.
      *
      * READ THE LINE NUMBERS BELOW AS DIRECTIONS, NOT AS FACTS UNDER TEST. This
-     * block carries SEVENTEEN distinct `<file>.php:<line>` citations in
-     * nineteen occurrences - re-derive that with
+     * block carries THIRTY distinct `<file>.php:<line>` citations in
+     * FORTY-SIX occurrences - re-derive that with
      * `/usr/bin/grep -oP '[A-Za-z/]+[.]php:[0-9]+(-[0-9]+)?' src/Agents/Agent.php | sort -u | wc -l`
      * - and NOT ONE of them is pinned by anything, which is the same argument
      * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::AGENT_ASSEMBLER_CALL_SITES}
@@ -471,16 +471,26 @@ final readonly class Agent
      *
      * MEASURED with a logging `git` shim on `PATH`, driving the nested-pipeline
      * shape (a fresh `Agent` per stage, `environment` left null, the process
-     * directory inside the committed git fixture): TWO stages cost TEN git
+     * directory inside the GENERATED fixture repository under
+     * `vendor/prompt-fixture/`): TWO stages cost TEN git
      * subprocesses and FIVE stages cost TWENTY-FIVE, and in both cases the
      * stages see ONE DISTINCT PROMPT - every render byte-identical, and the two
      * git-diff sections re-sent unchanged on every stage. Driven by
      * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheWorkflowShapedPipelineReRendersTheSameEnvironmentBlockOncePerStageAndNothingCanTellItNotTo()},
      * which DERIVES the size of the repeated diff tail rather than quoting one,
      * because that size is a property of the repository being rendered and not
-     * of this method: on the committed fixture it is 498 of the render's 967
+     * of this method: on that generated fixture it is 498 of the render's 967
      * bytes, and a brief that reached this step quoted 405 of 864 from a
-     * different fixture. The subprocess counts and the distinct-prompt count
+     * different fixture. GENERATED, NOT COMMITTED, and two earlier sentences in
+     * this doc-block called it committed: `git check-ignore -v
+     * sugar-crush/vendor/prompt-fixture/agent-repo` answers with the root
+     * ignore rule for `vendor/` at `.gitignore:6`, and
+     * `AgentTest::ensureFixtureRepo()` rebuilds the repository from scratch on
+     * any run that finds no `.git` under it. The word matters exactly here,
+     * because 498 and 967 are numbers taken OFF that repository: "committed"
+     * would have promised a reader they could reproduce them by inspecting
+     * checked-in bytes, when the only way to reproduce them is to run the
+     * suite that builds the repository first. The subprocess counts and the distinct-prompt count
      * are the fixture-independent half, and they are the half that matters.
      *
      * AND THE CALLER IS DRIVEN, NOT ONLY THE SHAPE. That test hand-rolls the
@@ -573,9 +583,67 @@ final readonly class Agent
      *     it. The exclusion is named here rather than quietly dropped so that
      *     what is written is what reproduces.
      *
+     * AND THE STEP TEXT SAYS OTHERWISE - recorded here because nothing else in
+     * this diff can record it. prompt_plan.md's P3.S6 Goal names
+     * `AgentManager.php:433` as the terminus of a LIVE production path. It is
+     * not one, and the command above is the whole of the argument. MEASURED
+     * from `sugar-crush/`:
+     *
+     *     $ /usr/bin/grep -rn --exclude=Agent.php -- '->executeSubAgent(' src/ bin/
+     *     $ echo $?
+     *     1
+     *
+     * No output, exit 1. `executeSubAgent()` has no caller anywhere in `src/`
+     * or `bin/`, so the Goal's path stops one hop short of the line it names,
+     * and a step briefed to classify a LIVE seam was pointed at a dormant one.
+     *
+     * THE PATH THAT IS ACTUALLY LIVE, every hop re-derived over this tree
+     * rather than reasoned about: `bin/sugarcrush:423` builds
+     * `Bootstrap::app($args->root)`; `Bootstrap::app()` calls
+     * `Bootstrap::chat()` at `Bootstrap.php:1887` (`chat()` itself at
+     * `Bootstrap.php:838`); `chat()` hands the `Chat` its engine through the
+     * `workflowEngine:` argument at `Bootstrap.php:1058`, built by
+     * `Bootstrap::workflowEngine()` at `Bootstrap.php:1183`;
+     * `Chat::workflowRun()` (`src/Chat.php:7820`) calls
+     * `$engine->run($workflowName, $context)` at `Chat.php:7844`, inside the
+     * `\Fiber` opened at `Chat.php:7842`; and `WorkflowEngine::run()`
+     * (`WorkflowEngine.php:348`) reaches this assembler at
+     * `WorkflowEngine.php:1042`, `:1152`, `:1252`, `:1294` and `:1397`.
+     *
+     * That is why every measurement in this doc-block is taken against
+     * `WorkflowEngine` and not against `AgentManager`. `prompt_plan.md` is
+     * outside P3.S6's declared file list, so the step text cannot be corrected
+     * from here; the correction is recorded at the API the claim is about, and
+     * escalated to the orchestrator with the rest.
+     *
      * (A review of this step wrote "five reachable, three dormant". That sums
      * to eight but splits it wrongly: `ProcessExecutor.php:473` is reached from
      * every WorkflowEngine stage. Six and two are the derived numbers.)
+     *
+     * WHICH OF THE EIGHT ARE DRIVEN BY A TEST, AND WHICH ARE CLASSIFIED BY
+     * READING. This is stated plainly because the classification is the whole
+     * deliverable and a reader is entitled to know how much of it is executed.
+     * FOUR ARE DRIVEN:
+     *
+     *   - `AgentManager.php:433`, by
+     *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()};
+     *   - `ProcessExecutor.php:473`, by
+     *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()};
+     *   - `WorkflowEngine.php:1152`, the nested-pipeline render, by
+     *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()};
+     *   - `WorkflowEngine.php:1042`, the plain sequential-stage render reached
+     *     from the outer `foreach` at `WorkflowEngine.php:875`, by
+     *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEngineSequentialStageChainRendersTheAgentAssemblerOncePerStage()}.
+     *
+     * FOUR ARE CLASSIFIED BY READING ONLY - no test enters them, and a wiring
+     * applied at any of them would not red anything in this diff:
+     * `App/App.php:569`, and `WorkflowEngine.php:1252`, `:1294` and `:1397`
+     * (the verification stage's straight-line pair, and the parallel stage's
+     * single `$firstAgent->systemPrompt()`). The two per-step seams this
+     * doc-block calls out by name are now BOTH driven - the `:1105` loop and
+     * the `:875` loop - but `executeVerificationStage()`'s double render is
+     * not, and neither is the dormant `App::dispatchSkill()`. Do not read the
+     * roster as four-driven-implies-eight-covered.
      *
      * Taken ONE AT A TIME the eight are still once-per-dispatch: each builds
      * one `CompleteRequest` and hands it to one completion, there is no agentic
@@ -599,6 +667,33 @@ final readonly class Agent
      * agent. All four are asserted by
      * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheAgentAssemblerCostsFiveGitSubprocessesPerRenderAndThreeWithTheDiffSuppressed()}.
      *
+     * AND THAT COST LANDS ON THE EVENT LOOP, NOT ONLY ON THE WIRE. Recorded as
+     * an OBSERVATION: it is pre-existing, this step did not cause it and is not
+     * fixing it, and it is here only because every other number in this
+     * doc-block is a count of BYTES or of SUBPROCESSES and a reader could
+     * finish it believing the repeated render is merely wasteful. It is also
+     * BLOCKING. `Chat::workflowRun()` (`src/Chat.php:7820`) runs
+     * `$engine->run(...)` (`Chat.php:7844`) inside a `\Fiber` opened at
+     * `Chat.php:7842` - on the MAIN loop, not in a child.
+     * {@see \SugarCraft\Crush\Agents\AgentWorkerPool} does suspend that fiber
+     * while it waits on children (`\Fiber::suspend()`,
+     * `AgentWorkerPool.php:869`), which is what keeps the TUI alive across the
+     * model call - but the PARENT-side render is not inside that wait. At
+     * `WorkflowEngine.php:1152` (and at `:1042`, `:1252`, `:1294`, `:1397`)
+     * `$agent->systemPrompt()` is evaluated as an argument to the
+     * `CompleteRequest` constructor, i.e. fully synchronously, BEFORE
+     * `$this->pool->executeOne()` is entered and therefore before any suspend -
+     * and {@see EnvironmentBlock::render()}'s five git calls are blocking
+     * `proc_open`/`shell_exec`, four and one respectively. `EnvironmentBlock`'s
+     * own class doc-block measures a render at **399 ms** on a large working
+     * tree (`EnvironmentBlock.php:54`; 373 of those milliseconds inside
+     * `git diff`, and it explicitly refuses to call any millisecond figure a
+     * ceiling). So a K-stage workflow can stall the event loop for roughly K
+     * times that, in K separate un-suspendable chunks, on a repository big
+     * enough. Not fixed here, and not fixable here: every one of the five
+     * render sites is in `Workflows/WorkflowEngine.php`, which reason 1 above
+     * already puts outside P3.S6's declared file list.
+     *
      * AND ONE DISPATCH RENDERS TWICE, WHICH IS A FINDING AND NOT A FIX.
      * `App::dispatchSkill()` and FOUR of the five `WorkflowEngine` sites
      * (`:1042`, `:1152`, `:1252`, `:1294`) build their `CompleteRequest` with
@@ -620,18 +715,50 @@ final readonly class Agent
      * removal prompt_plan.md section 1.10 prohibits, and `ProcessExecutor.php`
      * is outside P3.S6's declared file list.
      *
-     * ONE PROPOSED WIRING FOR IT, MEASURED AND DECLINED. A review proposed
-     * handing the `SubAgent` in `App::dispatchSkill()` an agent whose block has
-     * `withWriteSinceLastRender(false)`, so the worker's second render costs
-     * three subprocesses instead of five. MEASURED in that exact shape: the
-     * dispatch does fall from TEN subprocesses to EIGHT. Declined anyway, and
-     * not on scope grounds - `App/App.php` IS a declared file. The comment at
-     * `App.php:524-527` attaches the block before the `SubAgent` precisely
-     * because the request's `systemPrompt` and `$agent->agent->systemPrompt()`
-     * "must agree", so deliberately handing the worker a diff-less block makes
-     * the two consumers disagree MORE rather than less. It would also be a
-     * suppression keyed on nothing: the write signal it spends is the one that
-     * reason 2 above establishes cannot be derived on this path.
+     * ONE PROPOSED WIRING FOR IT, MEASURED AND DECLINED - AND THE MEASUREMENT
+     * IS CORRECTED IN PLACE (prompt_plan.md section 16.8 rule 42), because the
+     * first revision quoted a number for a shape `App/App.php` cannot express.
+     *
+     * WHAT IT USED TO SAY: that handing the `SubAgent` in
+     * `App::dispatchSkill()` an agent whose block has
+     * `withWriteSinceLastRender(false)` drops the dispatch from TEN
+     * subprocesses to EIGHT, and that this is declined because it makes the
+     * two consumers "disagree MORE".
+     *
+     * WHAT IS TRUE NOW. TEN-to-EIGHT is the ASYMMETRIC edit: the
+     * `CompleteRequest` built from an unmarked block (five) and the worker's
+     * second render from a marked one (three). `App/App.php` has no attachment
+     * point that produces it. There is exactly ONE, at `App.php:552-554`
+     * (`$agent = $agent->withEnvironment(EnvironmentBlock::capture(...))`),
+     * and BOTH consumers - the request's `systemPrompt` at `App.php:569` and
+     * `ProcessExecutor::spawnWorker()`'s second render at
+     * `ProcessExecutor.php:473` - read that one block. So the edit `App.php`
+     * actually admits is SYMMETRIC. MEASURED with the same logging-`git`-shim
+     * technique against `ProcessExecutor(simulatedWorker: true)`, on the same
+     * generated fixture repository, all three shapes side by side:
+     *
+     *     DEFAULT, one unmarked block feeding both     => 10 subprocesses; consumers agree
+     *     ASYMMETRIC, only the SubAgent's agent marked =>  8 subprocesses; consumers DISAGREE
+     *     SYMMETRIC, the single App.php:552 attachment =>  6 subprocesses; consumers agree
+     *
+     * The symmetric edit is 10 -> 6, and the two consumers still render
+     * BYTE-FOR-BYTE identical prompts. So the "disagree MORE" reasoning is
+     * dropped rather than quietly kept: it is a true statement about the
+     * asymmetric shape and it does not apply to the shape `App.php` offers.
+     *
+     * WHY THE DISPOSITION STILL STANDS, on the ground that survives the
+     * correction. `App::dispatchSkill()` has NO per-step seam - it is one of
+     * the once-per-dispatch eight, with no loop around its render - so marking
+     * its block `withWriteSinceLastRender(false)` is not a suppression keyed on
+     * a step that wrote nothing; it is an UNCONDITIONAL suppression of the two
+     * git diff sections on every dispatch this path ever makes. That is a
+     * change to the DEFAULT behaviour, which the step text forbids in terms:
+     * `writeSinceLastRender` defaults to `true`, and a diff that moves the
+     * golden has changed default behaviour and is wrong. It is also a
+     * suppression keyed on nothing in the sense reason 2 establishes: the write
+     * signal it would spend is one this path cannot derive. And
+     * `dispatchSkill()` is dormant besides - `App.php:533` says so in its own
+     * words - so the six-versus-ten saving is a saving on a path nothing runs.
      */
     public function systemPrompt(?EnvironmentBlock $environment = null): string
     {
