@@ -253,6 +253,44 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### BATCH P3.CLOSE.B1 OPEN · 2026-08-31
+
+**Two steps, spawned concurrently, disjoint declared file lists.** This is the first batch of the Phase 3
+close queue.
+
+| step | worktree | branch | declares |
+|---|---|---|---|
+| `P3.S4-fix-1` | `/home/sites/prompt-step-P3.S4-fix-1` | `prompt/P3.S4-fix-1` | `tests/Providers/PromptStabilityTest.php` — that file only |
+| `P3.S5-fix-1` | `/home/sites/prompt-step-P3.S5-fix-1` | `prompt/P3.S5-fix-1` | `src/Runtime.php` · `tests/RuntimeTest.php` · `tests/Integration/SystemPromptWiringTest.php` |
+
+Both branched from master `1267e6fbb`. Both given a `cp -al` hard-linked `vendor/`, **both verified** to
+resolve the PSR-4 root `SugarCraft\Crush\` into their OWN `src/` — the check that catches the `ln -s`
+mistake, which would silently run every test against the main repo's code:
+```
+PSR4 ROOT: /home/sites/prompt-step-P3.S4-fix-1/sugar-crush/src
+PSR4 ROOT: /home/sites/prompt-step-P3.S5-fix-1/sugar-crush/src
+```
+
+**Why concurrent, when the sequencing gate says "Phase 3 serial S1->S6".** That serialisation was about the
+STEPS, which had a real data dependency: P3.S5 needed P3.S4's measurement to exist. These are their
+follow-up fix steps and they share no file. §2.1 licenses five at a time on disjoint lists; two is well
+inside it. What is NOT concurrent is queue item (c), P3.S6 — it wants `src/Runtime.php`, which
+`P3.S5-fix-1` holds, so it is serial after that merge.
+
+**Declared merge order: `P3.S4-fix-1` first, then `P3.S5-fix-1`.** `P3.S4-fix-1` changes no production
+code at all, so its blast radius is a single test file; `P3.S5-fix-1` edits `src/Runtime.php` and carries
+the user-approved rename, so it gets the quieter tree. Full suite runs BETWEEN the two merges, not once
+after both — otherwise a regression cannot be attributed.
+
+**Orchestrator baseline, measured before spawning**, in the P3.S4-fix-1 worktree:
+`--filter PromptStabilityTest` → `OK (13 tests, 229 assertions)`.
+
+**One brief-writing note worth keeping.** `P3.S5-fix-1`'s brief carries ORCHESTRATION-RULE-2 verbatim and
+says out loud *who* broke it — a P3.S5 reviewer, which is the same step family this agent is cleaning up
+after. A rule quoted with its incident attached is likelier to be read than one quoted as boilerplate.
+
+---
+
 ### BOOKKEEPING — the resume becomes a run-to-completion prompt   ·   2026-08-31   ·   (this commit)
 
 **Status** `merged`. No `src/` or `tests/` change. Recorded because it changes HOW the plan is

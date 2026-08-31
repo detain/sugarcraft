@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3, nothing in flight — no agents, no worktrees, no open branches. Master is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter (measured at e0d00b6db; every commit since is bookkeeping only). YOUR JOB IS TO RUN THE PLAN TO COMPLETION: finish Phase 3's close queue, close Phase 3, then keep going through Phases 4-11 without stopping at the boundaries. Read §0 first, then §8.**
+**Current state: Phase 3 close queue OPEN. Batch P3.CLOSE.B1 IS IN FLIGHT — two step agents running in two worktrees; see `In-flight batch` in §8, which is the field that survives a session loss. Master is GREEN at 10500/161982 from both cwds AND on a CI-shape interpreter (measured at e0d00b6db; every commit since is bookkeeping only). YOUR JOB IS TO RUN THE PLAN TO COMPLETION: finish Phase 3's close queue, close Phase 3, then keep going through Phases 4-11 without stopping at the boundaries. Read §0 first, then §8.**
 
 ---
 
@@ -297,10 +297,22 @@ never write a dead agent's missing report yourself.
 ```
 Phase:            3. P3.S1-S5 merged. P3.S6 scheduled. Phase 3 NOT closed — see the queue.
 
-Next step:        **NOTHING IS IN FLIGHT. Start the Phase 3 close queue at (a).**
+Next step:        **BATCH P3.CLOSE.B1 IS IN FLIGHT.** Queue items (a) and (b) are both
+                  running RIGHT NOW as step agents in their own worktrees. If you are a
+                  fresh agent reading this, DO NOT re-spawn them — first find out whether
+                  they finished (see `In-flight batch` below for worktrees, branches and
+                  the merge order). If a worktree has commits on its branch, the agent got
+                  somewhere; recover it with prompt_plan.md §1.8 rather than starting over.
 
-                  There are no running agents, no worktrees besides the main repo, and no
-                  prompt/* branches. Everything spawned so far is verified and merged.
+                  (a) and (b) were launched CONCURRENTLY because their declared file lists
+                  are disjoint — (a) owns tests/Providers/PromptStabilityTest.php and
+                  nothing else; (b) owns src/Runtime.php + tests/RuntimeTest.php +
+                  tests/Integration/SystemPromptWiringTest.php. Nothing else in Phase 3's
+                  close queue may run alongside them: (c) P3.S6 wants src/Runtime.php,
+                  which (b) holds, so it is SERIAL after (b) merges.
+
+                  After both merge: (c) P3.S6, then (d) the Phase 3 close review, then
+                  (e) OPEN PHASE 4 IMMEDIATELY.
 
                   BEFORE YOU SPAWN ANYTHING, read §7 and hand every agent §1.10, §1.11,
                   §16, §17 and ORCHESTRATION-RULE-2. That last one is not optional: an
@@ -418,12 +430,48 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD. This plan recorded numbers f
                   the tree — the style gate cannot be run locally. Two steps have now
                   reported this. If CI enforces it, that is an unverifiable gate here.
 
-In-flight batch:  NONE.
+In-flight batch:  **P3.CLOSE.B1 — TWO STEPS, SPAWNED 2026-08-31, BOTH RUNNING.**
 
-Live worktrees:   /home/sites/sugarcraft  master, at the commit above. That is ALL.
+                  1. **P3.S4-fix-1**
+                     worktree /home/sites/prompt-step-P3.S4-fix-1
+                     branch   prompt/P3.S4-fix-1  (from master 1267e6fbb)
+                     declares tests/Providers/PromptStabilityTest.php  — THAT FILE ONLY
+                     brief    the eight cycle-6 findings F1-F8, verbatim in P3.S4's worklog
+                              entry (prompt_worklog.md lines ~2648-2830), worked F5 first,
+                              then F2, F6, F1, then F3/F4/F7/F8.
+                     baseline measured by the orchestrator IN that worktree before spawning:
+                              --filter PromptStabilityTest => OK (13 tests, 229 assertions)
+
+                  2. **P3.S5-fix-1**
+                     worktree /home/sites/prompt-step-P3.S5-fix-1
+                     branch   prompt/P3.S5-fix-1  (from master 1267e6fbb)
+                     declares src/Runtime.php · tests/RuntimeTest.php ·
+                              tests/Integration/SystemPromptWiringTest.php
+                     brief    the USER-APPROVED rename first (3 sites), then cycle-6
+                              findings 2 (wrong-green, do first of the five), 1, 3, 4, 5.
+                              Review: .sugar-crush-prompt/P3.S5-cycle6-review.txt
+
+                  **DECLARED MERGE ORDER: P3.S4-fix-1 FIRST, then P3.S5-fix-1.**
+                  Reason: (1) touches no production code at all, so its blast radius is one
+                  test file and a bad merge is trivially revertible; (2) edits src/Runtime.php
+                  and carries the rename, so it wants the quieter tree. Run the full suite
+                  between the two merges — do not merge both and then measure once.
+
+                  Both worktrees have a `cp -al` hard-linked vendor/, both VERIFIED to
+                  resolve the PSR-4 root SugarCraft\Crush\ into their OWN src/.
+
+                  Orchestrator baseline for this batch, MEASURED at master 1267e6fbb from
+                  the CHECKOUT ROOT, ambient: see `Latest suite` below.
+
+Live worktrees:   /home/sites/sugarcraft                  master, at the commit above.
+                  /home/sites/prompt-step-P3.S4-fix-1     IN FLIGHT (batch P3.CLOSE.B1)
+                  /home/sites/prompt-step-P3.S5-fix-1     IN FLIGHT (batch P3.CLOSE.B1)
+                  Branches prompt/P3.S4-fix-1 and prompt/P3.S5-fix-1 exist and are UNMERGED.
                   /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
-                  No prompt/* branches remain; every one was removed with `git branch -d`,
-                  which is itself a merge check.
+                  When a step closes, remove its worktree with §1.12's checks (uncommitted
+                  changes, unmerged commits, AND ignored files worth rescuing — P3.S5's
+                  worktree held the only copy of a review its follow-up needed) and delete
+                  the branch with `git branch -d`, which is itself a merge check.
 
 Blocked on:       Nothing.
 
