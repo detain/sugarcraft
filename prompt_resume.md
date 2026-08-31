@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3 close queue. BOTH fix branches are DONE, ORCHESTRATOR-VERIFIED and MERGE-READY — `P3.S4-fix-1` @ `6e7308938` (16/399) and `P3.S5-fix-1` @ `6acba5f9e` (145/689) — held ONLY for a quiet box to run their full suites serially. `P3.S6` has THREE COMMITS and a clean tree but its REPORT NEVER ARRIVED; it has been asked for it and must not be re-spawned. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
+**Current state: Phase 3 close queue. BOTH fix branches are DONE, ORCHESTRATOR-VERIFIED and MERGE-READY — `P3.S4-fix-1` @ `6e7308938` (16/399) and `P3.S5-fix-1` @ `6acba5f9e` (145/689). `P3.S6`'s step agent was KILLED BY AN API SESSION LIMIT (resets 4am America/New_York) leaving **398 UNCOMMITTED LINES** in its worktree; the work is BACKED UP AND VERIFIED at `<scratchpad>/P3.S6-rescue/`, the worktree was NOT touched, and the agent has been RESUMED. Do not re-spawn it and do not clean that worktree. None of the four worktrees may be deleted. Master is untouched and GREEN — orchestrator-measured `Tests: 10500, Assertions: 161982, Skipped: 1` from the checkout root. §4 lists everything already verified this session so you do NOT re-measure it; §8 has the exact next action for each agent. Call `ListAgents` before trusting any in-flight state.**
 
 ---
 
@@ -682,11 +682,39 @@ In-flight batch:  **BATCH P3.CLOSE.B1, RE-OPENED. THREE AGENTS RUNNING. VERIFY W
                      historical text as a live claim. Do not "fix" the plan backwards.
                      **FULL suite at ab9a7dcdc NOT RUN. No figure exists.**
 
-                  3. **P3.S6 — THREE COMMITS, CLEAN TREE, REPORT NEVER ARRIVED.**
-                     **DO NOT RE-SPAWN IT AND DO NOT WRITE ITS REPORT (§1.8).** The agent shows
-                     `completed` in ListAgents but delivered no result to the orchestrator. It
-                     has been sent a request for the report, told explicitly not to resume work,
-                     not to touch the worktree, and not to spawn another reviewer.
+                  3. **P3.S6 — AGENT KILLED BY AN API SESSION LIMIT. WORK RESCUED. RESUMED.**
+                     **DO NOT RE-SPAWN IT, DO NOT WRITE ITS REPORT (§1.8), AND DO NOT CLEAN OR
+                     COMMIT ITS WORKTREE.**
+                     It died with an explicit harness error — `rate_limit`, HTTP 429, *"You've
+                     hit your session limit · resets 4am (America/New_York)"*, request id
+                     req_011CeaEYSTbRPJjV9bzwk8o9 — mid-sentence, having just said its own fix
+                     agent had landed review fixes and, per its instruction, had NOT committed
+                     them.
+                     **THE WORKTREE IS DIRTY ON PURPOSE AND MUST STAY THAT WAY:**
+                       HEAD b3a5e578e, 3 commits above base c7e5a6454
+                       M sugar-crush/src/Agents/Agent.php
+                       M sugar-crush/tests/Agents/AgentTest.php
+                       2 files changed, 398 insertions(+), 42 deletions(-), no untracked files
+                     **BACKED UP AND VERIFIED before any recovery was attempted**, at
+                     <scratchpad>/P3.S6-rescue/ — the patch (md5 f6ea4b657bb9fb8e58fb75fbbe21f529,
+                     549 lines) plus full copies of both files. **Verified by RECONSTRUCTION,
+                     not by trust:** `git apply --check` against the LIVE tree fails (correctly —
+                     the patch is already applied there), so both files were extracted at
+                     b3a5e578e into a clean directory, the patch applied there, and compared:
+                     Agent.php c81e1cd4ad65ff0584472d499964562f and AgentTest.php
+                     cbf0c8b46d570a4071ae4726e3ea3fd0 MATCH the live tree byte-for-byte.
+                     **If the resume fails, that patch is the step's work** — apply it to
+                     b3a5e578e in the same worktree, do not start over.
+                     **`git stash list` shows nine `WIP on master` stashes belonging to the
+                     OTHER plan's lanes. Stashes are SHARED ACROSS WORKTREES. Do not pop one
+                     while tidying this rescue.**
+                     Rung 1 of the §1.8 ladder was used (per §6a: under Claude Code that means
+                     SendMessage to the same agent, which resumes it from its transcript). It
+                     was given its own state as I measured it and told to pick up at verifying
+                     the uncommitted diff, run tests, commit, then report — and NOT to spawn
+                     another reviewer. **It was told that if it hits the limit again it must stop
+                     and say so rather than truncate**, because a half-report from a dying agent
+                     is worse than waiting for the 4am reset.
                      **What I verified MYSELF in /home/sites/prompt-step-P3.S6:** clean tree;
                      three commits above base c7e5a6454 —
                        23fd87096 measure the Agent assembler seam - eight once-per-dispatch
@@ -768,7 +796,20 @@ Phase 4 is pre-read: so you do not have to re-read prompt_plan.md when Phase 3 c
                   in-flight step AND from the lane claims, so it is safe to open the moment
                   the Phase 3 close review passes.
 
-Blocked on:       Nothing. Three agents are working; no decision is owed to proceed.
+Blocked on:       Nothing needing a user decision. But NOTHING MERGES until P3.S6 reports,
+                  because the merge order runs S4 -> S5 -> S6 and each merge needs a full
+                  serial suite after it. Both fix branches are verified and waiting.
+                  If P3.S6 cannot be recovered before the 4am America/New_York reset, the
+                  correct move is to WAIT rather than merge around it — its worktree holds
+                  398 uncommitted lines whose provenance only that agent knows.
+
+                  **PROCESS RULE THIS EPISODE EARNED, put it in every brief that spawns a
+                  sub-agent: a step agent must NEVER leave a sub-agent's work uncommitted.**
+                  "Do not commit, I will review first" is safe when the reviewer is a live
+                  orchestrator and catastrophic when the only reader is an agent that can be
+                  killed mid-sentence by a rate limit. Commit sub-agent work to the step branch
+                  immediately and amend or revert it if the review objects — a commit is
+                  recoverable, a dirty worktree owned by a dead agent is not.
 
 Awaiting user decision: ONE, carried unanswered, and it does NOT block the Phase 3 close queue.
                   Carry it forward on every rewrite until the user answers. Do not decide it

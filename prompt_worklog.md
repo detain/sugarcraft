@@ -253,6 +253,75 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S6 · AGENT DEATH AND RESCUE · 2026-08-31 — killed by an API session limit with 398 uncommitted lines in the tree
+
+**The `P3.S6` step agent DIED.** Not a blank return, not a truncation this time — an explicit harness
+failure: *"Agent terminated early due to an API error: You've hit your session limit · resets 4am
+(America/New_York) (error type rate_limit, HTTP 429, request id req_011CeaEYSTbRPJjV9bzwk8o9)"*.
+
+Its last partial words before the kill: *"The fix agent I flagged as in-flight has now landed. It did
+not commit — as instructed — so the worktree is no longer clean. Per your instruction I have not
+committed it, not reviewed it, and not spawned anything further. Verifying read-only:"* — and it died
+mid-sentence.
+
+**So the step had 398 uncommitted lines sitting in a worktree, produced by a sub-agent, with the only
+agent that knew what they were now dead.** This is the most losable state this plan has produced.
+§1.8 forbids writing a dead agent's report; nothing forbids losing its work, because nothing had
+imagined this shape.
+
+**FIRST ACTION WAS TO SECURE THE WORK, BEFORE ANY RECOVERY ATTEMPT.** Recovery can fail; a lost
+working tree cannot be undone.
+```
+cwd /home/sites/prompt-step-P3.S6, HEAD b3a5e578e (3 commits above base c7e5a6454)
+git status --porcelain     M sugar-crush/src/Agents/Agent.php
+                           M sugar-crush/tests/Agents/AgentTest.php
+git diff HEAD --stat       2 files changed, 398 insertions(+), 42 deletions(-)
+untracked (non-vendor)     NONE
+```
+Saved to `<scratchpad>/P3.S6-rescue/`: the patch (`uncommitted-at-b3a5e578e.patch`, md5
+`f6ea4b657bb9fb8e58fb75fbbe21f529`, 549 lines) **and** full copies of both files.
+
+**THE BACKUP WAS THEN VERIFIED RATHER THAN ASSUMED, and the first check was a false alarm I had to
+reason past.** `git apply --check` against the live worktree FAILS — correctly, because the patch is
+already applied there. A backup that "fails its own check" is exactly the kind of thing that gets
+discarded in a hurry. So I reconstructed from scratch instead: extracted both files at `b3a5e578e`
+into a clean directory, applied the patch there, and compared to the live tree.
+```
+OK: patch applies cleanly to HEAD b3a5e578e
+MATCH  sugar-crush/src/Agents/Agent.php       c81e1cd4ad65ff0584472d499964562f
+MATCH  sugar-crush/tests/Agents/AgentTest.php cbf0c8b46d570a4071ae4726e3ea3fd0
+```
+Byte-for-byte on both files. **The work cannot now be lost**, whatever happens to the agent.
+
+**NOTHING IN THE WORKTREE WAS TOUCHED.** No commit, no stash, no checkout, no `git add`. The dirty
+tree was left exactly as the dead agent left it so the resumed agent finds what it expects.
+
+**A NOTE ON `git stash list`:** it shows nine stashes, all `WIP on master` from the OTHER plan's
+lanes. **Stashes are shared across worktrees in git.** They are not this plan's and were not touched.
+Recording it because a future agent tidying up a rescue could very easily pop one.
+
+**RECOVERY: rung 1 of the §1.8 ladder, adapted per §6a** (Claude Code has no OpenCode resume; the
+equivalent is `SendMessage` to the same agent, which resumes it from its transcript). The agent was
+sent its state as I measured it — HEAD, the exact dirty file list, the diffstat, the backup location
+and the two md5s — plus an explicit instruction to pick up at verifying its fix agent's uncommitted
+diff, run the tests, commit, and report; and NOT to spawn another reviewer. **It was also told that if
+it hits the limit again it must stop and say so rather than truncate**, because a half-report from a
+dying agent is worse than waiting until the 4am reset.
+
+**The nine-question report is still owed and still not inferable.** Its three commit subjects say it
+measured eight once-per-dispatch call sites, then CORRECTED ITS OWN DISPOSITION to *"the seam IS real
+and lives in WorkflowEngine, outside this list"*, then pinned that against a real pipeline, and
+separately repaired **"the midnight flake"** — a time-dependent test. Which outcome it landed on, what
+it did instead of widening into `WorkflowEngine`, and what that flake was cannot be read off a subject
+line, and §1.8 says I do not write them for it.
+
+**PROCESS RULE THIS EPISODE EARNS — a step agent must never leave a sub-agent's work uncommitted.**
+The instruction "do not commit, I will review first" is safe when the reviewer is a live orchestrator
+and catastrophic when the only reader is an agent that can be killed mid-sentence by a rate limit.
+Sub-agent work should be COMMITTED to the step branch immediately and amended or reverted afterwards
+if the reviewer objects — a commit is recoverable, a dirty worktree owned by a dead agent is not.
+**Put this in every step brief that spawns a sub-agent.**
+
 ### P3.S5-fix-1 · FINAL FIX PASS · 2026-08-31 — VERIFIED BY THE ORCHESTRATOR, MERGE-READY, HELD FOR A QUIET BOX
 
 Commit `6acba5f9e` on `prompt/P3.S5-fix-1`. F1, F2, F3, F5 FIXED; F4 half fixed and half
