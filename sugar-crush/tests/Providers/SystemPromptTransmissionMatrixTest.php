@@ -76,15 +76,22 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * class it was built to close for Vertex - which is the same conflation
      * ("complete() passes") that hid the Vertex Google defect in the first
      * place. Those three rows are now split `#complete`/`#stream`, with a
-     * drive each. The remaining three body-shaped rows are genuinely
+     * drive each. The remaining body-shaped rows are genuinely
      * single-builder and stay undiscriminated: Sglang shares buildParams()
      * (SglangProvider.php:642, called from :447 and :464); Vertex
      * `#anthropic` is one method serving both paths
-     * (anthropicBody($request, stream:), VertexProvider.php:431, called from
-     * :240 and :314); Vertex `#google` is reached on the stream path only by
-     * delegation (completeStream() yields complete(),
-     * VertexProvider.php:290-298). So the headline now holds for 9 of 9
-     * body-shaped rows.
+     * (anthropicBody($request, stream:), called from complete() and
+     * completeStream()); Vertex `#google` is reached on the stream path only
+     * by delegation (completeStream() yields complete()); Vertex `#gemini` is
+     * one method, geminiBody(), serving both complete() and streamGemini().
+     * So the headline holds for every body-shaped row.
+     *
+     * THE DENOMINATOR IS DELIBERATELY NO LONGER A NUMBER. It used to read
+     * "9 of 9", which was true when written and stopped being true the moment
+     * the Vertex `#gemini` row was added - 16.2: a figure no test derives
+     * rots. The coverage assertion in
+     * {@see testTheContractSlotSpellingsAreLoadBearing()} IS the derived form,
+     * and it reds on exactly the drift the number was meant to catch.
      *
      * THE "BEFORE" FIGURE IS 3 OF 6, AND ITS ANCHOR IS LOAD-BEARING: those 6
      * are the body-shaped rows at `d34ce0297`, the commit BEFORE the split
@@ -199,6 +206,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         BedrockProvider::class . '#stream' => 'system[0].text',
         VertexProvider::class . '#anthropic' => 'system',
         VertexProvider::class . '#google' => 'instances[0].context',
+        VertexProvider::class . '#gemini' => 'systemInstruction.parts[0].text',
         ClaudeCodeProvider::class => '--system-prompt argv',
     ];
 
@@ -252,9 +260,17 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
      * `{"maxTokens":4096,"temperature":0.7}`, because ConverseStream rejects
      * an absent maxTokens (BedrockProvider.php:50-55, :206-212).
      *
-     * The single-builder rows (Sglang, both Vertex arms) need no such guard:
-     * they have only one builder to resolve, which is what their
-     * undiscriminated key SAYS.
+     * The single-builder rows (Sglang, all three Vertex arms) need no such
+     * guard against the `#complete`/`#stream` conflation: they have only one
+     * builder to resolve, which is what their undiscriminated key SAYS.
+     *
+     * THE TWO VERTEX `publishers/google` ROWS DO GET A METHOD ASSERTION, for
+     * a different reason. `#google` and `#gemini` are the SAME publisher and
+     * differ only by model family, so a routing regression - the exact defect
+     * the Gemini arm was built to fix, reintroduced - would drive the wrong
+     * builder for the right publisher. Their slots differ, so the row would
+     * red anyway; the method assertion is there to make it red with the CAUSE
+     * named rather than as an anonymous NOT-FOUND.
      */
     private const WRONG_BUILDER = 'this drive resolved the WRONG builder for its contract row: a '
         . '`#complete`/`#stream` pair lands the sentinel in the same slot, so the row is only '
@@ -269,14 +285,29 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
     private const SENTINEL = 'P1S7-SENTINEL-4f8a2c91';
 
     /**
-     * A `publishers/google` model id, which is what selects VertexProvider's
-     * SECOND body builder: isAnthropicModel() is
-     * `str_contains(strtolower($model), 'claude')` (VertexProvider.php:397-400)
-     * and modelId() prefers the REQUEST's model over the provider's own
-     * default (:412-415), so this id on the request routes there whatever the
-     * helper below constructs the provider with.
+     * The id that selects VertexProvider's LEGACY `instances`/`:predict` body
+     * builder. modelId() prefers the REQUEST's model over the provider's own
+     * default, so this id on the request routes there whatever the helper
+     * below constructs the provider with.
+     *
+     * WAS `gemini-1.5-pro-002`, AND THAT WAS THE WRONG ID FOR THIS ROW.
+     * `publishers/google` fronts two protocols: the `instances`/`context`
+     * envelope this row's slot spelling names belongs to the PaLM 2
+     * `chat-bison` family, and Gemini is not served by it — it takes
+     * `:generateContent` with a top-level `systemInstruction`, which is now
+     * its own contract row. So the id here moved to one that really does take
+     * the envelope this row asserts, and the `#gemini` row below carries the
+     * other protocol. Neither row's ASSERTIONS were weakened; a row was added
+     * and an id corrected.
      */
-    private const VERTEX_GOOGLE_MODEL = 'gemini-1.5-pro-002';
+    private const VERTEX_GOOGLE_MODEL = 'chat-bison@002';
+
+    /**
+     * The id that selects VertexProvider's Gemini builder:
+     * `str_contains(strtolower($model), 'gemini')`
+     * ({@see VertexProvider::isGeminiModel()}).
+     */
+    private const VERTEX_GEMINI_MODEL = 'gemini-1.5-pro-002';
 
     /**
      * One OpenAI-compatible streamed chunk plus the terminal marker, carrying
@@ -380,6 +411,7 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
             BedrockProvider::class . '#stream' => self::SENTINEL,
             VertexProvider::class . '#anthropic' => self::SENTINEL,
             VertexProvider::class . '#google' => self::SENTINEL,
+            VertexProvider::class . '#gemini' => self::SENTINEL,
         ];
 
         $bodyShapedRows = array_values(array_diff(
@@ -623,8 +655,24 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
                 $googleCaptured = null;
                 $this->vertexProvider([], $googleCaptured)
                     ->complete($this->request(model: self::VERTEX_GOOGLE_MODEL));
+                $this->assertSame('predict', $googleCaptured['method'], self::WRONG_BUILDER);
 
                 return $googleCaptured['body'];
+
+            case VertexProvider::class . '#gemini':
+                $geminiCaptured = null;
+                $this->vertexProvider([], $geminiCaptured)
+                    ->complete($this->request(model: self::VERTEX_GEMINI_MODEL));
+                // THREE single-builder Vertex rows now, and two of them are
+                // `publishers/google`, so the method assertion stops being
+                // decoration: `instances[0].context` and
+                // `systemInstruction.parts[0].text` are different slots, but a
+                // routing regression that sent a Gemini id to the legacy
+                // builder would show up as a NOT-FOUND rather than as the
+                // named cause. This says the cause.
+                $this->assertSame('generateContent', $geminiCaptured['method'], self::WRONG_BUILDER);
+
+                return $geminiCaptured['body'];
         }
 
         // Rule 32: an unreadable row is reported, never quietly passed.
@@ -976,6 +1024,88 @@ final class SystemPromptTransmissionMatrixTest extends TestCase
         $provider->complete($this->request(null, self::VERTEX_GOOGLE_MODEL));
 
         $this->assertArrayNotHasKey('context', $captured['body']['instances'][0]);
+    }
+
+    // =========================================================================
+    // Vertex, THIRD arm — Gemini's top-level `systemInstruction` Content
+    // (VertexProvider::geminiBody()). `publishers/google` is two protocols:
+    // the PaLM 2 family above takes `instances`/`context`, Gemini takes
+    // `contents` + `systemInstruction` on `:generateContent`. Before that arm
+    // existed, THIS id was the one the `#google` row drove, so the row was
+    // asserting a PaLM 2 envelope for a model that never reads one.
+    // =========================================================================
+
+    public function testVertexTransmitsSystemPromptInTheGeminiSystemInstructionOnBothPaths(): void
+    {
+        $captured = null;
+        $provider = $this->vertexProvider([], $captured);
+        $provider->complete($this->request(model: self::VERTEX_GEMINI_MODEL));
+
+        $this->assertSame('generateContent', $captured['method']);
+        $this->assertSame(
+            ['parts' => [['text' => self::SENTINEL]]],
+            $captured['body']['systemInstruction'],
+            'Gemini takes the standing instruction as a top-level Content with parts and NO '
+            . 'role - not a bare string, and not a turn inside `contents`',
+        );
+        // ALSO through the declared contract slot, exactly as the other two
+        // Vertex arms are; both assertions are kept.
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $captured['body'],
+                $this->contractSlotFor(VertexProvider::class . '#gemini'),
+            ),
+        );
+        $this->assertSame(
+            [['role' => 'user', 'parts' => [['text' => 'Hi']]]],
+            $captured['body']['contents'],
+            'the systemPrompt must be hoisted into `systemInstruction` and NOT also left in '
+            . '`contents`; the one user turn must survive unaltered, and its role vocabulary '
+            . 'is user/model - never `assistant`',
+        );
+        $this->assertSame(1, substr_count((string) json_encode($captured['body']), self::SENTINEL));
+
+        // THE STREAMER SEAM, NOT THE PREDICTOR - and that is the difference
+        // from the `#google` arm above, which reaches its body by delegating
+        // to complete(). Gemini has a real `:streamGenerateContent` route, so
+        // "complete() passes" is not evidence about it and the capture has to
+        // come off the other seam.
+        $streamed = null;
+        $streamProvider = $this->vertexStreamer([], $streamed);
+        iterator_to_array(
+            $streamProvider->completeStream($this->request(model: self::VERTEX_GEMINI_MODEL)),
+            false,
+        );
+
+        $this->assertTrue($streamed['called'], 'the Gemini stream must reach the STREAMER seam');
+        $this->assertSame('streamGenerateContent', $streamed['method']);
+        $this->assertSame(
+            ['parts' => [['text' => self::SENTINEL]]],
+            $streamed['body']['systemInstruction'],
+        );
+        $this->assertSame(
+            self::SENTINEL,
+            $this->resolveContractSlot(
+                $streamed['body'],
+                $this->contractSlotFor(VertexProvider::class . '#gemini'),
+            ),
+        );
+        $this->assertSame(1, substr_count((string) json_encode($streamed['body']), self::SENTINEL));
+    }
+
+    public function testVertexGeminiArmNullSystemPromptTransmitsNothing(): void
+    {
+        // The negative polarity: systemInstruction() returns null when no part
+        // exists, and geminiBody() only sets the key for a non-null value. The
+        // mutation this catches is dropping that guard, which would send an
+        // empty `systemInstruction` Content on every prompt-less turn.
+        $captured = null;
+        $provider = $this->vertexProvider([], $captured);
+        $provider->complete($this->request(null, self::VERTEX_GEMINI_MODEL));
+
+        $this->assertSame('generateContent', $captured['method']);
+        $this->assertArrayNotHasKey('systemInstruction', $captured['body']);
     }
 
     // =========================================================================

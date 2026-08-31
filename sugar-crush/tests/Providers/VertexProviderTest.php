@@ -37,7 +37,23 @@ use SugarCraft\Crush\Tools\ToolResult;
 final class VertexProviderTest extends TestCase
 {
     private const ANTHROPIC_MODEL = 'claude-3-sonnet@20240229';
-    private const GOOGLE_MODEL = 'gemini-1.5-pro-002';
+
+    /**
+     * WAS `GOOGLE_MODEL = 'gemini-1.5-pro-002'`, AND THAT ID WAS WRONG FOR
+     * EVERY TEST THAT USED IT.
+     *
+     * `publishers/google` is two protocols. The `instances`/`context`
+     * envelope those tests pin is the PaLM 2 `chat-bison` one; Gemini is not
+     * served by it at all and now routes to `:generateContent`
+     * ({@see VertexProvider::isGeminiModel()}). So the legacy-arm tests below
+     * are re-pointed at a model that really does take the envelope they
+     * assert, and every one of their assertions is unchanged - the id was the
+     * only thing that moved. The Gemini id keeps its own constant and its own
+     * tests.
+     */
+    private const LEGACY_GOOGLE_MODEL = 'chat-bison@002';
+
+    private const GEMINI_MODEL = 'gemini-1.5-pro-002';
 
     /**
      * Builds a provider whose unary seam records its inputs and returns a
@@ -183,8 +199,24 @@ final class VertexProviderTest extends TestCase
         $provider = $this->providerWithPredictor();
 
         $this->assertSame(
+            'projects/my-project/locations/us-central1/publishers/google/models/chat-bison@002',
+            $provider->endpointFor(self::LEGACY_GOOGLE_MODEL),
+        );
+    }
+
+    public function testEndpointForAGeminiModelIsUNCHANGEDByTheGeminiSplit(): void
+    {
+        // The Gemini arm changes the RPC and the request document, NOT the
+        // resource name: Gemini is `publishers/google` exactly as PaLM 2 is.
+        // This is the byte-identical string the old
+        // testEndpointForNonAnthropicModelUsesTheGooglePublisher asserted for
+        // this id before the split, kept so the split cannot silently have
+        // moved the publisher segment as well.
+        $provider = $this->providerWithPredictor();
+
+        $this->assertSame(
             'projects/my-project/locations/us-central1/publishers/google/models/gemini-1.5-pro-002',
-            $provider->endpointFor(self::GOOGLE_MODEL),
+            $provider->endpointFor(self::GEMINI_MODEL),
         );
     }
 
@@ -297,7 +329,7 @@ final class VertexProviderTest extends TestCase
 
     public function testGoogleDefaultModelReportsNoStreamingOrToolSupport(): void
     {
-        $provider = $this->providerWithPredictor([], $unused, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $unused, self::LEGACY_GOOGLE_MODEL);
 
         $this->assertFalse($provider->supportsStreaming());
         $this->assertFalse($provider->supportsFunctionCalling());
@@ -728,9 +760,9 @@ final class VertexProviderTest extends TestCase
         // The `instances` envelope has no such requirement, so the legacy
         // Google path must not have picked the guard up.
         $captured = null;
-        $provider = $this->providerWithPredictor(['content' => 'ok'], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor(['content' => 'ok'], $captured, self::LEGACY_GOOGLE_MODEL);
 
-        $response = $provider->complete(new CompleteRequest(model: self::GOOGLE_MODEL, messages: []));
+        $response = $provider->complete(new CompleteRequest(model: self::LEGACY_GOOGLE_MODEL, messages: []));
 
         $this->assertFalse($response->isError);
         $this->assertTrue($captured['called']);
@@ -763,10 +795,10 @@ final class VertexProviderTest extends TestCase
     public function testCompleteSelectsPredictAndTheInstancesEnvelopeForGoogleModels(): void
     {
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $provider->complete(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new UserMessage('Hi')],
             temperature: 0.3,
             maxTokens: 512,
@@ -774,7 +806,7 @@ final class VertexProviderTest extends TestCase
 
         $this->assertSame('predict', $captured['method']);
         $this->assertSame(
-            'projects/my-project/locations/us-central1/publishers/google/models/gemini-1.5-pro-002',
+            'projects/my-project/locations/us-central1/publishers/google/models/chat-bison@002',
             $captured['endpoint'],
         );
         $this->assertSame(
@@ -798,10 +830,10 @@ final class VertexProviderTest extends TestCase
     public function testCompleteHoistsTheAssembledSystemPromptIntoTheGoogleInstanceContext(): void
     {
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $provider->complete(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new SystemMessage('be terse'), new UserMessage('Hi')],
             systemPrompt: 'you are a bot',
         ));
@@ -820,10 +852,10 @@ final class VertexProviderTest extends TestCase
     public function testTheGooglePromptRidesContextAndNowhereElseInTheBody(): void
     {
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $provider->complete(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new SystemMessage('SENTINEL-be-terse'), new UserMessage('Hi')],
         ));
 
@@ -851,10 +883,10 @@ final class VertexProviderTest extends TestCase
         // capture happens on the PREDICTOR seam, not the streamer - which is
         // the whole reason the unary path passing is not evidence here.
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new UserMessage('Hi')],
             systemPrompt: 'you are a bot',
         )), false);
@@ -885,10 +917,10 @@ final class VertexProviderTest extends TestCase
     public function testGoogleInstanceHasNoContextKeyWithoutASystemPrompt(): void
     {
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $provider->complete(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new UserMessage('Hi')],
         ));
 
@@ -909,10 +941,10 @@ final class VertexProviderTest extends TestCase
         // never called, and an assertArrayNotHasKey on a body nobody built
         // would pass for the wrong reason.
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new UserMessage('Hi')],
         )), false);
 
@@ -930,10 +962,10 @@ final class VertexProviderTest extends TestCase
         // The empty string is the pathological input the `!== null` guard the
         // OpenAI and Bedrock arms use would let through as an empty context.
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $provider->complete(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new UserMessage('Hi'), new SystemMessage('')],
             systemPrompt: '',
         ));
@@ -948,10 +980,10 @@ final class VertexProviderTest extends TestCase
     public function testGoogleInstanceContextJoinsEveryHistorySystemMessageInMessageOrder(): void
     {
         $captured = null;
-        $provider = $this->providerWithPredictor([], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor([], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $provider->complete(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [
                 new SystemMessage('first'),
                 new SystemMessage('second'),
@@ -990,10 +1022,10 @@ final class VertexProviderTest extends TestCase
         // pinned, so flipping either one is a visible red rather than a quiet
         // behaviour change.
         $captured = null;
-        $provider = $this->providerWithPredictor(['content' => 'ok'], $captured, self::GOOGLE_MODEL);
+        $provider = $this->providerWithPredictor(['content' => 'ok'], $captured, self::LEGACY_GOOGLE_MODEL);
 
         $response = $provider->complete(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new SystemMessage('only'), new SystemMessage('this')],
             systemPrompt: 'asm',
         ));
@@ -1028,10 +1060,10 @@ final class VertexProviderTest extends TestCase
         $provider = $this->providerWithPredictor(
             ['content' => 'legacy content', 'reasoning' => 'because'],
             $unused,
-            self::GOOGLE_MODEL,
+            self::LEGACY_GOOGLE_MODEL,
         );
 
-        $response = $provider->complete(new CompleteRequest(model: self::GOOGLE_MODEL, messages: []));
+        $response = $provider->complete(new CompleteRequest(model: self::LEGACY_GOOGLE_MODEL, messages: []));
 
         $this->assertSame('legacy content', $response->content);
         $this->assertSame('because', $response->reasoning);
@@ -1042,12 +1074,676 @@ final class VertexProviderTest extends TestCase
         $provider = $this->providerWithPredictor(
             ['predictions' => [['text' => 'wrapped']]],
             $unused,
-            self::GOOGLE_MODEL,
+            self::LEGACY_GOOGLE_MODEL,
         );
 
-        $response = $provider->complete(new CompleteRequest(model: self::GOOGLE_MODEL, messages: []));
+        $response = $provider->complete(new CompleteRequest(model: self::LEGACY_GOOGLE_MODEL, messages: []));
 
         $this->assertSame('wrapped', $response->content);
+    }
+
+    // =========================================================================
+    // Gemini — `:generateContent` / `:streamGenerateContent`
+    //
+    // `publishers/google` is TWO protocols. Everything above this line is the
+    // PaLM 2 `chat-bison` `instances`/`context` envelope, which Gemini does
+    // not read. These drive the third arm.
+    //
+    // EPISTEMIC STATUS, once for the section: no test here has Vertex
+    // credentials, so every assertion is about the DOCUMENT THIS CLASS BUILDS
+    // (and, in the call-site tests further down, about the protobuf request
+    // and the serialized HTTP body the vendored transport is handed). That
+    // the deployed service accepts that document is UNVERIFIED here.
+    // =========================================================================
+
+    public function testGeminiDefaultModelReportsStreamingButNoToolSupport(): void
+    {
+        $provider = $this->providerWithPredictor([], $unused, self::GEMINI_MODEL);
+
+        // Streaming is TRUE and that is a deliberate move from the flag this
+        // id used to report: `:streamGenerateContent` is a real route now, so
+        // reporting false would be a lie about a path that works.
+        $this->assertTrue($provider->supportsStreaming());
+
+        // Function calling stays FALSE, and that is not a lie: Gemini supports
+        // it, this class has no shaper for it. See supportsFunctionCalling().
+        $this->assertFalse($provider->supportsFunctionCalling());
+    }
+
+    public function testCompleteSelectsGenerateContentAndTheContentsEnvelopeForGeminiModels(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+            temperature: 0.3,
+            maxTokens: 512,
+        ));
+
+        $this->assertSame('generateContent', $captured['method']);
+        $this->assertSame(
+            'projects/my-project/locations/us-central1/publishers/google/models/gemini-1.5-pro-002',
+            $captured['endpoint'],
+        );
+
+        // THE WHOLE BODY, not a shape assertion on part of it. The `instances`
+        // wrapper and the `parameters` map must both be ABSENT: this arm
+        // exists precisely because a Gemini id used to be handed them.
+        $this->assertSame(
+            [
+                'contents' => [['role' => 'user', 'parts' => [['text' => 'Hi']]]],
+                'generationConfig' => ['temperature' => 0.3, 'maxOutputTokens' => 512],
+            ],
+            $captured['body'],
+        );
+        $this->assertArrayNotHasKey('instances', $captured['body']);
+        $this->assertArrayNotHasKey('parameters', $captured['body']);
+        $this->assertArrayNotHasKey('anthropic_version', $captured['body']);
+    }
+
+    public function testGeminiRoleVocabularyIsUserAndModelNeverAssistant(): void
+    {
+        // THE ONE WORD THAT FORCED A SEPARATE FORMATTER. formatMessages(),
+        // which the legacy arm still uses unchanged, emits `assistant`;
+        // Gemini does not know that role. A regression that reused the legacy
+        // formatter here would put `assistant` in `contents` and reds this.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [
+                new UserMessage('one'),
+                new AssistantMessage('two'),
+                new UserMessage('three'),
+            ],
+        ));
+
+        $this->assertSame(
+            [
+                ['role' => 'user', 'parts' => [['text' => 'one']]],
+                ['role' => 'model', 'parts' => [['text' => 'two']]],
+                ['role' => 'user', 'parts' => [['text' => 'three']]],
+            ],
+            $captured['body']['contents'],
+        );
+        $this->assertSame(
+            0,
+            substr_count((string) json_encode($captured['body']), 'assistant'),
+            'Gemini\'s assistant role is spelled `model`; the string `assistant` must not '
+            . 'appear anywhere in the body',
+        );
+    }
+
+    public function testGeminiContentsAreNotMergedAcrossConsecutiveSameRoleTurns(): void
+    {
+        // A DECISION, PINNED (16.2). formatAnthropicMessages() MUST merge
+        // consecutive same-role turns because Anthropic rejects them. Whether
+        // Gemini requires the same is UNVERIFIED here - nothing in this repo
+        // can call the service - so the transcript is transmitted
+        // turn-for-turn rather than reshaped on a guess. Adopting a merge
+        // later reds this test, which is the point: it makes that a visible
+        // decision instead of a silent one.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('first'), new UserMessage('second')],
+        ));
+
+        $this->assertSame(
+            [
+                ['role' => 'user', 'parts' => [['text' => 'first']]],
+                ['role' => 'user', 'parts' => [['text' => 'second']]],
+            ],
+            $captured['body']['contents'],
+        );
+    }
+
+    public function testCompleteHoistsTheAssembledSystemPromptIntoTheGeminiSystemInstruction(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new SystemMessage('be terse'), new UserMessage('Hi')],
+            systemPrompt: 'you are a bot',
+        ));
+
+        $this->assertSame(
+            ['parts' => [['text' => "you are a bot\n\nbe terse"]]],
+            $captured['body']['systemInstruction'],
+            'Gemini takes the standing instruction as a top-level Content - parts, no role - '
+            . 'assembled prompt first, then history SystemMessages in message order',
+        );
+        $this->assertSame(
+            [['role' => 'user', 'parts' => [['text' => 'Hi']]]],
+            $captured['body']['contents'],
+            'every hoisted SystemMessage must leave `contents`, or each one returns as a user turn',
+        );
+    }
+
+    public function testTheGeminiPromptRidesSystemInstructionAndNowhereElseInTheBody(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new SystemMessage('SENTINEL-be-terse'), new UserMessage('Hi')],
+        ));
+
+        $this->assertSame(
+            'SENTINEL-be-terse',
+            $captured['body']['systemInstruction']['parts'][0]['text'],
+        );
+
+        // A hoist that forgets to drop the SystemMessage from `contents`
+        // transmits it twice - once as the instruction, once as a `user` turn.
+        $this->assertSame(
+            1,
+            substr_count((string) json_encode($captured['body']), 'SENTINEL-be-terse'),
+        );
+    }
+
+    public function testGeminiSystemInstructionJoinsEveryHistorySystemMessageInMessageOrder(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [
+                new SystemMessage('first'),
+                new SystemMessage('second'),
+                new UserMessage('Hi'),
+                new SystemMessage('third'),
+            ],
+        ));
+
+        $this->assertSame(
+            "first\n\nsecond\n\nthird",
+            $captured['body']['systemInstruction']['parts'][0]['text'],
+        );
+        $this->assertSame(
+            [['role' => 'user', 'parts' => [['text' => 'Hi']]]],
+            $captured['body']['contents'],
+        );
+    }
+
+    public function testGeminiBodyHasNoSystemInstructionKeyWithoutASystemPrompt(): void
+    {
+        // NEGATIVE POLARITY. The mutation it catches is dropping the
+        // `if ($system !== null)` guard in geminiBody() so the key is written
+        // unconditionally - which would send an empty Content on every
+        // prompt-less turn. A positive test cannot catch that.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertArrayNotHasKey('systemInstruction', $captured['body']);
+    }
+
+    public function testGeminiBodyHasNoSystemInstructionKeyForAnEmptySystemPrompt(): void
+    {
+        // The pathological input the `!== null`-only guard that OpenAI and
+        // Bedrock use would let through as an empty instruction.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi'), new SystemMessage('')],
+            systemPrompt: '',
+        ));
+
+        $this->assertArrayNotHasKey('systemInstruction', $captured['body']);
+        $this->assertSame(
+            [['role' => 'user', 'parts' => [['text' => 'Hi']]]],
+            $captured['body']['contents'],
+        );
+    }
+
+    /**
+     * @return array<string, array{0: array<int, Message>}>
+     */
+    public static function geminiTurnlessTranscriptProvider(): array
+    {
+        return [
+            // The same two pathological inputs the legacy arm documents - and
+            // this arm answers them DIFFERENTLY on purpose. `contents` is
+            // annotated REQUIRED on the vendored proto, so an empty list is a
+            // server-side 400 with nothing useful in it; the `instances`
+            // envelope states no such requirement, which is why
+            // testGoogleModelsStillAcceptAnEmptyTranscript and
+            // testAGoogleSystemMessageOnlyTranscriptYieldsAnEmptyMessagesList
+            // still record the no-guard position for THAT arm.
+            'empty transcript' => [[]],
+            'system messages only' => [[new SystemMessage('only'), new SystemMessage('this')]],
+            // A third route this arm has and neither other arm does: a turn
+            // whose content is the empty string contributes no Part, so a
+            // transcript of nothing but those is turnless too.
+            'empty-content turns only' => [[new UserMessage(''), new AssistantMessage('')]],
+        ];
+    }
+
+    /**
+     * @dataProvider geminiTurnlessTranscriptProvider
+     * @param array<int, Message> $messages
+     */
+    public function testCompleteRejectsATurnlessGeminiTranscriptLocally(array $messages): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: $messages,
+            systemPrompt: 'asm',
+        ));
+
+        $this->assertTrue($response->isError);
+        $this->assertStringContainsString('`contents` is a REQUIRED field', (string) $response->errorMessage);
+        // Rejected LOCALLY: no round trip is burned on an opaque 400.
+        $this->assertFalse($captured['called']);
+        // And classified permanent, so Runtime does not retry it three times.
+        $this->assertFalse($response->errorTransient);
+    }
+
+    /**
+     * @dataProvider geminiTurnlessTranscriptProvider
+     * @param array<int, Message> $messages
+     */
+    public function testCompleteStreamRejectsATurnlessGeminiTranscriptLocally(array $messages): void
+    {
+        // The SAME guard on the streaming path, captured on the STREAMER seam
+        // - "complete() passes" is not evidence about completeStream(), and
+        // this arm no longer reaches the stream by delegating to complete().
+        $captured = null;
+        $provider = $this->providerWithStreamer([], $captured, self::GEMINI_MODEL);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: $messages,
+        )), false);
+
+        $this->assertCount(1, $chunks);
+        $this->assertTrue($chunks[0]->isError);
+        $this->assertStringContainsString('`contents` is a REQUIRED field', (string) $chunks[0]->errorMessage);
+        $this->assertFalse($captured['called']);
+    }
+
+    public function testGeminiGenerationConfigCarriesEverySamplingKnob(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+            temperature: 0.25,
+            maxTokens: 1024,
+            topP: 0.9,
+            topK: 40,
+            stop: ['STOP', ''],
+        ));
+
+        // camelCase, and nested under `generationConfig` - NOT the legacy
+        // arm's flat `parameters` map.
+        $this->assertSame(
+            [
+                'temperature' => 0.25,
+                'maxOutputTokens' => 1024,
+                'topP' => 0.9,
+                'topK' => 40,
+                // The empty stop string is filtered by the shared
+                // stopSequences() joiner, same as every other arm.
+                'stopSequences' => ['STOP'],
+            ],
+            $captured['body']['generationConfig'],
+        );
+    }
+
+    public function testGeminiGenerationConfigOmitsTheOptionalKnobsThatWereNotSet(): void
+    {
+        // NEGATIVE POLARITY on the same builder: the guarded keys must be
+        // ABSENT, not present-and-null. `temperature`/`maxOutputTokens` are
+        // unguarded and fall back to the class defaults, which is why they
+        // stay.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertSame(
+            ['temperature' => 0.7, 'maxOutputTokens' => 4096],
+            $captured['body']['generationConfig'],
+        );
+    }
+
+    public function testAGeminiBodyCarriesNoToolsKeyEvenWhenToolsAreOffered(): void
+    {
+        // A DELIBERATE ABSENCE, PINNED (16.2) rather than left to chance.
+        // Gemini DOES support function calling and setTools() is vendored;
+        // this class has no shaper for it, so supportsFunctionCalling()
+        // reports false and the body carries no `tools`. Whoever builds the
+        // shaper reds this test and flips the flag with it - which is the
+        // intended signal, not a regression.
+        $captured = null;
+        $provider = $this->providerWithPredictor([], $captured, self::GEMINI_MODEL);
+
+        $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+            tools: [$this->fakeTool()],
+        ));
+
+        $this->assertArrayNotHasKey('tools', $captured['body']);
+        $this->assertSame(
+            0,
+            substr_count((string) json_encode($captured['body']), 'reader'),
+            'no part of an offered tool may leak into a body that declares none',
+        );
+        $this->assertFalse($provider->supportsFunctionCalling());
+    }
+
+    // -------------------------------------------------------------------------
+    // Gemini response parsing — `candidates[0].content.parts[*].text`
+    // -------------------------------------------------------------------------
+
+    public function testCompleteParsesTheGeminiCandidateShape(): void
+    {
+        $provider = $this->providerWithPredictor(
+            [
+                'candidates' => [[
+                    'content' => [
+                        'role' => 'model',
+                        // Multiple parts, because a candidate is a LIST - the
+                        // same trap `predictions[0].content` does not have.
+                        'parts' => [['text' => 'Hello, '], ['text' => 'world']],
+                    ],
+                    'finishReason' => 'STOP',
+                ]],
+                'usageMetadata' => [
+                    'promptTokenCount' => 11,
+                    'candidatesTokenCount' => 5,
+                    // Deliberately DIFFERENT from the sum, so a parser that
+                    // read totalTokenCount instead reds.
+                    'totalTokenCount' => 99,
+                ],
+            ],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertFalse($response->isError);
+        $this->assertSame('Hello, world', $response->content);
+        $this->assertSame(16, $response->tokensUsed);
+        $this->assertNull($response->reasoning);
+        $this->assertNull($response->toolCalls);
+    }
+
+    public function testCompleteDoesNotParseAGeminiReplyWithTheLegacyPredictionsShape(): void
+    {
+        // THE CROSS-ARM CONTROL, and it is the assertion that says the two
+        // parsers are really separate. The legacy parser reads
+        // `content`/`text` off `predictions[0]`; hand the Gemini parser that
+        // document and it must find nothing rather than silently succeed -
+        // otherwise a routing regression would still "work" and hide itself.
+        $provider = $this->providerWithPredictor(
+            ['predictions' => [['content' => 'legacy content']]],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertSame('', $response->content);
+        $this->assertSame(0, $response->tokensUsed);
+    }
+
+    public function testCompleteReportsAGeminiPromptBlockAsAPermanentError(): void
+    {
+        // A 200 CARRYING A REFUSAL. A safety-blocked prompt answers success
+        // with no candidates and a promptFeedback.blockReason; read naively
+        // that is an empty completion, indistinguishable from a model that
+        // chose to say nothing.
+        $provider = $this->providerWithPredictor(
+            ['promptFeedback' => ['blockReason' => 'SAFETY']],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertTrue($response->isError);
+        $this->assertSame(
+            'Vertex generateContent: the prompt was blocked before generation (SAFETY).',
+            $response->errorMessage,
+        );
+        // Deterministic in the input: retrying re-sends the same blocked
+        // prompt, so it must not be classified transient.
+        $this->assertFalse($response->errorTransient);
+    }
+
+    public function testCompleteReturnsEmptyContentForAGeminiCandidateWithNoParts(): void
+    {
+        // The OTHER polarity of the block above, and it must NOT be an error:
+        // an output-side `finishReason: SAFETY` truncates the content object
+        // away, and a candidate with no parts is an empty answer, not a
+        // failure. Pinned so the two cases cannot collapse onto one another.
+        $provider = $this->providerWithPredictor(
+            ['candidates' => [['finishReason' => 'SAFETY']], 'usageMetadata' => ['promptTokenCount' => 7]],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        ));
+
+        $this->assertFalse($response->isError);
+        $this->assertSame('', $response->content);
+        $this->assertSame(7, $response->tokensUsed);
+    }
+
+    // -------------------------------------------------------------------------
+    // Gemini streaming — `:streamGenerateContent`
+    // -------------------------------------------------------------------------
+
+    public function testCompleteStreamSelectsStreamGenerateContentForGeminiModels(): void
+    {
+        $captured = null;
+        $provider = $this->providerWithStreamer([], $captured, self::GEMINI_MODEL);
+
+        iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        )), false);
+
+        // NOT a delegation to complete(): this arm reaches the STREAMER seam,
+        // which is the behaviour change from the fall-back the legacy arm
+        // still has.
+        $this->assertTrue($captured['called']);
+        $this->assertSame('streamGenerateContent', $captured['method']);
+        $this->assertSame(
+            'projects/my-project/locations/us-central1/publishers/google/models/gemini-1.5-pro-002',
+            $captured['endpoint'],
+        );
+        $this->assertSame(
+            ['role' => 'user', 'parts' => [['text' => 'Hi']]],
+            $captured['body']['contents'][0],
+        );
+    }
+
+    public function testCompleteStreamYieldsGeminiTextDeltasAndUsageExactlyOnce(): void
+    {
+        // USAGE IS CUMULATIVE ON THIS PROTOCOL, NOT SPLIT. Gemini restates
+        // usageMetadata on the chunks that carry it, so the arm parks the
+        // latest and emits ONE usage response after the stream ends. Runtime
+        // SUMS tokensUsed across chunks (because the Anthropic arm genuinely
+        // does split its usage in two), so yielding per chunk would bill this
+        // three-chunk turn's 12 output tokens as 4+8+12 = 24.
+        $provider = $this->providerWithStreamer(
+            [
+                ['candidates' => [['content' => ['parts' => [['text' => 'Hel']]]]],
+                    'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 4]],
+                ['candidates' => [['content' => ['parts' => [['text' => 'lo ']]]]],
+                    'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 8]],
+                ['candidates' => [['content' => ['parts' => [['text' => 'world']]], 'finishReason' => 'STOP']],
+                    'usageMetadata' => ['promptTokenCount' => 10, 'candidatesTokenCount' => 12]],
+            ],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        )), false);
+
+        // Exact counts, not "more than zero": three text deltas then one
+        // usage response, in that order.
+        $this->assertCount(4, $chunks);
+        $this->assertSame(['Hel', 'lo ', 'world', ''], array_map(
+            static fn (CompleteResponse $c): string => $c->content,
+            $chunks,
+        ));
+        $this->assertSame([0, 0, 0, 22], array_map(
+            static fn (CompleteResponse $c): int => $c->tokensUsed,
+            $chunks,
+        ));
+
+        // The accumulated answer, and the total Runtime's cross-chunk sum
+        // would arrive at.
+        $this->assertSame('Hello world', implode('', array_map(
+            static fn (CompleteResponse $c): string => $c->content,
+            $chunks,
+        )));
+        $this->assertSame(22, array_sum(array_map(
+            static fn (CompleteResponse $c): int => $c->tokensUsed,
+            $chunks,
+        )));
+    }
+
+    public function testCompleteStreamEmitsNoGeminiUsageChunkWhenTheStreamCarriesNone(): void
+    {
+        // NEGATIVE POLARITY on the usage emission: a stream with no
+        // usageMetadata anywhere must yield text deltas ONLY, not a trailing
+        // zero-token response. The mutation this catches is emitting the
+        // parked usage unconditionally.
+        $provider = $this->providerWithStreamer(
+            [['candidates' => [['content' => ['parts' => [['text' => 'hi']]]]]]],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        )), false);
+
+        $this->assertCount(1, $chunks);
+        $this->assertSame('hi', $chunks[0]->content);
+        $this->assertSame(0, $chunks[0]->tokensUsed);
+    }
+
+    public function testCompleteStreamSkipsGeminiChunksThatCarryNoText(): void
+    {
+        // A chunk with an empty candidate list, and one whose candidate has no
+        // parts, are both real (a keep-alive; an output-side safety
+        // truncation). Neither is a delta a caller can append, so neither is
+        // yielded.
+        $provider = $this->providerWithStreamer(
+            [
+                ['candidates' => []],
+                ['candidates' => [['finishReason' => 'SAFETY']]],
+                ['candidates' => [['content' => ['parts' => [['text' => 'only this']]]]]],
+            ],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        )), false);
+
+        $this->assertCount(1, $chunks);
+        $this->assertSame('only this', $chunks[0]->content);
+    }
+
+    public function testCompleteStreamReportsAGeminiPromptBlockAsAPermanentErrorChunk(): void
+    {
+        $provider = $this->providerWithStreamer(
+            [['promptFeedback' => ['blockReason' => 'PROHIBITED_CONTENT']]],
+            $unused,
+            self::GEMINI_MODEL,
+        );
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        )), false);
+
+        $this->assertCount(1, $chunks);
+        $this->assertTrue($chunks[0]->isError);
+        $this->assertSame(
+            'Vertex streamGenerateContent: the prompt was blocked before generation '
+            . '(PROHIBITED_CONTENT).',
+            $chunks[0]->errorMessage,
+        );
+        $this->assertFalse($chunks[0]->errorTransient);
+    }
+
+    public function testCompleteStreamReturnsAnErrorChunkWhenTheGeminiStreamerThrows(): void
+    {
+        $provider = VertexProvider::create(
+            projectId: 'my-project',
+            model: self::GEMINI_MODEL,
+            predictor: fn (): array => [],
+            streamer: function (): \Generator {
+                yield ['candidates' => [['content' => ['parts' => [['text' => 'partial']]]]]];
+
+                throw new \RuntimeException('gemini stream boom');
+            },
+        );
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: self::GEMINI_MODEL,
+            messages: [new UserMessage('Hi')],
+        )), false);
+
+        // The catch sits OUTSIDE the chunk loop, so it fires AFTER a real
+        // delta has already been yielded - the case Runtime must not blindly
+        // retry.
+        $this->assertCount(2, $chunks);
+        $this->assertSame('partial', $chunks[0]->content);
+        $this->assertTrue($chunks[1]->isError);
+        $this->assertSame('gemini stream boom', $chunks[1]->errorMessage);
     }
 
     // -------------------------------------------------------------------------
@@ -1353,11 +2049,11 @@ final class VertexProviderTest extends TestCase
         $provider = $this->providerWithPredictor(
             ['content' => 'unary answer'],
             $captured,
-            self::GOOGLE_MODEL,
+            self::LEGACY_GOOGLE_MODEL,
         );
 
         $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
-            model: self::GOOGLE_MODEL,
+            model: self::LEGACY_GOOGLE_MODEL,
             messages: [new UserMessage('Hi')],
         )), false);
 
@@ -1500,6 +2196,12 @@ final class VertexProviderTest extends TestCase
             'Predict' => ['Predict'],
             'RawPredict' => ['RawPredict'],
             'StreamRawPredict' => ['StreamRawPredict'],
+            'GenerateContent' => ['GenerateContent'],
+            // Like StreamRawPredict, this one names NO retry params in the
+            // shipped config, so it is built from
+            // RetrySettings::constructDefault() and its initialRpcTimeoutMillis
+            // is 20000 - which is why callOptions() has to zero BOTH fields.
+            'StreamGenerateContent' => ['StreamGenerateContent'],
         ];
     }
 
@@ -1725,6 +2427,16 @@ final class VertexProviderTest extends TestCase
             'rawPredict' => [VertexProvider::METHOD_RAW_PREDICT, ':rawPredict'],
             'predict' => [VertexProvider::METHOD_PREDICT, ':predict'],
             'streamRawPredict' => [VertexProvider::METHOD_STREAM_RAW_PREDICT, ':streamRawPredict'],
+            // The Gemini pair. Both carry `timeout_millis: 60000` in the
+            // shipped client config exactly as the three above do (MEASURED by
+            // reading prediction_service_client_config.json), so the seam that
+            // invokes them has to pass callOptions() or the whole stream is
+            // capped at 60s.
+            'generateContent' => [VertexProvider::METHOD_GENERATE_CONTENT, ':generateContent'],
+            'streamGenerateContent' => [
+                VertexProvider::METHOD_STREAM_GENERATE_CONTENT,
+                ':streamGenerateContent',
+            ],
         ];
     }
 
@@ -1741,11 +2453,25 @@ final class VertexProviderTest extends TestCase
             \Psr\Http\Message\RequestInterface $request,
             array $options
         ) use (&$captured): \GuzzleHttp\Promise\PromiseInterface {
-            $captured[] = ['uri' => (string) $request->getUri(), 'options' => $options];
+            $captured[] = [
+                'uri' => (string) $request->getUri(),
+                // The serialized request BODY, added for the Gemini call-site
+                // test: `generationConfig` reaching the protobuf object is not
+                // the same claim as it reaching the wire, and only this shows
+                // the second. Purely additive - no assertion above reads it.
+                'body' => (string) $request->getBody(),
+                'options' => $options,
+            ];
 
             // Just enough for HttpBody / PredictResponse to deserialize - these
-            // tests assert on what went OUT, not on what came back.
-            return new \GuzzleHttp\Promise\FulfilledPromise(new \GuzzleHttp\Psr7\Response(200, [], '{}'));
+            // tests assert on what went OUT, not on what came back. A
+            // server-streaming RPC decodes a JSON LIST of messages, so
+            // `:stream*Content` gets an empty list rather than an empty object.
+            $stream = str_contains((string) $request->getUri(), ':streamGenerateContent');
+
+            return new \GuzzleHttp\Promise\FulfilledPromise(
+                new \GuzzleHttp\Psr7\Response(200, [], $stream ? '[]' : '{}')
+            );
         };
 
         return new \Google\Cloud\AIPlatform\V1\Client\PredictionServiceClient([
@@ -1767,9 +2493,26 @@ final class VertexProviderTest extends TestCase
      */
     private function seamArgumentsFor(string $method): array
     {
+        if ($method === VertexProvider::METHOD_GENERATE_CONTENT
+            || $method === VertexProvider::METHOD_STREAM_GENERATE_CONTENT) {
+            // Byte-identical to what geminiBody() builds for this request -
+            // see testCompleteSelectsGenerateContentAndTheContentsEnvelopeForGeminiModels,
+            // which pins that whole body off the injected seam. Both Gemini
+            // RPCs take the same document.
+            return [
+                'projects/my-project/locations/us-central1/publishers/google/models/'
+                    . self::GEMINI_MODEL,
+                [
+                    'contents' => [['role' => 'user', 'parts' => [['text' => 'Hi']]]],
+                    'systemInstruction' => ['parts' => [['text' => 'you are a bot']]],
+                    'generationConfig' => ['temperature' => 0.7, 'maxOutputTokens' => 4096],
+                ],
+            ];
+        }
+
         if ($method === VertexProvider::METHOD_PREDICT) {
             return [
-                'projects/my-project/locations/us-central1/publishers/google/models/' . self::GOOGLE_MODEL,
+                'projects/my-project/locations/us-central1/publishers/google/models/' . self::LEGACY_GOOGLE_MODEL,
                 [
                     'instances' => [['messages' => [['role' => 'user', 'content' => 'Hi']]]],
                     'parameters' => ['temperature' => 0.7, 'maxOutputTokens' => 4096],
@@ -1800,7 +2543,10 @@ final class VertexProviderTest extends TestCase
 
         $seam = \Closure::bind(
             static function (string $method, object $client): \Closure {
-                return $method === VertexProvider::METHOD_STREAM_RAW_PREDICT
+                $streaming = $method === VertexProvider::METHOD_STREAM_RAW_PREDICT
+                    || $method === VertexProvider::METHOD_STREAM_GENERATE_CONTENT;
+
+                return $streaming
                     ? VertexProvider::defaultStreamer('us-central1', $client)
                     : VertexProvider::defaultPredictor('us-central1', $client);
             },
@@ -1845,6 +2591,15 @@ final class VertexProviderTest extends TestCase
             ),
             VertexProvider::METHOD_PREDICT => $client->predict(
                 (new \Google\Cloud\AIPlatform\V1\PredictRequest())->setEndpoint($endpoint)->setInstances([]),
+            ),
+            VertexProvider::METHOD_GENERATE_CONTENT => $client->generateContent(
+                (new \Google\Cloud\AIPlatform\V1\GenerateContentRequest())->setModel($endpoint),
+            ),
+            VertexProvider::METHOD_STREAM_GENERATE_CONTENT => iterator_to_array(
+                $client->streamGenerateContent(
+                    (new \Google\Cloud\AIPlatform\V1\GenerateContentRequest())->setModel($endpoint),
+                )->readAll(),
+                false,
             ),
             default => iterator_to_array(
                 $client->streamRawPredict(
@@ -1910,6 +2665,117 @@ final class VertexProviderTest extends TestCase
         $this->assertStringContainsString($verb, $request['uri']);
         $this->assertArrayHasKey('connect_timeout', $request['options']);
         $this->assertSame($expected, $request['options']['connect_timeout']);
+    }
+
+    /**
+     * @dataProvider geminiSeamRpcProvider
+     */
+    public function testTheGeminiCallSiteSendsGenerationConfigOnTheWire(string $method, string $verb): void
+    {
+        // THE DEFECT THIS EXISTS TO NOT REPEAT. defaultPredictor()'s legacy
+        // `:predict` branch builds its PredictRequest with setEndpoint() and
+        // setInstances() and NEVER calls setParameters(), so `temperature` and
+        // `maxOutputTokens` are silently discarded for every PaLM 2 model -
+        // half the body googleBody() carefully builds never reaches the wire.
+        // That is a real, pre-existing, separately-scoped defect in the legacy
+        // arm. This test is what makes the same class of bug impossible in the
+        // Gemini arm: it drives the provider's OWN seam through the real
+        // vendored REST transport and asserts on the SERIALIZED HTTP BODY the
+        // transport was handed - not on the array the provider built, and not
+        // on the protobuf object, either of which can carry a field the
+        // request never sends.
+        //
+        // MEASURED, not asserted: this is the request document, offline. It is
+        // NOT evidence that Vertex honours it - nothing here has credentials.
+        $request = $this->callSiteRequestFor($method);
+
+        $this->assertStringContainsString($verb, $request['uri']);
+
+        /** @var array<string, mixed> $sent */
+        $sent = json_decode($request['body'], true);
+
+        $this->assertIsArray($sent, 'the seam must send a JSON document');
+
+        // The sampling knobs, on the wire. Deleting `setGenerationConfig()`
+        // from generateContentRequest() reds exactly here - which is the
+        // deletion experiment this test is for.
+        $this->assertArrayHasKey('generationConfig', $sent);
+        $this->assertSame(4096, $sent['generationConfig']['maxOutputTokens']);
+        // `temperature` is a protobuf FLOAT (32-bit), so 0.7 does not
+        // round-trip to 0.7 - MEASURED: it serializes as 0.69999999. Asserted
+        // with a delta rather than pinned to that literal, which is a property
+        // of IEEE-754 binary32 and not of this class.
+        $this->assertEqualsWithDelta(0.7, $sent['generationConfig']['temperature'], 1.0e-6);
+
+        // The system instruction, on the wire, at its declared slot. Deleting
+        // `setSystemInstruction()` reds here.
+        $this->assertSame(
+            ['parts' => [['text' => 'you are a bot']]],
+            $sent['systemInstruction'],
+        );
+
+        // And the turns, so a request that carried config but no conversation
+        // cannot pass.
+        $this->assertSame(
+            [['role' => 'user', 'parts' => [['text' => 'Hi']]]],
+            $sent['contents'],
+        );
+
+        // The publisher resource name rides `model` on this request type, not
+        // `endpoint` - which is what the REST uri template binds to.
+        $this->assertSame(
+            'projects/my-project/locations/us-central1/publishers/google/models/gemini-1.5-pro-002',
+            $sent['model'],
+        );
+    }
+
+    /**
+     * NEGATIVE CONTROL for the test above, and it is not decoration: it proves
+     * the body probe is a live instrument rather than one that would report
+     * "present" for anything. The legacy `:predict` call site really does drop
+     * its `parameters`, so the same probe, pointed at it, must report the
+     * ABSENCE.
+     *
+     * This pins the pre-existing defect where it lives rather than repairing
+     * it - repairing the legacy arm is a different step (1.10: reported, not
+     * repaired). Whoever fixes it reds this test, and that is the intended
+     * signal.
+     */
+    public function testTheLegacyPredictCallSiteStillDropsItsParameters(): void
+    {
+        $request = $this->callSiteRequestFor(VertexProvider::METHOD_PREDICT);
+
+        $this->assertStringContainsString(':predict', $request['uri']);
+
+        /** @var array<string, mixed> $sent */
+        $sent = json_decode($request['body'], true);
+
+        $this->assertIsArray($sent);
+        // The instances DO survive (toProtobufValues + mergeFromJsonString),
+        // so the probe is looking at a real, populated body.
+        $this->assertArrayHasKey('instances', $sent);
+        $this->assertSame(
+            [['messages' => [['role' => 'user', 'content' => 'Hi']]]],
+            $sent['instances'],
+        );
+        // And the parameters do not: seamArgumentsFor(METHOD_PREDICT) supplies
+        // `temperature`/`maxOutputTokens`, and defaultPredictor() never calls
+        // setParameters(), so they are gone before the request is serialized.
+        $this->assertArrayNotHasKey('parameters', $sent);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function geminiSeamRpcProvider(): array
+    {
+        return [
+            'generateContent' => [VertexProvider::METHOD_GENERATE_CONTENT, ':generateContent'],
+            'streamGenerateContent' => [
+                VertexProvider::METHOD_STREAM_GENERATE_CONTENT,
+                ':streamGenerateContent',
+            ],
+        ];
     }
 
     /**
