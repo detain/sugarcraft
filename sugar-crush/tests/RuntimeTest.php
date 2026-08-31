@@ -1767,6 +1767,37 @@ final class RuntimeTest extends TestCase
      * `render()` emits no git section and the two calls cannot differ on a
      * repository that moved between them.
      *
+     * AND THAT ARGUMENT IS NOW ASSERTED RATHER THAN STATED - but NOT for the
+     * reason it was challenged, and the difference is worth recording because
+     * the challenge was the plausible one.
+     *
+     * WHAT WAS PUT TO IT: that the sentence is about the wrong directory,
+     * because `git` resolves a repository from ANCESTORS - `git -C <subdir>
+     * branch --show-current` inside a checkout answers for the enclosing
+     * repository and exits 0 - so on a host whose `TMPDIR` sat inside a
+     * checkout the render would carry a live git section and the two
+     * `render()` calls could disagree on a repository that moved between them.
+     *
+     * WHAT IS TRUE: that is true of `git` and false of this code.
+     * {@see \SugarCraft\Crush\Context\EnvironmentBlock::render()} gates the
+     * whole git section on `isGitRepo()`, which is a bare
+     * `file_exists($this->cwd . '/.git')` - it never runs git at all unless the
+     * NAMED directory itself holds a `.git`, so an ancestor repository is
+     * invisible to it and the original sentence was exact.
+     * HOW MEASURED: pointed this fixture at `sugar-crush/src` - inside this
+     * checkout, no `.git` of its own - and the test stayed GREEN at 1 test / 24
+     * assertions with no git section in the render; then at the checkout root,
+     * which does hold a `.git`, and the assertion below reds. So the property
+     * is "no `.git` in the named directory", exactly as written.
+     *
+     * WHY THE ASSERTION STAYS ANYWAY: the argument was load-bearing and
+     * unchecked. It now reds if `makeTempRepo()` ever starts creating a `.git`,
+     * or if that gate is widened to an ancestor walk - either of which would
+     * make the two `render()` calls independent live reads of a moving
+     * repository, and this test would then red about ASSEMBLER ORDERING while
+     * nothing about the order had moved (section 16.8 rule 25: a guard's
+     * failure message is the one part of a green suite that never runs).
+     *
      * THE DELETION EXPERIMENT, both halves, MEASURED and recorded in the
      * P3.audit-fix-2 report: appending one line after the env render in
      * `Runtime::buildSystemPrompt()` reds the system half; appending one after
@@ -1777,6 +1808,23 @@ final class RuntimeTest extends TestCase
         $root = $this->makeTempRepo();
         $block = new EnvironmentBlock($root, 'env-last-model', new DateTimeImmutable('2026-01-02 03:04:05'), 'linux');
         $rendered = $block->render();
+
+        // THE DETERMINISM PRECONDITION, asserted before anything is compared.
+        // A git section here means the fixture root resolved to a real
+        // repository - through an ANCESTOR, since makeTempRepo() creates no
+        // `.git` of its own - and every equality below would then be comparing
+        // two independent live reads.
+        $this->assertStringNotContainsString(
+            'Current branch:',
+            $rendered,
+            'the environment block for this fixture carries a git section. EnvironmentBlock '
+            . 'gates that section on a bare file_exists($cwd . \'/.git\'), so either '
+            . 'makeTempRepo() now creates a .git, or that gate has been widened to walk '
+            . 'ancestors. Either way the two render() calls below become independent LIVE reads '
+            . 'of a repository that can move between them, and this test would then red about '
+            . 'ASSEMBLER ORDERING when nothing about the order had moved. Point the fixture at a '
+            . 'directory holding no .git - do not delete this check.',
+        );
 
         $runtime = new Runtime($this->provider, $this->hookManager, $block);
         $systemPrompt = $this->invokePrivateMethod($runtime, 'buildSystemPrompt', [App::new($this->provider, 'gpt-4')]);

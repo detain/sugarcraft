@@ -377,9 +377,20 @@ final class TreeWideGuardRosterTest extends TestCase
      * gives. A human has read each of these FOUR ROWS and confirmed the walk is
      * over the package's own files. (This said "each of these three" and was
      * correct until `BaseSystemPromptTest.php` was reclassified into the constant
-     * a commit later - the sentence did not travel with the row it describes,
-     * which is rule 40. MEASURED at HEAD: four rows, and `why` agrees with
-     * declared = 4.)
+     * a commit later - the sentence did not travel with the row it describes.
+     * MEASURED at HEAD: four rows, and `why` agrees with declared = 4.)
+     *
+     * THAT USED TO CITE "rule 40" AND NO SUCH RULE EXISTS. WHAT IT SAID: "which
+     * is rule 40". WHAT IS TRUE: prompt_plan.md's section 16.8 rule 40 is "a
+     * surviving mutation may be equivalent, and that verdict does not transfer
+     * to its neighbour" - a rule about mutating NEIGHBOURS OF A SURVIVOR, not
+     * about a correction reaching neighbouring prose. HOW MEASURED: read rules
+     * 1-49 (prompt_plan.md:3056-3220) and grepped the whole file for
+     * "travel"/"neighbour"; the correction-travels claim appears in the plan's
+     * PROSE twice and in no rule. So the claim stands on its own here - it is
+     * measured over and over in this phase - and the number is dropped rather
+     * than swapped for another one. The two plan sites are outside every
+     * declared file list and are REPORTED, not edited.
      *
      * IT ADDS A FILE, AND IT ALSO EXEMPTS THAT FILE'S REMAINING SITES - both
      * halves, because the sentence here used to claim only the first. It said
@@ -400,8 +411,10 @@ final class TreeWideGuardRosterTest extends TestCase
      * membership the assertion reds.
      *
      * WHY THE KEY IS THE FILE AND NOT FILE-PLUS-EXPRESSION, unlike
-     * {@see WALKS_A_DIRECTORY_THE_TEST_MADE} (rule 34: key an exemption on its
-     * scope). The claim a row here makes is about the FILE - "this whole file is
+     * {@see WALKS_A_DIRECTORY_THE_TEST_MADE} (rule 35: an exemption's key is its
+     * scope; the class doc-block above cites the same rule by the same number,
+     * and this copy said 34 - which is the DIFFERENT rule about keying on
+     * structure rather than on prose). The claim a row here makes is about the FILE - "this whole file is
      * a tree-wide guard for a reason the alphabet cannot see" - so the file IS
      * the scope. The local bucket's claim is about one expression, so its key is
      * the expression.
@@ -622,8 +635,10 @@ final class TreeWideGuardRosterTest extends TestCase
      * MEASURED, it matches 0 files under `tests/` and `src/` OTHER THAN THIS ONE
      * today, so it is a closed door rather than a behaviour change. (The
      * exclusion is the correction the class doc-block already carries, and this
-     * copy of the same claim did not get it - rule 40, a correction must travel to
-     * its neighbours, missed on the neighbour 370 lines away. The one match is
+     * copy of the same claim did not get it: a correction missed on the
+     * neighbour 370 lines away. (This cited "rule 40" for that, and rule 40 is
+     * the mutation-equivalence rule - see the correction on
+     * {@see DECLARED_TREE_WIDE_GUARDS}.) The one match is
      * this file: the blind-spot table carries `dirname(__FILE__` as FIXTURE
      * SOURCE. At `bb4a311d0` it was genuinely 0.)
      *
@@ -1256,6 +1271,147 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'row goes with it.',
         );
     }
+    /**
+     * EVERY DECLARED TREE-WIDE ROW IS STILL WARRANTED - THE OTHER REMOVAL HALF.
+     *
+     * WHY THIS EXISTS, and it is a gap a reviewer opened by mutation rather
+     * than by reading. {@see testEveryLicensedResidueRowStillMatchesALiveWalkSite()}
+     * is the removal half for {@see WALKS_A_DIRECTORY_THE_TEST_MADE}, and its
+     * doc-block spends a paragraph on why a row for code that no longer walks
+     * "passes forever and waves through the next walk". {@see DECLARED_TREE_WIDE_GUARDS}
+     * had NO equivalent, and {@see derivation()} pushes every declared key into
+     * the roster with no existence check at all.
+     *
+     * MEASURED, both mutations, before this test existed: adding
+     * `'Ghost/DeletedGuardTest.php' => '...'` for a file that does not exist
+     * left this file at `OK (15 tests, 1055 assertions)`, byte-identical to
+     * baseline, with the phantom sitting in a roster of 68. Adding a row for
+     * `Config/EnvRosterDriftTest.php` - a file the derivation ALREADY reaches
+     * through a resolved root site - was equally silent.
+     *
+     * AND THE SECOND ONE IS THE EXPENSIVE SHAPE, which is why "warranted" here
+     * means more than "the file exists". A declared row makes
+     * {@see derivation()} return BEFORE the residue check, so from that moment
+     * the file's unresolved walker sites are never licensed and never reported.
+     * A row that adds no member still buys that silence. Section 16.8 rule 33:
+     * an exemption row written for correct code is a licence, and it is where
+     * the next real offender hides.
+     *
+     * SO THREE THINGS ARE ASSERTED PER ROW, and each is a way a row goes dead:
+     * the file still exists; channel A does NOT already carry it; and channel B
+     * does NOT already resolve one of its walks. The last two are what make
+     * this a warrant check rather than an existence check.
+     *
+     * WHAT IS DELIBERATELY NOT ASSERTED: that the file has an unresolved
+     * walker site. A legitimate future row is precisely a file whose walk this
+     * alphabet cannot see AT ALL - a collaborator object, a subprocess - and
+     * that file produces no site in either bucket. Requiring one would red on
+     * the very case {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()}
+     * enumerates. The aggregate is asserted non-zero instead, so the exemption
+     * half is exercised by SOMETHING without being demanded of EVERYTHING.
+     *
+     * BOTH POLARITIES, THROUGH THE SAME PREDICATES (rule 18), and the control
+     * files are DERIVED from `why` rather than named: a resolver that answered
+     * "not carried" for every input would pass the loop above on any constant
+     * at all, so the two controls take a real channel-A member and a real
+     * channel-B member out of the derivation and assert the predicates reject
+     * exactly those.
+     */
+    public function testEveryDeclaredTreeWideGuardRowIsStillWarranted(): void
+    {
+        $this->assertNotSame(
+            [],
+            self::DECLARED_TREE_WIDE_GUARDS,
+            'the declared-guard constant is empty, so this test ranges over nothing',
+        );
+
+        $everyFile = [];
+        foreach (self::everyTestFile() as $relative => $absolute) {
+            $everyFile[str_replace('\\', '/', $relative)] = $absolute;
+        }
+
+        $dead = [];
+        $exemptedSites = 0;
+        foreach (self::DECLARED_TREE_WIDE_GUARDS as $file => $_reason) {
+            if (!isset($everyFile[$file])) {
+                $dead[] = $file . ' => the file no longer exists';
+
+                continue;
+            }
+
+            $source = self::readOrFail($everyFile[$file]);
+
+            $helper = self::walkingHelperUsedIn($source);
+            if ($helper !== null) {
+                $dead[] = $file . ' => channel A already carries it (it names the walking helper '
+                    . $helper . '), so this row adds no roster member and only buys silence for the '
+                    . 'file\'s unresolved sites';
+
+                continue;
+            }
+
+            $sites = self::classifyWalkSites($source);
+            if ($sites['root'] !== []) {
+                $dead[] = $file . ' => channel B already resolves ' . implode(' ; ', $sites['root'])
+                    . ', so this row adds no roster member and only buys silence for the file\'s '
+                    . 'unresolved sites';
+
+                continue;
+            }
+
+            $exemptedSites += \count($sites['unresolved']);
+        }
+
+        $this->assertSame(
+            [],
+            $dead,
+            "these DECLARED_TREE_WIDE_GUARDS rows are no longer warranted:\n"
+                . implode("\n", array_map(static fn (string $row): string => '  - ' . $row, $dead))
+                . "\n\nA row here does two things: it puts the file in the roster, AND it stops "
+                . 'derivation() ever reaching that file\'s residue. When the derivation learns to '
+                . 'reach the file on its own, only the second half survives - a standing licence '
+                . 'over every future walk in that file, written for code that is already correct '
+                . '(rule 33). Delete the row in the same change-set as whatever made it '
+                . 'unnecessary; do not keep it "just in case".',
+        );
+
+        $this->assertGreaterThan(
+            0,
+            $exemptedSites,
+            'no declared row is exempting any unresolved walker site, so the second half of what a '
+                . 'row does - the silence it buys - is not exercised by this tree at all, and the '
+                . 'warning in this constant\'s doc-block has lost its subject',
+        );
+
+        // BOTH POLARITIES. The controls are pulled out of the derivation so no
+        // file name is written here and neither can go stale.
+        $viaHelper = null;
+        $viaRoot = null;
+        foreach (self::derivation()['why'] as $member => $sites) {
+            if ($viaHelper === null && \count($sites) === 1 && str_starts_with($sites[0], 'HELPER:')) {
+                $viaHelper = $member;
+            }
+            if ($viaRoot === null && $sites !== [] && $sites[0] !== 'DECLARED' && !str_starts_with($sites[0], 'HELPER:')) {
+                $viaRoot = $member;
+            }
+        }
+
+        $this->assertIsString($viaHelper, 'no channel-A member exists to use as a control, so the helper predicate above is untested');
+        $this->assertIsString($viaRoot, 'no channel-B member exists to use as a control, so the root predicate above is untested');
+
+        $this->assertNotNull(
+            self::walkingHelperUsedIn(self::readOrFail($everyFile[$viaHelper])),
+            $viaHelper . ' qualified through channel A yet the predicate this test uses says it names '
+                . 'no walking helper, so the loop above would accept a redundant row for it',
+        );
+        $this->assertNotSame(
+            [],
+            self::classifyWalkSites(self::readOrFail($everyFile[$viaRoot]))['root'],
+            $viaRoot . ' qualified through channel B yet the predicate this test uses resolves none of '
+                . 'its walks, so the loop above would accept a redundant row for it',
+        );
+    }
+
 
     /**
      * THE ROOT TAINT MATCHES AT NAME BOUNDARIES, AND IGNORES SPELLINGS THAT ARE
