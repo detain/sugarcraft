@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3's SIX STEPS ARE ALL MERGED — `P3.S4-fix-1` `1279d91cf`, `P3.S5-fix-1` `5cabca4a8`, `P3.S6` `f958ba8e6`. THE PHASE 3 CLOSE REVIEW IS IN FLIGHT (§1.7, cycle 1 of a cap of 3) — see `In-flight batch` in §8 for its worktree, its brief file and what to do with its findings. When it passes, Phase 4 opens immediately with **P4.S1 alone** — §0 is the standing order, do not stop at the boundary to ask.**
+**Current state: Phase 3's six steps are merged. The CLOSE REVIEW cycle 1 is DONE — 11 findings, 4 HIGH; its plan-document half is committed, its code half is on branch `prompt/P3.audit-fix-2` where THE FIX AGENT DIED WITHOUT REPORTING. 11 commits are on that branch and its worktree is clean. §1.8 recovery is the next action — see `In-flight batch` in §8, which has the full state and the exact next steps. After that branch is verified and merged, PHASE REVIEW CYCLE 2 (cap 3, this was cycle 1). Then Phase 4, P4.S1 alone.**
 
 ---
 
@@ -516,32 +516,109 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIA
                   php-cs-fixer is NOT installed on this box and NOT vendored anywhere in the
                   tree — the style gate cannot be run locally.
 
-In-flight batch:  **THE PHASE 3 CLOSE REVIEW, cycle 1 of a cap of 3.** Spawned 2026-08-31.
-                  Reviewer worktree `/home/sites/prompt-step-P3.CLOSE-r1`, branch
-                  `prompt/P3.CLOSE-r1`, based at master `d1633da63`, vendor materialised with
-                  `cp -al` and the PSR-4 root VERIFIED to print the worktree's `src/`.
-                  Scope handed to it: `git diff 924c71a0d HEAD -- sugar-crush/` (924c71a0d is
-                  the Phase 3 base = master immediately before P3.S1 merged) — 26 files,
-                  14955 insertions, 639 deletions, of which 5 are `.vhs/*.gif` from c5a82104c
-                  which is NOT this plan's commit.
-                  Its brief is a FILE, not a prompt, and it is the thing to re-read if this
-                  review has to be re-run:
-                    <scratchpad>/P3.CLOSE-r1/BRIEF.md          (294 lines, §1.4 + §1.7 + more)
-                    <scratchpad>/P3.CLOSE-r1/phase3-step-texts.md   (prompt_plan.md 1397-1630)
-                  Findings land at <scratchpad>/P3.CLOSE-r1/findings-cycle-1.md, written AS
-                  FOUND (eight of one step's ten findings were once lost to a context boundary
-                  because they lived only in a summary).
-                  THE BRANCH IS A SANDBOX, NOT WORK — the reviewer may mutate files there for
-                  check-12/check-13 experiments and may not commit. Nothing on
-                  `prompt/P3.CLOSE-r1` is ever merged; the worktree is removed and the branch
-                  force-deleted (`git branch -D`) when the review loop closes.
-                  If findings come back: fix agent in a FRESH worktree, step id
-                  `P3.audit-fix-2`, its own worklog entry, then a BRAND-NEW phase reviewer.
-                  Cap 3 cycles (§1.7.3).
+In-flight batch:  **P3.audit-fix-2 — RECOVERY AGENT IN FLIGHT (§1.8 rung 3).**
+                  The FIRST fix agent DIED without returning a report. A continuation agent was
+                  spawned into the SAME worktree on 2026-08-31 with a brief telling it not to
+                  start over. Its brief:
+                    <scratchpad>/P3.audit-fix-2-cont/BRIEF.md   (209 lines)
+                  If /tmp is gone, everything that brief needs is in the repo:
+                  `prompt_kit/findings/phase3-close-review-cycle-1.md` fully specifies A1-A7.
+                  **BRANCH ALREADY SYNCED with master by the orchestrator: HEAD is now
+                  `0f415e493`, the merge was clean, and it touched NO sugar-crush file**
+                  (`git diff --name-only 5a78a87f8 HEAD -- sugar-crush/` empty), so the branch
+                  figures will describe the tree a merge would create.
 
-Live worktrees:   /home/sites/sugarcraft   master, clean, at the commit above.
-                  /home/sites/prompt-step-P3.CLOSE-r1   phase-review SANDBOX, in flight, holds
-                                                        no work, never merged, `-D` at close.
+                  WHAT THE RECOVERY AGENT WAS ASKED FOR — this is also the acceptance bar, so
+                  if it too dies, the next agent gets the same list:
+                    - the A1-A7 ledger: landed or not, each with a file:line or test name
+                    - re-derivation of EVERY figure surviving in the tree (commit c4bbd9dda
+                      says six of seven figures were already wrong once)
+                    - a REAL deletion experiment per shipped guard: mutate, run, record the red
+                      test name and count, restore, md5-verify
+                    - the four declared test files by path; the nine-file census set; the roster
+                      A5 derives with each member's isolated figure; the FULL suite from the
+                      CHECKOUT ROOT with a prediction stated first and the delta attributed
+                      per class with `prompt_kit/tools/cmp.py`; the path-repo gate from the
+                      repo root
+                    - one more review cycle with a BRAND-NEW reviewer if it changed anything
+                    - what its predecessor left undone or wrong
+
+                  **DO NOT accept this branch on green tests alone.** §1.8: a dead agent's work
+                  is never accepted because the suite passes. If the recovery agent also dies,
+                  read its worktree (rung 2) and relaunch again — blank returns get FIVE
+                  attempts, and this is attempt 1 of 5.
+
+                  ---- state as of the first agent's death, kept for reference ----
+                  §1.8: a blank/aborted/absent report means the agent DIED. It is NOT a
+                  result, NOT `NO FINDINGS`, and NOT a finished step. **Do not merge this
+                  branch because its tests happen to be green, and NEVER write the missing
+                  report yourself.**
+
+                  WHAT EXISTS (rung 2 of the §1.8 ladder, ALREADY DONE — these are measured):
+                    worktree  /home/sites/prompt-step-P3.audit-fix-2   (vendor OK, PSR-4 root
+                              verified to print the worktree's own src/)
+                    branch    prompt/P3.audit-fix-2, HEAD 5a78a87f8, based at bb4a311d0
+                    state     `git status --porcelain` EMPTY — nothing uncommitted was lost
+                    commits   ELEVEN, oldest first:
+                      2f186fa98  A1/A2/A3/A4/A6/A7, six of seven findings
+                      165f85dde  A5, the tree-wide guard roster is DERIVED, not typed
+                      e559ba521  drop two project-instruction fence literals A1 added
+                      d23606898  the A5 roster's own claims re-derived, four made executable
+                      061e78479  channel A's alphabet is derived too, not one hardcoded name
+                      d34028669  a licensed residue row that has gone dead is now a red
+                      e9d5dd3b5  the roster's fail-closed claim, restated as one it can keep
+                      5685b2e02  unstack two doc-blocks; the guard that caught it is the A5 argument
+                      c4bbd9dda  seven figures re-derived; six of them were mine and wrong
+                      0efee65ab  a helper that DELEGATES the walk is no longer missed silently
+                      5a78a87f8  the self-referential census stops counting; final fix pass
+                    scope     VERIFIED by the orchestrator: `git diff --stat
+                              master...prompt/P3.audit-fix-2` touches EXACTLY the six declared
+                              files and NOTHING outside sugar-crush/ —
+                                src/Agents/Agent.php                     +76/-
+                                src/Runtime.php                          +34/-
+                                tests/Agents/AgentTest.php              +210/-
+                                tests/Context/EnvironmentBlockTest.php  +220/-
+                                tests/RuntimeTest.php                   +419/-
+                                tests/TreeWideGuardRosterTest.php      +2359  (NEW, the A5 roster)
+                              3303 insertions, 15 deletions.
+                    reading   the commit subjects suggest it ran its own review loop to
+                              completion ("final fix pass") and that a reviewer caught real
+                              defects in its work ("six of them were mine and wrong"). THAT IS
+                              AN INFERENCE FROM SUBJECT LINES, NOT A REPORT. Treat it as a lead
+                              for the continuation brief, never as evidence the step is done.
+
+                  WHAT IS NOT DONE — all of it:
+                    - No agent report. No Done-when ledger. No deletion experiments stated.
+                    - NO ORCHESTRATOR VERIFICATION AT ALL. No suite run, no census run, no
+                      per-file figures, no path-repo gate. Nothing below has been measured.
+                    - Not merged. No worklog entry.
+
+                  NEXT ACTIONS WHEN THE RECOVERY AGENT REPORTS:
+                  1. ~~§1.8 rung 3~~ **DONE — the continuation agent is in flight.**
+                  2. ~~Sync the branch~~ **DONE — HEAD `0f415e493`, clean, no sugar-crush file
+                     touched.**
+                  3. **The orchestrator's OWN verification** (§1.2 action 7): the four
+                     declared test files by path; the nine-file census set; the FULL suite from
+                     the CHECKOUT ROOT with `</dev/null`, box quiet, prediction stated first;
+                     `php tools/check-path-repos.php --no-lib-path-repos` from the repo root.
+                     **A5 adds a NEW test file under tests/, so the full suite is mandatory and
+                     the total WILL move — attribute every assertion with
+                     `prompt_kit/tools/cmp.py` before merging.**
+                  4. Merge, worklog entry, rewrite this file.
+                  5. **THEN PHASE REVIEW CYCLE 2** — a BRAND-NEW phase reviewer that is never
+                     shown cycle 1's findings. Build its brief from
+                     `prompt_kit/briefs/phase-review-brief.md`, updating the shas, the
+                     change-set range and the claims-to-attack. **Cap is THREE cycles and this
+                     will be cycle 2.**
+                  6. Then Phase 4 opens with **P4.S1 ALONE** — brief and step text already
+                     written at `prompt_kit/briefs/P4.S1-step-brief.md` and
+                     `P4.S1-step-text.md` (substitute WORKTREE_PATH_PLACEHOLDER and
+                     SCRATCH_PLACEHOLDER).
+
+Live worktrees:   /home/sites/sugarcraft   master, clean, at 40b9c6f53.
+                  /home/sites/prompt-step-P3.audit-fix-2   **KEEP — holds the 11 unmerged
+                      commits of a step whose agent died. Do NOT remove it; §1.8 rung 3 relaunches
+                      INTO it. Its vendor/ is materialised and its PSR-4 root is verified.**
                   /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
 
 Blocked on:       NOTHING. No user decision is owed to proceed. Phase 3 closes on its review;
