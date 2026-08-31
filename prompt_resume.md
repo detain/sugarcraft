@@ -180,7 +180,8 @@ c7e5a6454  10500 / 161982 / 1   pre-merge master
   was wrong.** *What it said:* both goldens unmoved through all of Phase 3. *What is true:* both
   moved three times / twice respectively, and have been unmoved only **since P3.S5**. *How
   measured:* `git show <sha>:sugar-crush/tests/fixtures/prompt/golden-*.txt | md5sum` at each of the
-  ten Phase 3 merge points —
+  ten Phase 3 merge points. **READ THE TABLE AS STATE-AT-EACH-MERGE-POINT, NOT AS CAUSATION — see
+  the second correction below, which is the error the first version of this one made.**
   ```
                     system    agent
   924c71a0d base     e89d98c7  edf691dc
@@ -194,13 +195,39 @@ c7e5a6454  10500 / 161982 / 1   pre-merge master
   f958ba8e6 P3.S6    32ea749d  ef0326dd
   ```
   All three moves are legitimate and each was verified by reading the diff, not inferred:
-  P3.S1's and P3.S3's ARE the steps' stated purpose, and P3.S5's is a **hermeticity** fix, not a
-  behaviour change — `OS version: Linux 6.8.0-138-generic` / `PHP version: 8.3.6` became
+  P3.S1's and P3.S3's ARE the steps' stated purpose, and the `<host>` hermeticity change is not a
+  behaviour change at all — `OS version: Linux 6.8.0-138-generic` / `PHP version: 8.3.6` became
   `OS version: <host>` / `PHP version: <host>` in both fixtures, so the goldens stopped being
   host-specific. **Why this correction matters more than a tidy-up:** the false sentence taught the
   next reader that a golden move anywhere in Phase 3 is a red flag, so they would either alarm at
   three legitimate moves or, worse, trust the sentence and skip the check entirely. State the window
   a no-move claim covers, or the claim is unfalsifiable.
+
+- **AND THE FIRST VERSION OF THAT CORRECTION GOT THE ATTRIBUTION WRONG — caught by the Phase 3
+  close reviewer (its finding 11) within the hour.** *What it said:* that the `<host>` hermeticity
+  move happened at **P3.S5**, because that is the row of the md5 table where the value changes.
+  *What is true:* **P3.S5 moved NEITHER golden.** The `<host>` change was made by
+  **`33df838d0` (P2.audit-fix-1)**, which sits between P3.S4 and P3.S5 in first-parent order, so its
+  effect first *appears* at the P3.S5 row of a state-per-merge-point table. *How measured:*
+  ```sh
+  git diff --name-only 405252a41^ 405252a41 -- sugar-crush/tests/fixtures/     # EMPTY
+  git log --oneline --first-parent 924c71a0d..HEAD -- .../golden-system-prompt.txt
+    33df838d0  merge P2.audit-fix-1 — the golden prompt tests no longer depend on the cwd
+    74cabae7f  merge P3.S3 — the git block states what it actually is
+    379ecc7d6  P3.S1 — move <env> to the end of the system prompt
+  # agent golden: 33df838d0, 74cabae7f only
+  ```
+  **Exactly three commits moved the system golden and two moved the agent golden, and none of them
+  is P3.S5.** P3.S2, P3.S4, P3.audit-fix-1, P3.S4-fix-1, P3.S5-fix-1, P3.S5 and P3.S6 moved neither.
+  This matters concretely: P3.S5's own Done-when requires the system golden stay byte-identical, so
+  the bad attribution accused a step of breaking its own acceptance criterion when
+  `git diff --stat 405252a41^ 405252a41 -- .../fixtures/` is empty.
+  **THE GENERAL LESSON, which is why this is written out rather than silently patched:** a table of
+  `git show <sha>:file | md5sum` gives **state at each point**, and every merge inherits everything
+  merged before it. Turning such a table into "step X changed it" is a category error. **To attribute
+  a change to a commit, ask the commit:** `git diff <sha>^ <sha> -- <path>`, or
+  `git log --first-parent -- <path>`. A value first differing at row N means the change landed at or
+  before N — not at N.
 
 
 - **`--filter AgentTest` is a regex that ALSO matches `SubAgentTest`.** Per file, `AgentTest.php`

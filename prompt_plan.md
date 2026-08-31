@@ -1340,7 +1340,10 @@ is worse than no golden.
 
 ### P2.S3 — The golden agent prompt
 
-**Goal** The same treatment for `Agent::systemPrompt()`, which assembles in the **opposite order**
+**Goal** The same treatment for `Agent::systemPrompt()`. **CORRECTION 2026-08-31: this Goal used to
+say Agent "assembles in the opposite order". It does not — both assemblers put `<env>` LAST, and
+this plan's own P3.S1 is what made that true. See §17.2 for the measurement.** What is actually
+different is the LAYER SET: Runtime assembles seven layers, Agent two
 (agent text, then `<env>`) and is separately test-pinned.
 **Source** §2.7, §11.2 ("the constraint that rules out unification").
 **Files**
@@ -1493,10 +1496,29 @@ sites, not one, and the list above reaches only the first:
 
 | Site | Feeds |
 |---|---|
-| `src/Runtime.php:2358` | `Runtime::buildSystemPrompt()` — **this step's target** |
+| `src/Runtime.php:2614` | `Runtime::buildSystemPrompt()` — **this step's target** |
 | `src/Cli/Bootstrap.php:1462` | `Agent::systemPrompt()` (per-agent roster capture) |
 | `src/App/App.php:553` | `Agent::systemPrompt()` (skill-fork capture) |
-| `src/Agents/Agent.php:417` | `Agent::systemPrompt()` (last-resort fallback) |
+| `src/Agents/Agent.php:852` | `Agent::systemPrompt()` (last-resort fallback) |
+
+**Re-derive this table, do not trust it** — the two `file:line`s in bold above were CORRECTED
+2026-08-31 from the Phase 3 close review's finding 10, and they will rot again:
+
+```sh
+/usr/bin/grep -rn 'EnvironmentBlock::capture(\|new EnvironmentBlock(' sugar-crush/src \
+  | /usr/bin/grep -v '^\s*\*\|//'      # drop doc-block and comment mentions
+```
+- **It said** `src/Runtime.php:2358` and `src/Agents/Agent.php:417`.
+- **What is true:** `src/Runtime.php:2614` and `src/Agents/Agent.php:852`. The other two rows were
+  and are correct.
+- **How measured:** the grep above, at master. **The COUNT reproduces exactly — four construction
+  sites, no fifth — and `new EnvironmentBlock(` appears nowhere in `src/`**, so only the line numbers
+  moved, not the census.
+- **Why `Agent.php:417 → 852` in particular:** a **+435-line shift**, which is exactly the size of
+  the doc-block P3.S6 added immediately above it. `src/Runtime.php:758-766` already carries the
+  three-part correction for this very citation — so the correction travelled to the production
+  doc-block and **never came back to the plan table it was copied from**. §16.8 rule 40 in the
+  code→plan direction, which is the direction nobody watches.
 
 MEASURED: there is **no fifth** site (`/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/` and
 `'new EnvironmentBlock('` → the four above and zero direct constructions). The other three all feed
@@ -1619,6 +1641,32 @@ subprocess count re-measured with the `git` shim and recorded; or (b) the step l
 the measurement showing the Agent path has no per-step seam to wire, with the **eight** call sites
 classified per-step vs once-per-agent. In both cases the full suite is green from BOTH cwds and the
 worklog records which outcome it was and why.
+
+**CORRECTION 2026-08-31, from the Phase 3 close review's finding 5 — clause (b) above asserts what
+the step DISPROVED, and the Goal was corrected in place while this clause, twelve lines down, was
+not.**
+
+- **It said:** branch (b) is *"a §18 row and the measurement showing the Agent path has no per-step
+  seam to wire"*.
+- **What is true:** the Agent path **does** have a per-step seam, it **is** live, and P3.S6 measured
+  it — in `src/Workflows/WorkflowEngine.php`, five production-reachable call sites, of which two
+  re-render once per stage. The §18 row that landed says so in terms: *"ESCALATED, NOT WAIVED — the
+  seam exists and is live."* P3.S6's own Goal carries a "CORRECTION, 2026-08-31" block walking the
+  live path hop by hop.
+- **How measured:** the step's own subprocess census with a logging `git` shim — one render = 5 git
+  subprocesses (3 with the diff suppressed), a K-stage workflow = 5×K, one `ProcessExecutor`
+  dispatch = 10 because it renders twice — plus `tests/Agents/AgentTest.php`'s eight-call-site
+  enumeration, every line number of which the close reviewer re-derived correct at HEAD.
+- **What actually happened, and it is a legitimately completed step:** neither declared branch. The
+  outcome is a **third** shape — the seam exists, is live, and is per-step, but wiring it is a
+  build-it-out across `WorkflowEngine.php` + `Agents/AgentResult.php` + the worker IPC frame, all
+  **outside P3.S6's declared file list**. That is §1.10's third permitted outcome: escalate to the
+  user. Escalating is a completed step, not a failed one.
+- **The lesson for the Done-when clauses of every later step:** this clause is the *third* place the
+  falsified "underivable/no seam" claim survived after being retired (the others were the §18 row's
+  first draft and an assertion message in `AgentTest.php`). A step text's Goal and its Done-when are
+  read by different people at different times — **correcting one is not correcting the step.**
+  §16.8 rule 40, and §16.8 rule 44 on why a brief's false clause outlives a review's.
 
 **Concurrency (Phase 3)** — **fully serial**: S1 → S2 → S3 → S4 → S5 → S6. Every step touches a file the
 previous one touched, and S4 measures the result of the other three. S6 was appended 2026-08-30
@@ -3328,10 +3376,50 @@ phrases, the `concurrently`+`fork` proximity window, the negation-polarity check
 - `EnvironmentBlockTest::testNoAdditionalWorkingDirectoriesLineIsEmitted()` — pins an **absence as a
   decision**. Do not make it pass by accident, do not delete it.
 
-**The constraint that rules out unification:** `Agent::systemPrompt()` uses the opposite order —
-agent prompt first, `<env>` second (`AgentTest.php:251` vs `:263`). Sharing one builder between
-`Runtime` and `Agent` makes `AgentTest.php:251` and `BaseSystemPromptTest.php:135` mutually
-contradictory. **Two assemblers, deliberately separate.**
+**The constraint that rules out unification. CONCLUSION INTACT, ARGUMENT RETIRED — corrected
+2026-08-31 from the Phase 3 close review's finding 7, in §16.8 rule 42's three-part form.**
+
+- **It said:** *"`Agent::systemPrompt()` uses the opposite order — agent prompt first, `<env>`
+  second (`AgentTest.php:251` vs `:263`). Sharing one builder between `Runtime` and `Agent` makes
+  `AgentTest.php:251` and `BaseSystemPromptTest.php:135` mutually contradictory."*
+- **What is true: BOTH assemblers now put `<env>` LAST, so there is no opposite order and no
+  contradiction to manufacture. THIS PLAN'S OWN P3.S1 IS WHAT KILLED IT** — it moved `<env>` from
+  Runtime layer 2 to layer 7, which was that step's entire purpose. The claim was correct before
+  P3.S1 and has been false since.
+- **How measured**, four ways, independently by the phase reviewer and the orchestrator:
+  1. `src/Agents/Agent.php:850-856` — the *entire body* of `systemPrompt()` is
+     `return $this->prompt === '' ? $rendered : $this->prompt . "\n\n" . $rendered;`. Nothing
+     follows the env render.
+  2. `src/Runtime.php:2533` — the last statement of `buildSystemPrompt()` before `return $base;` is
+     `$base .= "\n\n" . $this->environmentSnapshot($app)->render();`, under the comment "Volatile
+     content LAST". Nothing follows.
+  3. Both goldens **end** with `</env>` and no trailing newline.
+  4. `<env>` is line 84 of the 129-line system golden; `</env>` is its last line.
+- **Both citations had also rotted:** `AgentTest.php:251` is now inside
+  `testWithActivePreservesOtherFields()` and `BaseSystemPromptTest.php:135` is inside the base-slice
+  marker assertions. They are removed rather than re-pinned, because a `file:line` in a document no
+  test derives rots whether or not anyone mis-typed it.
+
+**Two assemblers, still deliberately separate — for this reason instead.** The two carry different
+LAYER SETS, and that is what makes one builder the wrong shape. MEASURED
+(`/usr/bin/grep -n '\$base \.=\|\$base =' src/Runtime.php`): `Runtime::buildSystemPrompt()`
+assembles **seven** layers — base identity prompt (`:2423`), repo map (`:2480`),
+`<project-instructions>` (`:2494`), memory (`:2506`), per-skill contributions (`:2512`), the skill
+list (`:2524`), `<env>` (`:2533`). `Agent::systemPrompt()` assembles **two**: the agent's own prompt
+and `<env>`. The five middle layers have no Agent-side counterpart at all. **The only two elements
+the assemblers share are the identity prompt first and `<env>` last — identical order, not
+opposite.**
+
+**WHY THIS CORRECTION IS WORTH THIS MUCH SPACE.** The dead argument did not just sit here: it
+PROPAGATED INTO PRODUCTION SOURCE during Phase 3, in both steps that touched the subject —
+`src/Runtime.php:771` (added by P3.S5) and `src/Agents/Agent.php:442` (added by P3.S6), plus
+`prompt_plan.md:1343`. And §17.2 was corrected THREE separate times during this same phase
+(invariants 4, 6 and 9 all carry P3.S1 notes) while this paragraph was missed every time — so the
+corrections stopped one paragraph short of the one the phase's last step leans on. §16.8 rule 40
+says a correction must travel to its neighbours; this is the case that shows what it costs when it
+does not. **P3.S6's whole disposition rests on the two-assembler split, so anyone re-deriving that
+disposition from the old argument would be building on a false premise.** The conclusion is
+unaffected — which is exactly why the false argument survived unchallenged for two steps.
 
 **Also:** `EnvironmentBlock::MAX_*` carries a *"sized BETWEEN its two neighbours"* argument that a
 fourth block would invalidate again. If you add a capped block, re-derive the argument.
