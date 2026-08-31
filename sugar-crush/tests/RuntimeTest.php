@@ -34,6 +34,7 @@ use SugarCraft\Crush\Skills\Skill;
 use SugarCraft\Crush\Cli\Bootstrap;
 use SugarCraft\Crush\Tests\Prompt\PromptFixture;
 use SugarCraft\Crush\Tests\Support\DropsInsignificantTokensTrait;
+use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 use SugarCraft\Crush\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Crush\Tests\Tools\BuiltInToolCorpus;
 use SugarCraft\Crush\Tools\Tool;
@@ -47,6 +48,7 @@ use DateTimeImmutable;
  */
 final class RuntimeTest extends TestCase
 {
+    use FlattensSourceProseTrait;
     use DropsInsignificantTokensTrait;
     use HomeSandboxTrait;
 
@@ -1947,41 +1949,93 @@ final class RuntimeTest extends TestCase
         //
         // THE SHAPE IS THE ONE THE SIBLING USES. AgentTest's citation census
         // reads a SENTENCE out of src/Agents/Agent.php and reds on it; this does
-        // the same for the corrected claim, in both files, and it carries no
-        // cardinality: the false phrase may appear ONLY inside a
-        // "WHAT IT SAID"/"WHAT THIS SAID" quotation, which is what the rule-42
-        // three-part correction form spells it as. Restore it as a live claim
-        // anywhere else in either file and this reds.
-        foreach ([
-            'src/Runtime.php' => 'Runtime::buildSystemPrompt()',
-            'src/Agents/Agent.php' => 'Agents\Agent::systemPrompt()',
-        ] as $relative => $subject) {
-            $source = (string) file_get_contents(\dirname(__DIR__) . '/' . $relative);
-            $this->assertNotSame('', $source, $relative . ' could not be read, so the two assertions below would pass on emptiness');
+        // the same for the corrected claim, and it carries no cardinality: the
+        // false phrase may appear ONLY inside a "WHAT IT SAID"/"WHAT THIS SAID"
+        // quotation, which is what the rule-42 three-part correction form spells
+        // it as. Restore it as a live claim anywhere in `src/` and this reds.
+        //
+        // THE DOMAIN IS DERIVED, NOT A LIST OF THE TWO FILES THAT HAPPEN TO
+        // CARRY IT TODAY. It was exactly that list, and a reviewer planted the
+        // live claim in a THIRD production file (src/Context/EnvironmentBlock.php)
+        // and the suite stayed green. A two-name list inside a change-set whose
+        // headline is that a hand-maintained list inherits its own omissions is
+        // the defect one directory over. The claim's real population is `src/`:
+        // it reached those two files FROM prompt_plan.md, so nothing stops it
+        // reaching a third.
+        //
+        // AND THE STRIP RUNS ON FLATTENED PROSE (section 16.8 rule 39). It used
+        // to be line-scoped, and the licensed quotation lives in a WRAPPING
+        // doc-block. MEASURED by a reviewer: re-wrapping src/Runtime.php's
+        // quotation onto two lines, changing nothing semantically, RED this
+        // guard with a message accusing the author of a claim they had not made.
+        // A guard that reds on correct code is worse than no guard, and this
+        // file's sibling already routes prose matching through the shared
+        // flattener for exactly this reason.
+        // THE FLATTENER'S KNOWN-POSITIVE CONTROL, which this file owes now that
+        // it is a consumer. FlattensSourceProseTrait's doc-block requires one in
+        // so many words, and the reason is this pin exactly: a flattener that
+        // returned '' would make every strip below a no-op over an empty string
+        // and every assertion pass on nothing. Built by CONCATENATION, as that
+        // doc-block also requires, because this file is scanned by tree-wide
+        // guards and an anchor phrase spelled contiguously here becomes a second
+        // match for it.
+        $wrapped = "/**\n     * WHAT IT SAID: \"...because the two order\n     * `<env>` "
+            . "opposite" . "ly.\"\n     */";
+        $this->assertStringContainsString(
+            'WHAT IT SAID: "...because the two order `<env>` opposite' . 'ly."',
+            self::flattened($wrapped),
+            'the shared flattener did not join a quotation that wraps mid-phrase, so the strip '
+            . 'below would leave the licensed quotation in place and this pin would red on the '
+            . 'correct prose it exists to protect - which is the bug it was just rewritten to fix',
+        );
 
-            // NOT VACUOUS: the phrase IS in the file, inside its quotation, so
-            // the strip below is removing something rather than finding nothing.
-            $this->assertStringContainsString(
-                'oppositely',
-                $source,
-                $relative . ' no longer quotes the false claim it corrects. The rule-42 three-part '
-                . 'form keeps WHAT IT SAID verbatim; if that paragraph was rewritten, this pin and '
-                . 'the one below have lost their subject and need rewriting with it.',
-            );
-
-            $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID:[^\n]*\n~', '', $source);
-
-            $this->assertStringNotContainsString(
-                'oppositely',
-                $live,
-                $relative . ' states, OUTSIDE a "WHAT IT SAID" quotation, that the two prompt '
-                . 'assemblers order the env block oppositely. That is false and has been since '
-                . 'P3.S1 moved this assembler\'s env block from layer 2 to layer 7: ' . $subject
-                . ' and its counterpart both put it LAST, which the assertions above measure. The '
-                . 'claim was copied into two production doc-blocks once already, from a plan '
-                . 'section that had been corrected three times. Do not restore it.',
-            );
+        $sourceFiles = [];
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__) . '/src', \FilesystemIterator::SKIP_DOTS));
+        foreach ($walk as $entry) {
+            if ($entry->isFile() && $entry->getExtension() === 'php') {
+                $sourceFiles[] = $entry->getPathname();
+            }
         }
+        $this->assertGreaterThan(1, \count($sourceFiles), 'the src/ walk found at most one file, so the domain of the claim below is not being derived');
+
+        $quoting = 0;
+        foreach ($sourceFiles as $absolute) {
+            $flat = self::flattened((string) file_get_contents($absolute));
+            $relative = 'src/' . str_replace(\dirname(__DIR__) . '/src/', '', $absolute);
+
+            // The rule-42 form quotes what the sentence USED to say, between
+            // double quotes. Strip those spans; whatever is left is a LIVE claim.
+            $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID: "[^"]*"~', '', $flat);
+            if ($live !== $flat) {
+                $quoting++;
+            }
+
+            foreach (['oppositely', 'opposite order'] as $falseClaim) {
+                $this->assertStringNotContainsString(
+                    $falseClaim,
+                    $live,
+                    $relative . ' states, OUTSIDE a "WHAT IT SAID" quotation, that the two prompt '
+                    . 'assemblers order the env block ' . $falseClaim . '. That is false, and has '
+                    . 'been since P3.S1 moved Runtime::buildSystemPrompt()\'s env block from layer '
+                    . '2 to layer 7: it and Agents\\Agent::systemPrompt() both put it LAST, which '
+                    . 'the assertions above measure against the real assemblers. The claim was '
+                    . 'copied into two production doc-blocks once already, out of a plan section '
+                    . 'that had been corrected three times - it spreads. Do not restore it.',
+                );
+            }
+        }
+
+        // NOT VACUOUS, and this is what stops the loop above passing because the
+        // flattener returned '' or the walk found nothing: the corrected files
+        // DO still carry the quotation, so the strip is removing something.
+        $this->assertGreaterThan(
+            0,
+            $quoting,
+            'no file under src/ carries a "WHAT IT SAID" quotation any more, so the strip above is a '
+            . 'no-op and this pin is asserting the absence of a phrase nobody has written rather '
+            . 'than the absence of a LIVE claim. The rule-42 three-part form keeps WHAT IT SAID '
+            . 'verbatim; if those paragraphs were rewritten, rewrite this pin with them.',
+        );
     }
 
     public function testBuildSystemPromptWithSameInjectedClockPlatformAndCwdIsByteIdenticalAcrossRuntimes(): void

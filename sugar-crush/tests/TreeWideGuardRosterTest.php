@@ -676,8 +676,26 @@ final class TreeWideGuardRosterTest extends TestCase
      * really are the minority. Run the generator above if you want today's four
      * numbers; do not write them down.
      *
-     * THE SHAPES ALLOWED ARE THE ONES {@see spellingsOf()} PRODUCES, and I
-     * measured that list rather than guessing it: a plain local `$root`, a
+     * THE SHAPES ALLOWED ARE A SUBSET OF THE ONES {@see spellingsOf()}
+     * PRODUCES - CORRECTED IN PLACE (section 16.8 rule 42).
+     *
+     * WHAT THIS SAID: "the shapes allowed are the ones spellingsOf() produces,
+     * and I measured that list rather than guessing it".
+     * WHAT IS TRUE: `spellingsOf()` emits SIX shapes and this pattern accepts
+     * FOUR. It rejects `self::$root` - the static-property spelling of an
+     * assignment target written `private static string $root` - and it rejects
+     * a bare constant name like `LIB_ROOT`.
+     * HOW MEASURED: drove `spellingsOf()` by reflection over the two declaration
+     * shapes it branches on and ran every output through this pattern;
+     * `self::$root` and `LIB_ROOT` come back 0 and the other four come back 1.
+     * WHICH DIRECTION THAT FAILS IN, because it decides whether it is a hole:
+     * CLOSED. A walk rooted at a name this pattern will not look for simply does
+     * not resolve, so the site lands in the residue and is REPORTED - it cannot
+     * become a silent roster omission. No verdict on this tree moves either way;
+     * `self::$root` and a bare constant read are spellings this tree does not
+     * currently use.
+     *
+     * The four it does accept: a plain local `$root`, a
      * property read `$this->srcDir`, a class constant `self::LIB_ROOT` or
      * `static::LIB_ROOT`, and - the one a narrower guess would have deleted
      * outright - the zero-argument helper call `self::helper(`, `$this->helper(`
@@ -1362,6 +1380,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'row goes with it.',
         );
     }
+
     /**
      * EVERY DECLARED TREE-WIDE ROW IS STILL WARRANTED - THE OTHER REMOVAL HALF.
      *
@@ -1619,6 +1638,7 @@ final class TreeWideGuardRosterTest extends TestCase
             );
         }
     }
+
     /**
      * THE TAINT LOOP IS A FIXPOINT AND NOT A FIXED NUMBER OF PASSES.
      *
