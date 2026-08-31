@@ -1193,21 +1193,18 @@ final class EnvironmentBlockTest extends TestCase
                 . 'longer the strictly-worse one and this whole ranking needs re-deriving',
         );
 
-        // NEGATIVE CONTROL, SAME INSTRUMENT: an ordinary branch name leaves the
-        // count at one. Without it, a `substr_count` that answered 2 for
-        // everything would pass every assertion above.
-        $plainRepo = $this->tempDir . '/plain-branch';
-        mkdir($plainRepo, 0777, true);
-        $pq = escapeshellarg($plainRepo);
-        shell_exec('git -C ' . $pq . ' init -q 2>/dev/null');
-        shell_exec('git -C ' . $pq . ' config user.email crush@example.test 2>/dev/null');
-        shell_exec('git -C ' . $pq . ' config user.name crush 2>/dev/null');
-        file_put_contents($plainRepo . '/a.txt', "one\n");
-        shell_exec('git -C ' . $pq . ' add -A 2>/dev/null');
-        shell_exec('git -C ' . $pq . ' commit -q -m harmless 2>/dev/null');
-        shell_exec('git -C ' . $pq . ' checkout -q -b feature/ordinary-name 2>/dev/null');
+        // NEGATIVE CONTROL, SAME INSTRUMENT, AND ON THE SAME REPOSITORY: an
+        // ordinary branch name leaves the count at one. Without it, a
+        // `substr_count` that answered 2 for everything would pass every
+        // assertion above. Done by checking the FIXTURE repo over to a harmless
+        // branch rather than building a fourth one - `tests/Support/`'s stderr
+        // census defers the whole `Context/` prefix without a count, and a
+        // countless deferral is a blank cheque its own doc-block warns about, so
+        // this test spends the fewest `shell_exec` sites that still prove the
+        // point.
+        shell_exec('git -C ' . $q . ' checkout -q -b feature/ordinary-name 2>/dev/null');
 
-        $viaPlain = EnvironmentBlock::capture($plainRepo, 'model')->render();
+        $viaPlain = EnvironmentBlock::capture($this->tempDir, 'model')->render();
 
         $this->assertStringContainsString('Current branch: feature/ordinary-name', $viaPlain);
         $this->assertSame(
@@ -1216,6 +1213,40 @@ final class EnvironmentBlockTest extends TestCase
             'an ordinary branch name closes the fence, so this instrument reports the vector for every input',
         );
         $this->assertSame(1, substr_count($viaPlain, '<env>'));
+
+        // AND THE SECOND EXPOSURE ON THE SAME INPUT, which the class doc-block's
+        // own argument for leaving this read uncapped gets WRONG.
+        // `EnvironmentBlock`'s SUMMARY_MAX_BYTES paragraph says the branch read
+        // needs no cap because "a ref name is bounded by the filesystem's own
+        // 255-byte name limit". That limit is per PATH COMPONENT, and a ref name
+        // may contain `/` - which is the very property that makes the forgery
+        // above work. MEASURED, here and in a scratch repository: a 60-segment
+        // name of 359 bytes is accepted by `git checkout -b`, returned in full by
+        // `branch --show-current`, and reaches the block in full. So the same
+        // untrusted value this test pins as unescaped is also UNCAPPED, on a
+        // bound roughly an order of magnitude below the real one (PATH_MAX).
+        // The doc-block that carries the false bound is in
+        // `src/Context/EnvironmentBlock.php`, outside this change-set's declared
+        // file list, so the correction there is REPORTED rather than made; what
+        // lands here is the executable half, so the claim cannot go on standing
+        // unchallenged.
+        $long = implode('/', array_map(static fn (int $i): string => sprintf('seg%02d', $i), range(0, 59)));
+        $this->assertGreaterThan(255, \strlen($long), 'the probe name is no longer over the 255-byte bound it exists to exceed');
+        shell_exec('git -C ' . $q . ' checkout -q -b ' . escapeshellarg($long) . ' 2>/dev/null');
+
+        $viaLong = EnvironmentBlock::capture($this->tempDir, 'model')->render();
+
+        $this->assertSame(
+            $long,
+            trim((string) shell_exec('git -C ' . $q . ' branch --show-current 2>/dev/null')),
+            'git no longer accepts a multi-segment ref name over 255 bytes, so this exposure is closed at the source',
+        );
+        $this->assertStringContainsString(
+            'Current branch: ' . $long,
+            $viaLong,
+            'the branch line is capped after all - if a cap was added deliberately, correct '
+                . 'EnvironmentBlock::SUMMARY_MAX_BYTES\'s 255-byte argument in the same change-set',
+        );
     }
 
     /**

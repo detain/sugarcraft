@@ -2874,13 +2874,34 @@ final class RuntimeTest extends TestCase
      * the accepted token classes AND absent from the enumeration below, so it
      * was an UNDECLARED hole (§16.8 rule 31), while two other scanners in this
      * same `tests/` tree already carried the token in their name alphabets.
-     * REACHABILITY, stated honestly: in a namespaced file the spelling resolves
-     * to `<Ns>\file_put_contents` and PHP fatals, and every file under `src/` is
-     * namespaced - but `bin/sugarcrush` is in the global namespace, the only
-     * such PHP file in this lib, so the moment this scanner is pointed at
-     * `bin/` or a global-namespace helper lands under `src/`, the spelling is a
-     * silent pass on a real executed write. Closed above by rewriting the token
-     * to its leading-backslash equivalent; pinned by
+     * REACHABILITY, stated honestly and CORRECTED IN PLACE (§16.8 rule 42),
+     * because the first revision of this paragraph carried a figure it inherited
+     * from a brief instead of re-deriving - which is the exact defect three of
+     * this round's findings are about.
+     *
+     * WHAT IT SAID: "`bin/sugarcrush` is in the global namespace, the only such
+     * PHP file in this lib".
+     * WHAT IS TRUE: there are SEVEN global-namespace entry points, and
+     * `bin/sugarcrush` is not a `.php` file at all - it is extensionless with a
+     * `#!/usr/bin/env php` line. The other six are
+     * `examples/agent-dashboard.php`, `examples/echo-chat.php`,
+     * `examples/edit-diff.php`, `examples/permission-prompt.php`,
+     * `tests/bootstrap.php` and `workflows/deep-research.php`.
+     * HOW MEASURED: every file under `bin/`, `examples/`, `workflows/`, `tests/`
+     * and `src/` that is either `*.php` or carries a `php` shebang, filtered on
+     * having no `^namespace ` line. Re-derived at this commit.
+     * WHY THE CORRECTION MAKES THE ARGUMENT STRONGER RATHER THAN WEAKER:
+     * `workflows/` is a SHIPPED RUNTIME DIRECTORY, not a demo, so the set of
+     * global-namespace PHP this lib ships is wider than one entry point - while
+     * "every file under `src/` is namespaced" IS true and re-derived (0 of 297
+     * without a `namespace` line), which is what keeps this a defeat of the
+     * INSTRUMENT rather than of today's verdict.
+     *
+     * So: in a namespaced file the spelling resolves to
+     * `<Ns>\file_put_contents` and PHP fatals; the moment this scanner is
+     * pointed at any of those seven, or a global-namespace helper lands under
+     * `src/`, the spelling is a silent pass on a real executed write. Closed
+     * above by rewriting the token to its leading-backslash equivalent; pinned by
      * {@see testTheWritePrimitiveScannerSeesTheRelativeNamespaceSpellingOfAGlobalCall()}.
      *
      * `T_NAME_QUALIFIED` IS DELIBERATELY NOT ACCEPTED: `Foo\copy(...)` is a

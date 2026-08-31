@@ -24,10 +24,17 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * set of tree-wide guards - treat it as the ones known to bite". That is an
  * honest disclaimer on a derivable population, which is what this file replaces.
  *
- * MEASURED, and it is one grep: `/usr/bin/grep -rln 'TestFileWalkTrait' tests/`
- * names SEVEN consumers of the SAME shared whole-tree walker, and FIVE of them
- * are outside the list of nine - one of which carries 3,268 assertions on its
- * own, better than a tenth of the whole nine-file set's total.
+ * MEASURED, WITH ITS GENERATOR AND ITS DOMAIN, because this figure moved while
+ * the file was being written and that is the defect the file is about:
+ * `/usr/bin/grep -rln 'TestFileWalkTrait' tests/ | wc -l` returns 9 at this
+ * commit and 8 at `bb4a311d0`. Two of the nine are not consumers - the trait's
+ * own declaration, and THIS file, which is the one the count gained. So there
+ * were SEVEN consumers of the same shared whole-tree walker at `bb4a311d0`, and
+ * FIVE of those seven are outside the list of nine - one of which carries 3,268
+ * assertions on its own, better than a tenth of the whole nine-file set's 31,215
+ * (10.5%). AN EARLIER REVISION OF THIS PARAGRAPH said the grep "names SEVEN
+ * consumers", which that grep returned at no commit; the subtraction is written
+ * out now instead of being left for the reader to rediscover.
  *
  * TWO CHANNELS, BOTH STRUCTURAL, AND THEIR PRECISION IS MEASURED RATHER THAN
  * ASSERTED.
@@ -46,12 +53,18 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *
  * WHY THE ROOT MUST BE IN THE WALKER'S OWN ARGUMENT and not merely somewhere in
  * the file: at file-level co-occurrence resolution - "this file calls `glob()`
- * somewhere and names the package root somewhere" - the detector returns 87
- * files on this tree, because a walk anchored at a temp directory the test just
- * made is indistinguishable from one anchored at a source root. MEASURED, both
- * numbers, on this tree: 182 test files call a walker at all; 87 of those also
- * name the package root; and channel B's per-call-site resolution reduces that
- * to a roster. A superset is not a roster and is not shipped as one.
+ * somewhere and names the package root somewhere" - a walk anchored at a temp
+ * directory the test just made is indistinguishable from one anchored at a
+ * source root, and the candidate set comes out far wider than the roster. THE
+ * CARDINALITIES ARE DELIBERATELY NOT PINNED IN THIS PROSE. An earlier revision
+ * gave two of them - "182 test files call a walker at all; 87 of those also name
+ * the package root" - with no generator attached, and a reviewer who tried eight
+ * definitions of those two populations reproduced neither. That is section 16.8
+ * rule 2 happening inside the file that cites it. The populations are DERIVED
+ * and their ORDERING is what is pinned, by
+ * {@see testTheCandidateSetIsStrictlyWiderThanTheRosterAndEveryPopulationIsDerived()},
+ * which reads them off {@see derivation()} instead of out of a sentence. A
+ * superset is not a roster and is not shipped as one.
  *
  * WHAT IS DELIBERATELY *NOT* IN THE DERIVATION, with the measurement that
  * decided it. A rule that taints a function PARAMETER from the arguments of its
@@ -65,16 +78,51 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * actual instruction: derive what can be derived, and declare the remainder
  * where a human has looked, rather than hand-maintaining the whole list.
  *
- * THE SELF-POLICING HALF, AND IT IS THE HALF THAT BITES. A derivation that
- * silently answers "not tree-wide" for a walk it cannot read is fail-OPEN in
- * exactly the direction that hid the omissions above. So every walker call site
- * in a file that names the package root must land in one of three buckets -
- * derived tree-wide, declared tree-wide, or declared local
- * ({@see WALKS_A_DIRECTORY_THE_TEST_MADE}, keyed on the file AND the flattened
- * expression) - and anything else reds
+ * THE SELF-POLICING HALF, AND EXACTLY WHAT IT DOES NOT COVER - CORRECTED IN
+ * PLACE (section 16.8 rule 42), because the sentence that stood here was false
+ * in the one direction that matters.
+ *
+ * WHAT IT COVERS: every walker call site in a file that names the package root
+ * lands in one of three buckets - derived tree-wide, declared tree-wide, or
+ * declared local ({@see WALKS_A_DIRECTORY_THE_TEST_MADE}, keyed on the file AND
+ * the flattened expression) - and anything else reds
  * {@see testEveryWalkerCallSiteInAFileThatNamesThePackageRootIsAccountedFor()}
- * and names itself. Section 16.8 rule 32: a guard must report what it cannot
- * read, never silently pass it.
+ * and names itself.
+ *
+ * WHAT THIS PARAGRAPH USED TO SAY, AND IT WAS WRONG: "The accepted direction for
+ * anything unreadable is a report, not a pass, which is what the third bucket is
+ * for." (The sentence sat on {@see WALKER_CLASSES}.)
+ *
+ * WHAT IS TRUE: the third bucket catches a walk whose WALKER this alphabet
+ * recognises and whose ROOT it cannot resolve. It does NOT catch a walk the
+ * alphabet cannot see as a walk at all - a collaborator object, a subprocess, a
+ * walker reached through a string, or a root spelled in a way
+ * {@see ROOT_ANCHOR} does not match. Those produce NO site, so the residue is
+ * empty and {@see derivation()} exits at its root-anchor gate in silence.
+ * MEASURED by a reviewer driving {@see classifyWalkSites()} against nine
+ * synthesised guards: EIGHT were skipped silently and only the declared
+ * parameter-taint gap reported. So the fail-open is real, and it is in the
+ * alphabet rather than in the bucket logic.
+ *
+ * WHY IT IS PINNED RATHER THAN CLOSED - a decision, with the measurement behind
+ * it. The gap is LATENT on this tree: `dirname(__FILE__` appears in 0 files, a
+ * `Finder` in 0, `shell_exec('find` in 0, and the three files naming
+ * `git ls-files` do so in a comment or a teardown. `dirname(__FILE__` was the one
+ * cheap spelling and it IS closed now, in {@see ROOT_ANCHOR}. A SUBPROCESS
+ * channel was built and MEASURED before being rejected: on this tree it finds
+ * exactly TWO root-anchored subprocess sites and BOTH are false positives -
+ * `Cli/BootstrapSkillSkipsTest`'s `exec()` and
+ * `Integration/BinSugarcrushDispatchTest`'s `proc_open()` spawn the CLI under
+ * test and walk nothing - so it would buy zero real members at the price of two
+ * exemption rows written for CORRECT code, which rule 33 names as exactly where
+ * the next real offender hides.
+ *
+ * SO THE LIMITS ARE MADE EXECUTABLE INSTEAD OF CLAIMED.
+ * {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()} drives each
+ * of those shapes through the shipped classifier and asserts the bucket it
+ * ACTUALLY lands in - including the ones that land nowhere at all. An alphabet
+ * is coverage (rule 31); a table is how it stops being prose. The day one of
+ * these is closed, that test reds and names which.
  *
  * WHY THE LOCAL BUCKET IS KEYED ON FILE *AND* EXPRESSION (rule 35: an
  * exemption's key is its scope). Keyed on the expression alone, one row for
@@ -172,6 +220,24 @@ final class TreeWideGuardRosterTest extends TestCase
         'Cli/ProjectTierRefusalInventoryTest.php' => 'dotPathsIn() takes src/ as a parameter and walks it recursively',
         // phpFilesUnder($root . '/src') where $root = \dirname(__DIR__).
         'DenialPrefixRosterTest.php' => 'phpFilesUnder() takes src/ as a parameter and walks it recursively',
+        // RECLASSIFIED FROM local TO tree-wide, and the reason it was local was
+        // MEASURED FALSE. copyTree() walks `tests/fixtures/prompt/tree` - inside
+        // the package - and this row used to sit in
+        // WALKS_A_DIRECTORY_THE_TEST_MADE on the argument that "if a step ever
+        // adds a file under that fixture tree, the golden prompt tests are what
+        // catch it". They do not, on any tree that has run the suite once:
+        // ensureFixtureRepo() caches the copy at
+        // `tests/../vendor/prompt-fixture/system-repo` and returns early when
+        // its `.git` exists, so copyTree() never runs again. MEASURED by a
+        // reviewer: adding a file under that fixture tree left
+        // `vendor/bin/phpunit tests/BaseSystemPromptTest.php` at
+        // `OK (15 tests, 179 assertions)`, byte-identical to baseline; with the
+        // cache cleared FIRST, baseline is `OK (49 tests, 601 assertions)` and
+        // the same added file gives `Tests: 49, Assertions: 601, Failures: 1` at
+        // BaseSystemPromptTest.php:672. So the delegation was to a guard its own
+        // cache masks. By this roster's stated criterion the walk qualifies, and
+        // it is declared rather than argued away.
+        'BaseSystemPromptTest.php' => 'copyTree() takes a fixture tree inside tests/ as a parameter; the golden guard it delegated to is masked by ensureFixtureRepo()\'s vendor/ cache',
     ];
 
     /**
@@ -188,13 +254,17 @@ final class TreeWideGuardRosterTest extends TestCase
      * them makes its test's verdict a function of the file population - which is
      * the whole membership criterion.
      *
-     * THE ONE ROW WORTH A SECOND LOOK is `BaseSystemPromptTest.php`'s
-     * `scandir($source)`: its caller does pass a fixed fixture directory that
-     * lives inside `tests/`. It is classified LOCAL because the walk COPIES that
-     * directory into a temp repository and the test's verdict is about the
-     * prompt built from the copy, not about the fixture population. If a step
-     * ever adds a file under that fixture tree, the golden prompt tests are what
-     * catch it.
+     * THE ROW THAT USED TO BE WORTH A SECOND LOOK IS GONE FROM THIS LIST.
+     * `BaseSystemPromptTest.php` was licensed here on the argument that its
+     * `scandir($source)` copies a fixture tree and that "the golden prompt tests
+     * are what catch it" if a step adds a file under that tree. A reviewer
+     * MEASURED that false - `ensureFixtureRepo()` caches the copy under
+     * `vendor/` and returns early, so the golden guard is masked on every
+     * sandbox that has run the suite once - and the file is now in
+     * {@see DECLARED_TREE_WIDE_GUARDS}, where its full reason is recorded. Both
+     * of its walker sites, the fixture copy AND the `removeTree()` teardown, are
+     * covered by that declaration: a file declared tree-wide is IN the roster,
+     * so this bucket stops asking about it.
      *
      * MAINTENANCE, said plainly so nobody guesses: a new row here is a
      * one-line HUMAN classification, and it is required precisely because the
@@ -207,7 +277,6 @@ final class TreeWideGuardRosterTest extends TestCase
         'Agents/AgentPresetRegistryTest.php' => ['scandir($dir)'],
         'Agents/WorktreeConfigTest.php' => ['scandir($dir)'],
         'Agents/WorktreeManagerConfigOriginTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
-        'BaseSystemPromptTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)', 'scandir($source)'],
         'ClaudeCodeMcpClientStdinWedgeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Cli/AgentManagerWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'Cli/BootstrapHookFileTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
@@ -251,9 +320,15 @@ final class TreeWideGuardRosterTest extends TestCase
      * (`$finder->in($root)`), by a subprocess (`find`, `git ls-files`), by
      * `SplFileObject` over a manifest, or through a name reached from a string,
      * is out of reach here - and so is a root that arrives from ANOTHER file, a
-     * base class or a trait other than the one channel A already keys on. The
-     * accepted direction for anything unreadable is a report, not a pass, which
-     * is what the third bucket is for.
+     * base class or a trait other than the one channel A already keys on.
+     *
+     * A SENTENCE HERE USED TO CLAIM that "the accepted direction for anything
+     * unreadable is a report, not a pass". IT WAS FALSE, and the class
+     * doc-block's self-policing paragraph now carries the correction and the
+     * measurement: a shape this alphabet cannot see as a walk produces no site
+     * at all and is skipped SILENTLY. That is why every one of the shapes named
+     * above is pinned, with the bucket it really lands in, by
+     * {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()}.
      *
      * @var list<string>
      */
@@ -265,15 +340,33 @@ final class TreeWideGuardRosterTest extends TestCase
     /**
      * An expression that names the package root.
      *
-     * BOTH SPELLINGS THIS TREE ACTUALLY USES, and no third: `dirname(__DIR__)`
-     * with any depth, and `__DIR__` concatenated with a path that climbs. A
-     * bare `__DIR__ . '/fixtures'` is deliberately NOT an anchor - it names a
-     * directory beside the test, which is how a fixture is addressed, and
-     * treating it as the root put 30 more files in the roster for no reason.
+     * THE TWO SPELLINGS THIS TREE USES, plus one it does not use yet:
+     * `dirname(__DIR__)` at any depth, `__DIR__` concatenated with a path that
+     * climbs, and `dirname(__FILE__)` at any depth. The third is here because a
+     * reviewer defeated the derivation with it and it costs one alternative;
+     * MEASURED, it matches 0 files under `tests/` and `src/` today, so it is a
+     * closed door rather than a behaviour change.
+     *
+     * A bare `__DIR__ . '/fixtures'` is deliberately NOT an anchor - it names a
+     * directory beside the test, which is how a fixture is addressed rather than
+     * how a source root is. An earlier revision of this paragraph claimed that
+     * treating it as a root "put 30 more files in the roster"; that figure was
+     * never measured and a reviewer's reproduction produced 0 extra files, so
+     * the claim is withdrawn rather than corrected - the REASON stands on what
+     * `__DIR__ . '/fixtures'` denotes, and needs no cardinality.
      */
-    private const ROOT_ANCHOR = '~dirname\(__DIR__|__DIR__\.[\'"]/\.\.~i';
+    private const ROOT_ANCHOR = '~dirname\(__DIR__|dirname\(__FILE__|__DIR__\.[\'"]/\.\.~i';
 
-    /** @var array{roster: list<string>, unaccounted: array<string, list<string>>}|null */
+    /**
+     * @var array{
+     *     roster: list<string>,
+     *     unaccounted: array<string, list<string>>,
+     *     why: array<string, list<string>>,
+     *     testFiles: int,
+     *     walkerFiles: int,
+     *     candidates: int
+     * }|null
+     */
     private static ?array $derivation = null;
 
     /**
@@ -485,9 +578,232 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
-     * The derived roster and the unaccounted-for sites, computed once.
+     * THE ALPHABET'S BLIND SPOTS ARE WHERE THIS FILE SAYS THEY ARE - a table,
+     * not a paragraph.
      *
-     * @return array{roster: list<string>, unaccounted: array<string, list<string>>}
+     * WHY THIS TEST EXISTS. The class doc-block used to claim that "the accepted
+     * direction for anything unreadable is a report, not a pass". A reviewer
+     * drove the shipped classifier against nine synthesised new guards and
+     * measured EIGHT of them skipped in SILENCE - not reported - because a shape
+     * this alphabet cannot see as a walk produces no site at all, so the residue
+     * is empty and nothing reds. The claim was false in the fail-open direction,
+     * which is the only direction that matters here.
+     *
+     * WHAT THIS TEST DOES ABOUT IT. It pins the bucket each shape ACTUALLY lands
+     * in, including the ones that land nowhere. So the gap is declared, is
+     * checked, and cannot quietly widen; and the day somebody closes one of
+     * these, this test reds and names which - which is the correct outcome,
+     * because closing one changes the roster and the plan's census set with it.
+     *
+     * `dirname(__FILE__)` IS IN THE TABLE AS A CLOSED DOOR. It was one of the
+     * eight and it now resolves to the package root, because it cost one
+     * alternative in {@see ROOT_ANCHOR} and MEASURED 0 live uses, so closing it
+     * could not change any verdict on this tree. The other six stay open
+     * deliberately; the class doc-block carries the measurement that rejected a
+     * subprocess channel.
+     *
+     * BOTH POLARITIES, THROUGH THE SAME CLASSIFIER (section 16.8 rule 18): two
+     * rows must REPORT and six must not, and a classifier that answered the same
+     * way for every input would fail one half or the other.
+     */
+    public function testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre(): void
+    {
+        $shapes = [
+            // Out of reach, SILENTLY - each produces no site this alphabet sees.
+            'a collaborator object' => [
+                "<?php\nclass P { function go() { \$f = new Finder(); foreach (\$f->files()->in(\\dirname(__DIR__, 2) . '/src') as \$x) {} } }\n",
+                'silent',
+            ],
+            'a subprocess running find' => [
+                "<?php\nclass P { function go() { \$o = shell_exec('find ' . \\dirname(__DIR__, 2) . '/src -name \"*.php\"'); } }\n",
+                'silent',
+            ],
+            'a subprocess running git ls-files' => [
+                "<?php\nclass P { function go() { \$o = shell_exec('git -C ' . \\dirname(__DIR__, 2) . ' ls-files'); } }\n",
+                'silent',
+            ],
+            'SplFileObject over a manifest' => [
+                "<?php\nclass P { function go() { \$h = new \\SplFileObject(\\dirname(__DIR__, 2) . '/src/list.txt'); } }\n",
+                'silent',
+            ],
+            'a literal absolute path' => [
+                "<?php\nclass P { function go() { \$r = \\dirname(__DIR__); foreach (glob('/home/x/sugar-crush/src/*.php') as \$y) {} } }\n",
+                'silent',
+            ],
+            'a walker reached through a string' => [
+                "<?php\nclass P { function go() { \$w = 'scandir'; \$r = \\dirname(__DIR__, 2) . '/src'; \$o = \$w(\$r); } }\n",
+                'silent',
+            ],
+            // CLOSED: this one was a blind spot and is not one any more.
+            'dirname(__FILE__) as the root' => [
+                "<?php\nclass P { function go() { foreach (glob(\\dirname(__FILE__, 3) . '/src/*.php') as \$x) {} } }\n",
+                'root',
+            ],
+            // Out of reach but REPORTED - the fail-closed half, and the reason
+            // the residue bucket is not decorative.
+            'a root computed by reflection' => [
+                "<?php\nclass P { function go() { foreach (glob(\\dirname((new \\ReflectionClass(self::class))->getFileName()) . '/*.php') as \$x) {} } }\n",
+                'reported',
+            ],
+            'a root reaching the walker through a parameter' => [
+                "<?php\nclass P { function go() { \$this->under(\\dirname(__DIR__, 2) . '/src'); }\n  function under(string \$d) { foreach (scandir(\$d) as \$x) {} } }\n",
+                'reported',
+            ],
+        ];
+
+        $actual = [];
+        foreach ($shapes as $label => [$source, $_expected]) {
+            $sites = self::classifyWalkSites($source);
+            $actual[$label] = $sites['root'] !== []
+                ? 'root'
+                : ($sites['unresolved'] !== [] ? 'reported' : 'silent');
+        }
+
+        $expected = array_map(static fn (array $row): string => $row[1], $shapes);
+
+        $this->assertSame(
+            $expected,
+            $actual,
+            'a shape moved between the alphabet\'s buckets. A row going from "silent" to "reported" '
+                . 'or "root" is somebody CLOSING a declared blind spot - good, and it changes the '
+                . 'derived roster, so update this table, re-run the roster, and tell the orchestrator '
+                . 'that prompt_plan.md section 1.2 action 7b has more members. A row going the other '
+                . 'way is the alphabet narrowing and is a regression.',
+        );
+
+        // BOTH POLARITIES ARE PRESENT, asserted rather than assumed: without a
+        // reporting row this table would pass against a classifier that saw
+        // nothing, and without a silent row it would pass against one that
+        // reported everything.
+        $this->assertContains('reported', $actual, 'no shape in this table reaches the residue bucket, so the fail-closed half is untested');
+        $this->assertContains('silent', $actual, 'no shape in this table is silently out of scope, so this table has stopped describing the gap it exists for');
+        $this->assertContains('root', $actual, 'no shape in this table resolves, so the classifier may be answering "silent" for everything');
+    }
+
+    /**
+     * THE POPULATIONS ARE DERIVED AND STRICTLY ORDERED, and no cardinality of
+     * them is written down anywhere.
+     *
+     * WHY. Two population sizes stood as literals in this class's doc-block with
+     * no generator attached, and a reviewer who tried eight readings of them
+     * reproduced neither. Section 16.8 rule 2 says ship the generator, not the
+     * count - so {@see derivation()} returns the three sizes and this test pins
+     * the RELATIONSHIP between them, which is the claim that was actually being
+     * made: the candidate set is strictly wider than the roster, and strictly
+     * narrower than the set of test files that walk anything.
+     *
+     * A relation survives every merge that adds a test; a literal does not. And
+     * a collapsed derivation cannot satisfy it: if any channel returned nothing,
+     * one of these strict inequalities fails.
+     */
+    public function testTheCandidateSetIsStrictlyWiderThanTheRosterAndEveryPopulationIsDerived(): void
+    {
+        $derived = self::derivation();
+
+        $this->assertGreaterThan(0, \count($derived['roster']), 'the derived roster is empty, so every other assertion in this file is vacuous');
+        $this->assertGreaterThan(0, $derived['candidates'], 'no file both walks and names the package root, which cannot be true of this tree');
+        $this->assertGreaterThan($derived['candidates'], $derived['walkerFiles'], 'every walking test also names the package root - the candidate gate has stopped narrowing anything');
+        $this->assertGreaterThan($derived['walkerFiles'], $derived['testFiles'], 'every test file walks a directory, which would mean the walker alphabet is matching something it should not');
+
+        // The roster is not simply the candidate set: channel A and the declared
+        // rows add to it, and the candidates that only walk a temp directory do
+        // not. Both directions of that difference must be non-empty, or the two
+        // populations have collapsed into one.
+        $rosterCount = \count($derived['roster']);
+        $this->assertNotSame(
+            $rosterCount,
+            $derived['candidates'],
+            'the roster and the candidate set are now the same size. That means either every '
+                . 'candidate qualified or the trait and declared channels stopped contributing; '
+                . 'check the channels before believing the coincidence.',
+        );
+    }
+
+    /**
+     * A SHRINK IN EITHER HALF OF THE WALKER ALPHABET IS DETECTED.
+     *
+     * WHY THIS EXISTS, and it is a real hole a reviewer found in this file's own
+     * controls: emptying {@see WALKER_FUNCTIONS} drops the derived roster by
+     * eight members and {@see testTheHandMaintainedCensusSetIsASubsetOfTheDerivedRoster()}
+     * stays GREEN, because all nine hand-maintained members happen to qualify
+     * through a CLASS walker. A nine-member known-positive control cannot see a
+     * narrowing that misses all nine - section 16.8 rule 19: count distinct
+     * SHAPES, not cases.
+     *
+     * So this asserts that each half of the alphabet is still carrying at least
+     * one member ON ITS OWN. It is derived from `why`, with no file named here:
+     * emptying either constant empties one of the two groups and reds this with
+     * the group named.
+     */
+    public function testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet(): void
+    {
+        $functionOnly = [];
+        $classOnly = [];
+
+        foreach (self::derivation()['why'] as $member => $sites) {
+            if ($sites === ['TRAIT'] || $sites === ['DECLARED']) {
+                continue;
+            }
+            $viaFunction = false;
+            $viaClass = false;
+            foreach ($sites as $site) {
+                foreach (self::WALKER_FUNCTIONS as $spelling) {
+                    $viaFunction = $viaFunction || str_starts_with(strtolower($site), $spelling . '(');
+                }
+                foreach (self::WALKER_CLASSES as $spelling) {
+                    $viaClass = $viaClass || str_starts_with(strtolower($site), $spelling . '(');
+                }
+            }
+            if ($viaFunction && !$viaClass) {
+                $functionOnly[] = $member;
+            }
+            if ($viaClass && !$viaFunction) {
+                $classOnly[] = $member;
+            }
+        }
+
+        $this->assertNotSame(
+            [],
+            $functionOnly,
+            'no roster member qualifies through a FUNCTION walker alone (glob/scandir/readdir). '
+                . 'Either WALKER_FUNCTIONS has been emptied or narrowed, or every such guard was '
+                . 'rewritten - and the nine-member census control cannot see this, which is why '
+                . 'this assertion exists.',
+        );
+        $this->assertNotSame(
+            [],
+            $classOnly,
+            'no roster member qualifies through a CLASS walker alone '
+                . '(RecursiveDirectoryIterator/DirectoryIterator/FilesystemIterator). Same '
+                . 'reasoning as the assertion above, for the other half of the alphabet.',
+        );
+    }
+
+    /**
+     * The derived roster, the unaccounted-for sites, WHY each member qualified,
+     * and the three population sizes. Computed once.
+     *
+     * THE POPULATIONS ARE RETURNED RATHER THAN WRITTEN DOWN. Two of them stood
+     * as literals in this class's doc-block, with no generator, and did not
+     * reproduce for a reviewer who tried eight readings of them. Returning them
+     * makes their ORDERING assertable
+     * ({@see testTheCandidateSetIsStrictlyWiderThanTheRosterAndEveryPopulationIsDerived()})
+     * without pinning a cardinality anywhere - section 16.8 rule 2.
+     *
+     * `why` maps each member to the walker sites that qualified it, or to the
+     * single entry `TRAIT` for a channel-A member. It is what lets
+     * {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
+     * ask whether both halves of the alphabet are still carrying members, which
+     * a nine-member known-positive list cannot see.
+     *
+     * @return array{
+     *     roster: list<string>,
+     *     unaccounted: array<string, list<string>>,
+     *     why: array<string, list<string>>,
+     *     testFiles: int,
+     *     walkerFiles: int,
+     *     candidates: int
+     * }
      */
     private static function derivation(): array
     {
@@ -495,8 +811,16 @@ final class TreeWideGuardRosterTest extends TestCase
             return self::$derivation;
         }
 
-        $roster = array_keys(self::DECLARED_TREE_WIDE_GUARDS);
+        $roster = [];
+        $why = [];
+        foreach (array_keys(self::DECLARED_TREE_WIDE_GUARDS) as $declared) {
+            $roster[] = $declared;
+            $why[$declared] = ['DECLARED'];
+        }
         $unaccounted = [];
+        $testFiles = 0;
+        $walkerFiles = 0;
+        $candidates = 0;
 
         foreach (self::everyTestFile() as $relative => $absolute) {
             if (!str_ends_with($relative, 'Test.php')) {
@@ -504,9 +828,16 @@ final class TreeWideGuardRosterTest extends TestCase
             }
             $relative = str_replace('\\', '/', $relative);
             $source = (string) file_get_contents($absolute);
+            $testFiles++;
+
+            $sites = self::classifyWalkSites($source);
+            if ($sites['root'] !== [] || $sites['unresolved'] !== []) {
+                $walkerFiles++;
+            }
 
             if (self::usesTheSharedWalker($source)) {
                 $roster[] = $relative;
+                $why[$relative] ??= ['TRAIT'];
 
                 continue;
             }
@@ -514,19 +845,26 @@ final class TreeWideGuardRosterTest extends TestCase
                 // A file that never names the package root cannot walk it.
                 continue;
             }
+            if ($sites['root'] === [] && $sites['unresolved'] === []) {
+                // Names the root but performs no walk this alphabet can see.
+                // Silently out of scope, and that gap is pinned by
+                // testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre().
+                continue;
+            }
+            $candidates++;
 
-            $sites = self::classifyWalkSites($source);
             if ($sites['root'] !== []) {
                 $roster[] = $relative;
+                $why[$relative] ??= $sites['root'];
 
                 continue;
             }
 
-            $licensed = self::WALKS_A_DIRECTORY_THE_TEST_MADE[$relative] ?? [];
             if (isset(self::DECLARED_TREE_WIDE_GUARDS[$relative])) {
                 continue;
             }
 
+            $licensed = self::WALKS_A_DIRECTORY_THE_TEST_MADE[$relative] ?? [];
             $left = array_values(array_diff($sites['unresolved'], $licensed));
             if ($left !== []) {
                 $unaccounted[$relative] = $left;
@@ -536,8 +874,16 @@ final class TreeWideGuardRosterTest extends TestCase
         $roster = array_values(array_unique($roster));
         sort($roster);
         ksort($unaccounted);
+        ksort($why);
 
-        return self::$derivation = ['roster' => $roster, 'unaccounted' => $unaccounted];
+        return self::$derivation = [
+            'roster' => $roster,
+            'unaccounted' => $unaccounted,
+            'why' => $why,
+            'testFiles' => $testFiles,
+            'walkerFiles' => $walkerFiles,
+            'candidates' => $candidates,
+        ];
     }
 
     /**
