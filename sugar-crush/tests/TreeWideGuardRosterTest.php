@@ -497,10 +497,22 @@ final class TreeWideGuardRosterTest extends TestCase
      *
      * THE DOMAIN IS NARROWED ON PURPOSE to files that name the package root at
      * all: a test that never mentions the root cannot walk it, so requiring a
-     * declared row for every `glob()` in `tests/` would be 182 rows of noise
-     * instead of 37 of signal. That narrowing is a NECESSARY condition and
-     * therefore sound in the fail-closed direction - the residual gap is a root
-     * arriving from another file, which the class doc-block names.
+     * declared row for every `glob()` in `tests/` would cost a row for every
+     * walking test in the tree instead of one per unresolved SITE.
+     * {@see derivation()} returns the walking-file population and
+     * {@see WALKS_A_DIRECTORY_THE_TEST_MADE} is the residue, so that ratio is
+     * readable without being typed here.
+     *
+     * TWO CARDINALITIES USED TO STAND IN THAT SENTENCE - "182 rows of noise
+     * instead of 37 of signal" - AND BOTH WERE STALE BY THE TIME ANYONE READ
+     * THEM. RE-MEASURED: the walking-file population is 181, and the residue is
+     * 27 files carrying 35 sites. That is the defect this class's doc-block
+     * declares four paragraphs earlier, recurring inside the same file, which is
+     * a fair measure of how durable it is.
+     *
+     * The narrowing is a NECESSARY condition and therefore sound in the
+     * fail-closed direction - the residual gap is a root arriving from another
+     * file, which the class doc-block names.
      */
     public function testEveryWalkerCallSiteInAFileThatNamesThePackageRootIsAccountedFor(): void
     {
@@ -758,6 +770,87 @@ final class TreeWideGuardRosterTest extends TestCase
             'the roster and the candidate set are now the same size. That means either every '
                 . 'candidate qualified or the trait and declared channels stopped contributing; '
                 . 'check the channels before believing the coincidence.',
+        );
+    }
+
+    /**
+     * EVERY LICENSED RESIDUE ROW STILL MATCHES A LIVE SITE - THE REMOVAL HALF.
+     *
+     * WHY THIS EXISTS, and it is the half of roster discipline that bites. Every
+     * other assertion in this file is about what a change ADDS: a new walk must
+     * be classified or declared. {@see WALKS_A_DIRECTORY_THE_TEST_MADE} fails in
+     * the other direction. Repair a walk - anchor it properly, delete the test,
+     * move it behind a helper - and its licensed row keeps passing, because the
+     * row is only ever CONSULTED when a matching site shows up. A row for code
+     * that no longer exists is section 16.8 rule 33's licence: it is written for
+     * correct code, it is invisible while green, and it is exactly the cover the
+     * next real offender needs, because the next walk added to that file under
+     * that same expression is waved through by a row nobody remembers granting.
+     *
+     * TWO WAYS A ROW GOES DEAD AND BOTH ARE CHECKED. The FILE can leave the
+     * residue path entirely - it is deleted, or it becomes a channel-A member,
+     * which returns before the residue is ever consulted. Or the individual
+     * EXPRESSION can stop appearing among that file's unresolved sites. The
+     * first is the one that just nearly happened: generalising channel A moved
+     * five files into it, and had any of them held a licensed row, that row would
+     * have gone dead in the same commit, silently.
+     *
+     * MEASURED at this commit: 0 rows dead by either route, out of 27 files and
+     * 35 sites. So this test is green for a reason and not because it cannot
+     * fail - which the deletion experiment in the commit message demonstrates by
+     * planting a row and watching it name itself.
+     *
+     * NOT VACUOUS: the constant must be non-empty, or every assertion below
+     * ranges over nothing.
+     */
+    public function testEveryLicensedResidueRowStillMatchesALiveWalkSite(): void
+    {
+        $this->assertNotSame(
+            [],
+            self::WALKS_A_DIRECTORY_THE_TEST_MADE,
+            'the licensed-residue constant is empty, so this test ranges over nothing and the '
+                . 'unaccounted-for test has nothing left to consult',
+        );
+
+        $everyFile = [];
+        foreach (self::everyTestFile() as $relative => $absolute) {
+            $everyFile[str_replace('\\', '/', $relative)] = $absolute;
+        }
+
+        $dead = [];
+        foreach (self::WALKS_A_DIRECTORY_THE_TEST_MADE as $file => $expressions) {
+            if (!isset($everyFile[$file])) {
+                $dead[] = $file . ' => the file no longer exists';
+
+                continue;
+            }
+
+            $source = (string) file_get_contents($everyFile[$file]);
+            if (self::walkingHelperUsedIn($source) !== null) {
+                $dead[] = $file . ' => the file is now a channel-A member, so its '
+                    . \count($expressions) . ' licensed row(s) are never consulted';
+
+                continue;
+            }
+
+            $unresolved = self::classifyWalkSites($source)['unresolved'];
+            foreach ($expressions as $expression) {
+                if (!\in_array($expression, $unresolved, true)) {
+                    $dead[] = $file . ' => ' . $expression;
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $dead,
+            "these licensed residue rows no longer match any live walk site:\n"
+                . implode("\n", array_map(static fn (string $row): string => '  - ' . $row, $dead))
+                . "\n\nA row written for code that no longer walks is a standing licence (rule 33): it "
+                . 'passes forever and waves through the next walk that happens to land on the same '
+                . 'file and expression. Delete the row in the same change-set as the repair. If the '
+                . 'file became a channel-A member, that is the whole reason the row is dead and the '
+                . 'row goes with it.',
         );
     }
 
@@ -1517,8 +1610,9 @@ final class TreeWideGuardRosterTest extends TestCase
         return "the derivation no longer finds these hand-maintained census members:\n"
             . implode("\n", array_map(static fn (string $file): string => '  - ' . $file, $missing))
             . "\n\nOne of the two channels has narrowed. Suspect the channel before the file: check "
-            . 'whether it still uses the shared walker trait, and whether its walk root still resolves '
-            . 'through the four taint rules in rootAnchoredNames(). If a file genuinely stopped walking '
+            . 'whether it still names one of the walking helpers walkingHelperNames() derives, and '
+            . 'whether its walk root still resolves through the four taint rules in rootAnchoredNames(). '
+            . 'If a file genuinely stopped walking '
             . 'the tree, remove it from HAND_MAINTAINED_CENSUS_SET and from prompt_plan.md section 1.2 '
             . 'action 7b in the same change-set - do not widen the anchor pattern to paper over it.';
     }
