@@ -253,6 +253,130 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S5-fix-1 — the rename, and five cycle-6 findings   ·   2026-08-31   ·   NOT MERGED, branch HEAD `5a0ff8e12`
+
+**Status** `paused (user stop)` — **not at a cap.** Three of five review cycles used. **HEAD `5a0ff8e12`
+has NEVER BEEN REVIEWED** (cycle 3's ten findings were all fixed in it, and no cycle 4 ran).
+**Worktree `/home/sites/prompt-step-P3.S5-fix-1` LEFT IN PLACE — do not delete it.**
+**Base** master `1267e6fbb`. Branch `prompt/P3.S5-fix-1`, 4 commits.
+
+**ORCHESTRATOR-VERIFIED, my own commands**
+- Scope clean: exactly the three declared files (`src/Runtime.php`,
+  `tests/RuntimeTest.php`, `tests/Integration/SystemPromptWiringTest.php`).
+- **`src/Runtime.php`'s change is COMMENT-ONLY.** I stripped `T_COMMENT`/`T_DOC_COMMENT`/`T_WHITESPACE`
+  from base and HEAD and compared the executable token streams: both `c42b4a36105c5ec8cc76669b4dd8fa95`.
+  IDENTICAL. So the only production file in this diff cannot have changed behaviour.
+- `git status --porcelain` EMPTY; no `MultiEdit.php`, no `src/Tools/Probe/`, no `src/Zzz/`.
+- Goldens UNMOVED: `32ea749d84938811ac9331419cae7380`, `ef0326dd38535aaa2f1d715919bff26e`.
+- **My OWN `token_get_all` census of `Agent::systemPrompt()`: 8 call sites, 1 declaration**
+  (`src/Agents/Agent.php:415`). Full list in commit `344b85550`.
+- **Full suite at HEAD: RUNNING SERIALLY as this entry is written** — see the `Latest suite` field in
+  `prompt_resume.md` for the result. It had NEVER been run at HEAD; the agent's last full run was at
+  `68a0c3c5d`, one commit earlier.
+
+**PART ONE — THE USER-APPROVED RENAME: DONE, and it is the cleanest part of the diff.**
+New name: `testEveryStepOfOneTurnGetsAByteIdenticalPromptExceptTheTwoGitDiffSectionsWhichAreTheOnlyLicensedDifference`
+Three sites in ONE commit (`2a197ed20`): `src/Runtime.php:681`,
+`tests/Integration/SystemPromptWiringTest.php:313` (declaration) and `:762` (the `{@see}`).
+Zero stranded references inside `sugar-crush/`. Still collected: `OK (1 test, 8 assertions)`.
+Two reviewers independently extracted the method body at base and at HEAD and found it BYTE-IDENTICAL
+(9,848 bytes, 8 assertions both sides) — nothing weakened, narrowed, skipped or renamed-out. The docblock
+paragraph that argued for KEEPING the old name was rewritten in rule-42 form, not deleted.
+**All three reviewers stated explicitly they had NO objection to the rename.**
+
+**SURPRISE, AND IT MATTERS: THE BRIEF'S OWN HEADLINE MEASUREMENT WAS FALSE.**
+My brief said, in capitals, *"THERE IS NO GUARD TO LEAN ON. MEASURED TWICE."* **It is false at this base.**
+MEASURED by the step agent: fabricating the cited METHOD name in `src/Runtime.php` **REDS**
+`SymbolCitationDriftTest` (`Tests: 7, Assertions: 2972, Failures: 1`), and so does a fabricated class name
+ending in `Test`. Root cause: P3.S5's own cycle-5 commit had already respelled that citation out of the
+invisible path-prefixed form into the policed one — so the guard existed by the time this step ran, and the
+measurement I copied forward predated it. (The baseline is also 2,972 assertions, not the 2,952 I quoted.)
+The narrower hole that IS real: `SymbolCitationDriftTest.php:335` `looksLikeATestSymbol()` keeps a citation
+only when the short class name ends in `Test`, so a fabricated `…TestClass` is discarded before resolution
+and passes green. **Lesson for the orchestrator, not the agent: a measurement quoted from a worklog entry
+is only true of the tree it was taken on. Re-derive before putting it in a brief in capitals.**
+
+**Findings 1-5 — all five DONE**
+- **1 (the "nine")** → **8**, five independent censuses agreeing, and now *derived* by
+  `RuntimeTest::testTheAgentAssemblerCallSiteCountInThisDocblockIsDerivedFromTheTree()`, which re-runs the
+  census and asserts the docblock digit equals the tree's. **The wrong word came FROM `prompt_plan.md`**,
+  which said "nine" twice while enumerating eight. Corrected in `344b85550`. §16.8 rule 44.
+- **2 (the wrong-green roster)** — the MultiEdit experiment reproduced EXACTLY as reported at base:
+  a write-capable tool typed into `$readOnly` left `OK (112 tests, 398 assertions)`, fully green.
+  Closed by a `token_get_all` scanner over each read-only tool's own source. **Three successive reviewers
+  then defeated that scanner TEN times, every one on a fully green suite**: `\file_put_contents` (FQ token),
+  `fopen('w')+vfprintf`, a write inside a `use`d trait in ANOTHER FILE, `fopen($p,'w')` alone (truncates at
+  open), `fopen($p,'x')`, `error_log($m,3,$p)`, `gzopen`/`gzwrite`, `imagepng($im,$p)`,
+  `new SplFileObject($p,'w')`, and `use function file_put_contents as persist;`. All ten now closed;
+  combined acceptance mutation reds with `MultiEdit calls vfprintf() at MultiEditWrites.php:12`, and
+  zero false positives across all twelve `Tool` implementors and their trait closures.
+  **The prose now says NARROWED, not CLOSED.** ESCALATED: see below.
+- **3** — third roster named, and the drift test now EXTRACTS BOTH rosters from source and asserts the
+  divergence `['Skill','WebSearch','doctor']`. No hand-maintained prose census left. Not reconciled, per the
+  gate's own "A DECISION, NOT A CENSUS".
+- **4** — MEASURED by BUILDING the hypothetical the reviewer had only inferred: candy-core's `Mutable` trait
+  does not merely reset the memos, it **FATALS** — `Error: Unknown named parameter $memoryBlock`, because
+  `get_object_vars()` returns class-body fields that are not constructor parameters. `App::mutate()`'s
+  hand-written form carries `$environmentBlock` and resets two. **Two blocks, not three; constructor
+  re-entry, not cloning.** Conclusion kept, reason corrected.
+- **5** — PINNED, and the pin bites. Removing it from the two engine-loop tests leaves `OK (2 tests, 62
+  assertions)` (they really are insensitive today); removing the sandbox from the new control test REDS,
+  printing the developer's real `~/.sugar-crush` config: `['provider' => 'dev-sglang', 'theme' => 'ansi']`.
+
+**Tests** `RuntimeTest.php` 112/398 → **118/439**. `SystemPromptWiringTest.php` 11/75 → **11/75** (unchanged
+count; the rename does not add a test). Census six-file set `OK (103 tests, 9468 assertions)`.
+Sixteen deletion experiments, all restored, verbatim in the agent's report.
+
+**THE LESSON OF THIS STEP, in one line: the instrument was the defect, every single cycle.** Ten green
+defeats of a scanner whose whole purpose was catching exactly that class of miss. §16.8 rule 30 held
+throughout, and a token scanner over function NAMES is now demonstrated to be structurally incompletable.
+
+**Escalations (§1.10) — verbatim-summarised, full text in the agent's report**
+1. **The complete fix for the read-only roster is out of scope and needs a decision.** Ten defeats by four
+   reviewers proves a name-based token scanner cannot be complete. Honest fixes: (a) a per-tool
+   `writesTree(): bool` on `src/Tools/Tool.php:20` implemented by all twelve implementors — moves the
+   judgement to the only place that can make it, and covers the embedder half too; or (b) the cheap
+   working-tree fingerprint `src/Runtime.php` already names. Both need `Tool.php` + every implementor.
+2. `prompt_resume.md:345` — stranded old test name. **FIXED BY THE ORCHESTRATOR in `199dd66ea`.**
+3. `prompt_plan.md:1466`/`:1509` "nine". **FIXED BY THE ORCHESTRATOR in `344b85550`.**
+4. **A SECOND `SymbolCitationDriftTest` hole**: `:335` `looksLikeATestSymbol()` drops any citation whose
+   short class name does not end in `Test`, so `…TestClass` passes green. Distinct from the still-open
+   path-prefix hole. Needs its own step, together with that one.
+5. Inherited P3.S5 escalations still open: `EnvironmentBlock.php`'s "that caller does not exist yet" is
+   still false in the shipped tree; the second assembler keeps the diff and its full cost.
+
+**Unactioned reviewer findings — carried, nothing done**
+1. Cycle 3: `tests/RuntimeTest.php` asserts trait file order from `ReflectionClass::getTraits()`; swapping two
+   `use` lines in `Grep.php` — a semantic no-op — would red it. Same defect class as its own finding 5.
+2. Cycle 3: `phpFilesUnder()` follows directory symlinks (`RecursiveDirectoryIterator` default). No cycle in
+   the tree today, so unbounded only latently.
+3. Cycle 3: **+2 full-suite assertions unattributed to a class**, PARTIAL/UNVERIFIED — its `--log-junit` run
+   was killed at 0 bytes. Both runs rc=0. A bookkeeping loose end, not a red.
+4. Cycle 1's `file:line` citations are against `2a197ed20` and are stale (+1,263 lines since); its findings
+   4-10 are UNVERIFIED against HEAD.
+
+**Subagents — three reviewers; ONE DID NOT ANSWER THE WIND-DOWN.**
+Cycles 1 and 3 completed, gave cleanup proof, and answered ORCHESTRATION-RULE-2 **NO**.
+**The cycle-2 reviewer's original review completed in full (10 findings, all addressed), but it returned
+NOTHING to the wind-down query after ~16 minutes. Recorded as UNANSWERED, not as "nothing to report"**,
+per the standing rule that a blank return means the agent died. The step agent independently verified the
+substance it would have covered (worktree clean, no stray files, goldens unmoved), and so did I.
+Cycle 3 also disclosed that its `cp -al` sandbox once propagated a write INTO the frozen tree through a
+hardlink; it detected and restored it at the time and re-verified at wind-down. **That is a real hazard of
+`cp -al` sandboxes worth carrying: a hardlinked copy is not a copy for writes that modify in place.**
+
+**ORCHESTRATION-RULE-2 CHECK, mine, prompted by cycle 3's disclosure of a stray repo carrying identity
+`t <a@b.c>` — the exact fingerprint of the original incident.** VERIFIED: that repo is
+`<scratchpad>/gt`, and `git rev-parse --show-toplevel` confirms it is confined to the scratchpad, NOT to
+`/home/sites/sugarcraft`. The main repo is clean, its identity is `Joe Huss / detain@interserver.net`, and
+all twelve most recent commits are authored `Joe Huss <detain@interserver.net>`. Siblings `gt2`/`gt3`/
+`tprobe` carry the correct identity. **The rule held this time.** UNVERIFIED which agent created `gt`.
+
+**HANDOFF** Run a fresh FOURTH reviewer over `5a0ff8e12` — it has never been reviewed — then merge behind
+`P3.S4-fix-1` per the declared order.
+
+---
+
 ### P3.S4-fix-1 — dispose of P3.S4's eight standing findings   ·   2026-08-31   ·   NOT MERGED, branch HEAD `bdef57632`
 
 **Status** `blocked (review-cycle)` — **PAUSED at the user's request, not at a cap.** Three of five review
