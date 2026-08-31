@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: Phase 3's SIX STEPS ARE ALL MERGED — `P3.S4-fix-1` `1279d91cf`, `P3.S5-fix-1` `5cabca4a8`, `P3.S6` `f958ba8e6`. NOTHING IS IN FLIGHT and no agent is running. The ONE remaining thing before Phase 4 is the **Phase 3 close review** (§1.7, cap three cycles). Then Phase 4 opens immediately — §0 is the standing order, do not stop at the boundary to ask.**
+**Current state: Phase 3's SIX STEPS ARE ALL MERGED — `P3.S4-fix-1` `1279d91cf`, `P3.S5-fix-1` `5cabca4a8`, `P3.S6` `f958ba8e6`. THE PHASE 3 CLOSE REVIEW IS IN FLIGHT (§1.7, cycle 1 of a cap of 3) — see `In-flight batch` in §8 for its worktree, its brief file and what to do with its findings. When it passes, Phase 4 opens immediately with **P4.S1 alone** — §0 is the standing order, do not stop at the boundary to ask.**
 
 ---
 
@@ -459,14 +459,32 @@ Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIA
                   php-cs-fixer is NOT installed on this box and NOT vendored anywhere in the
                   tree — the style gate cannot be run locally.
 
-In-flight batch:  **NONE. Batch P3.CLOSE.B1 is CLOSED — all three of its branches merged,
-                  all three worktrees removed, all three branches deleted.** Write this field
-                  the moment you spawn the next batch, not when you start merging it: every
-                  other field here describes work already recoverable from `git log` and the
-                  worklog, but five agents in five worktrees with a merge order you decided in
-                  your head is recoverable from nothing.
+In-flight batch:  **THE PHASE 3 CLOSE REVIEW, cycle 1 of a cap of 3.** Spawned 2026-08-31.
+                  Reviewer worktree `/home/sites/prompt-step-P3.CLOSE-r1`, branch
+                  `prompt/P3.CLOSE-r1`, based at master `d1633da63`, vendor materialised with
+                  `cp -al` and the PSR-4 root VERIFIED to print the worktree's `src/`.
+                  Scope handed to it: `git diff 924c71a0d HEAD -- sugar-crush/` (924c71a0d is
+                  the Phase 3 base = master immediately before P3.S1 merged) — 26 files,
+                  14955 insertions, 639 deletions, of which 5 are `.vhs/*.gif` from c5a82104c
+                  which is NOT this plan's commit.
+                  Its brief is a FILE, not a prompt, and it is the thing to re-read if this
+                  review has to be re-run:
+                    <scratchpad>/P3.CLOSE-r1/BRIEF.md          (294 lines, §1.4 + §1.7 + more)
+                    <scratchpad>/P3.CLOSE-r1/phase3-step-texts.md   (prompt_plan.md 1397-1630)
+                  Findings land at <scratchpad>/P3.CLOSE-r1/findings-cycle-1.md, written AS
+                  FOUND (eight of one step's ten findings were once lost to a context boundary
+                  because they lived only in a summary).
+                  THE BRANCH IS A SANDBOX, NOT WORK — the reviewer may mutate files there for
+                  check-12/check-13 experiments and may not commit. Nothing on
+                  `prompt/P3.CLOSE-r1` is ever merged; the worktree is removed and the branch
+                  force-deleted (`git branch -D`) when the review loop closes.
+                  If findings come back: fix agent in a FRESH worktree, step id
+                  `P3.audit-fix-2`, its own worklog entry, then a BRAND-NEW phase reviewer.
+                  Cap 3 cycles (§1.7.3).
 
-Live worktrees:   /home/sites/sugarcraft   master, clean, at the commit above. THE ONLY ONE.
+Live worktrees:   /home/sites/sugarcraft   master, clean, at the commit above.
+                  /home/sites/prompt-step-P3.CLOSE-r1   phase-review SANDBOX, in flight, holds
+                                                        no work, never merged, `-D` at close.
                   /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
 
 Blocked on:       NOTHING. No user decision is owed to proceed. Phase 3 closes on its review;
