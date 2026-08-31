@@ -135,36 +135,52 @@ See §8 `In-flight batch` for exactly what each one is doing and what to do when
 
 ### Already verified this session — do NOT redo unless the sha moved
 
+**All three branches are DONE and ORCHESTRATOR-VERIFIED. No agent is out. Everything below was run by
+the orchestrator, not reported by an agent, unless the row says otherwise.**
+
 | Check | Result | Measured at |
 |---|---|---|
-| cwd, branch, clean tree | `/home/sites/sugarcraft`, `master`, `git status --porcelain` empty | `58c1bf3e7` |
-| commit identity | `Joe Huss` / `detain@interserver.net` — re-checked after every commit, incl. after a scratch `git init` | `58c1bf3e7` |
-| worklog newest entry vs `git log` | match; nothing to reconstruct | `58c1bf3e7` |
-| `git worktree list` | four, all deliberate, none stale — see `Live worktrees` in §8 | `58c1bf3e7` |
-| **master full suite, serial-enough, checkout root, `</dev/null`** | **`Tests: 10500, Assertions: 161982, Skipped: 1`** (06:55.785) | `c7e5a6454` |
-| master's code untouched since `1267e6fbb` | `git diff --stat 1267e6fbb..HEAD` = the three `prompt_*.md` files and nothing else | `58c1bf3e7` |
-| `P3.S4-fix-1` scope / goldens / tests | one declared file; `src/` diff EMPTY; goldens unmoved; `PromptStabilityTest` **15/391**; census set **109/9632** | `2d5f14835` |
-| `P3.S5-fix-1` scope / goldens / tests | exactly the three declared files; census test itself untouched; goldens unmoved; the three filtered files **136/679**; census set **103/9468** | `842cc59b3` |
-| `P3.S6` sandbox | PSR-4 root resolves to `/home/sites/prompt-step-P3.S6/sugar-crush/src`; `--filter AgentTest` = `OK (56 tests, 278 assertions)` | base `c7e5a6454` |
-| `log.abbrevCommit` is parse-time validated | independently re-derived by the orchestrator in a scratch repo — see §8 | git 2.43.0 |
+| cwd, branch, clean tree | `/home/sites/sugarcraft`, `master`, `git status --porcelain` empty | every commit |
+| commit identity | `Joe Huss` / `detain@interserver.net` | every commit |
+| **master full suite**, checkout root, `</dev/null`, serial | **`Tests: 10500, Assertions: 161982, Skipped: 1`** (06:55.785) | `c7e5a6454` |
+| master's `sugar-crush/` untouched since `1267e6fbb` | `git diff --stat 1267e6fbb..HEAD` = the `prompt_*.md` files + `prompt_plan.md`'s new §18 row, nothing else | `ece72e809` |
+| **`P3.S4-fix-1` @ `6e7308938`** | `--filter PromptStabilityTest` **16/399**; scope = the ONE declared file; `src/` diff **EMPTY**; goldens unmoved; clean | `6e7308938` |
+| `P3.S4-fix-1` F-A hostile, **reproduced by me** | global `[diff] external = /bin/true` → 16 tests, **Failures: 3**; global `[core] excludesFile`→`Alpha.php` → 16 tests, **Failures: 3**. Both red with the HONEST message; *"The scanner is dead"* GONE from both, and each quotes git's own output — differing exactly as the two mechanisms predict | `6e7308938` |
+| `P3.S4-fix-1` F-E not live | colour override still reaches **control C** (16 tests, 387 assertions, Failures: 1) — B's new guard does not swallow it | `6e7308938` |
+| `P3.S4-fix-1` F-C by count | `[core] quotePath = nonsense` → Failures: 6, **6 of 6 name `git init`**, old misleading *"not in a git directory"* appears **0** times | `6e7308938` |
+| **`P3.S5-fix-1` @ `6acba5f9e`** | filtered three files **145/689**; `InterpolationOpenerTokenTest` **6/164** and its diff vs base **EMPTY** (no `KNOWN_GAPS` row); fixtures diff EMPTY; scope = the three declared files; goldens unmoved; clean | `6acba5f9e` |
+| `P3.S5-fix-1` `src/Runtime.php` comment-only | **my own script**: 4366 executable tokens both sides, element-identical, md5 `36ecb93cf7957cb77c9448aa6e16966e` — the FIFTH independent derivation | `6acba5f9e` |
+| `P3.S5-fix-1` F1 before/after, **my own probe** | PRE-FIX `ab9a7dcdc`: CONTROL `{"file_put_contents":[142]}`, B1 `//`-comment **`[]`**, B3 const-string **`[]`**. FIXED: CONTROL `[142]`, B1 **`[143]`**, B3 **`[143]`** | `6acba5f9e` |
+| **`P3.S6` @ `1461e1685`** | scope = the two declared files; goldens unmoved; author `Joe Huss`; tree clean; added-line scan for `markTestSkipped\|@deprecated\|assertNotNull\|assertIsArray` = **0** | `1461e1685` |
+| `P3.S6` `src/Agents/Agent.php` doc-block-only | **my own script**: **executable-identical to base, 1270 tokens both sides** | `1461e1685` |
+| `P3.S6` deletions | `git diff --numstat c7e5a6454..HEAD` = `348/0` and `1193/0` — **ZERO deletions at every commit**. Its report's *"42 deletions"* + enumeration describes churn between its OWN intermediate commits. Conclusion STRONGER than claimed, figure unreliable | `1461e1685` |
+| `P3.S6` `tools`/`AgentResult` facts (for the §18 row) | `ProcessExecutor.php:985` passes a literal `tools: null`; `AgentWorkerPool.php:410` forwards `tools: $request->tools`; `AgentResult::__construct` has **8 params, no tool-call field** | `1461e1685` |
+| `log.abbrevCommit` parse-time validated | independently re-derived by the orchestrator in a scratch repo | git 2.43.0 |
 
-**Still owed, and nobody has measured them:** the FULL suite at `P3.S4-fix-1` HEAD `6e7308938`,
-and the FULL suite at `P3.S5-fix-1` HEAD `6acba5f9e`. **Both branches are otherwise DONE and
-VERIFIED — their full suites are the only thing between them and their merges.**
+**THE CENSUS SET IS SEVEN FILES, NOT SIX.** `prompt_plan.md` §1.2 action 7b names six. The seventh is
+`sugar-crush/tests/Support/InterpolationOpenerTokenTest.php` (6/164). Six alone = `103 / 9468`; all
+seven = `109 / 9632`. They reconcile exactly. Say which one you ran.
 
-**WHY THEY HAVE NOT BEEN RUN YET, so nobody reads it as an oversight:** both must run SERIALLY with
-nothing else heavy on the box. Agents have been working continuously, and the `P3.S5-fix-1` fix pass
-runs mutants and tree-wide scans. Measured on this box: two runs of an IDENTICAL tree gave 162,075
-and 162,057 — 18 apart — under concurrency, while sequential uncontended runs agree exactly. Running
-now would produce a figure needing a caveat, and nothing is gained: merges are sequential anyway.
+**A FIGURE OF MINE THAT WAS WRONG, corrected so it stops propagating:** `--filter AgentTest` is a
+regex that **also matches `SubAgentTest`** (30 tests / 85 assertions, untouched by P3.S6). The
+baseline `OK (56 tests, 278 assertions)` recorded in this plan is `26 + 30` **across two files**.
+Per file, `AgentTest.php` went **26 → 33 tests**; P3.S6 added **7 tests, not 7-of-63**.
 
-**THE CENSUS SET IS SEVEN FILES, NOT SIX.** `prompt_plan.md` §1.2 action 7b names only six, which
-cost an agent a search to recover. The seventh is `sugar-crush/tests/Support/InterpolationOpenerTokenTest.php`
-(6 tests, 164 assertions). The six alone are `103 / 9468`; all seven are `109 / 9632`.
-103+6 = 109 and 9468+164 = 9632, so the two figures reconcile exactly. Use whichever the step needs,
-but say which one you ran. Both must be run **serially, from the worktree
-root, with nothing else heavy on the box**, immediately before that branch merges. Do not write a
-figure for either until you have run it.
+### Still owed — and this is the ONLY thing between here and three merges
+
+**A FULL SUITE PER BRANCH, RUN SERIALLY, from that branch's worktree root, with `</dev/null`.**
+Master's figure to beat: **`10500 / 161982 / 1` from the CHECKOUT ROOT**.
+
+- `P3.S4-fix-1` @ `6e7308938` — **a run was IN FLIGHT** as background task `bx8btbi9e`, output at
+  `/tmp/claude-1000/-home-sites-sugarcraft/3e35a6d4-602a-4db1-b5fa-055d3792747f/tasks/bx8btbi9e.output`.
+  **Read that file first.** It was piped through `tail -6`, so the file stays EMPTY until the run
+  ends — an empty file means "still running", not "failed". If the process is gone and the file is
+  still empty, the run was lost with the session: just re-run it.
+- `P3.S5-fix-1` @ `6acba5f9e` — not started.
+- `P3.S6` @ `1461e1685` — not started.
+
+**Also owed on `P3.S6` specifically, before it merges (see §8 item 3):** my own test figures,
+a re-verification of mutation **E5c**, and a decision on **review cycle 4**.
 
 ### If the tree HAS moved since `58c1bf3e7`, or you distrust any of the above
 
@@ -354,55 +370,57 @@ Phase:            3. P3.S1-S5 merged. THREE AGENTS RUNNING. Nothing new has merg
                   session — master's sugar-crush/ tree is byte-identical to 1267e6fbb.
                   Phase 3 NOT closed.
 
-Next step:        **CALL `ListAgents` FIRST. Three agents are out. Do not re-spawn any of
-                  them, and do not start their work yourself.** A completed report is not
-                  proof an agent has finished — one agent last session delivered its full
-                  report, went quiet, and RESUMED AN HOUR LATER; it had to be stopped with
-                  `TaskStop` and all trees re-verified afterwards.
+Next step:        **NO AGENTS ARE RUNNING. ALL THREE BRANCHES ARE DONE AND VERIFIED.** Call
+                  `ListAgents` to confirm, then RUN THE THREE OWED FULL SUITES AND MERGE, in
+                  this order, SERIALLY, with nothing else heavy on the box.
 
-                  Each of the three is described under `In-flight batch` with exactly what
-                  to do when it reports. The short form:
+                  Read §4 "Still owed" FIRST — a suite for P3.S4-fix-1 was already in flight as
+                  background task `bx8btbi9e`; its output file is EMPTY while running because it
+                  is piped through `tail -6`. Empty != failed.
 
-                  A) **P3.S4-fix-1 @ 6e7308938 — DONE, VERIFIED, MERGE-READY. HELD ONLY FOR
-                     A QUIET BOX.** Nothing further is owed on this branch except its full
-                     suite. **THE MOMENT the other two agents finish**, run:
-                       cd /home/sites/prompt-step-P3.S4-fix-1 && php sugar-crush/vendor/bin/\
-                         phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null
-                     SERIALLY, nothing else heavy on the box, then MERGE IT FIRST into master
-                     with `git -C /home/sites/sugarcraft merge --no-ff prompt/P3.S4-fix-1` and
-                     a §1.6 WHY/WHAT/MEASURED/REVIEW message. Master's figure to beat:
-                     10500 / 161982 / 1 from the CHECKOUT ROOT. Then remove the worktree,
-                     delete the branch, append the worklog entry, rewrite this file.
-                     It merges first because it changes NO production code at all.
-                  B) **P3.S5-fix-1 @ 6acba5f9e — DONE, VERIFIED, MERGE-READY. HELD FOR A
-                     QUIET BOX.** Nothing further is owed except its full suite. Run it
-                     SERIALLY from /home/sites/prompt-step-P3.S5-fix-1 AFTER P3.S4-fix-1 has
-                     merged AND a full suite has run in between, then merge SECOND.
-                     (superseded detail follows, kept for the reasoning)
-                     **P3.S5-fix-1 — CAP REACHED. FINAL FIX PASS, NO CYCLE-6 REVIEW.**
-                     Cycle 5 found F1, a CRITICAL fail-open that SUBTRACTS detections: a
-                     one-line COMMENT of the shape `use function X as file_put_contents;`
-                     deletes a primitive from the alphabet for the whole file, turning a real
-                     executed write into []. Seven green defeats measured end-to-end. When the
-                     fix agent reports: **verify it YOURSELF — nobody else will.** Re-derive
-                     the tree-wide before/after (768 scanned, 260 reporting, verdict diff 0),
-                     confirm scope is the three declared files, confirm the census file's diff
-                     vs base is STILL EMPTY, confirm src/Runtime.php is STILL comment-only
-                     (4366 tokens), then run the FULL SUITE SERIALLY and merge SECOND — after
-                     A has merged and a full suite has run in between. **Do NOT open a cycle 6.**
-                     If the fix agent's honest answer is that F1/F2 cannot be closed by any
-                     name-based means, that attaches to escalation N1 and is a COMPLETED
-                     outcome — merge on the fail-closed guarantee, not a complete scanner.
-                  C) **P3.S6 step agent** -> runs its own review loop internally and reports
-                     once at the end. Verify its numbers yourself, then MERGE THIRD.
+                  THE RECIPE, per branch, in the order S4 -> S5 -> S6:
+                  ```
+                  cd /home/sites/prompt-step-<ID> && php sugar-crush/vendor/bin/phpunit \
+                    -c sugar-crush/phpunit.xml --colors=never </dev/null | tail -6
+                  # then, from /home/sites/sugarcraft:
+                  git merge --no-ff prompt/<ID>          # §1.6 WHY/WHAT/MEASURED/REVIEW message
+                  php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml \
+                    --colors=never </dev/null | tail -6  # master suite BETWEEN merges
+                  git worktree remove /home/sites/prompt-step-<ID>   # §1.12 checks first
+                  git branch -d prompt/<ID>
+                  ```
+                  **A full suite between each merge is not optional** — a regression measured
+                  after two merges cannot be attributed to either. Master's figure to beat:
+                  **10500 / 161982 / 1 from the CHECKOUT ROOT**. DO NOT PUSH.
 
-                  THEN: (d) the Phase 3 close review — §1.7, a phase reviewer over ALL of
+                  A) **P3.S4-fix-1 @ 6e7308938 merges FIRST** — it changes NO production code at
+                     all (`src/` diff EMPTY), so it is the cheapest thing to attribute.
+                  B) **P3.S5-fix-1 @ 6acba5f9e merges SECOND.**
+                  C) **P3.S6 @ 1461e1685 merges THIRD — but THREE THINGS ARE OWED FIRST**, all
+                     in §8 item 3: my own figures, mutation **E5c**, and the **cycle-4
+                     decision**. Do not skip the cycle-4 decision by inertia: unlike both fix
+                     branches its five-cycle cap is NOT reached (3 used, cycle 3's fixes
+                     unreviewed), so declining a cycle needs a positive reason. The reason that
+                     may be good enough: its `src/` change is doc-block only, VERIFIED
+                     executable-identical at 1270 tokens, so the risk surface is the new tests
+                     and the doc-block claims, not behaviour.
+
+                  THEN: (d) the **Phase 3 close review** — §1.7, a phase reviewer over ALL of
                   Phase 3's commits together, cap three cycles.
-                  THEN: (e) OPEN PHASE 4 IMMEDIATELY. §0 is the standing order; do not stop
-                  at the boundary to ask. Phase 4's shape is already read and recorded under
-                  `Phase 4 is pre-read` below, so you do not need to re-read the plan for it.
+                  THEN: (e) **OPEN PHASE 4 IMMEDIATELY.** §0 is the standing order; do not stop
+                  at the boundary to ask. Phase 4's shape is pre-read below.
 
-Steps done:       22 of 63 merged, plus audit-fix sub-steps (not counted in the 63):
+                  **BEWARE THE API SESSION LIMIT.** It killed the P3.S6 agent mid-sentence
+                  (HTTP 429, *"resets 4am America/New_York"*). If an agent dies that way:
+                  SECURE ITS UNCOMMITTED WORK FIRST (patch + full file copies to the
+                  scratchpad, then verify the backup BY RECONSTRUCTION — `git apply --check`
+                  against the live dirty tree FAILS by design, which reads like a broken
+                  backup and is not), leave the worktree untouched, and only then try rung 1
+                  (`SendMessage` to the same agent). That sequence worked.
+
+Steps done:       22 of 63 MERGED. THREE MORE ARE DONE AND VERIFIED BUT NOT YET MERGED —
+                  P3.S4-fix-1 (6e7308938), P3.S5-fix-1 (6acba5f9e), P3.S6 (1461e1685).
+                  Merged so far, plus audit-fix sub-steps (not counted in the 63):
                   P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
                   P3.S5 405252a41 · P3.audit-fix-1 6aff0bad1 · P1.audit-fix-1 03d8fed37 ·
                   P2.audit-fix-1 33df838d0 + f95546b10 · CI-fix-1 72686c380 ·
@@ -836,11 +854,10 @@ Phase 4 is pre-read: so you do not have to re-read prompt_plan.md when Phase 3 c
                   in-flight step AND from the lane claims, so it is safe to open the moment
                   the Phase 3 close review passes.
 
-Blocked on:       Nothing. All three branches are ready and NO AGENTS ARE RUNNING.
-                  The box is quiet, so the owed FULL SUITES run now, SERIALLY, in the declared
-                  merge order: P3.S4-fix-1 (6e7308938) -> merge -> suite -> P3.S5-fix-1
-                  (6acba5f9e) -> merge -> suite -> P3.S6 (1461e1685) -> merge.
-                  Master's figure to beat: 10500 / 161982 / 1 from the CHECKOUT ROOT.
+Blocked on:       Nothing, and no decision is owed to proceed. All three branches are DONE
+                  and VERIFIED; NO AGENTS ARE RUNNING. The only remaining work before three
+                  merges is three full suites — see §4 "Still owed" and the recipe in
+                  `Next step`.
 
                   **PROCESS RULE THIS EPISODE EARNED, put it in every brief that spawns a
                   sub-agent: a step agent must NEVER leave a sub-agent's work uncommitted.**
@@ -850,7 +867,30 @@ Blocked on:       Nothing. All three branches are ready and NO AGENTS ARE RUNNIN
                   immediately and amend or revert it if the review objects — a commit is
                   recoverable, a dirty worktree owned by a dead agent is not.
 
-Awaiting user decision: ONE, carried unanswered, and it does NOT block the Phase 3 close queue.
+Awaiting user decision: TWO now. Neither blocks the queue. Carry both forward on every
+                  rewrite until the user answers, and do not decide either yourself.
+
+                  **(2) NEW, from P3.S6 — WIRE THE WRITE SIGNAL ON THE WORKFLOW PATH.**
+                  The per-step seam P3.S5 left open on the Agent assembler IS REAL and IS LIVE,
+                  in `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
+                  which `:1105` and `:875` re-render once per stage and `:1252`/`:1294` render
+                  twice in one verification stage. MEASURED with a logging git shim: one render
+                  = 5 git subprocesses (3 suppressed), a K-stage workflow = 5*K (10 at K=2, 25
+                  at K=5), one ProcessExecutor dispatch = 10 because it renders TWICE — and in
+                  every case the stages see ONE DISTINCT PROMPT, the two git-diff sections
+                  re-sent unchanged per stage.
+                  Wiring it is a BUILD-IT-OUT across `Workflows/WorkflowEngine.php` +
+                  `Agents/AgentResult.php` + the worker IPC frame, because the carrier does not
+                  exist: `AgentResult::__construct` is 8 params with NO tool-call field
+                  (VERIFIED) and the worker's `complete` frame carries only
+                  output/tokensUsed/costUsd. All of it is outside P3.S6's declared file list,
+                  which is why P3.S6 escalated rather than widened — a §1.1 declared-scope
+                  escalation, and a COMPLETED step.
+                  The §18 row is ALREADY LANDED in prompt_plan.md recording this as escalated,
+                  not waived. DECIDE: schedule the build-it-out as its own step, or leave the
+                  cost standing with the measurement pinned.
+
+                  **(1)** carried unanswered, and it does NOT block the Phase 3 close queue.
                   Carry it forward on every rewrite until the user answers. Do not decide it
                   yourself and do not let it hold up the queue.
 

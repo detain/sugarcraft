@@ -253,6 +253,89 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.S4-fix-1 · FULL SUITE RED · 2026-08-31 — the first full suite of the batch caught a roster miss, which is what it is for
+
+**The first owed full suite was run, SERIALLY on a verified-quiet box, and it is RED.** This is the
+whole reason the plan runs a full suite per branch before merging, and it is the first time in this
+batch that discipline has paid out.
+
+```
+cwd /home/sites/prompt-step-P3.S4-fix-1, HEAD 6e7308938, stdin </dev/null, uncontended
+  (verified: ps showed exactly ONE vendor/bin/phpunit on the box for the whole run)
+Tests: 10503, Assertions: 162131, Failures: 1, Skipped: 1
+  tests/Support/ChildStderrCaptureTest.php:1059   Failed asserting that false is true.
+```
+Master's figure at `c7e5a6454` was `10500 / 161982 / 1`, GREEN.
+
+**IT IS THE BRANCH'S DOING — MEASURED, not assumed.** The failing file is nowhere near the step's one
+declared file, so the first question was whether it is pre-existing or a flake. It is neither:
+```
+ChildStderrCaptureTest.php isolated, BRANCH 6e7308938   Tests: 6, Assertions: 322, Failures: 1
+ChildStderrCaptureTest.php isolated, MASTER            OK (6 tests, 343 assertions)
+```
+Reproduces in isolation, green on master. **Not a flake, not contention, not pre-existing.**
+
+**AND THE GUARD FIRED BECAUSE THE CHANGE WAS GOOD — the polarity is inverted from what I first
+assumed.** `testEveryOutOfScopeDirectoryStillHasAnOffendingSpawn` asserts that every prefix recorded
+in `OUT_OF_SCOPE` **still has an offender**. It fails when a deferral has been **overtaken**. Verbatim:
+
+> `Providers/` is recorded in OUT_OF_SCOPE as holding a spawn whose stderr reaches the suite, and it
+> no longer does. Move the prefix into SCOPE and delete this row, **in the SAME change-set** — a
+> deferral that has been overtaken is how a directory silently stops being guarded, and a prefix left
+> in both maps is refused by `testScopeAndOutOfScopeDoNotClaimTheSameDirectory()`. **WHAT MOVING IT
+> INTO SCOPE COMMITS YOU TO**, because it is more than the sites you just fixed: from then on EVERY
+> spawn added anywhere under that prefix must capture fd 2, and any deliberate discard needs its own
+> `ACCEPTED_DISCARDED_STDERR` row carrying a COUNT. That is the intended cost. And check the sibling
+> guard in the same pass — `ForkedChildReaperAdoptionTest` keeps its own SCOPE/OUT_OF_SCOPE pair over
+> the same directories for a different offence, and cleaning a directory for one of them does not move
+> it in the other.
+
+**The cause is cycle 4's F-C repair**: replacing the unchecked `shell_exec(… 'init -q 2>/dev/null')`
+at `tests/Providers/PromptStabilityTest.php:483` with a checked `self::git()` removed the **last**
+offending spawn under `Providers/`. A genuinely good fix, tripping a guard built to notice exactly
+that. **That is a well-designed guard and it is worth saying so**: it does not merely fail, it names
+the prefix, the required edit, the same-change-set constraint, the ongoing cost of accepting it, and
+the sibling to check.
+
+**WHY NOBODY CAUGHT IT EARLIER, and the lesson is about the census set, not about the reviewers.**
+Five review cycles and my own verification all ran `--filter PromptStabilityTest` plus the SEVEN-file
+census set. **`ChildStderrCaptureTest` is not in that seven.** It is a tree-wide census that no
+step-scoped filter reaches. §1.4 check 19 (roster membership) is the check that should have caught
+it, cycle 5 says it performed check 19 — and check 19 as written asks the reviewer to find the roster
+for *categories the diff adds* (env var, settings key, slash command, fence spelling, tool, new
+`src/` file). **This diff added nothing; it REMOVED an offending spawn, and no roster in check 19's
+list enumerates absences.** So the check was performed honestly and could not have found this.
+**Check 19 needs a second half: a diff that REMOVES the last instance of something a roster defers on
+must update that roster too.** Recorded as a plan defect, not a reviewer failure.
+
+**DISPOSITION — I widened the declared file list by one, deliberately.** A fix agent is out with
+`tests/Providers/PromptStabilityTest.php` **and** `tests/Support/ChildStderrCaptureTest.php`.
+Widening is REQUIRED here rather than scope creep: §1.4 check 19 and the guard's own message both say
+the roster moves in the SAME change-set. **The branch still changes no production code** — the `src/`
+diff must stay EMPTY, and I re-check that before merging.
+
+**MEASURED, so the fix agent does not have to re-derive it:**
+```
+ChildStderrCaptureTest SCOPE        :119  ['Agents/','Backend/','Chat/','Integration/','MCP/','Support/']
+ChildStderrCaptureTest OUT_OF_SCOPE :152, with 'Providers/' at :188
+ForkedChildReaperAdoptionTest       NO 'Providers/' row; OK (6 tests, 30 assertions) — UNAFFECTED
+```
+
+**THE TRAP IS IN THE BRIEF, because the cheap greens here are all silent un-guardings:** putting
+`Providers/` back into `OUT_OF_SCOPE`, re-introducing a discarding spawn, or adding an
+`ACCEPTED_DISCARDED_STDERR` row for a spawn that does not actually discard. Each makes the suite pass
+while removing the guard — precisely what the test exists to prevent. The agent is told that if the
+honest fix is bigger than the brief, it stops and escalates.
+
+**The assertion count is itself a signal and the agent must explain it:** master isolated is
+**343**, the red branch was **322**. Assertions that stop accruing are how a guard quietly stops
+guarding, so a post-fix figure materially below 343 needs a reason, not a shrug.
+
+**NOTHING HAS MERGED. Master is untouched.** `P3.S5-fix-1` (`6acba5f9e`) and `P3.S6` (`1461e1685`)
+are unaffected by this and remain verified and merge-ready behind it — **but note that neither has had
+its full suite run yet either, and this RED is a direct warning that a step-scoped filter set is not
+a substitute for one.**
+
 ### P3.S6 · RECOVERED AND REPORTED · 2026-08-31 — the seam is REAL, and the step is COMPLETE AS ESCALATED
 
 The rescued agent came back and delivered a complete report — **"No session-limit truncation: this
