@@ -146,6 +146,24 @@ final class EnvironmentBlockTest extends TestCase
      * src/ finds nothing. A permanently-blank line would be a decorative surface,
      * and inventing directories to fill it would be worse. The prerequisite is
      * recorded in docs/plans/crush_code_hardening_backlog.md.
+     *
+     * WHAT THIS USED TO BE, AND WHY IT WAS THE WRONG TEST (phase-3 close-review
+     * cycle-2 F6, the RETRO-RR4 F2 recurrence): the two absence assertions alone
+     * passed against a renderer stubbed to `''` — MEASURED, inserting
+     * `return '';` as the first statement of `EnvironmentBlock::render()` left
+     * this test at `OK (1 test, 2 assertions)` while 35 sibling tests in the
+     * same file REDDed. An empty string contains neither needle. §16.8 rule 16
+     * requires the known-positive control IN THE SAME TEST, through the same
+     * scanner, because a sibling test is a separately deletable unit — which is
+     * also why the 35 redding siblings never covered this gap.
+     *
+     * WHAT IT IS NOW: the same two needles, plus a control that PLANTS each
+     * forbidden phrase in a real working-directory path and renders it through
+     * the very method the absence half scans. `''` fails the control; a renderer
+     * that emits content but drops the `Working directory:` line fails it too.
+     * The absence is asserted against a live block whose content the control
+     * proves the needle would have found. The step text's own warning —
+     * "do not make it pass by accident" — had been describing the original.
      */
     public function testNoAdditionalWorkingDirectoriesLineIsEmitted(): void
     {
@@ -153,6 +171,30 @@ final class EnvironmentBlockTest extends TestCase
 
         $this->assertStringNotContainsString('dditional working director', $output);
         $this->assertStringNotContainsString('dditional director', $output);
+
+        // THE KNOWN-POSITIVE CONTROL THROUGH THE SAME RENDERER (§16.8 rule 16).
+        // Each needle gets its own planted directory because no single name
+        // contains both spellings: `additional working directories` matches the
+        // first needle only, `additional directors` the second only. If either
+        // render went dead, its `assertStringContainsString` reddens THIS test
+        // — the deletion experiment is stubbing `render()` to `return '';`.
+        $plantedWorking = $this->tempDir . '/additional working directories';
+        mkdir($plantedWorking);
+        $this->assertStringContainsString(
+            'dditional working director',
+            EnvironmentBlock::capture($plantedWorking, 'test-model')->render(),
+            'the scanner missed a planted match: if this reddens while the absence assertions above '
+            . 'stand, the block no longer interpolates the working directory at all and "absent" has '
+            . 'stopped meaning anything',
+        );
+
+        $plantedPlain = $this->tempDir . '/additional directors';
+        mkdir($plantedPlain);
+        $this->assertStringContainsString(
+            'dditional director',
+            EnvironmentBlock::capture($plantedPlain, 'test-model')->render(),
+            'the scanner missed the second planted match — see the control argument above',
+        );
     }
 
     /**
