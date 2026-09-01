@@ -26,7 +26,7 @@
 
 | Step | Lane | Build | Review loop | Commit | SHA |
 |---|---|---|---|---|---|
-| S1 Bubble ◞ fix | B | ⬜ | ⬜ | ⬜ | |
+| S1 Bubble ◞ fix | B | ✅ | ✅ | ✅ | ecce5edf0 |
 | S2 Rounded line set | A | ✅ | ✅ | ✅ | 4eb555810 |
 | S3 BarChart eighths | A | ⬜ | ⬜ | ⬜ | |
 | S4 Donut aspect | B | ✅ | ✅ | ✅ | 28b204b0b |
@@ -56,3 +56,9 @@
 | 2026-09-01T18:50Z | S1 | predict | orchestrator | done | commit expects dash@28b204b0b+dirty(S1 only): 5860/9230/1Sk rc0 W1-base (+3/+65 over S4-tree 5857/9165) |
 | 2026-09-01T18:50Z | S1 | commit | s1-commit | in-flight | dash@28b204b0b gate: 5860/9230/1Sk rc0 W1(base noise); review 1 cycle 0 findings CLEAN; staging 2 write-set files + chart_worklog.md fold |
 | 2026-09-01T18:50Z | S5 | in-flight | s5-build | pending | S5 quadrant-rim spawn at S1-commit window open (Donut.php committed-clean at 28b204b0b) |
+| 2026-09-01T19:44:07Z | S1 | commit | s1-commit | committed | ecce5edf0 sugar-dash S1 Bubble arcs (2 files) + fold chart_worklog.md; dash@ecce5edf0: 5860/9230/1Sk rc0 W1; reviewer 1 cycle 0 findings; caliber: fail |
+| 2026-09-01T20:52:00Z | S5 | build | s5-build | done | dash@ecce5edf0+dirty: 5867/9268/1Sk rc0 W1(base noise) vs 5860/9230 pre-edit (+7 tests/+38 asserts vs +4 expected: 6 feature/immutability/threading + 2 oracle locks); files: Donut.php + DonutTest.php = ceiling 2/2; sampling-space: ±0.25 RAW-cell offsets both axes, ring test evaluated post-aspect dy=(dyCell±0.25)*ratio, hole guard cell-center dist<innerRadius stays blank, majority-quadrant segment color w/ tie→center pick→first-covered-sample, 3of4 pairing corrected to Unicode (missingBR→▛ missingBL→▜ missingTR→▙ missingTL→▟; kickoff prompt had ▛/▜ swapped) same 14-rune declared set; oracle-2 (filled21 md5 954349b3…, empty21 md5 f3569493…) captured pre-edit from HEAD blob, flag-off md5-verified byte-identical both; goldens porcelain EMPTY; temp-revert counterfactual: HEAD-Donut swap → exactly my 7 tests ERROR, restored cmp-clean; renderEmpty untouched by flag (asserted); no phpstan/cs-fixer bins in dash vendor/bin |
+| 2026-09-01T20:45Z | S3 | test | orchestrator | done | gate charts@ecce5edf0+dirty(S3 only): 554/1338/0Sk rc0 (/tmp/gate-s3-charts.txt) — matches s3-build figures exactly; fixtures porcelain clean |
+| 2026-09-01T20:47Z | S5 | test | orchestrator | done | gate dash@ecce5edf0+dirty(S5 only): 5867/9268/1Sk/1Wbase rc0 (/tmp/gate-s5-dash.txt) — matches s5-build exactly; golden porcelain EMPTY |
+| 2026-09-01T21:35Z | S3 | review | S3-r1 | clean | ecce5edf0+dirty S3-write-set; 6 checks; 0 findings; reviewer note: plan:140 lists ▚▞ under "3-of-4" heading (they are diagonals) = plan-doc typo, code correct |
+| 2026-09-01T21:35Z | S3 | predict | orchestrator | pending | commit expects charts@<sha>: 554/1338/0Sk rc0 (gate2 /tmp/gate2-s3-charts.txt); dash unaffected (no dash paths in commit) |

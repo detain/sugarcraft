@@ -57,6 +57,18 @@ final class ShortAliasesTest extends TestCase
         $this->assertSame($long, $short);
     }
 
+    public function testBarChartFractionalAlias(): void
+    {
+        $long  = BarChart::new([['a', 0.7], ['b', 0.4]])->size(20, 5)->withFractionalHeights()->view();
+        $short = BarChart::new([['a', 0.7], ['b', 0.4]])->size(20, 5)->fractional()->view();
+        $this->assertSame($long, $short);
+        $this->assertNotSame(
+            BarChart::new([['a', 0.7], ['b', 0.4]])->size(20, 5)->view(),
+            $long,
+            'alias must reach the fractional-cap render path, not a silent no-op',
+        );
+    }
+
     public function testHeatmapAliases(): void
     {
         $cold = Color::hex('#001');
