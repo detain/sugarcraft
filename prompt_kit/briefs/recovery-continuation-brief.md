@@ -13,6 +13,11 @@
 >    paid for itself: six of the seven figures the dead agent had written into the tree did not
 >    reproduce, and only a fresh agent re-deriving them found that out.
 >
+> **Placeholders:** `<SCRATCH>` is this session's scratchpad root and `<STEP_ID>` the step being
+> recovered — the original absolute `/tmp` paths were substituted out, because they were dead the
+> moment that session ended and a template citing them would send the next agent to a missing
+> directory.
+>
 > When you build the next one, substitute the step's own facts and keep those four properties.
 > Adapting this file in place is fine; overwriting the header is not.
 
@@ -37,7 +42,7 @@ Read what is there first, then close only the gaps you find.
 - `sugar-crush/vendor/` is materialised; the PSR-4 root is verified to print the worktree's own
   `src/`. **Never run `composer install`/`composer update`** — it de-symlinks `vendor/sugarcraft/*`
   and silently voids every measurement taken after it.
-- Your PRIVATE scratchpad: `/tmp/claude-1000/-home-sites-sugarcraft/3e35a6d4-602a-4db1-b5fa-055d3792747f/scratchpad/P3.audit-fix-2-cont/`. Every sub-agent you spawn gets its own
+- Your PRIVATE scratchpad: `<SCRATCH>/<STEP_ID>-cont/`. Every sub-agent you spawn gets its own
   subdirectory beneath it.
 
 ## What is already committed — eleven commits, oldest first
@@ -71,7 +76,7 @@ agent's work is never accepted because the tests happen to be green.
 
 Full specification: `prompt_kit/findings/phase3-close-review-cycle-1.md` (824 lines, in the repo —
 read it). Its original brief, if `/tmp` still has it:
-`/tmp/claude-1000/-home-sites-sugarcraft/3e35a6d4-602a-4db1-b5fa-055d3792747f/scratchpad/P3.audit-fix-2/BRIEF.md`. Summary:
+`<SCRATCH>/<STEP_ID>/BRIEF.md` (**gone with the session that wrote it — this is exactly why briefs belong in `prompt_kit/`, not a scratchpad**). Summary:
 
 - **A1 (HIGH)** `src/Runtime.php:771` and `src/Agents/Agent.php:442` claimed the two prompt
   assemblers order `<env>` **oppositely**. Both put it LAST — this plan's own P3.S1 made that
@@ -163,7 +168,7 @@ The full suite, **from the CHECKOUT ROOT**, box quiet, stdin redirected:
 ps -eo pid,cmd | /usr/bin/grep -c '[v]endor/bin/phpunit'     # must print 0 FIRST
 cd /home/sites/prompt-step-P3.audit-fix-2 && php sugar-crush/vendor/bin/phpunit \
   -c sugar-crush/phpunit.xml --colors=never \
-  --log-junit /tmp/claude-1000/-home-sites-sugarcraft/3e35a6d4-602a-4db1-b5fa-055d3792747f/scratchpad/P3.audit-fix-2-cont/junit.xml </dev/null | tail -5
+  --log-junit <SCRATCH>/<STEP_ID>-cont/junit.xml </dev/null | tail -5
 ```
 **Master's figure: `Tests: 10526, Assertions: 162447, Skipped: 1`** — measured twice independently.
 **A5 adds a whole new test file, so the total WILL move. State your PREDICTION before you run, then
