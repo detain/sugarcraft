@@ -28,7 +28,7 @@
 |---|---|---|---|---|---|
 | S1 Bubble ◞ fix | B | ✅ | ✅ | ✅ | ecce5edf0 |
 | S2 Rounded line set | A | ✅ | ✅ | ✅ | 4eb555810 |
-| S3 BarChart eighths | A | ⬜ | ⬜ | ⬜ | |
+| S3 BarChart eighths | A | ✅ | ✅ | ✅ | 3bb91a785 |
 | S4 Donut aspect | B | ✅ | ✅ | ✅ | 28b204b0b |
 | S5 Donut quadrant rim | B | ⬜ | ⬜ | ⬜ | |
 | S6 Donut bg-SGR fill | B | ⬜ | ⬜ | ⬜ | |
@@ -62,3 +62,6 @@
 | 2026-09-01T20:47Z | S5 | test | orchestrator | done | gate dash@ecce5edf0+dirty(S5 only): 5867/9268/1Sk/1Wbase rc0 (/tmp/gate-s5-dash.txt) — matches s5-build exactly; golden porcelain EMPTY |
 | 2026-09-01T21:35Z | S3 | review | S3-r1 | clean | ecce5edf0+dirty S3-write-set; 6 checks; 0 findings; reviewer note: plan:140 lists ▚▞ under "3-of-4" heading (they are diagonals) = plan-doc typo, code correct |
 | 2026-09-01T21:35Z | S3 | predict | orchestrator | pending | commit expects charts@<sha>: 554/1338/0Sk rc0 (gate2 /tmp/gate2-s3-charts.txt); dash unaffected (no dash paths in commit) |
+| 2026-09-01T21:42:31Z | S3 | commit | s3-commit | committed | 3bb91a785 sugar-charts S3 fractional caps (4 files) + fold chart_worklog.md; charts@3bb91a785: 554/1338/0Sk rc0; reviewer 1 cycle 0 findings; caliber: fail |
+| 2026-09-01T21:45Z | S5 | review | s5-review-c1 | clean | ecce5edf0+dirty S5-write-set; 6 checks; 0 findings; reviewer confirmed Unicode-correct 3-of-4 pairing (missingBR→▛/BL→▜/TR→▙/TL→▟) over kickoff's inverted suggestion; +7 tests vs plan floor +4 all additive/oracle-driven; golden porcelain empty ×3 |
+| 2026-09-01T21:45Z | S5 | predict | orchestrator | pending | commit expects dash@<sha>: 5867/9268/1Sk/1Wrc0 (gate2 /tmp/gate2-s5-dash.txt); charts unaffected (no charts paths in commit) |

@@ -57,6 +57,50 @@ final class DonutTest extends TestCase
         . 'ICAg4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRICAgICAKICAgICAg4paR4paR4paR4paR4paR4paR4paR4paR4paR'
         . 'ICAgICAgCiAgICAgICAgICDilpEgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgIA==';
 
+    /**
+     * The 14 declared quadrant/block-drawing runes of the smooth rim
+     * (chart_plan.md S5): singles ▘▝▖▗, orthogonal halves ▀▄▌▐, diagonals
+     * ▚▞, three-of-four ▛▜▙▟ — everything withSmoothRim() may emit besides
+     * the full block █ and the blank space.
+     */
+    private const QUADRANT_RUNES = ['▘', '▝', '▖', '▗', '▀', '▄', '▌', '▐', '▚', '▞', '▛', '▜', '▙', '▟'];
+
+    /**
+     * ANSI-stripped render of `Donut::mocha(ORACLE_DATA)->withSize(21)` captured
+     * from the committed post-S4 code (md5 954349b37da821c364643777e4dda425),
+     * the default flag-off oracle for S5: the smooth-rim feature must not move
+     * a single byte of legacy output. Base64-chunked per the S4 style so
+     * trailing row padding survives whitespace linting.
+     */
+    private const PRE_S5_DEFAULT_FILLED_21 =
+        'ICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAgICAg'
+        . 'ICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAg4paI4paI4paI4paI'
+        . '4paI4paI4paI4paI4paIICAgICAgCiAgICDilojilojilojilojilojilojilojilojilojilojilojilojiloggICAgCiAg4paI'
+        . '4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paIICAKICDilojilojilojilojiloggICAgICAg'
+        . '4paI4paI4paI4paI4paIICAKIOKWiOKWiOKWiOKWiOKWiOKWiCAgICAgICDilojilojilojilojilojiloggCiAg4paI4paI4paI'
+        . '4paI4paIICAgICAgIOKWiOKWiOKWiOKWiOKWiCAgCiAg4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI4paI'
+        . '4paI4paI4paIICAKICAgIOKWiOKWiOKWiOKWiOKWiOKWiOKWiOKWiOKWiOKWiOKWiOKWiOKWiCAgICAKICAgICAg4paI4paI4paI'
+        . '4paI4paI4paI4paI4paI4paIICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAg'
+        . 'ICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAg'
+        . 'ICAgICAg';
+
+    /**
+     * Same capture for the empty placeholder ring,
+     * `Donut::new([])->withSize(21)` (md5 f356949319ea0269bf4e8c801da6c74a);
+     * renderEmpty() is not touched by the smooth rim at all.
+     */
+    private const PRE_S5_DEFAULT_EMPTY_21 =
+        'ICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAgICAg'
+        . 'ICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAg4paR4paR4paR4paR'
+        . '4paR4paR4paR4paR4paRICAgICAgCiAgICDilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpHilpEgICAgCiAg4paR'
+        . '4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paRICAKICDilpHilpHilpHilpHilpEgICAgICAg'
+        . '4paR4paR4paR4paR4paRICAKIOKWkeKWkeKWkeKWkeKWkeKWkSAgICAgICDilpHilpHilpHilpHilpHilpEgCiAg4paR4paR4paR'
+        . '4paR4paRICAgICAgIOKWkeKWkeKWkeKWkeKWkSAgCiAg4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR4paR'
+        . '4paR4paR4paRICAKICAgIOKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkeKWkSAgICAKICAgICAg4paR4paR4paR'
+        . '4paR4paR4paR4paR4paR4paRICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAg'
+        . 'ICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAg'
+        . 'ICAgICAg';
+
     public function testNewCreatesDonut(): void
     {
         $donut = Donut::new([
@@ -213,6 +257,155 @@ final class DonutTest extends TestCase
             'The empty placeholder ring must get the same aspect correction as the filled one.'
         );
         $this->assertNotSame($empty(1.0), $empty(2.0));
+    }
+
+    public function testSmoothRimOffKeepsPreS5FilledOutputByteIdentical(): void
+    {
+        $expected = base64_decode(self::PRE_S5_DEFAULT_FILLED_21, true);
+
+        $default = self::stripAnsi(Donut::mocha(self::ORACLE_DATA)->withSize(21)->render());
+        $explicitOff = self::stripAnsi(
+            Donut::mocha(self::ORACLE_DATA)->withSize(21)->withSmoothRim(false)->render()
+        );
+
+        $this->assertSame($expected, $default, 'Flag default must stay OFF: legacy byte path.');
+        $this->assertSame($expected, $explicitOff, 'withSmoothRim(false) must take the legacy byte path.');
+    }
+
+    public function testSmoothRimOffKeepsPlaceholderRingByteIdentical(): void
+    {
+        $expected = base64_decode(self::PRE_S5_DEFAULT_EMPTY_21, true);
+
+        $this->assertSame($expected, self::stripAnsi(Donut::new([])->withSize(21)->render()));
+        $this->assertSame(
+            self::stripAnsi(Donut::new([])->withSize(21)->withSmoothRim()->render()),
+            $expected,
+            'renderEmpty() is the ░ placeholder ring and must ignore the smooth-rim flag.'
+        );
+    }
+
+    public function testSmoothRimEmitsQuadrantRunesOnMidSizeDonut(): void
+    {
+        $rendered = self::stripAnsi(
+            Donut::mocha(self::ORACLE_DATA)->withSize(12)->withSmoothRim()->render()
+        );
+
+        $emitted = array_values(array_intersect(
+            self::QUADRANT_RUNES,
+            array_keys(self::glyphCounts($rendered))
+        ));
+
+        $this->assertNotEmpty(
+            $emitted,
+            'A supersampled size-12 rim must emit at least one quadrant rune.'
+        );
+    }
+
+    public function testSmoothRimOnlyEmitsDeclaredRuneSet(): void
+    {
+        $allowed = array_merge([' ', '█'], self::QUADRANT_RUNES);
+
+        foreach ([12, 14, 20] as $size) {
+            $rendered = self::stripAnsi(
+                Donut::mocha(self::ORACLE_DATA)->withSize($size)->withSmoothRim()->render()
+            );
+            $unexpected = array_values(array_diff(array_keys(self::glyphCounts($rendered)), $allowed));
+
+            $this->assertSame(
+                [],
+                $unexpected,
+                sprintf('Size-%d smooth rim must only emit the declared 14-rune quadrant set, block, or space.', $size)
+            );
+        }
+    }
+
+    public function testSmoothRimNeverOverwritesHoleInteriorCells(): void
+    {
+        $size = 20;
+        $rendered = self::stripAnsi(
+            Donut::mocha(self::ORACLE_DATA)->withSize($size)->withSmoothRim()->render()
+        );
+        $lines = explode("\n", $rendered);
+        $this->assertCount($size, $lines);
+
+        // Mirrors render()'s geometry: centre floor(size/2), radius floor(size/2)-1,
+        // innerRadius floor(radius*0.5), vertical leg scaled by the default 2.0 aspect.
+        $center = intdiv($size, 2);
+        $innerRadius = intdiv(intdiv($size, 2) - 1, 2);
+
+        $checked = 0;
+        foreach ($lines as $y => $line) {
+            foreach (mb_str_split($line) as $x => $cell) {
+                $dy = ($y - $center) * 2.0;
+                $dist = sqrt((($x - $center) ** 2) + ($dy ** 2));
+                if ($dist < $innerRadius) {
+                    $checked++;
+                    $this->assertSame(
+                        ' ',
+                        $cell,
+                        sprintf('Hole-interior cell (%d,%d) dist=%.2f must stay blank.', $x, $y, $dist)
+                    );
+                }
+            }
+        }
+
+        $this->assertGreaterThan(0, $checked, 'Guard: the size-20 hole must contain cells to check.');
+    }
+
+    public function testWithSmoothRimReturnsNewInstanceAndLeavesOriginalUnchanged(): void
+    {
+        $donut = Donut::mocha(self::ORACLE_DATA)->withSize(14);
+        $before = $donut->render();
+
+        $smooth = $donut->withSmoothRim();
+
+        $this->assertNotSame($donut, $smooth);
+        $this->assertSame($before, $donut->render(), 'Original instance must be untouched.');
+        $this->assertNotSame($before, $smooth->render(), 'The flag must change geometry.');
+    }
+
+    public function testSmoothRimSurvivesWitherThreading(): void
+    {
+        $chains = [
+            'withSize' => Donut::mocha(self::ORACLE_DATA)->withSmoothRim()->withSize(12)->render(),
+            'withAspect' => Donut::mocha(self::ORACLE_DATA)->withSmoothRim()->withAspect(1.5)->render(),
+            'withStartAngle' => Donut::mocha(self::ORACLE_DATA)->withSmoothRim()->withStartAngle(45.0)->render(),
+            'center withers' => Donut::mocha(self::ORACLE_DATA)
+                ->withSmoothRim()
+                ->withCenterLabel('x')
+                ->withCenterValue('1')
+                ->withShowPercentage(true)
+                ->render(),
+        ];
+
+        foreach ($chains as $label => $rendered) {
+            $emitted = array_values(array_intersect(
+                self::QUADRANT_RUNES,
+                array_keys(self::glyphCounts(self::stripAnsi($rendered)))
+            ));
+
+            $this->assertNotEmpty(
+                $emitted,
+                sprintf('withSmoothRim must survive the %s wither chain (threading lost?).', $label)
+            );
+        }
+    }
+
+    /**
+     * Per-glyph occurrence census of an ANSI-stripped render (row separators excluded).
+     *
+     * @return array<string, int>
+     */
+    private static function glyphCounts(string $stripped): array
+    {
+        $counts = [];
+        foreach (explode("\n", $stripped) as $line) {
+            foreach (mb_str_split($line) as $cell) {
+                $counts[$cell] = ($counts[$cell] ?? 0) + 1;
+            }
+        }
+
+        return $counts;
     }
 
     /**

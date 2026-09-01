@@ -30,6 +30,45 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
      */
     private const DEFAULT_ASPECT = 2.0;
 
+    /**
+     * Sub-cell sample offsets for the smooth rim, in raw cell units on each
+     * axis before the aspect scaling is applied (so the supersampling test
+     * runs in the same aspect-scaled space as the cell-center ring test),
+     * paired with the coverage bit each quadrant contributes:
+     * bit0 top-left, bit1 top-right, bit2 bottom-left, bit3 bottom-right.
+     * A quadrant counts as covered when the annulus test passes at its center.
+     */
+    private const RIM_SAMPLES = [
+        [-0.25, -0.25, 1], // TL
+        [0.25, -0.25, 2],  // TR
+        [-0.25, 0.25, 4],  // BL
+        [0.25, 0.25, 8],   // BR
+    ];
+
+    /**
+     * Coverage bitmask → quadrant/block-drawing rune. Singles ▘▝▖▗, orthogonal
+     * pairs ▀▄▌▐, diagonal pairs ▚▞, three-of-four ▛▜▙▟ (missing BR/BL/TR/TL
+     * per the Unicode block shapes), full █. Mask 0 is never looked up: the
+     * cell simply stays blank.
+     */
+    private const QUADRANT_RUNES = [
+        1 => '▘',
+        2 => '▝',
+        3 => '▀',
+        4 => '▖',
+        5 => '▌',
+        6 => '▞',
+        7 => '▛',
+        8 => '▗',
+        9 => '▚',
+        10 => '▐',
+        11 => '▜',
+        12 => '▄',
+        13 => '▙',
+        14 => '▟',
+        15 => '█',
+    ];
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -46,6 +85,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         private readonly float $startAngle = 0.0,
         private readonly bool $clockwise = true,
         private readonly ?float $aspect = null,
+        private readonly bool $smoothRim = false,
     ) {}
 
     /**
@@ -77,6 +117,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: 0.0,
             clockwise: true,
             aspect: null,
+            smoothRim: false,
         );
     }
 
@@ -120,6 +161,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: 0.0,
             clockwise: true,
             aspect: null,
+            smoothRim: false,
         );
     }
 
@@ -189,6 +231,14 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
                 // unchanged.
                 $dist = sqrt($dx * $dx + $dy * $dy);
 
+                if ($this->smoothRim) {
+                    $cell = $this->smoothRimCell($x, $y, $centerX, $centerY, $aspect, $dist, $innerRadius, $radius, $total);
+                    if ($cell !== null) {
+                        $grid[$y][$x] = $cell;
+                    }
+                    continue;
+                }
+
                 // Check if point is in the donut ring
                 if ($dist >= $innerRadius && $dist <= $radius) {
                     // Aspect-normalized so sector boundaries follow the same
@@ -235,6 +285,101 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         return rtrim($result, "\n");
+    }
+
+    /**
+     * Quadrant supersample of one cell for the smooth rim (see withSmoothRim()).
+     *
+     * The hole guard runs on the cell centre — a centre already inside the
+     * hole never gets a rune — while the four sub-centres decide coverage for
+     * every other cell, antialiasing both the outer and the inner rim from
+     * the ring side only. Samples whose angle belongs to no segment (the
+     * legacy CCW gaps) stay blank, mirroring the binary path.
+     *
+     * @return array{char: string, color: Color|null}|null null keeps the cell blank
+     */
+    private function smoothRimCell(
+        int $x,
+        int $y,
+        int $centerX,
+        int $centerY,
+        float $aspect,
+        float $centerDist,
+        int $innerRadius,
+        int $radius,
+        float $total,
+    ): ?array {
+        if ($centerDist < $innerRadius) {
+            return null;
+        }
+
+        $dx = $x - $centerX;
+        $dyCell = $y - $centerY;
+
+        $mask = 0;
+        /** @var array<int, int> $coverage segment index => covered quadrant count */
+        $coverage = [];
+        $firstSegment = null;
+
+        foreach (self::RIM_SAMPLES as [$offsetX, $offsetY, $bit]) {
+            $sampleDx = $dx + $offsetX;
+            $sampleDy = ($dyCell + $offsetY) * $aspect;
+            $sampleDist = sqrt($sampleDx * $sampleDx + $sampleDy * $sampleDy);
+
+            if ($sampleDist < $innerRadius || $sampleDist > $radius) {
+                continue;
+            }
+
+            $segment = $this->segmentAt($sampleDx, $sampleDy, $total);
+            if ($segment === null) {
+                continue;
+            }
+
+            $mask |= $bit;
+            $coverage[$segment] = ($coverage[$segment] ?? 0) + 1;
+            $firstSegment ??= $segment;
+        }
+
+        if ($mask === 0) {
+            return null;
+        }
+
+        $maxCount = max($coverage);
+        $winners = array_keys(array_filter($coverage, static fn(int $count): bool => $count === $maxCount));
+
+        // Majority quadrant wins the cell colour; ties fall back to the
+        // segment the legacy per-cell centre pick would have chosen.
+        $segmentIndex = count($winners) === 1
+            ? $winners[0]
+            : ($this->segmentAt($dx, $dyCell * $aspect, $total) ?? $firstSegment);
+
+        return [
+            'char' => self::QUADRANT_RUNES[$mask],
+            'color' => $this->segments[$segmentIndex]['color'],
+        ];
+    }
+
+    /**
+     * Segment owning an aspect-scaled offset from the donut centre, using the
+     * same angle normalisation as the cell-centre test in render() so a
+     * quadrant sample lands in the sector its cell would have.
+     */
+    private function segmentAt(float $dx, float $dyScaled, float $total): ?int
+    {
+        $angle = atan2($dyScaled, $dx);
+        // Convert to degrees, normalize to 0-360
+        $angleDeg = $angle * 180 / M_PI;
+        if ($angleDeg < 0) {
+            $angleDeg += 360;
+        }
+
+        // Adjust for start angle
+        $adjustedAngle = $angleDeg - $this->startAngle;
+        if ($adjustedAngle < 0) {
+            $adjustedAngle += 360;
+        }
+
+        return $this->findSegment($adjustedAngle, $total);
     }
 
     /**
@@ -318,6 +463,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
             aspect: $this->aspect,
+            smoothRim: $this->smoothRim,
         );
     }
 
@@ -336,6 +482,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
             aspect: $this->aspect,
+            smoothRim: $this->smoothRim,
         );
     }
 
@@ -354,6 +501,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
             aspect: $this->aspect,
+            smoothRim: $this->smoothRim,
         );
     }
 
@@ -372,6 +520,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
             aspect: $this->aspect,
+            smoothRim: $this->smoothRim,
         );
     }
 
@@ -390,6 +539,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: $angle,
             clockwise: $this->clockwise,
             aspect: $this->aspect,
+            smoothRim: $this->smoothRim,
         );
     }
 
@@ -413,6 +563,38 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
             aspect: $ratio,
+            smoothRim: $this->smoothRim,
+        );
+    }
+
+    /**
+     * Supersample the annulus boundary with quadrant-block runes.
+     *
+     * The default rim is binary (a cell is `█` or blank at its centre), which
+     * staircases one whole cell per step along the ring edge. Testing the ring
+     * at each cell's four quadrant centres (±0.25 cell offsets, evaluated in
+     * the aspect-scaled space render() uses) and emitting the matching
+     * ▘▝▖▗▀▄▌▐▚▞▛▜▙▟ rune doubles the perceived radial resolution while the
+     * blocks stay solid — unlike braille, which reads dotty. Applies to both
+     * the outer rim and the inner-hole rim; cells whose centre falls inside
+     * the hole always stay blank so smoothing never bleeds into the centre.
+     *
+     * Default off: the legacy byte-identical path is kept for existing
+     * consumers and goldens.
+     */
+    public function withSmoothRim(bool $on = true): self
+    {
+        return new self(
+            segments: $this->segments,
+            size: $this->size,
+            centerLabel: $this->centerLabel,
+            centerValue: $this->centerValue,
+            backgroundColor: $this->backgroundColor,
+            showPercentage: $this->showPercentage,
+            startAngle: $this->startAngle,
+            clockwise: $this->clockwise,
+            aspect: $this->aspect,
+            smoothRim: $on,
         );
     }
 }
