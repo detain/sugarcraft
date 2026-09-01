@@ -1087,6 +1087,38 @@ final class TreeWideGuardRosterTest extends TestCase
             self::classifyWalkSites($notAWalk),
             'a constructed Glob tool or a method named glob() is being read as a directory walk',
         );
+
+        // AND THE FIXTURE SET ITSELF IS PINNED, which is the NINTH door in this
+        // one check and the first that needed no prose at all. The coverage half
+        // in {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
+        // grants a walker spelling coverage from whatever these fixtures make
+        // the classifier EMIT, and it iterates ALL of them - while this test
+        // reads eight of them BY NAME. A ninth fixture is therefore coverage
+        // that nothing has ever checked the answer of.
+        //
+        // MEASURED by a reviewer and reproduced here before fixing, in its
+        // weaponised form: swap the REAL spelling `directoryiterator` out of
+        // WALKER_CLASSES for a bogus one (size preserved, so the count pin does
+        // not fire) and add one unasserted fixture that makes the classifier
+        // emit the bogus name. `OK (16 tests, 1081 assertions)` - identical to
+        // the clean tree. A live walker spelling left the alphabet with every
+        // assertion in this file green.
+        //
+        // The two doc-blocks either side of that mechanism said this test
+        // "asserts the exact answer for each" fixture. That was true of the
+        // eight and false of the set; it is true of the set now.
+        $this->assertSame(
+            ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk'],
+            array_keys(self::knownAnswerSources()),
+            'a fixture was added to or removed from knownAnswerSources() without a matching '
+            . 'exact-answer row above. That matters in one direction in particular: '
+            . 'testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet() grants alphabet '
+            . 'coverage from whatever these fixtures make the classifier EMIT, and it reads every '
+            . 'fixture while this test reads eight by name - so an unasserted fixture widens that '
+            . 'coverage silently, which is how a walker spelling with a live call site can be '
+            . 'dropped from WALKER_CLASSES with this whole file green at an unchanged assertion '
+            . 'count. Add the row above, then add the key here.',
+        );
     }
 
     /**

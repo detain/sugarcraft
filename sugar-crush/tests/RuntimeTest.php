@@ -2226,8 +2226,26 @@ final class RuntimeTest extends TestCase
                 // is dropped rather than corrected: it has no owner, and the
                 // sentence's point - that this counter is a control on the strip
                 // and not on the correction - survives without it.
-                if (preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"(?=\s*WHAT IS TRUE)~', $flat) === 1) {
-                    $correctionsQuoted[] = $relative . ':' . $token[2];
+                if (preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"(?=\s*WHAT IS TRUE)~', $flat, $quotation) === 1) {
+                    // KEYED ON THE QUOTATION, NOT ON A LINE NUMBER. The list
+                    // below used to read `src/Runtime.php:530`, and a reviewer
+                    // MEASURED the cost: inserting one harmless comment at
+                    // src/Runtime.php:100 - an entirely correct, unrelated edit
+                    // in a 2,600-line file - RED this guard with 530 against
+                    // 531. A guard that reds on correct code is a liability
+                    // however loudly its message explains itself, and this file
+                    // says so twice about other people's citations
+                    // (src/Agents/Agent.php's AGENT_ASSEMBLER_CALL_SITES is
+                    // keyed on the FILE for exactly this reason, and the A4
+                    // mutation notes below refuse to cite a line at all).
+                    //
+                    // AND A FILE-ONLY KEY WOULD BRING BACK THE MASKING BUTTON:
+                    // a SECOND quoting comment inside an already-listed file
+                    // would move only a count, and greening a count is one
+                    // keystroke. The quotation is the identity that is both
+                    // stable under edits elsewhere and impossible to green
+                    // without pasting the offending comment's own words here.
+                    $correctionsQuoted[] = $relative . ' :: ' . $quotation[0];
                 }
 
                 foreach (['oppositely', 'opposite order'] as $falseClaim) {
@@ -2296,7 +2314,10 @@ final class RuntimeTest extends TestCase
         // to green a plant you would have to paste its own file:line here,
         // which is a thing nobody does by accident.
         $this->assertSame(
-            ['src/Runtime.php:530', 'src/Agents/Agent.php:399'],
+            [
+                'src/Runtime.php :: WHAT THIS SAID: "…because the two order `<env>` oppositely."',
+                'src/Agents/Agent.php :: WHAT IT SAID: "…because the two order `<env>` oppositely."',
+            ],
             $correctionsQuoted,
             'the A1 correction itself has moved. Exactly these two src/ comments should quote the '
             . 'false "order the env block oppositely" reason inside a rule-42 WHAT IT SAID span - '
@@ -2306,8 +2327,9 @@ final class RuntimeTest extends TestCase
             . 'the reason was ever false. MORE MEANS READ THE EXTRA COMMENT THIS DIFF NAMES BEFORE '
             . 'TOUCHING THIS LIST: if it really is a third rule-42 correction, add it - but a '
             . 'comment whose quotation is UNCLOSED lands here too, and adding it then leaves a '
-            . 'LIVE false claim standing with the suite green. That was measured, not imagined. A '
-            . 'moved line number is the harmless case and costs one edit.',
+            . 'LIVE false claim standing with the suite green. That was measured, not imagined. '
+            . 'The entries are file plus the QUOTATION itself and carry no line number, so an '
+            . 'edit anywhere else in either file leaves this alone.',
         );
         $this->assertGreaterThan(
             $quoting,
