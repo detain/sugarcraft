@@ -2155,6 +2155,41 @@ final class TreeWideGuardRosterTest extends TestCase
         );
         $knownAnswerBody = strtolower(substr($knownAnswerBody, 0, (int) strpos($knownAnswerBody, 'public function ', 10)));
 
+        // AND THE SEARCH IS NARROWED AGAIN, TO THE EXPECTED VALUES ONLY, because
+        // stripping comments was not enough and a reviewer proved it in one
+        // edit. WHAT THE LAST REVISION DID: searched the whole comment-stripped
+        // method body. MEASURED: replacing the entire `readdir` row - fixture,
+        // classifier call and expected array - with
+        // `$this->assertTrue(true, '...readdir() loop is not seen...')` left
+        // this GREEN at an identical 1080 assertions, because the MESSAGE says
+        // `readdir(`. And decisively: a bogus `notawalkeratall` entry in the
+        // alphabet, with one `assertTrue(true, '...notawalkeratall()...')` line
+        // added, passed at 1081. The prose had simply moved out of a comment and
+        // into a string literal, in the guard whose own paragraph above says a
+        // correspondence a sentence can satisfy is not evidence.
+        //
+        // AN EXPECTED VALUE CANNOT BE WRITTEN WITHOUT A LIVE FIXTURE. It is the
+        // left-hand side of an `assertSame` whose right-hand side is the
+        // shipped classifier's real output, so a spelling named here that the
+        // classifier does not produce reds the row itself. That is the property
+        // a message string does not have, and it is what makes this check
+        // non-circular in both directions.
+        preg_match_all("~'root' => \\[[^\\]]*\\]~", $knownAnswerBody, $expected);
+        $expectedValues = implode(' ', $expected[0]);
+
+        // NOT VACUOUS. An empty match set would make every spelling below read
+        // as uncovered, which fails CLOSED - but it would blame the alphabet for
+        // a broken extractor, and the next reader would go looking in the wrong
+        // file. This assertion puts the blame where it belongs.
+        $this->assertGreaterThan(
+            3,
+            \count($expected[0]),
+            'the expected-value extractor found almost no "root" => [...] arrays in '
+            . 'testTheWalkClassifierAnswersKnownInputsCorrectly(). Either that test was rewritten '
+            . 'into another shape or this pattern stopped matching it; fix the extractor here '
+            . 'rather than reading the correspondence failure below as a real gap.',
+        );
+
         $uncovered = [];
         $zeroSite = [];
         foreach ($liveSiteCount as $spelling => $sites) {
@@ -2163,7 +2198,7 @@ final class TreeWideGuardRosterTest extends TestCase
             }
 
             $zeroSite[] = $spelling;
-            if (!str_contains($knownAnswerBody, $spelling . '(')) {
+            if (!str_contains($expectedValues, $spelling . '(')) {
                 $uncovered[] = $spelling;
             }
         }

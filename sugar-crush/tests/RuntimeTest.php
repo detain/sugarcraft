@@ -2032,17 +2032,52 @@ final class RuntimeTest extends TestCase
         // {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheFalsifiedPerStageWriteSignalClaimSurvivesOnlyInsideAQuotationOfWhatThisMessageUsedToSay()}
         // does for its own claim over `src/` + `tests/`. That claim is a long
         // distinctive phrase; these two are `oppositely` and `opposite order`,
-        // and MEASURED under `tests/` they already occur five times in code that
-        // is correct: four in THIS file, which has to spell both phrases to
-        // search for them, and one in
-        // `tests/Sessions/BackgroundSupervisorReapTest.php:438`, an unrelated
-        // and entirely legitimate "the same two branches in the opposite order".
-        // A `tests/` channel therefore needs an exclusion for this file plus a
-        // licence for that one before it is an improvement rather than a red on
-        // correct prose - which is a hand-maintained list, the thing this
-        // change-set exists to argue against, bought for a population that has
-        // never carried the claim. The claim reached `src/` FROM
-        // `prompt_plan.md`; it has never been in a test.
+        // and under `tests/` they already occur in code that is CORRECT.
+        //
+        // MEASURED BY THIS PIN'S OWN TWO CHANNELS, driven over `tests/` instead
+        // of `src/` - which is the only reading that answers the question, and
+        // is not the reading the sentence here used to give. WHAT IT SAID: "they
+        // already occur five times ... four in THIS file ... and one in
+        // BackgroundSupervisorReapTest.php". WHAT IS TRUE: five is the count of
+        // distinct COMMENT TOKENS, and it drops the CODE channel entirely, which
+        // is where the un-licensable sites are. HOW MEASURED, and the generator
+        // rather than the number, because this population moves every time a
+        // paragraph here is edited - from `<worktree>/sugar-crush`:
+        //
+        //     php -r 'function f($s){return preg_replace("/\\s+/"," ",
+        //       preg_replace("#\\n\\s*(?:\\*(?!/)|//)[ \\t]?#"," ",$s));}
+        //       $c=["oppositely","opposite order"];
+        //       foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator("tests",
+        //         FilesystemIterator::SKIP_DOTS)) as $e) { if (!$e->isFile()
+        //         || $e->getExtension()!=="php") continue; $code="";
+        //         foreach (token_get_all(file_get_contents($e->getPathname())) as $t) {
+        //           if (is_array($t) && ($t[0]===T_DOC_COMMENT||$t[0]===T_COMMENT)) {
+        //             $l=preg_replace("~WHAT (?:IT|THIS) SAID: \"[^\"]*\"~","",f($t[1]));
+        //             foreach ($c as $x) if (str_contains($l,$x)) echo $e->getPathname(),":",$t[2]," (comment) ",$x,"\n";
+        //           } else { $code .= is_array($t)?$t[1]:$t; }
+        //         }
+        //         foreach ($c as $x) if (str_contains(f($code),$x)) echo $e->getPathname()," (code) ",$x,"\n"; }'
+        //
+        // NO COUNT IS RECORDED HERE, and that is the point of shipping the
+        // generator instead: the population includes THIS COMMENT, so every
+        // paragraph written about it moves it. The first draft of this sentence
+        // said NINE, was correct when typed, and was ELEVEN by the time the
+        // paragraph explaining it had been written - measured, twice, an hour
+        // apart in the same edit. What is stable is the SHAPE, and it is what
+        // the argument rests on: the reports are concentrated in this file,
+        // which has to spell both phrases in order to search for them, plus one
+        // unrelated and entirely legitimate "the same two branches in the
+        // opposite order" at `tests/Sessions/BackgroundSupervisorReapTest.php:438`
+        // - and three of them are on the CODE channel, two here and that one.
+        //
+        // AND THE CODE CHANNEL IS THE HALF THAT SETTLES IT. This pin's own
+        // failure message says "a site marked (code) has no licence available:
+        // the three-part form is a comment form" - so widening to `tests/` would
+        // need not a licence but an EXCLUSION this pin cannot express, on top of
+        // a hand-maintained list, which is the thing this change-set exists to
+        // argue against, bought for a population that has never carried the
+        // claim. The claim reached `src/` FROM `prompt_plan.md`; it has never
+        // been in a test.
         //
         // WHAT IS STILL NOT COVERED, so that the next reader does not have to
         // rediscover it (rule 31): an unclosed quotation whose accidental
@@ -2062,6 +2097,7 @@ final class RuntimeTest extends TestCase
         $this->assertGreaterThan(1, \count($sourceFiles), 'the src/ walk found at most one file, so the domain of the claim below is not being derived');
 
         $quoting = 0;
+        $correctionsQuoted = 0;
         $comments = 0;
         $violations = [];
 
@@ -2085,6 +2121,20 @@ final class RuntimeTest extends TestCase
                 $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID: "[^"]*"~', '', $flat);
                 if ($live !== $flat) {
                     $quoting++;
+                }
+
+                // AND SEPARATELY, THE QUOTATIONS THAT ARE THIS PIN'S SUBJECT.
+                // `$quoting` counts EVERY rule-42 quotation under src/ - 22 of
+                // them - so it is a control on the STRIP, not on the A1
+                // correction, and a reviewer MEASURED the difference: deleting
+                // both corrected quotations, from src/Runtime.php and
+                // src/Agents/Agent.php, left this file green at an identical 487
+                // assertions. The whole executable record of the correction can
+                // be removed and the guard that exists to keep it notices
+                // nothing. Rule 42 requires the reasoning be kept IN PLACE; this
+                // is what makes that requirement enforceable.
+                if (preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"~', $flat) === 1) {
+                    $correctionsQuoted++;
                 }
 
                 foreach (['oppositely', 'opposite order'] as $falseClaim) {
@@ -2134,6 +2184,18 @@ final class RuntimeTest extends TestCase
             . 'is a no-op and this pin is asserting the absence of a phrase nobody has written '
             . 'rather than the absence of a LIVE claim. The rule-42 three-part form keeps WHAT IT '
             . 'SAID verbatim; if those paragraphs were rewritten, rewrite this pin with them.',
+        );
+        $this->assertSame(
+            2,
+            $correctionsQuoted,
+            'the A1 correction itself has moved. EXACTLY TWO src/ comments should quote the false '
+            . '"order the env block oppositely" reason inside a rule-42 WHAT IT SAID span - the '
+            . 'ones in Runtime::buildSystemPrompt() and Agents\\Agent::systemPrompt(), the two '
+            . 'production doc-blocks that carried the claim live. FEWER means somebody deleted the '
+            . 'correction rather than the claim, which leaves the next reader with no record that '
+            . 'the reason was ever false; MORE means a third file has been given the correction, '
+            . 'which is fine - say so here and make this 3. An exact count and not a floor, '
+            . 'because both directions are things a reader needs to be told about.',
         );
         $this->assertGreaterThan(
             $quoting,

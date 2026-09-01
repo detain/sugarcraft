@@ -2317,8 +2317,15 @@ final class AgentTest extends TestCase
      * AND PROXIMITY IS THE WEAKER LICENCE, which is stated rather than hidden
      * (rule 31): a live claim written within the window of an unrelated marker
      * is licensed by this test and would not be by the sibling's. The exposure
-     * is bounded by the window and by the fact that the marker appears three
-     * times in the whole package.
+     * is bounded by the window and by how rare the marker is - MEASURED, and
+     * corrected in place because the sentence here got the unit wrong: it said
+     * "the marker appears three times in the whole package", which is the FILE
+     * count, and the quantity this bound is about is OCCURRENCES, since each one
+     * opens its own window. `/usr/bin/grep -roh 'THIS MESSAGE USED TO SAY'
+     * --include='*.php' src tests | wc -l` answers SEVEN, in three files
+     * (src/Hooks/HookRegistry.php 1, tests/BaseSystemPromptTest.php 1, this file
+     * 5). A figure travelling without its unit understated the exposure by more
+     * than double, in a change-set whose headline finding is rule 1.
      *
      * THE DOMAIN IS `src/` + `tests/`, DERIVED. The claim reached this file from
      * `prompt_plan.md`, the same route by which A1's claim reached two
@@ -2402,12 +2409,24 @@ final class AgentTest extends TestCase
                 $relative = $directory . '/' . str_replace(\dirname(__DIR__, 2) . '/' . $directory . '/', '', $entry->getPathname());
                 $licensedHere += \count($found['licensed']);
 
+                // REPORTED AS file:line, NOT AS A FLATTENED BYTE OFFSET. The
+                // offset is into the FLATTENED text and maps to nothing a reader
+                // can navigate to - `tests/Agents/AgentTest.php @92385` was the
+                // real output of the previous revision, MEASURED by a reviewer
+                // on a revert. The sibling pin one file over prints
+                // `src/Tools/BuiltIn/Read.php:7 (comment) oppositely`; a census
+                // that names a file but not a line is a census somebody has to
+                // grep for afterwards.
+                $raw = (string) file_get_contents($entry->getPathname());
+                $rawAt = strpos($raw, $falseClaim);
+                $line = $rawAt === false ? 0 : substr_count(substr($raw, 0, $rawAt), "\n") + 1;
+
                 foreach ($found['live'] as $at) {
-                    $violations[] = $relative . ' @' . $at;
+                    $violations[] = $relative . ':' . $line . ' @' . $at;
                 }
 
                 foreach ($found['drifted'] as $at) {
-                    $drifting[] = $relative . ' @' . $at;
+                    $drifting[] = $relative . ':' . $line . ' @' . $at;
                 }
             }
         }
