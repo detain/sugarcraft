@@ -54,5 +54,7 @@ Halt only when: the user says stop; a step needs a public-default change beyond 
 
 ## Resume state
 
-- 2026-09-01: v2 protocol amendments applied from mining + adversarial reviews. Plan source-accuracy fixes (P1-P10) in place. Pre-flight (R13) still required before first spawn.
-- Next actions: run R13 pre-flight → spawn S1 (lane B) + S2 (lane A).
+- 2026-09-01 v2 protocol + plan P1-P10 fixes in place. Pre-flight R13 DONE (see worklog baseline row): identity Joe Huss OK; baselines charts 543/1259/0 rc0, dash 5853/9154/1Sk/1W rc0 @e2d17a4c9; UPDATE_GOLDENS create-only; dash --regenerate broken (10.5.64) -> use tools/generate-goldens.php or reflection replay; caliber hook ABSENT (caliber refresh 429-no-credits each commit = tolerated caliber-fail).
+- LANDED on master (UNPUSHED; origin/master=e2d17a4c9): S2=4eb555810, S4=28b204b0b (donut goldens re-recorded), S1=ecce5edf0 (Option-A geometry amendment, human-approved default-output change), S3=3bb91a785, S5=f14fefece. All review loops CLEAN c1. Board S1-S5 ticked.
+- IN FLIGHT: S6 built (Donut withFillStyle bg-SGR, default foreground; uncommitted in tree: Donut.php+DonutTest.php; gates dash 5875/9320/1Sk/1W rc0; reviewer lean-6Q running).
+- Next actions: S6 review verdict -> fix loop if findings -> orchestrator gate -> predict row -> S6 commit agent -> S7 wireframe build (last step; owns Donut.php serial) -> same loop -> close report.

@@ -30,7 +30,7 @@
 | S2 Rounded line set | A | ✅ | ✅ | ✅ | 4eb555810 |
 | S3 BarChart eighths | A | ✅ | ✅ | ✅ | 3bb91a785 |
 | S4 Donut aspect | B | ✅ | ✅ | ✅ | 28b204b0b |
-| S5 Donut quadrant rim | B | ⬜ | ⬜ | ⬜ | |
+| S5 Donut quadrant rim | B | ✅ | ✅ | ✅ | f14fefece |
 | S6 Donut bg-SGR fill | B | ⬜ | ⬜ | ⬜ | |
 | S7 Donut wireframe mode | B | ⬜ | ⬜ | ⬜ | |
 | 2026-09-01T15:12Z | plan | retry | nasty-tan-platypus | done | researcher delegation timed out after 900s with zero output (pre-flight batch 1); orchestrator re-ran all pre-flight checks directly via read-only pty commands — no tree mutation, nothing lost |
@@ -65,3 +65,10 @@
 | 2026-09-01T21:42:31Z | S3 | commit | s3-commit | committed | 3bb91a785 sugar-charts S3 fractional caps (4 files) + fold chart_worklog.md; charts@3bb91a785: 554/1338/0Sk rc0; reviewer 1 cycle 0 findings; caliber: fail |
 | 2026-09-01T21:45Z | S5 | review | s5-review-c1 | clean | ecce5edf0+dirty S5-write-set; 6 checks; 0 findings; reviewer confirmed Unicode-correct 3-of-4 pairing (missingBR→▛/BL→▜/TR→▙/TL→▟) over kickoff's inverted suggestion; +7 tests vs plan floor +4 all additive/oracle-driven; golden porcelain empty ×3 |
 | 2026-09-01T21:45Z | S5 | predict | orchestrator | pending | commit expects dash@<sha>: 5867/9268/1Sk/1Wrc0 (gate2 /tmp/gate2-s5-dash.txt); charts unaffected (no charts paths in commit) |
+| 2026-09-01T21:55:03Z | S5 | commit | s5-commit | committed | f14fefece sugar-dash S5 quadrant rim (2 files) + fold chart_worklog.md; dash@f14fefece: 5867/9268/1Sk rc0 W1(base); reviewer 1 cycle 0 findings; caliber: fail |
+| 2026-09-01T22:35:18Z | S6 | build | s6-build | done | f14fefece base; Donut withFillStyle('foreground'|'background') + FILL_* consts, RLE bg runs (toBg once/reset once per run, Canvas/Bar idiom), quadrant runes forced fg in bg mode, uncoloured segments stay literal █; 10 new-self sites (9 threaded + withFillStyle), setSize clone verified; unknown style throws InvalidArgumentException; +8 tests (filter 22→30/112A), 2 RAW pre-edit oracles md5 46616bb0…/f3569493…, PRE_S5 oracles untouched; dash full 5875/9320/1Sk/1W(base) rc0; golden porcelain empty ×3; temp-revert counterfactual exactly-8-fail (7E+1F) verified; src +97/−1 (comment reflow), tests +263/−0 |
+| 2026-09-01T22:40Z | S6 | test | orchestrator | done | gate dash@f14fefece+dirty S6-write-set: 5875/9320/1Sk/1W(base) rc0 (/tmp/gate-s6-dash.txt); golden porcelain EMPTY |
+| 2026-09-01T22:58Z | S6 | review | intensive-bronze-tuna | retry | reviewer blank-timeout 900s (infra blank #4 overall, c1 attempt-1) — relaunch fresh lean reviewer, verdict still pending |
+| 2026-09-01T23:04:59Z | S6 | review | suspicious-gold-gorilla | clean | CHART_REVIEW: CLEAN c1, 6/6 Q-pass: write-set exact 2M; RLE toBg-once/space/reset-once + quadrant forced-fg + hole guard + uncoloured literal █; flag-off legacy byte path + renderEmpty untouched + 10/10 new-self fillStyle args + RAW oracles; tests value-pinned (16==16 SGR pair count, 8+22==30 fg/bg split, assertSame row-10 bytes, strict-const reject) no vacuity; S5 rune interaction consistent with committed QUADRANT_RUNES; conventions OK — raw-English exception accepted (Lang::t needs lang/en.php outside ceiling = GR 9 STOP-forbidden); zero existing-test weakening; 0 findings; tree f14fefece+dirty |
+| 2026-09-01T23:05Z | S6 | predict | orchestrator | pending | S6 commit expects dash 5875/9320/1Sk/1W(base) rc0 (gate /tmp/gate-s6-dash.txt); charts untouched; goldens EMPTY |
+| 2026-09-01T23:07Z | S6 | commit | s6-commit | in-flight | dash@f14fefece gate: 5875/9320/1Sk rc0 W1(base noise); review 1 cycle 0 findings CLEAN; staging 2 write-set files + 3 chart_*.md docs fold |

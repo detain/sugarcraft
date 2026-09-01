@@ -69,6 +69,17 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         15 => '█',
     ];
 
+    /**
+     * Fill styles accepted by withFillStyle(): 'foreground' paints each filled
+     * cell as a segment-coloured `█` glyph (the classic per-cell toFg wrap),
+     * 'background' paints filled runs as plain spaces under the segment's
+     * background SGR — the gapless trick already used by Canvas::render() and
+     * Bar::render(), immune to the hairline seams adjacent `█` glyphs leave on
+     * some fonts/line-spacings.
+     */
+    public const FILL_FOREGROUND = 'foreground';
+    public const FILL_BACKGROUND = 'background';
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -86,6 +97,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         private readonly bool $clockwise = true,
         private readonly ?float $aspect = null,
         private readonly bool $smoothRim = false,
+        private readonly string $fillStyle = self::FILL_FOREGROUND,
     ) {}
 
     /**
@@ -118,6 +130,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: true,
             aspect: null,
             smoothRim: false,
+            fillStyle: self::FILL_FOREGROUND,
         );
     }
 
@@ -162,6 +175,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: true,
             aspect: null,
             smoothRim: false,
+            fillStyle: self::FILL_FOREGROUND,
         );
     }
 
@@ -268,11 +282,36 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             }
         }
 
-        // Render the grid
+        // Render the grid. In background mode a fully filled cell becomes a
+        // space under its segment's background SGR, merged with its contiguous
+        // same-colour neighbours into one run carrying exactly one open/reset
+        // pair (the Canvas/Bar house idiom) — hence the gapless fill. Quadrant
+        // runes and uncoloured cells cannot take a background paint, so they
+        // keep the foreground glyph path and close any open run first.
+        $backgroundFill = $this->fillStyle === self::FILL_BACKGROUND;
         $result = '';
         for ($y = 0; $y < $size; $y++) {
+            /** @var Color|null $runColor identity of the open background run's colour */
+            $runColor = null;
             for ($x = 0; $x < $size; $x++) {
                 $cell = $grid[$y][$x];
+
+                if ($backgroundFill && $cell['char'] === '█' && $cell['color'] !== null) {
+                    if ($runColor !== $cell['color']) {
+                        if ($runColor !== null) {
+                            $result .= Ansi::reset();
+                        }
+                        $result .= $cell['color']->toBg(ColorProfile::TrueColor);
+                        $runColor = $cell['color'];
+                    }
+                    $result .= ' ';
+                    continue;
+                }
+
+                if ($runColor !== null) {
+                    $result .= Ansi::reset();
+                    $runColor = null;
+                }
                 if ($cell['color'] !== null) {
                     $result .= $cell['color']->toFg(ColorProfile::TrueColor);
                 }
@@ -280,6 +319,9 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
                 if ($cell['color'] !== null) {
                     $result .= Ansi::reset();
                 }
+            }
+            if ($runColor !== null) {
+                $result .= Ansi::reset();
             }
             $result .= "\n";
         }
@@ -464,6 +506,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: $this->clockwise,
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
+            fillStyle: $this->fillStyle,
         );
     }
 
@@ -483,6 +526,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: $this->clockwise,
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
+            fillStyle: $this->fillStyle,
         );
     }
 
@@ -502,6 +546,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: $this->clockwise,
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
+            fillStyle: $this->fillStyle,
         );
     }
 
@@ -521,6 +566,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: $this->clockwise,
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
+            fillStyle: $this->fillStyle,
         );
     }
 
@@ -540,6 +586,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: $this->clockwise,
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
+            fillStyle: $this->fillStyle,
         );
     }
 
@@ -564,6 +611,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: $this->clockwise,
             aspect: $ratio,
             smoothRim: $this->smoothRim,
+            fillStyle: $this->fillStyle,
         );
     }
 
@@ -595,6 +643,54 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             clockwise: $this->clockwise,
             aspect: $this->aspect,
             smoothRim: $on,
+            fillStyle: $this->fillStyle,
+        );
+    }
+
+    /**
+     * Choose how filled ring cells are painted.
+     *
+     * 'foreground' (default) keeps the classic `█` glyph per cell wrapped in
+     * the segment's foreground SGR — byte-identical to every pre-S6 render.
+     * 'background' instead emits each run of consecutive same-colour filled
+     * cells as plain spaces under one background SGR opened at the run start
+     * and closed with a single {@see Ansi::reset()} at its end (the
+     * Canvas::render()/Bar::render() house idiom): fills stay gapless on
+     * fonts/line-spacings where adjacent `█` glyphs show hairline seams.
+     *
+     * Interaction with withSmoothRim(): a cell carries only one background
+     * colour, so sub-cell quadrant runes (▘▝▖▗▀▄▌▐▚▞▛▜▙▟) cannot be painted
+     * by background fill — they keep the foreground glyph path even in
+     * 'background' mode and split the surrounding runs. Fully covered (mask
+     * 15 → `█`) cells are indistinguishable from legacy fill and do fold into
+     * background runs. Uncoloured segments have no background to emit, so
+     * their `█` blocks stay literal.
+     *
+     * @throws \InvalidArgumentException on an unknown style name
+     */
+    public function withFillStyle(string $style = self::FILL_FOREGROUND): self
+    {
+        if (!in_array($style, [self::FILL_FOREGROUND, self::FILL_BACKGROUND], true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Unknown donut fill style "%s"; expected "%s" or "%s".',
+                $style,
+                self::FILL_FOREGROUND,
+                self::FILL_BACKGROUND
+            ));
+        }
+
+        return new self(
+            segments: $this->segments,
+            size: $this->size,
+            centerLabel: $this->centerLabel,
+            centerValue: $this->centerValue,
+            backgroundColor: $this->backgroundColor,
+            showPercentage: $this->showPercentage,
+            startAngle: $this->startAngle,
+            clockwise: $this->clockwise,
+            aspect: $this->aspect,
+            smoothRim: $this->smoothRim,
+            fillStyle: $style,
         );
     }
 }
