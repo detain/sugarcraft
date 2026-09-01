@@ -27,7 +27,7 @@
 | Step | Lane | Build | Review loop | Commit | SHA |
 |---|---|---|---|---|---|
 | S1 Bubble ◞ fix | B | ⬜ | ⬜ | ⬜ | |
-| S2 Rounded line set | A | ⬜ | ⬜ | ⬜ | |
+| S2 Rounded line set | A | ✅ | ✅ | ✅ | 4eb555810 |
 | S3 BarChart eighths | A | ⬜ | ⬜ | ⬜ | |
 | S4 Donut aspect | B | ⬜ | ⬜ | ⬜ | |
 | S5 Donut quadrant rim | B | ⬜ | ⬜ | ⬜ | |
@@ -45,3 +45,8 @@
 | 2026-09-01T18:25Z | S2 | predict | orchestrator | done | expected post-commit charts@sha: 546/1283/0sk rc0 (orchestrator gate MEASURED e2d17a4c9+write-set: OK 546/1283 rc0, /tmp/gate-s2-charts.txt); dash unaffected (S2 = charts-only write-set); first-run commit additionally folds dirty chart_plan.md (S1 Option-A amendment) + chart_worklog.md per R6b spirit (docs already tracked at 954b802) |
 | 2026-09-01T18:10:00Z | S2 | review | s2-r1-c1 | clean | e2d17a4c9+dirty S2-write-set; 8 checks: pass;pass;pass;pass;pass;pass;pass;delegated; 0 findings; figures 546/1283 rc0 (builder-reported) |
 | 2026-09-01T18:33:09Z | S2 | commit | s2-commit | done | committing S2 write-set + fold docs; pre-flight gate passed (porcelain: exactly 13 dirty tracked = 5 S2 write-set + 6 lane-B must-not-stage + tolerated chart_plan.md/chart_worklog.md; zero paths outside groups; chart_prompt.md clean; identity Joe Huss <detain@interserver.net> ok; hook no-hook) |
+| 2026-09-01T18:36:28Z | S2 | commit | s2-commit | committed | 4eb555810 sugar-charts S2 (5 files) + fold chart_plan.md/chart_worklog.md; post-commit charts@4eb555810: 546/1283/0 rc0; reviewer 1 cycle 0 findings; caliber: fail |
+| 2026-09-01T18:31:42Z | S4 | review | s4-review-c1 | clean | e2d17a4c9+dirty S4-write-set; checks 1-8 all PASS (write-set exact; aspect resolver reaches both loops incl. atan2; only vertical leg scaled, ≥/≤ predicates intact, 1.0-exactness mathematically guaranteed + double-orchestrated; goldens show 19→9 rows / 17-col width preserved, donut-only; value-level assertions; zero weakening hunks; +4 tests/+11 assertions reconcile exactly with suite deltas; conventions incl. 8/8 threading + BL-1 parking all hold); 0 findings; 5857/9165/1sk/1w-base rc0 builder-reported |
+| 2026-09-01T18:42Z | S4 | predict | orchestrator | done | commit expects dash@4eb555810+dirty: 5860/9230/1Sk rc0 W1-base (incl. sibling S1 +3 uncommitted; S4 share +4/+11 over 5853/9154); charts not re-run (no charts edits since S2 commit 4eb555810) |
+| 2026-09-01T18:42Z | S4 | commit | s4-commit | in-flight | dash@4eb555810 gate: 5860/9230/1Sk rc0 W1(base noise); review 1 cycle 0 findings CLEAN; staging 4 files + chart_plan.md + chart_worklog.md fold |
+| 2026-09-01T18:42Z | S5 | in-flight | s5-build | pending | S4 commit window open; Donut.php exclusive to S5 next |

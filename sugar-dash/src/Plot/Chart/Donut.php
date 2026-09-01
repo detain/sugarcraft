@@ -23,6 +23,13 @@ use SugarCraft\Core\Util\ColorProfile;
  */
 final class Donut implements \SugarCraft\Dash\Foundation\Sizer
 {
+    /**
+     * Terminal cells are roughly twice as wide as they are tall, so distances
+     * measured in raw cell units squash circles into vertical ellipses. 2.0
+     * pre-scales the vertical leg to make the ring read as visually round.
+     */
+    private const DEFAULT_ASPECT = 2.0;
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -38,6 +45,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         private readonly bool $showPercentage = false,
         private readonly float $startAngle = 0.0,
         private readonly bool $clockwise = true,
+        private readonly ?float $aspect = null,
     ) {}
 
     /**
@@ -68,6 +76,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             showPercentage: false,
             startAngle: 0.0,
             clockwise: true,
+            aspect: null,
         );
     }
 
@@ -110,6 +119,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             showPercentage: false,
             startAngle: 0.0,
             clockwise: true,
+            aspect: null,
         );
     }
 
@@ -136,6 +146,14 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
+     * Effective aspect ratio: explicit `withAspect()` value, else the default.
+     */
+    private function aspect(): float
+    {
+        return $this->aspect ?? self::DEFAULT_ASPECT;
+    }
+
+    /**
      * Render the donut chart using Unicode block characters.
      */
     public function render(): string
@@ -158,16 +176,23 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
 
         $centerX = (int) floor($size / 2);
         $centerY = (int) floor($size / 2);
+        $aspect = $this->aspect();
 
         // Fill the donut ring
         for ($y = 0; $y < $size; $y++) {
             for ($x = 0; $x < $size; $x++) {
                 $dx = $x - $centerX;
-                $dy = $y - $centerY;
+                $dy = ($y - $centerY) * $aspect;
+                // Vertical leg scaled by the aspect ratio so the ring is round
+                // on ~2:1 cells; radius stays in horizontal-cell units, keeping
+                // the horizontal diameter (and the withAspect(1.0) legacy path)
+                // unchanged.
                 $dist = sqrt($dx * $dx + $dy * $dy);
 
                 // Check if point is in the donut ring
                 if ($dist >= $innerRadius && $dist <= $radius) {
+                    // Aspect-normalized so sector boundaries follow the same
+                    // ellipse the distance test draws, not the raw cell grid.
                     $angle = atan2($dy, $dx);
                     // Convert to degrees, normalize to 0-360
                     $angleDeg = $angle * 180 / M_PI;
@@ -224,11 +249,14 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         $result = '';
         $centerX = (int) floor($size / 2);
         $centerY = (int) floor($size / 2);
+        $aspect = $this->aspect();
 
         for ($y = 0; $y < $size; $y++) {
             for ($x = 0; $x < $size; $x++) {
                 $dx = $x - $centerX;
-                $dy = $y - $centerY;
+                // Same aspect correction as render()'s ring so the empty
+                // placeholder ring matches the filled one's shape.
+                $dy = ($y - $centerY) * $aspect;
                 $dist = sqrt($dx * $dx + $dy * $dy);
 
                 if ($dist >= $innerRadius && $dist <= $radius) {
@@ -289,6 +317,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             showPercentage: $this->showPercentage,
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
+            aspect: $this->aspect,
         );
     }
 
@@ -306,6 +335,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             showPercentage: $this->showPercentage,
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
+            aspect: $this->aspect,
         );
     }
 
@@ -323,6 +353,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             showPercentage: $this->showPercentage,
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
+            aspect: $this->aspect,
         );
     }
 
@@ -340,6 +371,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             showPercentage: $show,
             startAngle: $this->startAngle,
             clockwise: $this->clockwise,
+            aspect: $this->aspect,
         );
     }
 
@@ -357,6 +389,30 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             showPercentage: $this->showPercentage,
             startAngle: $angle,
             clockwise: $this->clockwise,
+            aspect: $this->aspect,
+        );
+    }
+
+    /**
+     * Set the aspect-ratio correction applied to the vertical cell axis.
+     *
+     * Cells are ~1:2 (w:h), so raw cell-unit distances stretch the ring
+     * vertically; the ratio scales the vertical leg of every distance/angle
+     * computation instead. 1.0 reproduces the legacy (uncorrected) geometry
+     * byte-exactly, 2.0 is the visually-round default.
+     */
+    public function withAspect(float $ratio = self::DEFAULT_ASPECT): self
+    {
+        return new self(
+            segments: $this->segments,
+            size: $this->size,
+            centerLabel: $this->centerLabel,
+            centerValue: $this->centerValue,
+            backgroundColor: $this->backgroundColor,
+            showPercentage: $this->showPercentage,
+            startAngle: $this->startAngle,
+            clockwise: $this->clockwise,
+            aspect: $ratio,
         );
     }
 }
