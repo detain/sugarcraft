@@ -2570,7 +2570,25 @@ final class AgentTest extends TestCase
             $between = $at === false ? '' : substr($flat, $at, $offset - $at);
             $insideQuotation = substr_count($between, '"') % 2 === 1;
 
-            if ($distance <= self::A2_LICENCE_WINDOW_BYTES) {
+            // BOTH CONDITIONS ON THE LICENCE, NOT JUST DISTANCE. Parity was
+            // computed and then consulted only on the DRIFT arm, so any live
+            // claim within one window of any marker was licensed - closed
+            // quotation, no quotation, it made no difference. MEASURED by a
+            // reviewer and reproduced here before fixing: a doc-block reading
+            // `THIS MESSAGE USED TO SAY the signal was "derivable per stage".`
+            // followed by the falsified claim as an ordinary sentence, planted
+            // in src/Agents/Agent.php, ran `OK (35 tests, 402 assertions)` -
+            // the falsehood standing live in a production file, which is the
+            // one state this test exists to make impossible. The test's NAME
+            // says "only inside a quotation"; now the code does too.
+            //
+            // THE SIBLING GOT THIS RIGHT FIRST, which is what makes it a rule-40
+            // finding rather than an oversight: A1's pin in tests/RuntimeTest.php
+            // requires the full three-part form and a CLOSED quotation, because
+            // a reviewer defeated the loose form there. The correction did not
+            // travel one file over - between two guards in the same change-set,
+            // which is the defect the change-set exists to close.
+            if ($insideQuotation && $distance <= self::A2_LICENCE_WINDOW_BYTES) {
                 $found['licensed'][] = $offset;
             } elseif ($insideQuotation && $distance <= self::A2_LICENCE_WINDOW_BYTES * 8) {
                 $found['drifted'][] = $offset;

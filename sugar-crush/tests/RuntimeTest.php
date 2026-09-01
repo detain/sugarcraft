@@ -2134,7 +2134,7 @@ final class RuntimeTest extends TestCase
         $this->assertGreaterThan(1, \count($sourceFiles), 'the src/ walk found at most one file, so the domain of the claim below is not being derived');
 
         $quoting = 0;
-        $correctionsQuoted = 0;
+        $correctionsQuoted = [];
         $comments = 0;
         $violations = [];
 
@@ -2205,8 +2205,9 @@ final class RuntimeTest extends TestCase
                 }
 
                 // AND SEPARATELY, THE QUOTATIONS THAT ARE THIS PIN'S SUBJECT.
-                // `$quoting` counts EVERY rule-42 quotation under src/ - 22 of
-                // them - so it is a control on the STRIP, not on the A1
+                // `$quoting` counts EVERY rule-42 quotation under src/, not just
+                // the two that are this pin's subject, so it is a control on the
+                // STRIP, not on the A1
                 // correction, and a reviewer MEASURED the difference: deleting
                 // both corrected quotations, from src/Runtime.php and
                 // src/Agents/Agent.php, left this file green at an identical 487
@@ -2214,8 +2215,19 @@ final class RuntimeTest extends TestCase
                 // be removed and the guard that exists to keep it notices
                 // nothing. Rule 42 requires the reasoning be kept IN PLACE; this
                 // is what makes that requirement enforceable.
+                //
+                // A COUNT STOOD IN THAT SENTENCE AND WENT STALE INSIDE THE
+                // COMMIT THAT SHIPPED IT. WHAT IT SAID: "EVERY rule-42
+                // quotation under src/ - 22 of them". WHAT IS TRUE: 22 is what
+                // the strip returned BEFORE the three-part-form lookahead landed
+                // one commit earlier; with the shipped strip it is 5. HOW
+                // MEASURED: the loop above, run over all 297 src/ files with and
+                // without the `(?=\s*WHAT IS TRUE)` arm - 5 and 22. The figure
+                // is dropped rather than corrected: it has no owner, and the
+                // sentence's point - that this counter is a control on the strip
+                // and not on the correction - survives without it.
                 if (preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"(?=\s*WHAT IS TRUE)~', $flat) === 1) {
-                    $correctionsQuoted++;
+                    $correctionsQuoted[] = $relative . ':' . $token[2];
                 }
 
                 foreach (['oppositely', 'opposite order'] as $falseClaim) {
@@ -2267,20 +2279,35 @@ final class RuntimeTest extends TestCase
             . 'rather than the absence of a LIVE claim. The rule-42 three-part form keeps WHAT IT '
             . 'SAID verbatim; if those paragraphs were rewritten, rewrite this pin with them.',
         );
+        // A LIST, NOT A COUNT, AND THE DIFFERENCE IS THE WHOLE POINT. This is
+        // the only assertion that catches the declared residual - an unclosed
+        // quotation whose accidental closer is a later quote in the same
+        // comment, followed by WHAT IS TRUE - and while it was an integer its
+        // failure message had to say "if it really is a third correction, make
+        // this 3", which is the button that greens the defect. MEASURED by a
+        // reviewer, twice: plant that shape, watch only this assertion red, do
+        // what it says, and get `OK (130 tests, 488 assertions)` with a live
+        // false claim standing in a third production file.
+        //
+        // The loop above has $relative and $token[2] for every quoting comment
+        // and used to throw them away, so the reader could not cheaply find the
+        // third comment they were being told to read. An exact LIST names it in
+        // the failure output, and cannot be satisfied by bumping an integer -
+        // to green a plant you would have to paste its own file:line here,
+        // which is a thing nobody does by accident.
         $this->assertSame(
-            2,
+            ['src/Runtime.php:530', 'src/Agents/Agent.php:399'],
             $correctionsQuoted,
-            'the A1 correction itself has moved. EXACTLY TWO src/ comments should quote the false '
-            . '"order the env block oppositely" reason inside a rule-42 WHAT IT SAID span - the '
-            . 'ones in Runtime::buildSystemPrompt() and Agents\\Agent::systemPrompt(), the two '
+            'the A1 correction itself has moved. Exactly these two src/ comments should quote the '
+            . 'false "order the env block oppositely" reason inside a rule-42 WHAT IT SAID span - '
+            . 'the ones in Runtime::buildSystemPrompt() and Agents\\Agent::systemPrompt(), the two '
             . 'production doc-blocks that carried the claim live. FEWER means somebody deleted the '
             . 'correction rather than the claim, which leaves the next reader with no record that '
-            . 'the reason was ever false. MORE MEANS READ THE THIRD COMMENT BEFORE TOUCHING THIS '
-            . 'NUMBER: if it really is a third rule-42 correction, say so here and make this 3 - '
-            . 'but a comment whose quotation is UNCLOSED lands here too, and raising the count '
-            . 'then leaves a LIVE false claim standing with the suite green. That was measured, '
-            . 'not imagined. An exact count and not a floor, because both directions are things a '
-            . 'reader needs to be told about.',
+            . 'the reason was ever false. MORE MEANS READ THE EXTRA COMMENT THIS DIFF NAMES BEFORE '
+            . 'TOUCHING THIS LIST: if it really is a third rule-42 correction, add it - but a '
+            . 'comment whose quotation is UNCLOSED lands here too, and adding it then leaves a '
+            . 'LIVE false claim standing with the suite green. That was measured, not imagined. A '
+            . 'moved line number is the harmless case and costs one edit.',
         );
         $this->assertGreaterThan(
             $quoting,

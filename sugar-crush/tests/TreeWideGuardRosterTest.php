@@ -306,8 +306,13 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * moving. That half is the reviewer's measurement and is recorded as theirs.
  * What was re-derived here, by planting the same guard: the roster moves 67 to
  * 68, {@see derivation()} absorbs the new file through channel B without a
- * declared row, and this file stays `OK (16 tests, 1071 assertions)` - so the
- * sizes moved with nothing able to notice, which is the whole property. It
+ * declared row, and this file stays GREEN while it happens - so the sizes moved
+ * with nothing able to notice, which is the whole property. (A total stood
+ * here, `OK (16 tests, 1071 assertions)`, and was two revisions out of date by
+ * the time a reviewer re-ran the experiment and got 1083. It is a present-tense
+ * absolute with no paired before-arm, which is the one form the policy above
+ * forbids, in the paragraph documenting why. The claim is that the suite stays
+ * green, and that is what is recorded.) It
  * was written and then not applied to the paragraphs already on the page, which
  * is the same failure one level up, and the reason this correction is kept in
  * place rather than silently swept: FOUR attempts is the measurement.
@@ -996,16 +1001,14 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     public function testTheWalkClassifierAnswersKnownInputsCorrectly(): void
     {
-        $direct = "<?php\nforeach (glob(\\dirname(__DIR__, 2) . '/src/*.php') as \$f) {}\n";
+        $direct = self::knownAnswerSources()['direct'];
         $this->assertSame(
             ['root' => ['glob(\dirname(__DIR__,2).\'/src/*.php\')'], 'unresolved' => []],
             self::classifyWalkSites($direct),
             'an anchor written directly in the walker argument is not resolved, so channel B is dead',
         );
 
-        $viaChain = "<?php\nclass P { private const R = __DIR__ . '/../..';\n"
-            . "  private function go(): void { \$lib = self::R; \$src = \$lib . '/src';\n"
-            . "    \$it = new \\RecursiveDirectoryIterator(\$src, \\FilesystemIterator::SKIP_DOTS); } }\n";
+        $viaChain = self::knownAnswerSources()['viaChain'];
         $this->assertSame(
             ['root' => ['RecursiveDirectoryIterator($src,\FilesystemIterator::SKIP_DOTS)'], 'unresolved' => []],
             self::classifyWalkSites($viaChain),
@@ -1013,8 +1016,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'fixpoint is not iterating',
         );
 
-        $temp = "<?php\nclass P { private function go(): void { \$d = sys_get_temp_dir() . '/x';\n"
-            . "    foreach (glob(\$d . '/*') as \$f) {} } }\n";
+        $temp = self::knownAnswerSources()['temp'];
         $this->assertSame(
             ['root' => [], 'unresolved' => ['glob($d.\'/*\')']],
             self::classifyWalkSites($temp),
@@ -1022,7 +1024,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'teardown in the roster',
         );
 
-        $opaque = "<?php\nclass P { private function go(string \$where): void { scandir(\$where); } }\n";
+        $opaque = self::knownAnswerSources()['opaque'];
         $this->assertSame(
             ['root' => [], 'unresolved' => ['scandir($where)']],
             self::classifyWalkSites($opaque),
@@ -1035,8 +1037,7 @@ final class TreeWideGuardRosterTest extends TestCase
         // DirectoryIterator, and it produced no site in either bucket until it
         // joined WALKER_CLASSES. Zero live uses on this tree, so this row is
         // the only thing keeping the alphabet entry honest.
-        $viaGlobIterator = "<?php\nclass P { private function go(): void {\n"
-            . "    foreach (new \\GlobIterator(\\dirname(__DIR__, 2) . '/src/*.php') as \$f) {} } }\n";
+        $viaGlobIterator = self::knownAnswerSources()['viaGlobIterator'];
         $this->assertSame(
             ['root' => ["GlobIterator(\\dirname(__DIR__,2).'/src/*.php')"], 'unresolved' => []],
             self::classifyWalkSites($viaGlobIterator),
@@ -1057,8 +1058,7 @@ final class TreeWideGuardRosterTest extends TestCase
         // not reach it directly - it reaches `opendir()`, and the handle is what
         // reaches `readdir()`. So this row also pins that the taint fixpoint
         // crosses `opendir`, which no other row here covers.
-        $viaReaddir = "<?php\nclass P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src';\n"
-            . "    \$h = opendir(\$d); while (\$f = readdir(\$h)) {} } }\n";
+        $viaReaddir = self::knownAnswerSources()['viaReaddir'];
         $this->assertSame(
             ['root' => ['readdir($h)'], 'unresolved' => []],
             self::classifyWalkSites($viaReaddir),
@@ -1068,8 +1068,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'in the residue.',
         );
 
-        $viaFilesystemIterator = "<?php\nclass P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src';\n"
-            . "    foreach (new \\FilesystemIterator(\$d, \\FilesystemIterator::SKIP_DOTS) as \$f) {} } }\n";
+        $viaFilesystemIterator = self::knownAnswerSources()['viaFilesystemIterator'];
         $this->assertSame(
             ['root' => ['FilesystemIterator($d,\FilesystemIterator::SKIP_DOTS)'], 'unresolved' => []],
             self::classifyWalkSites($viaFilesystemIterator),
@@ -1082,13 +1081,44 @@ final class TreeWideGuardRosterTest extends TestCase
         // Neither a walker call: `new Glob(...)` is this tree's Glob TOOL, and
         // `$this->glob(...)` is a method. A classifier that counted either
         // would demand declared rows for code that walks nothing.
-        $notAWalk = "<?php\nclass P { private function go(): void { \$g = new Glob(prunedDirs: []);\n"
-            . "    \$this->glob(\\dirname(__DIR__) . '/src'); \$x = \\dirname(__DIR__); } }\n";
+        $notAWalk = self::knownAnswerSources()['notAWalk'];
         $this->assertSame(
             ['root' => [], 'unresolved' => []],
             self::classifyWalkSites($notAWalk),
             'a constructed Glob tool or a method named glob() is being read as a directory walk',
         );
+    }
+
+    /**
+     * The known-answer fixtures, in ONE place, because two consumers read them.
+     *
+     * {@see testTheWalkClassifierAnswersKnownInputsCorrectly()} asserts what the
+     * classifier returns for each; {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
+     * derives which walker spellings are EXERCISED by running the classifier
+     * over them. Held apart, the two would drift and the coverage half would go
+     * on reporting spellings that no fixture reaches any more.
+     *
+     * @return array<string, string>
+     */
+    private static function knownAnswerSources(): array
+    {
+        return [
+            'direct' => "<?php\nforeach (glob(\\dirname(__DIR__, 2) . '/src/*.php') as \$f) {}\n",
+            'viaChain' => "<?php\nclass P { private const R = __DIR__ . '/../..';\n"
+            . "  private function go(): void { \$lib = self::R; \$src = \$lib . '/src';\n"
+            . "    \$it = new \\RecursiveDirectoryIterator(\$src, \\FilesystemIterator::SKIP_DOTS); } }\n",
+            'temp' => "<?php\nclass P { private function go(): void { \$d = sys_get_temp_dir() . '/x';\n"
+            . "    foreach (glob(\$d . '/*') as \$f) {} } }\n",
+            'opaque' => "<?php\nclass P { private function go(string \$where): void { scandir(\$where); } }\n",
+            'viaGlobIterator' => "<?php\nclass P { private function go(): void {\n"
+            . "    foreach (new \\GlobIterator(\\dirname(__DIR__, 2) . '/src/*.php') as \$f) {} } }\n",
+            'viaReaddir' => "<?php\nclass P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src';\n"
+            . "    \$h = opendir(\$d); while (\$f = readdir(\$h)) {} } }\n",
+            'viaFilesystemIterator' => "<?php\nclass P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src';\n"
+            . "    foreach (new \\FilesystemIterator(\$d, \\FilesystemIterator::SKIP_DOTS) as \$f) {} } }\n",
+            'notAWalk' => "<?php\nclass P { private function go(): void { \$g = new Glob(prunedDirs: []);\n"
+            . "    \$this->glob(\\dirname(__DIR__) . '/src'); \$x = \\dirname(__DIR__); } }\n",
+        ];
     }
 
     /**
@@ -2133,151 +2163,58 @@ final class TreeWideGuardRosterTest extends TestCase
         // alphabet IS the classifier's key, so a name is visible BECAUSE it was
         // declared. An assertion that cannot fail for an arbitrary input is not
         // a weak assertion, it is not one (section 16.8 rule 16).
-        // COMMENTS STRIPPED FIRST, and this is not tidiness. MEASURED: with the
-        // raw source, deleting the `readdir` fixture row left this GREEN,
-        // because the PARAGRAPH above that row explains why the row exists and
-        // says `readdir()` while doing so. A correspondence that a sentence can
-        // satisfy is a correspondence between a spelling and somebody having
-        // mentioned it, which is what this whole file exists to stop being the
-        // standard of evidence.
-        // SIX DOORS, AND THE PARAGRAPHS BELOW DESCRIBED THE CHECK EACH ONE WAS
-        // MEANT TO BE. They are kept because the sequence is the finding: a
-        // comment, an assertion message, an array literal nothing compares, a
-        // tautological assertSame, a string literal spelling the assertion out,
-        // and finally the message again - harvested from the same statement as
-        // the expected value once the gate moved to the token stream. Every fix
-        // narrowed the EVIDENCE and left the HARVEST alone, and each time the
-        // prose was written for the version its author had in mind. The claim
-        // "TO THE EXPECTED VALUES ONLY" below was false of the shipped code for
-        // two revisions; it is true now because the harvest stops at the
-        // classifier call, not because the sentence says so.
+        // AND THE COVERED SET IS WHAT THE CLASSIFIER EMITS, NOT WHAT THE FILE
+        // SAYS. EIGHT revisions of this one check were satisfiable by text: a
+        // comment; an assertion message; an array literal nothing compares; a
+        // tautological `assertSame`; a string literal spelling the assertion
+        // out; the message again once the gate moved to the token stream; a
+        // literal in a DEAD TERNARY ARM that merely preceded the classifier
+        // call; and a bare `str_contains` that let `ecursivedirectoryiterator`
+        // ride on `recursivedirectoryiterator(`. Every one of the first seven
+        // was closed by narrowing WHICH TEXT counted, and the eighth arrived by
+        // the same route the previous seven did. MEASURED, the last two: the
+        // dead ternary and the substring each ran `OK (16 tests, 1081
+        // assertions)`, the total IDENTICAL to the clean tree.
         //
-        // AND THE SEARCH IS NARROWED AGAIN, TO THE EXPECTED VALUES ONLY, because
-        // stripping comments was not enough and a reviewer proved it in one
-        // edit. WHAT THE LAST REVISION DID: searched the whole comment-stripped
-        // method body. MEASURED: replacing the entire `readdir` row - fixture,
-        // classifier call and expected array - with
-        // `$this->assertTrue(true, '...readdir() loop is not seen...')` left
-        // this GREEN at an identical 1080 assertions, because the MESSAGE says
-        // `readdir(`. And decisively: a bogus `notawalkeratall` entry in the
-        // alphabet, with one `assertTrue(true, '...notawalkeratall()...')` line
-        // added, passed at 1081. The prose had simply moved out of a comment and
-        // into a string literal, in the guard whose own paragraph above says a
-        // correspondence a sentence can satisfy is not evidence.
+        // A TEXT CHECK HAS A DOOR FOR EVERY WAY TO WRITE TEXT. So the covered
+        // set is now derived by RUNNING the shipped classifier over
+        // {@see knownAnswerSources()} and keying on the spellings it actually
+        // returns. No comment, message, literal, tautology, dead branch or
+        // token forgery can add a key to that array; only a fixture the
+        // classifier really reports can. The fixtures are shared with
+        // {@see testTheWalkClassifierAnswersKnownInputsCorrectly()}, which
+        // asserts the exact answer for each, so a fixture that stops meaning
+        // what it says reds there rather than silently widening coverage here.
         //
-        // AN EXPECTED VALUE CANNOT BE WRITTEN WITHOUT A LIVE FIXTURE. It is the
-        // left-hand side of an `assertSame` whose right-hand side is the
-        // shipped classifier's real output, so a spelling named here that the
-        // classifier does not produce reds the row itself. That is the property
-        // a message string does not have, and it is what makes this check
-        // non-circular in both directions.
-        //
-        // AND THE PATTERN IS ANCHORED ON `assertSame(`, WHICH THE FIRST VERSION
-        // OF THIS PARAGRAPH CLAIMED WITHOUT DOING. WHAT IT MATCHED: any
-        // `'root' => [...]` array literal anywhere in the method. MEASURED by a
-        // reviewer, and reproduced here: `notawalkeratall` in WALKER_FUNCTIONS
-        // with the size pin bumped as this guard's own message instructs, plus
-        // two DEAD statements in the known-answer test -
-        // `$bogus = ['root' => ['notawalkeratall($x)'], 'unresolved' => []];`
-        // and an `assertIsArray($bogus)` - ran `OK (16 tests, 1082 assertions)`.
-        // A literal that is never compared to anything is not a fixture, and the
-        // paragraph above was describing the pattern it MEANT rather than the
-        // one it had. This is the third door in the same check: a comment, then
-        // a message string, then an unasserted literal.
-        //
-        // AND THERE WAS A FOURTH, WHICH IS WHY THE PATTERN NOW READS THE
-        // ASSERTION'S SECOND ARGUMENT TOO. Anchoring on `assertSame(` bought one
-        // extra token of evidence, not the correspondence the paragraph above
-        // claims: nothing looked at what the expected array was being compared
-        // TO. MEASURED by a reviewer, and reproduced here before fixing - a
-        // bogus spelling, the size pin bumped as this guard's own message
-        // instructs, and a TAUTOLOGY in the known-answer test
-        // (`$t = ['root' => ['notawalkeratall($x)'], ...]; assertSame(['root' =>
-        // ['notawalkeratall($x)'], ...], $t);`) ran `OK (16 tests, 1082
-        // assertions)` - the count UP rather than down, so the assertion-total
-        // corollary does not see it either. The pattern requires
-        // `self::classifyWalkSites(` between the expected array and the end of
-        // the statement now, so the expected value must be compared against the
-        // shipped classifier rather than against itself.
-        //
-        // FOUR DOORS IN ONE CHECK IS ITSELF THE FINDING, not an anecdote. Each
-        // fix narrowed the evidence by one step, and each time the paragraph
-        // describing the check was written for the pattern its author MEANT
-        // rather than the one they had. The general form is rule 30 - the
-        // instrument is a thing under test - and all four are recorded because
-        // the fifth will be found by somebody reading this list, not by somebody
-        // reading the regex.
-        //
-        // AND THE FIFTH DOOR CLOSED THE WHOLE CLASS OF THEM: THE EVIDENCE IS
-        // TAKEN FROM THE TOKEN STREAM, NOT FROM THE TEXT. Every text-level
-        // narrowing above can be forged by writing the text somewhere the
-        // narrowing does not exclude, and a reviewer walked straight through
-        // the last one - a single string literal spelling out
-        // `assertSame(['root' => ['notawalkeratall($x)'], ...],
-        // self::classifyWalkSites($q));`, asserted with `assertIsString`, ran
-        // `OK (16 tests, 1082 assertions)`. MEASURED, and reproduced here.
-        //
-        // A FORGERY IS ONE TOKEN; THE REAL THING IS A SEQUENCE. Below, the file
-        // is split into statements and a statement contributes its string
-        // literals ONLY if it carries a real `assertSame` identifier AND a real
-        // `classifyWalkSites` identifier as TOKENS. The forgery's identifiers
-        // are inside a `T_CONSTANT_ENCAPSED_STRING`, so they are not tokens and
-        // it contributes nothing. That is the difference between quoting an
-        // assertion and making one, and it is the property every revision of
-        // this paragraph claimed and only this one has.
-        $statementStrings = [];
-        $statementIdentifiers = [];
-        $expectedValues = '';
-        $statements = 0;
-
-        foreach (token_get_all((string) file_get_contents(__FILE__)) as $token) {
-            if ($token === ';') {
-                if (\in_array('assertsame', $statementIdentifiers, true) && \in_array('classifywalksites', $statementIdentifiers, true)) {
-                    $expectedValues .= ' ' . implode(' ', $statementStrings);
-                    $statements++;
+        // AND THE SUBSTRING MATCH IS GONE WITH IT: an exact array key cannot be
+        // a suffix of its neighbour. That door was not hypothetical -
+        // `directoryiterator` has NO fixture of its own and exactly one live
+        // site on this tree, so under `str_contains` it was covered by its
+        // longer sibling's label. Refactor that one call and it becomes the
+        // `globiterator` case again, invisibly. Under this check it becomes a
+        // red demanding a fixture, which is the correct answer.
+        $covered = [];
+        foreach (self::knownAnswerSources() as $fixture) {
+            $sites = self::classifyWalkSites($fixture);
+            foreach ([...$sites['root'], ...$sites['unresolved']] as $label) {
+                $name = strstr($label, '(', true);
+                if ($name !== false) {
+                    $covered[strtolower($name)] = true;
                 }
-
-                $statementStrings = [];
-                $statementIdentifiers = [];
-
-                continue;
-            }
-
-            if (!\is_array($token)) {
-                continue;
-            }
-
-            if ($token[0] === T_CONSTANT_ENCAPSED_STRING) {
-                // ONLY THE LITERALS THAT PRECEDE THE CLASSIFIER CALL, which in
-                // this file's `assertSame(expected, self::classifyWalkSites(...),
-                // 'message')` shape means the EXPECTED VALUE and nothing else.
-                // Buffering the whole statement re-opened door #3 one layer up:
-                // MEASURED by a reviewer, and reproduced here before fixing -
-                // appending ` or notawalkeratall($x)` to an existing row's
-                // failure MESSAGE, with a bogus spelling in WALKER_FUNCTIONS and
-                // the size pin bumped as this guard's own message instructs, ran
-                // `OK (16 tests, 1081 assertions)`, the total IDENTICAL to the
-                // clean tree. The message is not compared to anything; the
-                // expected value is.
-                if (!\in_array('classifywalksites', $statementIdentifiers, true)) {
-                    $statementStrings[] = strtolower(trim($token[1], '\'"'));
-                }
-            } elseif ($token[0] === T_STRING) {
-                $statementIdentifiers[] = strtolower($token[1]);
             }
         }
 
-        // NOT VACUOUS. An empty match set would make every spelling below read
-        // as uncovered, which fails CLOSED - but it would blame the alphabet for
-        // a broken extractor, and the next reader would go looking in the wrong
-        // file. This assertion puts the blame where it belongs.
+        // NOT VACUOUS. An empty covered set would report every zero-site
+        // spelling as uncovered, which fails CLOSED - but it would blame the
+        // alphabet for a broken fixture set, and the next reader would go
+        // looking in the wrong place. This puts the blame where it belongs.
         $this->assertGreaterThan(
             3,
-            $statements,
-            'the expected-value extractor found almost no statements that call assertSame() AND '
-            . 'classifyWalkSites() together. Either testTheWalkClassifierAnswersKnownInputsCorrectly() '
-            . 'was rewritten into another shape or this walk stopped seeing it; fix the extractor '
-            . 'here rather than reading the correspondence failure below as a real gap.',
+            \count($covered),
+            'running the shipped classifier over knownAnswerSources() produced almost no walker '
+            . 'labels. Either those fixtures were rewritten or classifyWalkSites() stopped '
+            . 'reporting; fix that rather than reading the correspondence failure below as a real '
+            . 'gap in the alphabet.',
         );
 
         $uncovered = [];
@@ -2288,7 +2225,7 @@ final class TreeWideGuardRosterTest extends TestCase
             }
 
             $zeroSite[] = $spelling;
-            if (!str_contains($expectedValues, $spelling . '(')) {
+            if (!isset($covered[$spelling])) {
                 $uncovered[] = $spelling;
             }
         }
