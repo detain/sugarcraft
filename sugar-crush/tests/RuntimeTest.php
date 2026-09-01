@@ -3542,10 +3542,24 @@ final class RuntimeTest extends TestCase
      * fifteenth spelled the construction with a keyword instead of a name —
      * `new self`, `new static` (T_STATIC, not even in the name alphabet
      * before this), `new parent`, each inside a same-file subclass, where the
-     * SITE names no class and only the ENCLOSING BODY does. All five spellings
-     * are read now; the `self` a TRAIT would write remains declared below,
-     * and every channel above has run through a deletion experiment — the
-     * list of which is the step report, not this paragraph.
+     * SITE names no class and only the ENCLOSING BODY does. Then the
+     * SIXTEENTH, SEVENTEENTH and EIGHTEENTH — review cycle 2 against the
+     * channels this step itself had grown, all three MEASURED truncating a
+     * real 6-byte file to 0 unscanned: the `class_alias` reader paired its
+     * two arguments POSITIONALLY, and named arguments are order-free
+     * (`class_alias(alias: 'V', class: X::class)`); it keyed the alias by
+     * LAST SEGMENT, while a `class_alias` literal may be NAMESPACED and the
+     * site writes the whole name (`new \Solo\NS`); and the construction-site
+     * alias resolution kept the backslash-ignores-imports guard, which is
+     * true of `use … as …` and false of `class_alias`, whose alias IS the
+     * global name with or without the leading backslash (`new \WNS`,
+     * `new Solo\NS`). All three read now: pairing by label, keys by full
+     * name, and a runtime map consulted outside the qualification exemption.
+     * The `self` a TRAIT would write remains declared below, as does
+     * `extends` naming a NAMESPACED runtime alias (header resolution still
+     * stops at the single segment) — and every channel above has run through
+     * a deletion experiment; the list of which is the step report, not this
+     * paragraph.
      *
      * THAT LIST IS THE ONLY PLACE THE HISTORY IS KEPT, and it carries no
      * cardinality — §16.8 rule 2, ship the generator not the count. It used to
@@ -3610,10 +3624,15 @@ final class RuntimeTest extends TestCase
      *    construction channel ONLY for chains this file can read: a rostered
      *    name written in the header, one spelled through a `use … as …`
      *    import, one reached through same-file `class_alias(...)` of two
-     *    LITERALS (in any of its argument spellings — positional, named, or
-     *    under a function-aliased name of the call itself), and `class`
-     *    declarations whose own extends lines sit in
-     *    this file — transitively. A `class W extends Base {}` whose `Base`
+     *    LITERALS (paired by label or position, in either order, under a
+     *    function-aliased name of the call, and keyed by the FULL alias name
+     *    so a namespaced alias resolves at its construction site), and
+     *    `class` declarations whose own extends lines sit in
+     *    this file — transitively. The extends HEADER itself still reads
+     *    single-segment names only: `class W extends \Solo\NS {}` (a
+     *    NAMESPACED runtime alias as parent) is the same row's out-of-reach
+     *    case from the other side — the construction sites of such aliases
+     *    ARE read, their use as an extends parent is not. A `class W extends Base {}` whose `Base`
      *    was IMPORTED from elsewhere is out of reach here: `Base`'s own
      *    parent is a fact about another file, and this walk opens no file it
      *    was not handed. ({@see sourceFilesOf()} pulls a TOOL's own parent
@@ -3695,7 +3714,9 @@ final class RuntimeTest extends TestCase
         // owns that alphabet and the argument for why it is one list.
         $tokens = self::significantTokens($source);
         $functionAliases = self::importedFunctionAliases($tokens);
-        $classAliases = self::classAliasDefinitions($tokens, self::importedClassAliases($tokens), $functionAliases);
+        $aliasMaps = self::classAliasDefinitions($tokens, self::importedClassAliases($tokens), $functionAliases);
+        $classAliases = $aliasMaps['merged'];
+        $runtimeAliases = $aliasMaps['runtime'];
         $construction = self::sameFileWriteConstructionSubclasses($tokens, $classAliases);
         $writeSubclasses = $construction['roots'];
         $parentOf = $construction['parentOf'];
@@ -3787,7 +3808,14 @@ final class RuntimeTest extends TestCase
             // else fails either the `(` neighbour test or the `new`-previous
             // arm below, and a static CLOSURE binding (`static $x`) is not
             // followed by `(` — MEASURED, both spellings.
-            if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE, T_STATIC], true)) {
+            // T_NAME_QUALIFIED joins for ONE shape: `new Solo\NS(...)`, a
+            // namespaced runtime alias (class_alias's literal may itself carry
+            // a namespace — review cycle 2, F-B). It reaches no other arm's
+            // roster: multi-segment text matches no global function name and
+            // no import alias key, exactly the exclusion doctrine the
+            // doc-block has always stated — the token is admitted ONLY so the
+            // runtime-alias consult below can see it.
+            if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE, T_STATIC], true)) {
                 continue;
             }
 
@@ -3815,6 +3843,44 @@ final class RuntimeTest extends TestCase
                 $name = '\\' . substr($name, \strlen('namespace\\'));
             }
 
+            $previous = $i > 0 ? $tokens[$i - 1] : null;
+            $afterNew = \is_array($previous) && $previous[0] === T_NEW;
+
+            $next = $tokens[$i + 1] ?? null;
+            $nextIndex = $i + 1;
+            if ($next !== '(') {
+                continue;
+            }
+
+            // THE RUNTIME-ALIAS SITE, consulted by FULL WRITTEN NAME and NOT
+            // gated on `!$qualified`. Review cycle 2 found the qualification
+            // exemption — correct for `use … as …` imports, because a leading
+            // backslash genuinely ignores them — WRONGLY inherited for
+            // class_alias names: `class_alias(X::class, 'WNS')` defines the
+            // GLOBAL `\WNS`, so `new \WNS($p,'w')` (single-segment, qualified)
+            // AND `new \Solo\NS(...)` (multi-segment, the whole reason
+            // `aliasLiteralName` keeps the full name) are exactly that global
+            // class constructed with its backslash. Neither reached the arm
+            // below: the single-segment one because `$qualified` suppressed
+            // alias resolution, the multi-segment one because the
+            // `substr_count !== 1` drop in the qualified block `continue`s it
+            // — so this arm runs BEFORE that block, on the raw token text.
+            // T_NAME_QUALIFIED joins the name alphabet above for the same
+            // reason (`new Solo\NS`, no leading backslash, is the same global
+            // alias construction).
+            if ($afterNew) {
+                $siteFull = strtolower(ltrim($token[1], '\\'));
+                if ($relative) {
+                    $siteFull = substr($siteFull, \strlen('namespace\\'));
+                }
+                $runtime = $runtimeAliases[$siteFull] ?? null;
+                if ($runtime !== null) {
+                    $found[$runtime][] = $token[2];
+
+                    continue;
+                }
+            }
+
             $qualified = $relative || $token[0] === T_NAME_FULLY_QUALIFIED;
             if ($qualified) {
                 // The global symbol only when the token is exactly `\name`;
@@ -3824,15 +3890,6 @@ final class RuntimeTest extends TestCase
                     continue;
                 }
                 $name = ltrim($name, '\\');
-            }
-
-            $previous = $i > 0 ? $tokens[$i - 1] : null;
-            $afterNew = \is_array($previous) && $previous[0] === T_NEW;
-
-            $next = $tokens[$i + 1] ?? null;
-            $nextIndex = $i + 1;
-            if ($next !== '(') {
-                continue;
             }
 
             // THE ALIAS CHANNEL ADDS A SPELLING AND NEVER REMOVES ONE, and
@@ -4084,13 +4141,31 @@ final class RuntimeTest extends TestCase
      * method or a declaration of the same name is excluded the way the
      * call-site arm excludes them.
      *
+     * THE ARGUMENTS PAIR BY LABEL WHEN ONE CARRIES ONE, and the returned map
+     * is TWO-KIND ON PURPOSE. Review cycle 2 measured three defeats in the
+     * pair the positional reading assumed: `class_alias(alias: 'V', class:
+     * X::class)` is legal PHP 8 (named arguments are order-free) and the
+     * positional read paired them backwards; `class_alias(X::class, 'Solo\NS')`
+     * registers a NAMESPACED global, and indexing by last segment only left
+     * every spelling of the site (`new \Solo\NS`, `new Solo\NS`) unmatched;
+     * and `new \WNS` of a single-segment runtime alias was skipped by the
+     * backslash-exempts-imports guard - a guard that is RIGHT for `use` maps
+     * (a leading backslash genuinely ignores imports) and WRONG for runtime
+     * aliases (class_alias defines the name globally, backslash or not). So
+     * the method returns `merged` (last-segment keys, what the plain
+     * construction arms consult, imports and runtime alike) and `runtime`
+     * (FULL lowercased names, class_alias entries only, consulted by the
+     * site arms WITHOUT the qualification exemption). The kinds are not
+     * interchangeable and the maps no longer pretend they are.
+     *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      * @param array<string, string>                         $classAliases
      *
-     * @return array<string, string>
+     * @return array{merged: array<string, string>, runtime: array<string, string>}
      */
     private static function classAliasDefinitions(array $tokens, array $classAliases, array $functionAliases): array
     {
+        $runtime = [];
         $count = \count($tokens);
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
@@ -4128,19 +4203,162 @@ final class RuntimeTest extends TestCase
                 continue;
             }
 
-            $canonical = self::literalClassName($parse['arguments'][0]);
-            $alias = self::literalClassName($parse['arguments'][1]);
-            if ($canonical === null || $alias === null) {
+            [$targetTokens, $aliasTokens] = self::pairClassAliasArguments($parse['arguments']);
+            if ($targetTokens === null || $aliasTokens === null) {
                 continue;
             }
+
+            $canonical = self::literalClassName($targetTokens);
+            $aliasFull = self::literalClassAliasName($aliasTokens);
+            if ($canonical === null || $aliasFull === null) {
+                continue;
+            }
+            $lastSep = strrpos($aliasFull, '\\');
+            $aliasLast = $lastSep === false ? $aliasFull : substr($aliasFull, $lastSep + 1);
 
             // FIRST WINS, because a second `class_alias` of the same name is a
             // PHP fatal ("Cannot redeclare class"), not a re-mapping — a
             // last-wins merge here would model a program PHP refuses to run.
-            $classAliases[$alias] ??= $canonical;
+            $classAliases[$aliasLast] ??= $canonical;
+            $runtime[$aliasFull] ??= $canonical;
         }
 
-        return $classAliases;
+        return ['merged' => $classAliases, 'runtime' => $runtime];
+    }
+
+    /**
+     * `class_alias` arguments, PAIRED BY LABEL where a label carries one and
+     * positionally otherwise; returns `[classTokens|null, aliasTokens|null]`.
+     *
+     * PHP 8 named arguments are ORDER-FREE: `class_alias(alias: 'V', class:
+     * X::class)` is legal and registers the alias, which the positional
+     * reading paired backwards and silently lost (review cycle 2, F-A,
+     * MEASURED truncating 6->0 unscanned on both instruments). A positional
+     * argument fills the first unfilled slot in the signature's own order —
+     * class, alias — which is the only reading any legal mix of the two can
+     * mean, since a positional after a named argument is itself a fatal.
+     * A third argument (`exclusive:`, or positionally after both slots are
+     * filled) has no slot to land in and is ignored by design.
+     *
+     * @param array<int, list<array{0: int, 1: string, 2: int}|string>> $arguments
+     *
+     * @return array{0: list<array{0: int, 1: string, 2: int}|string>|null, 1: list<array{0: int, 1: string, 2: int}|string>|null}
+     */
+    private static function pairClassAliasArguments(array $arguments): array
+    {
+        $slots = ['class' => null, 'alias' => null];
+        $positional = [];
+
+        foreach ($arguments as $arg) {
+            [$label, $value] = self::splitNamedArgument($arg);
+            if ($label !== null) {
+                if (array_key_exists($label, $slots) && $slots[$label] === null) {
+                    $slots[$label] = $value;
+                }
+
+                continue;
+            }
+            $positional[] = $value;
+        }
+
+        foreach (['class', 'alias'] as $slot) {
+            if ($slots[$slot] === null && $positional !== []) {
+                $slots[$slot] = array_shift($positional);
+            }
+        }
+
+        return [$slots['class'], $slots['alias']];
+    }
+
+    /**
+     * The `[label|null, value-tokens]` split of one argument.
+     *
+     * A label is an identifier-spelling token — INCLUDING KEYWORDS, because
+     * `class:` arrives as T_CLASS while `alias:` arrives as T_STRING (both
+     * MEASURED on 8.3.6) — followed by the one-byte `:`, never by `::`, and
+     * there is nothing before it. A ternary's `?` or the null-coalescing
+     * pair break that shape, so `a ? b : c` is never mis-split here.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $argument
+     *
+     * @return array{0: ?string, 1: list<array{0: int, 1: string, 2: int}|string>}
+     */
+    private static function splitNamedArgument(array $argument): array
+    {
+        if (\count($argument) > 2
+            && \is_array($argument[0]) && preg_match('~^[A-Za-z_][A-Za-z0-9_]*$~', $argument[0][1]) === 1
+            && $argument[1] === ':'
+        ) {
+            return [strtolower($argument[0][1]), \array_slice($argument, 2)];
+        }
+
+        return [null, $argument];
+    }
+
+    /**
+     * The FULL lowercased class name an alias argument spells.
+     *
+     * Unlike {@see literalClassName()}, which ends at the LAST segment —
+     * correct for a TARGET, which resolves to that class whichever name read
+     * it — an ALIAS is registered under the whole name and is constructed by
+     * the whole name: `class_alias(X::class, 'Solo\NS')` creates `Solo\NS`,
+     * and `NS` alone is a different class entirely (review cycle 2, F-B:
+     * last-segment keying meant neither `new \Solo\NS` nor `new Solo\NS`
+     * matched the declaration that made it). A leading backslash inside the
+     * literal normalises away — `class_alias(X::class, '\Solo\NS')` and
+     * `'Solo\NS'` register the same name. A trailing or doubled separator is
+     * a name PHP itself refuses, so it contributes nothing.
+     */
+    private static function literalClassAliasName(array $argument): ?string
+    {
+        if (\count($argument) === 1 && \is_array($argument[0]) && $argument[0][0] === T_CONSTANT_ENCAPSED_STRING) {
+            $text = $argument[0][1];
+            $quote = $text[0] ?? '';
+            if (($quote !== "'" && $quote !== '"') || \strlen($text) < 2) {
+                return null;
+            }
+            $body = substr($text, 1, -1);
+
+            if ($quote === "'") {
+                // SINGLE QUOTES: only `\\` and `\'` are escapes; every other
+                // backslash is literal, i.e. a namespace separator standing in
+                // the source exactly as the autoloader will see it. The NUL
+                // placeholder keeps an escaped backslash out of the separator
+                // shape, and a body already containing a NUL byte is refused
+                // outright rather than mis-decoded — no class name has one.
+                if (str_contains($body, "\x00")) {
+                    return null;
+                }
+                $name = str_replace(["\\\\", "\\'"], ["\x00", "'"], $body);
+                $name = str_replace("\x00", '\\', $name);
+            } else {
+                // DOUBLE QUOTES: `\\` is an escaped backslash; ANY remaining
+                // backslash belongs to an escape (`\n`, `\x4e`, ...) whose
+                // runtime value this reader would have to compute — it stops
+                // at spellings, returns null, and the miss is declared.
+                $name = str_replace('\\\\', "\x00", $body);
+                if (str_contains($name, '\\')) {
+                    return null;
+                }
+                $name = str_replace("\x00", '\\', $name);
+            }
+
+            $name = strtolower(ltrim($name, '\\'));
+
+            return preg_match('~^[a-z_][a-z0-9_]*(?:\\\\[a-z_][a-z0-9_]*)*$~', $name) === 1 ? $name : null;
+        }
+
+        if (\count($argument) === 3
+            && \is_array($argument[2]) && $argument[2][0] === T_CLASS && strtolower($argument[2][1]) === 'class'
+            && \is_array($argument[1]) && $argument[1][0] === T_DOUBLE_COLON
+            && \is_array($argument[0]) && \in_array($argument[0][0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+        ) {
+            $full = ltrim(strtolower($argument[0][1]), '\\');
+
+            return preg_match('~^[a-z_][a-z0-9_]*(?:\\\\[a-z_][a-z0-9_]*)*$~', $full) === 1 ? $full : null;
+        }
+
+        return null;
     }
 
     /**
@@ -6250,6 +6468,9 @@ final class RuntimeTest extends TestCase
             class_alias(SplFileObject::class, 'RuntimeWriter');
             ca('SplFileObject', 'FnAliasedWriter');
             class_alias(class: \SplFileObject::class, alias: 'NamedArgWriter');
+            class_alias(alias: 'RevArgWriter', class: \SplFileObject::class);
+            class_alias('SplFileObject', 'Solo\NS');
+            class_alias('SplFileObject', 'WNS');
 
             final class Extends
             {
@@ -6262,6 +6483,10 @@ final class RuntimeTest extends TestCase
                     $runtime = new RuntimeWriter($p, 'w');
                     $fnAliased = new FnAliasedWriter($p, 'w');
                     $namedArg = new NamedArgWriter($p, 'w');
+                    $reordered = new RevArgWriter($p, 'w');
+                    $soloFq = new \Solo\NS($p, 'w');
+                    $soloBare = new Solo\NS($p, 'w');
+                    $backslashSite = new \WNS($p, 'w');
                     $safe = new SafeWriter();
                     $plain = new \SplFileObject($p, 'w');
                     $wrongScope = new self($p, 'w');
@@ -6270,20 +6495,21 @@ final class RuntimeTest extends TestCase
             PROBE);
 
         $this->assertSame(
-            ['splfileobject' => [28, 33, 41, 53, 54, 55, 56, 57, 58, 59, 61]],
+            ['splfileobject' => [28, 33, 41, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 68]],
             self::writePrimitivesCalledIn($file),
-            'extends-clause reach is the construction channel: 53 is the anonymous class that '
-            . 'was the thirteenth defeat, 54 the same header under a `use … as …` alias, 55-56 '
-            . 'the named same-file subclass and its one-link chain, 57 the two-literal '
-            . '`class_alias` name, 58 the FUNCTION-aliased `class_alias` (the fourteenth defeat, '
-            . 'review cycle 1: `use function class_alias as ca;` silenced the whole declaration '
-            . 'channel for a scanner whose own alias map already held the answer), 59 the '
-            . 'named-argument label spelling of the same call (the same review, same shape, '
-            . 'other argument), 61 the direct spelling that must keep working, and 28/33/41 the '
-            . 'keyword spellings `self` / `static` / `parent` inside a same-file subclass (the '
-            . 'fifteenth defeat — the construction site names no token, the ENCLOSING CLASS '
-            . 'does, and the scope stack resolves it). Lines 60 (`ArrayObject` — nobody '
-            . 'rostered), 62 (`new self` inside a class that extends nothing) and the '
+            'extends-clause reach is the construction channel: 56 is the anonymous class that '
+            . 'was the thirteenth defeat, 57 the same header under a `use … as …` alias, 58-59 '
+            . 'the named same-file subclass and its one-link chain, 60 the two-literal '
+            . '`class_alias` name, 61 the FUNCTION-aliased `class_alias` (the fourteenth defeat, '
+            . 'review cycle 1), 62 the in-order named-argument spelling, 63 the REVERSED label '
+            . 'order and 64-66 the namespaced-alias and leading-backslash sites (the '
+            . 'sixteenth, seventeenth and eighteenth defeats — review cycle 2: an order-free '
+            . 'pairing, a FULL-NAME runtime map, and a runtime consult exempt from the '
+            . 'backslash-ignores-imports guard, which is right for imports and wrong for names '
+            . 'class_alias itself defines), 68 the direct spelling that must keep working, and '
+            . '28/33/41 the keyword spellings `self` / `static` / `parent` inside a same-file '
+            . 'subclass (the fifteenth defeat). Lines 67 (`ArrayObject` — nobody rostered), 70 '
+            . '(`new self` inside a class that extends nothing) and the '
             . 'declared-but-never-constructed class at 20-22 must NOT appear: both polarities '
             . 'or this arm reports everything.',
         );

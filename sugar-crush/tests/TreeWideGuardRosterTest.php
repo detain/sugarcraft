@@ -1174,6 +1174,28 @@ final class TreeWideGuardRosterTest extends TestCase
             . 'new channel reporting wrongly',
         );
 
+        // THE CYCLE-2 PAIR: label order is free in PHP 8, and a runtime alias
+        // may be namespaced - the site then spells the WHOLE name, with or
+        // without the leading backslash. Both were the fully-silent bucket on
+        // both instruments until the pairing/keying fix.
+        $viaReorderedClassAlias = self::knownAnswerSources()['viaReorderedClassAlias'];
+        $this->assertSame(
+            ['root' => ['RD($d)'], 'unresolved' => []],
+            self::classifyWalkSites($viaReorderedClassAlias),
+            'the reversed label order paired backwards again (alias into the target slot and '
+            . 'the other way round), which registers NOTHING the scanner can key on - the '
+            . 'silent direction, again',
+        );
+
+        $viaNamespacedClassAlias = self::knownAnswerSources()['viaNamespacedClassAlias'];
+        $this->assertSame(
+            ['root' => ['Deep\\NS($d)'], 'unresolved' => []],
+            self::classifyWalkSites($viaNamespacedClassAlias),
+            'a namespaced class_alias literal must key the FULL registered name - last-segment '
+            . 'keying left `new \Deep\NS(...)` matching nothing while it constructed the walker '
+            . 'for real',
+        );
+
         // AND THE FIXTURE SET ITSELF IS PINNED, which was the NINTH door in
         // this one check when the set held eight. The coverage half
         // in {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
@@ -1199,7 +1221,8 @@ final class TreeWideGuardRosterTest extends TestCase
         // eight and false of the set; it is true of the set now.
         $this->assertSame(
             ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk',
-                'viaFunctionAlias', 'viaClassAlias', 'viaRuntimeAlias', 'viaSplFileInfoChildren', 'splFileInfoChained', 'childrenUnanchored',],
+                'viaFunctionAlias', 'viaClassAlias', 'viaRuntimeAlias', 'viaSplFileInfoChildren', 'splFileInfoChained', 'childrenUnanchored',
+                'viaReorderedClassAlias', 'viaNamespacedClassAlias',],
             array_keys(self::knownAnswerSources()),
             'a fixture was added to or removed from knownAnswerSources() without a matching '
             . 'exact-answer row above. That matters in one direction in particular: '
@@ -1264,6 +1287,15 @@ final class TreeWideGuardRosterTest extends TestCase
             'childrenUnanchored' => "<?php\nclass P { private function go(): void {\n"
             . "    \$d = sys_get_temp_dir() . '/x'; \$f = new \\SplFileInfo(\$d);\n"
             . "    foreach (\$f->getChildren() as \$c) {} } }\n",
+            // THE CYCLE-2 RE-RAISES, pinned by exact label this time (the
+            // table rows below pin the bucket): `class_alias` arguments
+            // paired by label in EITHER order, and a NAMESPACED alias
+            // constructed under its full name. Both were silent-and-undeclared
+            // at the previous HEAD on both instruments, truncating for real.
+            'viaReorderedClassAlias' => "<?php\nclass_alias(alias: 'RD', class: 'RecursiveDirectoryIterator');\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
+            'viaNamespacedClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', 'Deep\\NS');\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new \\Deep\\NS(\$d); } }\n",
         ];
     }
 
@@ -1446,6 +1478,19 @@ final class TreeWideGuardRosterTest extends TestCase
             ],
             'a class_alias called with named arguments' => [
                 "<?php\nclass P { function go() { class_alias(class: 'RecursiveDirectoryIterator', alias: 'RD'); new RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'root',
+            ],
+            // THE CYCLE-2 PAIR, added the day the pairing and keying were
+            // fixed (review cycle 2, F-A and F-B - both MEASURED silent at the
+            // previous HEAD): label order is free, and a class_alias alias may
+            // itself be namespaced, in which case the SITE writes the whole
+            // name and only full-name keying matches it.
+            'a class_alias with its labels in reversed order' => [
+                "<?php\nclass P { function go() { class_alias(alias: 'RD', class: 'RecursiveDirectoryIterator'); new RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'root',
+            ],
+            'a namespaced runtime alias at its construction site' => [
+                "<?php\nclass P { function go() { class_alias('RecursiveDirectoryIterator', 'Deep\\\\NS'); new \\Deep\\NS(\\dirname(__DIR__, 2) . '/src'); } }\n",
                 'root',
             ],
             'a walker reached through a COMPUTED class_alias' => [
@@ -3391,12 +3436,53 @@ final class TreeWideGuardRosterTest extends TestCase
                 continue;
             }
 
-            $target = self::aliasLiteralName($args[0]);
-            $alias = self::aliasLiteralName($args[1]);
-            if ($target === null || $alias === null) {
+            // PAIR BY LABEL WHEN ONE CARRIES ONE (review cycle 2, F-A:
+            // `class_alias(alias: 'V', class: X::class)` is legal PHP 8 and
+            // the positional read paired it backwards, silently losing the
+            // alias on BOTH instruments). A positional argument fills the
+            // first unfilled signature slot, class then alias, which is the
+            // only reading a legal mix can have; a third `exclusive` argument
+            // has no slot and is ignored.
+            $slots = ['class' => null, 'alias' => null];
+            $positional = [];
+            foreach ($args as $arg) {
+                if (preg_match('~^([A-Za-z_][A-Za-z0-9_]*):(?!:)~', trim($arg), $lm) === 1) {
+                    $label = strtolower($lm[1]);
+                    if (array_key_exists($label, $slots) && $slots[$label] === null) {
+                        $slots[$label] = substr(trim($arg), strlen($lm[0]));
+                    }
+
+                    continue;
+                }
+                $positional[] = $arg;
+            }
+            foreach (['class', 'alias'] as $slot) {
+                if ($slots[$slot] === null && $positional !== []) {
+                    $slots[$slot] = array_shift($positional);
+                }
+            }
+            if ($slots['class'] === null || $slots['alias'] === null) {
                 continue;
             }
-            $class[$alias] ??= $target;
+
+            $targetFull = self::aliasLiteralName($slots['class']);
+            $aliasFull = self::aliasLiteralName($slots['alias']);
+            if ($targetFull === null || $aliasFull === null) {
+                continue;
+            }
+            // the roster keys on the LAST segment (WALKER_CLASSES is spelled
+            // short), so the target resolves to its last segment; the alias is
+            // stored under BOTH its full name (what a site writes) and its
+            // last segment (what a `use Solo\NS`-style bare read writes),
+            // because `class_alias(X::class, 'Solo\NS')` registers the whole
+            // name `\Solo\NS` - review cycle 2, F-B, silent on both
+            // instruments while keyed by last segment alone.
+            $sep = strrpos($targetFull, '\\');
+            $target = $sep === false ? $targetFull : substr($targetFull, $sep + 1);
+            $sep = strrpos($aliasFull, '\\');
+            $aliasLast = $sep === false ? $aliasFull : substr($aliasFull, $sep + 1);
+            $class[$aliasFull] ??= $target;
+            $class[$aliasLast] ??= $target;
         }
 
         return ['function' => $function, 'class' => $class];
@@ -3421,33 +3507,64 @@ final class TreeWideGuardRosterTest extends TestCase
             return null;
         }
 
-        // A leading NAMED-ARGUMENT LABEL (`class:`, `alias:`) is part of the
-        // call's shape, not of the value - review cycle 1 measured the label
-        // spelling of `class_alias` passing through un-read. The identifier
-        // half of the pair is matched as any word (the `class:` label itself
-        // arrives as T_CLASS, whose text joins to exactly this shape), and
-        // the `:` must come directly after it - a ternary's `?` or `??`
-        // breaks the shape before a bare colon, so `a ? 'x' : 'y'` is not a
-        // label and falls through to the literal rules below, where the
-        // concatenation earns its correct null.
+        // A leading NAMED-ARGUMENT LABEL is normally stripped upstream by the
+        // pairing loop, but this reader is called directly too, so the guard
+        // stays; a ternary's `?` or `??` breaks the shape before a bare colon,
+        // so `a ? 'x' : 'y'` is not a label and falls through to null below.
         if (preg_match('~^[A-Za-z_][A-Za-z0-9_]*:(?!:)~', $argument, $label) === 1) {
             $argument = trim(substr($argument, strlen($label[0])));
         }
 
-        if (preg_match("~^(['\"])(?<name>[^'\"]*)\\1$~", $argument, $m) === 1) {
-            $segments = explode('\\', strtolower($m['name']));
-            $last = (string) end($segments);
+        if (preg_match("~^(['\"])(?<name>.*)\\1$~s", $argument, $m) === 1) {
+            $full = strtolower(self::decodeAliasStringBody($m['name'], $m[1] ?? "'"));
 
-            return $last === '' ? null : $last;
+            if ($full === null) {
+                return null;
+            }
+            $full = ltrim($full, '\\');
+
+            return preg_match('~^[a-z_][a-z0-9_]*(?:\\\\[a-z_][a-z0-9_]*)*$~', $full) === 1 ? $full : null;
         }
 
         if (preg_match('~^(?<name>[A-Za-z_][A-Za-z0-9_]*(?:\\\\[A-Za-z_][A-Za-z0-9_]*)*)::class$~', $argument, $m) === 1) {
-            $segments = explode('\\', strtolower($m['name']));
-
-            return strtolower((string) end($segments));
+            return strtolower($m['name']);
         }
 
         return null;
+    }
+
+    /**
+     * The runtime value of a string literal's BODY, for a class name.
+     *
+     * A class_alias alias is a STRING, so `'Solo\\NS'` in source spells the
+     * runtime name `Solo\NS` - the double backslash is ONE separator, and it
+     * is the single-backslash form the construction SITE writes (`new
+     * Solo\NS` is one T_NAME_QUALIFIED token with one separator), so the two
+     * only line up after this unescape (review cycle 2, F-B: last-segment
+     * keying on the still-escaped text matched neither). Single quotes: only
+     * `\\` and `\'` escape; every other backslash stands, so a bare namespace
+     * separator typed as one backslash (legal in source) survives too. Double
+     * quotes: ONLY `\\` is name-safe; a body still holding a lone backslash
+     * carries an escape (`\n`, `\x4e`) whose value this reader refuses to
+     * compute - null, and the blind-spot table names it.
+     */
+    private static function decodeAliasStringBody(string $body, string $quote): ?string
+    {
+        if ($quote === "'") {
+            if (str_contains($body, "\x00")) {
+                return null;
+            }
+            $out = str_replace(["\\\\", "\\'"], ["\x00", "'"], $body);
+
+            return str_replace("\x00", '\\', $out);
+        }
+
+        $out = str_replace('\\\\', "\x00", $body);
+        if (str_contains($out, '\\')) {
+            return null;
+        }
+
+        return str_replace("\x00", '\\', $out);
     }
 
     /**
