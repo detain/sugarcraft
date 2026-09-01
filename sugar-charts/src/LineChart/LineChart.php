@@ -34,6 +34,7 @@ final class LineChart extends Chart
      * @param array<string,string>       $datasetPoints  per-series rune override
      * @param list<string>               $xLabels
      * @param list<string>               $yLabels
+     * @param ?array<string,string>      $lineStyle  axis runeset override (a Graph::LINE_* preset); null = LINE_THIN
      */
     public function __construct(
         public readonly array $data,
@@ -66,6 +67,7 @@ final class LineChart extends Chart
         float $animationProgress = 1.0,
         int $animationDuration = 0,
         public readonly bool $fill = false,
+        public readonly ?array $lineStyle = null,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ) {
@@ -215,6 +217,21 @@ final class LineChart extends Chart
     }
 
     /**
+     * Choose the line-art preset used for the axis frame drawn by
+     * {@see withAxes()} — e.g. `Graph::LINE_ROUNDED` for arc corners
+     * (`╰`) instead of the default sharp thin ones (`└`). Passing null
+     * restores the LINE_THIN default. WHY: ntcharts has no rune-style
+     * setter; this closes the org-wide rounded-box gap sugar-dash
+     * already defaults to.
+     *
+     * @param ?array<string,string> $runes  a Graph::LINE_* preset
+     */
+    public function withLineStyle(?array $runes): self
+    {
+        return $this->lineChartCopy(lineStyle: $runes, lineStyleSet: true);
+    }
+
+    /**
      * X-axis labels (rendered under the axis when `withAxes(true)` is set).
      * @param list<string> $labels
      */
@@ -246,6 +263,8 @@ final class LineChart extends Chart
         return $this->withXYRange($xMin, $xMax, $yMin, $yMax);
     }
     public function axes(bool $on = true): self      { return $this->withAxes($on); }
+    /** Short-form alias for {@see withLineStyle()}. */
+    public function lineStyle(?array $runes): self   { return $this->withLineStyle($runes); }
     /** @param list<string> $labels */
     public function xLabels(array $labels): self     { return $this->withXLabels($labels); }
     /** @param list<string> $labels */
@@ -491,7 +510,10 @@ final class LineChart extends Chart
             // Origin = bottom-left of the plot region.
             $xOrigin = $gutterLeft;
             $yOrigin = $plotH; // axis row sits one row below the topmost data
-            Graph::drawXYAxis($canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1);
+            Graph::drawXYAxis(
+                $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
+                null, $this->lineStyle ?? Graph::LINE_THIN,
+            );
             Graph::drawXYAxisLabel(
                 $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
                 $xLabels, $yLabels,
@@ -595,6 +617,8 @@ final class LineChart extends Chart
         ?float $animationProgress = null,
         ?int $animationDuration = null,
         ?bool $fill = null,
+        ?array $lineStyle = null,
+        bool $lineStyleSet = false,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ): self {
@@ -629,6 +653,7 @@ final class LineChart extends Chart
             animationProgress:  $animationProgress  ?? $this->getAnimationProgress(),
             animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
             fill:              $fill              ?? $this->fill,
+            lineStyle:         $lineStyleSet ? $lineStyle : $this->lineStyle,
             brailleCanvas:     $brailleCanvas     ?? $this->brailleCanvas,
             theme:             $theme             ?? $this->theme,
         );

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Tests\LineChart;
 
+use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\LineChart\LineChart;
 use PHPUnit\Framework\TestCase;
@@ -69,6 +70,38 @@ final class LineChartTest extends TestCase
         $this->assertStringContainsString('─', $out);
         $this->assertStringContainsString('│', $out);
         $this->assertStringContainsString('10', $out);
+    }
+
+    public function testWithLineStyleSwapsAxisCorners(): void
+    {
+        $base = LineChart::new([1, 5, 3, 7, 4], 20, 8)
+            ->withAxes()
+            ->withYLabels(['10', '5', '0'])
+            ->withXLabels(['t0', 't4']);
+
+        // Setter stores the runeset and stays immutable (no get-prefix
+        // accessor; the public readonly prop is the contract).
+        $rounded = $base->withLineStyle(Graph::LINE_ROUNDED);
+        $this->assertSame(Graph::LINE_ROUNDED, $rounded->lineStyle);
+        $this->assertNull($base->lineStyle);
+
+        // Default (LINE_THIN) is untouched: sharp corner, no arcs.
+        $defaultOut = $base->view();
+        $this->assertStringContainsString('└', $defaultOut);
+        $this->assertStringNotContainsString('╰', $defaultOut);
+
+        // Opted-in: arc at the axes intersection, thin runs elsewhere.
+        $out = $rounded->view();
+        $this->assertStringContainsString('╰', $out);
+        $this->assertStringNotContainsString('└', $out);
+        $this->assertStringContainsString('─', $out);
+        $this->assertStringContainsString('│', $out);
+
+        // The arc sits at the axis corner: the axis row opens with the
+        // label gutter, then the corner glyph directly abutting the
+        // X-axis run to the canvas edge (no stray cells).
+        $this->assertMatchesRegularExpression('/^ *╰─+$/um', $out);
+        $this->assertMatchesRegularExpression('/^ *└─+$/um', $defaultOut);
     }
 
     public function testWithDatasetRendersMultipleSeries(): void

@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\BarChart\BarChart;
+use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Charts\Sparkline\Sparkline;
@@ -30,6 +31,15 @@ final class ShortAliasesTest extends TestCase
     {
         $long  = LineChart::new([])->withSize(15, 4)->withData([1.0, 5.0, 3.0])->view();
         $short = LineChart::new([])->size(15, 4)->data([1.0, 5.0, 3.0])->view();
+        $this->assertSame($long, $short);
+    }
+
+    public function testLineChartLineStyleAlias(): void
+    {
+        $long  = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->axes()
+            ->withLineStyle(Graph::LINE_ROUNDED)->view();
+        $short = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->axes()
+            ->lineStyle(Graph::LINE_ROUNDED)->view();
         $this->assertSame($long, $short);
     }
 

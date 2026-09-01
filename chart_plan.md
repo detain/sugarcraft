@@ -43,19 +43,32 @@ Scheduling rule: a step starts only when (a) its intra-lane predecessor is commi
 
 ---
 
-## S1 — sugar-dash: Bubble bottom-right arc corner fix
+## S1 — sugar-dash: Bubble bottom-right arc corner fix (AMENDED 2026-09-01 → geometry fix per Option A)
 
 **Why**: `CIRCLE_CHARS` maps bottom-right to `◠` (U+25E0 LOWER HALF CIRCLE — a wide flat arc, not a corner). The correct bottom-right quarter arc is `◞` (U+25DE). ◜◝◟ are right; only BR is wrong. 1-glyph correctness fix, visible rounder bubbles.
 
-**Design**:
-- `CIRCLE_CHARS` (`Bubble.php`, const block `'bottom-right' => '◠'`) is currently DEAD — defined, never read; `getCircleChar()` hardcodes its return branches. Fix at the single source: (1) change the table entry `'bottom-right' => '◠'` → `'◞'`; (2) rewrite `getCircleChar()` to look up `self::CIRCLE_CHARS['bottom-right'/'top-left'/...]` (and `'full'`) instead of hardcoded literals, so the constant drives output.
-- Do not touch the other three corners' table entries.
+> **Amendment note (2026-09-01)**: the original rationale was measured **dead-on-arrival** — `drawBubbleOnGrid`'s disk test `dx*dx + dy*dy <= r*r` (`Bubble.php:396`) never admits corner cells (`|dx|=|dy|=r ⇒ 2r²>r²`), so `CIRCLE_CHARS` and the four corner branches of `getCircleChar()` are unreachable from render and NO `◜◝◟◠`/`◞` appears in ANY rendered bubble (measured: r=5 → 5-cell plus; r=8/10 → 13-cell diamond). A table-only `◠`→`◞` is a provable no-op and the original "assert rendered `◞` at bottom-right offset" acceptance test was unsatisfiable. Plan-drift STOP recorded 2026-09-01 (worklog `s1-build`); human ruling **OPTION A** (2026-09-01) amends S1 into a geometry fix: classify the ring boundary so the four corner arc glyphs from `CIRCLE_CHARS` ARE emitted at the diagonal extremes of each bubble, making the constant genuinely drive output. This is an EXPLICIT APPROVED default-output change scoped to sugar-dash `Bubble`.
+
+**Design** (amended contract):
+- `CIRCLE_CHARS` (`Bubble.php:49-55`): change `'bottom-right' => '◠'` → `'◞'` (U+25DE). Other entries untouched.
+- `getCircleChar()` (`Bubble.php:417`): look up `self::CIRCLE_CHARS` (the four corner keys + `'full'`) instead of the hardcoded literals at lines 421-439 (note the BR branch itself hardcodes the wrong `◠` at line 436).
+- `drawBubbleOnGrid()` (`Bubble.php:392`, **NOW in scope**): replace the pure-disk edge emission with a boundary classification such that for radius r ≥ 2 —
+  - the four diagonal extreme cells `(±r, ±r)` relative to center are emitted with the matching quadrant-arc glyph from `CIRCLE_CHARS` (BR = `◞`);
+  - cardinal-extreme cells `(0,±r)`, `(±r,0)` keep `●` (`CIRCLE_CHARS['full']`);
+  - interior/edge fills remain `●` per existing behavior;
+  - the ring must be 4-fold symmetric and connected (no diagonal-only touching that splits the ring at r=2).
+  The exact classification rule (e.g., emit corner glyph when `|dx|==|dy|==r`; choose fill rule for edge cells so small radii render as coherent rounded boxes) is the builder's choice — the acceptance criteria below are binding.
+- **APPROVED default-output change** (human ruling 2026-09-01, Option A): bubbles render corner arcs where before they rendered none; small-r shapes change (measured legacy: r=5 plus → ringed). Golden-safe: `'bubble'` ∈ `GoldenSnapshotTest::SKIPPED` and the bubble example is time-nondeterministic anyway — **zero golden churn; do NOT touch `tests/golden/**`** (no `.golden` file belongs in this step's write-set).
 
 **Write-set**:
-- `sugar-dash/src/Plot/Chart/Bubble.php` (symbols: `CIRCLE_CHARS`, `getCircleChar`)
-- `sugar-dash/tests/Plot/Chart/BubbleTest.php` — update the char-class regex in the circle-characters test to `/[●◜◝◟◞]/`; add one test that a rendered bubble ring contains `◞` at bottom-right offset (assert grid position, not just presence) — NOTE: strip ANSI first (`preg_replace('/\x1b\[[0-9;]*m/', '', $rendered)`) because `Bubble::render` wraps every cell glyph in `toFg(...)`/`Ansi::reset()`; plus one test asserting the `CIRCLE_CHARS` constant drives output (mutate expectation via table lookup, e.g. BR position equals `CIRCLE_CHARS['bottom-right']`).
+- `sugar-dash/src/Plot/Chart/Bubble.php` (symbols: `CIRCLE_CHARS`, `getCircleChar`, `drawBubbleOnGrid`)
+- `sugar-dash/tests/Plot/Chart/BubbleTest.php` — update the char-class regex (`BubbleTest.php:101`) from `/[●◜◝◟◠]/` to `/[●◜◝◟◞]/`. Tests MUST pin:
+  - (a) a rendered bubble (ANSI-stripped via `preg_replace('/\x1b\[[0-9;]*m/', '', $rendered)` — `Bubble::render` wraps every cell glyph in `toFg(...)`/`Ansi::reset()`) contains `◞` at the exact bottom-right diagonal offset (assert grid position, not just presence);
+  - (b) all four corner glyphs render at their diagonals for r ≥ 2;
+  - (c) output equals a table lookup — assert the rendered BR cell === `CIRCLE_CHARS['bottom-right']` resolved through a test-local copy of the table (const is `private`; via reflection or mirrored map). Hardcoding the expected glyph is forbidden: mutating the `'bottom-right'` entry in the test-local copy must change what the test expects, proving the table drives render;
+  - (d) default-shape regression tests that currently assert the legacy plus/diamond shapes must be UPDATED to the new ringed shapes — that IS the declared change. List every existing test you had to update in the build report.
 
-**Verify**: `vendor/bin/phpunit --filter Bubble` then full sugar-dash suite. Expected delta: +2 tests.
+**Verify**: `cd /home/sites/sugarcraft/sugar-dash && vendor/bin/phpunit --filter Bubble > /tmp/s1-bubble.log 2>&1; echo rc=$?` then the FULL sugar-dash suite. Baseline at e2d17a4c9: 5853 tests / 9154 assertions / 1 skipped / rc=0 with exactly 1 pre-existing warning — the `GenericModule.php:98` `proc_open` env noise, NOT a finding. Expected delta: +2..4 tests (builder reports actual).
 
 ---
 
@@ -192,6 +205,11 @@ Scheduling rule: a step starts only when (a) its intra-lane predecessor is commi
 ## Known caveats
 
 (resolved ambiguities land here so successor sessions don't relitigate — keep empty until one is earned)
+
+- 2026-09-01: `UPDATE_GOLDENS=1` (candy-testing `Assertions::assertGoldenAnsi`) only CREATES missing goldens; it NEVER overwrites an existing differing golden. To re-record sugar-charts goldens: delete the `.golden` first, run suite, keep the new file.
+- 2026-09-01: PHPUnit 10.5.64 rejects `--regenerate` in BOTH documented positions (`-- --regenerate` → "Test file not found"; bare → "Unknown option"); sugar-dash golden re-record requires either `php tools/generate-goldens.php --dimensions <dim>` (rewrites tool-style header `PHP 8.3.x...`) or a reflection replay of `GoldenSnapshotTest::runExample` + its regenerate branch (writes header `PHP (test)`; S4 used this). Comparison strips all header lines above `---` so both header styles pass.
+- 2026-09-01: 'bubble'/'calendar'/'clock'/'timer'/etc ∈ `GoldenSnapshotTest::SKIPPED`; 'donut' is NOT — S4-class changes re-record donut goldens only.
+- 2026-09-01: S1 amended to geometry fix per human ruling Option A after plan-drift stop (disk test dx²+dy²≤r² never emitted corner cells; table-only ◠→◞ was a provable no-op). Approved default-output change scoped to Bubble only.
 
 ## Completion criteria (whole plan)
 
