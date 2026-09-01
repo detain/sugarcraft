@@ -29,7 +29,7 @@
 | S1 Bubble ◞ fix | B | ⬜ | ⬜ | ⬜ | |
 | S2 Rounded line set | A | ✅ | ✅ | ✅ | 4eb555810 |
 | S3 BarChart eighths | A | ⬜ | ⬜ | ⬜ | |
-| S4 Donut aspect | B | ⬜ | ⬜ | ⬜ | |
+| S4 Donut aspect | B | ✅ | ✅ | ✅ | 28b204b0b |
 | S5 Donut quadrant rim | B | ⬜ | ⬜ | ⬜ | |
 | S6 Donut bg-SGR fill | B | ⬜ | ⬜ | ⬜ | |
 | S7 Donut wireframe mode | B | ⬜ | ⬜ | ⬜ | |
@@ -50,3 +50,9 @@
 | 2026-09-01T18:42Z | S4 | predict | orchestrator | done | commit expects dash@4eb555810+dirty: 5860/9230/1Sk rc0 W1-base (incl. sibling S1 +3 uncommitted; S4 share +4/+11 over 5853/9154); charts not re-run (no charts edits since S2 commit 4eb555810) |
 | 2026-09-01T18:42Z | S4 | commit | s4-commit | in-flight | dash@4eb555810 gate: 5860/9230/1Sk rc0 W1(base noise); review 1 cycle 0 findings CLEAN; staging 4 files + chart_plan.md + chart_worklog.md fold |
 | 2026-09-01T18:42Z | S5 | in-flight | s5-build | pending | S4 commit window open; Donut.php exclusive to S5 next |
+| 2026-09-01T18:49:31Z | S4 | commit | s4-commit | committed | 28b204b0b sugar-dash S4 Donut aspect (4 files: Donut.php, DonutTest.php, 80x24+120x40 donut.golden) + fold chart_plan.md/chart_worklog.md; dash@28b204b0b+dirty(S1 sibling): 5860/9230/1Sk rc0 W1; reviewer 1 cycle 0 findings; caliber: fail |
+| 2026-09-01T19:11:48Z | S3 | build | s3-build | done | charts@28b204b0b+dirty: 554/1338/0Sk rc0 (+8 tests/+55 asserts vs 546/1283 baseline); 4 files (BarChart.php, BarChartTest.php, ShortAliasesTest.php, README.md) = ceiling; ramps: vert mb_chr(0x2581+round(frac*8)-1), horiz mb_chr(0x2590-round(frac*8)) left-flush, <1/8 blank no ghost, 8/8 promotes to █, flag default-off byte-identical (fixtures porcelain empty); docblock :144 ┴→├ drift fixed (code emits ├ at :423→465); README BarChart sample replaced w/ REAL captured output + 2nd withFractionalHeights sample (byte-verified vs live render); phpstan L5 clean; temp-revert counterfactual: cap helpers→'' breaks 5/9 Fractional tests |
+| 2026-09-01T18:35Z | S1 | review | reviewer-c1 | clean | e2d17a4c9+dirty S1-write-set; checks1-8; 0 findings; 5860/9230/1sk/1w-base rc0 builder-reported (verbatim row from cold-ivory-barracuda, trailing artifact comment stripped) |
+| 2026-09-01T18:50Z | S1 | predict | orchestrator | done | commit expects dash@28b204b0b+dirty(S1 only): 5860/9230/1Sk rc0 W1-base (+3/+65 over S4-tree 5857/9165) |
+| 2026-09-01T18:50Z | S1 | commit | s1-commit | in-flight | dash@28b204b0b gate: 5860/9230/1Sk rc0 W1(base noise); review 1 cycle 0 findings CLEAN; staging 2 write-set files + chart_worklog.md fold |
+| 2026-09-01T18:50Z | S5 | in-flight | s5-build | pending | S5 quadrant-rim spawn at S1-commit window open (Donut.php committed-clean at 28b204b0b) |

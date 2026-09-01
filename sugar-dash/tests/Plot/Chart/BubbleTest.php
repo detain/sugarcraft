@@ -10,6 +10,7 @@ use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 
 final class BubbleTest extends TestCase
 {
@@ -98,7 +99,7 @@ final class BubbleTest extends TestCase
         $rendered = $bubble->render();
 
         // Should contain circle characters
-        $this->assertMatchesRegularExpression('/[●◜◝◟◠]/', $rendered);
+        $this->assertMatchesRegularExpression('/[●◜◝◟◞]/', $rendered);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -429,5 +430,119 @@ final class BubbleTest extends TestCase
         $rendered = $bubble->render();
 
         $this->assertNotSame('', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Ringed bubble geometry (S1 amendment: CIRCLE_CHARS drives render)
+    //
+    // render() binning via mapSize (default size range 1..10):
+    //   raw size 1..3  -> single cell
+    //   raw size 4..6  -> radius 1 (legacy plus, no diagonals exist)
+    //   raw size 7..10 -> radius 2 (rounded box with quadrant arcs)
+    // At the default 50x20 the single point (50,50) centers at grid cell
+    // (row 8, col 20); each row is a 6-char label + space, so the visible
+    // char for grid col x sits at mb offset 7 + x of the ANSI-stripped line.
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Read Bubble's private CIRCLE_CHARS table through reflection so the
+     * assertions below track the source of truth: mutating a table entry
+     * in src changes what these tests expect (proving the table drives
+     * render), instead of restating the glyphs as test-local literals.
+     *
+     * @return array<string,string>
+     */
+    private function circleCharsTable(): array
+    {
+        foreach ((new ReflectionClass(Bubble::class))->getReflectionConstants() as $constant) {
+            if ($constant->getName() === 'CIRCLE_CHARS') {
+                /** @var array<string,string> $value */
+                $value = $constant->getValue();
+
+                return $value;
+            }
+        }
+
+        $this->fail('Bubble::CIRCLE_CHARS no longer exists; the geometry contract has moved.');
+    }
+
+    /**
+     * @return list<string> ANSI-stripped render lines (row y = index y).
+     */
+    private function strippedRenderLines(Bubble $bubble): array
+    {
+        return explode("\n", (string) preg_replace('/\x1b\[[0-9;]*m/', '', $bubble->render()));
+    }
+
+    private function cellAt(array $lines, int $row, int $col): string
+    {
+        return mb_substr($lines[$row], 7 + $col, 1);
+    }
+
+    public function testMediumBubbleEmitsQuadrantArcsFromTableAtDiagonals(): void
+    {
+        $table = $this->circleCharsTable();
+        // size 10 -> radius 2; center (row 8, col 20); corners at (+-2, +-2).
+        $lines = $this->strippedRenderLines(Bubble::new([
+            new BubblePoint('Big', 50, 50, 10),
+        ]));
+
+        $this->assertSame($table['top-left'], $this->cellAt($lines, 6, 18));
+        $this->assertSame($table['top-right'], $this->cellAt($lines, 6, 22));
+        $this->assertSame($table['bottom-left'], $this->cellAt($lines, 10, 18));
+        // Binding criterion (a): bottom-right corner comes from the table
+        // lookup at its exact diagonal offset - never a hardcoded glyph.
+        $this->assertSame($table['bottom-right'], $this->cellAt($lines, 10, 22));
+        // The table entry itself must carry U+25DE LOWER RIGHT ARC.
+        $this->assertSame("\u{25DE}", $table['bottom-right']);
+    }
+
+    public function testMediumBubbleRendersConnectedBoxWithFullDotFill(): void
+    {
+        $table = $this->circleCharsTable();
+        $lines = $this->strippedRenderLines(Bubble::new([
+            new BubblePoint('Big', 50, 50, 10),
+        ]));
+
+        $arcs = [$table['top-left'], $table['top-right'], $table['bottom-left'], $table['bottom-right']];
+        for ($dy = -2; $dy <= 2; $dy++) {
+            for ($dx = -2; $dx <= 2; $dx++) {
+                $cell = $this->cellAt($lines, 8 + $dy, 20 + $dx);
+                $isCorner = abs($dx) === 2 && abs($dy) === 2;
+
+                // Connected: the 5x5 window holds no gaps (full box => 4-connected).
+                $this->assertNotSame(' ', $cell, "gap at (dx=$dx, dy=$dy)");
+
+                if ($isCorner) {
+                    $this->assertContains($cell, $arcs);
+                } else {
+                    // Cardinal extremes and interior fill stay the full dot.
+                    $this->assertSame($table['full'], $cell, "non-corner at (dx=$dx, dy=$dy)");
+                }
+            }
+        }
+    }
+
+    public function testSmallBubbleKeepsPlusShapeWithoutCornerArcs(): void
+    {
+        $table = $this->circleCharsTable();
+        // size 5 -> radius 1: legacy 5-cell plus; its diagonals are outside
+        // the disk, and the arc clause of the contract is scoped to r >= 2.
+        $bubble = Bubble::new([
+            new BubblePoint('Small', 50, 50, 5),
+        ]);
+        $lines = $this->strippedRenderLines($bubble);
+
+        $this->assertSame($table['full'], $this->cellAt($lines, 8, 20));
+        $this->assertSame($table['full'], $this->cellAt($lines, 7, 20));
+        $this->assertSame($table['full'], $this->cellAt($lines, 9, 20));
+        $this->assertSame($table['full'], $this->cellAt($lines, 8, 19));
+        $this->assertSame($table['full'], $this->cellAt($lines, 8, 21));
+        foreach ([[-1, -1], [-1, 1], [1, -1], [1, 1]] as [$dy, $dx]) {
+            $this->assertSame(' ', $this->cellAt($lines, 8 + $dy, 20 + $dx));
+        }
+
+        $arcs = [$table['top-left'], $table['top-right'], $table['bottom-left'], $table['bottom-right']];
+        $this->assertSame([], array_values(array_intersect(mb_str_split(implode('', $lines)), $arcs)));
     }
 }

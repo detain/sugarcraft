@@ -50,7 +50,7 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
         'top-left' => '◜',
         'top-right' => '◝',
         'bottom-left' => '◟',
-        'bottom-right' => '◠',
+        'bottom-right' => '◞',
         'full' => '●',
     ];
 
@@ -387,24 +387,34 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Draw a bubble on the grid.
      *
+     * r >= 2 fills the whole (2r+1)-cell box so the CIRCLE_CHARS quadrant arcs
+     * land on the diagonal extremes — a pure disk never admits |dx|=|dy|=r,
+     * leaving those glyphs unreachable (chart_plan.md S1 amendment). The full
+     * box is trivially 4-fold symmetric and 4-connected. r == 1 keeps the disk
+     * test: its diagonals fall outside dx²+dy²≤1, so it renders the legacy
+     * 5-cell plus with no corner arcs, per the r >= 2 contract clause.
+     *
      * @param array<array<string>> $grid
      */
     private function drawBubbleOnGrid(array &$grid, int $cx, int $cy, int $radius, ?Color $color, int $chartWidth, int $chartHeight): void
     {
         for ($dy = -$radius; $dy <= $radius; $dy++) {
             for ($dx = -$radius; $dx <= $radius; $dx++) {
-                if ($dx * $dx + $dy * $dy <= $radius * $radius) {
-                    $x = $cx + $dx;
-                    $y = $cy + $dy;
+                $inSmallDisk = $dx * $dx + $dy * $dy <= $radius * $radius;
+                if ($radius < 2 && !$inSmallDisk) {
+                    continue;
+                }
 
-                    if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
-                        // Determine which circle character to use based on position
-                        $char = $this->getCircleChar($dx, $dy, $radius);
-                        if ($color !== null) {
-                            $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
-                        } else {
-                            $grid[$y][$x] = $char;
-                        }
+                $x = $cx + $dx;
+                $y = $cy + $dy;
+
+                if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
+                    // Determine which circle character to use based on position
+                    $char = $this->getCircleChar($dx, $dy, $radius);
+                    if ($color !== null) {
+                        $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
+                    } else {
+                        $grid[$y][$x] = $char;
                     }
                 }
             }
@@ -413,30 +423,27 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
 
     /**
      * Get circle character for position.
+     *
+     * Resolved through CIRCLE_CHARS so the table (not per-branch literals)
+     * drives render: quadrant arcs at the diagonal extremes, the full glyph
+     * everywhere else — cardinals, interior fill, and the r == 1 plus.
      */
     private function getCircleChar(int $dx, int $dy, int $radius): string
     {
-        $isEdge = abs($dx) === $radius || abs($dy) === $radius;
-
-        if (!$isEdge) {
-            return '●';
-        }
-
-        // Edge characters
         if ($dx === -$radius && $dy === -$radius) {
-            return '◜';
+            return self::CIRCLE_CHARS['top-left'];
         }
         if ($dx === $radius && $dy === -$radius) {
-            return '◝';
+            return self::CIRCLE_CHARS['top-right'];
         }
         if ($dx === -$radius && $dy === $radius) {
-            return '◟';
+            return self::CIRCLE_CHARS['bottom-left'];
         }
         if ($dx === $radius && $dy === $radius) {
-            return '◠';
+            return self::CIRCLE_CHARS['bottom-right'];
         }
 
-        return '●';
+        return self::CIRCLE_CHARS['full'];
     }
 
     /**
