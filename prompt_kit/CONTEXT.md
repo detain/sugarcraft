@@ -1,6 +1,6 @@
 # prompt_kit/CONTEXT.md — accumulated project context, harness-portable
 
-**What this is.** Forty-four pieces of accumulated context about this repository that had been
+**What this is.** Forty-five pieces of accumulated context about this repository that had been
 living in Claude Code's per-project memory store
 (`~/.claude/projects/-home-sites-sugarcraft/memory/`). That store is **specific to one harness on
 one machine**: OpenCode cannot see it, a different checkout cannot see it, and nothing in the repo
@@ -41,7 +41,7 @@ authoritative and more current.
 ## Index
 
 
-**How the user wants the work done — corrections and confirmed approaches** (15)
+**How the user wants the work done — corrections and confirmed approaches** (16)
 
 - `SugarCraft audit — skip credit + upgrade-guide items` — Don't include audit items that exist purely to credit upstream authors, or upgrade guides — this is a pre-1.0 PHP port and neither applies
 - `feedback-delegate-verification` — "Trust-but-verify via subagent, not self — main/supervisor agent stays lean by delegating verification, research, and investigation"
@@ -49,6 +49,7 @@ authoritative and more current.
 - `feedback_functionality_before_hardening` — Pick functionality/wiring items first; defer security hardening and audit-instrument work to the end of the plan, but RECORD each deferred finding as a concrete step
 - `feedback-gh-unset-token` — "Always run `unset GITHUB_TOKEN` before any `gh` command in this repo — the env var conflicts with `gh auth` and breaks PR creation"
 - `llm-request-timeouts` — LLM completion HTTP calls need a short connect_timeout but never a blanket total-request timeout — completions can legitimately run tens of minutes on a slow/loaded server
+- `feedback-no-polling-while-subagent-runs` — Never poll or emit keep-alive filler while waiting on a background subagent — the harness delivers the completion notification, so wait silently
 - `no-remove-wire-instead` — "dead/unwired code in SugarCraft should be fixed and wired up, never deleted — moving/consolidating is fine, removal is not"
 - `packagist-not-path-repos` — "Sibling deps resolve from Packagist; per-lib manifests carry NO repositories[] block and CI injects path repos at build time (landed 2fa678a7, docs now agree)"
 - `feedback-phpunit-kill-pattern` — "When PHPUnit may hang (PTY/FFI/proc_open tests), don't rely on `timeout`; launch a backgrounded killer process and pkill phpunit/timeout/php"
@@ -217,6 +218,37 @@ When recommending or adding timeouts to provider/LLM HTTP clients (Guzzle or oth
 **Why:** user correction during the crush_code.md sugar-crush audit (2026-08-13): "requests can take 30 minuts easily if on a laggd srver th timeout suggestd is way too low .. maybe a connect timeout of 30 but not a timout of 30." The plan had recommended copying `src/MCP/McpClient.php`'s `timeout => 30` onto the LLM provider clients — correct for MCP's short tool calls, wrong for completions.
 
 **How to apply:** any time a plan/fix proposes adding an HTTP timeout to an LLM-completion code path, propose only a short connect-timeout, and explicitly call out that the overall request timeout must stay high/unset — don't reuse a timeout value from a different, shorter-lived call type without checking whether the target call can legitimately run long.
+
+
+## `feedback-no-polling-while-subagent-runs`
+
+*Never poll or emit keep-alive filler while waiting on a background subagent — the harness delivers the completion notification, so wait silently*
+
+<sub>originally `feedback_no_polling_while_subagent_runs.md`, type `feedback`</sub>
+
+While a background subagent is running, **produce no output and take no polling action** until the
+harness delivers its completion notification. Do not emit a stream of short marker messages
+(`a1`, `a2`, `a3`…, or any `<letter><incrementing id>` sequence) every second or few seconds; do
+not re-run `ListAgents` on a timer; do not read the agent's partial-output file to "check on it";
+do not `ScheduleWakeup` a short interval to look again. Waiting is the whole action.
+
+**Why:** the user has now seen this three separate times and calls it out directly — *"this is the
+3rd time an agent has started sending like a `<letter><incrementing id>` message every like second
+or few seconds while a subagent is running ... in some effor tot polll or keep alive ... which is
+not needed in claude since the subagent will let it know whn its done and its respons"*. It is not
+needed: Claude Code re-invokes the parent with the subagent's full report when it finishes. The
+filler burns tokens, buries real output in scrollback, and — because it looks like progress —
+disguises a parent that is doing nothing.
+
+**How to apply:** after spawning, say once what you are waiting for and what you will do when it
+lands, then stop. The next thing you emit is your response to the agent's actual report. A long
+`ScheduleWakeup` fallback (1200s+) is legitimate only as a hang guard for work the harness cannot
+track — never as a poll for a harness-tracked subagent. Note this cuts against the OpenCode-era
+liveness habits in `prompt_plan.md` §1.8.6 / §19, which is the same substitution
+[[feedback_plan_docs_are_opencode_flavored]] describes: keep *what must be true* (a blank return
+means the agent died, never `NO FINDINGS`), drop the *how*. Related:
+[[feedback_delegate_verification]], [[feedback_phpunit_kill_pattern]],
+[[project_sugarcrush_orchestration_plan]].
 
 
 ## `no-remove-wire-instead`
