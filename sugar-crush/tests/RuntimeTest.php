@@ -2141,6 +2141,37 @@ final class RuntimeTest extends TestCase
                 // double quotes. Strip those spans; whatever is left is a LIVE
                 // claim. The span cannot leave this comment - that is the fix.
                 $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID: "[^"]*"~', '', $flat);
+
+                // AND THE DECLARED RESIDUE IS CLOSED FOR THIS CLAIM ONLY, which
+                // is the narrowest form that does not red on correct prose. The
+                // paragraph above declares that an unclosed quotation whose
+                // accidental closer is a LATER double quote in the SAME comment
+                // still licenses whatever sits between them, and rules out whole
+                // -file quote parity as the remedy because 6 src/ comments
+                // carrying the marker already hold an odd number of quotes.
+                //
+                // MEASURED by a reviewer, planting exactly that shape in
+                // src/Tools/BuiltIn/Read.php: the $violations census PASSED and
+                // the only red was the exact-count pin below - whose message
+                // then said "MORE means a third file has been given the
+                // correction, which is fine - say so here and make this 3".
+                // Doing that ran `OK (130 tests, 488 assertions)` with a live
+                // false claim standing in a third production file. A failure
+                // message that prescribes the action which masks the defect it
+                // just caught is rule 25's cost paid in full.
+                //
+                // SO PARITY IS CONSULTED, BUT ONLY WHERE IT COSTS NOTHING: a
+                // comment loses the licence when it has ODD quote parity AND
+                // would be licensed FOR ONE OF THESE TWO PHRASES. MEASURED, both
+                // real corrected comments are EVEN - src/Runtime.php:530 carries
+                // 52 quotes and src/Agents/Agent.php:399 carries 40 - so the
+                // clean tree is untouched, and the 6 odd-parity comments that
+                // ruled out the general form do not quote this claim at all.
+                if (substr_count($flat, '"') % 2 !== 0
+                    && preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"~', $flat) === 1) {
+                    $live = $flat;
+                }
+
                 if ($live !== $flat) {
                     $quoting++;
                 }
@@ -2216,9 +2247,12 @@ final class RuntimeTest extends TestCase
             . 'ones in Runtime::buildSystemPrompt() and Agents\\Agent::systemPrompt(), the two '
             . 'production doc-blocks that carried the claim live. FEWER means somebody deleted the '
             . 'correction rather than the claim, which leaves the next reader with no record that '
-            . 'the reason was ever false; MORE means a third file has been given the correction, '
-            . 'which is fine - say so here and make this 3. An exact count and not a floor, '
-            . 'because both directions are things a reader needs to be told about.',
+            . 'the reason was ever false. MORE MEANS READ THE THIRD COMMENT BEFORE TOUCHING THIS '
+            . 'NUMBER: if it really is a third rule-42 correction, say so here and make this 3 - '
+            . 'but a comment whose quotation is UNCLOSED lands here too, and raising the count '
+            . 'then leaves a LIVE false claim standing with the suite green. That was measured, '
+            . 'not imagined. An exact count and not a floor, because both directions are things a '
+            . 'reader needs to be told about.',
         );
         $this->assertGreaterThan(
             $quoting,

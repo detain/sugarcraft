@@ -2140,21 +2140,6 @@ final class TreeWideGuardRosterTest extends TestCase
         // satisfy is a correspondence between a spelling and somebody having
         // mentioned it, which is what this whole file exists to stop being the
         // standard of evidence.
-        $codeOnly = '';
-        foreach (token_get_all((string) file_get_contents(__FILE__)) as $token) {
-            if (\is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
-                continue;
-            }
-
-            $codeOnly .= \is_array($token) ? $token[1] : $token;
-        }
-
-        $knownAnswerBody = substr(
-            $codeOnly,
-            (int) strpos($codeOnly, 'public function testTheWalkClassifierAnswersKnownInputsCorrectly'),
-        );
-        $knownAnswerBody = strtolower(substr($knownAnswerBody, 0, (int) strpos($knownAnswerBody, 'public function ', 10)));
-
         // AND THE SEARCH IS NARROWED AGAIN, TO THE EXPECTED VALUES ONLY, because
         // stripping comments was not enough and a reviewer proved it in one
         // edit. WHAT THE LAST REVISION DID: searched the whole comment-stripped
@@ -2187,8 +2172,75 @@ final class TreeWideGuardRosterTest extends TestCase
         // paragraph above was describing the pattern it MEANT rather than the
         // one it had. This is the third door in the same check: a comment, then
         // a message string, then an unasserted literal.
-        preg_match_all("~assertsame\\(\\s*\\['root' => \\[[^\\]]*\\]~", $knownAnswerBody, $expected);
-        $expectedValues = implode(' ', $expected[0]);
+        //
+        // AND THERE WAS A FOURTH, WHICH IS WHY THE PATTERN NOW READS THE
+        // ASSERTION'S SECOND ARGUMENT TOO. Anchoring on `assertSame(` bought one
+        // extra token of evidence, not the correspondence the paragraph above
+        // claims: nothing looked at what the expected array was being compared
+        // TO. MEASURED by a reviewer, and reproduced here before fixing - a
+        // bogus spelling, the size pin bumped as this guard's own message
+        // instructs, and a TAUTOLOGY in the known-answer test
+        // (`$t = ['root' => ['notawalkeratall($x)'], ...]; assertSame(['root' =>
+        // ['notawalkeratall($x)'], ...], $t);`) ran `OK (16 tests, 1082
+        // assertions)` - the count UP rather than down, so the assertion-total
+        // corollary does not see it either. The pattern requires
+        // `self::classifyWalkSites(` between the expected array and the end of
+        // the statement now, so the expected value must be compared against the
+        // shipped classifier rather than against itself.
+        //
+        // FOUR DOORS IN ONE CHECK IS ITSELF THE FINDING, not an anecdote. Each
+        // fix narrowed the evidence by one step, and each time the paragraph
+        // describing the check was written for the pattern its author MEANT
+        // rather than the one they had. The general form is rule 30 - the
+        // instrument is a thing under test - and all four are recorded because
+        // the fifth will be found by somebody reading this list, not by somebody
+        // reading the regex.
+        //
+        // AND THE FIFTH DOOR CLOSED THE WHOLE CLASS OF THEM: THE EVIDENCE IS
+        // TAKEN FROM THE TOKEN STREAM, NOT FROM THE TEXT. Every text-level
+        // narrowing above can be forged by writing the text somewhere the
+        // narrowing does not exclude, and a reviewer walked straight through
+        // the last one - a single string literal spelling out
+        // `assertSame(['root' => ['notawalkeratall($x)'], ...],
+        // self::classifyWalkSites($q));`, asserted with `assertIsString`, ran
+        // `OK (16 tests, 1082 assertions)`. MEASURED, and reproduced here.
+        //
+        // A FORGERY IS ONE TOKEN; THE REAL THING IS A SEQUENCE. Below, the file
+        // is split into statements and a statement contributes its string
+        // literals ONLY if it carries a real `assertSame` identifier AND a real
+        // `classifyWalkSites` identifier as TOKENS. The forgery's identifiers
+        // are inside a `T_CONSTANT_ENCAPSED_STRING`, so they are not tokens and
+        // it contributes nothing. That is the difference between quoting an
+        // assertion and making one, and it is the property every revision of
+        // this paragraph claimed and only this one has.
+        $statementStrings = [];
+        $statementIdentifiers = [];
+        $expectedValues = '';
+        $statements = 0;
+
+        foreach (token_get_all((string) file_get_contents(__FILE__)) as $token) {
+            if ($token === ';') {
+                if (\in_array('assertsame', $statementIdentifiers, true) && \in_array('classifywalksites', $statementIdentifiers, true)) {
+                    $expectedValues .= ' ' . implode(' ', $statementStrings);
+                    $statements++;
+                }
+
+                $statementStrings = [];
+                $statementIdentifiers = [];
+
+                continue;
+            }
+
+            if (!\is_array($token)) {
+                continue;
+            }
+
+            if ($token[0] === T_CONSTANT_ENCAPSED_STRING) {
+                $statementStrings[] = strtolower(trim($token[1], '\'"'));
+            } elseif ($token[0] === T_STRING) {
+                $statementIdentifiers[] = strtolower($token[1]);
+            }
+        }
 
         // NOT VACUOUS. An empty match set would make every spelling below read
         // as uncovered, which fails CLOSED - but it would blame the alphabet for
@@ -2196,11 +2248,11 @@ final class TreeWideGuardRosterTest extends TestCase
         // file. This assertion puts the blame where it belongs.
         $this->assertGreaterThan(
             3,
-            \count($expected[0]),
-            'the expected-value extractor found almost no "root" => [...] arrays in '
-            . 'testTheWalkClassifierAnswersKnownInputsCorrectly(). Either that test was rewritten '
-            . 'into another shape or this pattern stopped matching it; fix the extractor here '
-            . 'rather than reading the correspondence failure below as a real gap.',
+            $statements,
+            'the expected-value extractor found almost no statements that call assertSame() AND '
+            . 'classifyWalkSites() together. Either testTheWalkClassifierAnswersKnownInputsCorrectly() '
+            . 'was rewritten into another shape or this walk stopped seeing it; fix the extractor '
+            . 'here rather than reading the correspondence failure below as a real gap.',
         );
 
         $uncovered = [];

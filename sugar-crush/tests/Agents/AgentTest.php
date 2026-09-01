@@ -1720,10 +1720,18 @@ final class AgentTest extends TestCase
         foreach ($derived['offsets'] as $offset) {
             $this->assertTrue(
                 $offset >= $docStart && $offset < $docEnd,
-                'a file-dot-php-colon-line citation at byte ' . $offset . ' of src/Agents/Agent.php is '
-                    . 'OUTSIDE the doc-block whose self-census claims it, which is between bytes '
-                    . $docStart . ' and ' . $docEnd . '. Either move the citation back in or scope the '
-                    . 'sentence to the file rather than to the block.',
+                // NAMED AS file:line, NOT AS A BYTE OFFSET. These offsets are
+                // into the RAW source (citationCensusOf() uses
+                // PREG_OFFSET_CAPTURE on $source), so a line number is one
+                // expression away - and the A2 repair in this same file spends a
+                // paragraph establishing that an offset "maps to nothing a
+                // reader can navigate to". The byte is kept beside the line
+                // because the bounds either side of it are bytes.
+                'a file-dot-php-colon-line citation at src/Agents/Agent.php:'
+                    . (substr_count(substr($source, 0, $offset), "\n") + 1) . ' (byte ' . $offset
+                    . ') is OUTSIDE the doc-block whose self-census claims it, which is between '
+                    . 'bytes ' . $docStart . ' and ' . $docEnd . '. Either move the citation back in '
+                    . 'or scope the sentence to the file rather than to the block.',
             );
         }
 
@@ -2334,7 +2342,12 @@ final class AgentTest extends TestCase
      * figure moves the figure. That is rule 2 exactly, and the sibling pin in
      * `tests/RuntimeTest.php` had already learnt it for a population of the same
      * shape - the correction did not travel one file over until a reviewer
-     * carried it (rule 40).
+     * carried it. (This sentence cited "rule 40" and should not have: rule 40 is
+     * the mutation-equivalence rule - a surviving mutation may be equivalent,
+     * and that verdict does not transfer to its neighbour - and MEASURED over
+     * the whole of section 16.8, no rule states the correction-travels claim.
+     * The sibling file had already made this exact correction twice, on
+     * DECLARED_TREE_WIDE_GUARDS, which is the joke this sentence was making.)
      *
      * THE DOMAIN IS `src/` + `tests/`, DERIVED. The claim reached this file from
      * `prompt_plan.md`, the same route by which A1's claim reached two
