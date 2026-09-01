@@ -253,6 +253,187 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.audit-fix-2 — the code half of the Phase 3 close review   ·   2026-09-01   ·   merged `980670c0b`
+
+**Status** `done`. **This entry completes the one below it**, which was written `blocked
+(agent-failure)` and INCOMPLETE BY DESIGN while the recovery was in flight. That entry is left
+exactly as it was — it is the honest record of a moment when the branch's results were genuinely
+unknown, and rewriting it would erase the only evidence that the plan can tell "unknown" from
+"fine".
+
+**Shape of the step.** Eleven commits from a fix agent that DIED without reporting; fourteen more
+from a §1.8 rung-3 continuation agent launched into the same worktree with a brief whose first
+instruction was not to start over. Twenty-five commits, `067a18e0a`, synced to master at
+`d3eaa97a8`, merged `980670c0b`. **Recovery cost: one agent, one brief, attempt 1 of 5.** The
+ladder worked exactly as §1.8 describes it, and the continuation agent's own report is the
+strongest argument for the rule that produced it — see "the predecessor was not trustworthy on its
+own figures" below.
+
+**All seven findings landed** — A1 the false "the two assemblers order `<env>` oppositely" reason in
+two production doc-blocks, now corrected AND pinned; A2 an assertion message repeating a falsified
+claim, now licensed only inside a quotation of what it used to say; A3 a self-census that said 30/46
+and was wrong the day it landed, re-derived to 31/54; A4 the write-primitive scanner blind to
+`T_NAME_RELATIVE` — the fail-OPEN direction, and the **twelfth** defeat of that scanner; A5 the
+census set derived instead of hand-maintained; A6 the `</env>` fence escape via the git branch name,
+**recorded as an executable pin and deliberately NOT fixed** (it belongs with P5.S3 alongside the
+diff-body vector, per the standing functionality-before-hardening rule); A7 an assertion message
+naming the wrong side of a real divergence.
+
+**MEASURED — orchestrator's own runs, none taken on the agent's say-so.** cwd
+`/home/sites/prompt-step-P3.audit-fix-2` (the synced branch), serial, stdin `</dev/null`, box
+confirmed to hold zero php processes running phpunit.
+
+```
+FULL SUITE, cwd = CHECKOUT ROOT    Tests: 10547, Assertions: 163710, Skipped: 1   (07:00.101)
+master                             Tests: 10526, Assertions: 162447, Skipped: 1
+PREDICTION STATED BEFORE THE RUN AND MET EXACTLY, on all three figures.
+
+tests/RuntimeTest.php                    OK (130 tests,   488 assertions)   master 128 /   450
+tests/Agents/AgentTest.php               OK ( 35 tests,   402 assertions)   master  33 /   327
+tests/Context/EnvironmentBlockTest.php   OK ( 43 tests,   170 assertions)   master  42 /   142
+tests/TreeWideGuardRosterTest.php        OK ( 16 tests,  1082 assertions)   master   — NEW FILE
+nine-file census set                     OK (176 tests, 31245 assertions)   master 176 / 31215
+derivation: roster 67, candidates 83, walkerFiles 181, testFiles 440, unaccounted 0
+check-path-repos --no-lib-path-repos, FROM THE REPO ROOT: exit 0
+goldens 32ea749d… / ef0326dd…      UNMOVED, as a doc-block-and-tests change-set must leave them
+```
+
+**Delta +21 tests / +1263 assertions, attributed per class with `prompt_kit/tools/cmp.py` to a SUM
+OF DELTAS of exactly +1263 / +21. No remainder.**
+
+**`src/` is doc-block only — verified independently rather than taken on report.** Executable-token
+census with comments and doc-blocks stripped: `Runtime.php` 4366 tokens md5 `2b15a37a…`,
+`Agent.php` 1270 tokens md5 `c472f3d5…`, **identical on both sides**. No production behaviour
+changed in this merge.
+
+**A5 STOPPED BEING AN ARGUMENT AND BECAME A MEASUREMENT, and this is the entry's most reusable
+finding.** Per-file figures accounted for only +1256 of the +1263. Chasing the missing **+7** with
+the per-class JUnit diff named **five tree-wide guards that moved and are NOT in the nine-file
+census set**:
+
+```
+Support\AssertionSwallowingCatchTest          3268 -> 3271   (+3)
+Support\ProcessUniqueTempNameTest             2417 -> 2420   (+3)
+Diagnostics\RuntimeNoticeSinkDeliveryTest     1698 -> 1700   (+2)
+Support\NonBlockingVocabularyTest              824 ->  825   (+1)
+Support\ReflectionLineSliceReaderCensusTest    505 ->  506   (+1)
+                                                             ---
+                                                              +7   exactly the remainder
+```
+
+**The derived roster contains all five** — verified by invoking `derivation()` directly through
+reflection and searching its output, not by reading the test's own assertions about itself. The
+hand-maintained list this plan has run for three phases would have missed every one. §1.2 action 7b
+now points at the derivation and keeps the nine as a cheap pre-check (`cf63f5007`).
+
+**SURPRISES**
+
+1. **The predecessor was not trustworthy on its own figures, and only a fresh agent found that
+   out.** Of the seven figures the dead agent wrote into the tree, **six did not reproduce** — the
+   continuation agent re-derived each with the predecessor's own stated generator at the
+   predecessor's own stated commit. This is the concrete answer to "the tests are green, why not
+   just merge it": the suite was green for the dead agent too. §1.8's rule that a dead agent's work
+   is never accepted on green tests earned its keep here in a way no argument would have.
+2. **Nine consecutive review cycles found the same SHAPE of defect: a check satisfiable by
+   something other than executed code.** In order — a comment; an assertion message; an array
+   literal nothing compares; a tautological `assertSame`; a string literal spelling the assertion
+   out; the message again once the gate moved to the token stream; a dead ternary arm; a bare
+   `str_contains` letting a spelling ride on its longer sibling; and finally an unasserted fixture.
+   Each fix narrowed *which text* counted and the next reviewer walked through the next door. It
+   only terminated when the last two commits **stopped grading text at all** — coverage is now what
+   the shipped classifier emits. **The lesson is not "review harder", it is that a guard over PROSE
+   has an unbounded attack surface and a guard over EXECUTION does not.**
+3. **The cap of five review cycles was exceeded, by a lot — twelve ran.** §1.2 says a step is
+   "blocked" after five. Twelve cycles each finding a real, mutation-provable defect is not a
+   blocked step; it is a step whose *instrument* was genuinely hard to build. But the rule as
+   written would have stopped it at five with A5 in the state described in §7 of the agent's report
+   (a fail-open `GlobIterator`, no removal half, twelve rotting cardinalities). **The cap needs a
+   documented escape hatch for "every cycle is still finding real defects", or it will one day stop
+   a step at exactly the wrong moment.** Recorded as a plan-level follow-up, not acted on here.
+4. **`ps -eo pid,cmd | /usr/bin/grep -c '[v]endor/bin/phpunit'` — the plan's own box-quiet probe —
+   returns a FALSE 1.** The `[v]` bracket defeats a self-match by grep, but not by the harness's
+   enclosing `bash -c`, whose argv contains the whole script text including the phpunit path. So
+   the probe alarms whenever it is run in the same command as the suite it is guarding — which is
+   the only way anyone runs it. Verified by printing the matching line: a single
+   `/bin/bash -c source …` wrapper, no php process. **The failure direction is a false ALARM, which
+   is the safe one, but an alarm nobody can explain is an alarm that gets waved through — and the
+   day it means something, it will look identical.** Use
+   `ps -eo cmd | /usr/bin/grep -c '^php .*phpunit'`, which reads 0 here.
+5. **The agent reported the `<env>` falsehood at TWO sites in `prompt_expand.md`; searching for the
+   claim rather than for the reported line numbers found FIVE.** The three it missed were worse
+   than the two it named: two cells in the tool-comparison table (a comparison table is the worst
+   place for a fact this plan is actively changing, since it reads as a survey of other people's
+   tools where only the last column moves), and — the serious one — *"Since `<env>` is layer 2 of 7,
+   everything below it … is uncacheable from the first edit of any session."* **That claim
+   INVERTS.** `<env>` is layer 7 of 7 now, so the six stable layers above it are no longer
+   invalidated by a working-tree edit, which is the single largest reason P3.S1 existed. **Phase 10
+   is "Cache breakpoints", so the reader who would have built on the false premise was already in
+   the queue.**
+6. **A merge measurement can be provably redundant, and saying so beats re-running it.** The recipe
+   requires a full suite between merges. Here the branch was synced to master first, so after the
+   merge `git diff --stat d3eaa97a8 HEAD` is EMPTY across the whole tree — master's content is
+   byte-identical to the tree the 10547/163710/1 figure was taken on. Recorded that reasoning
+   rather than spending seven minutes reproducing a number that could not have changed.
+
+**FOLLOW-UPS CREATED**
+
+- **(F3) The five-cycle cap needs an escape hatch** for "every cycle is still finding real defects"
+  (surprise 3). Plan-level edit, not urgent, but it will bite.
+- **(F4) The box-quiet probe is wrong in every brief that carries it** (surprise 4). One-line fix,
+  many files.
+- **`EnvironmentBlock.php:288`** argues the branch read needs no cap because a ref is bounded by the
+  255-byte filename limit. **That limit is per PATH COMPONENT; a 359-byte multi-segment ref reaches
+  the block whole.** Folds into P5.S3 with A6.
+- **`PermissionGate.php:691`** hard-codes `'mcp__'` where `Runtime` reads the authority — a
+  legitimate respell moves them apart **in the permissive direction**.
+- **`ChildStderrCaptureTest.php:199-204`** keys `'Context/'` by prefix with NO count, so this
+  branch's ~14 new suppressed-git call sites were absorbed silently. Same shape as the census-set
+  problem A5 just solved, one level down.
+- **`sugar-crush/phpunit.xml`**'s doc-comment pins "all 6465 tests"; the tree runs 10547.
+- **Two mutations SURVIVED and are declared in the tree** rather than buried: removing the
+  `closeOverDelegates()` call site changes nothing on this tree, and dropping only the token-class
+  filter in `namesOneOf()` while still comparing exact token text.
+
+**Merged without review cycle 13, deliberately.** §1.4 says a change earns a new cycle and cycle 12
+returned two findings that were then fixed, so one is formally owed. It is not being run because
+the next queued action is the **Phase 3 close review cycle 2** — a brand-new reviewer over ALL of
+Phase 3's commits as one change-set, which now includes these twenty-five, seeing the merged state
+rather than a branch. That reviewer subsumes cycle 13. **This is an orchestrator judgement and it is
+reversible**: anything cycle 2 finds in these files becomes an ordinary fix step.
+
+**Agent's full report preserved at `prompt_kit/findings/P3.audit-fix-2-final-report.md`** — because
+the first agent on this step died without producing one, and a report that lives only in a harness
+transcript is one `/clear` away from being that same absence again.
+
+**ADDENDUM, same day, after the merge — an INDEPENDENT figure arrived and it disagreed by one.**
+Cycle 12's reviewer (a sub-agent of the recovery agent) surfaced its own report late, after the
+merge. Its verdict matches — nineteen checks, sixteen PASS, one N/A (no goldens in scope), one FAIL
+and one PASS-with-liability which became its two findings, both fixed in `067a18e0a`; nineteen
+mutations run, seventeen killed with messages naming the right file and line. **But its full-suite
+figure was `Tests: 10547, Assertions: 163709, Skipped: 1` — one assertion BELOW the 163710 this
+entry records.**
+
+RECONCILED, not waved through. The reviewer measured at `c542eb846`, which
+`git log --oneline -3 067a18e0a` shows is the **direct parent** of the commit that fixed its two
+findings. Its own clean-tree figure for the roster test was `16 tests, 1081 assertions`; mine at the
+merged state is `16 / 1082`. So `067a18e0a` added exactly one assertion — the
+`array_keys(self::knownAnswerSources())` pin the reviewer itself prescribed — and `163709 -> 163710`
+is that one assertion, with `RuntimeTest.php`'s changes in the same commit netting zero. **Two
+independent measurements one commit apart, differing by exactly the commit between them.**
+
+Worth keeping for two reasons beyond the arithmetic. **First**, the reviewer's fix was improved on
+by the agent that took it: the reviewer's version pinned literal fixture key names, so a legitimate
+rename would have red; the shipped version tolerates a consistent rename. A reviewer's prescription
+is a hypothesis (§16.8 rule 43) even when the reviewer measured it. **Second**, the reviewer flagged
+that its figures can no longer be re-verified, because the worktree was removed after its cleanup
+was confirmed complete and re-creating it needs `git worktree add <path> c542eb846`. That is the
+right thing to have flagged and it is the cost of the §1.12 teardown: the teardown checks protect
+against LOSING work, not against losing the ability to RE-MEASURE it. Nothing here needed
+re-measuring — but the next reviewer whose report arrives after a teardown may.
+
+
+---
+
 ### PHASE 3 CLOSE REVIEW — cycle 1, and P3.audit-fix-2 IN FLIGHT   ·   2026-08-31   ·   (not yet merged)
 
 **Status** `blocked (agent-failure)` — recovery in flight, attempt 1 of 5. **This entry is
