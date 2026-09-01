@@ -1420,6 +1420,34 @@ final class TreeWideGuardRosterTest extends TestCase
                 "<?php\nclass P { function go() { \$f = new \\SplFileInfo(\\dirname(__DIR__, 2) . '/src'); foreach (\$f->getChildren() as \$x) {} } }\n",
                 'root',
             ],
+            // THE IMPORT SPELLINGS THE READER CLAIMS TO ACCEPT. Review cycle 1
+            // F-C5 measured all five resolving correctly and named the sin:
+            // TRUE AND UNPINNED - a future edit blinding the comma-list branch,
+            // the group-brace discriminator, the leading-backslash accept, the
+            // function-aliased `class_alias` or its named-argument form would
+            // keep this file green. The write-scanner twin pins its equivalents;
+            // these rows are the roster's, and F-C4's two defeats arrive here
+            // as closed doors the same day they are read.
+            'a walker function imported in a comma list' => [
+                "<?php\nuse function strlen as x, glob as g;\nclass P { function go() { foreach (g(\\dirname(__DIR__, 2) . '/src/*.php') as \$y) {} } }\n",
+                'root',
+            ],
+            'a walker function imported in a braced group' => [
+                "<?php\nuse function Acme\\{strlen as x, glob as g};\nclass P { function go() { foreach (g(\\dirname(__DIR__, 2) . '/src/*.php') as \$y) {} } }\n",
+                'root',
+            ],
+            'a walker function imported with a leading backslash' => [
+                "<?php\nuse function \\glob as g;\nclass P { function go() { foreach (g(\\dirname(__DIR__, 2) . '/src/*.php') as \$y) {} } }\n",
+                'root',
+            ],
+            'a class_alias called through a function alias' => [
+                "<?php\nuse function class_alias as ca;\nclass P { function go() { ca('RecursiveDirectoryIterator', 'RD'); new RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'root',
+            ],
+            'a class_alias called with named arguments' => [
+                "<?php\nclass P { function go() { class_alias(class: 'RecursiveDirectoryIterator', alias: 'RD'); new RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'root',
+            ],
             'a walker reached through a COMPUTED class_alias' => [
                 "<?php\nclass P { function go() { \$n = 'DirectoryIterator'; class_alias(\$n, 'RD'); new \\RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
                 'silent',
@@ -3303,7 +3331,13 @@ final class TreeWideGuardRosterTest extends TestCase
         }
 
         // THE RUNTIME ALIAS, class kind only - `class_alias` has no function
-        // counterpart in PHP.
+        // counterpart in PHP. The CALL SPELLING resolves through the FUNCTION
+        // map this method just built: review cycle 1 measured
+        // `use function class_alias as ca; ca('RecursiveDirectoryIterator', 'RD');`
+        // sailing through both this reader and its RuntimeTest twin - the
+        // fourteenth and the F4-family fifteenth of the same construct, silent
+        // and undeclared while the map already held `ca => class_alias`.
+        // `class_alias(class: ..., alias: ...)` was its twin spelling.
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
             if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true)) {
@@ -3314,6 +3348,7 @@ final class TreeWideGuardRosterTest extends TestCase
                 $relative = substr($name, \strlen('namespace\\'));
                 $name = str_contains($relative, '\\') ? $name : $relative;
             }
+            $name = $function[$name] ?? $name;
             if ($name !== 'class_alias') {
                 continue;
             }
@@ -3384,6 +3419,19 @@ final class TreeWideGuardRosterTest extends TestCase
         $argument = trim($argument);
         if ($argument === '') {
             return null;
+        }
+
+        // A leading NAMED-ARGUMENT LABEL (`class:`, `alias:`) is part of the
+        // call's shape, not of the value - review cycle 1 measured the label
+        // spelling of `class_alias` passing through un-read. The identifier
+        // half of the pair is matched as any word (the `class:` label itself
+        // arrives as T_CLASS, whose text joins to exactly this shape), and
+        // the `:` must come directly after it - a ternary's `?` or `??`
+        // breaks the shape before a bare colon, so `a ? 'x' : 'y'` is not a
+        // label and falls through to the literal rules below, where the
+        // concatenation earns its correct null.
+        if (preg_match('~^[A-Za-z_][A-Za-z0-9_]*:(?!:)~', $argument, $label) === 1) {
+            $argument = trim(substr($argument, strlen($label[0])));
         }
 
         if (preg_match("~^(['\"])(?<name>[^'\"]*)\\1$~", $argument, $m) === 1) {
