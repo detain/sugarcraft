@@ -2140,6 +2140,18 @@ final class TreeWideGuardRosterTest extends TestCase
         // satisfy is a correspondence between a spelling and somebody having
         // mentioned it, which is what this whole file exists to stop being the
         // standard of evidence.
+        // SIX DOORS, AND THE PARAGRAPHS BELOW DESCRIBED THE CHECK EACH ONE WAS
+        // MEANT TO BE. They are kept because the sequence is the finding: a
+        // comment, an assertion message, an array literal nothing compares, a
+        // tautological assertSame, a string literal spelling the assertion out,
+        // and finally the message again - harvested from the same statement as
+        // the expected value once the gate moved to the token stream. Every fix
+        // narrowed the EVIDENCE and left the HARVEST alone, and each time the
+        // prose was written for the version its author had in mind. The claim
+        // "TO THE EXPECTED VALUES ONLY" below was false of the shipped code for
+        // two revisions; it is true now because the harvest stops at the
+        // classifier call, not because the sentence says so.
+        //
         // AND THE SEARCH IS NARROWED AGAIN, TO THE EXPECTED VALUES ONLY, because
         // stripping comments was not enough and a reviewer proved it in one
         // edit. WHAT THE LAST REVISION DID: searched the whole comment-stripped
@@ -2236,7 +2248,20 @@ final class TreeWideGuardRosterTest extends TestCase
             }
 
             if ($token[0] === T_CONSTANT_ENCAPSED_STRING) {
-                $statementStrings[] = strtolower(trim($token[1], '\'"'));
+                // ONLY THE LITERALS THAT PRECEDE THE CLASSIFIER CALL, which in
+                // this file's `assertSame(expected, self::classifyWalkSites(...),
+                // 'message')` shape means the EXPECTED VALUE and nothing else.
+                // Buffering the whole statement re-opened door #3 one layer up:
+                // MEASURED by a reviewer, and reproduced here before fixing -
+                // appending ` or notawalkeratall($x)` to an existing row's
+                // failure MESSAGE, with a bogus spelling in WALKER_FUNCTIONS and
+                // the size pin bumped as this guard's own message instructs, ran
+                // `OK (16 tests, 1081 assertions)`, the total IDENTICAL to the
+                // clean tree. The message is not compared to anything; the
+                // expected value is.
+                if (!\in_array('classifywalksites', $statementIdentifiers, true)) {
+                    $statementStrings[] = strtolower(trim($token[1], '\'"'));
+                }
             } elseif ($token[0] === T_STRING) {
                 $statementIdentifiers[] = strtolower($token[1]);
             }

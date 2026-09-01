@@ -2082,8 +2082,23 @@ final class RuntimeTest extends TestCase
         // WHAT IS STILL NOT COVERED, so that the next reader does not have to
         // rediscover it (rule 31): an unclosed quotation whose accidental
         // closing quote is a LATER double quote IN THE SAME COMMENT still
-        // licenses whatever sits between them. Quote parity would catch it and
-        // is NOT shipped, because it reds on correct code: MEASURED over this
+        // licenses whatever sits between them - and this paragraph used to end
+        // "quote parity would catch it and is NOT shipped", while the code
+        // eighty lines down consulted parity. Both halves were true of
+        // different revisions and neither was corrected when the other moved,
+        // which is the defect this very guard exists to catch, in the guard.
+        //
+        // WHAT IS SHIPPED, precisely: the licence requires the THREE-PART form
+        // (a WHAT IS TRUE must follow the quotation), and parity is consulted
+        // ONLY to withdraw the licence from a comment that would otherwise get
+        // it for one of these two phrases. WHAT IS STILL OPEN after both: an
+        // unclosed quotation in an EVEN-parity comment whose accidental closing
+        // quote happens to be followed by WHAT IS TRUE. That is contrived
+        // rather than a typo, which is the whole reason the two cheap halves
+        // are worth having and a third is not.
+        //
+        // GENERAL parity - refusing every odd-parity comment - is what is NOT
+        // shipped, because it reds on correct code: MEASURED over this
         // tree, comments that carry a WHAT IT SAID marker AND an odd number of
         // double quotes exist in both trees, in numbers this file deliberately
         // does not record - it is one of the files the count is taken over, so
@@ -2140,7 +2155,20 @@ final class RuntimeTest extends TestCase
                 // The rule-42 form quotes what the sentence USED to say, between
                 // double quotes. Strip those spans; whatever is left is a LIVE
                 // claim. The span cannot leave this comment - that is the fix.
-                $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID: "[^"]*"~', '', $flat);
+                // THE LICENCE IS THE THREE-PART FORM, NOT A LONE QUOTATION
+                // (rule 34: key an exemption on STRUCTURE, not on prose). A
+                // rule-42 correction is WHAT IT SAID / WHAT IS TRUE / HOW
+                // MEASURED; a quotation with no WHAT IS TRUE after it is not a
+                // correction, so it licenses nothing. MEASURED by a reviewer,
+                // and reproduced here before fixing: an unclosed quotation in a
+                // comment holding one balanced pair elsewhere has EVEN parity,
+                // so the parity check below did not fire, the span ran from the
+                // marker to that later quote, and a live "opposite order" claim
+                // between them was stripped - the census PASSED and only the
+                // exact-count pin red. MEASURED on this tree, both real
+                // corrections carry WHAT IS TRUE immediately after their
+                // quotation, so the clean tree is untouched.
+                $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID: "[^"]*"(?=\s*WHAT IS TRUE)~', '', $flat);
 
                 // AND THE DECLARED RESIDUE IS CLOSED FOR THIS CLAIM ONLY, which
                 // is the narrowest form that does not red on correct prose. The
@@ -2168,7 +2196,7 @@ final class RuntimeTest extends TestCase
                 // clean tree is untouched, and the 6 odd-parity comments that
                 // ruled out the general form do not quote this claim at all.
                 if (substr_count($flat, '"') % 2 !== 0
-                    && preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"~', $flat) === 1) {
+                    && preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"(?=\s*WHAT IS TRUE)~', $flat) === 1) {
                     $live = $flat;
                 }
 
@@ -2186,7 +2214,7 @@ final class RuntimeTest extends TestCase
                 // be removed and the guard that exists to keep it notices
                 // nothing. Rule 42 requires the reasoning be kept IN PLACE; this
                 // is what makes that requirement enforceable.
-                if (preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"~', $flat) === 1) {
+                if (preg_match('~WHAT (?:IT|THIS) SAID: "[^"]*(?:oppositely|opposite order)[^"]*"(?=\s*WHAT IS TRUE)~', $flat) === 1) {
                     $correctionsQuoted++;
                 }
 
