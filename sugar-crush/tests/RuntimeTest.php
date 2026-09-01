@@ -1989,6 +1989,47 @@ final class RuntimeTest extends TestCase
             . 'correct prose it exists to protect - which is the bug it was just rewritten to fix',
         );
 
+        // AND THE LICENCE IS SCOPED TO ONE COMMENT TOKEN, NOT TO THE WHOLE
+        // FLATTENED FILE (section 16.8 rule 34: key an exemption on structure,
+        // not on prose). This is the SECOND way this pin has failed open, and
+        // the first fix caused the second: flattening collapses newlines too, so
+        // the file becomes ONE line and a `[^"]*` licence span can run from a
+        // marker in one doc-block to the next double quote ANYWHERE in the file.
+        // MEASURED by a reviewer, on the code that stood here: a doc-block whose
+        // WHAT IT SAID quotation was left UNCLOSED, followed on the next line by
+        // the false claim as a live sentence, planted in src/Tools/BuiltIn/Read.php
+        // - the unbalanced quote swallowed the live claim and `tests/RuntimeTest.php`
+        // reported OK (130 tests, 1079 assertions). That is precisely the defect
+        // this guard exists to catch, reachable by a TYPO.
+        //
+        // SO THE DOMAIN IS TOKENISED, and the licence cannot cross a token
+        // boundary: every T_DOC_COMMENT/T_COMMENT is flattened and stripped ON
+        // ITS OWN, so an unclosed quotation licenses nothing beyond the comment
+        // it was written in - and inside that comment it licenses nothing at
+        // all, because with no closing quote the pattern does not match and the
+        // claim stays live. MEASURED in all three polarities on this tree: the
+        // exploit above -> 1 red naming the file; the same correction written
+        // CORRECTLY in a third file -> green, 23 quoting comments instead of 22;
+        // src/Runtime.php's real quotation re-wrapped -> green.
+        //
+        // AND THE CODE HALF IS A SECOND CHANNEL WITH NO LICENCE AT ALL. The
+        // rule-42 quotation form is a COMMENT form; a false claim in a string
+        // literal, a constant or an identifier has no WHAT IT SAID to hide
+        // behind, so everything that is not a comment token is checked with the
+        // strip switched off. The old whole-file scan covered those bytes only
+        // by accident and could not tell them from a licensed quotation.
+        // MEASURED: `const PROBE_NOTE = '...oppositely';` planted in a third
+        // src/ file -> 1 red, and it names the CODE channel rather than a
+        // doc-block, which is the message the author of that line needs.
+        //
+        // WHAT IS STILL NOT COVERED, so that the next reader does not have to
+        // rediscover it (rule 31): an unclosed quotation whose accidental
+        // closing quote is a LATER double quote IN THE SAME COMMENT still
+        // licenses whatever sits between them. Quote parity would catch it and
+        // is NOT shipped, because it reds on correct code: MEASURED over this
+        // tree, 6 src/ and 8 tests/ comments that carry a WHAT IT SAID marker
+        // already hold an odd number of double quotes. A guard that reds on
+        // correct prose is the liability this pin was rewritten once to escape.
         $sourceFiles = [];
         $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__) . '/src', \FilesystemIterator::SKIP_DOTS));
         foreach ($walk as $entry) {
@@ -1999,42 +2040,86 @@ final class RuntimeTest extends TestCase
         $this->assertGreaterThan(1, \count($sourceFiles), 'the src/ walk found at most one file, so the domain of the claim below is not being derived');
 
         $quoting = 0;
-        foreach ($sourceFiles as $absolute) {
-            $flat = self::flattened((string) file_get_contents($absolute));
-            $relative = 'src/' . str_replace(\dirname(__DIR__) . '/src/', '', $absolute);
+        $comments = 0;
+        $violations = [];
 
-            // The rule-42 form quotes what the sentence USED to say, between
-            // double quotes. Strip those spans; whatever is left is a LIVE claim.
-            $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID: "[^"]*"~', '', $flat);
-            if ($live !== $flat) {
-                $quoting++;
+        foreach ($sourceFiles as $absolute) {
+            $relative = 'src/' . str_replace(\dirname(__DIR__) . '/src/', '', $absolute);
+            $code = '';
+
+            foreach (token_get_all((string) file_get_contents($absolute)) as $token) {
+                if (!\is_array($token) || ($token[0] !== T_DOC_COMMENT && $token[0] !== T_COMMENT)) {
+                    $code .= \is_array($token) ? $token[1] : $token;
+
+                    continue;
+                }
+
+                $comments++;
+                $flat = self::flattened($token[1]);
+
+                // The rule-42 form quotes what the sentence USED to say, between
+                // double quotes. Strip those spans; whatever is left is a LIVE
+                // claim. The span cannot leave this comment - that is the fix.
+                $live = (string) preg_replace('~WHAT (?:IT|THIS) SAID: "[^"]*"~', '', $flat);
+                if ($live !== $flat) {
+                    $quoting++;
+                }
+
+                foreach (['oppositely', 'opposite order'] as $falseClaim) {
+                    if (str_contains($live, $falseClaim)) {
+                        $violations[] = $relative . ':' . $token[2] . ' (comment) ' . $falseClaim;
+                    }
+                }
             }
 
+            $flatCode = self::flattened($code);
+
             foreach (['oppositely', 'opposite order'] as $falseClaim) {
-                $this->assertStringNotContainsString(
-                    $falseClaim,
-                    $live,
-                    $relative . ' states, OUTSIDE a "WHAT IT SAID" quotation, that the two prompt '
-                    . 'assemblers order the env block ' . $falseClaim . '. That is false, and has '
-                    . 'been since P3.S1 moved Runtime::buildSystemPrompt()\'s env block from layer '
-                    . '2 to layer 7: it and Agents\\Agent::systemPrompt() both put it LAST, which '
-                    . 'the assertions above measure against the real assemblers. The claim was '
-                    . 'copied into two production doc-blocks once already, out of a plan section '
-                    . 'that had been corrected three times - it spreads. Do not restore it.',
-                );
+                if (str_contains($flatCode, $falseClaim)) {
+                    $violations[] = $relative . ' (code) ' . $falseClaim;
+                }
             }
         }
 
-        // NOT VACUOUS, and this is what stops the loop above passing because the
-        // flattener returned '' or the walk found nothing: the corrected files
-        // DO still carry the quotation, so the strip is removing something.
+        // ONE assertion over the whole derived domain, not one per comment. An
+        // assertion per comment token would add ~28,700 assertions to this file
+        // (MEASURED: 1,079 -> 29,754 on the first attempt at this rewrite) and
+        // section 16.8 rule 18's instruction is to count SHAPES, not cases. The
+        // list IS the failure message, so a red still names the file and line.
+        $this->assertSame(
+            [],
+            $violations,
+            'a src/ file states that the two prompt assemblers order the env block oppositely, or '
+            . 'in the opposite order. That is false, and has been since P3.S1 moved '
+            . 'Runtime::buildSystemPrompt()\'s env block from layer 2 to layer 7: it and '
+            . 'Agents\\Agent::systemPrompt() both put it LAST, which the assertions above measure '
+            . 'against the real assemblers. The claim was copied into two production doc-blocks '
+            . 'once already, out of a plan section that had been corrected three times - it '
+            . 'spreads. Do not restore it. A site marked (comment) may license the phrase by '
+            . 'quoting it in a rule-42 "WHAT IT SAID" span IN THAT SAME COMMENT - and if you meant '
+            . 'to, CLOSE THE QUOTATION, because an unclosed one licenses nothing. A site marked '
+            . '(code) has no licence available: the three-part form is a comment form.',
+        );
+
+        // NOT VACUOUS, and this is what stops the loops above passing because the
+        // flattener returned '', the walk found nothing, or the tokeniser handed
+        // back no comments: the corrected files DO still carry the quotation, so
+        // the strip is removing something, and src/ DOES carry comments.
         $this->assertGreaterThan(
             0,
             $quoting,
-            'no file under src/ carries a "WHAT IT SAID" quotation any more, so the strip above is a '
-            . 'no-op and this pin is asserting the absence of a phrase nobody has written rather '
-            . 'than the absence of a LIVE claim. The rule-42 three-part form keeps WHAT IT SAID '
-            . 'verbatim; if those paragraphs were rewritten, rewrite this pin with them.',
+            'no comment under src/ carries a "WHAT IT SAID" quotation any more, so the strip above '
+            . 'is a no-op and this pin is asserting the absence of a phrase nobody has written '
+            . 'rather than the absence of a LIVE claim. The rule-42 three-part form keeps WHAT IT '
+            . 'SAID verbatim; if those paragraphs were rewritten, rewrite this pin with them.',
+        );
+        $this->assertGreaterThan(
+            $quoting,
+            $comments,
+            'the tokeniser returned no more comments than the number carrying a licensed '
+            . 'quotation, so either token_get_all() stopped returning T_COMMENT/T_DOC_COMMENT or '
+            . 'the walk collapsed to one file: either way the per-comment channel is not being '
+            . 'exercised over the domain this pin claims.',
         );
     }
 

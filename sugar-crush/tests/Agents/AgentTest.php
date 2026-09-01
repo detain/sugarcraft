@@ -37,6 +37,19 @@ final class AgentTest extends TestCase
     use FlattensSourceProseTrait;
 
     /**
+     * How many flattened bytes after a "THIS MESSAGE USED TO SAY" marker the
+     * falsified per-stage-write-signal phrase may still appear in.
+     *
+     * NOT A ROUND NUMBER PICKED FOR COMFORT: the one real occurrence on this
+     * tree sits 46 bytes after its marker, MEASURED, and
+     * {@see testTheFalsifiedPerStageWriteSignalClaimSurvivesOnlyInsideAQuotationOfWhatThisMessageUsedToSay()}
+     * re-derives that distance on every run and reds HERE, with an actionable
+     * message, if an edit ever pushes it past this value. The margin is
+     * deliberate slack for a message that grows; it is not a measurement.
+     */
+    private const A2_LICENCE_WINDOW_BYTES = 200;
+
+    /**
      * Structural landmarks that must survive anywhere in the MIDDLE of the
      * committed agent-prompt golden.
      *
@@ -2268,6 +2281,149 @@ final class AgentTest extends TestCase
                 . 'this message until P3.audit-fix-2 - which is the costliest place to miss one, '
                 . 'because this text is all the agent who adds the field will read.',
         );
+    }
+
+    /**
+     * A2's REPAIR, MADE EXECUTABLE - because until this test the repair was a
+     * REWRITTEN ASSERTION MESSAGE and nothing else, and section 16.8 rule 25
+     * says the failure message is the one part of a green suite that never runs.
+     *
+     * WHAT THE REPAIR WAS. The message on
+     * {@see testTheWorkflowShapedPipelineReRendersTheSameEnvironmentBlockOncePerStageAndNothingCanTellItNotTo()}
+     * used to tell the next author that the per-stage write signal was
+     * "un" . "wireable on the Agent assembler path because no signal reaches the
+     * parent". P3.S6's own review cycle 2 falsified that; `prompt_plan.md`
+     * section 18 and `prompt_worklog.md` both recorded the falsification; the
+     * MESSAGE was not corrected until this step. Reverting that correction reds
+     * nothing, because a message is read only on failure - so the correction
+     * had exactly the durability of the claim it replaced.
+     *
+     * WHY THIS SHAPE AND NOT THE SIBLING'S. Its twin in
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testBothPromptAssemblersPutTheEnvironmentBlockLastAndAgreeOnTheTail()}
+     * strips a rule-42 quotation PER COMMENT TOKEN, because the claim it pins
+     * lives in doc-blocks. This one cannot: the licensed quotation here lives in
+     * an assertion-message STRING, and the marker and the quotation fall in two
+     * different `T_CONSTANT_ENCAPSED_STRING` tokens either side of a `.`
+     * concatenation, so a token-scoped licence would refuse the one occurrence
+     * that is correct. The licence is PROXIMITY instead: the phrase may appear
+     * only within {@see A2_LICENCE_WINDOW_BYTES} flattened bytes after a
+     * "THIS MESSAGE USED TO SAY" marker. MEASURED on this tree: the one real
+     * occurrence sits 46 bytes after its marker, so the window is warranted with
+     * four times the room the real case needs, and the window is asserted below
+     * rather than trusted.
+     *
+     * AND PROXIMITY IS THE WEAKER LICENCE, which is stated rather than hidden
+     * (rule 31): a live claim written within the window of an unrelated marker
+     * is licensed by this test and would not be by the sibling's. The exposure
+     * is bounded by the window and by the fact that the marker appears three
+     * times in the whole package.
+     *
+     * THE DOMAIN IS `src/` + `tests/`, DERIVED. The claim reached this file from
+     * `prompt_plan.md`, the same route by which A1's claim reached two
+     * production doc-blocks, so pinning the two files that carry it today is the
+     * defect one directory over - which is A5's entire argument.
+     */
+    public function testTheFalsifiedPerStageWriteSignalClaimSurvivesOnlyInsideAQuotationOfWhatThisMessageUsedToSay(): void
+    {
+        // SPELLED BY CONCATENATION, every time, because this file is inside the
+        // domain this test walks: a contiguous spelling here is a second live
+        // occurrence of the very phrase being forbidden, and the test would red
+        // on itself. FlattensSourceProseTrait's doc-block requires the same of
+        // every fixture, for the same reason.
+        $falseClaim = 'un' . 'wireable';
+        $marker = 'THIS MESSAGE USED TO SAY';
+
+        // THE KNOWN-POSITIVE AND KNOWN-NEGATIVE CONTROLS, both, before the
+        // instrument is trusted on a real file (rule 18: both polarities). A
+        // detector that never fired and one that always fired would each pass a
+        // one-polarity control.
+        $licensed = 'and it is NOT underivable. ' . $marker . ' the signal was "' . $falseClaim . ' on the agent path"; cycle 2 falsified it.';
+        $unlicensed = 'the per-stage write signal is ' . $falseClaim . ' on the Agent assembler path, so the disposition stands.';
+        $tooFar = $marker . ' something else entirely, ' . str_repeat('and then a great deal of unrelated prose, ', 8) . 'the signal is ' . $falseClaim . '.';
+
+        $this->assertSame([], self::unlicensedClaimOffsets($licensed, $falseClaim, $marker), 'the proximity licence refused a quotation that IS in the rule-42 form, so this test would red on the corrected message it exists to protect');
+        $this->assertSame([strpos($unlicensed, $falseClaim)], self::unlicensedClaimOffsets($unlicensed, $falseClaim, $marker), 'the detector did not report a live claim written with no marker in front of it at all, or reported it at the wrong offset, so it cannot report the regression this test exists for');
+        $this->assertNotSame([], self::unlicensedClaimOffsets($tooFar, $falseClaim, $marker), 'the detector licensed a claim that sits FAR past its marker, so the window is not bounding anything and any marker anywhere in a file would license every occurrence after it');
+
+        // THE WINDOW IS WARRANTED, NOT ASSUMED. If a future edit pushes the real
+        // occurrence past the window this reds HERE, with a message that says
+        // raise it - rather than in the census below, accusing the author of a
+        // claim they did not make.
+        $realDistance = null;
+        $agentTest = self::flattened((string) file_get_contents(__FILE__));
+        $offset = strpos($agentTest, $falseClaim);
+        while ($offset !== false) {
+            $before = substr($agentTest, 0, $offset);
+            $at = strrpos($before, $marker);
+            // UNBOUNDED by the window on purpose. Deriving this distance under
+            // the window would make the assertion below unfalsifiable: no
+            // occurrence more than A2_LICENCE_WINDOW_BYTES away could ever be
+            // the one measured, so "the real occurrence outgrew the window"
+            // would surface as the ABSENCE assertion above instead, telling the
+            // author the correction is gone when it is merely further off.
+            if ($at !== false) {
+                $realDistance = $offset - $at;
+
+                break;
+            }
+            $offset = strpos($agentTest, $falseClaim, $offset + 1);
+        }
+
+        $this->assertNotNull($realDistance, 'this file no longer carries the falsified claim inside a "' . $marker . '" quotation, so the census below is asserting the absence of a phrase nobody has written rather than the survival of a correction. If the message was rewritten, rewrite this test with it.');
+        $this->assertLessThanOrEqual(self::A2_LICENCE_WINDOW_BYTES, $realDistance, 'the real quotation of the falsified claim now sits ' . $realDistance . ' flattened bytes after its "' . $marker . '" marker, which is further than the window allows, so the census below is about to accuse a message that IS in the rule-42 form. Raise A2_LICENCE_WINDOW_BYTES to fit it.');
+
+        // THE CENSUS, over the derived domain.
+        $violations = [];
+        $files = 0;
+        foreach (['src', 'tests'] as $directory) {
+            $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__, 2) . '/' . $directory, \FilesystemIterator::SKIP_DOTS));
+            foreach ($walk as $entry) {
+                if (!$entry->isFile() || $entry->getExtension() !== 'php') {
+                    continue;
+                }
+
+                $files++;
+                $flat = self::flattened((string) file_get_contents($entry->getPathname()));
+                foreach (self::unlicensedClaimOffsets($flat, $falseClaim, $marker) as $at) {
+                    $violations[] = $directory . '/' . str_replace(\dirname(__DIR__, 2) . '/' . $directory . '/', '', $entry->getPathname()) . ' @' . $at;
+                }
+            }
+        }
+
+        $this->assertGreaterThan(100, $files, 'the src/ + tests/ walk found almost no files, so the domain of the claim below is not being derived');
+        $this->assertSame(
+            [],
+            $violations,
+            'a file states, outside a "' . $marker . '" quotation, that the per-stage write signal '
+            . 'is ' . $falseClaim . ' on the Agent assembler path. That is FALSE and was falsified '
+            . 'by P3.S6\'s own review cycle 2: the seam is real, live and per-stage in '
+            . 'Workflows/WorkflowEngine.php, and prompt_plan.md section 18 records it as ESCALATED, '
+            . 'NOT WAIVED - "it needs its own step". The claim survived three corrections of the '
+            . 'plan and the worklog while the assertion message that carried it went uncorrected '
+            . 'until P3.audit-fix-2, which is how it got a test. Do not restore it. To quote it as '
+            . 'history, put it inside a "' . $marker . '" span, as this file does.',
+        );
+    }
+
+    /**
+     * Offsets in `$flat` at which `$claim` appears with no `$marker` inside the
+     * preceding {@see A2_LICENCE_WINDOW_BYTES} bytes.
+     */
+    private static function unlicensedClaimOffsets(string $flat, string $claim, string $marker): array
+    {
+        $unlicensed = [];
+        $offset = strpos($flat, $claim);
+
+        while ($offset !== false) {
+            $at = strrpos(substr($flat, 0, $offset), $marker);
+            if ($at === false || ($offset - $at) > self::A2_LICENCE_WINDOW_BYTES) {
+                $unlicensed[] = $offset;
+            }
+
+            $offset = strpos($flat, $claim, $offset + 1);
+        }
+
+        return $unlicensed;
     }
 
     /**

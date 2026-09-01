@@ -154,9 +154,15 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  * MEMBERSHIP first, and the moment a file is a member it stops asking about that
  * file's remaining sites - once through channel A, once when any site in the file
  * resolves to the root, and once on a {@see DECLARED_TREE_WIDE_GUARDS} row.
- * MEASURED by driving the shipped classifier over `everyTestFile()`: 13
- * unresolved walker call sites in 10 files are passed over that way - 2 via
- * channel A, 5 via a resolved sibling site, 6 via a declared row.
+ * Sites are passed over that way through all three routes - channel-A
+ * membership, a resolved sibling site in the same file, and a declared row.
+ * A PRESENT-TENSE COUNT OF THEM STOOD HERE, in a file whose
+ * own policy is THE POPULATIONS ARE NOT PINNED IN PROSE. MEASURED by a reviewer
+ * on the sentence it replaced: planting ONE ordinary root-anchored guard under
+ * `tests/Support/` - this file's own killer experiment, recorded below - moved
+ * three of its five numbers and the suite stayed green. The one-liner in
+ * THE POPULATIONS ARE NOT PINNED IN PROSE answers it on demand, with
+ * `["unresolvedByFile"]`, and cannot go stale.
  *
  * A COUNT OF THEM STOOD HERE AND WAS FALSE AT THE COMMIT THAT SHIPPED IT, which
  * is worth the four lines it takes to say why, because the cause is a fix in the
@@ -285,8 +291,26 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *
  * SO: a size in this file is either DERIVED at the point of use, or it is a
  * BEFORE/AFTER pair from a controlled experiment at a named commit - which
- * cannot rot, because both arms move together and the claim is the DELTA. The
- * present-tense ones are gone. What replaces them is the command below.
+ * cannot rot, because both arms move together and the claim is the DELTA. What
+ * replaces them is the command below.
+ *
+ * ATTEMPT FOUR IS THIS ONE, AND THE SENTENCE THAT STOOD HERE WAS FALSE AT THE
+ * COMMIT THAT SHIPPED IT. WHAT IT SAID: "The present-tense ones are gone."
+ * WHAT WAS TRUE: five of them were still standing a hundred lines above this
+ * paragraph, in THE SELF-POLICING HALF - a site count, a file count and a
+ * three-way split of the passed-over residue - plus a roster size in the
+ * GENERATOR paragraph below and a residue count on
+ * {@see DECLARED_TREE_WIDE_GUARDS}. HOW MEASURED: a reviewer ran attempt
+ * three's own killer experiment against attempt four, planting one ordinary
+ * root-anchored guard under `tests/Support/`, and REPORTED three of the five
+ * moving. That half is the reviewer's measurement and is recorded as theirs.
+ * What was re-derived here, by planting the same guard: the roster moves 67 to
+ * 68, {@see derivation()} absorbs the new file through channel B without a
+ * declared row, and this file stays `OK (16 tests, 1071 assertions)` - so the
+ * sizes moved with nothing able to notice, which is the whole property. It
+ * was written and then not applied to the paragraphs already on the page, which
+ * is the same failure one level up, and the reason this correction is kept in
+ * place rather than silently swept: FOUR attempts is the measurement.
  *
  * SO THE ROUTE IS THE GENERATOR, WHICH IS THE ONLY KIND OF ROUTE THAT CANNOT GO
  * STALE. From `<worktree>/sugar-crush`:
@@ -304,8 +328,8 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *
  * That prints the members whenever anybody wants them, needs no artefact, and
  * is the answer `prompt_plan.md` section 1.2 action 7b's list should be checked
- * against. A test that printed 67 lines on every green run would be noise the
- * suite has to carry forever; a test that printed them only on failure would not
+ * against. A test that printed the whole roster on every green run would be
+ * noise the suite has to carry forever; a test that printed them only on failure would not
  * be reporting at all. Neither is preferable to one command.
  *
  * AND IT DOES NOT CLAIM THAT "NOTHING THAT WALKS THE TREE ESCAPES CLASSIFICATION
@@ -439,9 +463,10 @@ final class TreeWideGuardRosterTest extends TestCase
      * "THIS IS NOT AN EXEMPTION LIST ... a wrong row here costs a test run rather
      * than a missed guard." MEASURED: a row here does remove something from a
      * verdict. {@see derivation()} returns as soon as a declared row is found, so
-     * that file's unresolved sites are never licensed or reported - 6 sites in 4
-     * files at this commit, and the key is the FILE, so the number is unbounded
-     * in future.
+     * that file's unresolved sites are never licensed or reported at all, and the
+     * key is the FILE, so how many that is grows with the file and is not
+     * recorded here - ask `["unresolvedByFile"]`, per THE POPULATIONS ARE NOT
+     * PINNED IN PROSE.
      *
      * WHY THE ROW IS STILL SOUND, stated as the bound rather than as a denial: a
      * row here puts the file IN the roster, and roster membership is the only
