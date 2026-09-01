@@ -23,6 +23,7 @@ use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
 use SugarCraft\Crush\Providers\ProviderInterface;
 use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Tests\Support\FlattensSourceProseTrait;
 use SugarCraft\Crush\Workflows\Tasks;
 use SugarCraft\Crush\Workflows\WorkflowBuilder;
 use SugarCraft\Crush\Workflows\WorkflowEngine;
@@ -33,6 +34,22 @@ use SugarCraft\Crush\Workflows\WorkflowRegistry;
  */
 final class AgentTest extends TestCase
 {
+    use FlattensSourceProseTrait;
+
+    /**
+     * How many flattened bytes after a "THIS MESSAGE USED TO SAY" marker the
+     * falsified per-stage-write-signal phrase may still appear in.
+     *
+     * NOT A ROUND NUMBER PICKED FOR COMFORT: the one real occurrence on this
+     * tree sits 46 bytes after its marker, MEASURED, and
+     * {@see testTheFalsifiedPerStageWriteSignalClaimSurvivesOnlyInsideAQuotationOfWhatThisMessageUsedToSay()}
+     * re-classifies every occurrence on every run against this value, reporting
+     * one that has drifted past it separately from one that was never quoted at
+     * all - so an edit that grows the message reds with "raise this", not with
+     * an accusation. The margin is deliberate slack; it is not a measurement.
+     */
+    private const A2_LICENCE_WINDOW_BYTES = 200;
+
     /**
      * Structural landmarks that must survive anywhere in the MIDDLE of the
      * committed agent-prompt golden.
@@ -1571,6 +1588,227 @@ final class AgentTest extends TestCase
     }
 
     /**
+     * THE SELF-CENSUS IN `Agent::systemPrompt()`'s DOC-BLOCK IS DERIVED, AND
+     * BOTH FIGURES ARE READ BACK OUT OF THE PROSE RATHER THAN TYPED HERE.
+     *
+     * WHAT WENT WRONG: that doc-block said it carried "THIRTY distinct
+     * file-dot-php-colon-line citations in FORTY-SIX occurrences" and offered
+     * one command to re-derive them. MEASURED at the merge that WROTE the
+     * sentence and again at this branch's base: 31 and 54, identical at both -
+     * so both figures were wrong the day they were typed rather than stale
+     * later, the second had no generator at all (the command given ends in
+     * `sort -u`, which yields distinct only), and the paragraph making the claim
+     * is the paragraph arguing that unpinned figures rot.
+     *
+     * WHY THIS SHAPE AND NOT "STATE NO CARDINALITY". Section 16.8 rule 2 says
+     * ship the generator, not the count, and the honest way to keep a count is
+     * to make it derived. So the two literals stay in the prose - the count IS
+     * the argument there, being the measure of how much of that doc-block is
+     * unpinned - and this test is what makes them derived: it recomputes both
+     * from the file, parses the sentence's own two numbers back out, and reds
+     * naming the new pair. A test asserting a literal 31 in this file would be
+     * the same defect one file over, so no cardinality of that census appears
+     * here at all.
+     *
+     * THE SELF-REFERENCE IS HANDLED RATHER THAN LUCKY. The pattern greps the
+     * file the sentence lives in, and the sentence names that file twice. It
+     * matches neither pipeline because neither spelling carries a colon-line
+     * suffix - and the DOMAIN assertion below turns that from an accident into
+     * a checked property by requiring every occurrence to fall inside the one
+     * doc-block the sentence is about.
+     *
+     * THE INSTRUMENT IS EXERCISED BEFORE IT IS TRUSTED, both polarities: one
+     * NEW citation appended to a copy of the source must move both figures by
+     * one; a DUPLICATE of an existing citation must move the occurrence count
+     * only; and a citation planted OUTSIDE the doc-block must break the domain
+     * claim. Without those three, a regex that matched nothing would pass every
+     * assertion here by agreeing with a prose figure of zero.
+     *
+     * THE DELETION EXPERIMENT, MEASURED: editing either literal in the
+     * doc-block by one reds this test and its message prints both the derived
+     * and the claimed pair. Recorded with counts in the P3.audit-fix-2 report.
+     */
+    public function testTheCitationCensusInThisDocBlockIsDerivedFromTheFileRatherThanWrittenDown(): void
+    {
+        $path = \dirname(__DIR__, 2) . '/src/Agents/Agent.php';
+        $source = (string) file_get_contents($path);
+        $this->assertNotSame('', $source, 'the assembler source could not be read, so every figure below would be zero');
+
+        $derived = self::citationCensusOf($source);
+
+        // THE INSTRUMENT, AGAINST KNOWN ANSWERS, BEFORE ANY VERDICT. A regex
+        // that matched nothing would agree with a prose figure of zero and read
+        // as working.
+        $this->assertGreaterThan(0, $derived['occurrences'], 'the citation pattern matched nothing at all - this census is dead, not clean');
+        $novel = self::citationCensusOf($source . "\n// Planted.php:424242\n");
+        $this->assertSame($derived['distinct'] + 1, $novel['distinct'], 'a new citation did not move the distinct count');
+        $this->assertSame($derived['occurrences'] + 1, $novel['occurrences'], 'a new citation did not move the occurrence count');
+
+        // THE DUPLICATE IS DERIVED FROM THE SOURCE, not typed. This control used
+        // to append the literal `WorkflowEngine.php:875` — a citation the
+        // doc-block under test explicitly promises will rot. The first time
+        // anybody re-derives that line number, the "duplicate" stops being a
+        // duplicate, this control silently becomes the NOVEL-citation case, and
+        // it reds with a message about duplicates that is no longer describing
+        // what it did. Taking the first citation the census itself found cannot
+        // go stale.
+        preg_match('~[A-Za-z/]+[.]php:[0-9]+(?:-[0-9]+)?~', $source, $firstCitation);
+        $this->assertNotSame([], $firstCitation, 'no citation was found to duplicate, so the control below would be appending nothing');
+
+        $repeat = self::citationCensusOf($source . "\n// " . $firstCitation[0] . "\n");
+        $this->assertSame($derived['distinct'], $repeat['distinct'], 'a DUPLICATE citation moved the distinct count, so the two figures are not counting different sets');
+        $this->assertSame($derived['occurrences'] + 1, $repeat['occurrences'], 'a DUPLICATE citation did not move the occurrence count');
+
+        // THE PROSE IS THE THING UNDER TEST. Flattened first, because prose
+        // matching is line-oriented and a doc-block wraps mid-phrase (§16.8
+        // rule 39).
+        //
+        // THROUGH THE SHARED FLATTENER, not an inline regex. This line used to be
+        // `preg_replace('~\n\s*\*\s?~', ' ', $source)` — a private
+        // re-declaration of FlattensSourceProseTrait::flattened(), which exists
+        // for this and has other consumers. Its `\*(?!/)` is the difference that
+        // matters: the inline version's bare `\*` also eats the `*` of a
+        // TERMINATOR, running the end of one doc-block into the start of the next,
+        // so a pattern could match a "sentence" spanning two blocks and present
+        // in neither. MEASURED not exploitable here — no `s` modifier and a
+        // newline survives between the blocks — so this is de-duplication, and
+        // the reason it is still worth doing is that the local copy cannot
+        // inherit the trait's next fix.
+        // THE FLATTENER'S OWN KNOWN-POSITIVE CONTROL, which this consumer owed
+        // and did not have. FlattensSourceProseTrait's doc-block requires it in
+        // so many words: "each consuming test asserts this method's output on a
+        // synthetic wrapped fixture BEFORE it trusts it on a real file", because
+        // a flattener that returned '' would turn every anchor below into a zero
+        // match and a zero match cannot be told from a dead instrument. The
+        // fixture is built by CONCATENATION for the reason that doc-block gives:
+        // this file is itself scanned by tree-wide guards, and an anchor phrase
+        // spelled contiguously here becomes a second match for it.
+        $wrapped = "/**\n     * carries 7 distinct citations of the form "
+            . "file-dot-php-colon" . "-line\n     * in 9 occurrences.\n     */";
+        $this->assertSame(
+            1,
+            preg_match('~carries (\d+) distinct citations of the form file-dot-php-colon-line in (\d+) occurrences~', self::flattened($wrapped), $control),
+            'the shared flattener did not join a doc-block sentence that wraps mid-phrase, so every '
+                . 'match below would be a zero match and this whole census would read as a clean '
+                . 'instrument while being a dead one',
+        );
+        $this->assertSame(['7', '9'], [$control[1], $control[2]], 'the flattener joined the wrapped sentence but the two figures did not survive it');
+
+        $flat = self::flattened($source);
+        $this->assertSame(
+            1,
+            preg_match('~carries (\d+) distinct citations of the form file-dot-php-colon-line in (\d+) occurrences~', $flat, $claimed),
+            'the self-census sentence in Agent::systemPrompt()\'s doc-block was reworded out of this '
+                . 'test\'s reach. It is the sentence that states two cardinalities of that doc-block; '
+                . 'either keep a form this pattern reads, or drop both figures - do not leave them unpinned.',
+        );
+
+        $this->assertSame(
+            [$derived['distinct'], $derived['occurrences']],
+            [(int) $claimed[1], (int) $claimed[2]],
+            'src/Agents/Agent.php\'s doc-block census no longer matches the file. Derived '
+                . $derived['distinct'] . ' distinct in ' . $derived['occurrences'] . ' occurrences; the '
+                . 'sentence claims ' . $claimed[1] . ' in ' . $claimed[2] . '. Correct the two literals in '
+                . 'that paragraph - the two shell pipelines it prints beside them produce exactly these '
+                . 'two numbers, and a citation was almost certainly added to or removed from that block.',
+        );
+
+        // THE DOMAIN. "This doc-block carries N" is a claim about one
+        // doc-block, while both pipelines count the whole file, so the two
+        // coincide only while every occurrence sits inside it.
+        [$docStart, $docEnd] = self::censusDocBlockBounds($source);
+        foreach ($derived['offsets'] as $offset) {
+            $this->assertTrue(
+                $offset >= $docStart && $offset < $docEnd,
+                // NAMED AS file:line, NOT AS A BYTE OFFSET. These offsets are
+                // into the RAW source (citationCensusOf() uses
+                // PREG_OFFSET_CAPTURE on $source), so a line number is one
+                // expression away - and the A2 repair in this same file spends a
+                // paragraph establishing that an offset "maps to nothing a
+                // reader can navigate to". The byte is kept beside the line
+                // because the bounds either side of it are bytes.
+                'a file-dot-php-colon-line citation at src/Agents/Agent.php:'
+                    . (substr_count(substr($source, 0, $offset), "\n") + 1) . ' (byte ' . $offset
+                    . ') is OUTSIDE the doc-block whose self-census claims it, which is between '
+                    . 'bytes ' . $docStart . ' and ' . $docEnd . '. Either move the citation back in '
+                    . 'or scope the sentence to the file rather than to the block.',
+            );
+        }
+
+        // AND THE DOMAIN CHECK BITES: a citation planted outside the block is
+        // caught, so the loop above is not passing because it iterates nothing.
+        $planted = self::citationCensusOf($source . "\n// Outside.php:9\n");
+        $outside = array_filter($planted['offsets'], static fn (int $at): bool => $at < $docStart || $at >= $docEnd);
+        $this->assertCount(1, $outside, 'a citation planted after the class body was not seen as outside the doc-block');
+    }
+
+    /**
+     * Both halves of the self-census in one pass, plus the byte offset of each
+     * occurrence so the domain can be checked.
+     *
+     * THE PATTERN IS THE ONE THE DOC-BLOCK PRINTS, in PCRE rather than in
+     * `grep -oP`: letters and slashes, a literal dot, `php:`, a line number and
+     * an optional range. Distinct is the pipeline WITH `sort -u`, occurrences
+     * the same pipeline without it.
+     *
+     * @return array{distinct: int, occurrences: int, offsets: list<int>}
+     */
+    private static function citationCensusOf(string $source): array
+    {
+        preg_match_all('~[A-Za-z/]+[.]php:[0-9]+(?:-[0-9]+)?~', $source, $matches, PREG_OFFSET_CAPTURE);
+
+        $tokens = [];
+        $offsets = [];
+        foreach ($matches[0] as [$text, $at]) {
+            $tokens[] = $text;
+            $offsets[] = $at;
+        }
+
+        return [
+            'distinct' => \count(array_unique($tokens)),
+            'occurrences' => \count($tokens),
+            'offsets' => $offsets,
+        ];
+    }
+
+    /**
+     * The byte range of the ONE doc-block that makes the self-census claim.
+     *
+     * FOUND BY ITS OWN SENTENCE rather than by a line number, because a line
+     * number is exactly what that doc-block says about itself will rot. A
+     * `T_DOC_COMMENT` is a single token, so its text is the block verbatim and
+     * `strpos` gives the offset; a second block carrying the same sentence would
+     * mean the census has two subjects and that is a failure, not a tie-break.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private static function censusDocBlockBounds(string $source): array
+    {
+        $found = [];
+        foreach (token_get_all($source) as $token) {
+            if (!\is_array($token) || $token[0] !== T_DOC_COMMENT) {
+                continue;
+            }
+            if (!str_contains($token[1], 'distinct citations of the form')) {
+                continue;
+            }
+            $at = strpos($source, $token[1]);
+            if ($at === false) {
+                continue;
+            }
+            $found[] = [$at, $at + \strlen($token[1])];
+        }
+
+        if (\count($found) !== 1) {
+            throw new \RuntimeException(
+                'expected exactly one doc-block in src/Agents/Agent.php making the self-census claim, found ' . \count($found),
+            );
+        }
+
+        return $found[0];
+    }
+
+    /**
      * THE SEAM QUESTION, ANSWERED BY DRIVING IT: one sub-agent dispatch renders
      * the environment block exactly ONCE, however many chunks the provider
      * streams.
@@ -2039,10 +2277,329 @@ final class AgentTest extends TestCase
             ),
             'AgentResult::__construct()\'s parameter list moved. If a tool-call field was ADDED, the '
                 . 'parent can finally answer "did this stage write?" for a workflow stage, and the '
-                . 'P3.S6 disposition - that the per-step write signal is unwireable on the Agent '
-                . 'assembler path because no signal reaches the parent - must be revisited rather '
-                . 'than left standing.',
+                . 'P3.S6 disposition must be revisited rather than left standing. THE DISPOSITION '
+                . 'RESTS ON DECLARED SCOPE. The per-step seam is REAL, LIVE and PER-STAGE, in '
+                . 'Workflows/WorkflowEngine.php, which was outside P3.S6\'s declared file list; '
+                . 'wiring it is a build-it-out across WorkflowEngine.php + Agents/AgentResult.php + '
+                . 'the worker complete IPC frame, and prompt_plan.md section 18 records it as '
+                . 'ESCALATED, NOT WAIVED - "it needs its own step". It '
+                . 'is NOT waived and it is NOT underivable. THIS MESSAGE USED TO SAY the signal was '
+                . '"unwireable on the Agent assembler path because no signal reaches the parent"; '
+                . 'P3.S6\'s own review cycle 2 falsified that, prompt_plan.md section 18 and '
+                . 'prompt_worklog.md both record the falsification, and the correction did not reach '
+                . 'this message until P3.audit-fix-2 - which is the costliest place to miss one, '
+                . 'because this text is all the agent who adds the field will read.',
         );
+    }
+
+    /**
+     * A2's REPAIR, MADE EXECUTABLE - because until this test the repair was a
+     * REWRITTEN ASSERTION MESSAGE and nothing else, and section 16.8 rule 25
+     * says the failure message is the one part of a green suite that never runs.
+     *
+     * WHAT THE REPAIR WAS. The message on
+     * {@see testTheWorkflowShapedPipelineReRendersTheSameEnvironmentBlockOncePerStageAndNothingCanTellItNotTo()}
+     * used to tell the next author that the per-stage write signal was
+     * "un" . "wireable on the Agent assembler path because no signal reaches the
+     * parent". P3.S6's own review cycle 2 falsified that; `prompt_plan.md`
+     * section 18 and `prompt_worklog.md` both recorded the falsification; the
+     * MESSAGE was not corrected until this step. Reverting that correction reds
+     * nothing, because a message is read only on failure - so the correction
+     * had exactly the durability of the claim it replaced.
+     *
+     * WHY THIS SHAPE AND NOT THE SIBLING'S. Its twin in
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::testBothPromptAssemblersPutTheEnvironmentBlockLastAndAgreeOnTheTail()}
+     * strips a rule-42 quotation PER COMMENT TOKEN, because the claim it pins
+     * lives in doc-blocks. This one cannot: the licensed quotation here lives in
+     * an assertion-message STRING, and the marker and the quotation fall in two
+     * different `T_CONSTANT_ENCAPSED_STRING` tokens either side of a `.`
+     * concatenation, so a token-scoped licence would refuse the one occurrence
+     * that is correct. The licence is PROXIMITY instead: the phrase may appear
+     * only within {@see A2_LICENCE_WINDOW_BYTES} flattened bytes after a
+     * "THIS MESSAGE USED TO SAY" marker. MEASURED on this tree: the one real
+     * occurrence sits 46 bytes after its marker, so the window is warranted with
+     * four times the room the real case needs, and drift past it is a bucket of
+     * its own below with its own message, so a quotation that merely GREW is
+     * never reported as a falsehood somebody restored.
+     *
+     * AND PROXIMITY IS THE WEAKER LICENCE, which is stated rather than hidden
+     * (rule 31): a live claim written within the window of an unrelated marker
+     * is licensed by this test and would not be by the sibling's. The exposure
+     * is bounded by the window and by how rare the marker is - MEASURED, and
+     * corrected in place because the sentence here got the unit wrong: it said
+     * "the marker appears three times in the whole package", which is the FILE
+     * count, and the quantity this bound is about is OCCURRENCES, since each one
+     * opens its own window. `/usr/bin/grep -roh 'THIS MESSAGE USED TO SAY'
+     * --include='*.php' src tests | wc -l` answers it on demand, and NO COUNT IS
+     * RECORDED HERE. Two revisions of this sentence carried one and both were
+     * wrong by the time they shipped. WHAT THE FIRST SAID: "the marker appears
+     * three times in the whole package" - a FILE count where an OCCURRENCE count
+     * was wanted, since each occurrence opens its own window, so it understated
+     * the exposure by more than double. WHAT THE SECOND SAID: "SEVEN, in three
+     * files ... this file 5" - the right unit and the wrong number, MEASURED at
+     * EIGHT with six in this file one commit later. HOW: this file is inside the
+     * domain the command counts, so writing the paragraph that explains the
+     * figure moves the figure. That is rule 2 exactly, and the sibling pin in
+     * `tests/RuntimeTest.php` had already learnt it for a population of the same
+     * shape - the correction did not travel one file over until a reviewer
+     * carried it. (This sentence cited "rule 40" and should not have: rule 40 is
+     * the mutation-equivalence rule - a surviving mutation may be equivalent,
+     * and that verdict does not transfer to its neighbour - and MEASURED over
+     * the whole of section 16.8, no rule states the correction-travels claim.
+     * The sibling file had already made this exact correction twice, on
+     * DECLARED_TREE_WIDE_GUARDS, which is the joke this sentence was making.)
+     *
+     * THE DOMAIN IS `src/` + `tests/`, DERIVED. The claim reached this file from
+     * `prompt_plan.md`, the same route by which A1's claim reached two
+     * production doc-blocks, so pinning the two files that carry it today is the
+     * defect one directory over - which is A5's entire argument.
+     */
+    public function testTheFalsifiedPerStageWriteSignalClaimSurvivesOnlyInsideAQuotationOfWhatThisMessageUsedToSay(): void
+    {
+        // SPELLED BY CONCATENATION, every time, because this file is inside the
+        // domain this test walks: a contiguous spelling here is a second live
+        // occurrence of the very phrase being forbidden, and the test would red
+        // on itself. FlattensSourceProseTrait's doc-block requires the same of
+        // every fixture, for the same reason.
+        $falseClaim = 'un' . 'wireable';
+        $marker = 'THIS MESSAGE USED TO SAY';
+
+        // THE CONTROLS, ALL FOUR BUCKETS, before the instrument is trusted on a
+        // real file (section 16.8 rule 18: both polarities, and here there are
+        // three outcomes rather than two). A detector that never fired and one
+        // that always fired would each pass a one-polarity control.
+        $licensed = 'and it is NOT underivable. ' . $marker . ' the signal was "' . $falseClaim . ' on the agent path"; cycle 2 falsified it.';
+        $drifted = $marker . ' the signal was, and then ' . str_repeat('a great deal of prose that grew over time, ', 8) . '"' . $falseClaim . ' on the agent path".';
+        $live = 'the per-stage write signal is ' . $falseClaim . ' on the Agent assembler path, so the disposition stands.';
+        $farFromAMarker = $marker . ' something unrelated. ' . str_repeat('and then a very great deal of entirely unrelated prose indeed, ', 40) . 'the signal is ' . $falseClaim . '.';
+
+        $this->assertSame(
+            ['live' => [], 'drifted' => [], 'licensed' => [strpos($licensed, $falseClaim)]],
+            self::classifyClaimOffsets($licensed, $falseClaim, $marker),
+            'the proximity licence refused a quotation that IS in the rule-42 form, so this test '
+            . 'would red on the corrected message it exists to protect',
+        );
+        $this->assertSame(
+            ['live' => [], 'drifted' => [strpos($drifted, $falseClaim)], 'licensed' => []],
+            self::classifyClaimOffsets($drifted, $falseClaim, $marker),
+            'a quotation that has drifted just past its window is not being told apart from a live '
+            . 'claim, so a message that merely grew would be reported as a restored falsehood',
+        );
+        $this->assertSame(
+            ['live' => [strpos($live, $falseClaim)], 'drifted' => [], 'licensed' => []],
+            self::classifyClaimOffsets($live, $falseClaim, $marker),
+            'the detector did not report a live claim written with no marker in front of it at '
+            . 'all, or reported it in the wrong bucket, so it cannot report the regression this '
+            . 'test exists for',
+        );
+        $this->assertSame(
+            ['live' => [strpos($farFromAMarker, $falseClaim)], 'drifted' => [], 'licensed' => []],
+            self::classifyClaimOffsets($farFromAMarker, $falseClaim, $marker),
+            'a claim sitting a long way past an unrelated marker was licensed or excused as drift, '
+            . 'so any marker anywhere in a file would cover every occurrence after it',
+        );
+
+        // THE FOURTH CONTROL, and the one the three-bucket split was missing: a
+        // live claim written INSIDE the drift band but OUTSIDE the quotation.
+        // Distance alone calls this drift and tells the author to widen the
+        // window, which licenses it. The quotation here OPENS AND CLOSES before
+        // the claim, so the claim is the author's own voice.
+        $closedQuotationThenALiveClaim = $marker . ' the signal was "something else entirely". '
+            . str_repeat('And then some ordinary explanatory prose about the disposition. ', 4)
+            . 'The signal is ' . $falseClaim . ' on the Agent assembler path.';
+
+        $this->assertSame(
+            ['live' => [strpos($closedQuotationThenALiveClaim, $falseClaim)], 'drifted' => [], 'licensed' => []],
+            self::classifyClaimOffsets($closedQuotationThenALiveClaim, $falseClaim, $marker),
+            'a live claim written after a CLOSED quotation, inside the drift band, was reported as '
+            . 'drift - so the census would tell its author to raise the window, which is a '
+            . 'prescription that licenses a restored falsehood. Distance alone cannot tell a grown '
+            . 'quotation from a restored claim; quote parity is what does.',
+        );
+
+        // THE CENSUS, over the derived domain.
+        //
+        // THE THREE BUCKETS EXIST BECAUSE ONE BUCKET GAVE THE WRONG MESSAGE ON
+        // THE ONE REGRESSION THIS TEST IS FOR. WHAT IT DID: a separate warrant
+        // ran BEFORE the census, took the first occurrence with any preceding
+        // marker at any distance, and asserted it fitted the window. MEASURED by
+        // a reviewer, by reverting the A2 message to the text it replaced: the
+        // warrant fired instead of the census and reported the restored claim as
+        // a quotation that "now sits 77773 flattened bytes after its marker ...
+        // Raise A2_LICENCE_WINDOW_BYTES to fit it" - a regression reported as
+        // drift, with a prescription that would have licensed it. (It opened no
+        // hole: the reviewer followed the advice, and the too-far control RED
+        // instead. A confusing second red, not a silent pass.) Distance is what
+        // tells the two apart, so distance decides the bucket and each bucket
+        // carries its own message.
+        $violations = [];
+        $drifting = [];
+        $licensedHere = 0;
+        $files = 0;
+
+        foreach (['src', 'tests'] as $directory) {
+            $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__, 2) . '/' . $directory, \FilesystemIterator::SKIP_DOTS));
+            foreach ($walk as $entry) {
+                if (!$entry->isFile() || $entry->getExtension() !== 'php') {
+                    continue;
+                }
+
+                $files++;
+                $found = self::classifyClaimOffsets(self::flattened((string) file_get_contents($entry->getPathname())), $falseClaim, $marker);
+                $relative = $directory . '/' . str_replace(\dirname(__DIR__, 2) . '/' . $directory . '/', '', $entry->getPathname());
+                $licensedHere += \count($found['licensed']);
+
+                // REPORTED AS file:line, NOT AS A FLATTENED BYTE OFFSET. The
+                // offset is into the FLATTENED text and maps to nothing a reader
+                // can navigate to - `tests/Agents/AgentTest.php @92385` was the
+                // real output of the previous revision, MEASURED by a reviewer
+                // on a revert. The sibling pin one file over prints
+                // `src/Tools/BuiltIn/Read.php:7 (comment) oppositely`; a census
+                // that names a file but not a line is a census somebody has to
+                // grep for afterwards.
+                // AND THE LINE IS THE OFFENDER'S, NOT THE FILE'S FIRST. WHAT
+                // THIS DID: computed ONE line per file, from the FIRST raw
+                // occurrence, and printed it against every offender in that
+                // file. MEASURED by a reviewer: planting a live claim far down
+                // THIS file reported `tests/Agents/AgentTest.php:2279` - the
+                // properly-quoted rule-42 span, the one site that is CORRECT. A
+                // fix agent sent there finds nothing wrong, cannot reproduce the
+                // finding and closes it, which is the failure mode rule 25 is
+                // about: this message is all that reader will see.
+                //
+                // The raw occurrences and the flattened ones are in the same
+                // ORDER, so they pair by ordinal. They can differ in COUNT - a
+                // claim split across a wrapped comment exists in the flattened
+                // stream and not in the raw one - so a missing partner reports
+                // line 0 rather than someone else's line.
+                $raw = (string) file_get_contents($entry->getPathname());
+                $rawLines = [];
+                $rawAt = strpos($raw, $falseClaim);
+
+                while ($rawAt !== false) {
+                    $rawLines[] = substr_count(substr($raw, 0, $rawAt), "\n") + 1;
+                    $rawAt = strpos($raw, $falseClaim, $rawAt + 1);
+                }
+
+                $ordinals = [...$found['live'], ...$found['drifted'], ...$found['licensed']];
+                sort($ordinals);
+
+                foreach ($found['live'] as $at) {
+                    $violations[] = $relative . ':' . ($rawLines[(int) array_search($at, $ordinals, true)] ?? 0) . ' @' . $at;
+                }
+
+                foreach ($found['drifted'] as $at) {
+                    $drifting[] = $relative . ':' . ($rawLines[(int) array_search($at, $ordinals, true)] ?? 0) . ' @' . $at;
+                }
+            }
+        }
+
+        $this->assertGreaterThan(100, $files, 'the src/ + tests/ walk found almost no files, so the domain of the claim below is not being derived');
+        $this->assertSame(
+            [],
+            $violations,
+            'a file states, outside a "' . $marker . '" quotation, that the per-stage write signal '
+            . 'is ' . $falseClaim . ' on the Agent assembler path. That is FALSE and was falsified '
+            . 'by P3.S6\'s own review cycle 2: the seam is real, live and per-stage in '
+            . 'Workflows/WorkflowEngine.php, and prompt_plan.md section 18 records it as ESCALATED, '
+            . 'NOT WAIVED - "it needs its own step". The claim survived three corrections of the '
+            . 'plan and the worklog while the assertion message that carried it went uncorrected '
+            . 'until P3.audit-fix-2, which is how it got a test. Do not restore it. To quote it as '
+            . 'history, put it inside a "' . $marker . '" span, as this file does.',
+        );
+        $this->assertSame(
+            [],
+            $drifting,
+            'a "' . $marker . '" quotation of the falsified claim has grown past '
+            . self::A2_LICENCE_WINDOW_BYTES . ' flattened bytes from its marker, so the licence no '
+            . 'longer reaches it. Nothing is wrong with the prose: raise '
+            . 'A2_LICENCE_WINDOW_BYTES to fit it, in the same change-set that grew it. This '
+            . 'assertion is separate from the one above so that a message which merely GREW is '
+            . 'never reported as a falsehood somebody restored.',
+        );
+
+        // NOT VACUOUS. Without this, deleting the quotation outright leaves both
+        // censuses green over an empty subject and the correction disappears
+        // with the suite still reporting OK.
+        $this->assertGreaterThan(
+            0,
+            $licensedHere,
+            'no file under src/ or tests/ carries the falsified claim inside a "' . $marker . '" '
+            . 'quotation any more, so both censuses above are asserting the absence of a phrase '
+            . 'nobody has written rather than the survival of a correction. If the message was '
+            . 'legitimately rewritten, rewrite this test with it.',
+        );
+    }
+
+    /**
+     * `$claim`'s offsets in `$flat`, split by how far the nearest preceding
+     * `$marker` is.
+     *
+     * `licensed` is within {@see A2_LICENCE_WINDOW_BYTES}; `drifted` is within
+     * eight times that, which is a quotation that has outgrown its window
+     * rather than a claim somebody restored; `live` is everything else.
+     */
+    private static function classifyClaimOffsets(string $flat, string $claim, string $marker): array
+    {
+        $found = ['live' => [], 'drifted' => [], 'licensed' => []];
+        $offset = strpos($flat, $claim);
+
+        while ($offset !== false) {
+            $at = strrpos(substr($flat, 0, $offset), $marker);
+            $distance = $at === false ? \PHP_INT_MAX : $offset - $at;
+
+            // AND DRIFT ALSO REQUIRES BEING INSIDE THE STILL-OPEN QUOTATION,
+            // because distance ALONE does not tell a grown quote from a restored
+            // falsehood - it only moves the boundary from infinity to eight
+            // windows. MEASURED by a reviewer: a live claim written as an
+            // ordinary sentence about 300 flattened bytes after the real marker
+            // was reported as drift, with the message "Nothing is wrong with the
+            // prose: raise A2_LICENCE_WINDOW_BYTES to fit it" - a prescription
+            // that would license it. An odd number of double quotes between the
+            // marker and the claim means the quotation opened and has not closed
+            // yet, so the claim is inside it; an even number means it closed,
+            // and whatever follows is the author's own voice.
+            //
+            // PARITY IS USED ONLY TO DEMOTE, WHICH IS WHY IT IS SAFE HERE and is
+            // ruled out one file over as a LICENCE (tests/RuntimeTest.php: 6
+            // src/ comments carrying the marker already hold an odd number of
+            // quotes, so licensing on parity reds on correct prose). Demoting
+            // moves a site from drifted to live - from "raise the window" to "do
+            // not restore it" - so the worst a parity mistake can do here is ask
+            // for a rewrite of prose that could have been licensed by widening.
+            $between = $at === false ? '' : substr($flat, $at, $offset - $at);
+            $insideQuotation = substr_count($between, '"') % 2 === 1;
+
+            // BOTH CONDITIONS ON THE LICENCE, NOT JUST DISTANCE. Parity was
+            // computed and then consulted only on the DRIFT arm, so any live
+            // claim within one window of any marker was licensed - closed
+            // quotation, no quotation, it made no difference. MEASURED by a
+            // reviewer and reproduced here before fixing: a doc-block reading
+            // `THIS MESSAGE USED TO SAY the signal was "derivable per stage".`
+            // followed by the falsified claim as an ordinary sentence, planted
+            // in src/Agents/Agent.php, ran `OK (35 tests, 402 assertions)` -
+            // the falsehood standing live in a production file, which is the
+            // one state this test exists to make impossible. The test's NAME
+            // says "only inside a quotation"; now the code does too.
+            //
+            // THE SIBLING GOT THIS RIGHT FIRST, which is what makes it a rule-40
+            // finding rather than an oversight: A1's pin in tests/RuntimeTest.php
+            // requires the full three-part form and a CLOSED quotation, because
+            // a reviewer defeated the loose form there. The correction did not
+            // travel one file over - between two guards in the same change-set,
+            // which is the defect the change-set exists to close.
+            if ($insideQuotation && $distance <= self::A2_LICENCE_WINDOW_BYTES) {
+                $found['licensed'][] = $offset;
+            } elseif ($insideQuotation && $distance <= self::A2_LICENCE_WINDOW_BYTES * 8) {
+                $found['drifted'][] = $offset;
+            } else {
+                $found['live'][] = $offset;
+            }
+
+            $offset = strpos($flat, $claim, $offset + 1);
+        }
+
+        return $found;
     }
 
     /**
