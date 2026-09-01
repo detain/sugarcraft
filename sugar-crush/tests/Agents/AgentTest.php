@@ -1582,6 +1582,40 @@ final class AgentTest extends TestCase
         $this->assertArrayNotHasKey('environment', $agent->toArray());
     }
 
+    /**
+     * THE SAME OMISSION CONTRACT, FOR THE F5 FIELD — review cycle 1, F-C6:
+     * `environmentRoot` is per-session plumbing like the block, and the
+     * constructor's doc-block claims it is absent from `toArray()` and the
+     * factories "for the reason the block is". The claim was true and
+     * half-pinned: `testToArrayOmitsTheEnvironmentSnapshot` asserts the block
+     * key only, so widening `toArray()` or a factory with a root key reddened
+     * nothing. This test is that other half: the key set of a root-carrying
+     * agent's serialization must not name the root under EITHER spelling, the
+     * round trip through `fromArray()` must come back null, and the dormant
+     * template bridge must not learn the argument either.
+     */
+    public function testToArrayAndTheFactoriesOmitTheEnvironmentRootToo(): void
+    {
+        $agent = Agent::fromArray(['name' => 'a'])
+            ->withEnvironmentRoot('/session/root');
+
+        $this->assertSame('/session/root', $agent->environmentRoot, 'the wither itself must set it — if this fails, the omission below is omission of nothing');
+
+        $array = $agent->toArray();
+        $this->assertArrayNotHasKey('environment_root', $array);
+        $this->assertArrayNotHasKey('environmentRoot', $array);
+
+        $restored = Agent::fromArray($array);
+        $this->assertNull(
+            $restored->environmentRoot,
+            'a root that survives the serialize round trip would outlive the session that resolved it — '
+            . 'the exact failure mode the snapshot omission above documents for the block',
+        );
+
+        $fromTemplate = Agent::fromDefinition(AgentDefinition::reviewer(), 'openai', 'gpt-4o');
+        $this->assertNull($fromTemplate->environmentRoot, 'a library template carries no session root');
+    }
+
     // -------------------------------------------------------------------------
     // fromDefinition() / fromPreset() - the bridges into AgentManager::register()
     // -------------------------------------------------------------------------
@@ -2337,9 +2371,9 @@ final class AgentTest extends TestCase
      * path and it stays. What it cannot see is the per-RUN question, because
      * the shape that asks it is a loop in a different file:
      * `WorkflowEngine.php:1126` `foreach ($nestedStages as $nestedStage)`
-     * encloses a render at `:1152`, `executeVerificationStage()` renders twice
-     * straight-line at `:1252` and `:1294`, and `WorkflowEngine.php:895`
-     * reaches `:1042`/`:1252`/`:1294`/`:1397` once per stage - and unlike the
+     * encloses a render at `:1174`, `executeVerificationStage()` renders twice
+     * straight-line at `:1275` and `:1318`, and `WorkflowEngine.php:895`
+     * reaches `:1063`/`:1275`/`:1318`/`:1422` once per stage - and unlike the
      * dormant pair, that engine is LIVE from `bin/sugarcrush` via
      * `Bootstrap.php:1183`, wired at `Bootstrap.php:1058`.
      *
@@ -2868,7 +2902,7 @@ final class AgentTest extends TestCase
      * P3.S6 declines - hoisting
      * `EnvironmentBlock::capture((string) getcwd(), $this->model)->withWriteSinceLastRender(false)`
      * above the `foreach` at `WorkflowEngine.php:1126` and passing it into the
-     * render at `:1152` - and THIS FILE stayed green under it: at `c4cb9492c`,
+     * render at `:1174` - and THIS FILE stayed green under it: at `c4cb9492c`,
      * `vendor/bin/phpunit -c phpunit.xml tests/Agents/AgentTest.php` reported
      * OK at 31 tests and 266 assertions with that mutation applied. The
      * disposition this step exists to record was pinned by nothing, because
@@ -3055,21 +3089,21 @@ final class AgentTest extends TestCase
      * WHY THIS EXISTS BESIDE
      * {@see testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()}
      * RATHER THAN INSTEAD OF IT. That test drives ONE of `WorkflowEngine`'s
-     * five render sites - `:1152`, enclosed by `executePipelineStage()`'s
-     * `foreach ($nestedStages as $nestedStage)` at `:1105`. The doc-block on
+     * five render sites - `:1174`, enclosed by `executePipelineStage()`'s
+     * `foreach ($nestedStages as $nestedStage)` at `:1126`. The doc-block on
      * {@see Agent::systemPrompt()} names a SECOND loop, the outer one:
      * `foreach ($workflow->stages as $stageIndex => $stage)` at
-     * `WorkflowEngine.php:895`, reaching `:1042` once per stage through
+     * `WorkflowEngine.php:895`, reaching `:1063` once per stage through
      * `executeStage()`. A whole pipeline is ONE entry in that outer loop, so
      * the pipeline test never enters `executeStage()` and never touches
-     * `:1042` - which is why the workflow here is built with plain `->stage()`
+     * `:1063` - which is why the workflow here is built with plain `->stage()`
      * calls and NOT with `->pipeline()`. Everything else about the harness is
      * the sibling's, deliberately.
      *
      * MEASURED, AND THAT MEASUREMENT IS WHY THIS TEST WAS WRITTEN. Hoisting a
      * shared `EnvironmentBlock::capture((string) getcwd(), $this->model)
      * ->withWriteSinceLastRender(false)` above the `foreach` at
-     * `WorkflowEngine.php:895` and passing it into the render at `:1042` -
+     * `WorkflowEngine.php:895` and passing it into the render at `:1063` -
      * exactly the wiring P3.S6 declines, applied at the outer seam instead of
      * the inner one - left the sibling test and the rest of this file GREEN,
      * and reds only here: 6 against an expected 10 at K = 2.
@@ -3080,7 +3114,7 @@ final class AgentTest extends TestCase
      * WHY THE EXECUTOR IS A MOCK AND THE COUNT IS STILL REAL, and why the
      * process directory moves inside the generated fixture repository, are
      * both the sibling's arguments unchanged - the render counted here happens
-     * in the PARENT at `:1042`, before the `SubAgent` reaches
+     * in the PARENT at `:1063`, before the `SubAgent` reaches
      * {@see AgentWorkerPool::executeOne()}, and `WorkflowEngine` builds its
      * per-stage `Agent` with `environment` left null, so outside a repository
      * the git section collapses and the bill is not five.

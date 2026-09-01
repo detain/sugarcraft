@@ -3531,7 +3531,21 @@ final class RuntimeTest extends TestCase
      * extends-name token is followed by `{`, so the `(`-requirement dropped
      * it, and the `new` itself names nothing to key on). Closed above by
      * reading the extends header at every `new class` and resolving same-file
-     * extends chains to the roster before consulting it.
+     * extends chains to the roster before consulting it; then the FOURTEENTH
+     * and FIFTEENTH, each MEASURED truncating-for-real and silent by this
+     * step's own first review cycle, against the scanner this step had just
+     * widened — the fourteenth reached the runtime-alias reader through its
+     * OWN aliasing (`use function class_alias as ca;`, whose pair the function
+     * map already spelled and nobody consulted) and through the named-argument
+     * spelling `class_alias(class: X::class, alias: 'W')` (whose `class:`
+     * label arrives as T_CLASS while `alias:` arrives as T_STRING); the
+     * fifteenth spelled the construction with a keyword instead of a name —
+     * `new self`, `new static` (T_STATIC, not even in the name alphabet
+     * before this), `new parent`, each inside a same-file subclass, where the
+     * SITE names no class and only the ENCLOSING BODY does. All five spellings
+     * are read now; the `self` a TRAIT would write remains declared below,
+     * and every channel above has run through a deletion experiment — the
+     * list of which is the step report, not this paragraph.
      *
      * THAT LIST IS THE ONLY PLACE THE HISTORY IS KEPT, and it carries no
      * cardinality — §16.8 rule 2, ship the generator not the count. It used to
@@ -3585,11 +3599,20 @@ final class RuntimeTest extends TestCase
      *    {@see SUBPROCESS_PRIMITIVES} is inventoried rather than judged.
      *  - EXTENSION FUNCTIONS NOT ENUMERATED. `dba_open`, `ZipArchive`,
      *    `pg_copy_from`, an FFI call — any of them writes and none is named.
+     *  - A `new self` INSIDE A TRAIT. The scope stack resolves the keyword
+     *    spellings against the class BODY they are written in, and a trait
+     *    body says nothing about the class that will one day `use` it —
+     *    `self` there binds at use time, in another file, and is out of reach
+     *    exactly like the next row's imported parent. (MEASURED: a trait
+     *    declaring `new self` in a method resolves to nothing in the scanner;
+     *    the same code in a same-file class resolves and reports.)
      *  - A PARENT DECLARED IN ANOTHER FILE. The extends reach closes the
      *    construction channel ONLY for chains this file can read: a rostered
      *    name written in the header, one spelled through a `use … as …`
      *    import, one reached through same-file `class_alias(...)` of two
-     *    LITERALS, and `class` declarations whose own extends lines sit in
+     *    LITERALS (in any of its argument spellings — positional, named, or
+     *    under a function-aliased name of the call itself), and `class`
+     *    declarations whose own extends lines sit in
      *    this file — transitively. A `class W extends Base {}` whose `Base`
      *    was IMPORTED from elsewhere is out of reach here: `Base`'s own
      *    parent is a fact about another file, and this walk opens no file it
@@ -3672,18 +3695,32 @@ final class RuntimeTest extends TestCase
         // owns that alphabet and the argument for why it is one list.
         $tokens = self::significantTokens($source);
         $functionAliases = self::importedFunctionAliases($tokens);
-        $classAliases = self::classAliasDefinitions($tokens, self::importedClassAliases($tokens));
-        $writeSubclasses = self::sameFileWriteConstructionSubclasses($tokens, $classAliases);
+        $classAliases = self::classAliasDefinitions($tokens, self::importedClassAliases($tokens), $functionAliases);
+        $construction = self::sameFileWriteConstructionSubclasses($tokens, $classAliases);
+        $writeSubclasses = $construction['roots'];
+        $parentOf = $construction['parentOf'];
+        $classScopes = $construction['scopes'];
         $count = \count($tokens);
         $found = [];
         $attributeDepth = 0;
         $line = 1;
+        // THE ENCLOSING-CLASS STACK for `new self` / `new static` — the
+        // fifteenth defeat's scope resolution. Opened bodies push, indices
+        // past a body's end pop, so the nearest open body is always current.
+        $scopeStack = [];
 
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
 
             if (\is_array($token)) {
                 $line = $token[2];
+            }
+
+            while ($scopeStack !== [] && $scopeStack[\count($scopeStack) - 1][0] < $i) {
+                array_pop($scopeStack);
+            }
+            if (isset($classScopes[$i])) {
+                $scopeStack[] = $classScopes[$i];
             }
 
             // STEP OVER `#[ … ]`. T_ATTRIBUTE IS the opening `#[`, so depth
@@ -3743,7 +3780,14 @@ final class RuntimeTest extends TestCase
                 continue;
             }
 
-            if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true)) {
+            // T_STATIC JOINS THE ALPHABET for one shape: `new static(...)`,
+            // which PHP lexes as the keyword token, NOT a T_STRING — the
+            // fifteenth defeat's `static` half was invisible to this filter
+            // before it was visible to the scope stack. A `static` anywhere
+            // else fails either the `(` neighbour test or the `new`-previous
+            // arm below, and a static CLOSURE binding (`static $x`) is not
+            // followed by `(` — MEASURED, both spellings.
+            if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE, T_STATIC], true)) {
                 continue;
             }
 
@@ -3839,6 +3883,23 @@ final class RuntimeTest extends TestCase
                             $reached = $writeSubclasses[$spelling];
 
                             break;
+                        }
+                    }
+                }
+                if ($reached === null && ($name === 'self' || $name === 'static' || $name === 'parent') && $scopeStack !== []) {
+                    // THE FIFTEENTH DEFEAT, THE KEYWORD SPELLINGS. `self` and
+                    // `static` bind to the innermost open class and `parent`
+                    // to its parent — none of which is a token at this site,
+                    // so the written-name lookups above could only ever miss.
+                    // The scope stack answers WHICH class this line sits in,
+                    // and the same maps answer whether constructing it writes.
+                    $inner = $scopeStack[\count($scopeStack) - 1][1];
+                    $target = $name === 'parent' ? ($inner === null ? null : ($parentOf[$inner] ?? null)) : $inner;
+                    if ($target !== null) {
+                        if (\in_array($target, self::WRITE_CONSTRUCTIONS, true)) {
+                            $reached = $target;
+                        } elseif (isset($writeSubclasses[$target])) {
+                            $reached = $writeSubclasses[$target];
                         }
                     }
                 }
@@ -4028,7 +4089,7 @@ final class RuntimeTest extends TestCase
      *
      * @return array<string, string>
      */
-    private static function classAliasDefinitions(array $tokens, array $classAliases): array
+    private static function classAliasDefinitions(array $tokens, array $classAliases, array $functionAliases): array
     {
         $count = \count($tokens);
         for ($i = 0; $i < $count; $i++) {
@@ -4039,8 +4100,18 @@ final class RuntimeTest extends TestCase
             // THE THIRD SPELLING IS THE TWELFTH DEFEAT REPEAT —
             // `namespace\class_alias(...)` in the global namespace IS the
             // global function, so it gets the same rewrite the call-site arm
-            // applies before judging.
+            // applies before judging. And the FUNCTION-ALIAS spelling
+            // (`use function class_alias as ca; ca(...)`) resolves through
+            // the same additive map the construction channel itself consults
+            // — MEASURED by review cycle 1 as the fourteenth defeat: the
+            // declaration was read by its WRITTEN name alone, so one
+            // `use function` over silenced the whole channel while its map
+            // already held the answer.
             $name = self::singleSegmentClassName($token);
+            if ($name === null) {
+                continue;
+            }
+            $name = $functionAliases[$name] ?? $name;
             if ($name !== 'class_alias') {
                 continue;
             }
@@ -4082,14 +4153,31 @@ final class RuntimeTest extends TestCase
      * T_STRING, which is the same lexer fact that made the `new class`
      * detector check `declaredTypeNames` for the token after T_CLASS and find
      * nothing there — and the match accepts the keyword token as the literal
-     * text it is. Anything else — an interpolated string, a variable, a
-     * concatenation — is null: this reads spellings, it does not evaluate
-     * them, and the enumeration says so.
+     * text it is. A leading NAMED-ARGUMENT LABEL (`class:`, `alias:`) is
+     * stripped before matching: `class_alias(class: SplFileObject::class,
+     * alias: 'W')` is the same call written differently, and review cycle 1
+     * measured the label form sailing through both this reader and its twin
+     * in the roster classifier. Anything else — an interpolated string, a
+     * variable, a concatenation — is null: this reads spellings, it does not
+     * evaluate them, and the enumeration says so.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $argument
      */
     private static function literalClassName(array $argument): ?string
     {
+        // THE LABEL, not the value: `label:` at the head of the argument is
+        // PHP 8 named-argument syntax, and the argument's own tokens follow
+        // it. The label is any identifier-spelling token — INCLUDING KEYWORDS,
+        // because `class:` arrives as T_CLASS while `alias:` arrives as
+        // T_STRING (MEASURED on PHP 8.3.6, and the pair is why this row is
+        // named) — and a bare `:`, never a T_DOUBLE_COLON (`::`), follows it.
+        if (\count($argument) > 2
+            && \is_array($argument[0]) && preg_match('~^[A-Za-z_][A-Za-z0-9_]*$~', $argument[0][1]) === 1
+            && $argument[1] === ':'
+        ) {
+            $argument = \array_slice($argument, 2);
+        }
+
         if (\count($argument) === 1 && \is_array($argument[0]) && $argument[0][0] === T_CONSTANT_ENCAPSED_STRING) {
             $segments = explode('\\', strtolower(trim($argument[0][1], '\'"')));
 
@@ -4140,14 +4228,21 @@ final class RuntimeTest extends TestCase
      * path that writes nothing — the polarity row in
      * {@see testAWriteConstructionReachedThroughAnExtendsClauseIsScanned()}.
      *
+     * THE RETURN IS THREE-VALUED since the fifteenth defeat: `roots` is the
+     * name-to-primitive map the `new` arms consult, `parentOf` lets
+     * `new parent(...)` take one hop up the same chain, and `scopes` maps
+     * every class BODY — named or anonymous — to `[end, ?name]` so the walk
+     * can answer WHICH class a bare `self` or `static` is written inside.
+     *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      * @param array<string, string>                         $classAliases
      *
-     * @return array<string, string>
+     * @return array{roots: array<string, string>, parentOf: array<string, string>, scopes: array<int, array{0: int, 1: ?string}>}
      */
     private static function sameFileWriteConstructionSubclasses(array $tokens, array $classAliases): array
     {
         $parentOf = [];
+        $scopes = [];
         $count = \count($tokens);
 
         for ($i = 0; $i < $count; $i++) {
@@ -4156,15 +4251,41 @@ final class RuntimeTest extends TestCase
                 continue;
             }
             $previous = $tokens[$i - 1] ?? null;
-            // `Foo::class` is the same token; `new class` names nothing here.
-            if (\is_array($previous) && \in_array($previous[0], [T_DOUBLE_COLON, T_NEW], true)) {
+            // `Foo::class` is the same token and names no body at all.
+            if (\is_array($previous) && $previous[0] === T_DOUBLE_COLON) {
                 continue;
             }
+            // A NAMED class is a T_CLASS followed by a T_STRING, full stop:
+            // an anonymous one is followed by `(`, `{` or T_EXTENDS, and
+            // whatever preceded the keyword (`;`, `}`, T_ABSTRACT, T_NEW) can
+            // be a one-byte string token and is no part of the test — a
+            // first cut of this check demanded an ARRAY previous and silently
+            // un-named every top-level class declaration in the probe.
             $declared = $tokens[$i + 1] ?? null;
-            if (!\is_array($declared) || $declared[0] !== T_STRING) {
+            $named = \is_array($declared) && $declared[0] === T_STRING;
+            $child = $named ? strtolower($declared[1]) : null;
+
+            // THE BODY RANGE, for the `self` / `static` resolution of the
+            // FIFTEENTH defeat: `class D extends \SplFileObject { static
+            // function make(): self { return new self($p, 'w'); } }`
+            // truncates for real and the site-level check only ever looked
+            // the DECLARED name up, so the keyword spellings of the same
+            // construction scanned `[]` — undeclared AND unreported until
+            // review cycle 1 measured it. Anonymous bodies are ranged too
+            // (name null) so a `new self` inside one resolves to the anon,
+            // which is not rostered by name, rather than reaching past it to
+            // the enclosing named class.
+            $bodyStart = self::classBodyStart($tokens, $i);
+            if ($bodyStart !== null) {
+                $bodyEnd = self::bodyClose($tokens, $bodyStart);
+                if ($bodyEnd !== null) {
+                    $scopes[$bodyStart] = [$bodyEnd, $child];
+                }
+            }
+
+            if ($child === null) {
                 continue;
             }
-            $child = strtolower($declared[1]);
 
             for ($j = $i + 2; $j < $count; $j++) {
                 $step = $tokens[$j];
@@ -4213,7 +4334,83 @@ final class RuntimeTest extends TestCase
             }
         } while ($added);
 
-        return $roots;
+        return ['roots' => $roots, 'parentOf' => $parentOf, 'scopes' => $scopes];
+    }
+
+    /**
+     * The body-opening `{` of the class whose T_CLASS sits at $classIndex.
+     *
+     * Header tokens (name, optional constructor-argument list, optional
+     * extends/implements) contain no bare `{` — an interpolation opener is
+     * `T_CURLY_OPEN`, an array token, never the one-byte string — so the
+     * scan skips only the argument list at depth and takes the first bare
+     * `{` it reaches. A header it cannot close reports null: the scope is
+     * then absent and a `new self` inside the file resolves to nothing
+     * rather than to a guess.
+     */
+    private static function classBodyStart(array $tokens, int $classIndex): ?int
+    {
+        $count = \count($tokens);
+        $parenDepth = 0;
+        for ($i = $classIndex + 1; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if ($token === '(') {
+                $parenDepth++;
+
+                continue;
+            }
+            if ($token === ')') {
+                $parenDepth--;
+
+                continue;
+            }
+            if ($token === '{' && $parenDepth === 0) {
+                return $i;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The matching `}` of a body opened at $open, counting every spelling
+     * that OPENS a brace and closing on the bare `}` all three share.
+     *
+     * `{$` (T_CURLY_OPEN) and, where the running PHP still defines it, `${`
+     * (T_DOLLAR_OPEN_CURLY_BRACES) both close on a one-byte `}` — a walk
+     * that counted only the bare `{` loses a level at the first interpolated
+     * string in the file and then ends every later class body early, which
+     * is the defeat family {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest}
+     * exists to police tree-wide. Same shape as {@see callArguments()}'s
+     * opener table.
+     */
+    private static function bodyClose(array $tokens, int $open): ?int
+    {
+        $depth = 0;
+        $count = \count($tokens);
+        for ($i = $open; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if ($token === '{') {
+                $depth++;
+
+                continue;
+            }
+            if (\is_array($token)
+                && ($token[0] === T_CURLY_OPEN
+                    || (\defined('T_DOLLAR_OPEN_CURLY_BRACES') && $token[0] === T_DOLLAR_OPEN_CURLY_BRACES))) {
+                $depth++;
+
+                continue;
+            }
+            if ($token === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -6010,6 +6207,7 @@ final class RuntimeTest extends TestCase
 
             declare(strict_types=1);
 
+            use function class_alias as ca;
             use SplFileObject as AliasedWriter;
 
             class SameFileWriter extends \SplFileObject
@@ -6028,7 +6226,30 @@ final class RuntimeTest extends TestCase
             {
             }
 
+            class SelfWriter extends \SplFileObject
+            {
+                public static function make(string $p): self
+                {
+                    return new self($p, 'w');
+                }
+
+                public static function makeStatic(string $p): static
+                {
+                    return new static($p, 'w');
+                }
+            }
+
+            class ChildOfSelf extends SelfWriter
+            {
+                public static function up(string $p): parent
+                {
+                    return new parent($p, 'w');
+                }
+            }
+
             class_alias(SplFileObject::class, 'RuntimeWriter');
+            ca('SplFileObject', 'FnAliasedWriter');
+            class_alias(class: \SplFileObject::class, alias: 'NamedArgWriter');
 
             final class Extends
             {
@@ -6039,21 +6260,32 @@ final class RuntimeTest extends TestCase
                     $named = new SameFileWriter($p, 'w');
                     $chained = new ChainedWriter($p, 'w');
                     $runtime = new RuntimeWriter($p, 'w');
+                    $fnAliased = new FnAliasedWriter($p, 'w');
+                    $namedArg = new NamedArgWriter($p, 'w');
                     $safe = new SafeWriter();
                     $plain = new \SplFileObject($p, 'w');
+                    $wrongScope = new self($p, 'w');
                 }
             }
             PROBE);
 
         $this->assertSame(
-            ['splfileobject' => [29, 30, 31, 32, 33, 35]],
+            ['splfileobject' => [28, 33, 41, 53, 54, 55, 56, 57, 58, 59, 61]],
             self::writePrimitivesCalledIn($file),
-            'extends-clause reach is the construction channel: line 29 is the anonymous class '
-            . 'that was the thirteenth defeat, 30 the same header under a `use … as …` alias, '
-            . '31-32 the named same-file subclass and its one-link chain, 33 the two-literal '
-            . '`class_alias` name, and 35 the direct spelling that must keep working. Lines 34 '
-            . '(`ArrayObject` — nobody rostered) and the declared-but-never-constructed class at '
-            . '19 must NOT appear: both polarities or this arm reports everything.',
+            'extends-clause reach is the construction channel: 53 is the anonymous class that '
+            . 'was the thirteenth defeat, 54 the same header under a `use … as …` alias, 55-56 '
+            . 'the named same-file subclass and its one-link chain, 57 the two-literal '
+            . '`class_alias` name, 58 the FUNCTION-aliased `class_alias` (the fourteenth defeat, '
+            . 'review cycle 1: `use function class_alias as ca;` silenced the whole declaration '
+            . 'channel for a scanner whose own alias map already held the answer), 59 the '
+            . 'named-argument label spelling of the same call (the same review, same shape, '
+            . 'other argument), 61 the direct spelling that must keep working, and 28/33/41 the '
+            . 'keyword spellings `self` / `static` / `parent` inside a same-file subclass (the '
+            . 'fifteenth defeat — the construction site names no token, the ENCLOSING CLASS '
+            . 'does, and the scope stack resolves it). Lines 60 (`ArrayObject` — nobody '
+            . 'rostered), 62 (`new self` inside a class that extends nothing) and the '
+            . 'declared-but-never-constructed class at 20-22 must NOT appear: both polarities '
+            . 'or this arm reports everything.',
         );
     }
 
