@@ -2022,6 +2022,28 @@ final class RuntimeTest extends TestCase
         // src/ file -> 1 red, and it names the CODE channel rather than a
         // doc-block, which is the message the author of that line needs.
         //
+        // AND THE DOMAIN IS `src/` AND NOT `tests/`, WHICH IS THE SECOND
+        // DECLARED RESIDUE AND THE ONE A SIBLING IN THIS SAME CHANGE-SET DOES
+        // NOT SHARE. MEASURED by a reviewer, and re-measured here: the live
+        // claim planted as a doc-block in tests/Support/TestFileWalkTrait.php
+        // leaves this file GREEN at an identical 487 assertions.
+        //
+        // WHY IT IS NOT SIMPLY WIDENED, which is what
+        // {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheFalsifiedPerStageWriteSignalClaimSurvivesOnlyInsideAQuotationOfWhatThisMessageUsedToSay()}
+        // does for its own claim over `src/` + `tests/`. That claim is a long
+        // distinctive phrase; these two are `oppositely` and `opposite order`,
+        // and MEASURED under `tests/` they already occur five times in code that
+        // is correct: four in THIS file, which has to spell both phrases to
+        // search for them, and one in
+        // `tests/Sessions/BackgroundSupervisorReapTest.php:438`, an unrelated
+        // and entirely legitimate "the same two branches in the opposite order".
+        // A `tests/` channel therefore needs an exclusion for this file plus a
+        // licence for that one before it is an improvement rather than a red on
+        // correct prose - which is a hand-maintained list, the thing this
+        // change-set exists to argue against, bought for a population that has
+        // never carried the claim. The claim reached `src/` FROM
+        // `prompt_plan.md`; it has never been in a test.
+        //
         // WHAT IS STILL NOT COVERED, so that the next reader does not have to
         // rediscover it (rule 31): an unclosed quotation whose accidental
         // closing quote is a LATER double quote IN THE SAME COMMENT still
@@ -2750,7 +2772,21 @@ final class RuntimeTest extends TestCase
             . 'the gate only changed shape, teach the regex the new shape. The assertion on the '
             . 'next line is the one that says Runtime must agree, and it fails separately and says so.',
         );
-        $this->assertTrue(Runtime::stepRequestedAWrite([new ToolCall('c', 'mcp__x__y', [])]));
+        $this->assertTrue(
+            Runtime::stepRequestedAWrite([new ToolCall('c', 'mcp__x__y', [])]),
+            'Runtime::stepRequestedAWrite() no longer classifies an mcp__-prefixed call as a write, '
+            . 'so it disagrees with PermissionGate::isWriteTool(), which the assertion above pins '
+            . 'as still treating that prefix as a write. Runtime must agree: repair Runtime, or '
+            . 'respell the prefix at its authority (McpToolBridge::NAME_PREFIX) and let '
+            . 'PermissionGate, the regex above and Runtime all follow it. THIS MESSAGE EXISTS '
+            . 'BECAUSE THE PARAGRAPH ABOVE PROMISED IT: the A7 repair rewrote the message on the '
+            . 'assertion above and, in the same breath, told the reader that this line "fails '
+            . 'separately and says so" - while this line was a bare one-argument assertTrue whose '
+            . 'whole output was "Failed asserting that false is true." MEASURED by a reviewer, by '
+            . 'breaking the MCP_TOOL_PREFIX arm of stepRequestedAWrite(). A repair for a message '
+            . 'that named the wrong side is not finished by making a fresh unmeasured claim about '
+            . 'the assertion beside it (section 16.8 rules 7 and 25).',
+        );
 
         // THE HALF A GATE-TO-GATE DRIFT TEST CANNOT SEE, and §16.8 rule 15's
         // real failure mode one level up: both rosters can be SIMULTANEOUSLY

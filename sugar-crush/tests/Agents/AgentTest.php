@@ -43,9 +43,10 @@ final class AgentTest extends TestCase
      * NOT A ROUND NUMBER PICKED FOR COMFORT: the one real occurrence on this
      * tree sits 46 bytes after its marker, MEASURED, and
      * {@see testTheFalsifiedPerStageWriteSignalClaimSurvivesOnlyInsideAQuotationOfWhatThisMessageUsedToSay()}
-     * re-derives that distance on every run and reds HERE, with an actionable
-     * message, if an edit ever pushes it past this value. The margin is
-     * deliberate slack for a message that grows; it is not a measurement.
+     * re-classifies every occurrence on every run against this value, reporting
+     * one that has drifted past it separately from one that was never quoted at
+     * all - so an edit that grows the message reds with "raise this", not with
+     * an accusation. The margin is deliberate slack; it is not a measurement.
      */
     private const A2_LICENCE_WINDOW_BYTES = 200;
 
@@ -2309,8 +2310,9 @@ final class AgentTest extends TestCase
      * only within {@see A2_LICENCE_WINDOW_BYTES} flattened bytes after a
      * "THIS MESSAGE USED TO SAY" marker. MEASURED on this tree: the one real
      * occurrence sits 46 bytes after its marker, so the window is warranted with
-     * four times the room the real case needs, and the window is asserted below
-     * rather than trusted.
+     * four times the room the real case needs, and drift past it is a bucket of
+     * its own below with its own message, so a quotation that merely GREW is
+     * never reported as a falsehood somebody restored.
      *
      * AND PROXIMITY IS THE WEAKER LICENCE, which is stated rather than hidden
      * (rule 31): a live claim written within the window of an unrelated marker
@@ -2333,48 +2335,61 @@ final class AgentTest extends TestCase
         $falseClaim = 'un' . 'wireable';
         $marker = 'THIS MESSAGE USED TO SAY';
 
-        // THE KNOWN-POSITIVE AND KNOWN-NEGATIVE CONTROLS, both, before the
-        // instrument is trusted on a real file (rule 18: both polarities). A
-        // detector that never fired and one that always fired would each pass a
-        // one-polarity control.
+        // THE CONTROLS, ALL FOUR BUCKETS, before the instrument is trusted on a
+        // real file (section 16.8 rule 18: both polarities, and here there are
+        // three outcomes rather than two). A detector that never fired and one
+        // that always fired would each pass a one-polarity control.
         $licensed = 'and it is NOT underivable. ' . $marker . ' the signal was "' . $falseClaim . ' on the agent path"; cycle 2 falsified it.';
-        $unlicensed = 'the per-stage write signal is ' . $falseClaim . ' on the Agent assembler path, so the disposition stands.';
-        $tooFar = $marker . ' something else entirely, ' . str_repeat('and then a great deal of unrelated prose, ', 8) . 'the signal is ' . $falseClaim . '.';
+        $drifted = $marker . ' the signal was, and then ' . str_repeat('a great deal of prose that grew over time, ', 8) . '"' . $falseClaim . ' on the agent path".';
+        $live = 'the per-stage write signal is ' . $falseClaim . ' on the Agent assembler path, so the disposition stands.';
+        $farFromAMarker = $marker . ' something unrelated. ' . str_repeat('and then a very great deal of entirely unrelated prose indeed, ', 40) . 'the signal is ' . $falseClaim . '.';
 
-        $this->assertSame([], self::unlicensedClaimOffsets($licensed, $falseClaim, $marker), 'the proximity licence refused a quotation that IS in the rule-42 form, so this test would red on the corrected message it exists to protect');
-        $this->assertSame([strpos($unlicensed, $falseClaim)], self::unlicensedClaimOffsets($unlicensed, $falseClaim, $marker), 'the detector did not report a live claim written with no marker in front of it at all, or reported it at the wrong offset, so it cannot report the regression this test exists for');
-        $this->assertNotSame([], self::unlicensedClaimOffsets($tooFar, $falseClaim, $marker), 'the detector licensed a claim that sits FAR past its marker, so the window is not bounding anything and any marker anywhere in a file would license every occurrence after it');
-
-        // THE WINDOW IS WARRANTED, NOT ASSUMED. If a future edit pushes the real
-        // occurrence past the window this reds HERE, with a message that says
-        // raise it - rather than in the census below, accusing the author of a
-        // claim they did not make.
-        $realDistance = null;
-        $agentTest = self::flattened((string) file_get_contents(__FILE__));
-        $offset = strpos($agentTest, $falseClaim);
-        while ($offset !== false) {
-            $before = substr($agentTest, 0, $offset);
-            $at = strrpos($before, $marker);
-            // UNBOUNDED by the window on purpose. Deriving this distance under
-            // the window would make the assertion below unfalsifiable: no
-            // occurrence more than A2_LICENCE_WINDOW_BYTES away could ever be
-            // the one measured, so "the real occurrence outgrew the window"
-            // would surface as the ABSENCE assertion above instead, telling the
-            // author the correction is gone when it is merely further off.
-            if ($at !== false) {
-                $realDistance = $offset - $at;
-
-                break;
-            }
-            $offset = strpos($agentTest, $falseClaim, $offset + 1);
-        }
-
-        $this->assertNotNull($realDistance, 'this file no longer carries the falsified claim inside a "' . $marker . '" quotation, so the census below is asserting the absence of a phrase nobody has written rather than the survival of a correction. If the message was rewritten, rewrite this test with it.');
-        $this->assertLessThanOrEqual(self::A2_LICENCE_WINDOW_BYTES, $realDistance, 'the real quotation of the falsified claim now sits ' . $realDistance . ' flattened bytes after its "' . $marker . '" marker, which is further than the window allows, so the census below is about to accuse a message that IS in the rule-42 form. Raise A2_LICENCE_WINDOW_BYTES to fit it.');
+        $this->assertSame(
+            ['live' => [], 'drifted' => [], 'licensed' => [strpos($licensed, $falseClaim)]],
+            self::classifyClaimOffsets($licensed, $falseClaim, $marker),
+            'the proximity licence refused a quotation that IS in the rule-42 form, so this test '
+            . 'would red on the corrected message it exists to protect',
+        );
+        $this->assertSame(
+            ['live' => [], 'drifted' => [strpos($drifted, $falseClaim)], 'licensed' => []],
+            self::classifyClaimOffsets($drifted, $falseClaim, $marker),
+            'a quotation that has drifted just past its window is not being told apart from a live '
+            . 'claim, so a message that merely grew would be reported as a restored falsehood',
+        );
+        $this->assertSame(
+            ['live' => [strpos($live, $falseClaim)], 'drifted' => [], 'licensed' => []],
+            self::classifyClaimOffsets($live, $falseClaim, $marker),
+            'the detector did not report a live claim written with no marker in front of it at '
+            . 'all, or reported it in the wrong bucket, so it cannot report the regression this '
+            . 'test exists for',
+        );
+        $this->assertSame(
+            ['live' => [strpos($farFromAMarker, $falseClaim)], 'drifted' => [], 'licensed' => []],
+            self::classifyClaimOffsets($farFromAMarker, $falseClaim, $marker),
+            'a claim sitting a long way past an unrelated marker was licensed or excused as drift, '
+            . 'so any marker anywhere in a file would cover every occurrence after it',
+        );
 
         // THE CENSUS, over the derived domain.
+        //
+        // THE THREE BUCKETS EXIST BECAUSE ONE BUCKET GAVE THE WRONG MESSAGE ON
+        // THE ONE REGRESSION THIS TEST IS FOR. WHAT IT DID: a separate warrant
+        // ran BEFORE the census, took the first occurrence with any preceding
+        // marker at any distance, and asserted it fitted the window. MEASURED by
+        // a reviewer, by reverting the A2 message to the text it replaced: the
+        // warrant fired instead of the census and reported the restored claim as
+        // a quotation that "now sits 77773 flattened bytes after its marker ...
+        // Raise A2_LICENCE_WINDOW_BYTES to fit it" - a regression reported as
+        // drift, with a prescription that would have licensed it. (It opened no
+        // hole: the reviewer followed the advice, and the too-far control RED
+        // instead. A confusing second red, not a silent pass.) Distance is what
+        // tells the two apart, so distance decides the bucket and each bucket
+        // carries its own message.
         $violations = [];
+        $drifting = [];
+        $licensedHere = 0;
         $files = 0;
+
         foreach (['src', 'tests'] as $directory) {
             $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__, 2) . '/' . $directory, \FilesystemIterator::SKIP_DOTS));
             foreach ($walk as $entry) {
@@ -2383,9 +2398,16 @@ final class AgentTest extends TestCase
                 }
 
                 $files++;
-                $flat = self::flattened((string) file_get_contents($entry->getPathname()));
-                foreach (self::unlicensedClaimOffsets($flat, $falseClaim, $marker) as $at) {
-                    $violations[] = $directory . '/' . str_replace(\dirname(__DIR__, 2) . '/' . $directory . '/', '', $entry->getPathname()) . ' @' . $at;
+                $found = self::classifyClaimOffsets(self::flattened((string) file_get_contents($entry->getPathname())), $falseClaim, $marker);
+                $relative = $directory . '/' . str_replace(\dirname(__DIR__, 2) . '/' . $directory . '/', '', $entry->getPathname());
+                $licensedHere += \count($found['licensed']);
+
+                foreach ($found['live'] as $at) {
+                    $violations[] = $relative . ' @' . $at;
+                }
+
+                foreach ($found['drifted'] as $at) {
+                    $drifting[] = $relative . ' @' . $at;
                 }
             }
         }
@@ -2403,27 +2425,59 @@ final class AgentTest extends TestCase
             . 'until P3.audit-fix-2, which is how it got a test. Do not restore it. To quote it as '
             . 'history, put it inside a "' . $marker . '" span, as this file does.',
         );
+        $this->assertSame(
+            [],
+            $drifting,
+            'a "' . $marker . '" quotation of the falsified claim has grown past '
+            . self::A2_LICENCE_WINDOW_BYTES . ' flattened bytes from its marker, so the licence no '
+            . 'longer reaches it. Nothing is wrong with the prose: raise '
+            . 'A2_LICENCE_WINDOW_BYTES to fit it, in the same change-set that grew it. This '
+            . 'assertion is separate from the one above so that a message which merely GREW is '
+            . 'never reported as a falsehood somebody restored.',
+        );
+
+        // NOT VACUOUS. Without this, deleting the quotation outright leaves both
+        // censuses green over an empty subject and the correction disappears
+        // with the suite still reporting OK.
+        $this->assertGreaterThan(
+            0,
+            $licensedHere,
+            'no file under src/ or tests/ carries the falsified claim inside a "' . $marker . '" '
+            . 'quotation any more, so both censuses above are asserting the absence of a phrase '
+            . 'nobody has written rather than the survival of a correction. If the message was '
+            . 'legitimately rewritten, rewrite this test with it.',
+        );
     }
 
     /**
-     * Offsets in `$flat` at which `$claim` appears with no `$marker` inside the
-     * preceding {@see A2_LICENCE_WINDOW_BYTES} bytes.
+     * `$claim`'s offsets in `$flat`, split by how far the nearest preceding
+     * `$marker` is.
+     *
+     * `licensed` is within {@see A2_LICENCE_WINDOW_BYTES}; `drifted` is within
+     * eight times that, which is a quotation that has outgrown its window
+     * rather than a claim somebody restored; `live` is everything else.
      */
-    private static function unlicensedClaimOffsets(string $flat, string $claim, string $marker): array
+    private static function classifyClaimOffsets(string $flat, string $claim, string $marker): array
     {
-        $unlicensed = [];
+        $found = ['live' => [], 'drifted' => [], 'licensed' => []];
         $offset = strpos($flat, $claim);
 
         while ($offset !== false) {
             $at = strrpos(substr($flat, 0, $offset), $marker);
-            if ($at === false || ($offset - $at) > self::A2_LICENCE_WINDOW_BYTES) {
-                $unlicensed[] = $offset;
+            $distance = $at === false ? \PHP_INT_MAX : $offset - $at;
+
+            if ($distance <= self::A2_LICENCE_WINDOW_BYTES) {
+                $found['licensed'][] = $offset;
+            } elseif ($distance <= self::A2_LICENCE_WINDOW_BYTES * 8) {
+                $found['drifted'][] = $offset;
+            } else {
+                $found['live'][] = $offset;
             }
 
             $offset = strpos($flat, $claim, $offset + 1);
         }
 
-        return $unlicensed;
+        return $found;
     }
 
     /**

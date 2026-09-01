@@ -687,7 +687,9 @@ final class TreeWideGuardRosterTest extends TestCase
      * spellings out of a probe whose pattern was not this constant, and reproduced
      * under no reading. Attempt two fixed the units and gave four figures measured
      * correctly at the commit that wrote them - and they were STALE TWO COMMITS
-     * LATER, because THIS FILE IS ONE OF THE 472 the generator reads. Every
+     * LATER, because THIS FILE IS ONE OF THE FILES the generator reads - the size
+ * of that population is `["testFiles"]` on the one-liner above, deliberately not
+ * written here. Every
      * paragraph added to it moves its own census. MEASURED: substituting the
      * earlier revision of this one file back into the population reproduces those
      * four figures exactly, and the current file gives four different ones.
@@ -807,6 +809,23 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'derivation is not seeing the mechanism it is built on',
         );
 
+        // THE SAME LIVENESS PIN, FOR THE CONSTANT THAT IS THE FINDING. These
+        // five rows ARE the Phase 3 close review's finding 1 made executable,
+        // and the loop below is a `foreach`: fewer rows is fewer iterations, so
+        // an emptied constant retires the finding and keeps the test's name.
+        // MEASURED by a reviewer: one row deleted ran `OK (16 tests, 1068
+        // assertions)` and the emptied constant `OK (16 tests, 1064)` - a drop
+        // small enough that nobody reads it as a retired guarantee.
+        $this->assertCount(
+            5,
+            self::OMITTED_BY_THE_HAND_MAINTAINED_SET,
+            'the five tree-wide guards the nine-file list omits - which ARE the Phase 3 close '
+            . 'review\'s finding 1, made executable - have changed in number. The loop below '
+            . 'cannot fail for a row it no longer has, so a row deleted on its own retires part of '
+            . 'that finding while staying green. If the nine-file list in prompt_plan.md section '
+            . '1.2 action 7b grew to cover one of these, say so here and update this count.',
+        );
+
         foreach (self::OMITTED_BY_THE_HAND_MAINTAINED_SET as $omitted) {
             $this->assertContains(
                 $omitted,
@@ -851,6 +870,30 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     public function testTheHandMaintainedCensusSetIsASubsetOfTheDerivedRoster(): void
     {
+        // THE CONSTANT'S OWN LIVENESS, BEFORE ANYTHING IS DERIVED FROM IT, and
+        // this file had no business shipping without it: `array_diff` over a
+        // SHORTER list is a SMALLER diff, so deleting a row - or emptying the
+        // constant outright - leaves every assertion below green. MEASURED by a
+        // reviewer, both ways: one row removed and the whole constant replaced
+        // with `[]` each ran `OK (16 tests, 1069 assertions)`, the count
+        // IDENTICAL to the untouched file, so neither the green nor the
+        // assertion-total corollary could see it. That is section 16.8 rule 15
+        // happening inside the file whose headline is that a hand-maintained
+        // list inherits its own omissions - and the sibling constant
+        // {@see DECLARED_TREE_WIDE_GUARDS} already carried the guard these two
+        // lacked. An exact count and not `assertNotSame([], ...)`: the plan's
+        // list is a fixed nine, so a legitimate change to it is a change to
+        // `prompt_plan.md` section 1.2 action 7b and belongs in the same
+        // change-set as this number.
+        $this->assertCount(
+            9,
+            self::HAND_MAINTAINED_CENSUS_SET,
+            'the nine-file census set prompt_plan.md section 1.2 action 7b names has changed size. '
+            . 'If a file was legitimately added there or dropped from it, update this count in the '
+            . 'same change-set; if a row was deleted from this constant on its own, the subset '
+            . 'assertion below cannot fail for a case it no longer has.',
+        );
+
         $roster = self::derivation()['roster'];
         $missing = array_values(array_diff(self::HAND_MAINTAINED_CENSUS_SET, $roster));
 
@@ -1001,6 +1044,39 @@ final class TreeWideGuardRosterTest extends TestCase
                 . 'FilesystemIterator, which IS in WALKER_CLASSES, and a walk this alphabet cannot '
                 . 'see produces no site at all - so the file is skipped in SILENCE rather than '
                 . 'landing in the residue. Put globiterator back in WALKER_CLASSES.',
+        );
+
+        // THE OTHER TWO SPELLINGS WITH NO LIVE SITE ON THIS TREE. Same reason as
+        // GlobIterator's row above, and the correspondence is now DERIVED by
+        // {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
+        // rather than left to whoever adds the next spelling to remember: a
+        // spelling the tree does not exercise is covered by nothing unless it
+        // has a row here.
+        //
+        // `readdir` IS THE MORE INTERESTING OF THE TWO, because the root does
+        // not reach it directly - it reaches `opendir()`, and the handle is what
+        // reaches `readdir()`. So this row also pins that the taint fixpoint
+        // crosses `opendir`, which no other row here covers.
+        $viaReaddir = "<?php\nclass P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src';\n"
+            . "    \$h = opendir(\$d); while (\$f = readdir(\$h)) {} } }\n";
+        $this->assertSame(
+            ['root' => ['readdir($h)'], 'unresolved' => []],
+            self::classifyWalkSites($viaReaddir),
+            'a root-anchored readdir() loop is not seen as a directory walk, or the root stopped '
+                . 'reaching it through the opendir() handle. Either way a guard written that way '
+                . 'produces no site at all and its file is skipped in SILENCE rather than landing '
+                . 'in the residue.',
+        );
+
+        $viaFilesystemIterator = "<?php\nclass P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src';\n"
+            . "    foreach (new \\FilesystemIterator(\$d, \\FilesystemIterator::SKIP_DOTS) as \$f) {} } }\n";
+        $this->assertSame(
+            ['root' => ['FilesystemIterator($d,\FilesystemIterator::SKIP_DOTS)'], 'unresolved' => []],
+            self::classifyWalkSites($viaFilesystemIterator),
+            'a root-anchored FilesystemIterator is not seen as a directory walk. It appears on this '
+                . 'tree only as the SKIP_DOTS flag argument of another iterator, never as the '
+                . 'iterator itself, so this row is the only thing keeping that alphabet entry '
+                . 'honest.',
         );
 
         // Neither a walker call: `new Glob(...)` is this tree's Glob TOOL, and
@@ -1460,6 +1536,22 @@ final class TreeWideGuardRosterTest extends TestCase
             'the declared-guard constant is empty, so this test ranges over nothing',
         );
 
+        // AND ITS SIZE IS PINNED, which is what lets the two paragraphs above
+        // say FOUR out loud. Same reasoning as the sibling constants: the loop
+        // below is a `foreach`, so a deleted row is one fewer iteration and one
+        // fewer chance to fail. This is the ONE size in this file written in
+        // prose AND owned by an assertion; the rest are derived at the point of
+        // use or are before/after pairs - see THE POPULATIONS ARE NOT PINNED IN
+        // PROSE.
+        $this->assertCount(
+            4,
+            self::DECLARED_TREE_WIDE_GUARDS,
+            'the declared-guard list has changed size. A row is a LICENCE, so adding one is a '
+            . 'deliberate act that belongs in the same change-set as this count; removing one '
+            . 'retires a licence the file argues for in prose, and the loop below cannot fail for '
+            . 'a row it no longer has.',
+        );
+
         $everyFile = [];
         foreach (self::everyTestFile() as $relative => $absolute) {
             $everyFile[str_replace('\\', '/', $relative)] = $absolute;
@@ -1785,7 +1877,7 @@ final class TreeWideGuardRosterTest extends TestCase
     {
         $helpers = self::walkingHelperNames();
 
-        // (2) The positive half: the two helpers this tree actually has. Named,
+        // (2) The positive half: the helpers this tree actually has. Named,
         // because a derivation that found some OTHER pair would be answering a
         // different question and should say so out loud.
         $this->assertArrayHasKey(
@@ -1919,7 +2011,7 @@ final class TreeWideGuardRosterTest extends TestCase
         // name declaredTypeNames() cannot read contributes nothing and is missed
         // in silence - the same failure mode this whole method is about, one
         // token class down. `enum` is in the list BECAUSE it was not: MEASURED,
-        // 0 of the 32 helper files under tests/ declare one today, so this is a
+        // NO helper file under tests/ declares one today, so this is a
         // door closed before anybody walks through it.
         foreach (['class' => 'C', 'trait' => 'T', 'interface' => 'I', 'enum' => 'E'] as $keyword => $name) {
             $declaration = ['Support/D.php' => "<?php\nnamespace X;\n" . $keyword . ' ' . $name . " { use Walks; }\n"];
@@ -2003,6 +2095,121 @@ final class TreeWideGuardRosterTest extends TestCase
                 . '(RecursiveDirectoryIterator/DirectoryIterator/FilesystemIterator). Same '
                 . 'reasoning as the assertion above, for the other half of the alphabet.',
         );
+
+        // AND THE TWO ASSERTIONS ABOVE DO NOT DO WHAT THIS METHOD IS NAMED FOR,
+        // WHICH A REVIEWER MEASURED RATHER THAN ARGUED. They range over the
+        // ROSTER, so a spelling with no live site on this tree can be deleted
+        // from the alphabet and neither of them moves: dropping `readdir` ran
+        // `OK (16 tests, 1069 assertions)` and dropping `filesystemiterator`
+        // ran the same, the count IDENTICAL to the untouched file, while the
+        // control - dropping `recursivedirectoryiterator`, which has live sites
+        // - RED 9 of them. The instrument was alive and blind at once, which is
+        // the pair of readings that separates rule 16 from rule 40.
+        //
+        $liveSiteCount = array_fill_keys([...self::WALKER_CLASSES, ...self::WALKER_FUNCTIONS], 0);
+        foreach (self::derivation()['why'] as $sites) {
+            foreach ($sites as $site) {
+                foreach (array_keys($liveSiteCount) as $spelling) {
+                    if (str_starts_with(strtolower($site), $spelling . '(')) {
+                        $liveSiteCount[$spelling]++;
+                    }
+                }
+            }
+        }
+
+        // SO EVERY SPELLING WITH NO LIVE SITE ON THIS TREE MUST CARRY A
+        // KNOWN-ANSWER ROW, and that correspondence is derived here rather than
+        // remembered. A spelling the tree exercises is covered by the tree; a
+        // spelling it does not is covered by nothing unless somebody wrote it a
+        // fixture, which is exactly how `globiterator` came to have one.
+        //
+        // AND THE OBVIOUS CHECK IN THIS SLOT WAS CIRCULAR, which is recorded
+        // because it looked right and shipped for the length of one test run.
+        // WHAT IT DID: built a synthetic call per spelling and asserted the
+        // classifier returned a site for it. MEASURED, both halves: adding
+        // `notawalkeratall` to WALKER_FUNCTIONS and `notaclassatall` to
+        // WALKER_CLASSES - with the counts below bumped so they did not mask it
+        // - each ran `OK (16 tests, 1076 assertions)`. Of course they did: the
+        // alphabet IS the classifier's key, so a name is visible BECAUSE it was
+        // declared. An assertion that cannot fail for an arbitrary input is not
+        // a weak assertion, it is not one (section 16.8 rule 16).
+        // COMMENTS STRIPPED FIRST, and this is not tidiness. MEASURED: with the
+        // raw source, deleting the `readdir` fixture row left this GREEN,
+        // because the PARAGRAPH above that row explains why the row exists and
+        // says `readdir()` while doing so. A correspondence that a sentence can
+        // satisfy is a correspondence between a spelling and somebody having
+        // mentioned it, which is what this whole file exists to stop being the
+        // standard of evidence.
+        $codeOnly = '';
+        foreach (token_get_all((string) file_get_contents(__FILE__)) as $token) {
+            if (\is_array($token) && ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT)) {
+                continue;
+            }
+
+            $codeOnly .= \is_array($token) ? $token[1] : $token;
+        }
+
+        $knownAnswerBody = substr(
+            $codeOnly,
+            (int) strpos($codeOnly, 'public function testTheWalkClassifierAnswersKnownInputsCorrectly'),
+        );
+        $knownAnswerBody = strtolower(substr($knownAnswerBody, 0, (int) strpos($knownAnswerBody, 'public function ', 10)));
+
+        $uncovered = [];
+        $zeroSite = [];
+        foreach ($liveSiteCount as $spelling => $sites) {
+            if ($sites !== 0) {
+                continue;
+            }
+
+            $zeroSite[] = $spelling;
+            if (!str_contains($knownAnswerBody, $spelling . '(')) {
+                $uncovered[] = $spelling;
+            }
+        }
+
+        $this->assertNotSame(
+            [],
+            $zeroSite,
+            'every spelling in the walker alphabet now has live sites on this tree, so the '
+            . 'correspondence below ranges over nothing. That is a legitimate state - delete this '
+            . 'pair of assertions when it becomes permanent - but while it holds, a newly added '
+            . 'spelling is covered by nothing and nothing here says so.',
+        );
+        $this->assertSame(
+            [],
+            $uncovered,
+            'a spelling this file declares in its walker alphabet has ZERO call sites on this tree '
+            . 'AND no known-answer row in testTheWalkClassifierAnswersKnownInputsCorrectly(). '
+            . 'Nothing exercises it: it reads as coverage, and if the classifier cannot in fact '
+            . 'see that spelling, a file walking the tree that way is skipped in SILENCE rather '
+            . 'than landing in the fail-closed residue - which is precisely how globiterator '
+            . 'behaved before it was found. Write it a fixture there, in the shape the rows around '
+            . 'it use.',
+        );
+
+        // THE REMOVAL HALF. The loop above cannot fail for a spelling that is no
+        // longer in the constant, so the sizes are pinned - the same defect, and
+        // the same one-line fix, as the two hand-maintained constants above.
+        $this->assertCount(
+            4,
+            self::WALKER_CLASSES,
+            'the class half of the walker alphabet has changed size. Adding a spelling is welcome '
+            . 'and the loop above will exercise it - update this count in the same change-set. '
+            . 'REMOVING one is the case this assertion exists for: a spelling with no live site on '
+            . 'this tree can be dropped with every other assertion in this file staying green.',
+        );
+        $this->assertCount(
+            3,
+            self::WALKER_FUNCTIONS,
+            'the function half of the walker alphabet has changed size - see the message above, '
+            . 'which applies unchanged to glob/scandir/readdir.',
+        );
+
+        // NOT VACUOUS: at least one spelling in each half has live sites, so the
+        // derivation above is reading a real tree rather than an empty one.
+        $this->assertGreaterThan(0, array_sum(array_intersect_key($liveSiteCount, array_flip(self::WALKER_CLASSES))));
+        $this->assertGreaterThan(0, array_sum(array_intersect_key($liveSiteCount, array_flip(self::WALKER_FUNCTIONS))));
     }
 
     /**
@@ -2334,7 +2541,7 @@ final class TreeWideGuardRosterTest extends TestCase
      * SILENCE, having no walker call site of their own to land in the residue.
      * That is the A4 defect one file over: a token class missing from an alphabet
      * AND from that alphabet's own statement of what it cannot express (rule 31).
-     * MEASURED LATENT: of the 32 non-`*Test.php` files under `tests/`, 0 declare
+     * MEASURED LATENT: no non-`*Test.php` file under `tests/` declares
      * an enum, so closing it changes no verdict today - it removes a future one,
      * for the cost of one token constant.
      *
