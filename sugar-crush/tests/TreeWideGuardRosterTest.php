@@ -88,13 +88,30 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *    prediction was made by exactly the grep this method exists to replace, and
  *    the token matcher rejecting it is the mechanism working. Pinned by
  *    {@see testTheHelperSetChannelAKeysOnIsDerivedFromTheTreeItself()}.
+ *    THE ALIAS HALF TRAVELLED FROM F4: "names" now includes the two-literal
+ *    `class_alias` form, whose canonical sits in a STRING and so was invisible
+ *    to the T_STRING walk - MEASURED null at the base, and the import-alias
+ *    half the close review inferred was MEASURED already-honest (the `use`
+ *    statement spells the canonical). Both rows, with the non-helper polarity,
+ *    are pinned by
+ *    {@see testAWalkingHelperReachedThroughAnAliasOrClassAliasIsStillChannelA()}.
  *  - CHANNEL B: the file constructs a directory walker whose ROOT resolves to
  *    the package root. Resolution is a small same-file dataflow: an anchor
  *    (`dirname(__DIR__…)`, or `__DIR__` followed by a `/..` segment) written
  *    directly in the walker's own argument, or reaching it through an
  *    assignment, a class constant, a property default, a `foreach` binding, or
  *    a zero-argument helper whose body is itself anchored. Iterated to a
- *    fixpoint, so a chain of any depth resolves.
+ *    fixpoint, so a chain of any depth resolves. THE NAME HALF IS NO LONGER
+ *    WRITTEN-TEXT-ONLY: F4 measured three silent shapes through the old
+ *    alphabet - `use function glob as g;`, `use RecursiveDirectoryIterator as
+ *    Walk;`, and an `SplFileInfo` construction iterated via `getChildren()` -
+ *    and {@see importAliasMap()} resolves the alias pair (plus the
+ *    `namespace\` relative spelling the write scanner had already paid for)
+ *    while {@see classifyGetChildrenSite()} reads the SPL shape and fails
+ *    CLOSED on receivers it cannot place. The remaining silence in that
+ *    family - a computed `class_alias`, an alias to a NAMESPACED user class
+ *    that walks - is carried as rows in the blind-spot table, per F4's
+ *    "detect or declare-with-pin", not faked.
  *
  * WHY THE ROOT MUST BE IN THE WALKER'S OWN ARGUMENT and not merely somewhere in
  * the file: at file-level co-occurrence resolution - "this file calls `glob()`
@@ -1088,13 +1105,86 @@ final class TreeWideGuardRosterTest extends TestCase
             'a constructed Glob tool or a method named glob() is being read as a directory walk',
         );
 
-        // AND THE FIXTURE SET ITSELF IS PINNED, which is the NINTH door in this
-        // one check and the first that needed no prose at all. The coverage half
+        // THE THREE MEASURED SILENT ESCAPES OF F4, each now classified, plus
+        // the runtime-alias sibling and the two controls that keep the new
+        // channels from reporting everything: an UNANCHORED getChildren
+        // (fail-closed residue — a walk over a directory the test made, which
+        // is exactly what WALKS_A_DIRECTORY_THE_TEST_MADE exists to answer)
+        // and the written-name labels, which stay WRITTEN (`g(...)` not
+        // `glob(...)`) because a roster row's job is to point a human at the
+        // line, and the line says `g`.
+        $viaFunctionAlias = self::knownAnswerSources()['viaFunctionAlias'];
+        $this->assertSame(
+            ['root' => ["g(\\dirname(__DIR__,2).'/src/*.php')"], 'unresolved' => []],
+            self::classifyWalkSites($viaFunctionAlias),
+            'F4 escape one is open again: `use function glob as g;` + `g($root)` classifies as '
+            . 'nothing, so a guard that walks only through a function alias lands in no bucket '
+            . 'at all and its file is skipped in SILENCE. The alias map adds the spelling; '
+            . 'deleting the function-kind half of importAliasMap() reddens exactly this row.',
+        );
+
+        $viaClassAlias = self::knownAnswerSources()['viaClassAlias'];
+        $this->assertSame(
+            ['root' => ['Walk($f)'], 'unresolved' => []],
+            self::classifyWalkSites($viaClassAlias),
+            'F4 escape two is open again: a walker CLASS imported under an alias is still the '
+            . 'walker, and a classifier that reads only written last-segment text sees neither '
+            . 'the class nor the walk it constructs.',
+        );
+
+        $viaRuntimeAlias = self::knownAnswerSources()['viaRuntimeAlias'];
+        $this->assertSame(
+            ['root' => ['RD($d)'], 'unresolved' => []],
+            self::classifyWalkSites($viaRuntimeAlias),
+            'the addendum channel: `class_alias(\'RecursiveDirectoryIterator\', \'RD\')` + '
+            . '`new RD($d)` is the same class under a runtime name, decidable here from two '
+            . 'literals — and a computed alias stays declared-silent in the blind-spot table.',
+        );
+
+        $viaSplFileInfoChildren = self::knownAnswerSources()['viaSplFileInfoChildren'];
+        $this->assertSame(
+            ['root' => ['$f->getChildren()'], 'unresolved' => []],
+            self::classifyWalkSites($viaSplFileInfoChildren),
+            'F4 escape three is open again: the package root reached the SPL walker through '
+            . 'the CONSTRUCTION and the walk itself is a method call - neither alphabet names '
+            . 'it, and the file disappears without this channel.',
+        );
+
+        $splFileInfoChained = self::knownAnswerSources()['splFileInfoChained'];
+        $this->assertSame(
+            ['root' => ["(new\\SplFileInfo(\\dirname(__DIR__,2).'/src'))->getChildren()"], 'unresolved' => []],
+            self::classifyWalkSites($splFileInfoChained),
+            'the chained spelling `(new \SplFileInfo($root))->getChildren()` has no variable for '
+            . 'the taint resolver to carry the anchor - the receiver walk has to read the '
+            . 'expression itself, and if it returns unresolved here the anchor died with the '
+            . 'parenthesis.',
+        );
+
+        // THE CONTROL THE NEW CHANNELS OWE (§16.8 rule 18): the getChildren
+        // arm over a TEMP directory must report UNRESOLVED, not root and not
+        // silence. A classifier that answered `root` here would roster every
+        // temp-dir test in the tree; one that answered nothing here would have
+        // answered nothing everywhere, which is the silence F4 is about.
+        $childrenUnanchored = self::knownAnswerSources()['childrenUnanchored'];
+        $this->assertSame(
+            ['root' => [], 'unresolved' => ['$f->getChildren()']],
+            self::classifyWalkSites($childrenUnanchored),
+            'an unanchored getChildren either resolved to the package root (the anchor leaked) '
+            . 'or produced no site at all (the fail-closed direction was dropped) - both are the '
+            . 'new channel reporting wrongly',
+        );
+
+        // AND THE FIXTURE SET ITSELF IS PINNED, which was the NINTH door in
+        // this one check when the set held eight. The coverage half
         // in {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
-        // grants a walker spelling coverage from whatever these fixtures make
-        // the classifier EMIT, and it iterates ALL of them - while this test
-        // reads eight of them BY NAME. A ninth fixture is therefore coverage
-        // that nothing has ever checked the answer of.
+        // grants a walker spelling coverage from whatever these fixtures make the
+        // classifier EMIT, and it iterates ALL of them. This test once read
+        // eight by name while the set grew past them - which is the sentence
+        // F4's own growth re-falsifies on any day a fixture again arrives
+        // without a row, and why the key list below is the pin and the prose
+        // is not. It now reads EVERY fixture by name: the alias pair, the
+        // runtime alias, the two `getChildren` spellings and the unanchored
+        // control each have their exact answer asserted above.
         //
         // MEASURED by a reviewer and reproduced here before fixing, in its
         // weaponised form: swap the REAL spelling `directoryiterator` out of
@@ -1108,16 +1198,17 @@ final class TreeWideGuardRosterTest extends TestCase
         // "asserts the exact answer for each" fixture. That was true of the
         // eight and false of the set; it is true of the set now.
         $this->assertSame(
-            ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk'],
+            ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk',
+                'viaFunctionAlias', 'viaClassAlias', 'viaRuntimeAlias', 'viaSplFileInfoChildren', 'splFileInfoChained', 'childrenUnanchored',],
             array_keys(self::knownAnswerSources()),
             'a fixture was added to or removed from knownAnswerSources() without a matching '
             . 'exact-answer row above. That matters in one direction in particular: '
             . 'testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet() grants alphabet '
             . 'coverage from whatever these fixtures make the classifier EMIT, and it reads every '
-            . 'fixture while this test reads eight by name - so an unasserted fixture widens that '
-            . 'coverage silently, which is how a walker spelling with a live call site can be '
-            . 'dropped from WALKER_CLASSES with this whole file green at an unchanged assertion '
-            . 'count. Add the row above, then add the key here.',
+            . 'fixture while this test can only assert the keys it carries - so an unasserted '
+            . 'fixture widens that coverage silently, which is how a walker spelling with a live '
+            . 'call site can be dropped from WALKER_CLASSES with this whole file green at an '
+            . 'unchanged assertion count. Add the row above, then add the key here.',
         );
     }
 
@@ -1150,6 +1241,29 @@ final class TreeWideGuardRosterTest extends TestCase
             . "    foreach (new \\FilesystemIterator(\$d, \\FilesystemIterator::SKIP_DOTS) as \$f) {} } }\n",
             'notAWalk' => "<?php\nclass P { private function go(): void { \$g = new Glob(prunedDirs: []);\n"
             . "    \$this->glob(\\dirname(__DIR__) . '/src'); \$x = \\dirname(__DIR__); } }\n",
+            // THE THREE F4 ESCAPES, plus the runtime-alias row and two
+            // fail-closed controls. None of the six has a live use on this
+            // tree (MEASURED at this commit: `use function glob|scandir|readdir`,
+            // `use ...Iterator as ...`, `->getChildren(` and `class_alias` all
+            // return nothing outside this file and the write-scanner's own
+            // probes) — which is precisely why each needs a row: the tree
+            // exercises nothing here, so the row is the only thing keeping the
+            // alphabet entry honest, the standing argument of the GlobIterator
+            // and FilesystemIterator rows above.
+            'viaFunctionAlias' => "<?php\nuse function glob as g;\nclass P { private function go(): void {\n"
+            . "    foreach (g(\\dirname(__DIR__, 2) . '/src/*.php') as \$f) {} } }\n",
+            'viaClassAlias' => "<?php\nuse RecursiveDirectoryIterator as Walk;\nclass P { private function go(): void {\n"
+            . "    \$f = \\dirname(__DIR__, 2) . '/src'; \$it = new Walk(\$f); } }\n",
+            'viaRuntimeAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', 'RD');\nclass P { private function go(): void {\n"
+            . "    \$d = \\dirname(__DIR__, 2) . '/src'; \$it = new RD(\$d); } }\n",
+            'viaSplFileInfoChildren' => "<?php\nclass P { private function go(): void {\n"
+            . "    \$f = new \\SplFileInfo(\\dirname(__DIR__, 2) . '/src');\n"
+            . "    foreach (\$f->getChildren() as \$c) {} } }\n",
+            'splFileInfoChained' => "<?php\nclass P { private function go(): void {\n"
+            . "    foreach ((new \\SplFileInfo(\\dirname(__DIR__, 2) . '/src'))->getChildren() as \$c) {} } }\n",
+            'childrenUnanchored' => "<?php\nclass P { private function go(): void {\n"
+            . "    \$d = sys_get_temp_dir() . '/x'; \$f = new \\SplFileInfo(\$d);\n"
+            . "    foreach (\$f->getChildren() as \$c) {} } }\n",
         ];
     }
 
@@ -1203,17 +1317,43 @@ final class TreeWideGuardRosterTest extends TestCase
      * these, this test reds and names which - which is the correct outcome,
      * because closing one changes the roster and the plan's census set with it.
      *
-     * `dirname(__FILE__)` IS IN THE TABLE AS A CLOSED DOOR. It was one of the
-     * seven silent rows and it now resolves to the package root, because it cost
-     * one alternative in {@see ROOT_ANCHOR} and MEASURED 0 live uses, so closing
-     * it could not change any verdict on this tree. The other six stay open
-     * deliberately; the class doc-block carries the measurement that rejected a
-     * subprocess channel.
+     * WHAT THE HEADER CLAIMED, AND F4 MEASURED FALSE (section 16.8 rule 42,
+     * in place). WHAT THIS SAID: the table was the map of the alphabet's
+     * silence - "the gap is declared, is checked, and cannot quietly widen".
+     * WHAT IS TRUE NOW: it was three rows short of that claim - an import
+     * FUNCTION alias, an import CLASS alias, and the SPL `getChildren()`
+     * iteration were all silent shapes the table did not name, and none was
+     * any of the six silences it did. A map of omissions that itself has
+     * unomitted omissions is exactly the defect this file exists to refuse;
+     * the paragraph earned its place by being wrong, which is why the sentence
+     * above stands corrected rather than deleted. HOW MEASURED: the close
+     * review drove all three through the shipped {@see classifyWalkSites()} -
+     * 0 sites in either bucket, fully silent - and the same three rows now
+     * appear below in the bucket they really land in, two of them as closed
+     * doors, so the escape cannot return un-noticed.
      *
-     * BOTH POLARITIES, THROUGH THE SAME CLASSIFIER (section 16.8 rule 18): of the
-     * nine rows two must REPORT, six must be SILENT and one must RESOLVE, and a
-     * classifier that answered the same way for every input would fail two of
-     * those three assertions.
+     * `dirname(__FILE__)` IS IN THE TABLE AS A CLOSED DOOR. It was silent and
+     * it now resolves to the package root, because it cost one alternative in
+     * {@see ROOT_ANCHOR} and MEASURED 0 live uses, so closing it could not
+     * change any verdict on this tree. The import-alias pair and the SPL
+     * `getChildren()` row are closed doors of the same standing, each with
+     * its zero-live-population measurement in
+     * {@see testTheWalkClassifierAnswersKnownInputsCorrectly()}'s fixture
+     * comment. The rows still marked silent stay open deliberately - each is
+     * the shape whose closure costs more than a false positive buys, and the
+     * two whose channels exist but cannot be read from this file (a COMPUTED
+     * `class_alias`, an alias whose target lives in another file's class) are
+     * declared here rather than faked, because F4's disposition drew exactly
+     * that boundary. The class doc-block carries the measurement that rejected
+     * a subprocess channel.
+     *
+     * ALL THREE POLARITIES, THROUGH THE SAME CLASSIFIER (section 16.8 rule
+     * 18): the table carries rows that must RESOLVE, rows that must REPORT
+     * and rows that must stay SILENT, and no count of them is written here -
+     * the table has grown with every closed and every declared shape, which
+     * is rule 2 in the paragraph two rows above it. A classifier that answered
+     * the same way for every input would fail two of the three `assertContains`
+     * checks below no matter what this table grows to.
      */
     public function testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre(): void
     {
@@ -1258,6 +1398,45 @@ final class TreeWideGuardRosterTest extends TestCase
                 "<?php\nclass P { function go() { \$this->under(\\dirname(__DIR__, 2) . '/src'); }\n  function under(string \$d) { foreach (scandir(\$d) as \$x) {} } }\n",
                 'reported',
             ],
+            // THE THREE SHAPES F4 MEASURED AS UNDECLARED SILENCE. Two of the
+            // buckets they now land in are CLOSED DOORS, in the standing sense
+            // of the `dirname(__FILE__)` row above: the import-alias pair
+            // resolves through {@see importAliasMap()} and the SPL
+            // getChildren pair through {@see classifyGetChildrenSite()}, so
+            // they resolve rather than report - and they stay in this table
+            // because a table that only records silence drifts back into
+            // claiming its resolves are permanent. The third row here is the
+            // boundary of that closure: an alias this file cannot read is the
+            // silence F4's disposition refused to fake away.
+            'a walker function reached through an import alias' => [
+                "<?php\nuse function glob as g;\nclass P { function go() { foreach (g(\\dirname(__DIR__, 2) . '/src/*.php') as \$x) {} } }\n",
+                'root',
+            ],
+            'a walker class reached through an import alias' => [
+                "<?php\nuse RecursiveDirectoryIterator as Walk;\nclass P { function go() { \$f = \\dirname(__DIR__, 2) . '/src'; new Walk(\$f); } }\n",
+                'root',
+            ],
+            'an SPL walker iterated through getChildren' => [
+                "<?php\nclass P { function go() { \$f = new \\SplFileInfo(\\dirname(__DIR__, 2) . '/src'); foreach (\$f->getChildren() as \$x) {} } }\n",
+                'root',
+            ],
+            'a walker reached through a COMPUTED class_alias' => [
+                "<?php\nclass P { function go() { \$n = 'DirectoryIterator'; class_alias(\$n, 'RD'); new \\RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'silent',
+            ],
+            'an alias of a NAMESPACED user class that walks' => [
+                "<?php\nuse Acme\\TreeScanner as Scan;\nclass P { function go() { new Scan(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'silent',
+            ],
+            // THE NEW CHANNEL'S FAIL-CLOSED HALF, stated as a row: a
+            // getChildren whose receiver this resolver cannot place does not
+            // disappear - it lands in the residue for a human to answer, the
+            // same direction the reflection-root row above demonstrates for
+            // the walker alphabets.
+            'a getChildren behind a helper call this resolver cannot follow' => [
+                "<?php\nclass P { function go() { \$it = \$this->makeIterator(); foreach (\$it->getChildren() as \$x) {} }\n  function makeIterator() { return new \\stdClass(); } }\n",
+                'reported',
+            ],
         ];
 
         $actual = [];
@@ -1287,6 +1466,70 @@ final class TreeWideGuardRosterTest extends TestCase
         $this->assertContains('reported', $actual, 'no shape in this table reaches the residue bucket, so the fail-closed half is untested');
         $this->assertContains('silent', $actual, 'no shape in this table is silently out of scope, so this table has stopped describing the gap it exists for');
         $this->assertContains('root', $actual, 'no shape in this table resolves, so the classifier may be answering "silent" for everything');
+    }
+
+    /**
+     * THE HELPER CHANNEL AND THE ALIAS CHANNEL - one row of which the close
+     * review INFERRED and F4's disposition asked to "detect or
+     * declare-with-pin". Both halves were MEASURED against the base
+     * implementation before either claim was repeated here, and they split.
+     *
+     * WHAT THE ADDENDUM SAID: `use Support\TestFileWalkTrait as TF;` +
+     * `use TF;` "would miss walkingHelperUsedIn()'s name matching exactly as
+     * the class-alias walk missed classifyWalkSites". WHAT MEASUREMENT SHOWS:
+     * it does not - the written `use` statement itself carries the canonical
+     * last segment, which is the token the matcher keys on, and the shipped
+     * base classifier returned the helper for that row (driven, not argued).
+     * The addendum's own label - INFERRED, "not separately re-driven" - was
+     * exactly the epistemic status that caveat exists to mark, and this is
+     * the correction it earned. The row below stays asserted anyway: it pins
+     * a behavior the alias map could have silently broken.
+     *
+     * THE HALF THAT WAS REAL: `class_alias('...BuiltInToolCorpus', 'Corpus');`
+     * + `new Corpus()` keeps the canonical name inside a STRING CONSTANT - no
+     * T_STRING ever spells it - and the base matcher returned null. That is
+     * channel A failing open by a whole construct, the same family as the
+     * import-alias escapes this step closed on the other side of the file.
+     * {@see importAliasMap()} reads the two-literal form; the computed form
+     * stays in the blind-spot table above, and the polarity row here keeps
+     * the channel from answering for every alias in the tree.
+     */
+    public function testAWalkingHelperReachedThroughAnAliasOrClassAliasIsStillChannelA(): void
+    {
+        $helpers = self::walkingHelperNames();
+
+        // THE KNOWN ANSWER, asserted before any verdict (rule 13): the helper
+        // set the rows below consult is the derived two, not an accident of
+        // an empty map.
+        $this->assertArrayHasKey('testfilewalktrait', $helpers, 'the derived helper set no longer holds the trait the class doc-block names - the rows below would then be about nothing');
+        $this->assertArrayHasKey('builtintoolcorpus', $helpers, 'the derived helper set no longer holds the corpus - see the class doc-block for the measurement that found it');
+
+        $importAlias = "<?php\nuse SugarCraft\\Crush\\Tests\\Support\\TestFileWalkTrait as TF;\nclass P { use TF; }\n";
+        $this->assertSame(
+            'testfilewalktrait',
+            self::walkingHelperUsedIn($importAlias),
+            'the import-alias half: measured ALREADY-HONEST at the base (the `use` statement '
+            . 'spells the canonical), re-asserted here because the alias map this file now '
+            . 'grows must not break the path that already worked',
+        );
+
+        $runtimeAlias = "<?php\nclass_alias('SugarCraft\\Crush\\Tests\\Tools\\BuiltInToolCorpus', 'Corpus');\nclass P { function go(): void { new Corpus(); } }\n";
+        $this->assertSame(
+            'builtintoolcorpus',
+            self::walkingHelperUsedIn($runtimeAlias),
+            'the class_alias half is the gap that was REAL: the canonical lives in a string '
+            . 'constant, no T_STRING spells it, and the base matcher answered null - a test '
+            . 'that reaches the tree only through an alias of the helper vanishes from '
+            . 'channel A, which is the silence F4 addendum named even though its chosen '
+            . 'spelling turned out to be safe',
+        );
+
+        $notAHelper = "<?php\nclass_alias('SugarCraft\\Crush\\Tests\\Support\\NotAWalkingHelperAtAll', 'Nope');\nclass P { function go(): void { new Nope(); } }\n";
+        $this->assertNull(
+            self::walkingHelperUsedIn($notAHelper),
+            'a class_alias of a non-helper must contribute nothing - an alias map that '
+            . 'answered for every alias would pass the row above while rostering the tree',
+        );
     }
 
     /**
@@ -2485,6 +2728,16 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     private static function namesOneOf(string $source, array $helpers): ?string
     {
+        // THE ALIAS CHANNEL, travelled from F4's import-alias family and
+        // pinned by {@see testAWalkingHelperReachedThroughAnAliasOrClassAliasIsStillChannelA()}:
+        // `use SugarCraft\Crush\Tests\Support\TestFileWalkTrait as TF;` +
+        // `use TF;` names the helper as surely as the plain import does — the
+        // written last segment alone said it did not, which is the same
+        // defeat, in the same file tree, the write-scanner took twice.
+        // Consulted ADDITIVELY: the written name still answers first and the
+        // map can only ADD a match, never subtract one.
+        $aliases = self::importAliasMap(self::significant($source))['class'];
+
         foreach (token_get_all($source) as $token) {
             if (!\is_array($token) || \in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
                 continue;
@@ -2496,6 +2749,10 @@ final class TreeWideGuardRosterTest extends TestCase
             $last = strtolower((string) end($segments));
             if (isset($helpers[$last])) {
                 return $last;
+            }
+            $canonical = $aliases[$last] ?? null;
+            if ($canonical !== null && isset($helpers[$canonical])) {
+                return $canonical; // report the HELPER the alias names, not the alias
             }
         }
 
@@ -2675,6 +2932,18 @@ final class TreeWideGuardRosterTest extends TestCase
      * A LITERAL ABSOLUTE PATH is neither bucket - `glob('/proc/self/fd/*')`
      * cannot be the package tree and needs no human to say so.
      *
+     * AN IMPORT ALIAS ADDS A SPELLING AND NEVER REPLACES ONE, and the
+     * sentence had lived only in the OTHER scanner of this tree until F4
+     * measured three SILENT escapes through the gap (§16.8 rule 40, the
+     * correction that never travelled): `use function glob as g;` + `g($root)`,
+     * `use RecursiveDirectoryIterator as Walk;` + `new Walk($root)`, and
+     * `new \SplFileInfo($root)` iterated through `->getChildren()`. The first
+     * two now resolve through {@see importAliasMap()} - the same additive
+     * direction the write scanner took twice - and the third through the
+     * `getChildren` channel below, which FAILS CLOSED on a receiver this
+     * resolver cannot place. `namespace\glob(...)`, the write scanner's
+     * twelfth defeat, is read here too for the same travel.
+     *
      * @return array{root: list<string>, unresolved: list<string>}
      */
     private static function classifyWalkSites(string $source): array
@@ -2682,6 +2951,7 @@ final class TreeWideGuardRosterTest extends TestCase
         $tokens = self::significant($source);
         $count = \count($tokens);
         $tainted = self::rootAnchoredNames($tokens);
+        $aliases = self::importAliasMap($tokens);
 
         $root = [];
         $unresolved = [];
@@ -2691,8 +2961,34 @@ final class TreeWideGuardRosterTest extends TestCase
                 continue;
             }
             $name = strtolower(ltrim($token[1], '\\'));
-            $isClass = \in_array($name, self::WALKER_CLASSES, true);
-            if (!$isClass && !\in_array($name, self::WALKER_FUNCTIONS, true)) {
+            // THE RELATIVE SPELLING, travelled from the write scanner's
+            // twelfth defeat: `namespace\glob(...)` in a global-namespace file
+            // IS the global walker. A multi-segment relative name resolves to
+            // a different symbol and is left exactly as written - no match,
+            // like `Acme\glob()`, which names a different function.
+            if ($token[0] === T_NAME_RELATIVE) {
+                $relative = substr($name, \strlen('namespace\\'));
+                if (!str_contains($relative, '\\')) {
+                    $name = $relative;
+                }
+            }
+            $canonicalClass = $aliases['class'][$name] ?? null;
+            $canonicalFunction = $aliases['function'][$name] ?? null;
+            $isClass = \in_array($name, self::WALKER_CLASSES, true)
+                || ($canonicalClass !== null && \in_array($canonicalClass, self::WALKER_CLASSES, true));
+            $isFunction = \in_array($name, self::WALKER_FUNCTIONS, true)
+                || ($canonicalFunction !== null && \in_array($canonicalFunction, self::WALKER_FUNCTIONS, true));
+            if (!$isClass && !$isFunction) {
+                // THE getChildren CHANNEL - F4's third escape. `getchildren`
+                // is neither a class nor a function in this alphabet; it is
+                // the method by which a WALKER reached through an
+                // `SplFileInfo` (or any iterator the resolver cannot place)
+                // actually walks. Checked only here, after both alphabets
+                // missed, so a walker-named token never spends this arm.
+                if ($token[0] === T_STRING && $name === 'getchildren') {
+                    self::classifyGetChildrenSite($tokens, $i, $tainted, $root, $unresolved);
+                }
+
                 continue;
             }
             if (($tokens[$i + 1] ?? null) !== '(') {
@@ -2727,6 +3023,383 @@ final class TreeWideGuardRosterTest extends TestCase
         }
 
         return ['root' => array_values(array_unique($root)), 'unresolved' => array_values(array_unique($unresolved))];
+    }
+
+    /**
+     * The `getChildren` channel of {@see classifyWalkSites()} - F4's third
+     * escape, and the only one of the three that is not an import alias.
+     *
+     * `new \SplFileInfo(\dirname(__DIR__, 2) . '/src')` then iterates
+     * `->getChildren()`: the walk happens WITHOUT the package root ever
+     * appearing in a walker-named argument, and `getchildren` names neither
+     * alphabet. MEASURED silent (0/0) through the shipped classifier at the
+     * close review, with the two alias escapes beside it - all three now
+     * classified, the aliases into `root` and this shape into `root` too when
+     * the receiver resolves anchored.
+     *
+     * IT FAILS CLOSED, which is the whole design. A `->getChildren(` whose
+     * receiver this resolver cannot place lands in the residue - the
+     * GlobIterator row's own argument, quoted by the class doc-block: "a walk
+     * this alphabet cannot see produces no site at all - so the file is
+     * skipped in SILENCE rather than landing in the residue." A receiver that
+     * resolves but is NOT anchored (`$tempIterator->getChildren()` over a
+     * directory the test made) is a real unresolved site too - over-asking a
+     * human for a residue row is the safe direction here, and
+     * WALKS_A_DIRECTORY_THE_TEST_MADE exists to answer exactly that.
+     *
+     * @param array<string> $root
+     * @param array<string> $unresolved
+     */
+    private static function classifyGetChildrenSite(array $tokens, int $i, array $tainted, array &$root, array &$unresolved): void
+    {
+        $previous = $tokens[$i - 1] ?? null;
+        if (!\is_array($previous) || !\in_array($previous[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)) {
+            return;
+        }
+        if (($tokens[$i + 1] ?? null) !== '(') {
+            return;
+        }
+
+        [$end, $balanced] = self::closingBracket($tokens, $i + 1);
+        $receiver = self::receiverExpression($tokens, $i - 2);
+        $label = ($receiver['resolved'] ? $receiver['text'] : '<receiver-unreadable>')
+            . '->getChildren(' . self::join($tokens, $i + 2, $end - 1) . ')';
+
+        if (!$balanced) {
+            $unresolved[] = 'UNBALANCED-ARGUMENT-LIST ' . $label;
+
+            return;
+        }
+        if (!$receiver['resolved'] || !self::isRootAnchored($receiver['text'], $tainted)) {
+            $unresolved[] = $label;
+
+            return;
+        }
+
+        $root[] = $label;
+    }
+
+    /**
+     * The primary expression a `->` chain hangs off, read BACKWARD from the
+     * token before the operator.
+     *
+     * Three shapes, no more: a bare variable (`$f->getChildren()`, which the
+     * taint resolver has already had its chances at), a balanced closer
+     * (`(new \SplFileInfo($root))->getChildren()` or
+     * `$this->walk()->getChildren()` - the opener is found by depth and the
+     * primary's own head - `new`, a name, a variable - is taken with it), or
+     * nothing this resolver may claim (`resolved: false`, which the caller
+     * fails closed on). THE BACKWARD DEPTH COUNT IS PAIRED BY CLOSER CHARACTER
+     * on purpose: over the text this walk can actually produce in a receiver
+     * slot, a `)` always answers a `(` and a `]` a `[`; an unbalanced prefix
+     * stops at the stream head and reports unresolved, never a truncated
+     * guess dressed as a placement.
+     *
+     * @return array{text: string, resolved: bool}
+     */
+    private static function receiverExpression(array $tokens, int $beforeOperator): array
+    {
+        if ($beforeOperator < 0) {
+            return ['text' => '', 'resolved' => false];
+        }
+        $token = $tokens[$beforeOperator];
+        if (\is_array($token) && $token[0] === T_VARIABLE) {
+            return ['text' => $token[1], 'resolved' => true];
+        }
+        if ($token !== ')' && $token !== ']') {
+            return ['text' => self::text($token), 'resolved' => false];
+        }
+
+        $closer = $token;
+        $opener = $closer === ')' ? '(' : '[';
+        $depth = 0;
+        $start = null;
+        for ($j = $beforeOperator; $j >= 0; $j--) {
+            $t = $tokens[$j];
+            if ($t === $closer) {
+                $depth++;
+
+                continue;
+            }
+            if ($t === $opener) {
+                $depth--;
+                if ($depth === 0) {
+                    $start = $j;
+
+                    break;
+                }
+            }
+        }
+        if ($start === null) {
+            return ['text' => self::join($tokens, 0, $beforeOperator), 'resolved' => false];
+        }
+
+        $head = $start;
+        for ($k = $start - 1; $k >= 0; $k--) {
+            $t = $tokens[$k];
+            if (\is_array($t) && \in_array($t[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE, T_VARIABLE, T_NEW, T_DOUBLE_COLON], true)) {
+                $head = $k;
+                if ($t[0] === T_VARIABLE || $t[0] === T_NEW) {
+                    break;
+                }
+
+                continue;
+            }
+            break;
+        }
+
+        return ['text' => self::join($tokens, $head, $beforeOperator), 'resolved' => true];
+    }
+
+    /**
+     * `use function X as y;` / `use X as y;` and two-literal `class_alias`,
+     * as `written alias => canonical short name`, by KIND.
+     *
+     * THE ALIAS CHANNEL THE CLASSIFIER NEVER HAD, and F4 is what it cost:
+     * the write scanner in this same `tests/` tree has honoured import
+     * aliases since `5cabca4a8` - twice, because the first honouring failed
+     * OPEN by subtraction and had to be re-closed additively - while this
+     * classifier matched WRITTEN last-segment text alone, so
+     * `use function glob as g;` + `g($root)` was SILENT. An import alias
+     * adds a spelling and never replaces one; this map is consulted
+     * additively by {@see classifyWalkSites()} and {@see namesOneOf()}, and
+     * a name absent from it is judged on its own written text exactly as
+     * before.
+     *
+     * READ OFF THE TOKEN STREAM, because the write scanner's regex reader
+     * is the cautionary tale: a `use function` inside a comment, doc-block
+     * or string constant entered the map there, and with a rewrite-caller
+     * that deleted a primitive from the alphabet for the whole file. Here a
+     * whole comment is one token and a string literal is one token, so
+     * neither can contain a T_USE. Comma lists, the braced group form and a
+     * leading backslash all parse, for the write scanner's same reason:
+     * each was a separate defeat before it was handled. A trait-use
+     * conflict block's `{` ends the statement; a group brace is the one
+     * preceded by a namespace separator; a closure's `use ( ... )` imports
+     * variables and is skipped.
+     *
+     * `class_alias(A::class, 'b')` and `class_alias('A', 'b')` contribute
+     * `b => a` to the CLASS kind - the addendum channel F4 named: a walking
+     * helper (or a walker class) reached under a runtime alias is the same
+     * defeat one construct over, and a two-literal alias is decidable from
+     * this file alone. An alias built from a variable or a concatenation
+     * is NOT contributed - this reads spellings and does not execute the
+     * program, and the blind-spot table carries that shape as silence.
+     *
+     * WHY THIS IS A SECOND READER AND NOT A SHARED ONE:
+     * {@see \SugarCraft\Crush\Tests\RuntimeTest::importedSymbolAliases()} is
+     * the write scanner's twin, private to its class, and a consolidation
+     * would move both into a `Support/` trait - a file this step's declared
+     * list does not include. {@see DuplicatedTestHelperDriftTest} cannot
+     * see the pair (it keys on method NAMES across files, its own
+     * doc-block's admitted limit). Recorded in the step report rather than
+     * silently grown.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     *
+     * @return array{function: array<string, string>, class: array<string, string>}
+     */
+    private static function importAliasMap(array $tokens): array
+    {
+        $function = [];
+        $class = [];
+        $count = \count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_USE) {
+                continue;
+            }
+
+            $head = $tokens[$i + 1] ?? null;
+            if ($head === '(') {
+                continue; // a closure's `use ( $var )` imports variables
+            }
+            $isFunction = \is_array($head) && $head[0] === T_FUNCTION;
+            if (\is_array($head) && $head[0] === T_CONST) {
+                continue; // `use const` belongs to neither alphabet
+            }
+
+            $map = $isFunction ? 'function' : 'class';
+            $name = null;
+            $alias = null;
+            $sawAs = false;
+            $previous = null;
+
+            for ($j = $i + ($isFunction ? 2 : 1); $j < $count; $j++) {
+                $item = $tokens[$j];
+
+                if ($item === '{' && \is_array($previous) && $previous[0] === T_NS_SEPARATOR) {
+                    $name = null;
+                    $alias = null;
+                    $sawAs = false;
+                    $previous = $item;
+
+                    continue;
+                }
+
+                if ($item === '{' || $item === '}' || $item === ',' || $item === ';') {
+                    if ($name !== null) {
+                        $segments = explode('\\', trim((string) $name, '\\'));
+                        $short = strtolower((string) end($segments));
+                        $written = strtolower((string) ($alias ?? $short));
+                        // ADDITIVE AND IDENTITY-EXCLUDED: an alias that spells
+                        // its own target says nothing the written name does
+                        // not already say, and recording it would let a
+                        // future caller confuse "imported" with "renamed".
+                        if ($written !== $short) {
+                            ${$map}[$written] = $short;
+                        }
+                    }
+                    $name = null;
+                    $alias = null;
+                    $sawAs = false;
+                    if ($item === ';' || $item === '{') {
+                        break;
+                    }
+                    $previous = $item;
+
+                    continue;
+                }
+
+                if (\is_array($item) && $item[0] === T_AS) {
+                    $sawAs = true;
+                    $previous = $item;
+
+                    continue;
+                }
+                if (\is_array($item) && $item[0] === T_NS_SEPARATOR) {
+                    $previous = $item;
+
+                    continue;
+                }
+                // AN INTERPOLATION OPENER CANNOT LEGALLY APPEAR IN AN IMPORT
+                // LIST, and this reader compares the bare `{` and `}` below -
+                // the exact pair {@see \SugarCraft\Crush\Tests\Support\InterpolationOpenerTokenTest}
+                // exists to police: a walk that counts bare braces while
+                // ignoring `{$`/`${` loses a level somewhere, and here the
+                // silence would end an import early. The `break` below already
+                // ends the statement when it meets one (neither is a name, an
+                // `as`, a separator or a bracket) - MEASURED EQUIVALENT, and
+                // named rather than left to look accidental, exactly as
+                // RuntimeTest names its two measured-equivalent guards.
+                if (\is_array($item) && ($item[0] === T_CURLY_OPEN
+                    || (\defined('T_DOLLAR_OPEN_CURLY_BRACES') && $item[0] === T_DOLLAR_OPEN_CURLY_BRACES))) {
+                    break;
+                }
+                if (\is_array($item) && \in_array($item[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                    if ($sawAs) {
+                        $alias = $item[1];
+                    } else {
+                        $name = $item[1];
+                    }
+                    $previous = $item;
+
+                    continue;
+                }
+
+                break; // anything else cannot be part of an import list
+            }
+        }
+
+        // THE RUNTIME ALIAS, class kind only - `class_alias` has no function
+        // counterpart in PHP.
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || !\in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true)) {
+                continue;
+            }
+            $name = strtolower(ltrim($token[1], '\\'));
+            if ($token[0] === T_NAME_RELATIVE) {
+                $relative = substr($name, \strlen('namespace\\'));
+                $name = str_contains($relative, '\\') ? $name : $relative;
+            }
+            if ($name !== 'class_alias') {
+                continue;
+            }
+            $previous = $i > 0 ? $tokens[$i - 1] : null;
+            if (\is_array($previous) && \in_array($previous[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION], true)) {
+                continue; // a method or a declaration of that name is not the call
+            }
+            if (($tokens[$i + 1] ?? null) !== '(') {
+                continue;
+            }
+
+            $open = $i + 1;
+            $args = [];
+            $current = '';
+            $depth = 0;
+            for ($j = $open; $j < $count; $j++) {
+                $t = self::text($tokens[$j]);
+                if ($t === '(') {
+                    $depth++;
+                    if ($depth === 1) {
+                        continue;
+                    }
+                } elseif ($t === ')') {
+                    $depth--;
+                    if ($depth === 0) {
+                        break;
+                    }
+                } elseif ($t === ',' && $depth === 1) {
+                    $args[] = $current;
+                    $current = '';
+
+                    continue;
+                }
+                if ($depth >= 1) {
+                    $current .= $t;
+                }
+            }
+            $args[] = $current;
+            if (\count($args) < 2) {
+                continue;
+            }
+
+            $target = self::aliasLiteralName($args[0]);
+            $alias = self::aliasLiteralName($args[1]);
+            if ($target === null || $alias === null) {
+                continue;
+            }
+            $class[$alias] ??= $target;
+        }
+
+        return ['function' => $function, 'class' => $class];
+    }
+
+    /**
+     * The lowercased short name ONE argument of `class_alias` spells: a
+     * quoted string or a `X::class` constant, nothing else.
+     *
+     * The argument arrives as joined token text rather than as a token list -
+     * a literal argument is then exactly one shape wide (`'Acme\File'`,
+     * `"Acme\\File"`, `Acme\File::class`), and everything else - variable,
+     * concatenation, interpolation - contains a character no name token
+     * carries and returns null. This reader resolves SPELLINGS; the
+     * enumeration of what it cannot see is in
+     * {@see testTheAlphabetsOwnBlindSpotsAreWhereThisFileSaysTheyAre()}.
+     */
+    private static function aliasLiteralName(string $argument): ?string
+    {
+        $argument = trim($argument);
+        if ($argument === '') {
+            return null;
+        }
+
+        if (preg_match("~^(['\"])(?<name>[^'\"]*)\\1$~", $argument, $m) === 1) {
+            $segments = explode('\\', strtolower($m['name']));
+            $last = (string) end($segments);
+
+            return $last === '' ? null : $last;
+        }
+
+        if (preg_match('~^(?<name>[A-Za-z_][A-Za-z0-9_]*(?:\\\\[A-Za-z_][A-Za-z0-9_]*)*)::class$~', $argument, $m) === 1) {
+            $segments = explode('\\', strtolower($m['name']));
+
+            return strtolower((string) end($segments));
+        }
+
+        return null;
     }
 
     /**
