@@ -2174,7 +2174,20 @@ final class TreeWideGuardRosterTest extends TestCase
         // classifier does not produce reds the row itself. That is the property
         // a message string does not have, and it is what makes this check
         // non-circular in both directions.
-        preg_match_all("~'root' => \\[[^\\]]*\\]~", $knownAnswerBody, $expected);
+        //
+        // AND THE PATTERN IS ANCHORED ON `assertSame(`, WHICH THE FIRST VERSION
+        // OF THIS PARAGRAPH CLAIMED WITHOUT DOING. WHAT IT MATCHED: any
+        // `'root' => [...]` array literal anywhere in the method. MEASURED by a
+        // reviewer, and reproduced here: `notawalkeratall` in WALKER_FUNCTIONS
+        // with the size pin bumped as this guard's own message instructs, plus
+        // two DEAD statements in the known-answer test -
+        // `$bogus = ['root' => ['notawalkeratall($x)'], 'unresolved' => []];`
+        // and an `assertIsArray($bogus)` - ran `OK (16 tests, 1082 assertions)`.
+        // A literal that is never compared to anything is not a fixture, and the
+        // paragraph above was describing the pattern it MEANT rather than the
+        // one it had. This is the third door in the same check: a comment, then
+        // a message string, then an unasserted literal.
+        preg_match_all("~assertsame\\(\\s*\\['root' => \\[[^\\]]*\\]~", $knownAnswerBody, $expected);
         $expectedValues = implode(' ', $expected[0]);
 
         // NOT VACUOUS. An empty match set would make every spelling below read

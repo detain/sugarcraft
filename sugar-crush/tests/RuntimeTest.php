@@ -2084,9 +2084,31 @@ final class RuntimeTest extends TestCase
         // closing quote is a LATER double quote IN THE SAME COMMENT still
         // licenses whatever sits between them. Quote parity would catch it and
         // is NOT shipped, because it reds on correct code: MEASURED over this
-        // tree, 6 src/ and 8 tests/ comments that carry a WHAT IT SAID marker
-        // already hold an odd number of double quotes. A guard that reds on
-        // correct prose is the liability this pin was rewritten once to escape.
+        // tree, comments that carry a WHAT IT SAID marker AND an odd number of
+        // double quotes exist in both trees, in numbers this file deliberately
+        // does not record - it is one of the files the count is taken over, so
+        // the count moves whenever this paragraph is edited, which is the same
+        // reason the residue paragraph below ships a generator instead of a
+        // figure. The pair that stood here, "6 src/ and 8 tests/", reproduced
+        // under NO consistent reading: MEASURED, per COMMENT it is 6 and 9; per
+        // FILE it is 4 and 8. It mixed units - comments for one tree, files for
+        // the other - which is rule 1, in the paragraph after the one correcting
+        // that same error. From `<worktree>/sugar-crush`:
+        //
+        //     php -r 'function f($s){return preg_replace("/\\s+/"," ",
+        //       preg_replace("#\\n\\s*(?:\\*(?!/)|//)[ \\t]?#"," ",$s));}
+        //       foreach (["src","tests"] as $d) { $n=0;
+        //         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($d,
+        //           FilesystemIterator::SKIP_DOTS)) as $e) { if (!$e->isFile()
+        //           || $e->getExtension()!=="php") continue;
+        //           foreach (token_get_all(file_get_contents($e->getPathname())) as $t) {
+        //             if (!is_array($t) || ($t[0]!==T_DOC_COMMENT && $t[0]!==T_COMMENT)) continue;
+        //             $x=f($t[1]); if (preg_match("~WHAT (?:IT|THIS) SAID:~",$x)
+        //               && substr_count($x,chr(34))%2!==0) $n++; } }
+        //         echo $d,": ",$n," comments\n"; }'
+        //
+        // A guard that reds on correct prose is the liability this pin was
+        // rewritten once to escape, and one such comment is enough for that.
         $sourceFiles = [];
         $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__) . '/src', \FilesystemIterator::SKIP_DOTS));
         foreach ($walk as $entry) {
@@ -2156,7 +2178,8 @@ final class RuntimeTest extends TestCase
         // ONE assertion over the whole derived domain, not one per comment. An
         // assertion per comment token would add ~28,700 assertions to this file
         // (MEASURED: 1,079 -> 29,754 on the first attempt at this rewrite) and
-        // section 16.8 rule 18's instruction is to count SHAPES, not cases. The
+        // section 16.8 rule 19's instruction is to count SHAPES, not cases (rule
+        // 18 is both polarities; this citation named it and was wrong). The
         // list IS the failure message, so a red still names the file and line.
         $this->assertSame(
             [],

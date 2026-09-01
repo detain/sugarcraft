@@ -2322,10 +2322,19 @@ final class AgentTest extends TestCase
      * "the marker appears three times in the whole package", which is the FILE
      * count, and the quantity this bound is about is OCCURRENCES, since each one
      * opens its own window. `/usr/bin/grep -roh 'THIS MESSAGE USED TO SAY'
-     * --include='*.php' src tests | wc -l` answers SEVEN, in three files
-     * (src/Hooks/HookRegistry.php 1, tests/BaseSystemPromptTest.php 1, this file
-     * 5). A figure travelling without its unit understated the exposure by more
-     * than double, in a change-set whose headline finding is rule 1.
+     * --include='*.php' src tests | wc -l` answers it on demand, and NO COUNT IS
+     * RECORDED HERE. Two revisions of this sentence carried one and both were
+     * wrong by the time they shipped. WHAT THE FIRST SAID: "the marker appears
+     * three times in the whole package" - a FILE count where an OCCURRENCE count
+     * was wanted, since each occurrence opens its own window, so it understated
+     * the exposure by more than double. WHAT THE SECOND SAID: "SEVEN, in three
+     * files ... this file 5" - the right unit and the wrong number, MEASURED at
+     * EIGHT with six in this file one commit later. HOW: this file is inside the
+     * domain the command counts, so writing the paragraph that explains the
+     * figure moves the figure. That is rule 2 exactly, and the sibling pin in
+     * `tests/RuntimeTest.php` had already learnt it for a population of the same
+     * shape - the correction did not travel one file over until a reviewer
+     * carried it (rule 40).
      *
      * THE DOMAIN IS `src/` + `tests/`, DERIVED. The claim reached this file from
      * `prompt_plan.md`, the same route by which A1's claim reached two
@@ -2377,6 +2386,24 @@ final class AgentTest extends TestCase
             . 'so any marker anywhere in a file would cover every occurrence after it',
         );
 
+        // THE FOURTH CONTROL, and the one the three-bucket split was missing: a
+        // live claim written INSIDE the drift band but OUTSIDE the quotation.
+        // Distance alone calls this drift and tells the author to widen the
+        // window, which licenses it. The quotation here OPENS AND CLOSES before
+        // the claim, so the claim is the author's own voice.
+        $closedQuotationThenALiveClaim = $marker . ' the signal was "something else entirely". '
+            . str_repeat('And then some ordinary explanatory prose about the disposition. ', 4)
+            . 'The signal is ' . $falseClaim . ' on the Agent assembler path.';
+
+        $this->assertSame(
+            ['live' => [strpos($closedQuotationThenALiveClaim, $falseClaim)], 'drifted' => [], 'licensed' => []],
+            self::classifyClaimOffsets($closedQuotationThenALiveClaim, $falseClaim, $marker),
+            'a live claim written after a CLOSED quotation, inside the drift band, was reported as '
+            . 'drift - so the census would tell its author to raise the window, which is a '
+            . 'prescription that licenses a restored falsehood. Distance alone cannot tell a grown '
+            . 'quotation from a restored claim; quote parity is what does.',
+        );
+
         // THE CENSUS, over the derived domain.
         //
         // THE THREE BUCKETS EXIST BECAUSE ONE BUCKET GAVE THE WRONG MESSAGE ON
@@ -2417,16 +2444,39 @@ final class AgentTest extends TestCase
                 // `src/Tools/BuiltIn/Read.php:7 (comment) oppositely`; a census
                 // that names a file but not a line is a census somebody has to
                 // grep for afterwards.
+                // AND THE LINE IS THE OFFENDER'S, NOT THE FILE'S FIRST. WHAT
+                // THIS DID: computed ONE line per file, from the FIRST raw
+                // occurrence, and printed it against every offender in that
+                // file. MEASURED by a reviewer: planting a live claim far down
+                // THIS file reported `tests/Agents/AgentTest.php:2279` - the
+                // properly-quoted rule-42 span, the one site that is CORRECT. A
+                // fix agent sent there finds nothing wrong, cannot reproduce the
+                // finding and closes it, which is the failure mode rule 25 is
+                // about: this message is all that reader will see.
+                //
+                // The raw occurrences and the flattened ones are in the same
+                // ORDER, so they pair by ordinal. They can differ in COUNT - a
+                // claim split across a wrapped comment exists in the flattened
+                // stream and not in the raw one - so a missing partner reports
+                // line 0 rather than someone else's line.
                 $raw = (string) file_get_contents($entry->getPathname());
+                $rawLines = [];
                 $rawAt = strpos($raw, $falseClaim);
-                $line = $rawAt === false ? 0 : substr_count(substr($raw, 0, $rawAt), "\n") + 1;
+
+                while ($rawAt !== false) {
+                    $rawLines[] = substr_count(substr($raw, 0, $rawAt), "\n") + 1;
+                    $rawAt = strpos($raw, $falseClaim, $rawAt + 1);
+                }
+
+                $ordinals = [...$found['live'], ...$found['drifted'], ...$found['licensed']];
+                sort($ordinals);
 
                 foreach ($found['live'] as $at) {
-                    $violations[] = $relative . ':' . $line . ' @' . $at;
+                    $violations[] = $relative . ':' . ($rawLines[(int) array_search($at, $ordinals, true)] ?? 0) . ' @' . $at;
                 }
 
                 foreach ($found['drifted'] as $at) {
-                    $drifting[] = $relative . ':' . $line . ' @' . $at;
+                    $drifting[] = $relative . ':' . ($rawLines[(int) array_search($at, $ordinals, true)] ?? 0) . ' @' . $at;
                 }
             }
         }
@@ -2485,9 +2535,31 @@ final class AgentTest extends TestCase
             $at = strrpos(substr($flat, 0, $offset), $marker);
             $distance = $at === false ? \PHP_INT_MAX : $offset - $at;
 
+            // AND DRIFT ALSO REQUIRES BEING INSIDE THE STILL-OPEN QUOTATION,
+            // because distance ALONE does not tell a grown quote from a restored
+            // falsehood - it only moves the boundary from infinity to eight
+            // windows. MEASURED by a reviewer: a live claim written as an
+            // ordinary sentence about 300 flattened bytes after the real marker
+            // was reported as drift, with the message "Nothing is wrong with the
+            // prose: raise A2_LICENCE_WINDOW_BYTES to fit it" - a prescription
+            // that would license it. An odd number of double quotes between the
+            // marker and the claim means the quotation opened and has not closed
+            // yet, so the claim is inside it; an even number means it closed,
+            // and whatever follows is the author's own voice.
+            //
+            // PARITY IS USED ONLY TO DEMOTE, WHICH IS WHY IT IS SAFE HERE and is
+            // ruled out one file over as a LICENCE (tests/RuntimeTest.php: 6
+            // src/ comments carrying the marker already hold an odd number of
+            // quotes, so licensing on parity reds on correct prose). Demoting
+            // moves a site from drifted to live - from "raise the window" to "do
+            // not restore it" - so the worst a parity mistake can do here is ask
+            // for a rewrite of prose that could have been licensed by widening.
+            $between = $at === false ? '' : substr($flat, $at, $offset - $at);
+            $insideQuotation = substr_count($between, '"') % 2 === 1;
+
             if ($distance <= self::A2_LICENCE_WINDOW_BYTES) {
                 $found['licensed'][] = $offset;
-            } elseif ($distance <= self::A2_LICENCE_WINDOW_BYTES * 8) {
+            } elseif ($insideQuotation && $distance <= self::A2_LICENCE_WINDOW_BYTES * 8) {
                 $found['drifted'][] = $offset;
             } else {
                 $found['live'][] = $offset;
