@@ -1237,6 +1237,7 @@ final class Bootstrap
             model: $model,
             provider: $provider,
             permissionGate: $gate,
+            environmentRoot: $root,
         );
     }
 

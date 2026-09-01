@@ -2192,7 +2192,7 @@ final class RuntimeTest extends TestCase
                 // comment loses the licence when it has ODD quote parity AND
                 // would be licensed FOR ONE OF THESE TWO PHRASES. MEASURED, both
                 // real corrected comments are EVEN - src/Runtime.php:530 carries
-                // 52 quotes and src/Agents/Agent.php:399 carries 40 - so the
+                // 52 quotes and src/Agents/Agent.php:456 carries 40 - so the
                 // clean tree is untouched, and the 6 odd-parity comments that
                 // ruled out the general form do not quote this claim at all.
                 if (substr_count($flat, '"') % 2 !== 0

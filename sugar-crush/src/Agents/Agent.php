@@ -48,6 +48,26 @@ final readonly class Agent
      * @param list<string>          $disallowedTools Preset tool denylist; see the note above.
      * @param ?int                  $maxTurns        Preset turn cap, null for uncapped.
      * @param array<string, mixed>  $mcpServers      Preset MCP server declarations.
+     * @param ?string               $environmentRoot The directory
+     *        {@see systemPrompt()}'s last-resort capture is anchored at — the
+     *        session's resolved project root (`--root`'s value), or null to
+     *        fall back to the process directory exactly as before.
+     *
+     * WHY A ROOT AND NOT A BLOCK. The block itself is per-session state and
+     * belongs attached ({@see withEnvironment()}), which is what
+     * `Bootstrap::agentManager()` does for every REGISTERED agent; the fresh
+     * per-stage agents a {@see \SugarCraft\Crush\Workflows\WorkflowEngine}
+     * run builds carry no block precisely so each stage re-renders, and a
+     * block passed down that path would change that measured cost. The
+     * DIRECTORY, though, is not per-stage state: on a `--root <dir>` run
+     * whose process started elsewhere it is fixed for the session, and the
+     * last-resort capture used to read the process directory — the same
+     * mismatch between the prompt's orientation and the tools' jail that
+     * {@see Runtime} closes at its own capture site. This parameter is that
+     * one seam carried to the second assembler: same-file plumbing of the
+     * root `Bootstrap::chat()` already resolved, never a second resolver. It
+     * is absent from `fromArray()`, `fromDefinition()`, `fromPreset()` and
+     * `toArray()` for the reason the block is: per-session, not agent config.
      */
     public function __construct(
         public string $name,
@@ -70,6 +90,7 @@ final readonly class Agent
         public ?Isolation $isolation = null,
         public ?string $color = null,
         public SkillSource $source = SkillSource::Native,
+        public ?string $environmentRoot = null,
     ) {}
 
     /**
@@ -337,6 +358,7 @@ final readonly class Agent
             isolation: $this->isolation,
             color: $this->color,
             source: $this->source,
+            environmentRoot: $this->environmentRoot,
         );
     }
 
@@ -363,6 +385,7 @@ final readonly class Agent
             isolation: $this->isolation,
             color: $this->color,
             source: $this->source,
+            environmentRoot: $this->environmentRoot,
         );
     }
 
@@ -393,6 +416,40 @@ final readonly class Agent
             isolation: $this->isolation,
             color: $this->color,
             source: $this->source,
+            environmentRoot: $this->environmentRoot,
+        );
+    }
+
+    /**
+     * Set the directory the last-resort environment capture anchors at — the
+     * session's resolved project root. Per-session plumbing like the block
+     * itself, which is why `toArray()` does not carry it; pinned in
+     * {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testTheEnvironmentRootSurvivesTheWitherRebuilds()}.
+     */
+    public function withEnvironmentRoot(?string $environmentRoot): self
+    {
+        return new self(
+            name: $this->name,
+            description: $this->description,
+            prompt: $this->prompt,
+            model: $this->model,
+            provider: $this->provider,
+            tools: $this->tools,
+            skillNames: $this->skillNames,
+            hooks: $this->hooks,
+            isActive: $this->isActive,
+            environment: $this->environment,
+            disallowedTools: $this->disallowedTools,
+            permissionMode: $this->permissionMode,
+            maxTurns: $this->maxTurns,
+            mcpServers: $this->mcpServers,
+            memory: $this->memory,
+            background: $this->background,
+            effort: $this->effort,
+            isolation: $this->isolation,
+            color: $this->color,
+            source: $this->source,
+            environmentRoot: $environmentRoot,
         );
     }
 
@@ -521,15 +578,15 @@ final readonly class Agent
      * `Workflows/WorkflowEngine.php`. Re-derived over this tree rather than
      * reasoned about:
      *
-     *   - `WorkflowEngine.php:1105` `foreach ($nestedStages as $nestedStage)`
-     *     encloses the render at `:1152` - ONE RENDER PER NESTED PIPELINE
+     *   - `WorkflowEngine.php:1126` `foreach ($nestedStages as $nestedStage)`
+     *     encloses the render at `:1174` - ONE RENDER PER NESTED PIPELINE
      *     STAGE.
      *   - `WorkflowEngine::executeVerificationStage()` renders TWICE,
-     *     straight-line, at `:1252` (the task agent) and `:1294` (the
+     *     straight-line, at `:1275` (the task agent) and `:1318` (the
      *     verifier), the verifier after the task's sub-agent has already run.
-     *   - `WorkflowEngine.php:875`
+     *   - `WorkflowEngine.php:895`
      *     `foreach ($workflow->stages as $stageIndex => $stage)` reaches
-     *     `:1042`/`:1252`/`:1294`/`:1397` once per stage.
+     *     `:1063`/`:1275`/`:1318`/`:1422` once per stage.
      *   - And this is the LIVE half, unlike the two dormant sites in the roster
      *     below: `Bootstrap.php:1183` `workflowEngine()` is wired at
      *     `Bootstrap.php:1058`, the same construction point as `agentManager:`
@@ -566,7 +623,7 @@ final readonly class Agent
      * stay green. {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()}
      * closes it: it registers a K-stage pipeline on a real {@see \SugarCraft\Crush\Workflows\WorkflowEngine}
      * with a mock {@see ExecutorInterface} - in-process, nothing spawned, the
-     * parent-side render at `:1152` untouched - and asserts `5 * K` git
+     * parent-side render at `:1174` untouched - and asserts `5 * K` git
      * subprocesses at K = 2 and K = 4. MEASURED under that same hoisted-shared-
      * block mutation: 6 against an expected 10, red.
      *
@@ -596,7 +653,7 @@ final readonly class Agent
      *      it. So for stages 2..N of one run the answer is a constant `false`,
      *      not an unknown, and a review demonstrated exactly that: one hoisted
      *      `EnvironmentBlock::capture(...)->withWriteSinceLastRender(false)`
-     *      above `WorkflowEngine.php:1105`, passed into the render at `:1152`,
+     *      above `WorkflowEngine.php:1126`, passed into the render at `:1174`,
      *      green.
      *
      *      WHY THE DISPOSITION SURVIVES IT ANYWAY: that hoisted line is an
@@ -674,15 +731,15 @@ final readonly class Agent
      * THE PATH THAT IS ACTUALLY LIVE, every hop re-derived over this tree
      * rather than reasoned about: `bin/sugarcrush:423` builds
      * `Bootstrap::app($args->root)`; `Bootstrap::app()` calls
-     * `Bootstrap::chat()` at `Bootstrap.php:1887` (`chat()` itself at
+     * `Bootstrap::chat()` at `Bootstrap.php:1888` (`chat()` itself at
      * `Bootstrap.php:838`); `chat()` hands the `Chat` its engine through the
      * `workflowEngine:` argument at `Bootstrap.php:1058`, built by
      * `Bootstrap::workflowEngine()` at `Bootstrap.php:1183`;
      * `Chat::workflowRun()` (`src/Chat.php:7820`) calls
      * `$engine->run($workflowName, $context)` at `Chat.php:7844`, inside the
      * `\Fiber` opened at `Chat.php:7842`; and `WorkflowEngine::run()`
-     * (`WorkflowEngine.php:348`) reaches this assembler at
-     * `WorkflowEngine.php:1042`, `:1152`, `:1252`, `:1294` and `:1397`.
+     * (`WorkflowEngine.php:368`) reaches this assembler at
+     * `WorkflowEngine.php:1063`, `:1174`, `:1275`, `:1318` and `:1422`.
      *
      * That is why every measurement in this doc-block is taken against
      * `WorkflowEngine` and not against `AgentManager`. `prompt_plan.md` is
@@ -703,19 +760,19 @@ final readonly class Agent
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testASubAgentDispatchRendersTheEnvironmentBlockOnceHoweverManyChunksTheProviderStreams()};
      *   - `ProcessExecutor.php:473`, by
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice()};
-     *   - `WorkflowEngine.php:1152`, the nested-pipeline render, by
+     *   - `WorkflowEngine.php:1174`, the nested-pipeline render, by
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEnginePipelineRendersTheAgentAssemblerOncePerStage()};
-     *   - `WorkflowEngine.php:1042`, the plain sequential-stage render reached
-     *     from the outer `foreach` at `WorkflowEngine.php:875`, by
+     *   - `WorkflowEngine.php:1063`, the plain sequential-stage render reached
+     *     from the outer `foreach` at `WorkflowEngine.php:895`, by
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testARealWorkflowEngineSequentialStageChainRendersTheAgentAssemblerOncePerStage()}.
      *
      * FOUR ARE CLASSIFIED BY READING ONLY - no test enters them, and a wiring
      * applied at any of them would not red anything in this diff:
-     * `App/App.php:569`, and `WorkflowEngine.php:1252`, `:1294` and `:1397`
+     * `App/App.php:569`, and `WorkflowEngine.php:1275`, `:1318` and `:1422`
      * (the verification stage's straight-line pair, and the parallel stage's
      * single `$firstAgent->systemPrompt()`). The two per-step seams this
-     * doc-block calls out by name are now BOTH driven - the `:1105` loop and
-     * the `:875` loop - but `executeVerificationStage()`'s double render is
+     * doc-block calls out by name are now BOTH driven - the `:1126` loop and
+     * the `:895` loop - but `executeVerificationStage()`'s double render is
      * not, and neither is the dormant `App::dispatchSkill()`. Do not read the
      * roster as four-driven-implies-eight-covered.
      *
@@ -753,7 +810,7 @@ final readonly class Agent
      * while it waits on children (`\Fiber::suspend()`,
      * `AgentWorkerPool.php:869`), which is what keeps the TUI alive across the
      * model call - but the PARENT-side render is not inside that wait. At
-     * `WorkflowEngine.php:1152` (and at `:1042`, `:1252`, `:1294`, `:1397`)
+     * `WorkflowEngine.php:1174` (and at `:1063`, `:1275`, `:1318`, `:1422`)
      * `$agent->systemPrompt()` is evaluated as an argument to the
      * `CompleteRequest` constructor, i.e. fully synchronously, BEFORE
      * `$this->pool->executeOne()` is entered and therefore before any suspend -
@@ -770,14 +827,14 @@ final readonly class Agent
      *
      * AND ONE DISPATCH RENDERS TWICE, WHICH IS A FINDING AND NOT A FIX.
      * `App::dispatchSkill()` and FOUR of the five `WorkflowEngine` sites
-     * (`:1042`, `:1152`, `:1252`, `:1294`) build their `CompleteRequest` with
+     * (`:1063`, `:1174`, `:1275`, `:1318`) build their `CompleteRequest` with
      * this method AND then {@see ProcessExecutor::spawnWorker()} calls it again
      * for the worker's startup message - TEN subprocesses for one dispatch, two
      * unmemoised renders of a live git section that can disagree with each
      * other. NOT "every caller that goes through the worker pool", which is
      * what an earlier revision of this sentence said: `Chat::executeAgents()`
      * (`src/Chat.php:5124`) also goes through the pool and is not one of the
-     * eight call sites at all. The PARALLEL stage at `:1397` is a third shape
+     * eight call sites at all. The PARALLEL stage at `:1422` is a third shape
      * again - `$firstAgent->systemPrompt()` builds one `$defaultRequest`, the
      * per-task agents built in the `foreach` below it call nothing, and
      * `AgentWorkerPool::executeAll()` copies `$request->systemPrompt` onto each
@@ -839,7 +896,7 @@ final readonly class Agent
      * `App/App.php` and said nothing at all about `Cli/Bootstrap.php`, which
      * left the reader to assume no attachment point was there. One is.
      * `/usr/bin/grep -rn 'withEnvironment(' src/ bin/` finds exactly TWO
-     * production attachment points - `Bootstrap.php:1462`
+     * production attachment points - `Bootstrap.php:1463`
      * (`$manager->register($agent->withEnvironment(EnvironmentBlock::capture($root, $agent->model)))`,
      * inside `Bootstrap::agentManager()`'s roster loop) and `App.php:552`
      * treated above; every other hit is this file's own, the setter's
@@ -861,8 +918,18 @@ final readonly class Agent
      *   answers ZERO against `/usr/bin/grep -c 'new Agent(' ...` SEVEN: every
      *   one of the five per-stage renders builds a fresh {@see Agent} and
      *   passes no block at all, so each falls through to the last-resort
-     *   `EnvironmentBlock::capture((string) getcwd(), ...)` in the method
-     *   below. `ProcessExecutor::spawnWorker()`'s second render at
+     *   capture in the method below. WHAT THAT CAPTURE ANCHORS AT MOVED ONCE
+     *   SINCE THIS PARAGRAPH WAS WRITTEN, and the three-part form because the
+     *   signal disposition above is unchanged by it: it used to read
+     *   `EnvironmentBlock::capture((string) getcwd(), ...)`; it now reads
+     *   `EnvironmentBlock::capture($this->environmentRoot ?? (string) getcwd(), ...)`,
+     *   because P3.audit-fix-3 F5 closed the directory half of the two-assembler
+     *   seam - a `--root <dir>` run whose process started elsewhere was told the
+     *   process directory here while `Runtime` told it the session root, exactly
+     *   the orienting-line mismatch that capture site exists to prevent. The
+     *   write-signal argument above is about attaching a BLOCK and is untouched
+     *   by passing a DIRECTORY: each stage still captures and renders its own
+     *   block, at the root the launch resolved. `ProcessExecutor::spawnWorker()`'s second render at
      *   `ProcessExecutor.php:473` renders the SubAgent's OWN agent, which on
      *   the live path is that same fresh one. The one consumer that does read
      *   a registered agent's block is {@see AgentManager::executeSubAgent()}
@@ -892,13 +959,13 @@ final readonly class Agent
      *   diff sections are gone. That is a moved default, and a diff that moves
      *   the default is wrong here in the step text's own terms.
      *
-     * SO THE HONEST DISPOSITION FOR `Bootstrap.php:1462` IS THE ESCALATED ONE.
+     * SO THE HONEST DISPOSITION FOR `Bootstrap.php:1463` IS THE ESCALATED ONE.
      * Carrying a real write signal to the renders that actually repeat needs
      * `WorkflowEngine` to pass a block at all (it passes none, measured above),
      * {@see AgentResult}'s constructor to carry what a stage did, and the
      * worker's `complete` IPC frame to report it - the BUILD-IT-OUT named
      * under reason 2, across `WorkflowEngine` + `AgentResult` + the worker IPC
-     * frame. `Bootstrap.php:1462` is downstream of none of that and cannot
+     * frame. `Bootstrap.php:1463` is downstream of none of that and cannot
      * substitute for it.
      *
      * AND WHY THAT DISPOSITION IS RECORDED HERE AND NOT AT THE SITE, since a
@@ -915,7 +982,7 @@ final readonly class Agent
      */
     public function systemPrompt(?EnvironmentBlock $environment = null): string
     {
-        $rendered = ($environment ?? $this->environment ?? EnvironmentBlock::capture((string) getcwd(), $this->model))
+        $rendered = ($environment ?? $this->environment ?? EnvironmentBlock::capture($this->environmentRoot ?? (string) getcwd(), $this->model))
             ->render();
 
         return $this->prompt === '' ? $rendered : $this->prompt . "\n\n" . $rendered;

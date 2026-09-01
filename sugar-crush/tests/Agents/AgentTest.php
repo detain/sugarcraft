@@ -373,6 +373,256 @@ final class AgentTest extends TestCase
         $this->assertStringContainsString('Working directory: /attached/cwd', $systemPrompt);
         $this->assertStringContainsString('Model: attached-model', $systemPrompt);
     }
+
+    /**
+     * P3.AUDIT-FIX-3 F5 — THE ROOT REACHES THE LAST-RESORT CAPTURE.
+     *
+     * THE GAP: `Runtime::projectRoot()` captures the environment block at the
+     * App's configured `--root`, falling back to the process directory only
+     * when none was set — and its doc-block states WHY: on a `--root <lib>`
+     * run the prompt must name the directory the tools are jailed to. The
+     * Agent assembler's last-resort capture read ONLY the process directory,
+     * so every per-stage workflow prompt on such a run oriented its sub-agent
+     * at a directory its jailed tools do not share. The close review called it
+     * a cross-step seam: no single step's file list contained both assemblers.
+     *
+     * THE POLARITIES: `testSystemPromptAppendsCapturedEnvironmentBlock()`
+     * above is the null-root row — an agent that carries no root still
+     * captures at `getcwd()`, byte for byte as before. This is the
+     * root-set-and-different row: the capture anchors at the root, and the
+     * process directory is NOT named. And `withEnvironment()` still wins over
+     * both — the attached-block test above covers that order; here the root
+     * must not disturb it, asserted in the third row below.
+     */
+    public function testTheEnvironmentRootAnchorsTheLastResortCapture(): void
+    {
+        $root = sys_get_temp_dir() . '/p3af3-root-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($root, 0777, true);
+
+        try {
+            $agent = Agent::fromArray(['prompt' => 'Orient yourself.'])
+                ->withEnvironmentRoot($root);
+
+            $systemPrompt = $agent->systemPrompt();
+
+            $this->assertStringContainsString('<env>', $systemPrompt, 'the block must still be appended');
+            $this->assertStringContainsString(
+                'Working directory: ' . $root,
+                $systemPrompt,
+                'a session root must orient the last-resort capture, exactly as it orients '
+                . 'Runtime::projectRoot() - naming the process directory instead is the F5 defect',
+            );
+            $this->assertStringNotContainsString(
+                'Working directory: ' . getcwd(),
+                $systemPrompt,
+                'both directories cannot be the working directory; the process one won',
+            );
+
+            // THE ATTACHED BLOCK STILL WINS OVER THE ROOT - the capture-order
+            // rows are a ladder, and a root that overrode an attached block
+            // would re-open the two-sources-of-truth defect from the other side.
+            $attached = $agent->withEnvironment(new EnvironmentBlock('/attached/wins', 'attached-model'));
+            $this->assertStringContainsString(
+                'Working directory: /attached/wins',
+                $attached->systemPrompt(),
+            );
+            $this->assertStringNotContainsString($root, $attached->systemPrompt());
+        } finally {
+            rmdir($root);
+        }
+    }
+
+    /**
+     * THE SAME AGENT CARRIES ITS ROOT THROUGH EVERY `with*()` REBUILD.
+     *
+     * `Agent` is hand-rebuilt at each wither — the CALIBER lesson that a new
+     * field not threaded through the rebuild map is SILENTLY DROPPED on the
+     * next transition. `withName()` and `withActive()` are the two a stage
+     * dispatch can actually hit before rendering; this drives both and reads
+     * the value back through the rendered block, not just the property, so a
+     * dropped argument fails where it costs something.
+     */
+    public function testTheEnvironmentRootSurvivesTheWitherRebuilds(): void
+    {
+        $root = sys_get_temp_dir() . '/p3af3-carry-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($root, 0777, true);
+
+        try {
+            $agent = Agent::fromArray(['prompt' => 'Carry me.'])
+                ->withEnvironmentRoot($root)
+                ->withName('renamed-stage')
+                ->withActive(true);
+
+            $this->assertSame($root, $agent->environmentRoot, 'a wither dropped the root field');
+            $this->assertStringContainsString('Working directory: ' . $root, $agent->systemPrompt());
+            $this->assertSame('renamed-stage', $agent->name);
+            $this->assertTrue($agent->isActive);
+        } finally {
+            rmdir($root);
+        }
+    }
+
+    /**
+     * EVERY PER-STAGE WORKFLOW PROMPT NAMES THE SESSION ROOT, NOT THE PROCESS
+     * DIRECTORY — the production shape F5 is about.
+     *
+     * A workflow exercising ALL FOUR stage types, so the run touches all six
+     * `new Agent(...)` sites in `WorkflowEngine` — seven dispatches — and the
+     * engine is built with a root that is NOT the process directory. Each
+     * captured `CompleteRequest->systemPrompt` must name the root and not the
+     * cwd. Dropping the `environmentRoot:` argument at any ONE site reddens
+     * exactly that dispatch's prompt (the deletion experiment in the step
+     * report does one site at a time for the sequential stage and reports the
+     * index that reddened).
+     *
+     * THE ROOT IS AN EXISTING NON-GIT DIRECTORY, deliberately: `render()`
+     * answers "Is directory a git repo: No" for it, the assertion below needs
+     * no git fixture, and the whole F5 property is about the DIRECTORY line,
+     * not about git state. The fixture shape stays honest either way — the
+     * assertion would fire identically inside a repository whose path differs
+     * from the cwd, which is what a real `--root` run is.
+     */
+    public function testEveryWorkflowStagePromptNamesTheSessionRootRatherThanTheProcessDirectory(): void
+    {
+        $root = sys_get_temp_dir() . '/p3af3-engine-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($root, 0777, true);
+
+        try {
+            /** @var list<string> $systemPrompts */
+            $systemPrompts = [];
+
+            $executor = $this->getMockBuilder(ExecutorInterface::class)
+                ->onlyMethods(['execute', 'executeStream', 'cancel', 'cancelAll'])
+                ->getMock();
+            $executor
+                ->method('execute')
+                ->willReturnCallback(
+                    static function (SubAgent $agent, CompleteRequest $request) use (&$systemPrompts): AgentResult {
+                        $systemPrompts[] = (string) $request->systemPrompt;
+
+                        return new AgentResult(
+                            agentId: $agent->id,
+                            status: AgentStatus::Completed,
+                            output: 'stage-output-' . count($systemPrompts),
+                            startedAt: new DateTimeImmutable(),
+                            completedAt: new DateTimeImmutable(),
+                        );
+                    },
+                );
+
+            $registry = new WorkflowRegistry();
+            $registry->register(
+                (new WorkflowBuilder())
+                    ->name('p3af3-root-seam')
+                    ->description('F5: one of every stage type')
+                    ->stage('sequential', Tasks::agent('coder')->prompt('Do the thing'))
+                    ->parallel('fan', [
+                        Tasks::agent('coder')->name('left')->prompt('Left'),
+                        Tasks::agent('tester')->name('right')->prompt('Right'),
+                    ])
+                    ->pipeline('chain', [
+                        Tasks::agent('architect')->name('first')->prompt('First'),
+                        Tasks::agent('coder')->name('second')->prompt('Second: {{prevResult}}'),
+                    ])
+                    ->withVerification(
+                        'checked',
+                        Tasks::agent('coder')->prompt('Build'),
+                        Tasks::agent('reviewer')->prompt('Verify: {{prevResult}}'),
+                    )
+                    ->build(),
+            );
+
+            $engine = new WorkflowEngine(
+                $registry,
+                new AgentWorkerPool(5, $executor),
+                environmentRoot: $root,
+            );
+
+            $result = $engine->run('p3af3-root-seam', []);
+
+            $this->assertTrue($result->isSuccess(), 'the workflow did not run, so nothing below measures a dispatch');
+            $this->assertCount(7, $systemPrompts, 'all four stage types must have dispatched, so every new Agent site is reached');
+
+            foreach ($systemPrompts as $index => $prompt) {
+                $this->assertStringContainsString(
+                    'Working directory: ' . $root,
+                    $prompt,
+                    "dispatch #{$index} oriented its sub-agent at a directory the run's root is not - "
+                    . 'that dispatch is one of the six new Agent(...) sites that lost the root argument',
+                );
+                $this->assertStringNotContainsString(
+                    'Working directory: ' . getcwd(),
+                    $prompt,
+                    "dispatch #{$index} named the process directory: the root never reached this agent",
+                );
+            }
+
+            // THE CONTROL THAT A DEAD `environmentRoot:` ARGUMENT CANNOT PASS:
+            // the same workflow shape on an engine WITHOUT a root names the
+            // process directory instead - the pre-F5 behaviour, preserved for
+            // callers that pass none (§16.8 rule 18, both polarities).
+            $unrooted = new WorkflowEngine($registry, new AgentWorkerPool(5, $executor));
+            $systemPrompts = [];
+            $control = $unrooted->run('p3af3-root-seam', []);
+            $this->assertTrue($control->isSuccess(), 'the unrooted control run must also complete');
+            $this->assertNotSame([], $systemPrompts, 'the control run dispatched nothing, so the polarity above is unmeasured');
+            $this->assertStringContainsString(
+                'Working directory: ' . getcwd(),
+                $systemPrompts[0],
+                'an engine with no root must capture exactly where it always did - the getcwd() fallback',
+            );
+        } finally {
+            rmdir($root);
+        }
+    }
+
+    /**
+     * THE LAUNCH PLUMBS THE ONE RESOLVED ROOT INTO THE ENGINE — the last hop.
+     *
+     * `Bootstrap::chat()` resolves `--root` (defaulting to the process
+     * directory) and hands the same value to the registry tier, the manager,
+     * and — since this step — the engine. Without that argument the engine
+     * parameter above is a seam nothing reaches in production, which is the
+     * exact defect class this whole plan exists to close, so the wiring gets
+     * its own pin. Read reflectively, for the reason the tree already gives
+     * for reading the live-run slots that way: the argument is plumbing, not
+     * API, and inferring it from a later render cannot see a stranded null.
+     *
+     * BOTH POLARITIES: a rooted launch carries the root; a rootless one
+     * (`null`) stays exactly as it was. `trustedConfigDirPath()` reads the
+     * real user tier; the call below only CONSTRUCTS the registry and engine
+     * — no workflow file is read or written.
+     */
+    public function testTheLaunchedWorkflowEngineIsGivenTheSessionRoot(): void
+    {
+        $invoke = new \ReflectionMethod(\SugarCraft\Crush\Cli\Bootstrap::class, 'workflowEngine');
+        $invoke->setAccessible(true);
+        $read = new \ReflectionProperty(WorkflowEngine::class, 'environmentRoot');
+        $read->setAccessible(true);
+
+        $root = sys_get_temp_dir() . '/p3af3-launch-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($root, 0777, true);
+
+        try {
+            $gate = new \SugarCraft\Crush\Permissions\PermissionGate(
+                \SugarCraft\Crush\Permissions\PermissionMode::Default,
+            );
+
+            $this->assertSame(
+                $root,
+                $read->getValue($invoke->invoke(null, $root, $gate)),
+                'Bootstrap::workflowEngine() stopped passing its resolved root to the engine — '
+                . 'every stage prompt is back to naming the process directory on a --root run',
+            );
+            $this->assertNull(
+                $read->getValue($invoke->invoke(null, null, $gate)),
+                'a launch without a root must stay exactly the pre-F5 shape: null in, null carried',
+            );
+        } finally {
+            rmdir($root);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Golden prompt pin - committed byte golden + host-path leak scan
     // -------------------------------------------------------------------------
@@ -1645,7 +1895,7 @@ final class AgentTest extends TestCase
         $this->assertSame($derived['occurrences'] + 1, $novel['occurrences'], 'a new citation did not move the occurrence count');
 
         // THE DUPLICATE IS DERIVED FROM THE SOURCE, not typed. This control used
-        // to append the literal `WorkflowEngine.php:875` — a citation the
+        // to append the literal `WorkflowEngine.php:895` — a citation the
         // doc-block under test explicitly promises will rot. The first time
         // anybody re-derives that line number, the "duplicate" stops being a
         // duplicate, this control silently becomes the NOVEL-citation case, and
@@ -2086,9 +2336,9 @@ final class AgentTest extends TestCase
      * anywhere in `src/` or `bin/`. That test pins a real property of a dormant
      * path and it stays. What it cannot see is the per-RUN question, because
      * the shape that asks it is a loop in a different file:
-     * `WorkflowEngine.php:1105` `foreach ($nestedStages as $nestedStage)`
+     * `WorkflowEngine.php:1126` `foreach ($nestedStages as $nestedStage)`
      * encloses a render at `:1152`, `executeVerificationStage()` renders twice
-     * straight-line at `:1252` and `:1294`, and `WorkflowEngine.php:875`
+     * straight-line at `:1252` and `:1294`, and `WorkflowEngine.php:895`
      * reaches `:1042`/`:1252`/`:1294`/`:1397` once per stage - and unlike the
      * dormant pair, that engine is LIVE from `bin/sugarcrush` via
      * `Bootstrap.php:1183`, wired at `Bootstrap.php:1058`.
@@ -2617,7 +2867,7 @@ final class AgentTest extends TestCase
      * written: a review applied to `WorkflowEngine.php` exactly the wiring
      * P3.S6 declines - hoisting
      * `EnvironmentBlock::capture((string) getcwd(), $this->model)->withWriteSinceLastRender(false)`
-     * above the `foreach` at `WorkflowEngine.php:1105` and passing it into the
+     * above the `foreach` at `WorkflowEngine.php:1126` and passing it into the
      * render at `:1152` - and THIS FILE stayed green under it: at `c4cb9492c`,
      * `vendor/bin/phpunit -c phpunit.xml tests/Agents/AgentTest.php` reported
      * OK at 31 tests and 266 assertions with that mutation applied. The
@@ -2641,7 +2891,7 @@ final class AgentTest extends TestCase
      * once per stage" from "renders once and re-sends": both are one number.
      *
      * WHY THE EXECUTOR IS A MOCK AND THE COUNT IS STILL REAL. The render this
-     * counts happens in the PARENT, at `WorkflowEngine.php:1152`, before the
+     * counts happens in the PARENT, at `WorkflowEngine.php:1174`, before the
      * `SubAgent` is handed to {@see AgentWorkerPool::executeOne()}. Injecting a
      * mock {@see ExecutorInterface} keeps the whole run in-process - no
      * `proc_open()`, no fork, no provider - while leaving that parent-side call
@@ -2809,7 +3059,7 @@ final class AgentTest extends TestCase
      * `foreach ($nestedStages as $nestedStage)` at `:1105`. The doc-block on
      * {@see Agent::systemPrompt()} names a SECOND loop, the outer one:
      * `foreach ($workflow->stages as $stageIndex => $stage)` at
-     * `WorkflowEngine.php:875`, reaching `:1042` once per stage through
+     * `WorkflowEngine.php:895`, reaching `:1042` once per stage through
      * `executeStage()`. A whole pipeline is ONE entry in that outer loop, so
      * the pipeline test never enters `executeStage()` and never touches
      * `:1042` - which is why the workflow here is built with plain `->stage()`
@@ -2819,7 +3069,7 @@ final class AgentTest extends TestCase
      * MEASURED, AND THAT MEASUREMENT IS WHY THIS TEST WAS WRITTEN. Hoisting a
      * shared `EnvironmentBlock::capture((string) getcwd(), $this->model)
      * ->withWriteSinceLastRender(false)` above the `foreach` at
-     * `WorkflowEngine.php:875` and passing it into the render at `:1042` -
+     * `WorkflowEngine.php:895` and passing it into the render at `:1042` -
      * exactly the wiring P3.S6 declines, applied at the outer seam instead of
      * the inner one - left the sibling test and the rest of this file GREEN,
      * and reds only here: 6 against an expected 10 at K = 2.
@@ -2912,8 +3162,8 @@ final class AgentTest extends TestCase
                     $subprocesses,
                     "a REAL WorkflowEngine chain of {$stages} plain sequential stages no longer costs "
                         . 'five git subprocesses per stage. If it costs fewer, the per-stage render at '
-                        . 'WorkflowEngine.php:1042 is gone: a caller began sharing one EnvironmentBlock '
-                        . 'across the foreach at WorkflowEngine.php:875, which is EXACTLY the wiring '
+                        . 'WorkflowEngine.php:1063 is gone: a caller began sharing one EnvironmentBlock '
+                        . 'across the foreach at WorkflowEngine.php:895, which is EXACTLY the wiring '
                         . 'P3.S6 declined and recorded as an escalation. That is the P3.S6 disposition '
                         . 'changing - the write signal now has a per-stage seam a caller is using - and '
                         . 'it must be re-dispositioned rather than silenced by moving this number.',

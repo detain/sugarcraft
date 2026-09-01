@@ -281,6 +281,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *        handed out is therefore a subset of the checked union; but it does
      *        mean the list is a request for capability, and nothing downstream
      *        enforces that an agent receives only what it declared.
+     *
+     * @param ?string $environmentRoot The session's resolved project root -
+     *        `--root`'s value as {@see \SugarCraft\Crush\Cli\Bootstrap::chat()}
+     *        resolved it, or null for an engine whose launch has none. It is
+     *        carried to every per-stage `new Agent(...)` below as
+     *        {@see \SugarCraft\Crush\Agents\Agent::$environmentRoot}, which is
+     *        what makes that agent's last-resort environment capture name the
+     *        directory the stage's tools are jailed to rather than the process
+     *        directory the launch happened to start in. THE ROOT, NOT A BLOCK:
+     *        the stage agents deliberately carry no `EnvironmentBlock` - the
+     *        P3.S6 paragraph of {@see \SugarCraft\Crush\Agents\Agent::systemPrompt()}
+     *        measures what an attached block would change - so the per-stage
+     *        re-render and its five-git-subprocess cost stay as pinned, and
+     *        only the anchor of the capture moves. This closes a seam a phase
+     *        close-review found between the two assemblers: the Runtime one
+     *        captures at the session root and states that invariant in its
+     *        own doc-block; these six sites read the process directory until
+     *        this parameter carried the root to them. Null keeps the old
+     *        behaviour exactly - a caller that does not care changes nothing.
      */
     public function __construct(
         private readonly WorkflowRegistry $registry = new WorkflowRegistry(),
@@ -289,6 +308,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         private readonly string $model = 'claude-sonnet-4-6',
         private readonly string $provider = 'anthropic',
         private readonly ?PermissionGate $permissionGate = null,
+        private readonly ?string $environmentRoot = null,
     ) {}
 
     /**
@@ -1020,6 +1040,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             skillNames: [],
             hooks: [],
             isActive: true,
+            environmentRoot: $this->environmentRoot,
         );
 
         $subAgent = new SubAgent(
@@ -1131,6 +1152,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 skillNames: [],
                 hooks: [],
                 isActive: true,
+                environmentRoot: $this->environmentRoot,
             );
 
             $subAgent = new SubAgent(
@@ -1233,6 +1255,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             skillNames: [],
             hooks: [],
             isActive: true,
+            environmentRoot: $this->environmentRoot,
         );
 
         $taskSubAgent = new SubAgent(
@@ -1275,6 +1298,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             skillNames: [],
             hooks: [],
             isActive: true,
+            environmentRoot: $this->environmentRoot,
         );
 
         $verifierSubAgent = new SubAgent(
@@ -1386,6 +1410,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             skillNames: [],
             hooks: [],
             isActive: true,
+            environmentRoot: $this->environmentRoot,
         );
 
         $defaultRequest = new CompleteRequest(
@@ -1414,6 +1439,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 skillNames: [],
                 hooks: [],
                 isActive: true,
+                environmentRoot: $this->environmentRoot,
             );
 
             $subAgents[] = new SubAgent(

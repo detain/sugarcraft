@@ -752,10 +752,10 @@ final class Runtime
      *     silently. `EnvironmentBlock` has FOUR production construction sites;
      *     this step reaches ONE. MEASURED with
      *     `/usr/bin/grep -rn 'EnvironmentBlock::capture(' src/ bin/`: this
-     *     class, plus `Cli/Bootstrap.php:1462`, `App/App.php:553` and the
+     *     class, plus `Cli/Bootstrap.php:1463`, `App/App.php:553` and the
      *     last-resort fallback inside `Agents\Agent::systemPrompt()` itself.
      *     THE SYMBOL IS THE CITATION FOR THAT THIRD ONE and the line number
-     *     is only a direction (`Agents/Agent.php:852`, MEASURED in this merge
+     *     is only a direction (`Agents/Agent.php:985`, MEASURED in this merge
      *     with `/usr/bin/grep -n 'EnvironmentBlock::capture(' src/Agents/Agent.php`
      *     — the one hit that is a STATEMENT rather than doc-block prose; that
      *     command returns EIGHT hits in `Agents/Agent.php` and the other seven
@@ -881,7 +881,7 @@ final class Runtime
      *     found, instead of as a sentence nobody re-measures; and
      *     {@see \SugarCraft\Crush\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()}
      *     pins the ROSTER those numbers are counted from, so a site that moves
-     *     between files without changing the total still reds. `Bootstrap.php:1462`
+     *     between files without changing the total still reds. `Bootstrap.php:1463`
      *     memoises the CAPTURE onto each agent, which costs nothing: capture()
      *     runs ZERO subprocesses (MEASURED with a logging `git` shim: ten
      *     captures with no render, 0 invocations) and `render()` pays the bill
