@@ -212,9 +212,17 @@ which matches the code exactly.
 | 6 | Enabled skills' full bodies | `1799-1805` | `## Skill: <name>` | **dormant** |
 | 7 | `SkillMatcher::listForPrompt()` | `1813` | plain list | **no** |
 
-Ordering rationale is recorded at `Runtime.php:1662-1671`: `<env>` first so the model knows where it
-is before reading conventions about paths relative to that cwd; `<repo-map>` second because every
+Ordering rationale was recorded at `Runtime.php:1662-1671`: `<env>` first so the model knows where
+it is before reading conventions about paths relative to that cwd; `<repo-map>` second because every
 line in it is a path relative to that cwd; then authored convention.
+
+> **HISTORICAL AS OF 2026-09-01 — P3.S1 REVERSED THIS AND THAT WAS THE POINT.** `<env>` is no longer
+> first; it is layer **7 of 7**, last, under the comment "Volatile content LAST". The rationale
+> above is why the code once looked that way, kept because it is the argument P3.S1 had to answer:
+> the model still learns its cwd before it needs it, because the whole prompt arrives at once — the
+> ordering only ever mattered for CACHING, and putting the volatile layer first is what made every
+> stable layer behind it uncacheable. Re-derive the line number before citing it; this plan has
+> moved `Runtime.php` in four steps since.
 
 All three snapshots are memoized per-`Runtime` (`environmentSnapshot():1835`, `memorySnapshot():1853`,
 `repoMapSnapshot():1883`) because `buildSystemPrompt()` runs once per agentic step, and
@@ -306,8 +314,21 @@ public function systemPrompt(?EnvironmentBlock $environment = null): string
 }
 ```
 
-Agent text then `<env>` — **the opposite order to `Runtime`**, and test-pinned that way. No tools
-guidance, no instruction files, no memory, no repo map, no skill listing.
+Agent text then `<env>`. No tools guidance, no instruction files, no memory, no repo map, no skill
+listing.
+
+> **CORRECTED 2026-09-01 — this line used to end "the opposite order to `Runtime`, and test-pinned
+> that way", and that has been false since this plan's own P3.S1.** *What it said:* Agent orders
+> agent-text-then-`<env>`, the OPPOSITE of `Runtime`. *What is true:* **both** assemblers put
+> `<env>` LAST, so the orders are IDENTICAL. P3.S1 moved `<env>` from `Runtime` layer 2 to layer 7
+> — that was the step's entire purpose — and the claim has been false ever since. *How measured:*
+> `Agent::systemPrompt()`'s entire body is
+> `return $this->prompt === '' ? $rendered : $this->prompt . "\n\n" . $rendered;` with nothing
+> after the env render; `buildSystemPrompt()`'s last statement before `return` is
+> `$base .= "\n\n" . $this->environmentSnapshot($app)->render();` under the comment "Volatile
+> content LAST"; and both goldens END with `</env>`. The two assemblers ARE still deliberately
+> separate, for a different and measured reason — different LAYER SETS, seven versus two — see
+> `prompt_plan.md` §17.2, which carries the full correction.
 
 `AgentManager` layers skills on at `src/Agents/AgentManager.php:413-429`.
 
@@ -543,8 +564,19 @@ on a dirty tree; a 45.9 MB working diff (40 files, 400k changed lines each way) 
 Caps are `DIFF_MAX_BYTES` per section with a shared budget so a large staged diff cannot starve the
 unstaged one.
 
-Since `<env>` is layer 2 of 7, everything below it — repo map, project instructions, memory,
-skills — is uncacheable from the first edit of any session.
+Since `<env>` was layer 2 of 7, everything below it — repo map, project instructions, memory,
+skills — was uncacheable from the first edit of any session.
+
+> **CORRECTED 2026-09-01, AND THE CONCLUSION INVERTS — READ THIS BEFORE PLANNING PHASE 10.**
+> *What it said (present tense):* `<env>` is layer 2 of 7, so everything below it is uncacheable
+> from the first edit of any session. *What is true:* **P3.S1 moved `<env>` to layer 7 of 7**, so
+> the volatile layer is now LAST and the six stable layers above it — identity prompt, repo map,
+> `<project-instructions>`, memory, per-skill contributions, the skill list — are no longer
+> invalidated by a working-tree edit. *How measured:* the final statement of `buildSystemPrompt()`
+> before `return $base;` is the env render, under the comment "Volatile content LAST"; both goldens
+> end with `</env>`. **This is the single largest reason P3.S1 existed**, so a Phase 10 step that
+> reads the original sentence would conclude the opposite of what the tree now supports and would
+> re-solve a problem this plan already fixed.
 
 ### 3.5 Context window — NOT a defect (correcting an earlier draft)
 
@@ -3398,11 +3430,27 @@ the counts above marked `*` are index values, not verified.
 | Walk-up | parents, root-down | **no** | yes, first-match + lazy | global+project additive | **yes — 3 walks incl. on-touch** |
 | Context filenames | CLAUDE.md (+ @import) | 16 hardcoded | 3 + 2 global | .roo/rules + AGENTS.md + legacy | **2 (CLAUDE.md, AGENTS.md)** |
 | Tool descriptions | huge (Bash git block 2,469 tk) | external .md, terse, **capability-aware** | inline TS | **not in prompt** — native schema | **rich + instance-conditional, but uneven** |
-| Env block | cwd/platform/OS/date, git **last** | cwd/git/platform/date, capped | model id/worktree/cwd, **no git** | OS/shell/home/cwd | **cwd/OS/PHP/model/date + git status + DIFF BODIES, position 2** |
+| Env block | cwd/platform/OS/date, git **last** | cwd/git/platform/date, capped | model id/worktree/cwd, **no git** | OS/shell/home/cwd | **cwd/OS/PHP/model/date + git status + DIFF BODIES, position 7 of 7** [*](#p3s1-note) |
 | Skills | 3-level, 1% ctx budget | `<available_skills>` XML + mandatory-load rule | verbose in prompt, terse in tool | XML + `<mandatory_skill_check>` | **3-level; L1 live, L2 live, bodies dormant** |
-| Subagent prompt | own prompt + env + CLAUDE.md | 3 rules + `<env>` | `explore.txt` | per-mode | **agent text + `<env>`, opposite order** |
+| Subagent prompt | own prompt + env + CLAUDE.md | 3 rules + `<env>` | `explore.txt` | per-mode | **agent text + `<env>` last** [*](#p3s1-note) |
 | Compaction | 9 sections + `<analysis>` | 5 sections, one-shot | 6 sections, **recursive merge** + head/tail | 9 sections + system-op guard | **one line per exchange, <200 chars** |
 | Cache breakpoints | server-side, 1 documented | **4, wiped+reapplied per step** | 4, 6 provider dialects | `cache_control` on system | **none** |
+
+<a id="p3s1-note"></a>
+> **\* CORRECTED 2026-09-01. Two cells in the SugarCrush column were snapshots of the tree as it
+> was when this dossier was written, and this plan's own P3.S1 falsified both.** *They said:* the
+> env block sits at **position 2**, and the subagent assembler uses the **opposite order** to
+> `Runtime`. *What is true:* P3.S1 moved `<env>` from layer 2 to layer **7 of 7** — the last thing
+> in the prompt — which was that step's entire purpose, so both assemblers now end with `<env>` and
+> their orders are IDENTICAL. *How measured:* `buildSystemPrompt()`'s final statement before
+> `return $base;` is the env render, under the comment "Volatile content LAST"; `Agent::systemPrompt()`
+> ends with the same render; both goldens end with `</env>`. The two assemblers are still
+> deliberately separate, but on a LAYER-SET argument (seven layers versus two), not an ordering one
+> — `prompt_plan.md` §17.2 and the correction at §9.2 of this document carry it in full.
+>
+> **A comparison table is the worst place for a fact the plan is actively changing**, because it
+> reads as a survey of other people's tools where only the last column moves. Anything in that
+> column is a claim about a tree this plan edits every day.
 | Hook context injection | `additionalContext`, 4 insertion points, 10k cap | n/a | n/a | n/a | **none — field doesn't exist** |
 | Golden prompt tests | n/a | **yes, injectable clock/platform/cwd** | n/a | snapshot files | **no** |
 
@@ -3752,10 +3800,41 @@ phrases, the `concurrently`+`fork` proximity window, the negation-polarity check
 `EnvironmentBlockTest::testNoAdditionalWorkingDirectoriesLineIsEmitted()` pins an **absence as a
 decision** (backlog E26).
 
-**The constraint that rules out unification:** `Agent::systemPrompt()` uses the opposite order —
-agent prompt first, `<env>` second (`AgentTest.php:251` vs `:263`). Sharing one builder between
-`Runtime` and `Agent` makes `AgentTest.php:251` and `BaseSystemPromptTest.php:135` mutually
-contradictory. **The two assemblers must stay separate.**
+**The constraint that rules out unification. CONCLUSION INTACT, ARGUMENT RETIRED — corrected
+2026-09-01, and this document is the SOURCE the retired argument propagated from.**
+
+- *What it said:* *"`Agent::systemPrompt()` uses the opposite order — agent prompt first, `<env>`
+  second (`AgentTest.php:251` vs `:263`). Sharing one builder between `Runtime` and `Agent` makes
+  `AgentTest.php:251` and `BaseSystemPromptTest.php:135` mutually contradictory."*
+- *What is true:* **BOTH assemblers put `<env>` LAST. There is no opposite order and no
+  contradiction to manufacture.** This plan's own **P3.S1** is what killed the claim — it moved
+  `<env>` from `Runtime` layer 2 to layer 7. The claim was correct when this dossier was written
+  and has been false since that step merged.
+- *How measured:* `Agent::systemPrompt()`'s whole body is
+  `return $this->prompt === '' ? $rendered : $this->prompt . "\n\n" . $rendered;` — nothing
+  follows the env render; `buildSystemPrompt()`'s last statement before `return $base;` is
+  `$base .= "\n\n" . $this->environmentSnapshot($app)->render();`, under the comment "Volatile
+  content LAST"; both goldens end with `</env>`; `<env>` is line 84 of the 129-line system golden
+  and `</env>` is its last line.
+- *Both citations had ALSO rotted:* `AgentTest.php:251` now sits inside
+  `testWithActivePreservesOtherFields()` and `BaseSystemPromptTest.php:135` inside the base-slice
+  marker assertions. Removed rather than re-pinned — a `file:line` in a document no test derives
+  rots whether or not anyone mis-typed it.
+
+**The two assemblers must still stay separate, for this reason instead: they carry different LAYER
+SETS.** `Runtime::buildSystemPrompt()` assembles **seven** layers — identity prompt, repo map,
+`<project-instructions>`, memory, per-skill contributions, the skill list, `<env>`.
+`Agent::systemPrompt()` assembles **two**: the agent's own prompt and `<env>`. The five middle
+layers have no Agent-side counterpart at all. The only two elements the assemblers share are the
+identity prompt first and `<env>` last — **identical order, not opposite**.
+
+**WHY THE CORRECTION IS HERE AND NOT ONLY IN THE PLAN.** `prompt_plan.md` §17.2 was corrected on
+2026-08-31, and the two production doc-blocks that had copied the claim — `src/Runtime.php:771`
+and `src/Agents/Agent.php:442` — were corrected and PINNED by `P3.audit-fix-2` (merged
+`980670c0b`). But the document those copies were made FROM was not touched, so the propagation
+source stayed open and would have re-seeded the falsehood into the next step that read §3.4 or
+§9.2 for context. That is §16.8 rule 40 — a correction must travel to its neighbours — applied in
+the direction people forget: **upstream, to the source, not only outward to the copies.**
 
 Also: `RepoMapBlock`'s prose is load-bearing in two census tests (backlog E252, E409 both name "a
 prose restatement in `RepoMapBlock`" that a `src/` file-count change moves), and
