@@ -224,7 +224,7 @@ Suggested interleave: A runs B1..B4; B runs B5,B6,B7 serially with B8/B9/B10/B11
 | Step | BL | Lane | Build | Review loop | Commit | SHA |
 |---|---|---|---|---|---|---|
 | B1 alias-completeness | BL-4 | A | ✅ | ✅ | ✅ | 980001aa4 |
-| B2 MarkLine rendering | MarkLine | A | ⬜ | ⬜ | ⬜ | — |
+| B2 MarkLine rendering | MarkLine | A | ✅ | ✅ | ✅ | 9065a2784 |
 | B3 Unicode connectors | connectors | A | ⬜ | ⬜ | ⬜ | — |
 | B4 charts failOnWarning | BL-3a | A | ⬜ | ⬜ | ⬜ | — |
 | B5 withAspect guard | BL-5 | B(D) | ✅ | ✅ | ✅ | ea5b7d595 |

@@ -14,11 +14,12 @@ use SugarCraft\Dash\Plot\Braille\Bresenham;
  *
  * Features:
  * - Multiple data segments with customizable colors
- * - Optional center text (label, value, or percentage)
+ * - Optional center text: up to two mb-truncated lines (a value, or the
+ *   first segment's percentage, plus an optional label) inside the hole
  * - Configurable inner/outer radius
-     * - Start angle for rotation
-     * - Clockwise or counter-clockwise rendering
-     * - Filled (default) or wireframe/outline render mode
+ * - Start angle for rotation
+ * - Clockwise or counter-clockwise rendering
+ * - Filled (default) or wireframe/outline render mode
  *
  * Mirrors donut/pie chart patterns adapted to PHP with wither-style
  * immutable setters.
@@ -331,6 +332,8 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             }
         }
 
+        $grid = $this->paintCenterText($grid, $centerX, $centerY, $innerRadius, $aspect, $total);
+
         // Render the grid. In background mode a fully filled cell becomes a
         // space under its segment's background SGR, merged with its contiguous
         // same-colour neighbours into one run carrying exactly one open/reset
@@ -474,6 +477,110 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
+     * Paint the optional center text (BL-1, wired per the Q1 contract) into a
+     * rendered ring grid: up to two lines centered in the hole.
+     *
+     * The primary line is centerValue; with showPercentage on and no explicit
+     * value it is the first segment's share of the total, formatted
+     * number_format(share, 0) . '%'. centerLabel, when set, takes a second
+     * line directly below the primary. Each line is mb-truncated to the inner
+     * diameter minus a 2-cell breathing margin — further narrowed to whatever
+     * the hole actually spans on its row — so text never lands on ring cells.
+     * A line whose row the hole cannot fit is omitted. With every knob at its
+     * default (or centerLabel alone, which has no primary to hang under)
+     * nothing is emitted and the render stays byte-identical.
+     *
+     * @param array<int, array<int, array{char: string, color: Color|null}>> $grid
+     *
+     * @return array<int, array<int, array{char: string, color: Color|null}>>
+     */
+    private function paintCenterText(array $grid, int $centerX, int $centerY, int $innerRadius, float $aspect, float $total): array
+    {
+        $primary = $this->centerPrimaryText($total);
+        if ($primary === null) {
+            return $grid;
+        }
+
+        $grid = $this->paintCenterLine($grid, $primary, $centerX, $centerY, 0, $innerRadius, $aspect);
+
+        if ($this->centerLabel === null || $this->centerLabel === '') {
+            return $grid;
+        }
+
+        return $this->paintCenterLine($grid, $this->centerLabel, $centerX, $centerY + 1, 1, $innerRadius, $aspect);
+    }
+
+    /**
+     * The primary center line: explicit centerValue wins, else the
+     * first-segment percentage when showPercentage is on, else null meaning
+     * "no center text at all".
+     */
+    private function centerPrimaryText(float $total): ?string
+    {
+        if ($this->centerValue !== null) {
+            return $this->centerValue;
+        }
+
+        if (!$this->showPercentage || $total <= 0.0 || $this->segments === []) {
+            return null;
+        }
+
+        return number_format($this->segments[0]['value'] / $total * 100, 0) . '%';
+    }
+
+    /**
+     * Paint one center-text line, horizontally centered on $centerX of row $y,
+     * truncated to min(inner diameter - 2, the hole span of this row). Cells
+     * outside the hole are never touched: the ring stays whole even if a
+     * future geometry change ever widened a line past the blank span.
+     *
+     * @param array<int, array<int, array{char: string, color: Color|null}>> $grid
+     *
+     * @return array<int, array<int, array{char: string, color: Color|null}>>
+     */
+    private function paintCenterLine(array $grid, string $text, int $centerX, int $y, int $rowOffset, int $innerRadius, float $aspect): array
+    {
+        $fit = min(2 * $innerRadius - 2, $this->holeRowWidth($rowOffset, $innerRadius, $aspect));
+        if ($fit < 1) {
+            return $grid;
+        }
+
+        $characters = mb_str_split(mb_strlen($text) > $fit ? mb_substr($text, 0, $fit) : $text);
+
+        $startX = $centerX - intdiv(count($characters), 2);
+        foreach ($characters as $offset => $character) {
+            $cell = &$grid[$y][$startX + $offset];
+            if ($cell['char'] === ' ' && $cell['color'] === null) {
+                $cell['char'] = $character;
+            }
+            unset($cell);
+        }
+
+        return $grid;
+    }
+
+    /**
+     * Blank-hole width of the row at aspect-scaled distance $rowOffset from
+     * the center row: the count of integer columns dx with
+     * dx^2 + (rowOffset * aspect)^2 < innerRadius^2 — the strict complement of
+     * render()'s ring test ($dist >= $innerRadius). 0 when the hole does not
+     * reach the row at all.
+     */
+    private function holeRowWidth(int $rowOffset, int $innerRadius, float $aspect): int
+    {
+        $remaining = $innerRadius ** 2 - ($rowOffset * $aspect) ** 2;
+        if ($remaining <= 0.0) {
+            return 0;
+        }
+
+        // Largest integer strictly inside the bound: ceil() steps one below
+        // exact squares (sqrt 16 -> last hole column 3, since dist 4 is ring).
+        $halfSpan = (int) ceil(sqrt($remaining)) - 1;
+
+        return 2 * $halfSpan + 1;
+    }
+
+    /**
      * Render an empty donut chart.
      */
     private function renderEmpty(): string
@@ -544,10 +651,10 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
      * the aspect-corrected ellipse with each cell bucketed by its LOCAL
      * TANGENT (─│╱╲ plus a rounded ◜◝◟◞ corner rune at the four diagonals),
      * one hub→rim divider per segment boundary, and a hub rune where the
-     * spokes meet. No legend and no centre text are emitted — the filled path
-     * never drew any (centerLabel/centerValue remain unwired, Backlog BL-1),
-     * so shape alone must do the work; that is also what keeps this mode
-     * legible on B/W terminals, which is its whole raison d'être.
+     * spokes meet. No legend and no center text are emitted — wireframe is
+     * shape-only by contract (Q1), which is also what keeps this mode legible
+     * on B/W terminals, its whole raison d'être; center text belongs to the
+     * filled path alone (see paintCenterText()).
      */
     private function renderWireframe(float $total): string
     {

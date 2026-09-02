@@ -737,6 +737,195 @@ final class DonutTest extends TestCase
         );
     }
 
+    public function testCenterTextDefaultsEmitNothingAndLabelAloneIsNotATrigger(): void
+    {
+        $oracle = Donut::mocha(self::ORACLE_DATA)->withSize(21);
+
+        $this->assertSame(
+            base64_decode(self::PRE_S6_RAW_FILLED_21, true),
+            $oracle->render(),
+            'All three center knobs at their defaults must keep the raw default render byte-identical.'
+        );
+        $this->assertSame(
+            $oracle->render(),
+            $oracle->withCenterLabel('Solo')->render(),
+            'Q1: text renders only from centerValue/showPercentage — a lone centerLabel stays invisible.'
+        );
+    }
+
+    public function testCenterValueRendersCenteredInHole(): void
+    {
+        $rendered = Donut::new([
+            ['label' => 'A', 'value' => 30],
+            ['label' => 'B', 'value' => 70],
+        ])->withSize(21)->withCenterValue('42')->render();
+        $lines = explode("\n", $rendered);
+
+        $this->assertCount(21, $lines, 'Center text must not add or drop rows.');
+
+        // Uncoloured segments render bare blocks: row 10 is the center row,
+        // hole columns 7-13 (innerRadius 4 around centerX 10); '42' (2 chars)
+        // centers left-biased onto columns 9-10.
+        $this->assertSame(' ██████  42   ██████ ', $lines[10]);
+        $this->assertSame(1, substr_count($rendered, '4'));
+        $this->assertSame(1, substr_count($rendered, '2'));
+    }
+
+    public function testShowPercentageFallsBackToFirstSegmentShareAndCenterValueTakesPrecedence(): void
+    {
+        $donut = Donut::new([
+            ['label' => 'A', 'value' => 30],
+            ['label' => 'B', 'value' => 70],
+        ])->withSize(21);
+        $centerRow = static fn(string $rendered): string => explode("\n", $rendered)[10];
+
+        $this->assertSame(
+            ' ██████  30%  ██████ ',
+            $centerRow($donut->withShowPercentage(true)->render()),
+            'showPercentage with no centerValue must render the first segment share as an integer percent.'
+        );
+        $this->assertSame(
+            ' ██████  99   ██████ ',
+            $centerRow($donut->withShowPercentage(true)->withCenterValue('99')->render()),
+            'centerValue wins over showPercentage for the primary line.'
+        );
+
+        $thirds = Donut::new(self::ORACLE_DATA)->withSize(21)->withShowPercentage(true)->render();
+        $this->assertStringContainsString(
+            '  33%  ',
+            $centerRow($thirds),
+            'One third of the total must number_format(…, 0) to "33%".'
+        );
+    }
+
+    public function testCenterValueIsTruncatedToInnerDiameterMinusTwoCodepoints(): void
+    {
+        $rendered = Donut::new([['label' => 'A', 'value' => 1]])
+            ->withSize(21)
+            ->withCenterValue('日本語テキストです')
+            ->render();
+        $line = explode("\n", $rendered)[10];
+
+        // inner diameter 2*4 minus the 2-cell breathing margin = 6 CELLS, not
+        // 6 bytes: the first six codepoints land on hole columns 7-12 and a
+        // single byte-slicing implementation would mangle or misplace them.
+        $this->assertSame(' ██████日本語テキス ██████ ', $line);
+        $this->assertSame(21, mb_strlen($line), 'Row must hold exactly 21 cells — no partial codepoints.');
+        $this->assertStringNotContainsString('で', $rendered, 'The 7th codepoint must be cut.');
+    }
+
+    public function testCenterLabelRendersOnSecondLineBelowPrimary(): void
+    {
+        $rendered = Donut::new([['label' => 'A', 'value' => 1]])
+            ->withSize(21)
+            ->withCenterValue('7')
+            ->withCenterLabel('LB')
+            ->render();
+        $lines = explode("\n", $rendered);
+
+        $this->assertSame('   7   ', mb_substr($lines[10], 7, 7), 'Primary sits centered on the center row.');
+        $this->assertSame('  LB   ', mb_substr($lines[11], 7, 7), 'Label takes the line directly below, centered.');
+        $this->assertSame(1, substr_count($rendered, 'L'));
+    }
+
+    public function testCenterTextOmittedWhenHoleTooNarrow(): void
+    {
+        // Size 8: radius 3 → innerRadius 1 → budget 2*1-2 = 0 cells: no line fits.
+        $tiny = Donut::new([['label' => 'A', 'value' => 1]])->withSize(8);
+        $this->assertSame(
+            $tiny->render(),
+            $tiny->withCenterValue('AB')->withCenterLabel('CD')->render(),
+            'A one-cell hole must emit no center text at all.'
+        );
+
+        // Size 10: innerRadius 2 → primary fits (2 cells) but the row below is
+        // entirely ring at aspect 2.0, so the label is omitted, not smeared.
+        $small = Donut::new([['label' => 'A', 'value' => 1]])->withSize(10);
+        $withBoth = explode("\n", $small->withCenterValue('AB')->withCenterLabel('CD')->render());
+
+        $this->assertSame(' ███AB ███', $withBoth[5]);
+        $this->assertSame(0, substr_count(implode('', $withBoth), 'C'), 'Label must be omitted on the narrow hole.');
+        $this->assertSame(
+            explode("\n", $small->render())[6],
+            $withBoth[6],
+            'The ring row under the center must stay untouched when the label is dropped.'
+        );
+
+        // Row-fit case: at aspect 3.0 the size-21 hole row under the center is
+        // only 5 cells wide while the diameter budget allows 6 — the label
+        // must re-truncate to the row's own span (cols 8-12), never smear a
+        // character into a ring column and leave a gap.
+        $wide = Donut::new([['label' => 'A', 'value' => 1]])
+            ->withSize(21)
+            ->withAspect(3.0)
+            ->withCenterValue('V')
+            ->withCenterLabel('ABCDE12')
+            ->render();
+        $wideLine = explode("\n", $wide)[11];
+
+        $this->assertSame('ABCDE', mb_substr($wideLine, 8, 5), 'Label must cut to the 5-cell hole span of its row.');
+        $this->assertSame('█', mb_substr($wideLine, 7, 1), 'Column 7 is ring on that row and must stay a block.');
+    }
+
+    public function testCenterTextNeverOverwritesRingCells(): void
+    {
+        $oracle = Donut::mocha(self::ORACLE_DATA)->withSize(21);
+        $bare = self::stripAnsi($oracle->render());
+        $texted = self::stripAnsi(
+            $oracle->withCenterValue(str_repeat('V', 20))->withCenterLabel(str_repeat('L', 20))->render()
+        );
+
+        $this->assertSame(
+            substr_count($bare, '█'),
+            substr_count($texted, '█'),
+            'Overlong center text must be truncated, never painted over the ring.'
+        );
+
+        $center = intdiv(21, 2);
+        $innerRadius = intdiv(intdiv(21, 2) - 1, 2);
+        $checked = 0;
+        foreach (explode("\n", $texted) as $y => $line) {
+            foreach (mb_str_split($line) as $x => $cell) {
+                if ($cell === 'V' || $cell === 'L') {
+                    $checked++;
+                    $dist = sqrt((($x - $center) ** 2) + ((($y - $center) * 2.0) ** 2));
+                    $this->assertLessThan(
+                        (float) $innerRadius,
+                        $dist,
+                        sprintf('Text glyph "%s" at (%d,%d) dist=%.2f escaped the hole.', $cell, $x, $y, $dist)
+                    );
+                }
+            }
+        }
+
+        $this->assertSame(12, $checked, 'Both lines must contribute exactly their 6-cell truncation.');
+    }
+
+    public function testWireframeAndEmptyDonutEmitNoCenterText(): void
+    {
+        $oracle = Donut::mocha(self::ORACLE_DATA)->withSize(21);
+        $bareWireframe = $oracle->withRenderMode(Donut::RENDER_WIREFRAME)->render();
+        $knobbedWireframe = $oracle
+            ->withRenderMode(Donut::RENDER_WIREFRAME)
+            ->withCenterValue('42')
+            ->withCenterLabel('x')
+            ->withShowPercentage(true)
+            ->render();
+
+        $this->assertSame($bareWireframe, $knobbedWireframe, 'Wireframe stays shape-only (Q1); center text belongs to the filled path.');
+
+        $this->assertSame(
+            base64_decode(self::PRE_S6_RAW_EMPTY_21, true),
+            Donut::new([])
+                ->withSize(21)
+                ->withCenterValue('42')
+                ->withCenterLabel('x')
+                ->withShowPercentage(true)
+                ->render(),
+            'The empty placeholder ring must ignore every center knob byte-for-byte.'
+        );
+    }
+
     /**
      * Per-glyph occurrence census of an ANSI-stripped render (row separators excluded).
      *
