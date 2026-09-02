@@ -157,9 +157,9 @@ Confirm with `ListAgents`; `git worktree list` must show exactly TWO worktrees w
 | **MASTER full suite**, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10556, Assertions: 163806, Skipped: 1`** (06:57.534) — MMG-198 arm | `5f716b34d` (= `99227d29c` for `sugar-crush/`) |
 | master tree == the tree that figure was measured on | `git diff --stat 5f716b34d 99227d29c -- sugar-crush/` EMPTY — the sync merge imported ZERO sugar-crush files, so the figure describes master and re-running it is provably redundant | `99227d29c` |
 | goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — **unmoved since `405252a41`**, zero-byte fixtures diff across the whole audit-fix-3 window | `99227d29c` |
-| nine-file census subset | `OK (320 tests, 29926 assertions)` at `99227d29c` (grew from `OK (176, 31245)` at `470e43569` as guards gained arms — both states real, cite the sha) | `99227d29c` (lead at `60c037932`) |
+| nine-file census subset | `OK (176 tests, 31255 assertions)` at `cf41aacd6`, over exactly the nine `HAND_MAINTAINED_CENSUS_SET` files (`tests/TreeWideGuardRosterTest.php:407-417`), cwd `sugar-crush/`, serial, `</dev/null`. Same nine at `470e43569`: `OK (176, 31245)` — audit-fix-3's new guard arms are +10 assertions, no test added. **IT SAID `OK (320, 29926)` until 2026-09-02**; that figure was never the nine — see the corrections list | `cf41aacd6` (orchestrator; cycle-3 reviewer agrees) |
 | **derived** guard roster | roster **67**, candidates 83, walkerFiles 181, testFiles 440, **unaccounted 0** — UNCHANGED by audit-fix-3; the added alias arms are MEASURED-LATENT (`class_alias` count in `src/` = 0). Roster test itself now 17 tests / 1,101 assertions | `60c037932` |
-| audit-fix-3 scope purity | the 17-commit window `3634aa1cb..60c037932` touches EXACTLY the 9 declared files; pickup+cycle-4 fix touched only the 2 instrument test files | `60c037932` |
+| audit-fix-3 scope purity | the 17-commit window `3634aa1cb..60c037932` touches the EIGHT declared files (`WorkflowEngine.php` among them, declared conditionally) **plus one disclosed widening**: `src/Cli/Bootstrap.php`, +1 line `environmentRoot: $root` at :1240, required to carry the unified root to the Agent assembler by the F5 fix. Nine paths total — re-derived here. IT SAID "EXACTLY the 9 declared files", which was right about the count and wrong about which list: Bootstrap is not in the step brief's list, and that brief now carries a SCOPE AMENDMENT section. Real work on F5, not a §1.10 violation — no dormant code removed. pickup+cycle-4 fix touched only the 2 instrument test files | `cf41aacd6` |
 | audit-fix-2 src/ purity | **elementwise token-stream identity** (strip comments/whitespace): `Runtime.php` 4366 tokens, `Agent.php` 1270, identical both sides of `980670c0b`. Do NOT quote md5s of re-serialized streams — see corrections | re-confirmed by cycle-2 reviewer |
 | path-repo gate, **from the repo root** | `php tools/check-path-repos.php --no-lib-path-repos` exit 0 | `980670c0b` |
 
@@ -245,6 +245,13 @@ f958ba8e6  10526 / 162447 / 1   + P3.S6           (test count predicted exactly;
   quoted md5 prefixes of stripped `token_get_all()` streams; they did not reproduce under another
   (equally honest) serialization even though the underlying claim was TRUE. State token-stream
   identities **elementwise** (token count + array-equality of `[id,text]` pairs).
+- **THE 320 / 29,926 NINE-FILE CENSUS FIGURE WAS AN ORCHESTRATOR ERROR.** It was propagated from a
+  pickup verification note that carried NO FILE LIST, and the set it described was never the nine.
+  Corrected 2026-09-02 by direct measurement: the nine `HAND_MAINTAINED_CENSUS_SET` files measure
+  **OK (176 tests, 31255 assertions)** at `cf41aacd6` (176 / 31245 at `470e43569`) — cwd
+  `sugar-crush/`, serial, `</dev/null`. **THE LESSON:** a census figure must always be accompanied
+  by the file list it was measured over; without its domain a number is not a measurement, and this
+  one survived into a brief, a worklog entry and this table before anyone re-derived it (rule 1).
 
 ### If the tree HAS moved, or you distrust any of the above
 
@@ -558,8 +565,12 @@ In-flight batch:  P3.audit-fix-3 — MERGED 99227d29c (see the closure story bel
                   RUN of the new PROCESS RULE (leads never apply findings; a dedicated fix
                   agent did, 6 commits; the lead verified every one with own measurements) —
                   and cycle 5 returned NO findings and all nineteen §1.4 checks accounted.
-                  17 commits, ALL detain@interserver.net (the standing identity check now also
-                  covers INCOMING commit authors). Scope purity: exactly the 9 declared files.
+                   17 commits, ALL detain@interserver.net (the standing identity check now also
+                   covers INCOMING commit authors). Scope purity: the EIGHT declared files plus ONE
+                   disclosed widening — `src/Cli/Bootstrap.php`, +1 line `environmentRoot: $root`
+                   for the F5 seam — amended into the step brief post-merge by close-review cycle 3
+                   (it previously read "exactly the 9 declared files", which mis-named which list was
+                   declared). No dormant code removed.
                   Goldens unmoved; roster derivation UNCHANGED (67/83/181/440/0) — the added
                   alias arms are MEASURED-LATENT, zero live population. F-4R-3: a value-
                   redundant but PINNED scanner hop left in place (removal = orchestrator
@@ -613,9 +624,13 @@ Awaiting user decision: TWO. **NEITHER BLOCKS THE QUEUE.** Carry both forward on
 
                   **(2) WIRE THE WRITE SIGNAL ON THE WORKFLOW PATH — P3.S6's escalation.**
                   The per-step seam P3.S5 left open on the Agent assembler IS REAL and IS LIVE,
-                  in `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
-                  which `:1105` and `:875` re-render once per stage and `:1252`/`:1294` render
-                  twice in one verification stage. MEASURED with a logging git shim: one render
+                                     in `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
+                   which `:1105` and `:875` re-render once per stage and `:1275`/`:1318` — the pair
+                   inside `executeVerificationStage()` (declared :1222), re-derived at `cf41aacd6` —
+                   render twice in one verification stage. Cite a call site by FUNCTION NAME PLUS
+                   LINE: this sentence said `:1252`/`:1294`, which was true when P3.S6 wrote it and
+                   rotted by the +23/+24 the F5 wiring added above them. MEASURED with a logging git
+                   shim: one render
                   = 5 git subprocesses (3 suppressed), a K-stage workflow = 5*K (10 at K=2, 25
                   at K=5), one ProcessExecutor dispatch = 10 because it renders TWICE — and in
                   every case the stages see ONE DISTINCT PROMPT, the two git-diff sections

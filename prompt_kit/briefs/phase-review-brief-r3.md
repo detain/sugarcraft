@@ -11,8 +11,10 @@ agent, never to you; if the loop cannot close, the orchestrator escalates the fu
 user — you do not grind.
 
 ## The sandbox
-Worktree `/home/sites/prompt-step-P3.CLOSE-r3`, branch `prompt/P3.CLOSE-r3`, HEAD `99227d29c`
-(= current master tip, which contains the P3.audit-fix-3 merge). `git status --porcelain` must
+Worktree `/home/sites/prompt-step-P3.CLOSE-r3`, branch `prompt/P3.CLOSE-r3`, HEAD `cf41aacd6`
+(= current master tip, which contains the P3.audit-fix-3 merge `99227d29c`; bookkeeping-only
+commits may move the tip above the merge sha — `git diff 99227d29c..cf41aacd6 -- sugar-crush/`
+is EMPTY, so the reviewed `sugar-crush/` content is identical at both). `git status --porcelain` must
 be EMPTY when you start — verify it first. vendor/ is a hardlinked copy (`cp -al`); PSR-4
 verified to print the WORKTREE paths:
 `SugarCraft\Crush\ => /home/sites/prompt-step-P3.CLOSE-r3/sugar-crush/src` and
@@ -53,7 +55,7 @@ The Phase-3 merges on master's first-parent line (the full window also contains 
 | 379ecc7d6 | P3.S1 | system-prompt assembly: 7 layers, `<env>` last in both assemblers |
 | dabcd27f7 | P3.S2 | diff-after-write sections populated from real git state |
 | 74cabae7f | P3.S3 | prompt snapshot + honest git-state caveat |
-| f2af06eaa | P3.S4 | prefix-win ordering in tool-result truncation |
+| f2af06eaa | P3.S4 | stable-prefix win MEASURED, zero production change: one test file (`tests/Providers/PromptStabilityTest.php`) quantifies what S1-S3 bought — the first differing byte moves 3,095 → 4,670 of a 4,844 B prompt. THIS ROW PREVIOUSLY READ "prefix-win ordering in tool-result truncation", which describes no change anywhere in the window: `git log --grep=truncat` finds none, and `src/Runtime.php:661` says of that tool-result path that it is "not a prefix win, and nothing downstream should be built on the belief that it is" |
 | 6aff0bad1 | P3.audit-fix-1 | close-review cycle-1 code findings |
 | 1279d91cf | P3.S4-fix-1 | S4 review fixes |
 | 405252a41 | P3.S5 | write-signal marked from the engine loop (Runtime path) |
@@ -93,7 +95,7 @@ Delta vs the never-edited P0.S1 baseline (10,351 / 160,648 / 1): **+205 tests / 
 
 Phase 3's headline defence is the DERIVED roster: `tests/TreeWideGuardRosterTest.php` walks every test file and derives which guards scan src/ or tests/ wholesale. Claimed at HEAD: **roster 67 / candidates 83 / walkerFiles 181 / testFiles 440 / unaccounted 0**, and the roster test itself: 17 tests / 1,101 assertions. Audit-fix-3 added classifier arms but claims the five derivation numbers UNCHANGED — the new arms are MEASURED-LATENT (zero live population: `class_alias` count in src/ is 0; planted shapes live inside string literals the classifier lexes as T_ENCAPSED). Verify all six numbers; then ATTACK THE DERIVATION itself — helper-built file lists, differently-spelled scans, symlinked dirs, non-.php files, dynamic globs, anything that makes a walking test invisible to the roster.
 
-The nine-file asserted subset (pre-check, cwd = sugar-crush/): it GREW during audit-fix-3 — expect **OK (320 tests, 29,926 assertions)** at HEAD. (At 470e43569 the same nine files were OK 176/31,245 — both numbers true at their commits; state which you measured.)
+The nine-file asserted subset (pre-check, cwd = sugar-crush/, serial, `</dev/null`): expect **OK (176 tests, 31,255 assertions)** at HEAD `cf41aacd6` — MEASURED 2026-09-02 over exactly the nine `HAND_MAINTAINED_CENSUS_SET` members named at `tests/TreeWideGuardRosterTest.php`. The same nine measured OK (176, 31,245) at `470e43569`; audit-fix-3's new guard arms are +10 assertions with no test added. IT SAID **320 tests / 29,926 assertions** here, and that figure does not reproduce over these nine at any sha in the window — it came from a pickup verification note recorded with no file list, and the 320-count set was never the nine (a 29,926 total cannot contain a 31,255 population). Corrected by direct measurement; the lesson is rule 1 — a census figure travels with the file list it was measured over, or it is not a measurement.
 
 Channels audit-fix-3 newly CLOSED — attack each specifically (a miss here means the scanner/roster silently under-counts writes or guards again):
 - `use ... as` imports resolved for walker classes AND the scanner's alphabet
@@ -109,10 +111,10 @@ Channels audit-fix-3 newly CLOSED — attack each specifically (a miss here mean
 3. **Vertex three arms** (legacy instances / hoisted Google context / real Gemini systemInstruction) routed by model FAMILY; Gemini carries no tools key even when tools are offered (pinned).
 4. **Write-primitive scanner fails CLOSED.** Defeat ledger: eighteen-plus defeats across five reviewers — do NOT trust this brief's number, count the ledger from RuntimeTest's own defeat pins. The construction channel is now READ (anon classes, same-file named subclasses, aliased parents, keywords in every scope class). The rule "an unknown spelling costs a FALSE POSITIVE, never a silent miss" must hold EXCEPT for the declared residuals (each pinned): cross-file trait users, cross-file/imported parents, NAMESPACED extends parents, same-file CONSTANT and computed class_alias names, roster-side self-in-subclass. TRY TO BE THE NEXT DEFEAT: invent a write or walk shape, drive it through the shipped scanner AND the shipped roster classifier with a same-script known-positive control.
 5. **Roster derivation** six numbers exact (section 6).
-6. **Write signal:** wired on the Runtime path (engine loop marks each step; Agent path MEASURED-NOT-WIRED, escalated — §18 row reads ESCALATED, NOT WAIVED). WorkflowEngine has 5 per-step render call sites (:1252 and :1294 both inside executeVerificationStage = double render per verify stage). AgentResult::__construct has 8 params, none tool-named. Project-root resolution is unified (a seam from an earlier window, now closed): Runtime and Agent assemblers share ONE project-root resolution — a regression here IS a finding; it is no longer known-open.
+6. **Write signal:** wired on the Runtime path (engine loop marks each step; Agent path MEASURED-NOT-WIRED, escalated — §18 row reads ESCALATED, NOT WAIVED). WorkflowEngine has 5 per-step `systemPrompt()` render call sites, re-derived at `cf41aacd6`: :1063, :1174, :1275, :1318, :1422 — the pair inside `executeVerificationStage()` (declared :1222) is **:1275 and :1318**, which is the double render per verify stage. Cite a call site by FUNCTION NAME PLUS line number, never by a bare number: this claim read ":1252 and :1294" when the brief was drafted, and audit-fix-3's own F5 wiring inserted lines above them (+21 to +25 across the five sites) while the text was being written, so both numbers rotted inside the very window the brief describes. AgentResult::__construct has 8 params, none tool-named. Project-root resolution is unified (a seam from an earlier window, now closed): Runtime and Agent assemblers share ONE project-root resolution — a regression here IS a finding; it is no longer known-open.
 7. **Determinism:** clock/platform/cwd injectable; both goldens pin byte-for-byte, the agent golden pinning `Agent::systemPrompt()`.
 8. **audit-fix-2 src purity:** across 980670c0b, `src/Runtime.php` and `src/Agents/Agent.php` changed NO executable token — re-derive as ELEMENTWISE token-stream identity after stripping T_COMMENT/T_DOC_COMMENT/T_WHITESPACE (Runtime.php 4,366 tokens, Agent.php 1,270, both sides). Do not use md5 of a re-serialized stream — the serialization domain is unstable (a cycle-2 formulation defect).
-9. **audit-fix-3 scope purity:** re-derive `git diff --name-only 3634aa1cb..60c037932` and check every path against the declared file list in `/home/sites/sugarcraft/prompt_kit/briefs/P3.audit-fix-3-step-brief.md` (9 files; `src/Workflows/WorkflowEngine.php` was declared conditionally). Anything outside = finding (check 10).
+9. **audit-fix-3 scope purity:** re-derive `git diff --name-only 3634aa1cb..60c037932` and check every path against the declared file list in `/home/sites/sugarcraft/prompt_kit/briefs/P3.audit-fix-3-step-brief.md` (EIGHT declared files; `src/Workflows/WorkflowEngine.php` was declared conditionally). The window touches NINE: the eight plus `src/Cli/Bootstrap.php` (+1 line, `environmentRoot: $root` at :1240) — a disclosed widening of the F5 fix, amended into that step brief by close-review cycle 3, not an undisclosed overrun. Anything beyond those nine = finding (check 10).
 ## Known-open — the orchestrator HOLDS these; do NOT report them as new findings
 EnvironmentBlock.php:288 branch read uncapped ('255-byte limit' is per-component) — fold into P5.S3.
 BOTH fence-escape vectors pinned-not-fixed, folded into P5.S3 in one planned diff: (i) `</env>`

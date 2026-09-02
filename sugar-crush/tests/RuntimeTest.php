@@ -3665,6 +3665,22 @@ final class RuntimeTest extends TestCase
      *    kind of miss by the same reasoning: this channel reads spellings and
      *    does not execute programs, and it says so rather than faking the
      *    detection — the boundary F2's disposition drew.
+     *  - A `class_alias(...)` PAIRED IN ANOTHER FILE. `class_alias('SplFileObject', 'W')` in one
+     *    file and `new W('/tmp/x.txt', 'w')` in another reads as nothing to either walk: the
+     *    alias's TARGET name never appears lexically in the file that constructs, and the bare
+     *    `W` that file does name is not in the primitive alphabet — so the scan returns the
+     *    empty array, and this is a SILENCE rather than a false positive, the same dangerous
+     *    direction the string-indirection row above declares. The mechanism is the parent row's
+     *    own sentence — the chain's declaration and the construction sit in two different walks
+     *    and nothing links them — written out as its own row because the enumeration IS the
+     *    contract, and a silence not in the table is a finding (close-review cycle 3, F5).
+     *    MEASURED LATENT, like every other alias arm on this channel: a tree-wide grep of
+     *    `class_alias` across src/ counts ZERO occurrences, so no live population hides behind
+     *    this row today. The classifier twin states the same silence in its own blind-spot header
+     *    (`tests/TreeWideGuardRosterTest.php`: an alias whose target lives in another file's
+     *    class, cycle 1's boundary). It is answered where the parent row is answered — by the
+     *    per-tool `writesTree()` escalated below, which moves the judgement to the only place
+     *    that can make it — and not by a spelling this walk could ever read.
      *
      * THAT IS WHY `src/Runtime.php` SAYS NARROWED AND NOT CLOSED, and why the
      * real fix — a per-tool `writesTree()` on the
