@@ -253,6 +253,55 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.audit-fix-3 — close Phase 3 close-review cycle-2 findings F1 F2 F4 F5 F6 (instruments + seams)   ·   2026-09-02   ·   99227d29c
+
+**Status** `merged`
+**Worktree** /home/sites/prompt-step-P3.audit-fix-3  (removed)
+**Base** 3634aa1cb
+
+**Goal (restated in one sentence)**
+Close the five code findings of Phase 3 close-review cycle 2: the thirteenth scanner defeat on the construction channel (F2), three undeclared alias escapes in the roster derivation (F4), the vacuous absence guard (F6, RR4-F2 class), the flooding-stderr shutdown flake (F1), and the --root seam between the two prompt assemblers (F5). F3 (brief-text) and F7 (commit-address history) recorded, no code.
+
+**What changed**
+- tests/RuntimeTest.php + tests/TreeWideGuardRosterTest.php: write-primitive scanner and roster classifier extended to the construction channel — anon-class extends, same-file named subclasses, keywords self/static/parent resolved per scope class (named, anon, trait incl. qualified `use`, `class_alias` of two string literals in every spelling: single-quoted with escaped-backslash decode, double-quoted with substitutions ignored, nowdoc/heredoc with flush and indented terminators); alias resolution for `use X as Y` and `use function`; roster-side twin mirrors each arm; blind-spot table header made to match rows; honest DECLARED-residual list, each item pinned on both instruments.
+- src/Runtime.php + src/Agents/Agent.php: ONE shared project-root resolution now orients BOTH prompt assemblers (Runtime `buildSystemPrompt` and Agent `systemPrompt`); closes the `--root` seam (F5).
+- tests/ClaudeCodeMcpClientShutdownTest.php: flooding-stderr test now waits for stderr DATA with a bounded poll mirroring readMessages() instead of racing a pid-file handshake (F1).
+- tests/Context/EnvironmentBlockTest.php: the absence guard testNoAdditionalWorkingDirectoriesLineIsEmitted carries a known-positive control through the same scanner (F6).
+- tests/Agents/AgentTest.php: --root/agent-assembler pins for the shared resolution.
+
+**Tests added or changed**
+- RuntimeTest/TreeWideGuardRosterTest defeat pins for every shape above (anon extends SplFileObject, aliased parents, indented nowdoc writers, escaped-backslash class_alias, qualified trait use, new-parent-in-anon (gap A), trait-used-by-anon (gap B), qualified use last-segment (gap C), reviewer cycle-4 arms F-4R-1..6) — each asserts the shipped scanner/classifier NAMES the site, not that it exists.
+**Deletion experiment**: K12 (F-1 aliased-parent keyword), K13 (heredoc/nowdoc channel), K14 (anon-extends), K15 (quote-escape decode), K16 (roster twin), GA/GB/GC (gaps A/B/C), F-4R-1 dedent no-op, M4-pattern T_NAME_RELATIVE drop — every arm measured RED on break, restored, porcelain-empty after each; re-run on final HEAD by both the cycle-5 reviewer and the leads. F1 fix proven by 10x repeat of testAServerThatFloodsStderrIsStillHeard (all OK).
+
+**MEASURED**
+Lead (pickup lead #2, cwd = checkout root, serial, </dev/null, box-quiet probe 0), at 60c037932:
+```
+Tests: 10556, Assertions: 163809, Skipped: 1   (Time 06:59, EXIT=0)
+```
+Goldens unmoved: 32ea749d84938811ac9331419cae7380 / ef0326dd38535aaa2f1d715919bff26e; fixtures diff 0 bytes. Roster derivation UNCHANGED: roster 67 / candidates 83 / walkerFiles 181 / testFiles 440 / unaccounted 0 — added arms MEASURED-LATENT (class_alias count in src/ = 0; planted shapes live inside string literals). Nine-file census set grew to OK (320 tests, 29926 assertions) at cwd sugar-crush/. Per-class: RuntimeTest 130/488->133/506, Roster 16/1082->17/1101, AgentTest 35/402->40/437, EnvBlock 43/170->43/172. cmp.py vs base: 9 movers, sum +91 assertions/+9 tests, all attributed; MouseModalGuard variance = viewport arm.
+Orchestrator gate runs at synced tip 5f716b34d (cwd = checkout root, serial, </dev/null):
+```
+gate2 (bg, non-tty): Tests: 10556, Assertions: 163806, Skipped: 1, 0 failures, SUITE-EXIT=0
+```
+The -3 vs the lead headline RECONCILED per-class: MouseModalGuardTest viewport arm — the lead's own two snapshots on the same tree differ exactly thus (fix-4 run 163806 @ MMG-198; pickup run 163809 @ MMG-201). gate3 junit run confirms MMG-only mover: sole mover MouseModalGuardTest 201->198 (-3 assertions), dTests +0; totals 163806/10556 vs 163809/10556, every other class identical
+The sync merge (master into branch) imported ZERO sugar-crush files (git diff 3634aa1cb..master -- sugar-crush/ empty before merge), so the branch figure provably describes the resulting master.
+
+**Suite result**
+Master after this merge: Tests: 10556, Assertions: 163806 (MMG-198 arm; 163809 at MMG-201 arm), Skipped: 1, 0 failures — orchestrator-run at the synced tip, conditions as above.
+Baseline for comparison: 10351 / 160648 / 1 (P0.S1). Delta for the phase-to-date: +205 tests, +3,158 assertions at this arm; vs the previous master figure 10547/163710: +9 tests, +96/+99 assertions across the MouseModalGuard arms.
+
+**Review loop**
+- RECOVERED: first lead was CANCELLED by the user mid-cycle-3-fix (context exhaustion, not a §1.8 death): 8 commits + 607/227-line WIP; its cycle-3 reviewer report recovered from the transcript DB; a NEW pickup lead (per user instruction) audited the WIP against F-1..F-5, committed it, found and closed 3 gaps (A/B/C) in the half-built machinery itself, then ran cycle 4.
+- Cycles 1-3 — reviewers (first lead): 6 / 3 / 5 findings → fixed by that lead.
+- Cycle 4 — fresh reviewer: 6 findings (F-4R-1..6) → applied by a DEDICATED FIX AGENT (6 commits; new process rule: leads never apply findings, they verify with own measurements).
+- Cycle 5 — fresh reviewer: NO NEW FINDINGS; 11 arms broken RED; accounts for all nineteen §1.4 checks.
+Total cycles: 5 (internal). Subsumption: this step's five cycles also discharge the review-cycle-13 debt recorded at the P3.audit-fix-2 merge for its six files.
+
+**Notes**
+- 17 commits, all authored Joe Huss <detain@interserver.net> (standing F7 pre-merge check).
+- F-4R-3: named-class parentOf hop is value-redundant with the roots fixpoint, pinned by a deletion experiment; removal was an orchestrator judgment call — LEFT IN PLACE, disclosed.
+- Process change first run at scale: dedicated fix agents from cycle 4; it held.
+
 ### P3.audit-fix-2 — the code half of the Phase 3 close review   ·   2026-09-01   ·   merged `980670c0b`
 
 **Status** `done`. **This entry completes the one below it**, which was written `blocked

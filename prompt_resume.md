@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: PHASE 3 IS CODE-COMPLETE. All six steps merged, and the close review's cycle 1 is fully discharged — its plan-document half was committed directly, its code half merged as `980670c0b` (P3.audit-fix-2, all seven findings A1-A7). NOTHING IS IN FLIGHT and no worktree is live. THE NEXT ACTION IS PHASE REVIEW CYCLE 2: a brand-new reviewer over ALL of Phase 3's commits as one change-set, never shown cycle 1's findings. Cap is THREE cycles and this is cycle 2. Then Phase 4 opens with P4.S1 ALONE, whose brief and step text are already written.**
+**Current state: PHASE 3 IS CODE-COMPLETE, CODE-MERGED THROUGH `P3.audit-fix-3` (`99227d29c`), AND AWAITS ONLY ITS FINAL CLOSE REVIEW — CYCLE 3, brief committed at prompt_kit/briefs/phase-review-brief-r3.md, one READ-ONLY reviewer in /home/sites/prompt-step-P3.CLOSE-r3. NOTHING ELSE IS IN FLIGHT. A CLEAN CYCLE 3 CLOSES PHASE 3 AND OPENS PHASE 4 WITH P4.S1 ALONE — all Phase-4 batch-1/2 briefs are already written. Full state and the exact next action are in §8.**
 
 ---
 
@@ -86,15 +86,17 @@ changes that feel too small to be worth spawning for.
 
 ## 3. What has been built so far
 
-Phases 0-2 are closed and Phase 3 is code-complete: six steps plus the close review's fix branch,
-all merged. Seven things a fresh agent needs about the **current** shape of the code:
+Phases 0-2 are closed; Phase 3's code is fully merged through `P3.audit-fix-3` (`99227d29c`) and
+closes when the FINAL close-review cycle passes. Seven things a fresh agent needs about the
+**current** shape of the code:
 
 1. **The prompt reaches the model.** `Runtime::buildSystemPrompt()` (`sugar-crush/src/Runtime.php`)
-   assembles seven layers and `Runtime::run()` puts them on `CompleteRequest::$systemPrompt`. All
-   seven providers transmit it on **both** `complete()` and `completeStream()`;
-   `tests/Providers/SystemPromptTransmissionMatrixTest.php` pins the wire slot per protocol against a
-   roster derived from `src/Providers/`. Measured end to end: **assembled 5099 B == golden 5099 B ==
-   wire 5099 B**, `messages[0].role = 'system'`.
+   assembles seven layers and `Runtime::run()` puts them on `CompleteRequest::$systemPrompt`. SIX
+   of the seven providers transmit it on **both** `complete()` and `completeStream()` — the
+   EchoProvider is EXEMPT and the exemption is pinned by assertion.
+   `tests/Providers/SystemPromptTransmissionMatrixTest.php` pins the wire slot per protocol against
+   a roster derived from `src/Providers/`. Measured end to end: **assembled == golden == wire,
+   5,176 B**, `messages[0].role = 'system'`.
 2. **Vertex has THREE arms.** `P1.audit-fix-1` (`03d8fed37`) hoisted the prompt into the Google
    `instances[0].context` slot; `P1.audit-fix-3` (`e0d00b6db`) built a real Gemini
    `:generateContent` arm with `systemInstruction` and streaming. Routing is by model FAMILY, not
@@ -103,14 +105,14 @@ all merged. Seven things a fresh agent needs about the **current** shape of the 
 3. **The prompt is deterministic and golden-pinned.** Clock, platform and cwd are injectable;
    `golden-system-prompt.txt` (md5 `32ea749d…`) pins the assembly byte-for-byte and
    `golden-agent-prompt.txt` (`ef0326dd…`) pins `Agent::systemPrompt()`. Both **unmoved since P3.S5's
-   merge point (`405252a41`)** — the claim that carries the load, because `writeSinceLastRender`
-   defaults to `true`, so a golden that moved in the last batch would mean DEFAULT behaviour changed.
-   **State the window a no-move claim covers** — see §4's correction for what happens when you do not.
+   merge point (`405252a41`)** — re-confirmed at `99227d29c`: audit-fix-3's fixtures diff is zero
+   bytes. **State the window a no-move claim covers** — see §4's correction for what happens when
+   you do not.
 4. **`<env>` IS LAST IN BOTH ASSEMBLERS.** P3.S1 moved it from Runtime layer 2 to layer 7. The two
    assemblers are still deliberately separate, but on a **layer-set** argument (seven layers versus
-   two), NOT an ordering one — the old "they order `<env>` oppositely" reason was measured false and
-   is retired everywhere it lived: `prompt_plan.md` §17.2, two production doc-blocks (pinned by
-   P3.audit-fix-2 so re-planting the claim reds), and five sites in `prompt_expand.md`.
+   two), NOT an ordering one. Since `P3.audit-fix-3` BOTH assemblers share **ONE project-root
+   resolution** — the `--root` flag orients the `<env>` block of the live Agent/WorkflowEngine path,
+   not just Runtime's (a close-review finding: the seam no single step's file list could see).
 5. **The write-signal is WIRED on the Runtime path, and MEASURED-BUT-NOT-WIRED on the Agent path.**
    P3.S5 (`405252a41`) marks the `Runtime` from `EngineBackend`'s per-step loop. P3.S6 (`f958ba8e6`)
    established the Agent path's per-step seam **is real and live** — in `Workflows/WorkflowEngine.php`,
@@ -119,39 +121,46 @@ all merged. Seven things a fresh agent needs about the **current** shape of the 
    twice, and the stages see ONE DISTINCT PROMPT. A §18 row records this as **escalated, not
    waived**, and an exact-list assertion over `AgentResult::__construct` reds the day a tool-call
    field is added — the change that unblocks it.
-6. **The write-primitive scanner now fails CLOSED, and its alphabet covers `T_NAME_RELATIVE`.**
-   `P3.S5-fix-1` (`5cabca4a8`) closed an alias channel that had been failing OPEN by *subtracting*
-   primitives from its own alphabet. `P3.audit-fix-2` (A4) then closed the twelfth defeat:
-   `namespace\file_put_contents()` scanned as `[]`, the fail-open direction. **Twelve defeats across
-   four reviewers.** An unknown spelling now costs a false positive, not a silent pass.
+6. **The write-primitive scanner fails CLOSED. Eighteen-plus defeats, five reviewers.** Beyond the
+   `T_NAME_RELATIVE` and alias-subtraction fixes, `P3.audit-fix-3` read the CONSTRUCTION CHANNEL:
+   anon classes and same-file named subclasses (with aliased parents), `self`/`static`/`parent` in
+   every scope, and `class_alias()` in every string spelling — indented heredoc/nowdoc terminators
+   and escaped-backslash decode included. **Count the ledger from `tests/RuntimeTest.php`'s own
+   pins — never trust a brief's number.** An unknown spelling costs a FALSE POSITIVE, never a
+   silent miss — except the declared residuals, EACH PINNED: cross-file trait users,
+   cross-file/imported parents, NAMESPACED extends parents, same-file CONSTANT and computed
+   `class_alias`, roster-side self-in-subclass.
 7. **The tree-wide census set is DERIVED, not hand-maintained.**
-   `sugar-crush/tests/TreeWideGuardRosterTest.php` (P3.audit-fix-2, A5) walks 440 test files and
-   derives **67** guards that scan `src/` or `tests/` wholesale, `unaccounted 0`, and asserts the old
-   nine-file list is a subset. This is not a tidy-up: attributing that branch's own delta found
-   **five** guards outside the nine that moved, and the derivation contains all five. `prompt_plan.md`
-   §1.2 action 7b now points at it.
+   `sugar-crush/tests/TreeWideGuardRosterTest.php` walks 440 test files and derives **67** guards
+   that scan `src/` or `tests/` wholesale, `unaccounted 0`. `P3.audit-fix-3` extended the
+   classifier's alias arms (imported-`as`, `class_alias` literals) — the five derivation numbers
+   are **UNCHANGED**: the new arms are declared-latent, zero live population. `prompt_plan.md`
+   §1.2 action 7b points at it.
 
 ## 4. How to resume
 
-**Everything below was measured by the orchestrator on 2026-09-01, and each row names the sha it was
-measured at. Re-run a check ONLY if the sha it names has moved. Do not spend seven minutes
+**Everything below was measured by the orchestrator on 2026-09-02, and each row names the sha it
+was measured at. Re-run a check ONLY if the sha it names has moved. Do not spend seven minutes
 re-measuring a suite this file already gives you the answer to.**
 
-**NOTHING IS IN FLIGHT.** No agent is running, no worktree is live, the tree is clean. Confirm with
-`ListAgents` and `git worktree list` (expect exactly one: `/home/sites/sugarcraft`), then go to §8.
+**IN FLIGHT: the Phase 3 close-review CYCLE 3 reviewer** (READ-ONLY, brief
+`prompt_kit/briefs/phase-review-brief-r3.md`, sandbox `/home/sites/prompt-step-P3.CLOSE-r3`).
+Confirm with `ListAgents`; `git worktree list` must show exactly TWO worktrees while it runs:
+`/home/sites/sugarcraft` and that sandbox.
 
 ### Verified this session — do NOT redo unless the sha moved
 
 | Check | Result | Measured at |
 |---|---|---|
 | cwd, branch, clean tree | `/home/sites/sugarcraft`, `master`, porcelain empty | every commit |
-| commit identity | `Joe Huss` / `detain@interserver.net` | every commit |
-| **MASTER full suite**, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10547, Assertions: 163710, Skipped: 1`** (07:00.101) | `980670c0b` |
-| master tree == the tree that figure was measured on | `git diff --stat d3eaa97a8 980670c0b` EMPTY across the WHOLE tree — the branch was synced before measuring, so the figure describes master exactly and re-running it is provably redundant | `980670c0b` |
-| goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — **unmoved since the P3.S5 merge point `405252a41`** | `980670c0b` |
-| nine-file census set | `OK (176 tests, 31245 assertions)` | `980670c0b` |
-| **derived** guard roster | roster **67**, candidates 83, walkerFiles 181, testFiles 440, **unaccounted 0** | `980670c0b` |
-| `src/` unchanged by P3.audit-fix-2 | executable-token census: `Runtime.php` 4366 tokens md5 `2b15a37a…`, `Agent.php` 1270 / `c472f3d5…`, **identical both sides** | `980670c0b` |
+| commit identity | `Joe Huss` / `detain@interserver.net` — re-checked at EVERY merge; note: 8 gmail-address commits exist in the P3.audit-fix-2 lane history, un-rewritable, recorded | `99227d29c` |
+| **MASTER full suite**, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10556, Assertions: 163806, Skipped: 1`** (06:57.534) — MMG-198 arm | `5f716b34d` (= `99227d29c` for `sugar-crush/`) |
+| master tree == the tree that figure was measured on | `git diff --stat 5f716b34d 99227d29c -- sugar-crush/` EMPTY — the sync merge imported ZERO sugar-crush files, so the figure describes master and re-running it is provably redundant | `99227d29c` |
+| goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — **unmoved since `405252a41`**, zero-byte fixtures diff across the whole audit-fix-3 window | `99227d29c` |
+| nine-file census subset | `OK (320 tests, 29926 assertions)` at `99227d29c` (grew from `OK (176, 31245)` at `470e43569` as guards gained arms — both states real, cite the sha) | `99227d29c` (lead at `60c037932`) |
+| **derived** guard roster | roster **67**, candidates 83, walkerFiles 181, testFiles 440, **unaccounted 0** — UNCHANGED by audit-fix-3; the added alias arms are MEASURED-LATENT (`class_alias` count in `src/` = 0). Roster test itself now 17 tests / 1,101 assertions | `60c037932` |
+| audit-fix-3 scope purity | the 17-commit window `3634aa1cb..60c037932` touches EXACTLY the 9 declared files; pickup+cycle-4 fix touched only the 2 instrument test files | `60c037932` |
+| audit-fix-2 src/ purity | **elementwise token-stream identity** (strip comments/whitespace): `Runtime.php` 4366 tokens, `Agent.php` 1270, identical both sides of `980670c0b`. Do NOT quote md5s of re-serialized streams — see corrections | re-confirmed by cycle-2 reviewer |
 | path-repo gate, **from the repo root** | `php tools/check-path-repos.php --no-lib-path-repos` exit 0 | `980670c0b` |
 
 ### PROGRESSION, all checkout root, all serial — the only comparable series
@@ -162,6 +171,9 @@ c7e5a6454  10500 / 161982 / 1   pre-merge master
 5cabca4a8  10519 / 162241 / 1   + P3.S5-fix-1     (PREDICTED exactly before merging)
 f958ba8e6  10526 / 162447 / 1   + P3.S6           (test count predicted exactly; +12 found and attributed)
 980670c0b  10547 / 163710 / 1   + P3.audit-fix-2  (ALL THREE figures predicted exactly)
+5f716b34d  10556 / 163806 / 1   + P3.audit-fix-3  (MMG-198 arm; the lead's 163809 = MMG-201 arm;
+                  cmp.py: sole mover MouseModalGuardTest 201->198, dTests +0, every other class
+                  identical; +205 tests / +3,158 assertions at this arm vs baseline 10351/160648)
 ```
 
 ### FOUR METHOD CHANGES THAT ARE NOW PART OF THE PLAN — use them
@@ -223,6 +235,17 @@ f958ba8e6  10526 / 162447 / 1   + P3.S6           (test count predicted exactly;
   printed nothing, which reads exactly like "no changes". **Anchor with `git -C <path>` and absolute
   paths.**
 
+- **A HEADLINE SUITE FIGURE CAN HAVE TWO LEGITIMATE VALUES.** `MouseModalGuardTest` arms itself by
+  viewport (assertions 198 vs 201 — observed variants 168/181 too; under a live tty even a hard
+  failure at `:792` even with `COLUMNS`/`LINES` unset — tty-ness itself drives it). So
+  `163,806` and `163,809` are BOTH "the master number". NEVER adjudicate a ±3 headline delta by
+  headline: run `cmp.py` per-class first — if the sole mover is MouseModalGuardTest, the tree did
+  not change behaviour. Do NOT weaken or "fix" the test.
+- **md5 OVER A RE-SERIALIZED TOKEN STREAM IS SERIALIZATION-DOMAIN SENSITIVE.** The cycle-2 brief
+  quoted md5 prefixes of stripped `token_get_all()` streams; they did not reproduce under another
+  (equally honest) serialization even though the underlying claim was TRUE. State token-stream
+  identities **elementwise** (token count + array-equality of `[id,text]` pairs).
+
 ### If the tree HAS moved, or you distrust any of the above
 
 1. Confirm `/home/sites/sugarcraft`, `master`, `git status --porcelain` empty.
@@ -231,14 +254,16 @@ f958ba8e6  10526 / 162447 / 1   + P3.S6           (test count predicted exactly;
    git -C /home/sites/sugarcraft config user.name    # must print: Joe Huss
    git -C /home/sites/sugarcraft config user.email   # must print: detain@interserver.net
    ```
-   Re-check after every step, not only before committing — ORCHESTRATION-RULE-2 in §7.
+   Re-check after every step, not only before committing — ORCHESTRATION-RULE-2 in §7. And check
+   the AUTHORS of incoming commits too, not just your own config: `git log --format='%an <%ae>'
+   <base>..prompt/<ID> | sort | uniq -c` must show ONE identity (the gmail-address incident).
 3. Confirm the newest entry in `prompt_worklog.md` matches the last plan commit in `git log`. If one
    is missing, **reconstruct it before doing anything else** (`prompt_plan.md` §3.3).
-4. `git worktree list` — **expect exactly ONE**, `/home/sites/sugarcraft`. Every Phase 3 worktree was
-   removed after merging with the §1.12 checks passed and its branch deleted. Any
-   `/home/sites/prompt-step-*` you find is stale by definition; run §1.12's checks before removing
-   it, and check it for ignored files worth rescuing first.
-   `/home/sites/crush-lane-{a,b,c}` belong to the other plan. Leave them completely alone.
+4. `git worktree list` — while the close review runs, expect TWO: `/home/sites/sugarcraft` and
+   `/home/sites/prompt-step-P3.CLOSE-r3` (its sandbox — leave it alone; remove it via §1.12 only
+   when Phase 3 closes). After that, expect ONE. Any other `/home/sites/prompt-step-*` is stale by
+   definition; run §1.12's checks before removing it, and check it for ignored files worth
+   rescuing first. `/home/sites/crush-lane-{a,b,c}` belong to the other plan. Leave them alone.
 5. Re-take the master baseline SERIALLY, and record the cwd beside the number:
    ```sh
    php sugar-crush/vendor/bin/phpunit -c sugar-crush/phpunit.xml --colors=never </dev/null | tail -4
@@ -247,7 +272,7 @@ f958ba8e6  10526 / 162447 / 1   + P3.S6           (test count predicted exactly;
 
 ## 5. The sequencing gate — checked
 
-**CHECKED 2026-08-26 — decision: proceed.** Phases 0–4 are safe to run alongside the other plan
+**CHECKED 2026-08-26, re-confirmed 2026-09-02 — decision: proceed.** Phases 0–4 are safe to run alongside the other plan
 (`docs/plans/crush_code_*.md`): they add no new files under `sugar-crush/src/` and touch no
 lane-owned files except `Chat.php`/`ContextCompactor.php` in Phase 4. **Do not start Phase 5 or
 Phase 6 while the other plan has a round in flight** — they add most of the ~11 new `src/` files and
@@ -415,43 +440,50 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            3 — CODE-COMPLETE. Six steps merged, plus the close review's cycle-1 fix
-                  branch. Phase 3 CLOSES when the close review passes.
+Phase:            3 — code-complete and merged through P3.audit-fix-3 (99227d29c). CLOSES when
+                  the close review's CYCLE 3 (FINAL) passes. Cap is THREE; cycles 1 and 2 are
+                  discharged; cycle 2 found 7 findings, 5 closed in code by audit-fix-3 (merged),
+                  2 recorded (F3 brief-text, F7 gmail-author history).
 
-Next step:        **(a) PHASE 3 CLOSE REVIEW — CYCLE 2.** Then (b) OPEN PHASE 4 IMMEDIATELY.
-                  Call `ListAgents` first to confirm nothing is running (nothing is).
+Next step:        **(a) PHASE 3 CLOSE REVIEW — CYCLE 3 (FINAL).** Then (b) OPEN PHASE 4
+                  IMMEDIATELY. Call `ListAgents` first to see whether the cycle-3 reviewer is
+                  already running (it is the moment this file's state is live — do NOT duplicate
+                  a running agent; wait for its notification).
 
-                  (a) Spawn a BRAND-NEW phase reviewer over ALL of Phase 3's commits
-                      TOGETHER, as ONE change-set. **It must NEVER be shown cycle 1's
-                      findings** — §1.4: a reviewer given a list checks the list.
-                      Build its brief from `prompt_kit/briefs/phase-review-brief.md`,
-                      updating the shas, the change-set range and the claims-to-attack.
-                      **CAP IS THREE CYCLES AND THIS IS CYCLE 2.**
+                  (a) The reviewer brief is WRITTEN AND COMMITTED:
+                        prompt_kit/briefs/phase-review-brief-r3.md
+                      Its sandbox: worktree /home/sites/prompt-step-P3.CLOSE-r3, branch
+                      prompt/P3.CLOSE-r3, built off the post-merge master tip — create with:
+                        git -C /home/sites/sugarcraft worktree add \
+                          /home/sites/prompt-step-P3.CLOSE-r3 -b prompt/P3.CLOSE-r3 master
+                        cp -al /home/sites/sugarcraft/sugar-crush/vendor \
+                               /home/sites/prompt-step-P3.CLOSE-r3/sugar-crush/vendor
+                        (then the PSR-4 print must show the WORKTREE's src — see §6/§16)
+                      Scratchpad (EXISTS): /home/sites/prompt-scratch/P3.CLOSE-r3/review-1/
+                      (phase3-step-texts.md ALREADY EXTRACTED there).
+                      Spawn the reviewer via task() with subagent_type=coder under a READ-ONLY
+                      mandate, pointing it AT THE BRIEF FILE. NEVER show it cycle-1 or cycle-2
+                      findings. Its findings file: <scratchpad>/review-1/findings-cycle-3.md.
+                      PROCESS RULE: the reviewer fixes nothing. If it finds defects, spawn a
+                      DEDICATED FIX AGENT (own subdir fix-1/), verify its commits with your own
+                      measurements, merge per the recipe, and STOP AND REPORT THE FULL STATE TO
+                      THE USER — cycle 3 is the cap; a retrospective track exists. Do not grind.
+                      On a CLEAN verdict: Phase 3 is CLOSED. Then bookkeeping (worklog entry,
+                      full resume rewrite, worktree removal after §1.12 checks) and go to (b)
+                      the SAME session.
 
-                      The change-set:  git diff 924c71a0d..HEAD -- sugar-crush/
-                      Phase 3's merged commits, in first-parent order:
-                        P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f ·
-                        P3.S4 f2af06eaa · P3.audit-fix-1 6aff0bad1 · P3.S4-fix-1 1279d91cf ·
-                        P3.S5 405252a41 · P3.S5-fix-1 5cabca4a8 · P3.S6 f958ba8e6 ·
-                        P3.audit-fix-2 980670c0b
-                      **GIVE IT THE DERIVED ROSTER, NOT THE NINE-FILE LIST**, and give it the
-                      JUnit method (§4). Cycle 1 ran with the nine and five guards outside it
-                      moved on the very branch it commissioned.
-                      **Cycle 2 subsumes the review cycle 13 that P3.audit-fix-2 formally
-                      owed** — see `In-flight batch` for why that was merged without it. If
-                      cycle 2 finds anything in that branch's six files, it is an ordinary
-                      fix step, not a re-opening of the merge.
-                      Findings -> fix agent -> a BRAND-NEW phase reviewer -> loop, cap 3.
-
-                  (b) **OPEN PHASE 4 WITHOUT ASKING.** §0 is the standing order. Batch 1 is
-                      **P4.S1 ALONE** — everything in the phase depends on it, and its files
-                      (src/Usage.php, tests/UsageTest.php) are disjoint from every lane claim,
-                      so it is safe the moment the close review passes. Phase 4 is pre-read
-                      below; you do not need to re-read prompt_plan.md for it.
-                      Brief and step text are ALREADY WRITTEN:
+                  (b) PHASE 4, Batch 1 = P4.S1 ALONE. BRIEF + STEP TEXT EXIST:
                         prompt_kit/briefs/P4.S1-step-brief.md
                         prompt_kit/briefs/P4.S1-step-text.md
-                      (substitute WORKTREE_PATH_PLACEHOLDER and SCRATCH_PLACEHOLDER).
+                      (substitute WORKTREE_PATH_PLACEHOLDER and SCRATCH_PLACEHOLDER; scratchpad
+                      root convention /home/sites/prompt-scratch/<STEP_ID>/<role>/; supply the
+                      measured master suite figure — 10556/163806/1 at 5f716b34d, MMG-198 arm —
+                      in the spawn prompt so the lead predicts against the RIGHT number).
+                      Batch 2 = P4.S2 + P4.S3 CONCURRENTLY — BOTH BRIEFS ALREADY WRITTEN AND
+                      COMMITTED (prompt_kit/briefs/P4.S2-step-brief.md, P4.S3-step-brief.md;
+                      step texts extracted to /home/sites/prompt-scratch/P4.S2/ and P4.S3/).
+                      Batch 3 (P4.S4 -> P4.S5 SERIAL) touches Chat.php + ContextCompactor.php:
+                      ASK THE SUPERVISOR before opening Batch 3 (§5 collision).
 
                   THE STEP LOOP, in short (full detail §1.2, summary §6):
                   ```
@@ -488,38 +520,52 @@ Steps done:       25 of 63 MERGED. Phase 3's six are complete.
                   P3.S1 379ecc7d6 · P3.S2 dabcd27f7 · P3.S3 74cabae7f · P3.S4 f2af06eaa ·
                   P3.S5 405252a41 · P3.S6 f958ba8e6
                   Fix/audit sub-steps (not counted in the 63): P3.audit-fix-1 6aff0bad1 ·
-                  P3.S4-fix-1 1279d91cf · P3.S5-fix-1 5cabca4a8 · **P3.audit-fix-2 980670c0b** ·
-                  P1.audit-fix-1 03d8fed37 · P2.audit-fix-1 33df838d0 + f95546b10 ·
-                  CI-fix-1 72686c380 · P1.audit-fix-3 e0d00b6db
-Phases done:      3 of 12 merged; Phase 3 CLOSES when its close review passes.
+                  P3.S4-fix-1 1279d91cf · P3.S5-fix-1 5cabca4a8 · P3.audit-fix-2 980670c0b ·
+                  **P3.audit-fix-3 99227d29c** · P1.audit-fix-1 03d8fed37 ·
+                  P1.audit-fix-3 e0d00b6db · P2.audit-fix-1 33df838d0 + f95546b10 ·
+                  CI-fix-1 72686c380
+Phases done:      3 of 12 closed on merge — Phase 3 closes when cycle 3 passes.
 Last commit:      re-derive with `git -C /home/sites/sugarcraft log --oneline -1`. Newest CODE
-                  commit is **980670c0b** (the P3.audit-fix-2 merge); everything after is
+                  commit is **99227d29c** (the P3.audit-fix-3 merge); everything after is
                   `prompt:` bookkeeping.
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, NEVER edited)
 
-Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIALLY.** This
-                  plan recorded numbers for weeks without naming the cwd, and that is exactly
-                  what hid CI being red for five days.
-
+Latest suite:     **EVERY FIGURE MUST NAME ITS CWD, AND WHETHER IT WAS RUN SERIALLY.**
                   **MASTER — GREEN. ORCHESTRATOR-RUN, checkout root (= CI's cwd), stdin
                   </dev/null, serial, box confirmed quiet:
-                    Tests: 10547, Assertions: 163710, Skipped: 1**
-                  See §4 for the full progression and the per-class attribution of every delta.
+                    Tests: 10556, Assertions: 163806, Skipped: 1**   (06:57.534)
+                  measured at 5f716b34d; `git diff --stat 5f716b34d 99227d29c -- sugar-crush/`
+                  is EMPTY so the figure describes master — a re-run is provably redundant.
+                  **163,806 (MMG-198 arm) and 163,809 (MMG-201 arm) are BOTH correct master
+                  numbers — NEVER adjudicate a ±3 delta by headline; cmp.py per-class first.**
+                  See §4 for the full progression and corrections.
+                  **CI/local assertion counts are NOT comparable.** TEST counts agree exactly.
+                  Path-repo gates: RUN THEM FROM THE REPO ROOT (misread happened twice).
+                  php-cs-fixer is NOT installed on this box; the style gate cannot run locally.
 
-                  **CI/local assertion counts are NOT comparable.** The two environments gate
-                  different tests (FFI/pty/extension paths) and a failing test stops accruing
-                  where it dies. TEST counts agree exactly. Compare assertions between the two
-                  CWDS on one box; never between this box and CI.
-                  Path-repo gates: RUN THEM FROM THE REPO ROOT, not sugar-crush/; from the
-                  wrong cwd php cannot find tools/check-path-repos.php and all three "fail".
-                  That misread has happened twice.
-                  Two tests fail ONLY under a pty with a live terminal
-                  (Chat\CompactModelSummaryTest, MouseModalGuardTest). ALWAYS redirect stdin
-                  from /dev/null.
-                  php-cs-fixer is NOT installed on this box and NOT vendored anywhere in the
-                  tree — the style gate cannot be run locally.
+In-flight batch:  P3.audit-fix-3 — MERGED 99227d29c (see the closure story below). Nothing else
+                  is in flight; the cycle-3 reviewer is the next spawn.
 
-In-flight batch:  **NONE.** Nothing is running and no worktree is live.
+                  ---- P3.audit-fix-3, CLOSED 2026-09-02 as merge 99227d29c, kept for HOW ----
+                  First lead was USER-CANCELLED mid-cycle-3 (context exhaustion — NOT a §1.8
+                  death, so the resume ladder did not apply). Recovery pattern that worked:
+                  assess the worktree from disk (8 commits + 607/227-line WIP), RECOVER the lost
+                  reviewer report from the transcript DB (sqlite3 ~/.local/share/opencode/
+                  opencode.db; tables session/message/part; assistant text in part.data JSON
+                  $.type='text'), spawn a NEW pickup lead (NOT a continuation) with a short
+                  pickup brief. That lead found THREE GAPS (A/B/C) in the dead half-built
+                  machinery of its own predecessor, closed them, then ran cycle 4 — the FIRST
+                  RUN of the new PROCESS RULE (leads never apply findings; a dedicated fix
+                  agent did, 6 commits; the lead verified every one with own measurements) —
+                  and cycle 5 returned NO findings and all nineteen §1.4 checks accounted.
+                  17 commits, ALL detain@interserver.net (the standing identity check now also
+                  covers INCOMING commit authors). Scope purity: exactly the 9 declared files.
+                  Goldens unmoved; roster derivation UNCHANGED (67/83/181/440/0) — the added
+                  alias arms are MEASURED-LATENT, zero live population. F-4R-3: a value-
+                  redundant but PINNED scanner hop left in place (removal = orchestrator
+                  judgment, documented). Its five cycles also discharge audit-fix-2's owed
+                  cycle-13 debt (subsumption, reversible, disclosed).
+
 
                   ---- P3.audit-fix-2, CLOSED 2026-09-01, kept because of HOW it closed ----
                   Its first fix agent DIED without reporting, leaving 11 commits and a clean
@@ -542,11 +588,10 @@ In-flight batch:  **NONE.** Nothing is running and no worktree is live.
                   Phase 3 including these 25 commits, seeing the merged state rather than a
                   branch. **Orchestrator judgement, and reversible**: anything cycle 2 finds
                   in those six files is an ordinary fix step.
-
-Live worktrees:   **/home/sites/sugarcraft ONLY** — master, clean.
+Live worktrees:   **TWO while the cycle-3 review runs:** `/home/sites/sugarcraft` (master) and
+                  `/home/sites/prompt-step-P3.CLOSE-r3` (the reviewer's sandbox — leave it
+                  alone; remove via §1.12 only when Phase 3 closes).
                   /home/sites/crush-lane-{a,b,c} are NOT this plan's — leave alone.
-
-Blocked on:       NOTHING. No user decision is owed to proceed.
 
 Awaiting user decision: TWO. **NEITHER BLOCKS THE QUEUE.** Carry both forward on every rewrite
                   until the user answers, and do not decide either yourself.
@@ -600,6 +645,21 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                   - **Do not POLL a running agent** (§6a). No keep-alive filler, no timer
                     `ListAgents`, no reading its partial-output file. Wait for the notification.
 
+                  - **THE LEAD NEVER FIXES (user-mandated 2026-09-02, after the audit-fix-3
+                    context blowout):** step/lead agents do not apply review findings. Each
+                    dirty cycle spawns a DEDICATED FIX AGENT with its own scratchpad subdir
+                    (fix-N/); the lead verifies the fixer's commits with own measurements;
+                    then a brand-new read-only reviewer runs. First run at scale: audit-fix-3
+                    cycles 4-5 — it held. IN EVERY P4 BRIEF.
+                  - **BRIEF VIA FILES, PROMPTS LEAN:** spawn every agent with a pointer to its
+                    brief FILE on disk, never a pasted wall of text; reports capped ~150 lines.
+                    Context blowouts are an orchestrating failure, not an agent failure — the
+                    user-cancel of audit-fix-3's first lead is the canonical case.
+                  - **CHECK INCOMING COMMIT AUTHORS, NOT JUST YOUR OWN CONFIG:**
+                    `git log --format='%an <%ae>' <base>..<tip> | sort | uniq -c` — the gmail-
+                    address incident (8 commits) proved identity drift can survive a green
+                    suite. Un-rewritable history; recorded in §4.
+
                   **NEW from P3.audit-fix-2, and worth scheduling:**
                   - **(F3) The five-cycle review cap needs a documented escape hatch.** §1.2
                     says a step is "blocked" after five cycles. P3.audit-fix-2 ran TWELVE, and
@@ -608,8 +668,9 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                     rule as written would have stopped it at five with A5 in a fail-open state.
                     Needs: "cap does not apply while every cycle is still finding real defects,
                     and the orchestrator records why".
-                  - **(F4) The box-quiet probe is wrong in every brief that carries it.** See
-                    §4's first correction. One-line fix, many files.
+                  - **(F4) CLOSED 2026-09-02:** the corrected box-quiet probe
+                    (`ps -eo cmd | /usr/bin/grep -c '^php .*phpunit'`) now ships in §4 and in
+                    EVERY current brief (r3, P4.S1, P4.S2, P4.S3).
                   - **`EnvironmentBlock.php:288`** argues the branch read needs no cap because a
                     ref is bounded by the 255-byte filename limit. **That limit is per PATH
                     COMPONENT; a 359-byte multi-segment ref reaches the block whole.** Folds
@@ -622,7 +683,7 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                     silently. Same shape as the census-set problem A5 just solved, one level
                     down.
                   - **`sugar-crush/phpunit.xml`**'s doc-comment pins "all 6465 tests"; the tree
-                    runs 10547.
+                    runs 10,556.
                   - **Two mutations SURVIVED** in P3.audit-fix-2 and are declared in the tree
                     rather than buried: removing the `closeOverDelegates()` call site changes
                     nothing on this tree, and dropping only the token-class filter in
@@ -641,7 +702,7 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                   **STANDING ITEMS:**
                   **(N1) A per-tool `writesTree(): bool` on `src/Tools/Tool.php:20`**, ESCALATED
                   by P3.S5-fix-1. Four reviewers have now defeated a token scanner over function
-                  NAMES **twelve** times, each on a fully green suite. A name-based scanner is
+                  NAMES **eighteen-plus** times across FIVE reviewers, each on a fully green suite - count the ledger from the RuntimeTest pins, never from a brief. A name-based scanner is
                   structurally incompletable. The alternative the code already names is a
                   working-tree fingerprint. **Needs a user decision on which** — but NOT
                   blocking: the scanner fails CLOSED.
@@ -686,7 +747,7 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                   reds), deliberately NOT fixed, per the standing functionality-before-hardening
                   rule: the FIX is deferred, the FINDING is recorded as a step.
 
-Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-09-01. Phase 3 ran serial S1->S6 and is
+Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-09-02. Phase 3 ran serial S1->S6 and is
                   done. The src/ file-count census is RESOLVED — it never applied to this plan
                   (§5) — so Phases 5/6/10 are NOT serialised by it.
                   Still live before Phase 5/6: EngineBackend.php held by a lane and also edited
@@ -717,17 +778,17 @@ Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-09-01. Phase 3 ran seria
 ```
 
 **Phase 4 is pre-read, so you do not have to re-read `prompt_plan.md` when Phase 3 closes.**
-Phase 4 = "Token accounting and cache observability", `prompt_plan.md` lines 1586-1685.
+Phase 4 = "Token accounting and cache observability", `prompt_plan.md` lines 1701-1871 (re-derived 2026-09-02).
 
 - **P4.S1** Give `Usage` real buckets — inputTokens / outputTokens / cacheReadTokens /
   cacheCreationTokens, total = cacheRead + cacheCreation + input. Files: `src/Usage.php`,
   `tests/UsageTest.php`. **Hard constraint from the backlog: do NOT simply raise the 95% threshold** —
   that hides the unit mismatch instead of naming it.
-- **P4.S2** Providers populate the buckets. Files: Sglang/Custom/OpenAI/Bedrock/Vertex providers +
+- **P4.S2** Providers populate the buckets (BRIEF WRITTEN: prompt_kit/briefs/P4.S2-step-brief.md). Files: Sglang/Custom/OpenAI/Bedrock/Vertex providers +
   `tests/Integration/UsageWiringTest.php`. **Each provider needs a REAL-SHAPED usage payload copied
   from an actual response and pasted into the worklog** — a hand-invented shape proves only that the
   parser parses your invention.
-- **P4.S3** Cache health in the status line. Files: `Config/StatusLineCommand.php`, `Renderer.php` +
+- **P4.S3** Cache health in the status line (BRIEF WRITTEN: prompt_kit/briefs/P4.S3-step-brief.md). Files: `Config/StatusLineCommand.php`, `Renderer.php` +
   their two tests. **Hard constraint:** renders into the STATUS LINE PANE, never the transcript, and a
   test must assert rendering it adds ZERO messages to the session transcript.
 - **P4.S4** E18 — one exchange larger than the tier is refused five times with a RISING estimate
