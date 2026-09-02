@@ -6,5 +6,5 @@ use SugarCraft\Dash\Plot\Chart\Bubble;
 
 // Bubble chart with sample data
 $component = Bubble::sample(6);
-$component->setSize(60, 15);
+$component = $component->setSize(60, 15);
 echo $component->render();
