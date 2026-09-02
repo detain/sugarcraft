@@ -55,7 +55,7 @@ The Phase-3 merges on master's first-parent line (the full window also contains 
 | 379ecc7d6 | P3.S1 | system-prompt assembly: 7 layers, `<env>` last in both assemblers |
 | dabcd27f7 | P3.S2 | diff-after-write sections populated from real git state |
 | 74cabae7f | P3.S3 | prompt snapshot + honest git-state caveat |
-| f2af06eaa | P3.S4 | prefix-win ordering in tool-result truncation |
+| f2af06eaa | P3.S4 | stable-prefix win MEASURED, zero production change: one test file (`tests/Providers/PromptStabilityTest.php`) quantifies what S1-S3 bought — the first differing byte moves 3,095 → 4,670 of a 4,844 B prompt. THIS ROW PREVIOUSLY READ "prefix-win ordering in tool-result truncation", which describes no change anywhere in the window: `git log --grep=truncat` finds none, and `src/Runtime.php:661` says of that tool-result path that it is "not a prefix win, and nothing downstream should be built on the belief that it is" |
 | 6aff0bad1 | P3.audit-fix-1 | close-review cycle-1 code findings |
 | 1279d91cf | P3.S4-fix-1 | S4 review fixes |
 | 405252a41 | P3.S5 | write-signal marked from the engine loop (Runtime path) |
