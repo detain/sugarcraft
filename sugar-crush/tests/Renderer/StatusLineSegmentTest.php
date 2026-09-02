@@ -900,17 +900,24 @@ final class StatusLineSegmentTest extends TestCase
     /**
      * DONE-WHEN HALF B, its own test: twelve ticks and their renders add
      * EXACTLY ZERO messages to the session transcript. The instruments are
-     * layered, not interchangeable: the per-tick pins on the arm's contract
-     * — null `Cmd`, same Chat instance — are the FIRST reds, and the lead's
-     * E2b artifact shows exactly that (the plant fell to "tick #0 returned
-     * a different Chat instance", never to the closing signature line).
-     * That line can only trail: while the arm returns the same Chat and
-     * `Chat::$history` is readonly, its equality is forced. It is the
-     * second instrument — the one that would additionally notice a
-     * model-level replace or reorder should the arm ever return a
-     * rewritten Chat — and the AssistantMsg control below is what fires
-     * the signature machinery itself, the known-positive half
-     * (§16.8 rule 16 / RR4-F2).
+     * layered, not interchangeable.
+     *
+     * WHAT THIS SAID (through fix-5): the per-tick pins on the arm's
+     * contract — null `Cmd`, same Chat instance — were the FIRST reds, and
+     * the lead's E2b artifact showed exactly that (the plant fell to
+     * "tick #0 returned a different Chat instance", never to the closing
+     * signature line); the signature comparison "can only trail". WHAT IS
+     * TRUE NOW (fix-8 A): a per-tick signature comparison runs INSIDE the
+     * loop, ahead of both arm-contract pins, so the named zero-transcript
+     * claim takes its own first red — MEASURED at fix-8, the same E2b-shape
+     * plant now falls to "tick #0 moved the transcript", and deleting the
+     * new comparison restores the old fall-to-identity behaviour. WHY THE
+     * LAYERING STILL EARNS ITS PLACE: the closing comparison remains the
+     * whole-loop belt, the per-tick pins remain the arm-contract claims a
+     * same-transcript instance swap (the plant the identity pin alone
+     * catches) still reddens, and the AssistantMsg control below is still
+     * what fires the signature machinery's positive half (§16.8 rule 16 /
+     * RR4-F2).
      *
      * THE LOOP IS THE REAL IDLE LOOP, not a synthetic stand-in for one:
      * `Chat::subscriptions()` arms the status tick only while a `statusLine`
@@ -969,6 +976,22 @@ final class StatusLineSegmentTest extends TestCase
             Renderer::render($next);
             $tickTarget = $next;
             [$next, $cmd] = $next->update(new StatusLineTickMsg());
+            // Fix-8 A (review-7 M3): the NAMED claim gets its own first red.
+            // Before this, a transcript-growing plant fell to the identity pin
+            // — "tick #0 returned a different Chat instance" — because the
+            // closing signature line sat behind the loop and PHPUnit aborts at
+            // the first failure; the zero-transcript assertion itself never
+            // reddened. Checking the signature per tick, BEFORE the
+            // arm-contract pins, makes the plant fall to the claim it violates.
+            // MEASURED: with this line the plant's first red is
+            // 'tick #0 moved the transcript'; with it deleted, the plant falls
+            // back to the identity pin. The closing comparison below stays as
+            // the whole-loop belt — never weaken, layer.
+            self::assertSame(
+                $before,
+                $this->transcriptSignature($next),
+                'tick #' . $i . ' moved the transcript — the zero-transcript claim itself, ahead of the arm-contract pins',
+            );
             self::assertNull(
                 $cmd,
                 'tick #' . $i . ' returned a Cmd — the status path\'s normal route into the transcript',
