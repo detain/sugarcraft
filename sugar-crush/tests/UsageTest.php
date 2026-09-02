@@ -299,8 +299,16 @@ final class UsageTest extends TestCase
         // `== null` and PHP's 0 == null makes a measured zero look missing —
         // exactly the Anthropic full-cache-hit shape (input_tokens: 0) — and
         // the sum voids to null. Each row zeroes ONE term and holds the other
-        // two at distinct positives, so a loosened guard reds on its OWN row
-        // with its OWN expected figure, never on a neighbour's value.
+        // two at distinct positives, so an inputTokens or cacheReadTokens
+        // loosening reds on its OWN row with its OWN expected figure (45 and
+        // 65), never on a neighbour's value. The cacheCreationTokens loosening
+        // is caught EARLIER than its row — the pre-loop $reportedZero pin also
+        // zeroes cacheCreationTokens, so relaxing that one condition reds at
+        // the $reportedZero assert first (assertSame(100, ...)) and the row
+        // itself never runs (all three outcomes measured, review cycle 5).
+        // Detection is complete for every term either way; this states which
+        // assertion actually fails for which loosening — deliberately by name,
+        // not by line number, which is how the citation this replaced rotted.
         $zeroRows = [
             'inputTokens' => 45,           // 0 + 40 + 5
             'cacheReadTokens' => 65,       // 60 + 0 + 5
