@@ -49,6 +49,14 @@ use SugarCraft\Crush\Usage;
  * Every test here drives the REAL Runtime and the REAL EngineBackend against a
  * provider double. Nothing calls a private method or asserts on a docblock: the
  * question in each case is what a caller can observe on the returned Message.
+ *
+ * DOMAIN OF THE SENTENCE ABOVE: the ten crush_code.md Phase 5 tests. The P4.S2
+ * section appended below answers a different question - the provider's own
+ * parse of its usage object - so it drives the providers through their PUBLIC
+ * parse seams plus their complete()/completeStream() entry points, and asserts
+ * the buckets on the returned Usage; the buckets cannot yet be observed on the
+ * Message (CompleteResponse carries no carrier field - the reported widening
+ * seam), as the section banner and the step's ESCALATION record explain.
  */
 final class UsageWiringTest extends TestCase
 {
@@ -980,6 +988,40 @@ JSON;
         $this->assertSame(3, $usageChunks[0]->tokensUsed, 'only the message_delta bills; the zero-input start is dropped as it always was');
     }
 
+    public function testP4S2VertexAnthropicNegativeMessageStartDropsInsteadOfBillingNegatives(): void
+    {
+        // The negative-on-START companion of the clamp pins above: a
+        // `message_start` with input_tokens -10 clamps to 0 inside Usage, so
+        // the per-delta gate (`inputTokens === null || === 0`) DROPS the
+        // document - the clamp doctrine reaching the gate. The OLD inline
+        // `(int)(...) ?? 0` gate read the wire directly, let -10 through and
+        // EMITTED `tokensUsed: -10` through CompleteResponse's untyped
+        // pass-through; the stray output_tokens on the start document never
+        // billed (per-delta split) and does not now.
+        // Prove-it mutation: reinstate the pre-gate raw read in this branch -
+        // replace the emit's `$usage->inputTokens` (and the gate's) with a
+        // fresh `(int) ($event['message']['usage']['input_tokens'] ?? 0)` -
+        // and -10 !== 0 emits a negative chunk: assertCount(1) redden.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => [
+                'input_tokens' => -10,
+                'output_tokens' => 3,
+            ]]],
+            ['type' => 'message_delta', 'usage' => ['output_tokens' => 4]],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $usageChunks = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed !== 0));
+        $this->assertCount(1, $usageChunks, 'the negative-input start is dropped; only the message_delta bills');
+        $this->assertSame(4, $usageChunks[0]->tokensUsed);
+        $this->assertSame([], array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed < 0), 'no chunk anywhere may bill a negative - the pre-P4.S2 pass-through emitted -10 here');
+    }
+
     public function testP4S2VertexGeminiSubtractsLocallyProvenCacheSubset(): void
     {
         // VENDORED-SHAPE fixture: `cachedContentTokenCount` and its SUBSET
@@ -1108,7 +1150,7 @@ JSON;
         // `publishers/google` `:predict` (PaLM-era chat-bison). What is
         // MEASURED here is the provider side only: this arm's parse reads no
         // usage anywhere, and its parseResponse hardcodes `tokensUsed: 0` /
-        // `costUsd: 0.0` (src/Providers/VertexProvider.php:1901, parseResponse).
+        // `costUsd: 0.0` (src/Providers/VertexProvider.php:1903, parseResponse).
         // Whether PaLM-era `:predict` response documents ever carried usage
         // at all could not be probed - no Vertex credentials exist for this
         // plan - so the API-side absence is UNVERIFIED, and this comment
