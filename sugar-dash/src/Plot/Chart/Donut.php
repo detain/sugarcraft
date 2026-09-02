@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dash\Plot\Braille\Bresenham;
 
 /**
  * A donut chart component for displaying proportional data.
@@ -15,8 +16,9 @@ use SugarCraft\Core\Util\ColorProfile;
  * - Multiple data segments with customizable colors
  * - Optional center text (label, value, or percentage)
  * - Configurable inner/outer radius
- * - Start angle for rotation
- * - Clockwise or counter-clockwise rendering
+     * - Start angle for rotation
+     * - Clockwise or counter-clockwise rendering
+     * - Filled (default) or wireframe/outline render mode
  *
  * Mirrors donut/pie chart patterns adapted to PHP with wither-style
  * immutable setters.
@@ -80,6 +82,46 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
     public const FILL_FOREGROUND = 'foreground';
     public const FILL_BACKGROUND = 'background';
 
+    /**
+     * Render modes accepted by withRenderMode(): 'filled' paints the annulus
+     * cells (the classic S4-S6 behaviour, byte-identical default), 'wireframe'
+     * draws only the outline primitives — tangent-bucketed rim runes, one
+     * radial divider per segment boundary, and a hub cell — so the chart reads
+     * on B/W terminals and at small sizes where block fills smear into a blob.
+     */
+    public const RENDER_FILLED = 'filled';
+    public const RENDER_WIREFRAME = 'wireframe';
+
+    /**
+     * Axis-aligned arc pieces for the wireframe rim: corner, horizontal,
+     * corner, vertical, corner, horizontal... order is TL, ─, TR, │, BR, BL.
+     * Copied verbatim from GaugeCircle::ARC_CHARS (private there — rewiring
+     * the original is Backlog work); used for the flat/steep runs the tangent
+     * buckets emit and as the cardinal-box-aligned corner fallback.
+     */
+    private const ARC_CHARS = ['╭', '─', '╮', '│', '╯', '╰'];
+
+    /**
+     * Cell-space slope threshold separating a rim/divider segment from its
+     * neighbour bucket: ±22.5° around each axis reads as flat or steep, the
+     * diagonals in between take ╱/╲ (tan 22.5° ≈ 0.414).
+     */
+    private const WIRE_SLOPE_FLAT = 0.414;
+
+    /**
+     * [unit-dx, unit-dy (screen-down), rounded corner, ARC_CHARS index] for
+     * the four rim quadrants. The rounded ◜◝◟◞ rune reads as part of a circle
+     * at normal sizes; when the corner cell lands exactly on a cardinal axis
+     * (small radii where the ellipse "turns the box") the sharper ARC_CHARS
+     * box corner is the honest glyph instead.
+     */
+    private const WIRE_CORNERS = [
+        [0.70710678, -0.70710678, '◝', 2],  // NE
+        [-0.70710678, -0.70710678, '◜', 0], // NW
+        [-0.70710678, 0.70710678, '◟', 5],  // SW
+        [0.70710678, 0.70710678, '◞', 4],   // SE
+    ];
+
     private ?int $width = null;
     private ?int $height = null;
 
@@ -98,6 +140,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         private readonly ?float $aspect = null,
         private readonly bool $smoothRim = false,
         private readonly string $fillStyle = self::FILL_FOREGROUND,
+        private readonly string $renderMode = self::RENDER_FILLED,
     ) {}
 
     /**
@@ -131,6 +174,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: null,
             smoothRim: false,
             fillStyle: self::FILL_FOREGROUND,
+            renderMode: self::RENDER_FILLED,
         );
     }
 
@@ -176,6 +220,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: null,
             smoothRim: false,
             fillStyle: self::FILL_FOREGROUND,
+            renderMode: self::RENDER_FILLED,
         );
     }
 
@@ -218,6 +263,10 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
 
         if ($total <= 0 || $this->segments === []) {
             return $this->renderEmpty();
+        }
+
+        if ($this->renderMode === self::RENDER_WIREFRAME) {
+            return $this->renderWireframe($total);
         }
 
         $size = min($this->width ?? $this->size, $this->height ?? $this->size);
@@ -488,6 +537,174 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         return null;
     }
 
+    /**
+     * Render the outline-only view (see withRenderMode()).
+     *
+     * Three primitives carry the whole message: the outer rim walked around
+     * the aspect-corrected ellipse with each cell bucketed by its LOCAL
+     * TANGENT (─│╱╲ plus a rounded ◜◝◟◞ corner rune at the four diagonals),
+     * one hub→rim divider per segment boundary, and a hub rune where the
+     * spokes meet. No legend and no centre text are emitted — the filled path
+     * never drew any (centerLabel/centerValue remain unwired, Backlog BL-1),
+     * so shape alone must do the work; that is also what keeps this mode
+     * legible on B/W terminals, which is its whole raison d'être.
+     */
+    private function renderWireframe(float $total): string
+    {
+        $size = min($this->width ?? $this->size, $this->height ?? $this->size);
+        $radius = (int) floor($size / 2) - 1;
+        $centerX = (int) floor($size / 2);
+        $centerY = (int) floor($size / 2);
+        $aspect = $this->aspect();
+
+        $grid = [];
+        for ($y = 0; $y < $size; $y++) {
+            $grid[$y] = array_fill(0, $size, ['char' => ' ', 'color' => null]);
+        }
+
+        /** Ellipse cell touched by the aspect-scaled direction $angleDeg. */
+        $ellipseCell = function (float $angleDeg) use ($radius, $centerX, $centerY, $aspect): array {
+            $t = deg2rad($angleDeg);
+            return [
+                (int) round($centerX + $radius * cos($t)),
+                (int) round($centerY + $radius * sin($t) / $aspect),
+            ];
+        };
+
+        // Rim: ~80 samples per radius unit keeps every step far below 1/8 of
+        // a cell so no rim cell is skipped; first writer wins, so a cell keeps
+        // the rune of the arc section that entered it. Cells whose angle falls
+        // in a legacy CCW gap stay blank, mirroring the filled path.
+        $steps = max(720, $radius * 80);
+        for ($i = 0; $i < $steps; $i++) {
+            $t = 2 * M_PI * $i / $steps;
+            $sin = sin($t);
+            $cos = cos($t);
+            $x = (int) round($centerX + $radius * $cos);
+            $y = (int) round($centerY + $radius * $sin / $aspect);
+
+            if ($x < 0 || $x >= $size || $y < 0 || $y >= $size || $grid[$y][$x]['char'] !== ' ') {
+                continue;
+            }
+
+            $segmentIndex = $this->segmentAt($cos, $sin, $total);
+            if ($segmentIndex === null) {
+                continue;
+            }
+
+            $grid[$y][$x] = [
+                // Tangent of (R·cos t, R·sin t / aspect) is (-sin t, cos t / aspect).
+                'char' => self::directionRune(-$sin, $cos / $aspect),
+                'color' => $this->segments[$segmentIndex]['color'],
+            ];
+        }
+
+        // Quadrant corners: the diagonals get the rounded arc runes; when the
+        // corner cell collapses onto a cardinal axis (small radii where the
+        // ellipse effectively turns a box corner) the sharper ARC_CHARS corner
+        // is the honest glyph instead.
+        foreach (self::WIRE_CORNERS as $corner) {
+            [$ux, $uy, $roundRune, $arcIndex] = $corner;
+            $t = atan2($aspect * $uy, $ux);
+            $x = (int) round($centerX + $radius * cos($t));
+            $y = (int) round($centerY + $radius * sin($t) / $aspect);
+
+            if ($x < 0 || $x >= $size || $y < 0 || $y >= $size) {
+                continue;
+            }
+
+            $segmentIndex = $this->segmentAt(cos($t), sin($t), $total);
+            $grid[$y][$x] = [
+                'char' => ($x === $centerX || $y === $centerY) ? self::ARC_CHARS[$arcIndex] : $roundRune,
+                'color' => $segmentIndex === null ? null : $this->segments[$segmentIndex]['color'],
+            ];
+        }
+
+        // Dividers: the leading edge of every segment is a boundary, so N
+        // segments draw exactly N spokes (N=2 → the two 180°-apart halves of
+        // one diameter). Bresenham runs in cell space from the hub to the rim
+        // cell on the same aspect-scaled angle the ring test uses; each cell
+        // takes the line's dominant direction and the colour of the segment
+        // the spoke opens on — the same fg-SGR wrap the filled path emits.
+        /** @var list<string> $dividerRunes */
+        $dividerRunes = [];
+        $swept = 0.0;
+        foreach ($this->segments as $segment) {
+            $angleDeg = fmod($swept + $this->startAngle, 360.0);
+            $swept += $segment['value'] * 360.0 / $total;
+
+            [$endX, $endY] = $ellipseCell($angleDeg);
+            $rune = self::directionRune((float) ($endX - $centerX), (float) ($endY - $centerY));
+            $dividerRunes[] = $rune;
+
+            foreach (Bresenham::line($centerX, $centerY, $endX, $endY) as $point) {
+                $x = $point->x;
+                $y = $point->y;
+                if ($x === $centerX && $y === $centerY) {
+                    continue; // hub rune is decided last, below
+                }
+                if ($x < 0 || $x >= $size || $y < 0 || $y >= $size || $grid[$y][$x]['char'] !== ' ') {
+                    continue; // stop short of the rim it just reached
+                }
+                $grid[$y][$x] = ['char' => $rune, 'color' => $segment['color']];
+            }
+        }
+
+        // Hub: two non-collinear diagonals cross as ╳, one horizontal plus one
+        // vertical cross as ┼, anything else gets the plain ● cap.
+        $diagonals = array_unique(array_values(array_filter(
+            $dividerRunes,
+            static fn(string $rune): bool => $rune === '╱' || $rune === '╲',
+        )));
+        if (count($diagonals) >= 2) {
+            $hub = '╳';
+        } elseif (in_array('─', $dividerRunes, true) && in_array('│', $dividerRunes, true)) {
+            $hub = '┼';
+        } else {
+            $hub = '●';
+        }
+        $grid[$centerY][$centerX] = [
+            'char' => $hub,
+            'color' => $this->segments[0]['color'],
+        ];
+
+        // Same foreground wrap as the filled mode: a coloured cell opens the
+        // segment colour, prints its rune, and closes it; blanks stay blank.
+        $result = '';
+        foreach ($grid as $row) {
+            foreach ($row as $cell) {
+                if ($cell['color'] !== null) {
+                    $result .= $cell['color']->toFg(ColorProfile::TrueColor);
+                }
+                $result .= $cell['char'];
+                if ($cell['color'] !== null) {
+                    $result .= Ansi::reset();
+                }
+            }
+            $result .= "\n";
+        }
+
+        return rtrim($result, "\n");
+    }
+
+    /**
+     * Bucket a cell-space direction (dx right, dy down) into the stroke rune
+     * that reads most continuously: within ±22.5° of an axis the flat ─ or
+     * steep │ (straight from the copied ARC_CHARS table), otherwise the
+     * matching diagonal ╱/╲.
+     */
+    private static function directionRune(float $dx, float $dy): string
+    {
+        if (abs($dy) <= self::WIRE_SLOPE_FLAT * abs($dx)) {
+            return self::ARC_CHARS[1];
+        }
+        if (abs($dx) <= self::WIRE_SLOPE_FLAT * abs($dy)) {
+            return self::ARC_CHARS[3];
+        }
+
+        return $dx * $dy > 0 ? '╲' : '╱';
+    }
+
     // ─── Withers ──────────────────────────────────────────────────
 
     /**
@@ -507,6 +724,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
             fillStyle: $this->fillStyle,
+            renderMode: $this->renderMode,
         );
     }
 
@@ -527,6 +745,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
             fillStyle: $this->fillStyle,
+            renderMode: $this->renderMode,
         );
     }
 
@@ -547,6 +766,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
             fillStyle: $this->fillStyle,
+            renderMode: $this->renderMode,
         );
     }
 
@@ -567,6 +787,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
             fillStyle: $this->fillStyle,
+            renderMode: $this->renderMode,
         );
     }
 
@@ -587,6 +808,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
             fillStyle: $this->fillStyle,
+            renderMode: $this->renderMode,
         );
     }
 
@@ -612,6 +834,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $ratio,
             smoothRim: $this->smoothRim,
             fillStyle: $this->fillStyle,
+            renderMode: $this->renderMode,
         );
     }
 
@@ -644,6 +867,7 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $this->aspect,
             smoothRim: $on,
             fillStyle: $this->fillStyle,
+            renderMode: $this->renderMode,
         );
     }
 
@@ -691,6 +915,46 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
             aspect: $this->aspect,
             smoothRim: $this->smoothRim,
             fillStyle: $style,
+            renderMode: $this->renderMode,
+        );
+    }
+
+    /**
+     * Choose the chart's render mode.
+     *
+     * 'filled' (default) is the classic annulus of S4-S6 and stays
+     * byte-identical for every existing consumer and golden. 'wireframe'
+     * draws the palette doc's "segmented outline circle" instead: tangent
+     * rim runes, one radial divider per segment boundary, and a hub rune —
+     * no fills, no legend, no centre text, so the shape alone stays legible
+     * on colourless terminals and at small sizes where block fills smear.
+     *
+     * @throws \InvalidArgumentException on an unknown mode name
+     */
+    public function withRenderMode(string $mode = self::RENDER_FILLED): self
+    {
+        if (!in_array($mode, [self::RENDER_FILLED, self::RENDER_WIREFRAME], true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Unknown donut render mode "%s"; expected "%s" or "%s".',
+                $mode,
+                self::RENDER_FILLED,
+                self::RENDER_WIREFRAME
+            ));
+        }
+
+        return new self(
+            segments: $this->segments,
+            size: $this->size,
+            centerLabel: $this->centerLabel,
+            centerValue: $this->centerValue,
+            backgroundColor: $this->backgroundColor,
+            showPercentage: $this->showPercentage,
+            startAngle: $this->startAngle,
+            clockwise: $this->clockwise,
+            aspect: $this->aspect,
+            smoothRim: $this->smoothRim,
+            fillStyle: $this->fillStyle,
+            renderMode: $mode,
         );
     }
 }

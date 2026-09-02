@@ -364,6 +364,31 @@ final class DonutTest extends TestCase
         }
     }
 
+    public function testRenderModeDefaultKeepsFilledRingBytesIdentical(): void
+    {
+        $expected = base64_decode(self::PRE_S6_RAW_FILLED_21, true);
+        $this->assertIsString($expected);
+
+        $implicit = Donut::mocha(self::ORACLE_DATA)->withSize(21)->render();
+        $explicit = Donut::mocha(self::ORACLE_DATA)->withSize(21)->withRenderMode(Donut::RENDER_FILLED)->render();
+
+        $this->assertSame($expected, $implicit, 'S7 must not move a byte of the default (filled) render.');
+        $this->assertSame($implicit, $explicit, 'withRenderMode("filled") is the default; bytes must match exactly.');
+    }
+
+    public function testRenderModeLeavesEmptyPlaceholderPathAlone(): void
+    {
+        $default = Donut::new([])->withSize(21)->render();
+        $wireframe = Donut::new([])->withSize(21)->withRenderMode(Donut::RENDER_WIREFRAME)->render();
+
+        $this->assertSame(
+            base64_decode(self::PRE_S6_RAW_EMPTY_21, true),
+            $default,
+            'Empty data must keep the pre-S6 placeholder bytes on the default path.'
+        );
+        $this->assertSame($default, $wireframe, 'Empty data short-circuits before the render mode is consulted.');
+    }
+
     public function testNewCreatesDonut(): void
     {
         $donut = Donut::new([
