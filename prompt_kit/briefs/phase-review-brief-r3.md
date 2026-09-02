@@ -11,8 +11,10 @@ agent, never to you; if the loop cannot close, the orchestrator escalates the fu
 user — you do not grind.
 
 ## The sandbox
-Worktree `/home/sites/prompt-step-P3.CLOSE-r3`, branch `prompt/P3.CLOSE-r3`, HEAD `99227d29c`
-(= current master tip, which contains the P3.audit-fix-3 merge). `git status --porcelain` must
+Worktree `/home/sites/prompt-step-P3.CLOSE-r3`, branch `prompt/P3.CLOSE-r3`, HEAD `cf41aacd6`
+(= current master tip, which contains the P3.audit-fix-3 merge `99227d29c`; bookkeeping-only
+commits may move the tip above the merge sha — `git diff 99227d29c..cf41aacd6 -- sugar-crush/`
+is EMPTY, so the reviewed `sugar-crush/` content is identical at both). `git status --porcelain` must
 be EMPTY when you start — verify it first. vendor/ is a hardlinked copy (`cp -al`); PSR-4
 verified to print the WORKTREE paths:
 `SugarCraft\Crush\ => /home/sites/prompt-step-P3.CLOSE-r3/sugar-crush/src` and
