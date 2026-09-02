@@ -819,9 +819,24 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
      * vertically; the ratio scales the vertical leg of every distance/angle
      * computation instead. 1.0 reproduces the legacy (uncorrected) geometry
      * byte-exactly, 2.0 is the visually-round default.
+     *
+     * A non-positive or non-finite ratio would collapse or invert the ellipse
+     * (or poison every distance/angle computation with NaN), silently
+     * distorting the ring rather than failing — so the value is rejected up
+     * front, mirroring the throw precedent of the sibling withFillStyle() /
+     * withRenderMode() setters.
+     *
+     * @throws \InvalidArgumentException on a non-finite or non-positive ratio
      */
     public function withAspect(float $ratio = self::DEFAULT_ASPECT): self
     {
+        if (!is_finite($ratio) || $ratio <= 0.0) {
+            throw new \InvalidArgumentException(sprintf(
+                'Invalid donut aspect ratio "%s"; expected a finite positive float.',
+                $ratio
+            ));
+        }
+
         return new self(
             segments: $this->segments,
             size: $this->size,

@@ -679,6 +679,64 @@ final class DonutTest extends TestCase
         }
     }
 
+    public function testWithAspectRejectsZero(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid donut aspect ratio "0"; expected a finite positive float.');
+
+        Donut::mocha(self::ORACLE_DATA)->withAspect(0.0);
+    }
+
+    public function testWithAspectRejectsNegativeRatio(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid donut aspect ratio "-2"; expected a finite positive float.');
+
+        Donut::mocha(self::ORACLE_DATA)->withAspect(-2.0);
+    }
+
+    public function testWithAspectRejectsNaN(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid donut aspect ratio "NAN"; expected a finite positive float.');
+
+        Donut::mocha(self::ORACLE_DATA)->withAspect(NAN);
+    }
+
+    public function testWithAspectRejectsPositiveInfinity(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid donut aspect ratio "INF"; expected a finite positive float.');
+
+        Donut::mocha(self::ORACLE_DATA)->withAspect(INF);
+    }
+
+    public function testWithAspectRejectsNegativeInfinity(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid donut aspect ratio "-INF"; expected a finite positive float.');
+
+        Donut::mocha(self::ORACLE_DATA)->withAspect(-INF);
+    }
+
+    public function testWithAspectAcceptsTinyPositiveRatio(): void
+    {
+        $donut = Donut::mocha(self::ORACLE_DATA)->withSize(21);
+
+        $corrected = $donut->withAspect(0.01);
+
+        $this->assertNotSame($donut, $corrected, 'withAspect must return a new instance.');
+
+        $accessor = new \ReflectionMethod($corrected, 'aspect');
+        $accessor->setAccessible(true);
+
+        $this->assertSame(
+            0.01,
+            $accessor->invoke($corrected),
+            'aspect() must read the accepted tiny positive ratio back verbatim.'
+        );
+    }
+
     /**
      * Per-glyph occurrence census of an ANSI-stripped render (row separators excluded).
      *
