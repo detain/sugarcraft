@@ -156,17 +156,29 @@ Donut threading rule: ANY new ctor param must thread all 11 new-self sites + set
 
 **Declared-output-change flag**: possible default-output change (ring option) — GATED on Rulings Q4.
 
-### B10 (Lane B disjoint) sugar-dash: examples clone-assignment + golden re-records [BL-8]
+### B10a (Lane B) sugar-dash: donut+bubble examples setSize-clone fix + donut goldens re-record [BL-8a]
 
-**Why**: examples/donut.php:12, examples/bubble.php:9 AND examples/chart.php:12 all call `$component->setSize(60, 15);` and discard the immutable clone — the goldens therefore render at the ctor default (donut = 20x20 body), and GoldenSnapshotTest's setSize patch (:147-151) is inert against a discarded return.
+**Why**: BL-8 measured (donut half): examples/donut.php:12 + examples/bubble.php:9 call `$component->setSize(60, 15);` and discard the immutable clone — donut.golden ×2 bodies render at the ctor default (size=20 ⇒ exactly 20 rows both dims, discard proven), GoldenSnapshotTest's setSize patch (:147-151) inert against a discarded return. Premise re-verified live at b10-build drift-stop @08:00:45Z; split per orchestrator ruling @08:13:31Z (chart half → B10b — that example fatals BEFORE its setSize line, so one ceiling cannot cover both).
 
-**Design**: assign the returned clone in examples/donut.php (`$component = $component->setSize(60, 15);`) and examples/bubble.php (:9) — per Q3 include examples/chart.php:12 too (recommended); re-record affected goldens via the reflection replay of GoldenSnapshotTest::runExample regenerate branch (documented working route; phpunit --regenerate BROKEN on 10.5.64 — do NOT use it; alternative `cd sugar-dash && php tools/generate-goldens.php --dimensions <dim>` ⚠ intake-verify: tool lives at sugar-dash/tools/generate-goldens.php, not repo-root tools/; header cosmetic diff acceptable since comparison strips above `---`); harness patches setSize args to canvas dims (GoldenSnapshotTest.php:147-151) so goldens become full-canvas donut (size=min(80,24)=24 rows / min(120,40)=40 rows) — read every re-recorded golden as content in the report; do NOT create donut-wireframe goldens (2 missing-golden skips are the accepted deterministic baseline unless a ruling says otherwise; verified: examples/donut-wireframe.php exists, no donut-wireframe.golden in either dim, skip via GoldenSnapshotTest.php:246); bubble has no LIVE golden (∈ SKIPPED; stale on-disk files untouched).
+**Design**: assign the clone in donut.php:12 + bubble.php:9 (`$component = $component->setSize(60, 15);`); purge donut.php:6-8 unused bogus imports (`Layout\Grid\ChartDataPoint` et al. — nonexistent-class bug-class, harmless dead use-statements, Q3 scope). Bubble example fix is CORRECTNESS-only: bubble ∈ GoldenSnapshotTest::SKIPPED ⇒ its on-disk goldens stay stale-inert — DO NOT touch. Re-record donut.golden ×2 via TARGETED reflection replay of GoldenSnapshotTest::runExample regenerate branch ONLY, donut at both dims (phpunit --regenerate BROKEN on 10.5.64; blanket tools/generate-goldens.php FORBIDDEN — rewrites ALL dim goldens → cross-step drift; headers cosmetic, comparison strips above `---`). Harness patches setSize args to canvas dims (:147-151) so bodies become 60x15-proportioned donut fit-in-24/40 rows — read every re-recorded golden as content in the report; do NOT create donut-wireframe goldens (2 missing-golden skips accepted baseline, GoldenSnapshotTest.php:246).
 
-**Write-set ceiling**: sugar-dash/examples/donut.php, sugar-dash/examples/bubble.php, sugar-dash/examples/chart.php (if Q3 includes), sugar-dash/tests/golden/80x24/donut.golden, sugar-dash/tests/golden/120x40/donut.golden, sugar-dash/tests/golden/80x24/chart.golden + sugar-dash/tests/golden/120x40/chart.golden (only if chart included).
+**Write-set ceiling**: sugar-dash/examples/donut.php [SYMBOLS: setSize-assign line :12, import purge :6-8], sugar-dash/examples/bubble.php [setSize-assign line :9], sugar-dash/tests/golden/80x24/donut.golden + sugar-dash/tests/golden/120x40/donut.golden [re-record artifacts via targeted reflection replay ONLY].
 
-**Verify**: full dash rc0 W1 3Sk (Skipped count must STAY 3 — if it moves, explain exactly why); zero test count delta expected (goldens are data); porcelain shows ONLY the declared golden files changed.
+**Verify**: full dash rc0 3Sk/1W base — counts UNCHANGED 5911/9549→5911 (goldens are content not counts; donut unit tests UNCHANGED; Skipped must STAY exactly 3 — if it moves, explain); GoldenSnapshotTest PASSES on NEW goldens; porcelain `-- sugar-dash/tests/golden` shows ONLY the 2 donut files; builder documents BEFORE/AFTER golden body row census (20 rows → canvas-proportionate). Delta band +0 tests (re-record only; any added determinism-guard test must be self-declared).
 
-**Declared-output-change flag**: DECLARED OUTPUT CHANGE (donut goldens ×2, chart goldens ×2 if included) — GATED on Rulings Q3.
+**Declared-output-change flag**: YES — donut.golden ×2 ONLY (Q3-approved) — GATED on Rulings Q3.
+
+### B10b (Lane B) sugar-dash: chart example fatal-import fix + chart goldens FIRST TRUE RENDER [BL-8b]
+
+**Why**: drift evidence verbatim (b10-build @08:00:45Z): examples/chart.php:6 imports `SugarCraft\Dash\Layout\Grid\ChartDataPoint` — class DOES NOT EXIST (real: `SugarCraft\Dash\Plot\Chart\ChartDataPoint`, final readonly, src/Plot/Chart/Chart.php:27, same (string,float) ctor); the example fatals at :11 BEFORE setSize :12; chart.golden ×2 = deterministic CRASH-RECORDS (Fatal + 3 trace lines + header) currently BLESSED by the passing suite (fatal==fatal PASSES, GoldenSnapshotTest 250/258/2Sk rc0). setSize-assignment alone moves ZERO chart output — Q3 approved chart.php in scope; import fix explicitly ceiling-authorized per ruling @08:13:31Z.
+
+**Design**: fix examples/chart.php:6 to `use SugarCraft\Dash\Plot\Chart\ChartDataPoint;` — builder MUST re-derive the real FQN + ctor signature live before editing (do not trust this line); assign the clone at :12 (`$component = $component->setSize(60, 15);`). Re-record chart.golden ×2 = FIRST-TRUE-RENDER diff — the Fatal trace body is replaced ENTIRELY by rendered chart content (reviewer reads the hunks as content, not churn). Same targeted reflection-replay route as B10a (never blanket). STOP: if B10b's true render ALSO drifts donut/other goldens → shared-state premise violation → STOP-and-report.
+
+**Write-set ceiling**: sugar-dash/examples/chart.php [SYMBOLS: import line :6, setSize-assign line :12], sugar-dash/tests/golden/80x24/chart.golden + sugar-dash/tests/golden/120x40/chart.golden [first-true-render re-record artifacts].
+
+**Verify**: GoldenSnapshotTest chart rows PASS on new goldens; full dash rc0 counts UNCHANGED (5911/9549/3Sk/1W base — goldens are data); porcelain `-- sugar-dash/tests/golden` shows ONLY the 2 chart files. Delta band +0 tests (any added guard test self-declared).
+
+**Declared-output-change flag**: YES — chart.golden ×2 ONLY (Q3-approved, supersedes crash-record) — GATED on Rulings Q3.
 
 ### B11 (Lane B, precedes B12 — shared file) sugar-dash: bufferFromOutput multibyte fix
 
@@ -174,7 +186,9 @@ Donut threading rule: ANY new ctor param must thread all 11 new-self sites + set
 
 **Design**: Chart.php:791: replace `isset($line[$col]) ? mb_substr($line,$col,1) : ' '` with a codepoint-consistent guard — `$len = mb_strlen($line); $char = $col < $len ? mb_substr($line, $col, 1) : ' ';` (hoist $len per line); MINIMAL fix only — ANSI-in-buffer and the first-frame path stay as-is (park w/ quotes in ## Parked); add tests: a frame line containing multibyte glyphs (█) where a diff past the multibyte run must slice correct codepoints (drive Chart public render() multi-frame diff path per ChartTest patterns, or test bufferFromOutput via reflection if render-path pinning is too indirect — justify choice).
 
-**Write-set ceiling**: sugar-dash/src/Plot/Chart/Chart.php (bufferFromOutput only), sugar-dash/tests/Plot/Chart/ChartTest.php; CONDITIONAL additions: the two chart.golden files ONLY IF the fix verifiably moves them (measure first; if moved, the step must re-record + show content — and that re-record belongs to THIS step's declaration, not B10's).
+**Write-set ceiling**: sugar-dash/src/Plot/Chart/Chart.php (bufferFromOutput mb-slice only, ~:791, callers :195/:203), sugar-dash/tests/Plot/Chart/ChartTest.php (pin) ONLY — examples/chart.php moved OUT of this ceiling to B10b (fatal-import fix + first-true-render re-record, ruling @08:13:31Z); the former conditional chart.golden additions belong to B10b's declaration, not here.
+
+NOTE: bufferFromOutput is the diff-RE-RENDER path — builder MUST verify whether any golden path exercises it post-B10b; if this fix changes golden output that is a declared change B11 must enumerate + re-record targeted (reflection replay, never blanket).
 
 **Verify**: full dash rc0 W1, +1..3 tests; report explicitly whether chart.golden bytes moved.
 
@@ -207,8 +221,8 @@ Donut threading rule: ANY new ctor param must thread all 11 new-self sites + set
 ## Lanes & ordering
 
 Lane A (charts): B1 → B2 → B3 → B4 (serial; B4 last).
-Lane B (dash): B5 → B6 → B7 STRICTLY SERIAL (Donut.php). Disjoint-with-A-eligible: B8 (RenderBar), B9 (Bubble), B10 (examples+goldens), B11 → B12 (SHARED FILE Chart.php — strictly serial pair, B11 first), B13 LAST in the round (flip converts standing W1 into a hard gate). Commits serialized by orchestrator. Max 2 simultaneous builds, file-disjoint.
-Suggested interleave: A runs B1..B4; B runs B5,B6,B7 serially with B8/B9/B10/B11→B12 filling between Donut steps whenever file-disjoint.
+Lane B (dash): B5 → B6 → B7 STRICTLY SERIAL (Donut.php). Disjoint-with-A-eligible: B8 (RenderBar), B9 (Bubble), B10a ∥ B10b (examples+goldens — MAY run concurrent: file-disjoint, donut/bubble examples + donut goldens vs chart example + chart goldens; targeted replays write disjoint goldens), B11 → B12 (SHARED FILE Chart.php — strictly serial pair, B11 first), B13 LAST in the round (flip converts standing W1 into a hard gate). Commits serialized by orchestrator. Max 2 simultaneous builds, file-disjoint.
+Suggested interleave: A runs B1..B4; B runs B5,B6,B7 serially with B8/B9/B10a∥B10b/B11→B12 filling between Donut steps whenever file-disjoint; B12 serial after B11 (same file); B13 absolute last.
 
 ## Parked (→ v4)
 
@@ -231,9 +245,10 @@ Suggested interleave: A runs B1..B4; B runs B5,B6,B7 serially with B8/B9/B10/B11
 | B6 center text wiring | BL-1 | B(D) | ✅ | ✅ | ✅ | 5a5d9fe98 |
 | B7 angle-math dedupe | BL-9 | B(D) | ✅ | ✅ | ✅ | f5e3fb9ae |
 | B8 RenderBar ramp | BL-2 | B | ✅ | ✅ | ✅ | 4c8c16cc2 |
-| B9 Bubble semantics | BL-6/7 | B | ⬜ | ⬜ | ⬜ | — |
-| B10 examples+goldens | BL-8 | B | ⬜ | ⬜ | ⬜ | — |
-| B11 bufferFromOutput mb | Chart.php | B | ⬜ | ⬜ | ⬜ | — |
+| B9 Bubble semantics | BL-6/7 | B | ✅ | ✅ | ✅ | 81551a975 |
+| B10a donut/bubble examples + donut goldens | BL-8a | B | ⬜ | ⬜ | ⬜ | — |
+| B10b chart example fix + chart goldens | BL-8b | B | ⬜ | ⬜ | ⬜ | — |
+| B11 bufferFromOutput mb (Chart.php+ChartTest only) | Chart.php | B | ⬜ | ⬜ | ⬜ | — |
 | B12 dead-tables sweep | dead tables | B | ⬜ | ⬜ | ⬜ | — |
 | B13 W1 legitimize + dash flip | BL-3b | B | ⬜ | ⬜ | ⬜ | — |
 
