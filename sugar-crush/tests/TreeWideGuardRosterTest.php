@@ -1218,6 +1218,23 @@ final class TreeWideGuardRosterTest extends TestCase
             . 'watched it happen with no site in either bucket',
         );
 
+        // THE CYCLE-4 INDENTED PAIR (F-4R-1). Deleting the roster dedent arm reddens
+        // these two. Each was measured silent-and-truncating on the previous HEAD.
+        $this->assertSame(
+            ['root' => ['RD($d)'], 'unresolved' => []],
+            self::classifyWalkSites(self::knownAnswerSources()['viaIndentedNowdocClassAlias']),
+            'an INDENTED (flexible) nowdoc terminator is the idiomatic PSR spelling of the alias '
+            . 'body - the runtime name PHP registers is the DEDENTED body, and this reader answered '
+            . 'the GlobIterator-row grade of silence while the target truncated for real (F-4R-1)',
+        );
+
+        $this->assertSame(
+            ['root' => ['RD($d)'], 'unresolved' => []],
+            self::classifyWalkSites(self::knownAnswerSources()['viaIndentedHeredocClassAlias']),
+            'an INDENTED double-quoted heredoc terminator dedents to the same name before the "" '
+            . 'escape law runs - the second reader branch F-4R-1 left unread',
+        );
+
         // AND THE FIXTURE SET ITSELF IS PINNED, which was the NINTH door in
         // this one check when the set held eight. The coverage half
         // in {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
@@ -1244,7 +1261,8 @@ final class TreeWideGuardRosterTest extends TestCase
         $this->assertSame(
             ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk',
                 'viaFunctionAlias', 'viaClassAlias', 'viaRuntimeAlias', 'viaSplFileInfoChildren', 'splFileInfoChained', 'childrenUnanchored',
-                'viaReorderedClassAlias', 'viaNamespacedClassAlias', 'viaWalkerSubclass', 'viaHeredocClassAlias',],
+                'viaReorderedClassAlias', 'viaNamespacedClassAlias', 'viaWalkerSubclass', 'viaHeredocClassAlias',
+                'viaIndentedNowdocClassAlias', 'viaIndentedHeredocClassAlias',],
             array_keys(self::knownAnswerSources()),
             'a fixture was added to or removed from knownAnswerSources() without a matching '
             . 'exact-answer row above. That matters in one direction in particular: '
@@ -1326,6 +1344,15 @@ final class TreeWideGuardRosterTest extends TestCase
             'viaWalkerSubclass' => "<?php\nclass MyWalker extends \\RecursiveDirectoryIterator {}\n"
             . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new MyWalker(\$d); } }\n",
             'viaHeredocClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', <<<'EOT'\nRD\nEOT);\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
+            // THE CYCLE-4 INDENTED PAIR (F-4R-1), each measured silent-and-truncating
+            // at the previous HEAD on this classifier: the INDENTED (PHP 7.3+
+            // flexible) nowdoc and heredoc terminators — the body carries the source
+            // indent and the closing marker carries its own; only a flush terminator
+            // resolved before the dedent arm.
+            'viaIndentedNowdocClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', <<<'EOT'\n            RD\n            EOT);\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
+            'viaIndentedHeredocClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', <<<EOT\n            RD\n            EOT);\n"
             . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
         ];
     }
@@ -3692,7 +3719,7 @@ final class TreeWideGuardRosterTest extends TestCase
         if (preg_match("~^(['\"])(?<name>.*)\\1$~s", $argument, $m) === 1) {
             $body = $m['name'];
             $quote = $m[1];
-        } elseif (preg_match("~^<<<'(?<label>\w+)'\n(?<name>.*)\n\\k<label>$~s", $argument, $m) === 1) {
+        } elseif (preg_match("~^<<<'(?<label>\w+)'\n(?<name>.*)\n(?<indent>[ \t]*)\\k<label>$~s", $argument, $m) === 1) {
             // NOWDOC (review cycle 3, F-2): the body is literal verbatim —
             // the readers used to refuse `class_alias(A::class, <<<'EOT'
             // W
@@ -3702,15 +3729,21 @@ final class TreeWideGuardRosterTest extends TestCase
             // VERBATIM: a nowdoc body carries no escapes at all, so `\\` in
             // source is two backslashes in the runtime name — the shape
             // check below refuses it, as the engine would refuse the name.
-            $body = rtrim($m['name'], "\r\n");
+            // The INDENT capture (review cycle 4, F-4R-1) is the flexible-
+            // heredoc closing marker's own leading whitespace; the body token
+            // carries the matching source indent, so it is dedented to the
+            // runtime name before the shape check.
+            $body = self::dedentWalkHeredoc(rtrim($m['name'], "\r\n"), $m['indent']);
             $quote = "\x00";
-        } elseif (preg_match("~^<<<(?<label>\w+)\n(?<name>.*)\n\\k<label>$~s", $argument, $m) === 1) {
+        } elseif (preg_match("~^<<<(?<label>\w+)\n(?<name>.*)\n(?<indent>[ \t]*)\\k<label>$~s", $argument, $m) === 1) {
             // Double-quoted HEREDOC: same escape law as `""`; the join of
             // the significant stream carries the whole body as ONE run here
             // precisely when it is interpolation-free, because an
             // interpolated body would have joined `$`/`{`-bearing extra
             // tokens into a text this shape refuses below at the decode.
-            $body = rtrim($m['name'], "\r\n");
+            // Dedented off the closing marker's indent for the same F-4R-1
+            // reason as the nowdoc branch.
+            $body = self::dedentWalkHeredoc(rtrim($m['name'], "\r\n"), $m['indent']);
             $quote = '"';
         }
 
@@ -3729,6 +3762,42 @@ final class TreeWideGuardRosterTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * Strip a flexible-heredoc closing marker's indentation from a heredoc body.
+     *
+     * The roster twin of RuntimeTest's dedent, so BOTH instruments read the
+     * indented (PHP 7.3+) nowdoc/heredoc terminator the same day (rule 40) —
+     * review cycle 4, F-4R-1 measured this reader answering `{"root":[],
+     * "unresolved":[]}` on `class_alias('RecursiveDirectoryIterator', <<<'EOT'`
+     * with an indented body and an indented `EOT` — the GlobIterator-row grade of
+     * silence — while a flush terminator resolved. `$indent` is the closing
+     * marker's leading whitespace run, captured off the argument text; that width
+     * is stripped from every body line, stopping at the first non-whitespace,
+     * exactly as PHP computes the runtime value. An empty indent (the flush
+     * spelling) is a no-op, so the pre-existing known-answer rows are untouched.
+     */
+    private static function dedentWalkHeredoc(string $body, string $indent): string
+    {
+        if ($indent === '') {
+            return $body;
+        }
+
+        $width = \strlen($indent);
+
+        return implode("\n", array_map(
+            static function (string $line) use ($width): string {
+                $limit = min($width, \strlen($line));
+                $cut = 0;
+                while ($cut < $limit && ($line[$cut] === ' ' || $line[$cut] === "\t")) {
+                    $cut++;
+                }
+
+                return substr($line, $cut);
+            },
+            explode("\n", $body)
+        ));
     }
 
     /**

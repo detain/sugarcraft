@@ -4458,7 +4458,16 @@ final class RuntimeTest extends TestCase
             && \is_array($argument[1]) && $argument[1][0] === T_ENCAPSED_AND_WHITESPACE
             && \is_array($argument[2]) && $argument[2][0] === T_END_HEREDOC
         ) {
-            $body = rtrim($argument[1][1], "\n");
+            // PHP 7.3+ flexible heredoc: the body token text carries the SOURCE
+            // indent, and T_END_HEREDOC carries the closing marker's own leading
+            // whitespace. The runtime value PHP registers is the body with that
+            // marker indent stripped from every line — so the dedent has to
+            // happen BEFORE the shape check (review cycle 4, F-4R-1: an indented
+            // terminator was measured SILENT and truncating on both readers while
+            // only the flush spelling was read). A flush marker has an empty
+            // indent and dedents to a no-op, so the column-0 spellings are
+            // untouched.
+            $body = self::dedentHeredoc(rtrim($argument[1][1], "\n"), $argument[2][1]);
             if (str_starts_with($argument[0][1], "<<<'")) {
                 return $body;
             }
@@ -4467,6 +4476,40 @@ final class RuntimeTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * Strip a flexible-heredoc closing marker's indentation from every body line,
+     * exactly as PHP does when it computes the runtime value.
+     *
+     * The width to remove is the leading run of spaces/tabs inside T_END_HEREDOC
+     * (measured, review cycle 4 F-4R-1); each body line loses up to that many
+     * leading whitespace characters, stopping at the first non-whitespace byte —
+     * PHP refuses to under-indent a body line below the marker, so no legal file
+     * presents a line with less. A flush terminator carries an empty indent and
+     * is therefore a no-op, which is why the pre-existing column-0 spellings
+     * still read byte-for-byte as before.
+     */
+    private static function dedentHeredoc(string $body, string $endToken): string
+    {
+        if (preg_match('~^([ \t]*)~', $endToken, $m) !== 1 || $m[1] === '') {
+            return $body;
+        }
+
+        $width = \strlen($m[1]);
+
+        return implode("\n", array_map(
+            static function (string $line) use ($width): string {
+                $limit = min($width, \strlen($line));
+                $cut = 0;
+                while ($cut < $limit && ($line[$cut] === ' ' || $line[$cut] === "\t")) {
+                    $cut++;
+                }
+
+                return substr($line, $cut);
+            },
+            explode("\n", $body)
+        ));
     }
 
     /**
@@ -6975,6 +7018,28 @@ final class RuntimeTest extends TestCase
             [T_END_HEREDOC, 'EOT', 1],
         ];
         $this->assertSame('heredoc\\writer', $alias($heredoc), 'double-quoted heredoc obeys the same escape law as ""');
+
+        // AN INDENTED (PHP 7.3+ FLEXIBLE) TERMINATOR (review cycle 4, F-4R-1):
+        // the body token carries the source indent and T_END_HEREDOC carries the
+        // closing marker's own leading whitespace; the name PHP registers is the
+        // DEDENTED body. Before this arm both readers answered nothing on exactly
+        // this shape while a real 6-byte target truncated 6->0. These two rows are
+        // the known-answer that reddens if the dedent arm is deleted, and they use
+        // the byte-exact runtime values measured against the real engine.
+        $indentedNowdoc = [
+            [T_START_HEREDOC, "<<<'EOT'\n", 1],
+            [T_ENCAPSED_AND_WHITESPACE, "            IndentedNowdocWriter\n", 1],
+            [T_END_HEREDOC, "            EOT", 1],
+        ];
+        $this->assertSame('IndentedNowdocWriter', $body($indentedNowdoc), 'an indented nowdoc terminator dedents to the runtime name PHP registers');
+        $this->assertSame('indentednowdocwriter', $alias($indentedNowdoc), 'and keys the lowercased alias, exactly like the flush spelling');
+
+        $indentedHeredoc = [
+            [T_START_HEREDOC, "<<<EOT\n", 1],
+            [T_ENCAPSED_AND_WHITESPACE, "        IndentedHeredoc\\\\Writer\n", 1],
+            [T_END_HEREDOC, "        EOT", 1],
+        ];
+        $this->assertSame('indentedheredoc\\writer', $alias($indentedHeredoc), 'an indented double-quoted heredoc dedents, then obeys the "" escape law');
 
         // AN INTERPOLATED HEREDOC does not arrive as the accepted triple at
         // all - the lexer breaks it into more tokens - and the shape
