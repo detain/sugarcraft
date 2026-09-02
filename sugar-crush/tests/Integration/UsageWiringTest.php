@@ -542,6 +542,38 @@ JSON;
         $this->assertSame(15, $broken->cacheReadTokens);
     }
 
+    public function testP4S2SglangStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor(): void
+    {
+        // review-5 finding 7: removing the `isset($data['choices'][0]['delta'])`
+        // guard in completeStream survived everything, because no test fed a
+        // line the guard is about. This is the LIVE-PROBE terminal usage
+        // chunk (2026-09-02 skynet2 stream, worklog §1c - only ever emitted
+        // with stream_options.include_usage, which this provider does not
+        // send, making it a forward-shape pin): `choices: []` beside a full
+        // usage document. Without the gate, parseChunk's `?? []` tolerance
+        // turns that line into an EXTRA empty CompleteResponse - a phantom
+        // chunk in wire order. The guard drops it (and the `data: [DONE]`
+        // line drops at the `$data !== null` guard), so the stream yields
+        // EXACTLY the two delta chunks, content and billing intact.
+        $delta = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"delta":{"content":"%s"},"logprobs":null,"finish_reason":null,"matched_stop":null}]}';
+        $usageChunk = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
+        $sse = sprintf('data: ' . $delta . "\n", 'Hel')
+            . sprintf('data: ' . $delta . "\n", 'lo')
+            . 'data: ' . $usageChunk . "\n"
+            . "data: [DONE]\n";
+
+        $chunks = iterator_to_array($this->p4s2SglangRespondingWith($sse)->completeStream(
+            new CompleteRequest(
+                model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+                messages: [new UserMessage('hi')],
+            ),
+        ));
+
+        $this->assertCount(2, $chunks, 'the zero-choice usage chunk and [DONE] yield NOTHING - gate removed, parseChunk emits a third, empty chunk');
+        $this->assertSame(['Hel', 'lo'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the surviving deltas, intact');
+        $this->assertSame([0, 0], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), 'per-chunk deltas bill zero - the usage document on the dropped line never reaches a chunk');
+    }
+
     public function testP4S2SglangNegativeWireTotalBillsZeroThroughTheRealParsePath(): void
     {
         // The routing-revert RED test: with the old inline
