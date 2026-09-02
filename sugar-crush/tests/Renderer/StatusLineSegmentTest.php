@@ -844,9 +844,18 @@ final class StatusLineSegmentTest extends TestCase
 
     /**
      * DONE-WHEN HALF B, its own test: twelve ticks and their renders add
-     * EXACTLY ZERO messages to the session transcript, measured as the
-     * history's object identity, so an append, a replace and a reorder all
-     * move it.
+     * EXACTLY ZERO messages to the session transcript. The instruments are
+     * layered, not interchangeable: the per-tick pins on the arm's contract
+     * — null `Cmd`, same Chat instance — are the FIRST reds, and the lead's
+     * E2b artifact shows exactly that (the plant fell to "tick #0 returned
+     * a different Chat instance", never to the closing signature line).
+     * That line can only trail: while the arm returns the same Chat and
+     * `Chat::$history` is readonly, its equality is forced. It is the
+     * second instrument — the one that would additionally notice a
+     * model-level replace or reorder should the arm ever return a
+     * rewritten Chat — and the AssistantMsg control below is what fires
+     * the signature machinery itself, the known-positive half
+     * (§16.8 rule 16 / RR4-F2).
      *
      * THE LOOP IS THE REAL IDLE LOOP, not a synthetic stand-in for one:
      * `Chat::subscriptions()` arms the status tick only while a `statusLine`
