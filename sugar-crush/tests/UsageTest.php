@@ -226,11 +226,12 @@ final class UsageTest extends TestCase
      * it or a later reader will "fix" it): `promptTokens()` counts what was
      * SENT, which is what fills the context window and what the 95% tier must
      * stop estimating with chars/4. What the model wrote is not part of what
-     * was sent. If anyone adds `$this->outputTokens` to the sum, the
-     * `assertSame(45000, ...)` and the withOutputTokens(1) re-assert below go
-     * red TOGETHER — the second is the one that catches a sum that quietly
-     * grew, since 45000 alone could also be read as "output just happens to
-     * be excluded by the fixture values".
+     * was sent. Add `$this->outputTokens` to the sum and this test reds at the first
+     * assertion — PHPUnit aborts there, so the two pins never fail in the same run;
+     * they kill DIFFERENT mutations. The withOutputTokens(1) re-assert below is the
+     * load-bearing one: it survives a "fix" that updates the 45000 constant, because
+     * it fails whenever the sum moves by moving outputTokens at all, whatever the
+     * fixture values are.
      *
      * `totalTokens` (99999 here, deliberately NOT the bucket sum 65000) is the
      * provider's own billable figure over both directions: `new()` derives it
