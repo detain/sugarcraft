@@ -737,8 +737,13 @@ JSON;
             'outputTokens' => 300,
             'totalTokens' => 2500,
             'cacheReadInputTokens' => 8000,
-            'cacheWriteInputTokens' => 1200,
-            'cacheDetails' => ['ephemeral5mInputTokens' => 1200],
+            'cacheWriteInputTokens' => 1234,
+            // The two cache-WRITE-side numbers are DELIBERATELY distinct:
+            // cacheCreationTokens must source ONLY from cacheWriteInputTokens
+            // (parseUsage reads cacheDetails nowhere - it has no Usage bucket),
+            // and equal values here would let a future mis-wire to the TTL
+            // split pass on coincidence instead of on the right field.
+            'cacheDetails' => ['ephemeral5mInputTokens' => 99],
         ];
         $provider = $this->p4s2BedrockUnaryWith($usageArray);
 
@@ -753,8 +758,8 @@ JSON;
         $this->assertSame(1200, $usage->inputTokens, 'Bedrock follows the Anthropic convention - inputTokens is the fresh side, no subtraction');
         $this->assertSame(300, $usage->outputTokens);
         $this->assertSame(8000, $usage->cacheReadTokens);
-        $this->assertSame(1200, $usage->cacheCreationTokens, 'a cache WRITE is what Usage calls cache CREATION');
-        $this->assertSame(10400, $usage->promptTokens(), 'the one provider family here where total = cacheRead + cacheCreation + input has all three sides reported');
+        $this->assertSame(1234, $usage->cacheCreationTokens, 'a cache WRITE is what Usage calls cache CREATION');
+        $this->assertSame(10434, $usage->promptTokens(), 'the one provider family here where total = cacheRead + cacheCreation + input has all three sides reported');
     }
 
     public function testP4S2BedrockStreamMetadataSharesTheSameParse(): void

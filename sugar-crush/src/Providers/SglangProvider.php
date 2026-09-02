@@ -1094,9 +1094,11 @@ final readonly class SglangProvider implements ProviderInterface
      * carrying it is a separate seam, reported, deliberately not done here.
      *
      * NOTE FOR THE STREAM ARMS: this provider NEVER receives a usage object on
-     * `completeStream()` — it sends no `stream_options.include_usage` (MEASURED:
-     * zero `stream_options` in src/ as of P4.S2), and the terminal usage chunk
-     * that flag produces carries `choices: []`, which the `delta` gate in
+     * `completeStream()` — it sends no `stream_options.include_usage` (MEASURED
+     * 2026-09-02: no code path in src/ emits it — every current grep hit for
+     * `stream_options` under src/Providers is a docblock this very step wrote,
+     * zero in executable code), and the terminal usage chunk that flag produces
+     * carries `choices: []`, which the `delta` gate in
      * {@see completeStream()} drops before any parse runs (the same gate
      * qwen.md §P1 found). Live probe (2026-09-02) confirms: without the option
      * the SSE stream contains no `usage` key at all; with it, exactly one
