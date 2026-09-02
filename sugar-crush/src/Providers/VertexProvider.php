@@ -930,11 +930,15 @@ final readonly class VertexProvider implements ProviderInterface
     /**
      * One usage number as reported: absent OR JSON null stays `null`
      * (unreported — never coerced to a measured zero); anything numeric
-     * counts as its int.
+     * counts as its int. Non-numeric junk - strings, booleans, arrays,
+     * objects - decodes to UNREPORTED, never a counted zero, while numeric
+     * strings and floats count as their int (a float count floors,
+     * tolerating a buggy provider exactly where the old strict-typed int
+     * parameters would have crashed).
      */
     private static function usageInt(mixed $value): ?int
     {
-        return $value === null ? null : (int) $value;
+        return $value === null || !is_numeric($value) ? null : (int) $value;
     }
 
     /**
@@ -1091,6 +1095,24 @@ final readonly class VertexProvider implements ProviderInterface
         // changing the gate would change P1.S5-pinned emission semantics
         // under this step's no-behaviour-change boundary and is part of the
         // same reported follow-up.
+        //
+        // ACCOUNTING OWNERSHIP, split on purpose (review-2): the PARSE owns
+        // the document - the Usage parseAnthropicUsage() returns prices the
+        // WHOLE usage document it was handed, and that is correct for the
+        // unary arm, which bills one document once. The EMIT sites below own
+        // P1.S5's per-delta event shape, so each prices ITS OWN side
+        // explicitly - `cost($model, $inputTokens, 0)` on `message_start`,
+        // `cost($model, 0, $outputTokens)` on `message_delta` - never the
+        // composed whole-document cost. Anthropic's published streaming docs
+        // show a `message_start` usage can carry `output_tokens` as it
+        // progresses (UNVERIFIED-documented; this repo ships no Anthropic SDK
+        // to check against), and a cumulative `message_delta` can carry
+        // input - a both-sided document handed to a whole-document price
+        // would bill the same side twice across the summed turn. Today the
+        // per-side split is unobservable through cost - Vertex's
+        // costPer1kTokens() is a placeholder 0.0
+        // (src/Providers/VertexProvider.php:262-266) - so the P4.S2 tests
+        // pin the tokensUsed side of it instead.
         if ($type === 'message_start') {
             $usage = $this->parseAnthropicUsage(
                 is_array($event['message']['usage'] ?? null) ? $event['message']['usage'] : [],
@@ -1102,7 +1124,7 @@ final readonly class VertexProvider implements ProviderInterface
                 : new CompleteResponse(
                     content: '',
                     tokensUsed: $usage->inputTokens,
-                    costUsd: $usage->costUsd,
+                    costUsd: $this->cost($model, $usage->inputTokens ?? 0, 0),
                 );
         }
 
@@ -1117,7 +1139,7 @@ final readonly class VertexProvider implements ProviderInterface
                 : new CompleteResponse(
                     content: '',
                     tokensUsed: $usage->outputTokens,
-                    costUsd: $usage->costUsd,
+                    costUsd: $this->cost($model, 0, $usage->outputTokens ?? 0),
                 );
         }
 

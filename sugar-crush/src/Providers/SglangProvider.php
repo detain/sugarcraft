@@ -1136,11 +1136,15 @@ final readonly class SglangProvider implements ProviderInterface
      * `null` (unreported - the OpenAI-compatible DTOs this family copies do
      * emit explicit nulls, e.g. `completion_tokens`, and coercing one to a
      * measured zero is the exact lie Usage forbids); anything numeric counts
-     * as its int.
+     * as its int. Non-numeric junk - strings, booleans, arrays, objects -
+     * decodes to UNREPORTED, never a counted zero, while numeric strings and
+     * floats count as their int (a float count floors, tolerating a buggy
+     * provider exactly where the old strict-typed int parameters would have
+     * crashed).
      */
     private static function usageInt(mixed $value): ?int
     {
-        return $value === null ? null : (int) $value;
+        return $value === null || !is_numeric($value) ? null : (int) $value;
     }
 
     /**

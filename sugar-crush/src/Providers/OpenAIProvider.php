@@ -320,11 +320,15 @@ final readonly class OpenAIProvider implements ProviderInterface
     /**
      * One usage number as reported: absent OR JSON null stays `null`
      * (unreported — the DTO emits explicit nulls, and one must not coerce to
-     * a measured zero); anything numeric counts as its int.
+     * a measured zero); anything numeric counts as its int. Non-numeric junk
+     * - strings, booleans, arrays, objects - decodes to UNREPORTED, never a
+     * counted zero, while numeric strings and floats count as their int (a
+     * float count floors, tolerating a buggy provider exactly where the old
+     * strict-typed int parameters would have crashed).
      */
     private static function usageInt(mixed $value): ?int
     {
-        return $value === null ? null : (int) $value;
+        return $value === null || !is_numeric($value) ? null : (int) $value;
     }
 
     /**

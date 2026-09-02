@@ -896,8 +896,14 @@ JSON;
         // events must stay per-delta - `message_start` bills input only,
         // `message_delta` output only - because Runtime SUMS them. P4.S2
         // widens only what each event's usage DOCUMENT feeds the parse.
+        // BOTH-SIDED on purpose (review-2 finding 1): Anthropic's published
+        // streaming docs show a `message_start` usage can carry
+        // `output_tokens` as the stream progresses (UNVERIFIED-documented -
+        // no local SDK), so the start document here does too. The emit must
+        // still bill only the input side on the input event.
         $startUsage = [
             'input_tokens' => 12,
+            'output_tokens' => 1,
             'cache_read_input_tokens' => 6400,
             'cache_creation_input_tokens' => 500,
         ];
@@ -917,8 +923,17 @@ JSON;
         $usageChunks = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed !== 0));
         $this->assertCount(2, $usageChunks, 'exactly the two split events bill, the text deltas do not');
         $this->assertSame([12, 4], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $usageChunks));
+        $this->assertSame(12, $usageChunks[0]->tokensUsed, 'a message_start carrying a stray output_tokens must not bill both sides on the input event');
 
+        // PARSE vs EMIT, visibly distinct: the parse keeps the FULL document
+        // accounting - both sides of $startUsage survive in the returned
+        // Usage - while each emitted event bills only its own side. The
+        // whole-document cost composition belongs to the unary arm; the
+        // stream emit sites re-price per side (see the accounting-ownership
+        // passage in parseAnthropicChunk).
         $parsed = $provider->parseAnthropicUsage($startUsage, 'claude-3-sonnet@20240229');
+        $this->assertSame(12, $parsed->inputTokens, 'the parse keeps the document\'s input side');
+        $this->assertSame(1, $parsed->outputTokens, 'the parse keeps the document\'s output side too - whole-document accounting is the parse\'s job even though the emit is per-side');
         $this->assertSame(6400, $parsed->cacheReadTokens, 'the stream arm reports cache too - a bucket wired only on the unary path is the failure mode this case exists to red');
         $this->assertSame(500, $parsed->cacheCreationTokens);
     }
@@ -1048,12 +1063,19 @@ JSON;
     public function testP4S2VertexLegacyArmRecordsThatNoUsageObjectArrives(): void
     {
         // The third Vertex arm, recorded honestly rather than invented past:
-        // `publishers/google` `:predict` (PaLM-era chat-bison) answers with a
-        // predictions document this provider parses with NO usage read at
-        // all - the document itself carries none - so there is no cache
-        // field, and no bucket, to parse here. The step rule "a provider
-        // whose API reports no cache fields is a legitimate outcome: record
-        // it, do not invent a field" applies with full force.
+        // `publishers/google` `:predict` (PaLM-era chat-bison). What is
+        // MEASURED here is the provider side only: this arm's parse reads no
+        // usage anywhere, and its parseResponse hardcodes `tokensUsed: 0` /
+        // `costUsd: 0.0` (src/Providers/VertexProvider.php:1901, parseResponse).
+        // Whether PaLM-era `:predict` response documents ever carried usage
+        // at all could not be probed - no Vertex credentials exist for this
+        // plan - so the API-side absence is UNVERIFIED, and this comment
+        // claims nothing past the provider's non-read. That split does not
+        // change the step's outcome for this arm either way: a provider that
+        // parses no usage object has no cache field, and no bucket, to wire
+        // here. The step rule "a provider whose API reports no cache fields
+        // is a legitimate outcome: record it, do not invent a field" applies
+        // with full force.
         $provider = $this->p4s2VertexWith(
             ['predictions' => [['content' => 'sure', 'safetyAttributes' => ['blocked' => false]]]],
             'chat-bison@002',
@@ -1118,6 +1140,95 @@ JSON;
             'completion_tokens' => 10,
         ]);
         $this->assertNull($missing->cacheReadTokens, 'and the same parse without the key says NOTHING, which is a different claim');
+    }
+
+    /**
+     * review-2 finding 2: the plain `(int)$value` cast FABRICATED reported
+     * numbers out of non-numeric wire values - measured: 'abc' counted 0, a
+     * nested array counted 1. The helper's own docblock limits counting to
+     * numerics, and Usage's refuse-what-you-cannot-read doctrine
+     * (src/Usage.php:417 refuses frames it did not write) says a bucket that
+     * is neither null nor numeric is UNREPORTED, never a number. One drive
+     * per parse seam, exact values.
+     */
+    public function testP4S2NonNumericWireValuesDecodeUnreportedNotFabricatedNumbers(): void
+    {
+        // OpenAI-family, full junk document: string, nested array, and the
+        // one int wire value that must be UNAFFECTED by its neighbours.
+        $familyJunk = [
+            'prompt_tokens' => 'abc',
+            'total_tokens' => 25,
+            'completion_tokens' => [1],
+            'prompt_tokens_details' => ['cached_tokens' => 'x'],
+        ];
+
+        $sglang = SglangProvider::openAiCompatible('https://api.example.com')->parseUsage($familyJunk);
+        $this->assertNull($sglang->inputTokens, "sglang: a non-numeric 'abc' prompt is UNREPORTED, never the counted zero an (int) cast fabricates");
+        $this->assertNull($sglang->outputTokens, 'sglang: a nested-array completion is UNREPORTED, never the counted 1 casting an array gives');
+        $this->assertNull($sglang->cacheReadTokens, 'sglang: a non-numeric cached_tokens is UNREPORTED, never a counted zero');
+        $this->assertSame(25, $sglang->totalTokens, 'sglang: the int wire value is unaffected by its junk neighbours');
+
+        $custom = $this->p4s2CustomRespondingWith('{"usage":{}}')->parseUsage($familyJunk);
+        $this->assertNull($custom->inputTokens, 'custom: same family, same refusal');
+        $this->assertNull($custom->outputTokens, 'custom: same family, same refusal');
+        $this->assertNull($custom->cacheReadTokens, 'custom: same family, same refusal');
+        $this->assertSame(25, $custom->totalTokens, 'custom: the int total survives the junk neighbours');
+
+        // OpenAIProvider: prompt/completion stay NUMERIC because this arm
+        // prices them with RAW wire arithmetic in calculateCost() - a
+        // non-numeric prompt crashes THERE regardless of usageInt
+        // (pre-existing, outside this seam, reported not touched). The junk
+        // sits where the helper actually reads it: a nested-array
+        // cached_tokens the old cast counted as 1, and a string total.
+        $openai = (new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o'))
+            ->parseUsage([
+                'prompt_tokens' => 5,
+                'completion_tokens' => 2,
+                'total_tokens' => 'abc',
+                'prompt_tokens_details' => ['cached_tokens' => [1]],
+            ]);
+        $this->assertNull($openai->cacheReadTokens, 'openai: a nested-array cached_tokens decodes UNREPORTED - the old cast fabricated a counted 1');
+        $this->assertSame(5, $openai->inputTokens, 'openai: a numeric prompt still counts beside the junk');
+        $this->assertSame(2, $openai->outputTokens);
+        $this->assertSame(0, $openai->totalTokens, 'openai: the preserved absent-or-null total expression accounts a non-numeric total as its pre-P4.S2 0 - nothing newly counted');
+
+        $bedrock = (new BedrockProvider(
+            $this->p4s2BedrockClient([]),
+            'us-east-1',
+            'anthropic.claude-sonnet-4-6',
+        ))->parseUsage(
+            ['inputTokens' => true, 'outputTokens' => '12'],
+            'anthropic.claude-sonnet-4-6',
+        );
+        $this->assertNull($bedrock->inputTokens, 'bedrock: a boolean inputTokens is not a number - UNREPORTED, never the counted 1 of (int)true');
+        $this->assertSame(12, $bedrock->outputTokens, "bedrock: a NUMERIC STRING counts as its int - '12' is a measurement the provider really said");
+        $this->assertSame(12, $bedrock->totalTokens, 'bedrock: the null side defaults per the preserved input+output expression');
+        $this->assertEqualsWithDelta(0.00018, $bedrock->costUsd, 0.0000001, 'bedrock: (0*0.003 + 12*0.015)/1000 - priced off the defaulted zero, not a fabricated count');
+
+        // Numeric floats count, flooring - exactly where the old
+        // strict-typed int parameters would have crashed on the same wire.
+        $anth = $this->p4s2VertexWith([], 'claude-3-sonnet@20240229')
+            ->parseAnthropicUsage(
+                ['input_tokens' => '10.9', 'output_tokens' => 2.5],
+                'claude-3-sonnet@20240229',
+            );
+        $this->assertSame(10, $anth->inputTokens, "vertex-anthropic: the numeric string '10.9' counts, floored to its int");
+        $this->assertSame(2, $anth->outputTokens, 'vertex-anthropic: a float count floors - a buggy provider is tolerated, not crashed');
+        $this->assertSame(12, $anth->totalTokens, 'vertex-anthropic: the preserved floored-pair sum');
+
+        $gem = $this->p4s2VertexWith([], 'gemini-1.5-pro-002')
+            ->parseUsageMetadata(
+                [
+                    'promptTokenCount' => 'abc',
+                    'candidatesTokenCount' => 5,
+                    'cachedContentTokenCount' => null,
+                ],
+                'gemini-1.5-pro-002',
+            );
+        $this->assertNull($gem->inputTokens, 'gemini: a non-numeric prompt count is UNREPORTED, not a counted zero');
+        $this->assertSame(5, $gem->outputTokens, 'gemini: the numeric candidate count still counts beside the junk');
+        $this->assertNull($gem->cacheReadTokens, 'gemini: an explicit null cache count stays unreported');
+        $this->assertSame(5, $gem->totalTokens, 'gemini: the unreported prompt side defaults per the preserved prompt+candidates expression');
     }
 
     // ---- P4.S2 fixture builders (transport mocks in the shapes the provider's own suites use) ----
