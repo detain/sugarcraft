@@ -901,6 +901,18 @@ JSON;
         // `output_tokens` as the stream progresses (UNVERIFIED-documented -
         // no local SDK), so the start document here does too. The emit must
         // still bill only the input side on the input event.
+        // The `message_delta` document is BOTH-SIDED too (fix-3 survivor
+        // experiment - named in the commit body): Anthropic's published
+        // streaming docs show a cumulative `message_delta` restating
+        // `input_tokens` (UNVERIFIED-documented, and adversarially good
+        // hygiene regardless - a provider bug reaching our parser is exactly
+        // what a fixture may model), so EACH of the two usage events carries
+        // a both-sided document and EACH per-side emit is independently
+        // falsifiable (§16.8 rule 18, both polarities) - before, the delta
+        // half of the split was pinned only by the coincidence of a
+        // single-sided fixture. The PARSE still keeps whole-document
+        // accounting (input 12 / output 4 / cache fields) - the parse-vs-emit
+        // distinction is unchanged.
         $startUsage = [
             'input_tokens' => 12,
             'output_tokens' => 1,
@@ -911,7 +923,7 @@ JSON;
             ['type' => 'message_start', 'message' => ['usage' => $startUsage]],
             ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'Hel']],
             ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'lo']],
-            ['type' => 'message_delta', 'usage' => ['output_tokens' => 4]],
+            ['type' => 'message_delta', 'usage' => ['input_tokens' => 12, 'output_tokens' => 4]],
             ['type' => 'message_stop'],
         ], 'claude-3-sonnet@20240229');
 
@@ -924,6 +936,7 @@ JSON;
         $this->assertCount(2, $usageChunks, 'exactly the two split events bill, the text deltas do not');
         $this->assertSame([12, 4], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $usageChunks));
         $this->assertSame(12, $usageChunks[0]->tokensUsed, 'a message_start carrying a stray output_tokens must not bill both sides on the input event');
+        $this->assertSame(4, $usageChunks[1]->tokensUsed, 'a message_delta restating input_tokens must not bill both sides on the output event');
 
         // PARSE vs EMIT, visibly distinct: the parse keeps the FULL document
         // accounting - both sides of $startUsage survive in the returned
