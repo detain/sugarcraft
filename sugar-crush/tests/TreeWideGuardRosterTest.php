@@ -1235,6 +1235,14 @@ final class TreeWideGuardRosterTest extends TestCase
             . 'escape law runs - the second reader branch F-4R-1 left unread',
         );
 
+        $this->assertSame(
+            ['root' => ['Esc\\AP($d)'], 'unresolved' => []],
+            self::classifyWalkSites(self::knownAnswerSources()['viaDqHeredocClassAlias']),
+            'a double-quoted HEREDOC alias body decodes its `\\\\` to one separator and keys the full '
+            . 'registered name - the roster twin of the RuntimeTest row that already pinned this arm, '
+            . 'green with the whole arm deleted (F-4R-4, rule 40)',
+        );
+
         // AND THE FIXTURE SET ITSELF IS PINNED, which was the NINTH door in
         // this one check when the set held eight. The coverage half
         // in {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
@@ -1262,7 +1270,7 @@ final class TreeWideGuardRosterTest extends TestCase
             ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk',
                 'viaFunctionAlias', 'viaClassAlias', 'viaRuntimeAlias', 'viaSplFileInfoChildren', 'splFileInfoChained', 'childrenUnanchored',
                 'viaReorderedClassAlias', 'viaNamespacedClassAlias', 'viaWalkerSubclass', 'viaHeredocClassAlias',
-                'viaIndentedNowdocClassAlias', 'viaIndentedHeredocClassAlias',],
+                'viaIndentedNowdocClassAlias', 'viaIndentedHeredocClassAlias', 'viaDqHeredocClassAlias',],
             array_keys(self::knownAnswerSources()),
             'a fixture was added to or removed from knownAnswerSources() without a matching '
             . 'exact-answer row above. That matters in one direction in particular: '
@@ -1354,6 +1362,12 @@ final class TreeWideGuardRosterTest extends TestCase
             . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
             'viaIndentedHeredocClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', <<<EOT\n            RD\n            EOT);\n"
             . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
+            // F-4R-4: a double-quoted HEREDOC alias body — the escaped-namespaced
+            // spelling — driving the roster's dq-heredoc reader branch, the twin
+            // arm the RuntimeTest string reader already pinned (rule 40). This
+            // branch was green with the whole arm deleted.
+            'viaDqHeredocClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', <<<EOT\nEsc\\\\AP\nEOT);\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new \\Esc\\AP(\$d); } }\n",
         ];
     }
 
