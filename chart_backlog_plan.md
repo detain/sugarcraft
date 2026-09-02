@@ -66,6 +66,8 @@ Donut threading rule: ANY new ctor param must thread all 11 new-self sites + set
 
 **Write-set ceiling**: sugar-charts/src/LineChart/LineChart.php, NEW sugar-charts/tests/LineChart/LineChartMarkLineTest.php, sugar-charts/tests/ShortAliasesTest.php, sugar-charts/README.md (optional mention).
 
+- sugar-charts/tests/AliasCompletenessTest.php (census pin 123→124 + any roster touch REQUIRED by GR-2 coupling — AMENDED at B2-review-c1 prep: ceiling pre-dated the B1 completeness-test coupling; new withMarkLines() forces re-pin or suite is red)
+
 **Verify**: full charts suite rc0; +4..7 tests vs post-B1 count; existing fixtures porcelain EMPTY; existing tests zero edits.
 
 **Declared-output-change flag**: NO output change (opt-in only).
@@ -221,7 +223,7 @@ Suggested interleave: A runs B1..B4; B runs B5,B6,B7 serially with B8/B9/B10/B11
 
 | Step | BL | Lane | Build | Review loop | Commit | SHA |
 |---|---|---|---|---|---|---|
-| B1 alias-completeness | BL-4 | A | ⬜ | ⬜ | ⬜ | — |
+| B1 alias-completeness | BL-4 | A | ✅ | ✅ | ✅ | 980001aa4 |
 | B2 MarkLine rendering | MarkLine | A | ⬜ | ⬜ | ⬜ | — |
 | B3 Unicode connectors | connectors | A | ⬜ | ⬜ | ⬜ | — |
 | B4 charts failOnWarning | BL-3a | A | ⬜ | ⬜ | ⬜ | — |

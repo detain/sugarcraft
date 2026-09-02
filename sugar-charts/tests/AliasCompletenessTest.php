@@ -117,10 +117,11 @@ final class AliasCompletenessTest extends TestCase
         }
 
         $this->assertSame([], $missing, "Alias gaps detected:\n" . implode("\n", $missing));
-        // The registry is meaningful: it must cover the full 123-wither surface,
-        // including every documented deviation. A count collapse here would mean
-        // the reflection silently stopped seeing withers.
-        $this->assertSame(123, $checked, 'wither census count drifted from the documented 123');
+        // The registry is meaningful: it must cover the full 124-wither surface
+        // (123 from BL-4 + withMarkLines added by B2), including every documented
+        // deviation. A count collapse here would mean the reflection silently
+        // stopped seeing withers.
+        $this->assertSame(124, $checked, 'wither census count drifted from the documented 124');
         $this->assertGreaterThanOrEqual(5, $exception, 'documented alias deviations must all be present');
     }
 

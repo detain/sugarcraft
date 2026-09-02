@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\LineChart;
 use SugarCraft\Charts\Chart\Chart;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
@@ -35,6 +36,7 @@ final class LineChart extends Chart
      * @param list<string>               $xLabels
      * @param list<string>               $yLabels
      * @param ?array<string,string>      $lineStyle  axis runeset override (a Graph::LINE_* preset); null = LINE_THIN
+     * @param list<MarkLine>             $markLines  horizontal reference-line annotations; [] (default) draws nothing
      */
     public function __construct(
         public readonly array $data,
@@ -68,6 +70,7 @@ final class LineChart extends Chart
         int $animationDuration = 0,
         public readonly bool $fill = false,
         public readonly ?array $lineStyle = null,
+        public readonly array $markLines = [],
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ) {
@@ -232,6 +235,33 @@ final class LineChart extends Chart
     }
 
     /**
+     * Horizontal reference-line annotations drawn across the plot at fixed
+     * Y values (see {@see MarkLine}). Each mark whose value falls inside the
+     * resolved `[min, max]` range paints its style glyph — solid `─`, dashed
+     * `╌`, dotted `┄` — over the full plot-width run of the mapped row,
+     * replacing any point/connector cells it crosses (marks are annotations
+     * ON TOP), with an optional label right-aligned over the run when it
+     * fits. WHY: closes the docblock's "rendering integration not yet
+     * wired" gap; Mirrors ntcharts' `MarkLine` overlay concept.
+     *
+     * @param list<MarkLine> $marks  default [] renders nothing (byte-identical)
+     * @throws \InvalidArgumentException if the list contains a non-MarkLine element
+     */
+    public function withMarkLines(array $marks): self
+    {
+        // Boundary parse: trust the list internals after this point.
+        foreach ($marks as $mark) {
+            if (!$mark instanceof MarkLine) {
+                throw new \InvalidArgumentException(sprintf(
+                    'MarkLine list must contain only MarkLine instances, %s given',
+                    get_debug_type($mark),
+                ));
+            }
+        }
+        return $this->lineChartCopy(markLines: array_values($marks));
+    }
+
+    /**
      * X-axis labels (rendered under the axis when `withAxes(true)` is set).
      * @param list<string> $labels
      */
@@ -277,6 +307,8 @@ final class LineChart extends Chart
     public function dataset(string $name, array $values): self { return $this->withDataset($name, $values); }
     /** Short-form alias for {@see withDatasetPoint()}. */
     public function datasetPoint(string $name, string $rune): self { return $this->withDatasetPoint($name, $rune); }
+    /** Short-form alias for {@see withMarkLines()}. */
+    public function markLines(array $marks): self { return $this->withMarkLines($marks); }
 
     // ─── Chart Property Overrides ───────────────────────────────────────
     // Override Chart's methods to use lineChartCopy() so LineChart properties are preserved
@@ -485,9 +517,7 @@ final class LineChart extends Chart
                 $col = $gutterLeft + ($count <= 1
                     ? 0
                     : (int) round($i * ($plotW - 1) / ($count - 1)));
-                $norm = ((float) $v - $min) / ($max - $min);
-                $norm = max(0.0, min(1.0, $norm));
-                $row = (int) round((1.0 - $norm) * ($plotH - 1));
+                $row = self::rowForValue((float) $v, (float) $min, (float) $max, $plotH);
                 $coords[] = [$col, $row];
             }
             // Only render up to maxPointIndex points (and connectors between them)
@@ -514,6 +544,13 @@ final class LineChart extends Chart
             }
         }
 
+        // Reference-line annotations paint ON TOP of the series (their row
+        // wins over point/connector cells) but UNDER the axis frame. The
+        // default [] skips the pass entirely → byte-identical output.
+        if ($this->markLines !== []) {
+            $this->drawMarkLines($canvas, (float) $min, (float) $max, $gutterLeft, $plotW, $plotH);
+        }
+
         if ($this->showAxes) {
             // Origin = bottom-left of the plot region.
             $xOrigin = $gutterLeft;
@@ -528,6 +565,54 @@ final class LineChart extends Chart
             );
         }
         return $canvas->view();
+    }
+
+    /**
+     * Map a Y value to its plot row: normalise into the resolved
+     * `[min, max]` range (clamped to it), topmost row = 0. Shared by the
+     * series loop and the MarkLine overlay so the two mappings can never
+     * drift apart. Callers guarantee `$max > $min` (degenerate ranges are
+     * widened by +1.0 before plotting).
+     */
+    private static function rowForValue(float $value, float $min, float $max, int $plotHeight): int
+    {
+        $norm = ($value - $min) / ($max - $min);
+        $norm = max(0.0, min(1.0, $norm));
+        return (int) round((1.0 - $norm) * ($plotHeight - 1));
+    }
+
+    /**
+     * Paint the {@see MarkLine} annotations. One horizontal glyph run per
+     * mark spanning the full plot width at the row its value maps to;
+     * marks outside the resolved range are skipped. A non-empty label
+     * overwrites the rightmost label-width cells of its own row when the
+     * plot is wider than the label plus a 2-cell breathing margin (mb-safe:
+     * cells are codepoints, not bytes).
+     */
+    private function drawMarkLines(Canvas $canvas, float $min, float $max, int $gutterLeft, int $plotW, int $plotH): void
+    {
+        foreach ($this->markLines as $mark) {
+            if ($mark->value < $min || $mark->value > $max) {
+                continue;
+            }
+            $glyph = match ($mark->style) {
+                MarkLine::STYLE_SOLID  => '─',  // U+2500
+                MarkLine::STYLE_DASHED => '╌',  // U+254C
+                MarkLine::STYLE_DOTTED => '┄',  // U+2504
+                default => throw new \InvalidArgumentException("Invalid MarkLine style: {$mark->style}"),
+            };
+            $row = self::rowForValue($mark->value, $min, $max, $plotH);
+            for ($col = $gutterLeft; $col < $gutterLeft + $plotW; $col++) {
+                $canvas->setCell($col, $row, $glyph);
+            }
+            $labelWidth = mb_strlen($mark->label, 'UTF-8');
+            if ($mark->label !== '' && $plotW > $labelWidth + 2) {
+                $start = $gutterLeft + $plotW - $labelWidth;
+                foreach (mb_str_split($mark->label, 1, 'UTF-8') as $offset => $char) {
+                    $canvas->setCell($start + $offset, $row, $char);
+                }
+            }
+        }
     }
 
     /**
@@ -627,6 +712,7 @@ final class LineChart extends Chart
         ?bool $fill = null,
         ?array $lineStyle = null,
         bool $lineStyleSet = false,
+        ?array $markLines = null,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ): self {
@@ -662,6 +748,7 @@ final class LineChart extends Chart
             animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
             fill:              $fill              ?? $this->fill,
             lineStyle:         $lineStyleSet ? $lineStyle : $this->lineStyle,
+            markLines:         $markLines        ?? $this->markLines,
             brailleCanvas:     $brailleCanvas     ?? $this->brailleCanvas,
             theme:             $theme             ?? $this->theme,
         );

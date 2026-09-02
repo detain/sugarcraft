@@ -9,6 +9,7 @@ use SugarCraft\Charts\BarChart\BarChart;
 use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Charts\Heatmap\Heatmap;
 use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Sparkline\Sparkline;
 use SugarCraft\Core\Util\Color;
 
@@ -41,6 +42,19 @@ final class ShortAliasesTest extends TestCase
         $short = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->axes()
             ->lineStyle(Graph::LINE_ROUNDED)->view();
         $this->assertSame($long, $short);
+    }
+
+    public function testLineChartMarkLinesAlias(): void
+    {
+        $marks = [MarkLine::at(2.5, 'mid')];
+        $long  = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->withMarkLines($marks)->view();
+        $short = LineChart::new([1.0, 2.0, 3.0, 4.0])->size(20, 5)->markLines($marks)->view();
+        $this->assertSame($long, $short);
+        $this->assertStringContainsString(
+            '╌',
+            $short,
+            'alias must reach the mark-line render path, not a silent no-op',
+        );
     }
 
     public function testSparklineAliases(): void
