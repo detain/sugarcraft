@@ -3998,6 +3998,18 @@ final class RuntimeTest extends TestCase
                             // resolves to that same name (the pickup audit's
                             // first half-wire — following `parentOf` off an
                             // anon's resolved primitive found no entry).
+                            // PINNED at fixture line 145 (a `new parent` in a
+                            // trait used by a named class extending an ALIAS of
+                            // a primitive). MEASURED nuance (review cycle 4,
+                            // F-4R-3): nulling THIS candidate makes row 145 drop
+                            // (the arm is live and contributes the value), but
+                            // collapsing the whole ternary to `$userName` keeps
+                            // 145 — the `roots` fixpoint already maps that same
+                            // class name to the primitive, so the two spellings
+                            // are value-redundant for a named user. The hop is
+                            // load-bearing only in removing the candidate, and
+                            // it is the anon-vs-class guard on `$userKind` that
+                            // stops a following-`parentOf`-off-an-anon (gap A).
                             $candidates[] = $name === 'parent' && $userKind === 'class'
                                 ? ($parentOf[$userName] ?? null)
                                 : $userName;
@@ -6840,13 +6852,26 @@ final class RuntimeTest extends TestCase
                     $nowdoc = new NowdocWriter($p, 'w');
                     $safe = new SafeWriter();
                     $plain = new \SplFileObject($p, 'w');
-                    $wrongScope = new self($p, 'w');
+                     $wrongScope = new self($p, 'w');
+                 }
+             }
+
+            trait BottomParentBound
+            {
+                public function write(string $q): void
+                {
+                    new parent($q, 'w');
                 }
+            }
+
+            class BottomParentTraitUser extends HandleParent
+            {
+                use BottomParentBound;
             }
             PROBE);
 
         $this->assertSame(
-            ['splfileobject' => [29, 34, 42, 50, 58, 71, 79, 103, 104, 105, 108, 111, 114, 117, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 136]],
+            ['splfileobject' => [29, 34, 42, 50, 58, 71, 79, 103, 104, 105, 108, 111, 114, 117, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 136, 145]],
             self::writePrimitivesCalledIn($file),
             'extends-clause reach is the construction channel: 103 is the anonymous class that '
             . 'was the thirteenth defeat, 104 the same header under a `use … as …` alias, 105 and '
@@ -6881,8 +6906,16 @@ final class RuntimeTest extends TestCase
             . '`use … as …`), and 58 the `self` of a TRAIT used by a same-file write class '
             . '(review cycle 3 F-4: the enumeration row that waved ALL trait `self` away as '
             . 'binding "in another file" was false of this shape, and the pre-pass now pairs '
-            . 'same-file trait users; the cross-file user is what the corrected row actually '
-             . 'declares). Lines 135 (`ArrayObject` - nobody rostered), 137 (`new self` inside '
+             . 'same-file trait users; the cross-file user is what the corrected row actually '
+             . 'declares), and 145 the `parent` of a TRAIT used by a same-file class that '
+             . 'extends an ALIAS (`HandleParent`) of a primitive - the direct `parent`-half '
+             . 'sibling of the 58 `self` case (review cycle 4 F-4R-3: this drives the class-kind '
+             . 'trait-user branch of the candidate producer at :4001-4003 for real. Nulling that '
+             . 'candidate drops row 145 (the arm is live); collapsing the whole ternary to the '
+             . 'class name keeps it, because the `roots` fixpoint already maps the class name to '
+             . 'the same primitive - so the two spellings are value-redundant for a NAMED user, '
+             . 'and the arm is load-bearing only as the candidate itself). '
+             . 'Lines 135 (`ArrayObject` - nobody rostered), 137 (`new self` inside '
              . 'a class that extends nothing), the `new self` inside the ANON that extends nothing '
              . '(118/121 - the anon fixpoint leaves the scope name null, so the arm has no target) '
              . 'and the declared-but-never-constructed class at '
