@@ -704,6 +704,40 @@ final class StatusLineSegmentTest extends TestCase
             '98% cache · 1d',
             $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 90000), 60, (float) self::ANCHOR),
         );
+
+        // The six boundary legs — each value sits ADJACENT to a rung threshold,
+        // so nudging any `<` boundary reddens exactly one of them (the three
+        // rungs above only bound each threshold between sample neighbours).
+        self::assertSame(
+            '98% cache · 59s',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 59), 60, (float) self::ANCHOR),
+            'last second before the minute boundary',
+        );
+        self::assertSame(
+            '98% cache · 1m',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 60), 60, (float) self::ANCHOR),
+            'exactly on the minute boundary → intdiv(60,60)=1',
+        );
+        self::assertSame(
+            '98% cache · 59m',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 3599), 60, (float) self::ANCHOR),
+            'last minute before the hour boundary → intdiv(3599,60)=59',
+        );
+        self::assertSame(
+            '98% cache · 1h',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 3600), 60, (float) self::ANCHOR),
+            'exactly on the hour boundary → intdiv(3600,3600)=1',
+        );
+        self::assertSame(
+            '98% cache · 23h',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 86399), 60, (float) self::ANCHOR),
+            'last hour before the day boundary → intdiv(86399,3600)=23',
+        );
+        self::assertSame(
+            '98% cache · 1d',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 86400), 60, (float) self::ANCHOR),
+            'exactly on the day boundary → intdiv(86400,86400)=1',
+        );
     }
 
     /**
@@ -766,27 +800,48 @@ final class StatusLineSegmentTest extends TestCase
     /**
      * The readout walks back to the NEWEST report that can carry one, and
      * BOTH numbers then belong to that same report — the age is the age of
-     * the report shown, not of the newest message on the row.
+     * the report shown, not of the newest message on the row. When a newer
+     * entry carries its OWN full report it outranks an older one, so the walk
+     * direction (newest-first) is what the first leg below pins: a forward
+     * walk breaks at the oldest usable report and lands on '50% cache · 1m'
+     * instead.
      */
     public function testTheSegmentCarriesTheNewestUsableReportNotTheNewestMessage(): void
     {
-        $chat = (new Chat(
-            history: [
-                Message::user('hello', self::ANCHOR - 200),
-                // Older: the full split — 1000 of (1000+0+1000) = 50%.
-                Message::assistant('full report', self::ANCHOR - 100)->withUsage(
-                    Usage::new(2050, 0.02, 1000, 50, 1000, 0),
-                ),
-                // Newer: a total only — says nothing about the cache, skipped.
-                Message::assistant('total only', self::ANCHOR - 1)->withUsage(Usage::new(900, 0.01)),
-            ],
+        // Older: the full split — 1000 of (1000+0+1000) = 50%.
+        $fullReport = Message::assistant('full report', self::ANCHOR - 100)->withUsage(
+            Usage::new(2050, 0.02, 1000, 50, 1000, 0),
+        );
+        // Middle: a total only — says nothing about the cache, skipped.
+        $totalOnly = Message::assistant('total only', self::ANCHOR - 1)->withUsage(Usage::new(900, 0.01));
+        // Newest: a SECOND full report that stamps over the older one — 300 of
+        // (300+700+200) = 25%, age 5s — the mid-session invalidator the
+        // docblock's "newest usable" reasoning names as the whole point.
+        $invalidated = Message::assistant('invalidated', self::ANCHOR - 5)->withUsage(
+            Usage::new(1200, 0.01, 200, 0, 300, 700),
+        );
+
+        $withNewer = (new Chat(
+            history: [Message::user('hello', self::ANCHOR - 200), $fullReport, $totalOnly, $invalidated],
             backend: new EchoBackend(),
         ))->withSize(100, 30);
 
-        // Age 100 s from the reporting call — NOT 1 s from the newest message.
-        // An implementation that took the timestamp from the wrong end of the
-        // walk lands on '1s' and fails this exact string.
-        self::assertSame('50% cache · 1m', $this->cacheSegment($chat, 60, (float) self::ANCHOR));
+        // First leg — pins the reverse walk. The newest usable report wins over
+        // the older one: 25% at age 5s, NOT the 50%/1m the forward walk would
+        // break at first.
+        self::assertSame('25% cache · 5s', $this->cacheSegment($withNewer, 60, (float) self::ANCHOR));
+
+        // Second leg — with the newer report removed (a separate fixture, not a
+        // mutation of the first), the walk steps past the total-only entry and
+        // lands on the older full one. Age 100 s from the reporting call — NOT
+        // 1 s from the newest message: an implementation that took the timestamp
+        // from the wrong end of the walk lands on '1s' and fails this string.
+        $olderOnly = (new Chat(
+            history: [Message::user('hello', self::ANCHOR - 200), $fullReport, $totalOnly],
+            backend: new EchoBackend(),
+        ))->withSize(100, 30);
+
+        self::assertSame('50% cache · 1m', $this->cacheSegment($olderOnly, 60, (float) self::ANCHOR));
     }
 
     /**
