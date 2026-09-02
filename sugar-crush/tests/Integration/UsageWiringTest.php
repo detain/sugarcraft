@@ -993,9 +993,85 @@ JSON;
             messages: [new UserMessage('hi')],
         )));
 
+        // TOTAL-CHUNK discipline (review-5 finding 6): the filter below cannot
+        // see a start-sourced tokensUsed-0 chunk - inverting the drop-gate to
+        // always-emit leaves the BILLING count at exactly 1 while the stream
+        // carries a phantom. The wire yields exactly TWO chunks: the text
+        // delta, then the message_delta's usage response. Kill experiment
+        // (fix-6, measured): `inputTokens === null || inputTokens === 0` ->
+        // `false` in parseAnthropicChunk reddens the assertCount(2) with a
+        // third chunk.
+        $this->assertCount(2, $chunks, 'the all-cached message_start emits NOTHING at all - not even an invisible zero-bill chunk');
+        $this->assertSame(['x', ''], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order with the phantom excluded: text delta first, then the message_delta response (empty content by construction)');
+
         $usageChunks = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed !== 0));
         $this->assertCount(1, $usageChunks);
         $this->assertSame(3, $usageChunks[0]->tokensUsed, 'only the message_delta bills; the zero-input start is dropped as it always was');
+    }
+
+    public function testP4S2VertexAnthropicDropGatesEmitNoPhantomChunksForZeroSides(): void
+    {
+        // review-5 finding 6, ZERO half of both drop-gates. The branch
+        // rewrote these gates (`=== 0` -> `=== null || === 0`) and the
+        // finding measured that inverting either to always-emit survived
+        // every existing test, because each watched the stream through a
+        // `tokensUsed !== 0` filter - an emitted zero chunk is invisible
+        // there. This stream arms BOTH gates' drop branches with the values
+        // they name (a cache-only start counting input 0; a delta counting
+        // output 0 - provider-bug shapes, which fix-2's doctrine says a
+        // fixture may model). Honest behaviour: BOTH documents are dropped
+        // WHOLE, so the stream yields exactly one chunk, the text delta.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => [
+                'input_tokens' => 0,
+                'cache_read_input_tokens' => 5000,
+            ]]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'x']],
+            ['type' => 'message_delta', 'usage' => ['output_tokens' => 0]],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(1, $chunks, 'a zero-input start and a zero-output delta each drop the WHOLE response; either gate inverted to always-emit lands 2 here');
+        $this->assertSame('x', $chunks[0]->content, 'the only survivor is the text delta');
+        $this->assertSame(0, $chunks[0]->tokensUsed, 'and it bills zero - no usage document reached the stream at all');
+    }
+
+    public function testP4S2VertexAnthropicDropGatesEmitNoPhantomChunksForNullSides(): void
+    {
+        // review-5 finding 6, NULL half of both drop-gates: usage documents
+        // that ABSENT the side each event bills (a start reporting only
+        // cache, a delta with no usage members). Dropping on null is the
+        // `=== null` clause; the twin of the zero-side test above. Here
+        // always-emit cannot even build a chunk - CompleteResponse::$tokensUsed
+        // is a non-nullable int, so the `new` TypeError falls into
+        // completeStream()'s transport catch and resurfaces as an ERROR
+        // chunk: the isError pin below is what reddens that shape (and the
+        // half-gate weakenings `=== 0`-only land the same way; `=== null`-only
+        // is killed by the zero-side test). The three gates' surviving
+        // contract, exact: the stream carries ONLY the text delta.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => [
+                'cache_read_input_tokens' => 5000,
+            ]]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'x']],
+            ['type' => 'message_delta', 'usage' => []],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(1, $chunks, 'the null-input start and null-output delta both drop whole; an inverted or null-blind gate never leaves 1 intact');
+        $this->assertSame([], array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->isError)), 'a gate regressed to always-emit TypeErrors into the transport catch - an error chunk in this stream IS the regression signal');
+        $this->assertSame('x', $chunks[0]->content, 'the surviving chunk is exactly the text delta');
+        $this->assertSame(0, $chunks[0]->tokensUsed);
     }
 
     public function testP4S2VertexAnthropicNegativeMessageStartDropsInsteadOfBillingNegatives(): void
