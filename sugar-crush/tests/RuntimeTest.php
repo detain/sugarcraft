@@ -3563,12 +3563,18 @@ final class RuntimeTest extends TestCase
      * because it only matched `T_CONSTANT_ENCAPSED_STRING` — both run
      * for real, both truncating, both now read; the bare same-file
      * CONSTANT spelling beside them is DECLINED by name (constant folding
-     * is the indirection row's mechanism, not this one's).
-     * The `self` a TRAIT would write remains declared below, as does
-     * `extends` naming a NAMESPACED runtime alias (header resolution still
-     * stops at the single segment) — and every channel above has run through
-     * a deletion experiment; the list of which is the step report, not this
-     * paragraph.
+     * is the indirection row's mechanism, not this one's). Then the pickup
+     * audit closed three half-wires in the F-1/F-4 machinery ITSELF: `new
+     * parent` inside an ANONYMOUS class (the anon has no `parentOf` entry, so
+     * its resolved extends name IS the parent — following the hop answered
+     * nothing while the write truncated), a trait `use`d BY an anonymous class
+     * (the pairing filter read `class` only and dropped the anon user), and a
+     * `use \TraitName;` written QUALIFIED (the reader claimed last-segment
+     * matching but only read a bare `T_STRING`). All three run for real, all
+     * three truncating, all three now read; the same-file CROSS-FILE trait
+     * user and the NAMESPACED extends parent stay declared below. Every
+     * channel above has run through a deletion experiment; the list of which
+     * is the step report, not this paragraph.
      *
      * THAT LIST IS THE ONLY PLACE THE HISTORY IS KEPT, and it carries no
      * cardinality — §16.8 rule 2, ship the generator not the count. It used to
@@ -3624,16 +3630,16 @@ final class RuntimeTest extends TestCase
      *    `pg_copy_from`, an FFI call — any of them writes and none is named.
      *  - A `new self` INSIDE A TRAIT WHOSE USERS LIVE IN ANOTHER FILE. The
      *    keyword spellings bind at use time to the class that `use`s the
-     *    trait, and this pre-pass pairs those uses when the trait and the
-     *    class share the scanned file (review cycle 3, F-4 measured the
-     *    same-file half truncating for real while the row below's first
-     *    draft waved ALL trait `self` away on the false ground that it
-     *    "binds in another file" — the sentence now says the honest half:
-     *    what stays out of reach is the user in ANOTHER file, which is the
-     *    next row's imported-parent shape by another door. A trait that uses
-     *    a trait is likewise not followed — composing `self` through two
-     *    bodies before the concrete user multiplies the candidates without
-     *    the scanner holding any new fact.)
+     *    trait, named or anonymous, written bare or qualified, and this
+     *    pre-pass pairs those uses when the trait and the user share the
+     *    scanned file (review cycle 3, F-4 measured the same-file half
+     *    truncating for real while the row below's first draft waved ALL trait
+     *    `self` away on the false ground that it "binds in another file" — the
+     *    sentence now says the honest half: what stays out of reach is the
+     *    user in ANOTHER file, which is the next row's imported-parent shape by
+     *    another door. A trait that uses a trait is likewise not followed —
+     *    composing `self` through two bodies before the concrete user
+     *    multiplies the candidates without the scanner holding any new fact.)
      *  - A PARENT DECLARED IN ANOTHER FILE. The extends reach closes the
      *    construction channel ONLY for chains this file can read: a rostered
      *    name written in the header, one spelled through a `use … as …`
@@ -3972,15 +3978,32 @@ final class RuntimeTest extends TestCase
                     // this file uses stays silent, which is the cross-file
                     // half the enumeration declares. An ANON body's scope name
                     // is its resolved extends primitive (or null), set by the
-                    // pre-pass after the fixpoint.
+                    // pre-pass after the fixpoint — and because that name IS
+                    // the anon's parent, `new parent` inside an anon resolves
+                    // to the SAME scope name as `self`/`static`, not a further
+                    // hop through `parentOf` (which is keyed by DECLARED class
+                    // names and has no entry for an anon; following it was the
+                    // pickup audit's first measured half-wire: the shape
+                    // truncated for real while the arm answered nothing).
                     $top = $scopeStack[\count($scopeStack) - 1];
                     $inner = $top[1];
                     $kind = $top[2];
                     $candidates = [];
                     if ($kind === 'trait' && $inner !== null) {
                         foreach ($traitUsers[$inner] ?? [] as $user) {
-                            $candidates[] = $name === 'parent' ? ($parentOf[$user] ?? null) : $user;
+                            [$userName, $userKind] = $user;
+                            // A NAMED class user's `parent` is one `parentOf`
+                            // hop up its own chain; an ANON user's scope name
+                            // already IS its extends target, so every keyword
+                            // resolves to that same name (the pickup audit's
+                            // first half-wire — following `parentOf` off an
+                            // anon's resolved primitive found no entry).
+                            $candidates[] = $name === 'parent' && $userKind === 'class'
+                                ? ($parentOf[$userName] ?? null)
+                                : $userName;
                         }
+                    } elseif ($kind === 'anon') {
+                        $candidates[] = $inner;
                     } else {
                         $candidates[] = $name === 'parent'
                             ? ($inner === null ? null : ($parentOf[$inner] ?? null))
@@ -4562,13 +4585,13 @@ final class RuntimeTest extends TestCase
      * the walk can answer WHICH class a bare `self` or `static` is written
      * inside (an ANON's name is its resolved extends primitive once the
      * fixpoint ran), and `traitUsers` pairs each same-file TRAIT with the
-     * classes that `use` it — the binding `self` performs at use time, for
-     * the uses this file can see.
+     * classes — named or anonymous — that `use` it, as `[name, kind]`, the
+     * binding `self` performs at use time, for the uses this file can see.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      * @param array<string, string>                         $classAliases
      *
-     * @return array{roots: array<string, string>, parentOf: array<string, string>, scopes: array<int, array{0: int, 1: ?string, 2: string, 3: int}>, traitUsers: array<string, list<string>>}
+     * @return array{roots: array<string, string>, parentOf: array<string, string>, scopes: array<int, array{0: int, 1: ?string, 2: string, 3: int}>, traitUsers: array<string, list<array{0: string, 1: string}>>}
      */
     private static function sameFileWriteConstructionSubclasses(array $tokens, array $classAliases): array
     {
@@ -4717,6 +4740,13 @@ final class RuntimeTest extends TestCase
         // differently-namespaced same-word is the safe direction); a TRAIT
         // USING A TRAIT is not followed — composing chains of `self` through
         // two bodies is the half that stays declared.
+        //
+        // THE USER MAY BE AN ANONYMOUS CLASS too — `new class extends
+        // \SplFileObject { use TW5; }` binds TW5's `self` to the anon, whose
+        // scope name the fixpoint already resolved to its extends primitive;
+        // excluding anon users left that shape truncating for real while the
+        // arm answered nothing (pickup audit). Each entry is `[name, kind]`
+        // so the consumer resolves `parent` against the right hop.
         $traitUsers = [];
         $traits = array_keys(array_filter(
             $scopes,
@@ -4732,25 +4762,32 @@ final class RuntimeTest extends TestCase
                 continue;
             }
             $head = $tokens[$i + 1] ?? null;
-            if ($head === '(' || !\is_array($head) || $head[0] !== T_STRING) {
+            // A BARE NAME or a QUALIFIED/fully-qualified one are all trait
+            // uses; the last segment is the key the scopes carry (the pickup
+            // audit's third measured half-wire: the guard read only
+            // `T_STRING`, so `use \TW5;` — a spelling the comment already
+            // claimed to match — was silently skipped).
+            if ($head === '(' || !\is_array($head) || !\in_array($head[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
                 continue;
             }
             $after = $tokens[$i + 2] ?? null;
             if (!($after === ';' || $after === ',' || $after === '{')) {
                 continue; // not a bare `use TraitName;` statement
             }
-            $ref = strtolower($head[1]);
+            $segments = explode('\\', strtolower($head[1]));
+
+            $ref = (string) end($segments);
             if (!\in_array($ref, array_map(
                 static fn (int $start): ?string => $scopes[$start][1],
                 $traits,
             ), true)) {
                 continue;
             }
-            // THE CONTAINING SCOPE decides: a T_USE inside a CLASS body is a
-            // trait use; outside every body it is the file's own import.
+            // THE CONTAINING SCOPE decides: a T_USE inside a CLASS or ANON
+            // body is a trait use; outside every body it is the file's own import.
             foreach ($scopeRanges as [$start, $end, $name, $kind]) {
-                if ($kind === 'class' && $name !== null && $i > $start && $i < $end) {
-                    $traitUsers[$ref][] = $name;
+                if (($kind === 'class' || $kind === 'anon') && $name !== null && $i > $start && $i < $end) {
+                    $traitUsers[$ref][] = [$name, $kind];
                 }
             }
         }
@@ -6690,6 +6727,27 @@ final class RuntimeTest extends TestCase
                 use SelfBound;
             }
 
+            trait AnonBound
+            {
+                public function w(string $q): void
+                {
+                    new self($q, 'w');
+                }
+            }
+
+            trait QualifiedBound
+            {
+                public function w(string $q): void
+                {
+                    new self($q, 'w');
+                }
+            }
+
+            class QualifiedTraitUser extends \SplFileObject
+            {
+                use \QualifiedBound;
+            }
+
             class_alias(SplFileObject::class, 'RuntimeWriter');
             ca('SplFileObject', 'FnAliasedWriter');
             class_alias(class: \SplFileObject::class, alias: 'NamedArgWriter');
@@ -6708,6 +6766,19 @@ final class RuntimeTest extends TestCase
                     $anon = new class($p, 'w') extends \SplFileObject {};
                     $anonAliased = new class($p, 'w') extends AliasedWriter {};
                     $anonSelf = new class($p) extends \SplFileObject {
+                        public function m(string $q): void
+                        {
+                            new self($q, 'w');
+                        }
+                    };
+                    $anonParent = new class($p) extends \SplFileObject {
+                        public function m(string $q): void
+                        {
+                            new parent($q, 'w');
+                        }
+                    };
+                    $anonTrait = new class($p) extends \SplFileObject { use AnonBound; };
+                    $anonWrong = new class($p) {
                         public function m(string $q): void
                         {
                             new self($q, 'w');
@@ -6732,25 +6803,35 @@ final class RuntimeTest extends TestCase
             PROBE);
 
         $this->assertSame(
-            ['splfileobject' => [29, 34, 42, 50, 58, 82, 83, 84, 87, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 102]],
+            ['splfileobject' => [29, 34, 42, 50, 58, 71, 79, 103, 104, 105, 108, 111, 114, 117, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 136]],
             self::writePrimitivesCalledIn($file),
-            'extends-clause reach is the construction channel: 82 is the anonymous class that '
-            . 'was the thirteenth defeat, 83 the same header under a `use … as …` alias, 84 and '
-            . '87 the same anon shape with a `new self` in its body (the header arm reports the '
+            'extends-clause reach is the construction channel: 103 is the anonymous class that '
+            . 'was the thirteenth defeat, 104 the same header under a `use … as …` alias, 105 and '
+            . '108 the same anon shape with a `new self` in its body (the header arm reports the '
             . 'construction, the scope stack reports the keyword inside it - an anon binds '
-            . 'self to the anon, NOT past it to the enclosing class), 90-91 the named same-file '
-            . 'subclass and its one-link chain, 92 the two-literal `class_alias` name, 93 the '
-            . 'FUNCTION-aliased `class_alias` (the fourteenth defeat, review cycle 1), 94 the '
-            . 'in-order named-argument spelling, 95 the REVERSED label order and 96-98 the '
+            . 'self to the anon, NOT past it to the enclosing class), 111 and 114 the SAME anon '
+            . 'body but a `new parent` - an anon has no entry in the `parentOf` map (which is '
+            . 'keyed by DECLARED names), so `parent` resolves to the anon scope name itself, '
+            . 'which the fixpoint already set to its extends primitive; taking the `parentOf` hop '
+            . 'here answered nothing while the write truncated for real (pickup audit, gap A), '
+            . '117 the anon that `use`s a trait and 71 the trait body whose `self` binds to that '
+            . 'anon (the same trait pair, resolved through the anon user the pre-pass now records '
+            . '- pickup audit, gap B; the class-only filter missed it), 79 the `self` of a trait '
+            . 'reached by a QUALIFIED `use \QualifiedBound;` (the reader claimed last-segment '
+            . 'matching but only read a bare `T_STRING`, so the fully-qualified spelling was '
+            . 'skipped - pickup audit, gap C), 124-125 the named same-file '
+            . 'subclass and its one-link chain, 126 the two-literal `class_alias` name, 127 the '
+            . 'FUNCTION-aliased `class_alias` (the fourteenth defeat, review cycle 1), 128 the '
+            . 'in-order named-argument spelling, 129 the REVERSED label order and 130-132 the '
             . 'namespaced-alias and leading-backslash sites (the sixteenth, seventeenth and '
             . 'eighteenth defeats - review cycle 2: an order-free pairing, a FULL-NAME runtime '
             . 'map, and a runtime consult exempt from the backslash-ignores-imports guard, '
-            . 'which is right for imports and wrong for names class_alias itself defines), 99 '
+            . 'which is right for imports and wrong for names class_alias itself defines), 133 '
             . 'the ESCAPED alias literal (`Esc\\AP` in source is one separator in the runtime '
             . 'name, and the site writes one - review cycle 3 F-5, which measured this decode '
-            . 'arm live-but-UNPINNED: deleting it left the whole file green), 100 the NOWDOC '
+            . 'arm live-but-UNPINNED: deleting it left the whole file green), 134 the NOWDOC '
             . 'alias body (the twentieth defeat - a pure literal the two-literal reader refused '
-            . 'for SHAPE alone), 102 the direct spelling that must keep working, and 29/34/'
+            . 'for SHAPE alone), 136 the direct spelling that must keep working, and 29/34/'
             . '42/50 the keyword spellings `self` / `static` / `parent` - plain and aliased '
             . 'parents - inside same-file subclasses (the fifteenth defeat and the nineteenth: '
             . 'the raw-name check alone missed `new parent` whose parent arrives through '
@@ -6758,8 +6839,10 @@ final class RuntimeTest extends TestCase
             . '(review cycle 3 F-4: the enumeration row that waved ALL trait `self` away as '
             . 'binding "in another file" was false of this shape, and the pre-pass now pairs '
             . 'same-file trait users; the cross-file user is what the corrected row actually '
-            . 'declares). Lines 101 (`ArrayObject` - nobody rostered), 103 (`new self` inside '
-            . 'a class that extends nothing) and the declared-but-never-constructed class at '
+            . 'declares). Lines 135 (`ArrayObject` - nobody rostered), 137 (`new self` inside '
+            . 'a class that extends nothing), the `new self` inside the ANON that extends nothing '
+            . '(118/121 - the anon fixpoint leaves the scope name null, so the arm has no target) '
+            . 'and the declared-but-never-constructed class at '
             . '21-23 must NOT appear: both polarities or this arm reports everything.',
         );
     }
