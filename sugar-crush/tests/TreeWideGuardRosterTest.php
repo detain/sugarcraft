@@ -3170,31 +3170,6 @@ final class TreeWideGuardRosterTest extends TestCase
     }
 
     /**
-     * The `getChildren` channel of {@see classifyWalkSites()} - F4's third
-     * escape, and the only one of the three that is not an import alias.
-     *
-     * `new \SplFileInfo(\dirname(__DIR__, 2) . '/src')` then iterates
-     * `->getChildren()`: the walk happens WITHOUT the package root ever
-     * appearing in a walker-named argument, and `getchildren` names neither
-     * alphabet. MEASURED silent (0/0) through the shipped classifier at the
-     * close review, with the two alias escapes beside it - all three now
-     * classified, the aliases into `root` and this shape into `root` too when
-     * the receiver resolves anchored.
-     *
-     * IT FAILS CLOSED, which is the whole design. A `->getChildren(` whose
-     * receiver this resolver cannot place lands in the residue - the
-     * GlobIterator row's own argument, quoted by the class doc-block: "a walk
-     * this alphabet cannot see produces no site at all - so the file is
-     * skipped in SILENCE rather than landing in the residue." A receiver that
-     * resolves but is NOT anchored (`$tempIterator->getChildren()` over a
-     * directory the test made) is a real unresolved site too - over-asking a
-     * human for a residue row is the safe direction here, and
-     * WALKS_A_DIRECTORY_THE_TEST_MADE exists to answer exactly that.
-     *
-     * @param array<string> $root
-     * @param array<string> $unresolved
-     */
-    /**
      * Every class DECLARED IN THIS FILE whose `extends` chain reaches a
      * {@see WALKER_CLASSES} entry, as `declared name => walker spelling`.
      *
@@ -3295,6 +3270,31 @@ final class TreeWideGuardRosterTest extends TestCase
         return $roots;
     }
 
+    /**
+     * The `getChildren` channel of {@see classifyWalkSites()} - F4's third
+     * escape, and the only one of the three that is not an import alias.
+     *
+     * `new \SplFileInfo(\dirname(__DIR__, 2) . '/src')` then iterates
+     * `->getChildren()`: the walk happens WITHOUT the package root ever
+     * appearing in a walker-named argument, and `getchildren` names neither
+     * alphabet. MEASURED silent (0/0) through the shipped classifier at the
+     * close review, with the two alias escapes beside it - all three now
+     * classified, the aliases into `root` and this shape into `root` too when
+     * the receiver resolves anchored.
+     *
+     * IT FAILS CLOSED, which is the whole design. A `->getChildren(` whose
+     * receiver this resolver cannot place lands in the residue - the
+     * GlobIterator row's own argument, quoted by the class doc-block: "a walk
+     * this alphabet cannot see produces no site at all - so the file is
+     * skipped in SILENCE rather than landing in the residue." A receiver that
+     * resolves but is NOT anchored (`$tempIterator->getChildren()` over a
+     * directory the test made) is a real unresolved site too - over-asking a
+     * human for a residue row is the safe direction here, and
+     * WALKS_A_DIRECTORY_THE_TEST_MADE exists to answer exactly that.
+     *
+     * @param array<string> $root
+     * @param array<string> $unresolved
+     */
     private static function classifyGetChildrenSite(array $tokens, int $i, array $tainted, array &$root, array &$unresolved): void
     {
         $previous = $tokens[$i - 1] ?? null;
