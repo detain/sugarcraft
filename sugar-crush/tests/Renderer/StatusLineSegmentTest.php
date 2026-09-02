@@ -6,12 +6,14 @@ namespace SugarCraft\Crush\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Crush\AssistantMsg;
 use SugarCraft\Crush\Backend\EchoBackend;
 use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Config\StatusLineCommand;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Renderer;
 use SugarCraft\Crush\StatusLineTickMsg;
+use SugarCraft\Crush\Usage;
 
 /**
  * The `statusLine` command's output where it is PAINTED — the live status bar
@@ -46,6 +48,22 @@ final class StatusLineSegmentTest extends TestCase
     private function bar(Chat $chat): string
     {
         $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat);
+
+        return (string) (new \ReflectionMethod(Renderer::class, 'stripZoneMarkers'))->invoke(null, $bar);
+    }
+
+    /**
+     * {@see bar()} with the clock pinned — the seam
+     * {@see Renderer::renderStatusBar()} carries for exactly this, because an
+     * age readout that counted from the wall cannot be asserted byte-for-byte.
+     *
+     * Named distinctly from `bar()` on purpose: `DuplicatedTestHelperDriftTest`
+     * walks every same-named helper pair across the suite, and widening an
+     * existing helper's signature is the drift it exists to red.
+     */
+    private function barAt(Chat $chat, int $now): string
+    {
+        $bar = (new \ReflectionMethod(Renderer::class, 'renderStatusBar'))->invoke(null, $chat, $now);
 
         return (string) (new \ReflectionMethod(Renderer::class, 'stripZoneMarkers'))->invoke(null, $bar);
     }
@@ -501,5 +519,533 @@ final class StatusLineSegmentTest extends TestCase
         self::assertSame(1, substr_count((string) file_get_contents($probe), "\n"));
 
         unlink($probe);
+    }
+
+    // =====================================================================
+    // P4.S3 — the cache-health readout (hit rate + age)
+    // =====================================================================
+
+    /**
+     * A fixed epoch anchor for the fixtures below (2025-10-09T08:53:20Z, a
+     * date comfortably in the past). Every age assertion passes an explicit
+     * clock to {@see Renderer::cacheIndicator()} through the reflection seam
+     * so the byte-exact strings cannot drift with the wall; the anchor keeps
+     * even the REAL-clock paths (whole-frame rendering) deterministic in the
+     * only part they assert on — the rate, never the age digits.
+     */
+    private const ANCHOR = 1_760_000_000;
+
+    /**
+     * A two-message chat whose newest assistant reply carries a fully
+     * reported prompt-side split: input 200 + cacheRead 7800 + creation 0 =
+     * prompt 8000, so the rate is 97.5 → 98%, and the report is 42 s old
+     * measured at ANCHOR.
+     */
+    private function cacheChat(int $cols = 100, ?Usage $usage = null, ?int $replyAt = null): Chat
+    {
+        $replyAt ??= self::ANCHOR - 42;
+
+        return (new Chat(
+            history: [
+                Message::user('hello', self::ANCHOR - 100),
+                Message::assistant('Sure.', $replyAt)->withUsage($usage ?? Usage::new(
+                    8100,
+                    0.05,
+                    200,
+                    100,
+                    7800,
+                    0,
+                )),
+            ],
+            backend: new EchoBackend(),
+        ))->withSize($cols, 30);
+    }
+
+    /**
+     * The cache fixture built through the PRODUCTION billing path: a settled
+     * provider reply delivered to `update()`, which is the ONLY route into
+     * `Chat::accountUsage()` — spend is tracker-derived, so the `history:`
+     * shortcut of {@see cacheChat()} can never light the spend piece and a
+     * fixture for the spend+cache assembly arm has to be billed, not seeded.
+     *
+     * Deliberately distinct in name from `StatusBarSpendTest::billed()`:
+     * `DuplicatedTestHelperDriftTest` compares same-named helpers across
+     * files, and this one is NOT that helper — it carries history, size and
+     * cap too, because the bar under test assembles four pieces, not one.
+     */
+    private function billedChat(?Usage $usage, ?float $cap, int $cols): Chat
+    {
+        $chat = (new Chat(
+            history: [Message::user('hello', self::ANCHOR - 100)],
+            backend: new EchoBackend(),
+            maxCostUsd: $cap,
+        ))->withSize($cols, 30);
+
+        [$chat] = $chat->update(new AssistantMsg(
+            Message::assistant('Sure.', self::ANCHOR - 42)->withUsage($usage),
+        ));
+
+        return $chat;
+    }
+
+    /** The cache segment exactly as painted, for an explicit room and clock. */
+    private function cacheSegment(Chat $chat, int $room = 60, ?float $now = null): string
+    {
+        return (string) (new \ReflectionMethod(Renderer::class, 'cacheIndicator'))
+            ->invoke(null, $chat, $room, $now);
+    }
+
+    /**
+     * The transcript's identity, not its text: one entry per message, so an
+     * appended, PREPENDED, REPLACED or dropped message all move it.
+     *
+     * @return list<int>
+     */
+    private function transcriptSignature(Chat $chat): array
+    {
+        return array_map('spl_object_id', $chat->history);
+    }
+
+    /**
+     * THE SPEND+CACHE ASSEMBLY ARM, the priority claim between the two
+     * optional pieces, and cache-vs-`statusLine` coexistence — none of which
+     * the seeded fixtures can reach, because spend reads the tracker and the
+     * tracker is fed only by `update()` (see {@see billedChat()}).
+     *
+     * THREE halves, one fixture family (bucketed Usage `200 + 7800 + 0 = 8000`
+     * prompt at 98 %, cap `5.0` so both the cap-form spend AND the cache piece
+     * claim columns):
+     *
+     *  1. at 120 columns both pieces paint, SPEND BEFORE CACHE — the literal
+     *     `$context · $spend · $cache · $processing` rebuild, and at 100 the
+     *     cache piece is the one that vanishes while the cap-form spend
+     *     survives: "fitted below spend" made concrete from both sides.
+     *  2. the no-deepening sweep the spend tests use, cols 4..200, asserted as
+     *     a DELTA against the same billed chat with the buckets UNREPORTED
+     *     (spend identical, cache absent), because the bar is legitimately
+     *     over-wide below 36 columns. This is what pins the `- Width::of
+     *     ($separator)` in the cache room at `Renderer::renderStatusBar()`:
+     *     deleting it inflates the room by 3, a too-wide cache form is chosen,
+     *     and THIS sweep is the only test in the file that reddens (MEASURED —
+     *     every pre-existing test stayed green under that mutation).
+     *  3. a configured `statusLine` command still paints AFTER the cache
+     *     piece — the assembled bar reaching `withStatusLineCommand()` with
+     *     both optional pieces live.
+     */
+    public function testABilledSessionPaintsSpendThenCacheAndNeverDeepensTheBarAtAnyWidth(): void
+    {
+        StatusLineCommand::reset();
+        $bucketed = Usage::new(8100, 0.05, 200, 100, 7800, 0);
+        $totalOnly = Usage::new(8100, 0.05);
+
+        $bar = $this->barAt($this->billedChat($bucketed, 5.0, 120), self::ANCHOR);
+        self::assertStringContainsString('$0.0500 of $5.0000 cap', $bar, 'the cap form of the spend piece must survive next to the cache piece');
+        self::assertStringContainsString('98% cache · 42s', $bar, 'the widest cache form must fit at 120');
+        self::assertStringContainsString('Enter to send', $bar, 'and the mandatory hint rides along — this is the four-piece bar');
+        self::assertLessThan(
+            (int) strpos($bar, '98% cache'),
+            (int) strpos($bar, '$0.0500'),
+            'spend is cache\'s senior: it paints first on the row, before the cache piece',
+        );
+
+        $narrow = $this->barAt($this->billedChat($bucketed, 5.0, 100), self::ANCHOR);
+        self::assertStringContainsString('$0.0500 of $5.0000 cap', $narrow, 'the senior keeps its columns at 100');
+        self::assertStringNotContainsString('98% cache', $narrow, 'the junior is the piece that gives them up');
+
+        for ($cols = 4; $cols <= 200; $cols++) {
+            $width = Width::of($this->barAt($this->billedChat($bucketed, 5.0, $cols), self::ANCHOR));
+            $baseline = Width::of($this->barAt($this->billedChat($totalOnly, 5.0, $cols), self::ANCHOR));
+            self::assertLessThanOrEqual(
+                max($baseline, $cols),
+                $width,
+                sprintf('cols=%d: the cache piece deepened the bar from %d to %d', $cols, $baseline, $width),
+            );
+        }
+
+        self::install('echo on-branch');
+        $wide = $this->barAt($this->billedChat($bucketed, 5.0, 140), self::ANCHOR);
+        self::assertStringEndsWith(
+            '98% cache · 42s · Enter to send · Ctrl+P menu · /exit or ^C to quit · on-branch',
+            $wide,
+            'cache, hint, then the status line — the command paints below ALL fitted pieces',
+        );
+        self::assertLessThanOrEqual(140, Width::of($wide), 'five pieces and still inside the terminal');
+    }
+
+    /**
+     * THE TWO GUARDS `cacheIndicator()`'s docblock enumerates as "each one
+     * pinned by a test" that no test actually touched at review-1: the age
+     * clamp at 0 and `formatCacheAge()`'s hour/day rungs. The fixture's
+     * `?int $replyAt` knob is what makes each reachable — it was dead until
+     * this test, and every expectation below is the docblock formula applied
+     * by hand at ANCHOR.
+     */
+    public function testTheAgeClampsAtZeroAndLaddersUpThroughHoursAndDays(): void
+    {
+        // A reply stamped 120 s in the FUTURE (the NTP step-back shape the
+        // clamp bullet names): floor of a negative is negative, and the clamp
+        // must paint the truthful 0, never '-120s'. If the knob were ignored
+        // this fixture would render the default '42s' — so the string pins
+        // the knob, the clamp, and the sign handling at once.
+        self::assertSame(
+            '98% cache · 0s',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR + 120), 60, (float) self::ANCHOR),
+        );
+
+        // Hour rung: 3630 s → intdiv 3630/3600 = 1. Flooring, not rounding:
+        // an age rounded UP would announce an expiry a full 59.5 minutes early.
+        self::assertSame(
+            '98% cache · 1h',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 3600 - 30), 60, (float) self::ANCHOR),
+        );
+
+        // Day rung: 90000 s → intdiv 90000/86400 = 1, and NOT '25h'.
+        self::assertSame(
+            '98% cache · 1d',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 90000), 60, (float) self::ANCHOR),
+        );
+
+        // The six boundary legs — each value sits ADJACENT to a rung threshold,
+        // so nudging any `<` boundary reddens exactly one of them (the three
+        // rungs above only bound each threshold between sample neighbours).
+        self::assertSame(
+            '98% cache · 59s',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 59), 60, (float) self::ANCHOR),
+            'last second before the minute boundary',
+        );
+        self::assertSame(
+            '98% cache · 1m',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 60), 60, (float) self::ANCHOR),
+            'exactly on the minute boundary → intdiv(60,60)=1',
+        );
+        self::assertSame(
+            '98% cache · 59m',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 3599), 60, (float) self::ANCHOR),
+            'last minute before the hour boundary → intdiv(3599,60)=59',
+        );
+        self::assertSame(
+            '98% cache · 1h',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 3600), 60, (float) self::ANCHOR),
+            'exactly on the hour boundary → intdiv(3600,3600)=1',
+        );
+        self::assertSame(
+            '98% cache · 23h',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 86399), 60, (float) self::ANCHOR),
+            'last hour before the day boundary → intdiv(86399,3600)=23',
+        );
+        self::assertSame(
+            '98% cache · 1d',
+            $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 86400), 60, (float) self::ANCHOR),
+            'exactly on the day boundary → intdiv(86400,86400)=1',
+        );
+    }
+
+    /**
+     * DONE-WHEN HALF A — the snapshot test. Exact rendered bytes, not a
+     * non-null shape: 7800/8000 → "98%", age 42 s → "42s", joined in the
+     * widest form, and the same bytes land inside the assembled bar between
+     * the context readout and the processing hint (never inside the
+     * transcript — half B is its own test below).
+     */
+    public function testTheCacheSegmentRendersTheReportedRateAndAgeIntoTheBar(): void
+    {
+        $chat = $this->cacheChat();
+
+        self::assertSame(
+            '98% cache · 42s',
+            $this->cacheSegment($chat, 60, (float) self::ANCHOR),
+            'round(7800/8000*100)=98 over prompt = cacheRead+creation+input, age = ANCHOR - (ANCHOR-42)',
+        );
+
+        $bar = $this->barAt($chat, self::ANCHOR);
+        self::assertSame(1, substr_count($bar, '98% cache · 42s'), 'the segment paints exactly once');
+        self::assertLessThan(
+            (int) strpos($bar, 'Enter to send'),
+            (int) strpos($bar, '98% cache'),
+            'the readout belongs to the readouts block, before the processing hint',
+        );
+    }
+
+    /**
+     * THE FORMULA, exercised by moving one bucket — the third mandatory
+     * §111 experiment as a standing test. Each expected string below is the
+     * docblock formula applied by hand, and the last two are the polarities:
+     * a measured MISS renders, an UNREPORTED split renders nothing (null is
+     * not a zero — see {@see Usage}).
+     */
+    public function testChangingOneBucketMovesTheRenderedRateExactlyAsTheFormulaSays(): void
+    {
+        $now = (float) self::ANCHOR;
+
+        // cacheCreation 0 → 6000: prompt 8000 → 14000; 7800/14000 = 55.71 → 56.
+        $withCreation = $this->cacheChat(usage: Usage::new(14100, 0.05, 200, 100, 7800, 6000));
+        self::assertSame('56% cache · 42s', $this->cacheSegment($withCreation, 60, $now));
+
+        // cacheRead 7800 → 0 with a reported prompt of 200: a TOTAL MISS, and
+        // it renders — this figure is the Phase-3/Phase-10 regression signal.
+        $miss = $this->cacheChat(usage: Usage::new(300, 0.01, 200, 100, 0, 0));
+        self::assertSame('0% cache · 42s', $this->cacheSegment($miss, 60, $now));
+
+        // Every bucket unreported — what every live provider reports today:
+        // no segment at all, never a 0%.
+        $silent = $this->cacheChat(usage: Usage::new(300, 0.01));
+        self::assertSame('', $this->cacheSegment($silent, 60, $now));
+
+        // A prompt of exactly zero measured tokens has no cache share; 0/0 is
+        // not a rate the bar may assert.
+        $zeroPrompt = $this->cacheChat(usage: Usage::new(5, 0.0, 0, 0, 0, 0));
+        self::assertSame('', $this->cacheSegment($zeroPrompt, 60, $now));
+    }
+
+    /**
+     * The readout walks back to the NEWEST report that can carry one, and
+     * BOTH numbers then belong to that same report — the age is the age of
+     * the report shown, not of the newest message on the row. When a newer
+     * entry carries its OWN full report it outranks an older one, so the walk
+     * direction (newest-first) is what the first leg below pins: a forward
+     * walk breaks at the oldest usable report and lands on '50% cache · 1m'
+     * instead.
+     */
+    public function testTheSegmentCarriesTheNewestUsableReportNotTheNewestMessage(): void
+    {
+        // Older: the full split — 1000 of (1000+0+1000) = 50%.
+        $fullReport = Message::assistant('full report', self::ANCHOR - 100)->withUsage(
+            Usage::new(2050, 0.02, 1000, 50, 1000, 0),
+        );
+        // Middle: a total only — says nothing about the cache, skipped.
+        $totalOnly = Message::assistant('total only', self::ANCHOR - 1)->withUsage(Usage::new(900, 0.01));
+        // Newest: a SECOND full report that stamps over the older one — 300 of
+        // (300+700+200) = 25%, age 5s — the mid-session invalidator the
+        // docblock's "newest usable" reasoning names as the whole point.
+        $invalidated = Message::assistant('invalidated', self::ANCHOR - 5)->withUsage(
+            Usage::new(1200, 0.01, 200, 0, 300, 700),
+        );
+
+        $withNewer = (new Chat(
+            history: [Message::user('hello', self::ANCHOR - 200), $fullReport, $totalOnly, $invalidated],
+            backend: new EchoBackend(),
+        ))->withSize(100, 30);
+
+        // First leg — pins the reverse walk. The newest usable report wins over
+        // the older one: 25% at age 5s, NOT the 50%/1m the forward walk would
+        // break at first.
+        self::assertSame('25% cache · 5s', $this->cacheSegment($withNewer, 60, (float) self::ANCHOR));
+
+        // Second leg — with the newer report removed (a separate fixture, not a
+        // mutation of the first), the walk steps past the total-only entry and
+        // lands on the older full one. Age 100 s from the reporting call — NOT
+        // 1 s from the newest message: an implementation that took the timestamp
+        // from the wrong end of the walk lands on '1s' and fails this string.
+        $olderOnly = (new Chat(
+            history: [Message::user('hello', self::ANCHOR - 200), $fullReport, $totalOnly],
+            backend: new EchoBackend(),
+        ))->withSize(100, 30);
+
+        self::assertSame('50% cache · 1m', $this->cacheSegment($olderOnly, 60, (float) self::ANCHOR));
+    }
+
+    /**
+     * Forms are tried widest-first against the room the row's seniors left,
+     * and the piece gives up its columns in the same order the other
+     * readouts do — age first, segment entirely last. A fitting failure must
+     * NEVER widen the un-wrappable bar by one column, hence no last resort.
+     */
+    public function testTheCacheSegmentDegradesThenVanishesAsTheRoomNarrows(): void
+    {
+        $chat = $this->cacheChat();
+        $now = (float) self::ANCHOR;
+
+        self::assertSame(15, Width::of('98% cache · 42s'), 'the fixture form, with its width');
+        self::assertSame('98% cache · 42s', $this->cacheSegment($chat, 15, $now), 'a form fits at exactly its own width');
+        self::assertSame('98% cache', $this->cacheSegment($chat, 14, $now), 'the age is the first thing given up');
+        self::assertSame('98% cache', $this->cacheSegment($chat, 9, $now));
+        self::assertSame('', $this->cacheSegment($chat, 8, $now), 'no room: no segment, never an overflow');
+        self::assertSame('', $this->cacheSegment($chat, 0, $now));
+    }
+
+    /**
+     * THE HARD CONSTRAINT, string half: the widget renders into the status
+     * line LINE and nowhere else in the frame. Claude Code's /context billed
+     * ~1.6k tokens per invocation by painting its grid into the conversation;
+     * the same bug in this frame would make the readout appear in a content
+     * line as well as the bar. Counted over the WHOLE painted frame: exactly
+     * one occurrence, and it is on the bar (the frame's last line).
+     *
+     * The needle is the clock-INDEPENDENT part of the segment: this path runs
+     * the real `microtime(true)` (render() has no clock seam), so the AGE
+     * digits drift by definition — which is precisely why the assertion is
+     * structured on the rate. The liveness guard below is what stops "appears
+     * exactly once" degenerating into "never appears at all" (rule 16): the
+     * same needle is asserted PRESENT on the bar line first.
+     */
+    public function testTheReadoutAppearsExactlyOnceInTheFrameAndOnlyOnTheBarLine(): void
+    {
+        $frame = Renderer::render($this->cacheChat());
+
+        $lines = explode("\n", rtrim($frame, "\n"));
+        $bar = (string) end($lines);
+        self::assertStringContainsString(
+            '98% cache',
+            $bar,
+            'the widget must actually be live in this fixture, or the count below measures a dead renderer',
+        );
+
+        self::assertSame(
+            1,
+            substr_count($frame, '98% cache'),
+            'the readout reached the transcript as well as the bar — the /context per-call tax this step exists to prevent',
+        );
+    }
+
+    /**
+     * DONE-WHEN HALF B, its own test: twelve ticks and their renders add
+     * EXACTLY ZERO messages to the session transcript. The instruments are
+     * layered, not interchangeable.
+     *
+     * WHAT THIS SAID (through fix-5): the per-tick pins on the arm's
+     * contract — null `Cmd`, same Chat instance — were the FIRST reds, and
+     * the lead's E2b artifact showed exactly that (the plant fell to
+     * "tick #0 returned a different Chat instance", never to the closing
+     * signature line); the signature comparison "can only trail". WHAT IS
+     * TRUE NOW (fix-8 A): a per-tick signature comparison runs INSIDE the
+     * loop, ahead of both arm-contract pins, so the named zero-transcript
+     * claim takes its own first red — MEASURED at fix-8, the same E2b-shape
+     * plant now falls to "tick #0 moved the transcript", and deleting the
+     * new comparison restores the old fall-to-identity behaviour. WHY THE
+     * LAYERING STILL EARNS ITS PLACE: the closing comparison remains the
+     * whole-loop belt, the per-tick pins remain the arm-contract claims a
+     * same-transcript instance swap (the plant the identity pin alone
+     * catches) still reddens, and the AssistantMsg control below is still
+     * what fires the signature machinery's positive half (§16.8 rule 16 /
+     * RR4-F2).
+     *
+     * THE LOOP IS THE REAL IDLE LOOP, not a synthetic stand-in for one:
+     * `Chat::subscriptions()` arms the status tick only while a `statusLine`
+     * command is CONFIGURED, so a command is installed here and the
+     * subscriptions guard below proves the fixture actually arms it — with no
+     * command configured the tick arm never fires in that session, and
+     * "twelve ticks" would be twelve hand-delivered messages nothing on the
+     * live path sends.
+     *
+     * BOTH HALVES OF THE UPDATE RESULT ARE CAPTURED. A `Cmd` is this
+     * architecture's normal route from a side effect to a transcript message
+     * — a status-path update that quietly returned one would bill the very
+     * tax this step exists to prevent, and a test that destructured only the
+     * model would not see it. The arm's identity contract (`returns $this,
+     * null Cmd`) is pinned per tick as well.
+     *
+     * THE PLANT ACCOUNT, stated plainly rather than left to the evidence
+     * packet: this test's mutation plant (the lead's E2b) was made in the TICK
+     * ARM — that arm is the only seam on the status path that can add a
+     * message. WHAT THIS SAID (through fix-5): the render-path half of the
+     * claim (a string reaching the transcript) was planted and caught ONLY by
+     * the sibling frame test
+     * {@see testTheReadoutAppearsExactlyOnceInTheFrameAndOnlyOnTheBarLine}.
+     * WHAT IS TRUE NOW (fix-8 B): the M9-shape plant reddens BOTH — this test
+     * carries its own painted-transcript scan, with the bar line of the same
+     * frame as its known-positive half through the same scanner (rule 16: a
+     * sibling test is a separately deletable unit, and the hard constraint
+     * should not rest solely on one). WHY THE DIVISION STILL EARNS ITS PLACE:
+     * MESSAGE-absence still cannot be proved through painting — a paint has no
+     * message to grow — so the tick-arm plant remains the model-side evidence
+     * and the frame test remains the independent frame-side belt.
+     *
+     * The control is the half that makes this a test rather than a tautology
+     * (§16.8 rule 16, RR4-F2): the SAME signature machinery must notice a
+     * real transcript-growing operation — settling a provider reply — by
+     * exactly one, in the same test, or an absence assertion here would stay
+     * green against a dead instrument.
+     */
+    public function testPaintingAndTickingTheCacheReadoutAddZeroTranscriptMessages(): void
+    {
+        $chat = $this->cacheChat();
+
+        // Live-widget guard: what is measured below is absence, so first prove
+        // the widget actually fires on this fixture.
+        self::assertSame('98% cache · 42s', $this->cacheSegment($chat, 60, (float) self::ANCHOR));
+
+        // Make the ticks LIVE, not hand-fed: the subscription exists only in
+        // this configuration (see the docblock), and painting must not run
+        // the command — that separation is testRenderingNeverRunsTheCommand.
+        self::install('echo hi');
+        self::assertNotNull(
+            $chat->subscriptions(),
+            'the fixture arms no status tick, so the twelve updates below would be a synthetic loop',
+        );
+
+        $before = $this->transcriptSignature($chat);
+        self::assertCount(2, $before, 'the fixture is two messages; the control below bounds the signature to this domain');
+
+        $next = $chat;
+        for ($i = 0; $i < 12; $i++) {
+            $this->barAt($next, self::ANCHOR);
+            Renderer::render($next);
+            $tickTarget = $next;
+            [$next, $cmd] = $next->update(new StatusLineTickMsg());
+            // Fix-8 A (review-7 M3): the NAMED claim gets its own first red.
+            // Before this, a transcript-growing plant fell to the identity pin
+            // — "tick #0 returned a different Chat instance" — because the
+            // closing signature line sat behind the loop and PHPUnit aborts at
+            // the first failure; the zero-transcript assertion itself never
+            // reddened. Checking the signature per tick, BEFORE the
+            // arm-contract pins, makes the plant fall to the claim it violates.
+            // MEASURED: with this line the plant's first red is
+            // 'tick #0 moved the transcript'; with it deleted, the plant falls
+            // back to the identity pin. The closing comparison below stays as
+            // the whole-loop belt — never weaken, layer.
+            self::assertSame(
+                $before,
+                $this->transcriptSignature($next),
+                'tick #' . $i . ' moved the transcript — the zero-transcript claim itself, ahead of the arm-contract pins',
+            );
+            self::assertNull(
+                $cmd,
+                'tick #' . $i . ' returned a Cmd — the status path\'s normal route into the transcript',
+            );
+            self::assertSame(
+                $tickTarget,
+                $next,
+                'tick #' . $i . ' returned a different Chat instance; the arm is documented to return $this',
+            );
+        }
+
+        self::assertSame($before, $this->transcriptSignature($next), 'twelve ticks and their renders moved the transcript');
+
+        // Fix-8 B (review-7 M9): the STRING half of the hard constraint, guarded
+        // by THIS test's own scanner. At fix-5 the plant that echoed the needle
+        // into painted transcript content reddened EXACTLY the sibling frame
+        // test — and §16.8 rule 16 calls a sibling test a separately deletable
+        // unit, so the named hard-constraint test has to see the tax itself.
+        // The bar line of the SAME frame is the known-positive half through the
+        // SAME scanner: without it, the transcript-side zero could be the
+        // identical silence of a dead scan. MEASURED: the M9-shape plant now
+        // reddens this test AND the frame test (2 reds); with these two lines
+        // deleted it falls back to the frame test alone (1 red).
+        $frameLines = explode("\n", rtrim(Renderer::render($next), "\n"));
+        $barLine = (string) array_pop($frameLines);
+        self::assertStringContainsString(
+            '98% cache',
+            $barLine,
+            'the needle is live on the bar line of this very frame — without it the transcript-side zero below could be the silence of a dead scanner (§16.8 rule 16)',
+        );
+        self::assertStringNotContainsString(
+            '98% cache',
+            implode("\n", $frameLines),
+            'the readout reached painted transcript content — the /context per-call tax, now caught in the zero-transcript test itself, not only in the sibling frame test',
+        );
+
+        [$grown] = $next->update(new AssistantMsg(Message::assistant('a settled reply')));
+        $grownSignature = $this->transcriptSignature($grown);
+        self::assertSame(
+            \count($before) + 1,
+            \count($grownSignature),
+            'the KNOWN-POSITIVE CONTROL failed: a real transcript append does not move this signature, '
+            . 'so the zero-transcript assertion above could not notice one either',
+        );
+        self::assertSame(
+            $before,
+            \array_slice($grownSignature, 0, \count($before)),
+            'the control grew the transcript by APPENDING, not by rewriting what was already there',
+        );
     }
 }
