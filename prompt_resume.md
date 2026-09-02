@@ -617,9 +617,13 @@ Awaiting user decision: TWO. **NEITHER BLOCKS THE QUEUE.** Carry both forward on
 
                   **(2) WIRE THE WRITE SIGNAL ON THE WORKFLOW PATH — P3.S6's escalation.**
                   The per-step seam P3.S5 left open on the Agent assembler IS REAL and IS LIVE,
-                  in `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
-                  which `:1105` and `:875` re-render once per stage and `:1252`/`:1294` render
-                  twice in one verification stage. MEASURED with a logging git shim: one render
+                                     in `Workflows/WorkflowEngine.php` — five production-reachable call sites, of
+                   which `:1105` and `:875` re-render once per stage and `:1275`/`:1318` — the pair
+                   inside `executeVerificationStage()` (declared :1222), re-derived at `cf41aacd6` —
+                   render twice in one verification stage. Cite a call site by FUNCTION NAME PLUS
+                   LINE: this sentence said `:1252`/`:1294`, which was true when P3.S6 wrote it and
+                   rotted by the +23/+24 the F5 wiring added above them. MEASURED with a logging git
+                   shim: one render
                   = 5 git subprocesses (3 suppressed), a K-stage workflow = 5*K (10 at K=2, 25
                   at K=5), one ProcessExecutor dispatch = 10 because it renders TWICE — and in
                   every case the stages see ONE DISTINCT PROMPT, the two git-diff sections
