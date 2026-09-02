@@ -250,20 +250,54 @@ final class ClaudeCodeMcpClientShutdownTest extends TestCase
      * discarding the only diagnostic a wedged MCP server produces. This is also
      * the positive component that stops {@see ClaudeCodeMcpClient::stderrTail()}
      * being pinned only by an empty string.
+     *
+     * WHAT THIS USED TO DO, AND WHY IT WAS FLAKY (phase-3 close-review cycle-2
+     * F1, MEASURED by the close reviewer: red 1-in-2 full-suite runs, green
+     * 3-in-3 isolated, and deterministically reproduced with a synthetic 300 ms
+     * child stall against CORRECT library code). The fixture writes its pid
+     * file — the only readiness handshake — BEFORE the stderr storm, so the
+     * handshake implies the child exists and nothing about any stderr BYTE.
+     * The test then did ONE `readMessages()` — one non-blocking bounded drain
+     * — and asserted the tail was non-empty. A scheduler that leaves the child
+     * unscheduled between those two fixture lines for the length of the
+     * parent's assert path produced `stderrTail() === ''` against a drain,
+     * retention and cap that were all intact: a load flake in the TEST, not a
+     * defect in the client. (The pid-before-storm ordering stays deliberate —
+     * {@see NOISY_STDERR_SERVER} explains why a wedged child must not surface
+     * as a handshake failure.)
+     *
+     * WHAT IT DOES NOW: the same single bounded drain becomes a BOUNDED POLL on
+     * stderr data arrival — 100 attempts, 10 ms apart — mirroring exactly how
+     * {@see ClaudeCodeMcpClient::callTool()} polls
+     * {@see ClaudeCodeMcpClient::readMessages()} for a reply. Each attempt
+     * drives the real drain path, so a client that never retains stderr still
+     * spends the whole second and reddens on the same assertion; the poll
+     * changes WHEN the assertion is allowed to fail, not WHAT it demands.
+     * The 64 KiB cap semantics asserted below are untouched.
      */
     public function testTheFloodingServersStderrIsRetainedUpToOneBufferAndNoMore(): void
     {
         $client = $this->connectedClientOverNoisy(self::FLOODING_STDERR_BYTES);
 
         try {
-            $client->readMessages();
-            $tail = $client->stderrTail();
+            $attempts = 0;
+            $tail = '';
+            while ($attempts < 100) {
+                $client->readMessages();
+                $tail = $client->stderrTail();
+                if ($tail !== '') {
+                    break;
+                }
+                usleep(10000); // 10ms — the callTool() poll cadence
+                $attempts++;
+            }
 
             $this->assertNotSame(
                 '',
                 $tail,
-                'nothing was retained, so fd 2 is being discarded rather than read — the server '
-                . 'stays alive but its only diagnostic is gone'
+                'nothing was retained in ' . $attempts . ' drain attempts over ~'
+                . number_format($attempts * 10) . ' ms, so fd 2 is being discarded rather than read — '
+                . 'the server stays alive but its only diagnostic is gone'
             );
             $this->assertSame(
                 str_repeat('E', strlen($tail)),
