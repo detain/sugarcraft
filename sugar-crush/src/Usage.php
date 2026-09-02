@@ -97,8 +97,12 @@ namespace SugarCraft\Crush;
  * frame written before the buckets existed — which simply lacks those keys —
  * to unreported buckets rather than to four zeroes. That last one is why a
  * bucket must be added to BOTH halves of the array pair: the fork boundary's
- * parent cannot receive the object, so a key missing from `toArray()` or
- * `fromArray()` works in sync mode and silently reads zero forever in async.
+ * parent cannot receive the object, so a key dropped from `toArray()` makes
+ * the async path read that bucket UNREPORTED forever — accounting lost on
+ * one side only, with sync mode staying green — while the mirror error,
+ * `fromArray()` coercing an absent key to a number, fabricates a measured
+ * zero. Both are silent; both are the async side; the pair must stay
+ * symmetric.
  */
 final readonly class Usage
 {

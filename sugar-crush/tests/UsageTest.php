@@ -196,11 +196,15 @@ final class UsageTest extends TestCase
     // =====================================================================
 
     /**
-     * Done-when clause 1, as behaviour: the four buckets exist, and the
-     * constructor defaults are UNREPORTED — `new()` with no buckets must read
-     * null on all four, not 0. If a default ever flips to 0, every unsplit
-     * provider instantly "reports" a zero cache and the status bar starts
-     * asserting facts nobody measured.
+     * Done-when clause 1, as behaviour: the four buckets exist, and their
+     * defaults are UNREPORTED — `new()` with no buckets must read null on
+     * all four, not 0. The path this pins is `new()`'s OWN default
+     * parameters; the private constructor's parallel `= null` defaults state
+     * the same invariant but are not the enforced path — every internal
+     * construction site passes all six arguments, so flipping only those
+     * leaves this suite green (measured). If `new()`'s default ever flips to
+     * 0, every unsplit provider instantly "reports" a zero cache and the
+     * status bar starts asserting facts nobody measured.
      */
     public function testNewCarriesEachBucketExactlyAndDefaultsThemToUnreported(): void
     {
