@@ -636,9 +636,10 @@ JSON;
     public function testP4S2CustomMirrorsTheFamilyParseOnTheProbedShape(): void
     {
         // LIVE-PROBE payload by family: CustomProvider fronts any
-        // OpenAI-compatible server - frequently, its own class docblock says,
-        // exactly the sglang deployment probed above - so the probed body is
-        // the real-shaped fixture for it.
+        // OpenAI-compatible server - frequently, its own inline extra_body
+        // reasoning-flag comment (src/Providers/CustomProvider.php:141-142,
+        // inside complete()) says, exactly the sglang deployment probed
+        // above - so the probed body is the real-shaped fixture for it.
         $document = json_decode(self::SGLANG_PROBE_COLD, true, flags: JSON_THROW_ON_ERROR);
         $provider = $this->p4s2CustomRespondingWith(self::SGLANG_PROBE_COLD);
 
