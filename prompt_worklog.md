@@ -253,6 +253,32 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P3.CLOSE-r3 + r3-fix - close-review cycle 3 (FINAL) and its record-side fixes; PHASE 3 CLOSED - 2026-09-02 - 58150a432
+
+Status: MERGED to master as 58150a432 (branch prompt/P3.CLOSE-r3-fix, 7 commits 1fc23d889..dd07b245a). Both cycle-3 worktrees removed; branches deleted. PHASE 3 IS CLOSED by this entry.
+
+Base: cf41aacd6 (bookkeeping tip carrying audit-fix-3 99227d29c).
+
+What cycle 3 was: the FINAL full-window close review (cap 3, per the phase-review protocol), brand-new read-only reviewer over the complete Phase 3 change-set (924c71a0d..cf41aacd6 -- sugar-crush/ = 30 files, +22,911/-603), briefed by prompt_kit/briefs/phase-review-brief-r3.md, never shown cycle-1/2 findings.
+
+Reviewer verdict - NO production-code or test defect. Everything reproduced exactly on record: change-set diffstat; full suite 10556 / 163,806 / 1 skipped / 0 failures (06:58.443, checkout root, serial, /dev/null - the MMG-198 arm; cmp.py sole-mover-none vs the lane's own snapshot); roster derivation 67/83/181/440/0 EXACT (testFiles cross-checked by find = 440); goldens byte-identical, unmoved since 405252a41 (fixtures log empty); assembled==golden==wire at the 5,176 B pin; scanner attacked with 20 planted shapes - zero new defeats, every non-declared shape READ or fail-closed over-reported, same-script controls fired; claim-8 elementwise token identity re-derived (Runtime 4,366 / Agent 1,270); subtraction read of all -603 lines - every deleted test survives (5 relocated Vertex pins, S5 inverted pin); root unified via requireRoot(); AgentResult ctor exactly 8 params, none tool-named. Honest non-checks stated: lane deletion experiments accepted as RECORDED-UNVERIFIED; 163,809-arm not re-run; php-cs-fixer/coverage/VHS excluded by brief.
+
+Six findings, ALL record-side, fixed here:
+- F1: brief sandbox HEAD was stale (99227d29c vs tip cf41aacd6; 0 sugar-crush diff between).
+- F2: nine-file census figure 320/29,926 UNREPRODUCIBLE - measured truth for the nine HAND_MAINTAINED_CENSUS_SET members (TreeWideGuardRosterTest.php:407-417) is OK (176 tests, 31,255 assertions), re-measured by the orchestrator independently (00:17.006). Corrected at brief:98, prompt_worklog.md:282, prompt_resume.md:160. New corrections rule: a census figure must always carry its file list.
+- F3: claim-9 (audit-fix-3 scope purity) FALSIFIED as stated - the merged window touches 9 paths including src/Cli/Bootstrap.php +1 line (environmentRoot: $root, the honest F5 shared-root wiring) while the step brief declared 8. A SCOPE AMENDMENT section (three-part form) now sits in P3.audit-fix-3-step-brief.md; the pickup re-declaration's "the declared-file list stands" claim is recorded as false; records corrected (resume:162, resume:562-568, brief:117, this worklog's Bootstrap bullet).
+- F4: brief merge-table row mis-described P3.S4 ("prefix-win ordering in tool-result truncation") - S4 MEASURED the stable-prefix win (3,095 -> 4,670 of 4,844 B), zero production change; Runtime.php:661 says the tool-result path is NOT a prefix win. Row rewritten with the superseded text quoted as history.
+- F5: scanner blind-spot table lacked a row for cross-file literal class_alias (planted probe scans []; roster table has the sibling row). +16 doc-comment lines in tests/RuntimeTest.php declare it MEASURED LATENT (class_alias count in src/ = 0 before and after). Comment-only PROVEN: token streams elementwise identical at 28,293 significant tokens; php -l clean. Orchestrator re-ran the non-comment-line grep on the diff: EMPTY.
+- F6: WorkflowEngine render-site citations rotted (:1252/:1294 -> :1275/:1318, +23/+24 from the lane's own F5 wiring; substance - five sites, verify-stage pair inside executeVerificationStage declared :1222 - holds). Re-derived fresh: systemPrompt() at :1063/:1174/:1275/:1318/:1422. New rule: cite by function name plus line number.
+
+Gate trail (every figure cwd + serial + /dev/null, box-quiet probe 0): fix-agent full suite 10556/163,806/1/0fail at branch tip 06:56.750 with cmp.py ZERO movers (+0/+0) vs the reviewer's suite-r3.xml on cf41aacd6 - assertion figures identical, no mover to attribute; nine-file census 176/31,255 (agent and orchestrator, independently); path-repo gate exit 0 (58 libs); goldens identical before/after at both sandboxes. Orchestrator's own belt-and-suspenders full-suite re-run on merged master 58150a432 recorded separately (expect EXACTLY 10556/163,806/1/0).
+
+Cycle cap: this was cycle 3 of at most 3. All six findings were record-side and verified by measurement (zero-mover suites prove no behavior change) - a fourth full window was NOT spent; the retrospective track exists if the record diffs are ever doubted. Close-review ledger for Phase 3: cycle 1 -> A1-A7 (audit-fix-2), cycle 2 -> F1-F7 (audit-fix-3 + F3/F7 recorded), cycle 3 -> F1-F6 record-side (this merge). audit-fix-2's owed cycle-13 debt stayed discharged by the window reviews.
+
+Carried to a follow-up step (F6b, citation refresh - NOT blocking): F5's +16 lines rotted two RuntimeTest SELF-citations the fix agent was (correctly) forbidden to touch under comment-only scope: :6929 cites ":4001-4003" (now :4017-4019) from inside an assertSame() MESSAGE STRING (its own disclosed change required), and :6942's comment cites :3921 (now :3937) - that same list was PRE-EXISTINGLY rotted (:4931/:4967/:5156 now ~:4958/:4986/:5022/:5211). Also stale: prompt_plan.md:1606 and the section-18 row at :3480 carry the P3.S6-era loop lines :875/:1105 (now :895/:1108/:1126). One small dedicated step.
+
+N1 note: cross-file literal class_alias silence now DECLARED in both instrument tables (scanner + roster); the per-tool writesTree() vs working-tree-fingerprint decision still awaits the user.
+
 ### P3.audit-fix-3 — close Phase 3 close-review cycle-2 findings F1 F2 F4 F5 F6 (instruments + seams)   ·   2026-09-02   ·   99227d29c
 
 **Status** `merged`
