@@ -439,6 +439,13 @@ final class UsageTest extends TestCase
      * read is the per-bucket face of "free is not unknown" (the existing
      * `testRealTokensAtZeroCost...` for totals), so `reported()` must not drop
      * it — and the all-null mirror case must still drop to null.
+     *
+     * "Measured" includes measured-as-ZERO: the gate's bucket conditions are
+     * strict `=== null`, so a provider that reports exactly zero in a bucket
+     * on an otherwise-free, otherwise-empty call has still said something
+     * ("the cache was never read") and must get a Usage back, direct and
+     * across the fork wire. Pinned per bucket because the gate has one
+     * condition per bucket.
      */
     public function testBucketsCountAsReportsEvenWhenTotalAndCostAreZero(): void
     {
@@ -446,6 +453,16 @@ final class UsageTest extends TestCase
         $this->assertNotNull($freeButMeasured, 'a measured cache read beside a zero bill is still a measurement');
         $this->assertSame(40, $freeButMeasured->cacheReadTokens);
         $this->assertSame(null, $freeButMeasured->inputTokens);
+
+        foreach (['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens'] as $bucket) {
+            $zeroMeasured = Usage::reported(0, 0.0, ...[$bucket => 0]);
+            $this->assertNotNull($zeroMeasured, "a $bucket reported as EXACTLY zero is still a report");
+            $this->assertSame(0, $zeroMeasured->$bucket, '...and it stays zero, not rewritten to unreported');
+
+            $zeroOnTheWire = Usage::fromArray(['totalTokens' => 0, 'costUsd' => 0.0, $bucket => 0]);
+            $this->assertNotNull($zeroOnTheWire, "the same zero-$bucket frame survives the fork wire as a report");
+            $this->assertSame(0, $zeroOnTheWire->$bucket);
+        }
 
         $this->assertNull(Usage::reported(0, 0.0), 'mirror polarity: nothing at all is still nothing reported');
     }
