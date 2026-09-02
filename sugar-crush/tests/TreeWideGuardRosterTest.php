@@ -1196,6 +1196,28 @@ final class TreeWideGuardRosterTest extends TestCase
             . 'for real',
         );
 
+        // THE CYCLE-3 PAIR, each measured silent-and-undeclared at the
+        // previous HEAD (F-3: the write scanner's subclass chain had never
+        // travelled to this classifier; F-2: the nowdoc body is as literal
+        // as a quoted string and only the shape refused it).
+        $viaWalkerSubclass = self::knownAnswerSources()['viaWalkerSubclass'];
+        $this->assertSame(
+            ['root' => ['MyWalker($d)'], 'unresolved' => []],
+            self::classifyWalkSites($viaWalkerSubclass),
+            'a same-file SUBCLASS of a walker class, constructed rooted, is the walker under a '
+            . 'name the alphabet does not spell - exactly the silence the GlobIterator row '
+            . 'refuses, reopened by this file\'s own fixpoint-less chain read',
+        );
+
+        $viaHeredocClassAlias = self::knownAnswerSources()['viaHeredocClassAlias'];
+        $this->assertSame(
+            ['root' => ['RD($d)'], 'unresolved' => []],
+            self::classifyWalkSites($viaHeredocClassAlias),
+            'a NOWDOC alias body is a literal in full - PHP registered the alias, the site '
+            . 'constructed the walker, and a reader that matches only the quoted spelling '
+            . 'watched it happen with no site in either bucket',
+        );
+
         // AND THE FIXTURE SET ITSELF IS PINNED, which was the NINTH door in
         // this one check when the set held eight. The coverage half
         // in {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
@@ -1222,7 +1244,7 @@ final class TreeWideGuardRosterTest extends TestCase
         $this->assertSame(
             ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk',
                 'viaFunctionAlias', 'viaClassAlias', 'viaRuntimeAlias', 'viaSplFileInfoChildren', 'splFileInfoChained', 'childrenUnanchored',
-                'viaReorderedClassAlias', 'viaNamespacedClassAlias',],
+                'viaReorderedClassAlias', 'viaNamespacedClassAlias', 'viaWalkerSubclass', 'viaHeredocClassAlias',],
             array_keys(self::knownAnswerSources()),
             'a fixture was added to or removed from knownAnswerSources() without a matching '
             . 'exact-answer row above. That matters in one direction in particular: '
@@ -1296,6 +1318,15 @@ final class TreeWideGuardRosterTest extends TestCase
             . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
             'viaNamespacedClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', 'Deep\\NS');\n"
             . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new \\Deep\\NS(\$d); } }\n",
+            // THE CYCLE-3 PAIR, both MEASURED silent-and-undeclared before the
+            // fix: a same-file SUBCLASS of a walker class (the write scanner's
+            // thirteenth-defeat channel, never travelled to this classifier
+            // until F-3), and a heredoc NOWDOC alias body (a pure literal the
+            // two-literal reader refused for shape alone, F-2).
+            'viaWalkerSubclass' => "<?php\nclass MyWalker extends \\RecursiveDirectoryIterator {}\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new MyWalker(\$d); } }\n",
+            'viaHeredocClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', <<<'EOT'\nRD\nEOT);\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new RD(\$d); } }\n",
         ];
     }
 
@@ -1371,13 +1402,22 @@ final class TreeWideGuardRosterTest extends TestCase
      * `getChildren()` row are closed doors of the same standing, each with
      * its zero-live-population measurement in
      * {@see testTheWalkClassifierAnswersKnownInputsCorrectly()}'s fixture
-     * comment. The rows still marked silent stay open deliberately - each is
-     * the shape whose closure costs more than a false positive buys, and the
-     * two whose channels exist but cannot be read from this file (a COMPUTED
-     * `class_alias`, an alias whose target lives in another file's class) are
-     * declared here rather than faked, because F4's disposition drew exactly
-     * that boundary. The class doc-block carries the measurement that rejected
-     * a subprocess channel.
+     * comment. So are - as of review cycle 3, which measured each of them
+     * silent-and-undeclared the day after they were written about - the
+     * same-file WALKER SUBCLASS chain ({@see sameFileWalkerSubclasses()},
+     * the F-3 row this method's own GlobIterator criterion demanded), the
+     * reversed LABEL order and the NOWDOC alias body of the runtime-alias
+     * reader (F-2). The rows still marked silent stay open deliberately -
+     * each is the shape whose closure costs more than a false positive buys:
+     * a COMPUTED `class_alias` and an alias whose target lives in another
+     * file's class (cycle 1's boundary), the KEYWORD spellings inside a
+     * subclass, whose resolution needs the enclosing-body stack the write
+     * scanner carries and this classifier deliberately does not (cycle 3's
+     * F-3, declined half, named), and the same-file CONSTANT argument of a
+     * `class_alias`, which is the constant folding the string-indirection
+     * row already refuses, declined on both instruments by the same right.
+     * The class doc-block carries the measurement that rejected a subprocess
+     * channel.
      *
      * ALL THREE POLARITIES, THROUGH THE SAME CLASSIFIER (section 16.8 rule
      * 18): the table carries rows that must RESOLVE, rows that must REPORT
@@ -1492,6 +1532,28 @@ final class TreeWideGuardRosterTest extends TestCase
             'a namespaced runtime alias at its construction site' => [
                 "<?php\nclass P { function go() { class_alias('RecursiveDirectoryIterator', 'Deep\\\\NS'); new \\Deep\\NS(\\dirname(__DIR__, 2) . '/src'); } }\n",
                 'root',
+            ],
+            'a same-file subclass of a walker class' => [
+                "<?php\nclass MyWalker extends \\RecursiveDirectoryIterator {}\nclass P { function go() { new MyWalker(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'root',
+            ],
+            // THE TWO DECLINED SHAPES of the F-3 family, named so the table
+            // keeps being the map of the silence the header now claims.
+            // A KEYWORD (`new self` inside a subclass) needs the enclosing-
+            // body stack the WRITE scanner grew; the classifier carries none,
+            // and giving it one would only ever over-widen a bucket that
+            // already lands in the residue for a human. A SAME-FILE CONSTANT
+            // as the alias name is the literal one hop from the call -
+            // resolving it is the constant folding the string-indirection
+            // row already refuses, declined on both instruments by the same
+            // right (RuntimeTest declares it beside this one).
+            'a walker subclass reached through a self/static/parent keyword' => [
+                "<?php\nclass MyWalker extends \\RecursiveDirectoryIterator { function m() { return new self(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'silent',
+            ],
+            'a class_alias named by a same-file constant' => [
+                "<?php\nconst AL = 'RD';\nclass P { function go() { class_alias('RecursiveDirectoryIterator', AL); new RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
+                'silent',
             ],
             'a walker reached through a COMPUTED class_alias' => [
                 "<?php\nclass P { function go() { \$n = 'DirectoryIterator'; class_alias(\$n, 'RD'); new \\RD(\\dirname(__DIR__, 2) . '/src'); } }\n",
@@ -3025,6 +3087,13 @@ final class TreeWideGuardRosterTest extends TestCase
         $count = \count($tokens);
         $tainted = self::rootAnchoredNames($tokens);
         $aliases = self::importAliasMap($tokens);
+        // THE SAME-FILE CHAIN, travelled from the write scanner's thirteenth
+        // defeat the day review cycle 3 measured the classifier still reading
+        // written names only: `class MyWalker extends \RecursiveDirectoryIterator
+        // {}` + `new MyWalker($root)` is the walker under a name the alphabet
+        // does not spell, and it was silently neither root nor residue - the
+        // GlobIterator row's own criterion for a defect.
+        $walkerSubclasses = self::sameFileWalkerSubclasses($tokens, $aliases['class']);
 
         $root = [];
         $unresolved = [];
@@ -3048,7 +3117,9 @@ final class TreeWideGuardRosterTest extends TestCase
             $canonicalClass = $aliases['class'][$name] ?? null;
             $canonicalFunction = $aliases['function'][$name] ?? null;
             $isClass = \in_array($name, self::WALKER_CLASSES, true)
-                || ($canonicalClass !== null && \in_array($canonicalClass, self::WALKER_CLASSES, true));
+                || ($canonicalClass !== null && \in_array($canonicalClass, self::WALKER_CLASSES, true))
+                || isset($walkerSubclasses[$name])
+                || ($canonicalClass !== null && isset($walkerSubclasses[$canonicalClass]));
             $isFunction = \in_array($name, self::WALKER_FUNCTIONS, true)
                 || ($canonicalFunction !== null && \in_array($canonicalFunction, self::WALKER_FUNCTIONS, true));
             if (!$isClass && !$isFunction) {
@@ -3123,6 +3194,107 @@ final class TreeWideGuardRosterTest extends TestCase
      * @param array<string> $root
      * @param array<string> $unresolved
      */
+    /**
+     * Every class DECLARED IN THIS FILE whose `extends` chain reaches a
+     * {@see WALKER_CLASSES} entry, as `declared name => walker spelling`.
+     *
+     * THE CLASSIFIER'S THIRTEENTH-DEFEAT TWIN, and review cycle 3, F-3, is
+     * what it closes: the write scanner got this channel in the same step and
+     * the classifier did not, so `class MyWalker extends
+     * \RecursiveDirectoryIterator {}` + `new MyWalker(dirname(...))` produced
+     * NO site in either bucket - skipped in SILENCE, the exact grade the
+     * GlobIterator row was written to refuse. Fixpoint so declaration order
+     * cannot matter; a parent spelled through `use … as …` or a two-literal
+     * `class_alias` resolves through the merged class map; a parent imported
+     * from another file keeps its chain out of reach and the blind-spot table
+     * says so. A DECLARED subclass constructs nothing until a `new` names it -
+     * the same polarity discipline as the write scanner's channel.
+     *
+     * THE KEYWORD SPELLINGS ARE NOT HERE: `new self` / `new static` /
+     * `new parent` inside such a subclass resolve their target through the
+     * ENCLOSING BODY, which the classifier carries no stack for; that shape
+     * is a pinned blind-spot row, not a fake.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
+     * @param array<string, string>                         $classAliases
+     *
+     * @return array<string, string>
+     */
+    private static function sameFileWalkerSubclasses(array $tokens, array $classAliases): array
+    {
+        $parentOf = [];
+        $count = \count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_CLASS) {
+                continue;
+            }
+            $previous = $tokens[$i - 1] ?? null;
+            if (\is_array($previous) && $previous[0] === T_DOUBLE_COLON) {
+                continue;
+            }
+            $declared = $tokens[$i + 1] ?? null;
+            if (!\is_array($declared) || $declared[0] !== T_STRING) {
+                continue;
+            }
+            $child = strtolower($declared[1]);
+
+            for ($j = $i + 2; $j < $count; $j++) {
+                $step = $tokens[$j];
+                if (\is_array($step) && $step[0] === T_EXTENDS) {
+                    $parent = $tokens[$j + 1] ?? null;
+                    if (\is_array($parent) && \in_array($parent[0], [T_STRING, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE], true)) {
+                        $pname = strtolower(ltrim($parent[1], '\\'));
+                        if ($parent[0] === T_NAME_RELATIVE) {
+                            $rel = substr($pname, \strlen('namespace\\'));
+                            $pname = str_contains($rel, '\\') ? '' : $rel;
+                        }
+                        if ($pname !== '' && !str_contains($pname, '\\')) {
+                            $parentOf[$child] = $pname;
+                        }
+                    }
+
+                    break;
+                }
+                if ($step === '{') {
+                    break;
+                }
+            }
+        }
+
+        $roots = [];
+        do {
+            $added = false;
+            foreach ($parentOf as $child => $parent) {
+                if (isset($roots[$child])) {
+                    continue;
+                }
+                $spellings = [$parent];
+                $resolved = $classAliases[$parent] ?? null;
+                if ($resolved !== null && $resolved !== $parent) {
+                    $spellings[] = $resolved;
+                }
+                foreach ($spellings as $spelling) {
+                    if (\in_array($spelling, self::WALKER_CLASSES, true)) {
+                        $roots[$child] = $spelling;
+                        $added = true;
+
+                        break;
+                    }
+                    if (isset($roots[$spelling])) {
+                        $roots[$child] = $roots[$spelling];
+                        $added = true;
+
+                        break;
+                    }
+                }
+            }
+        } while ($added);
+
+        return $roots;
+    }
+
     private static function classifyGetChildrenSite(array $tokens, int $i, array $tainted, array &$root, array &$unresolved): void
     {
         $previous = $tokens[$i - 1] ?? null;
@@ -3515,13 +3687,39 @@ final class TreeWideGuardRosterTest extends TestCase
             $argument = trim(substr($argument, strlen($label[0])));
         }
 
+        $body = null;
+        $quote = "'";
         if (preg_match("~^(['\"])(?<name>.*)\\1$~s", $argument, $m) === 1) {
-            $full = strtolower(self::decodeAliasStringBody($m['name'], $m[1] ?? "'"));
+            $body = $m['name'];
+            $quote = $m[1];
+        } elseif (preg_match("~^<<<'(?<label>\w+)'\n(?<name>.*)\n\\k<label>$~s", $argument, $m) === 1) {
+            // NOWDOC (review cycle 3, F-2): the body is literal verbatim —
+            // the readers used to refuse `class_alias(A::class, <<<'EOT'
+            // W
+            // EOT);` entirely, and PHP still registered the alias, truncated
+            // the target, and both instruments answered nothing. An
+            // interpolated body is impossible in a nowdoc by definition.
+            // VERBATIM: a nowdoc body carries no escapes at all, so `\\` in
+            // source is two backslashes in the runtime name — the shape
+            // check below refuses it, as the engine would refuse the name.
+            $body = rtrim($m['name'], "\r\n");
+            $quote = "\x00";
+        } elseif (preg_match("~^<<<(?<label>\w+)\n(?<name>.*)\n\\k<label>$~s", $argument, $m) === 1) {
+            // Double-quoted HEREDOC: same escape law as `""`; the join of
+            // the significant stream carries the whole body as ONE run here
+            // precisely when it is interpolation-free, because an
+            // interpolated body would have joined `$`/`{`-bearing extra
+            // tokens into a text this shape refuses below at the decode.
+            $body = rtrim($m['name'], "\r\n");
+            $quote = '"';
+        }
 
-            if ($full === null) {
+        if ($body !== null) {
+            $decoded = self::decodeAliasStringBody($body, $quote);
+            if ($decoded === null) {
                 return null;
             }
-            $full = ltrim($full, '\\');
+            $full = strtolower(ltrim($decoded, '\\'));
 
             return preg_match('~^[a-z_][a-z0-9_]*(?:\\\\[a-z_][a-z0-9_]*)*$~', $full) === 1 ? $full : null;
         }
@@ -3550,6 +3748,11 @@ final class TreeWideGuardRosterTest extends TestCase
      */
     private static function decodeAliasStringBody(string $body, string $quote): ?string
     {
+        if ($quote === "\x00") {
+            // VERBATIM (nowdoc): no escape law applies; the body IS the name.
+            return $body;
+        }
+
         if ($quote === "'") {
             if (str_contains($body, "\x00")) {
                 return null;

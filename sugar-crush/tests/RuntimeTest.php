@@ -3555,6 +3555,15 @@ final class RuntimeTest extends TestCase
      * global name with or without the leading backslash (`new \WNS`,
      * `new Solo\NS`). All three read now: pairing by label, keys by full
      * name, and a runtime map consulted outside the qualification exemption.
+     * Then the NINETEENTH and TWENTIETH, same review, one cycle later —
+     * `new parent` whose parent resolves through a `use … as …` alias
+     * (the keyword arm checked the RAW parent name where the fixpoint two
+     * lines away consulted the alias map), and the NOWDOC/HEREDOC argument
+     * of `class_alias`, a pure literal the two-literal reader refused
+     * because it only matched `T_CONSTANT_ENCAPSED_STRING` — both run
+     * for real, both truncating, both now read; the bare same-file
+     * CONSTANT spelling beside them is DECLINED by name (constant folding
+     * is the indirection row's mechanism, not this one's).
      * The `self` a TRAIT would write remains declared below, as does
      * `extends` naming a NAMESPACED runtime alias (header resolution still
      * stops at the single segment) — and every channel above has run through
@@ -3613,13 +3622,18 @@ final class RuntimeTest extends TestCase
      *    {@see SUBPROCESS_PRIMITIVES} is inventoried rather than judged.
      *  - EXTENSION FUNCTIONS NOT ENUMERATED. `dba_open`, `ZipArchive`,
      *    `pg_copy_from`, an FFI call — any of them writes and none is named.
-     *  - A `new self` INSIDE A TRAIT. The scope stack resolves the keyword
-     *    spellings against the class BODY they are written in, and a trait
-     *    body says nothing about the class that will one day `use` it —
-     *    `self` there binds at use time, in another file, and is out of reach
-     *    exactly like the next row's imported parent. (MEASURED: a trait
-     *    declaring `new self` in a method resolves to nothing in the scanner;
-     *    the same code in a same-file class resolves and reports.)
+     *  - A `new self` INSIDE A TRAIT WHOSE USERS LIVE IN ANOTHER FILE. The
+     *    keyword spellings bind at use time to the class that `use`s the
+     *    trait, and this pre-pass pairs those uses when the trait and the
+     *    class share the scanned file (review cycle 3, F-4 measured the
+     *    same-file half truncating for real while the row below's first
+     *    draft waved ALL trait `self` away on the false ground that it
+     *    "binds in another file" — the sentence now says the honest half:
+     *    what stays out of reach is the user in ANOTHER file, which is the
+     *    next row's imported-parent shape by another door. A trait that uses
+     *    a trait is likewise not followed — composing `self` through two
+     *    bodies before the concrete user multiplies the candidates without
+     *    the scanner holding any new fact.)
      *  - A PARENT DECLARED IN ANOTHER FILE. The extends reach closes the
      *    construction channel ONLY for chains this file can read: a rostered
      *    name written in the header, one spelled through a `use … as …`
@@ -3721,6 +3735,7 @@ final class RuntimeTest extends TestCase
         $writeSubclasses = $construction['roots'];
         $parentOf = $construction['parentOf'];
         $classScopes = $construction['scopes'];
+        $traitUsers = $construction['traitUsers'];
         $count = \count($tokens);
         $found = [];
         $attributeDepth = 0;
@@ -3950,13 +3965,56 @@ final class RuntimeTest extends TestCase
                     // so the written-name lookups above could only ever miss.
                     // The scope stack answers WHICH class this line sits in,
                     // and the same maps answer whether constructing it writes.
-                    $inner = $scopeStack[\count($scopeStack) - 1][1];
-                    $target = $name === 'parent' ? ($inner === null ? null : ($parentOf[$inner] ?? null)) : $inner;
-                    if ($target !== null) {
-                        if (\in_array($target, self::WRITE_CONSTRUCTIONS, true)) {
-                            $reached = $target;
-                        } elseif (isset($writeSubclasses[$target])) {
-                            $reached = $writeSubclasses[$target];
+                    // A TRAIT body's `self` (review cycle 3, F-4) binds at
+                    // use time to whatever class uses it — same-file users
+                    // are enumerated by the pre-pass and ANY write-reaching
+                    // user reports (the over-direction); a trait no class in
+                    // this file uses stays silent, which is the cross-file
+                    // half the enumeration declares. An ANON body's scope name
+                    // is its resolved extends primitive (or null), set by the
+                    // pre-pass after the fixpoint.
+                    $top = $scopeStack[\count($scopeStack) - 1];
+                    $inner = $top[1];
+                    $kind = $top[2];
+                    $candidates = [];
+                    if ($kind === 'trait' && $inner !== null) {
+                        foreach ($traitUsers[$inner] ?? [] as $user) {
+                            $candidates[] = $name === 'parent' ? ($parentOf[$user] ?? null) : $user;
+                        }
+                    } else {
+                        $candidates[] = $name === 'parent'
+                            ? ($inner === null ? null : ($parentOf[$inner] ?? null))
+                            : $inner;
+                    }
+                    foreach ($candidates as $target) {
+                        if ($target === null || $reached !== null) {
+                            continue;
+                        }
+                        // THE TARGET RESOLVES THROUGH THE CLASS-ALIAS MAP TOO,
+                        // exactly as the fixpoint at
+                        // {@see sameFileWriteConstructionSubclasses()} does:
+                        // `class D extends Handle` under
+                        // `use SplFileObject as Handle` puts `handle` in
+                        // parentOf, and a `new parent` there is a construction
+                        // of the rostered class — the raw-name check alone
+                        // missed it (review cycle 3, F-1, MEASURED truncating
+                        // for real). Additive: the raw spelling is still tried.
+                        $targetSpellings = [$target];
+                        $resolved = $classAliases[$target] ?? null;
+                        if ($resolved !== null && $resolved !== $target) {
+                            $targetSpellings[] = $resolved;
+                        }
+                        foreach ($targetSpellings as $spelling) {
+                            if (\in_array($spelling, self::WRITE_CONSTRUCTIONS, true)) {
+                                $reached = $spelling;
+
+                                break;
+                            }
+                            if (isset($writeSubclasses[$spelling])) {
+                                $reached = $writeSubclasses[$spelling];
+
+                                break;
+                            }
                         }
                     }
                 }
@@ -4131,10 +4189,16 @@ final class RuntimeTest extends TestCase
      * a runtime alias declared in this very file is the same defect one
      * keyword over, and rule 40’s corrections-travel lesson is exactly that a
      * closed channel in one scanner must be checked in its sibling. The
-     * mapping is decided ONLY from two literals: an argument that is not a
-     * `T_CONSTANT_ENCAPSED_STRING` or a `::class` constant is a name this
-     * scanner would have to RUN to know, and it contributes nothing —
-     * declared in the enumeration, not silently half-read.
+     * mapping is decided ONLY from two literals: a quoted string, a nowdoc
+     * or interpolation-free heredoc body (review cycle 3, F-2: the readers
+     * used to refuse `<<<'EOT' W EOT;` outright, and PHP registered the
+     * alias anyway), or a `::class` constant. A bare same-file CONSTANT
+     * name (`const ALIAS = 'W'; class_alias(X::class, ALIAS)`) is the
+     * literal ONE HOP AWAY from the call — resolving it is the constant
+     * folding the INDIRECTION row already refuses for `$f = 'unlink'`, so
+     * it is DECLINED, not half-read: the declaration contributes nothing
+     * and the enumeration says so. An interpolated or computed argument is
+     * the same refusal by the same right.
      *
      * `class_alias` spelled with a leading backslash is the same global call
      * (the first defeat this scanner ever took was exactly that spelling); a
@@ -4311,41 +4375,11 @@ final class RuntimeTest extends TestCase
      */
     private static function literalClassAliasName(array $argument): ?string
     {
-        if (\count($argument) === 1 && \is_array($argument[0]) && $argument[0][0] === T_CONSTANT_ENCAPSED_STRING) {
-            $text = $argument[0][1];
-            $quote = $text[0] ?? '';
-            if (($quote !== "'" && $quote !== '"') || \strlen($text) < 2) {
-                return null;
-            }
-            $body = substr($text, 1, -1);
+        $literal = self::literalStringBody($argument);
+        if ($literal !== null) {
+            $full = strtolower(ltrim($literal, '\\'));
 
-            if ($quote === "'") {
-                // SINGLE QUOTES: only `\\` and `\'` are escapes; every other
-                // backslash is literal, i.e. a namespace separator standing in
-                // the source exactly as the autoloader will see it. The NUL
-                // placeholder keeps an escaped backslash out of the separator
-                // shape, and a body already containing a NUL byte is refused
-                // outright rather than mis-decoded — no class name has one.
-                if (str_contains($body, "\x00")) {
-                    return null;
-                }
-                $name = str_replace(["\\\\", "\\'"], ["\x00", "'"], $body);
-                $name = str_replace("\x00", '\\', $name);
-            } else {
-                // DOUBLE QUOTES: `\\` is an escaped backslash; ANY remaining
-                // backslash belongs to an escape (`\n`, `\x4e`, ...) whose
-                // runtime value this reader would have to compute — it stops
-                // at spellings, returns null, and the miss is declared.
-                $name = str_replace('\\\\', "\x00", $body);
-                if (str_contains($name, '\\')) {
-                    return null;
-                }
-                $name = str_replace("\x00", '\\', $name);
-            }
-
-            $name = strtolower(ltrim($name, '\\'));
-
-            return preg_match('~^[a-z_][a-z0-9_]*(?:\\\\[a-z_][a-z0-9_]*)*$~', $name) === 1 ? $name : null;
+            return preg_match('~^[a-z_][a-z0-9_]*(?:\\\\[a-z_][a-z0-9_]*)*$~', $full) === 1 ? $full : null;
         }
 
         if (\count($argument) === 3
@@ -4359,6 +4393,80 @@ final class RuntimeTest extends TestCase
         }
 
         return null;
+    }
+
+    /**
+     * The RUNTIME value of a string argument spelled entirely by literals, or
+     * null if any part of it would have to be EXECUTED to know.
+     *
+     * Three spellings, one line of demarcation — LITERAL text is read,
+     * EVALUATED text is refused:
+     *  - `'X'` / `"X"`: single quotes escape only `\\` and `\'`, so every
+     *    other backslash stands as one separator; double quotes escape
+     *    only `\\` name-wise and the reader refuses any body still carrying
+     *    a backslash after that substitution (`"\n"`, `"\x4e"` would have
+     *    to be computed);
+     *  - `<<<'EOT' ... EOT` (nowdoc): the body is literal verbatim — review
+     *    cycle 3, F-2, measured the readers refusing it while `class_alias`
+     *    registered the name and a real target still truncated;
+     *  - `<<<EOT ... EOT` (double-quoted heredoc): same escape law as `""`,
+     *    and an INTERPOLATED body never arrives as the single-token triple
+     *    matched here — interpolation breaks it into more tokens, so the
+     *    shape itself is the refusal.
+     * A NUL byte in a body is refused outright (no legal class name carries
+     * one, and the placeholder decode must not collide with real input).
+     * A trailing newline is the heredoc terminator's own line break, not
+     * part of the name.
+     */
+    private static function literalStringBody(array $argument): ?string
+    {
+        if (\count($argument) === 1 && \is_array($argument[0]) && $argument[0][0] === T_CONSTANT_ENCAPSED_STRING) {
+            $text = $argument[0][1];
+            $quote = $text[0] ?? '';
+            if (($quote !== "'" && $quote !== '"') || \strlen($text) < 2) {
+                return null;
+            }
+
+            return self::decodeStringBody(substr($text, 1, -1), $quote);
+        }
+
+        if (\count($argument) === 3
+            && \is_array($argument[0]) && $argument[0][0] === T_START_HEREDOC
+            && \is_array($argument[1]) && $argument[1][0] === T_ENCAPSED_AND_WHITESPACE
+            && \is_array($argument[2]) && $argument[2][0] === T_END_HEREDOC
+        ) {
+            $body = rtrim($argument[1][1], "\n");
+            if (str_starts_with($argument[0][1], "<<<'")) {
+                return $body;
+            }
+
+            return self::decodeStringBody($body, '"');
+        }
+
+        return null;
+    }
+
+    /**
+     * The one escape law, applied to the quoted and heredoc spellings above.
+     */
+    private static function decodeStringBody(string $body, string $quote): ?string
+    {
+        if (str_contains($body, "\x00")) {
+            return null;
+        }
+
+        if ($quote === "'") {
+            $out = str_replace(["\\\\", "\\'"], ["\x00", "'"], $body);
+
+            return str_replace("\x00", '\\', $out);
+        }
+
+        $out = str_replace('\\\\', "\x00", $body);
+        if (str_contains($out, '\\')) {
+            return null;
+        }
+
+        return str_replace("\x00", '\\', $out);
     }
 
     /**
@@ -4396,8 +4504,9 @@ final class RuntimeTest extends TestCase
             $argument = \array_slice($argument, 2);
         }
 
-        if (\count($argument) === 1 && \is_array($argument[0]) && $argument[0][0] === T_CONSTANT_ENCAPSED_STRING) {
-            $segments = explode('\\', strtolower(trim($argument[0][1], '\'"')));
+        $literal = self::literalStringBody($argument);
+        if ($literal !== null) {
+            $segments = explode('\\', strtolower($literal));
 
             return '' === $segments[0] && \count($segments) === 1 ? null : (string) end($segments);
         }
@@ -4446,16 +4555,20 @@ final class RuntimeTest extends TestCase
      * path that writes nothing — the polarity row in
      * {@see testAWriteConstructionReachedThroughAnExtendsClauseIsScanned()}.
      *
-     * THE RETURN IS THREE-VALUED since the fifteenth defeat: `roots` is the
-     * name-to-primitive map the `new` arms consult, `parentOf` lets
-     * `new parent(...)` take one hop up the same chain, and `scopes` maps
-     * every class BODY — named or anonymous — to `[end, ?name]` so the walk
-     * can answer WHICH class a bare `self` or `static` is written inside.
+     * THE RETURN IS FOUR-VALUED since the fifteenth and nineteenth defeats:
+     * `roots` is the name-to-primitive map the `new` arms consult, `parentOf`
+     * lets `new parent(...)` take one hop up the same chain, `scopes` maps
+     * every class, anon and trait BODY to `[end, ?name, kind, declIndex]` so
+     * the walk can answer WHICH class a bare `self` or `static` is written
+     * inside (an ANON's name is its resolved extends primitive once the
+     * fixpoint ran), and `traitUsers` pairs each same-file TRAIT with the
+     * classes that `use` it — the binding `self` performs at use time, for
+     * the uses this file can see.
      *
      * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      * @param array<string, string>                         $classAliases
      *
-     * @return array{roots: array<string, string>, parentOf: array<string, string>, scopes: array<int, array{0: int, 1: ?string}>}
+     * @return array{roots: array<string, string>, parentOf: array<string, string>, scopes: array<int, array{0: int, 1: ?string, 2: string, 3: int}>, traitUsers: array<string, list<string>>}
      */
     private static function sameFileWriteConstructionSubclasses(array $tokens, array $classAliases): array
     {
@@ -4465,7 +4578,7 @@ final class RuntimeTest extends TestCase
 
         for ($i = 0; $i < $count; $i++) {
             $token = $tokens[$i];
-            if (!\is_array($token) || $token[0] !== T_CLASS) {
+            if (!\is_array($token) || !\in_array($token[0], [T_CLASS, T_TRAIT], true)) {
                 continue;
             }
             $previous = $tokens[$i - 1] ?? null;
@@ -4482,6 +4595,9 @@ final class RuntimeTest extends TestCase
             $declared = $tokens[$i + 1] ?? null;
             $named = \is_array($declared) && $declared[0] === T_STRING;
             $child = $named ? strtolower($declared[1]) : null;
+            $kind = $token[0] === T_TRAIT
+                ? 'trait'
+                : ($named ? (\is_array($previous) && $previous[0] === T_NEW ? 'anon' : 'class') : 'anon');
 
             // THE BODY RANGE, for the `self` / `static` resolution of the
             // FIFTEENTH defeat: `class D extends \SplFileObject { static
@@ -4497,7 +4613,7 @@ final class RuntimeTest extends TestCase
             if ($bodyStart !== null) {
                 $bodyEnd = self::bodyClose($tokens, $bodyStart);
                 if ($bodyEnd !== null) {
-                    $scopes[$bodyStart] = [$bodyEnd, $child];
+                    $scopes[$bodyStart] = [$bodyEnd, $child, $kind, $i];
                 }
             }
 
@@ -4552,7 +4668,94 @@ final class RuntimeTest extends TestCase
             }
         } while ($added);
 
-        return ['roots' => $roots, 'parentOf' => $parentOf, 'scopes' => $scopes];
+        // THE ANON BODIES GET THEIR RESOLVED EXTENDS NAME now that the
+        // fixpoint has run: `new class extends \SplFileObject { ... }` with a
+        // `new self` in its body constructs exactly the anon, which reaches
+        // the roster through its own header — the same over-the-body binding
+        // the named classes got, with no reach-past to the enclosing class.
+        foreach ($scopes as $bodyStart => [$bodyEnd, $scopeName, $kind, $declIndex]) {
+            if ($kind !== 'anon') {
+                continue;
+            }
+            for ($j = $declIndex + 1; $j < $bodyStart; $j++) {
+                $step = $tokens[$j];
+                if (\is_array($step) && $step[0] === T_EXTENDS) {
+                    $parent = self::singleSegmentClassName($tokens[$j + 1] ?? null);
+                    if ($parent !== null) {
+                        $spellings = [$parent];
+                        $resolved = $classAliases[$parent] ?? null;
+                        if ($resolved !== null && $resolved !== $parent) {
+                            $spellings[] = $resolved;
+                        }
+                        foreach ($spellings as $spelling) {
+                            if (\in_array($spelling, self::WRITE_CONSTRUCTIONS, true)) {
+                                $scopes[$bodyStart][1] = $spelling;
+
+                                break;
+                            }
+                            if (isset($roots[$spelling])) {
+                                $scopes[$bodyStart][1] = $roots[$spelling];
+
+                                break;
+                            }
+                        }
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        // THE TRAIT USERS, same file only (review cycle 3, F-4): a `use TW5;`
+        // written INSIDE a class body is how `self` in TW5's methods comes to
+        // mean a concrete class, and when that class and the trait are both
+        // in the file the scanner now holding them can pair them — the row
+        // that declared ALL trait `self` out of reach on the ground it "binds
+        // in another file" was false of this shape, and the arm below now
+        // reads it. A trait is matched by the last segment of its written
+        // name (a same-file trait is written short, and over-matching a
+        // differently-namespaced same-word is the safe direction); a TRAIT
+        // USING A TRAIT is not followed — composing chains of `self` through
+        // two bodies is the half that stays declared.
+        $traitUsers = [];
+        $traits = array_keys(array_filter(
+            $scopes,
+            static fn (array $scope): bool => $scope[2] === 'trait' && $scope[1] !== null,
+        ));
+        $scopeRanges = [];
+        foreach ($scopes as $bodyStart => $scope) {
+            $scopeRanges[] = [$bodyStart, $scope[0], $scope[1], $scope[2]];
+        }
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (!\is_array($token) || $token[0] !== T_USE) {
+                continue;
+            }
+            $head = $tokens[$i + 1] ?? null;
+            if ($head === '(' || !\is_array($head) || $head[0] !== T_STRING) {
+                continue;
+            }
+            $after = $tokens[$i + 2] ?? null;
+            if (!($after === ';' || $after === ',' || $after === '{')) {
+                continue; // not a bare `use TraitName;` statement
+            }
+            $ref = strtolower($head[1]);
+            if (!\in_array($ref, array_map(
+                static fn (int $start): ?string => $scopes[$start][1],
+                $traits,
+            ), true)) {
+                continue;
+            }
+            // THE CONTAINING SCOPE decides: a T_USE inside a CLASS body is a
+            // trait use; outside every body it is the file's own import.
+            foreach ($scopeRanges as [$start, $end, $name, $kind]) {
+                if ($kind === 'class' && $name !== null && $i > $start && $i < $end) {
+                    $traitUsers[$ref][] = $name;
+                }
+            }
+        }
+
+        return ['roots' => $roots, 'parentOf' => $parentOf, 'scopes' => $scopes, 'traitUsers' => $traitUsers];
     }
 
     /**
@@ -6427,6 +6630,7 @@ final class RuntimeTest extends TestCase
 
             use function class_alias as ca;
             use SplFileObject as AliasedWriter;
+            use SplFileObject as HandleParent;
 
             class SameFileWriter extends \SplFileObject
             {
@@ -6465,12 +6669,37 @@ final class RuntimeTest extends TestCase
                 }
             }
 
+            class ParentViaAlias extends HandleParent
+            {
+                public static function up(string $p): parent
+                {
+                    return new parent($p, 'w');
+                }
+            }
+
+            trait SelfBound
+            {
+                public function write(string $q): void
+                {
+                    new self($q, 'w');
+                }
+            }
+
+            class TraitUser extends \SplFileObject
+            {
+                use SelfBound;
+            }
+
             class_alias(SplFileObject::class, 'RuntimeWriter');
             ca('SplFileObject', 'FnAliasedWriter');
             class_alias(class: \SplFileObject::class, alias: 'NamedArgWriter');
             class_alias(alias: 'RevArgWriter', class: \SplFileObject::class);
             class_alias('SplFileObject', 'Solo\NS');
             class_alias('SplFileObject', 'WNS');
+            class_alias('SplFileObject', 'Esc\\AP');
+            class_alias(\SplFileObject::class, <<<'EOT'
+            NowdocWriter
+            EOT);
 
             final class Extends
             {
@@ -6478,6 +6707,12 @@ final class RuntimeTest extends TestCase
                 {
                     $anon = new class($p, 'w') extends \SplFileObject {};
                     $anonAliased = new class($p, 'w') extends AliasedWriter {};
+                    $anonSelf = new class($p) extends \SplFileObject {
+                        public function m(string $q): void
+                        {
+                            new self($q, 'w');
+                        }
+                    };
                     $named = new SameFileWriter($p, 'w');
                     $chained = new ChainedWriter($p, 'w');
                     $runtime = new RuntimeWriter($p, 'w');
@@ -6487,6 +6722,8 @@ final class RuntimeTest extends TestCase
                     $soloFq = new \Solo\NS($p, 'w');
                     $soloBare = new Solo\NS($p, 'w');
                     $backslashSite = new \WNS($p, 'w');
+                    $escaped = new \Esc\AP($p, 'w');
+                    $nowdoc = new NowdocWriter($p, 'w');
                     $safe = new SafeWriter();
                     $plain = new \SplFileObject($p, 'w');
                     $wrongScope = new self($p, 'w');
@@ -6495,23 +6732,35 @@ final class RuntimeTest extends TestCase
             PROBE);
 
         $this->assertSame(
-            ['splfileobject' => [28, 33, 41, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 68]],
+            ['splfileobject' => [29, 34, 42, 50, 58, 82, 83, 84, 87, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 102]],
             self::writePrimitivesCalledIn($file),
-            'extends-clause reach is the construction channel: 56 is the anonymous class that '
-            . 'was the thirteenth defeat, 57 the same header under a `use … as …` alias, 58-59 '
-            . 'the named same-file subclass and its one-link chain, 60 the two-literal '
-            . '`class_alias` name, 61 the FUNCTION-aliased `class_alias` (the fourteenth defeat, '
-            . 'review cycle 1), 62 the in-order named-argument spelling, 63 the REVERSED label '
-            . 'order and 64-66 the namespaced-alias and leading-backslash sites (the '
-            . 'sixteenth, seventeenth and eighteenth defeats — review cycle 2: an order-free '
-            . 'pairing, a FULL-NAME runtime map, and a runtime consult exempt from the '
-            . 'backslash-ignores-imports guard, which is right for imports and wrong for names '
-            . 'class_alias itself defines), 68 the direct spelling that must keep working, and '
-            . '28/33/41 the keyword spellings `self` / `static` / `parent` inside a same-file '
-            . 'subclass (the fifteenth defeat). Lines 67 (`ArrayObject` — nobody rostered), 70 '
-            . '(`new self` inside a class that extends nothing) and the '
-            . 'declared-but-never-constructed class at 20-22 must NOT appear: both polarities '
-            . 'or this arm reports everything.',
+            'extends-clause reach is the construction channel: 82 is the anonymous class that '
+            . 'was the thirteenth defeat, 83 the same header under a `use … as …` alias, 84 and '
+            . '87 the same anon shape with a `new self` in its body (the header arm reports the '
+            . 'construction, the scope stack reports the keyword inside it - an anon binds '
+            . 'self to the anon, NOT past it to the enclosing class), 90-91 the named same-file '
+            . 'subclass and its one-link chain, 92 the two-literal `class_alias` name, 93 the '
+            . 'FUNCTION-aliased `class_alias` (the fourteenth defeat, review cycle 1), 94 the '
+            . 'in-order named-argument spelling, 95 the REVERSED label order and 96-98 the '
+            . 'namespaced-alias and leading-backslash sites (the sixteenth, seventeenth and '
+            . 'eighteenth defeats - review cycle 2: an order-free pairing, a FULL-NAME runtime '
+            . 'map, and a runtime consult exempt from the backslash-ignores-imports guard, '
+            . 'which is right for imports and wrong for names class_alias itself defines), 99 '
+            . 'the ESCAPED alias literal (`Esc\\AP` in source is one separator in the runtime '
+            . 'name, and the site writes one - review cycle 3 F-5, which measured this decode '
+            . 'arm live-but-UNPINNED: deleting it left the whole file green), 100 the NOWDOC '
+            . 'alias body (the twentieth defeat - a pure literal the two-literal reader refused '
+            . 'for SHAPE alone), 102 the direct spelling that must keep working, and 29/34/'
+            . '42/50 the keyword spellings `self` / `static` / `parent` - plain and aliased '
+            . 'parents - inside same-file subclasses (the fifteenth defeat and the nineteenth: '
+            . 'the raw-name check alone missed `new parent` whose parent arrives through '
+            . '`use … as …`), and 58 the `self` of a TRAIT used by a same-file write class '
+            . '(review cycle 3 F-4: the enumeration row that waved ALL trait `self` away as '
+            . 'binding "in another file" was false of this shape, and the pre-pass now pairs '
+            . 'same-file trait users; the cross-file user is what the corrected row actually '
+            . 'declares). Lines 101 (`ArrayObject` - nobody rostered), 103 (`new self` inside '
+            . 'a class that extends nothing) and the declared-but-never-constructed class at '
+            . '21-23 must NOT appear: both polarities or this arm reports everything.',
         );
     }
 
@@ -6594,6 +6843,71 @@ final class RuntimeTest extends TestCase
             'an argument list that runs off the end of the stream must report, not resolve '
             . 'nothing and pass in silence',
         );
+    }
+
+    /**
+     * THE STRING-BODY READER, ARM BY ARM, ON INPUTS AS REAL PHP WOULD LEX
+     * THEM - the decode/decline table of {@see literalStringBody} and
+     * {@see literalClassAliasName}, driven directly because the full-channel
+     * probe pins only what survives to a construction site. Review cycle 3,
+     * F-5: the escape decode was measured LIVE-BUT-UNPINNED (deleting it
+     * left the whole file green), and the NUL refusal and the interpolated-
+     * heredoc refusal were named in the doc-block with nothing driving them
+     * at all. Every ACCEPT here is what the alias-keying needs to line up
+     * with the site's single-backslash spelling; every REFUSAL is the
+     * declared "reads spellings, does not execute" boundary - a reader that
+     * refused everything would pass the refusals and fail the accepts, and
+     * one that accepted everything would fail the refusals. Both polarities,
+     * through the shipped methods.
+     */
+    public function testTheStringBodyReaderAcceptsLiteralsAndRefusesEvaluations(): void
+    {
+        $body = static fn (array $tokens): ?string => self::literalStringBody($tokens);
+        $alias = static fn (array $tokens): ?string => self::literalClassAliasName($tokens);
+
+        $single = [[T_CONSTANT_ENCAPSED_STRING, "'Solo\\\\NS'", 1]];
+        $this->assertSame('Solo\\NS', $body($single), 'single-quoted `\\\\` is one separator');
+        $this->assertSame('solo\\ns', $alias($single), 'the alias reader keys the full name');
+
+        $double = [[T_CONSTANT_ENCAPSED_STRING, '"Solo\\\\NS"', 1]];
+        $this->assertSame('Solo\\NS', $body($double), 'double-quoted escaped backslash pair decodes too');
+
+        $escaped = [[T_CONSTANT_ENCAPSED_STRING, '"Spl\\x4eObject"', 1]];
+        $this->assertNull($body($escaped), 'a double-quoted body carrying \\x4e would have to be COMPUTED - refused, not guessed');
+
+        $nul = [[T_CONSTANT_ENCAPSED_STRING, "'" . "\x00" . "X'", 1]];
+        $this->assertNull($body($nul), 'a body carrying the decoder placeholder byte is refused outright');
+
+        $nowdoc = [
+            [T_START_HEREDOC, "<<<'EOT'\n", 1],
+            [T_ENCAPSED_AND_WHITESPACE, "NowdocWriter\n", 1],
+            [T_END_HEREDOC, 'EOT', 1],
+        ];
+        $this->assertSame('NowdocWriter', $body($nowdoc), 'nowdoc bodies are literal VERBATIM');
+        $this->assertSame('nowdocwriter', $alias($nowdoc), 'and reach the alias key lowercased, like any other literal');
+
+        $heredoc = [
+            [T_START_HEREDOC, "<<<EOT\n", 1],
+            [T_ENCAPSED_AND_WHITESPACE, "Heredoc\\\\Writer\n", 1],
+            [T_END_HEREDOC, 'EOT', 1],
+        ];
+        $this->assertSame('heredoc\\writer', $alias($heredoc), 'double-quoted heredoc obeys the same escape law as ""');
+
+        // AN INTERPOLATED HEREDOC does not arrive as the accepted triple at
+        // all - the lexer breaks it into more tokens - and the shape
+        // refusal IS the evaluation refusal. Hand-lex the four-token form to
+        // prove the reader declines it.
+        $interpolated = [
+            [T_START_HEREDOC, "<<<EOT\n", 1],
+            [T_ENCAPSED_AND_WHITESPACE, "Name", 1],
+            [T_VARIABLE, '$x', 1],
+            [T_END_HEREDOC, 'EOT', 1],
+        ];
+        $this->assertNull($body($interpolated), 'an interpolated heredoc body is more than one token and this reader takes only the literal triple');
+
+        // CONSTANT NAMES ARE NOT LITERALS AT THE CALL SITE.
+        $bare = [[T_STRING, 'AL', 1]];
+        $this->assertNull($alias($bare), 'a same-file const spelling is one hop from the literal - constant folding is the INDIRECTION row, not this reader');
     }
 
     /**
