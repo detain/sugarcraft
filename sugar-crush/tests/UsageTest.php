@@ -452,12 +452,21 @@ final class UsageTest extends TestCase
     }
 
     /**
-     * The merge's null policy, both polarities: a bucket reported by EITHER
-     * side survives the addition (the measured number is not thrown away
+     * The merge's null policy, both polarities — with "reported" covering BOTH
+     * values it can carry, a measured number AND a measured zero: a bucket
+     * reported by EITHER side survives the addition (it is not thrown away
      * because the other step said nothing); a bucket reported by NEITHER side
      * stays unreported rather than becoming a fabricated turn zero. If
      * `plusBucket()` flips its null carry-through to a zero (the shape that
      * pretends the unreported half was measured), the all-null leg goes red.
+     * If it collapses the other way — reading a measured ZERO as unreported
+     * (`if ($own === null || $own === 0)`, the shape review cycle 5 measured
+     * surviving the 37 tests this method stood alone against) — the per-bucket
+     * zero-against-null loop goes red instead, one assertion per bucket in
+     * each operand order. The 0-plus-N leg elsewhere cannot catch that
+     * collapse itself: 0+5 and 5 are the same number, so only
+     * zero-against-NULL distinguishes "the provider measured zero" from "the
+     * provider said nothing".
      */
     public function testPlusCarriesABucketReportedByEitherOperandAndKeepsUnreportedOnesUnreported(): void
     {
@@ -469,6 +478,19 @@ final class UsageTest extends TestCase
         $this->assertSame(7, $sum->outputTokens, 'reported by one side only — carried, not nulled, not zero-added');
         $this->assertSame(5, $sum->cacheReadTokens, 'reported by one side only — carried');
         $this->assertNull($sum->cacheCreationTokens, 'reported by neither side — stays unreported');
+
+        // A measured ZERO against an unreported neighbour, per bucket, in BOTH
+        // operand orders: the carry-through guards must test `=== null`, never
+        // falsiness. Each order drives a different guard of plusBucket() —
+        // zero-then-silent the theirs-is-null guard returning $own, silent-then-
+        // zero the own-is-null guard returning $theirs.
+        foreach (['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens'] as $bucket) {
+            $zeroThenSilent = Usage::new(1, 0.0, ...[$bucket => 0])->plus(Usage::new(2, 0.0));
+            $this->assertSame(0, $zeroThenSilent->$bucket, "a $bucket measured as exactly zero survives a merge with a step that said nothing — 0 is not null");
+
+            $silentThenZero = Usage::new(1, 0.0)->plus(Usage::new(2, 0.0, ...[$bucket => 0]));
+            $this->assertSame(0, $silentThenZero->$bucket, "...and the same measured zero survives on the OTHER side of the merge");
+        }
 
         $bare = Usage::new(1, 0.0)->plus(Usage::new(2, 0.0));
         $this->assertNull($bare->inputTokens);
