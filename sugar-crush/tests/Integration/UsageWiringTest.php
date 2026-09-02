@@ -1073,6 +1073,35 @@ JSON;
         $this->assertSame(10, $chunks[1]->tokensUsed, 'the all-cached turn still bills its 10 prompt tokens through the wire-total gate');
     }
 
+    public function testP4S2VertexGeminiNegativeStreamDocumentParksNothing(): void
+    {
+        // Review-3 finding 3: the falsifier the park-gate comment in
+        // parseGeminiChunk() now claims. PROVE-IT MUTATION: widening the
+        // park gate `if ($usage->totalTokens !== 0) {` to `if (true) {`
+        // yields one extra tokensUsed-0 chunk and reddens the assertCount(0)
+        // below.
+        //
+        // Why ZERO chunks is the honest expectation: the empty text part is
+        // not a delta - that is the arm's text gate - and the negative
+        // usageMetadata clamps to a 0 total, which the `!== 0` gate refuses
+        // to park. Those are two ARM-SPECIFIC gates, not a general law about
+        // negative reports: the unary Gemini arm still bills its clamped
+        // zeros as a usage-carrying response
+        // (testP4S2VertexGeminiNegativeWireCountsBillZeroThroughTheRealParsePath),
+        // so this test overclaims nothing past the stream arm.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['candidates' => [['content' => ['parts' => [['text' => '']]]]],
+             'usageMetadata' => ['promptTokenCount' => -10, 'candidatesTokenCount' => -5]],
+        ], 'gemini-1.5-pro-002');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gemini-1.5-pro-002',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(0, $chunks, 'a blank-text delta yields none per the arm text gate; the negative-usage document must NOT park');
+    }
+
     public function testP4S2VertexLegacyArmRecordsThatNoUsageObjectArrives(): void
     {
         // The third Vertex arm, recorded honestly rather than invented past:

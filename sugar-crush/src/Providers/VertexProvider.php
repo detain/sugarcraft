@@ -1512,8 +1512,10 @@ final readonly class VertexProvider implements ProviderInterface
         // prompt (promptTokenCount == cachedContentTokenCount, e.g. 10/10
         // with candidates 0) parks a 10-token bill today, and gating on the
         // DERIVED fresh-input bucket would silently drop exactly that turn's
-        // usage. (Negative wire values now park as zero instead of parking
-        // negatives - Usage's clamp doctrine, same as every other arm.)
+        // usage. (Negative wire values now clamp the total to 0, and a 0-total
+        // document does not park at ALL - where the old inline parse parked a
+        // negative tokensUsed; Usage's clamp doctrine, pinned by
+        // testP4S2VertexGeminiNegativeStreamDocumentParksNothing.)
         $usage = $this->parseUsageMetadata(
             is_array($event['usageMetadata'] ?? null) ? $event['usageMetadata'] : [],
             $model,
