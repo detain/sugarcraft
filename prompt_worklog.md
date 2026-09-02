@@ -253,6 +253,60 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 
 ## ENTRIES
 
+### P4.S2 — providers populate the Usage buckets, with per-provider cache-field evidence · 2026-09-02 · 80db1b27d (merge of c8f01cdbe; message amended once to replace an unfinalized placeholder - recorded)
+
+**Base/branch**: f2204a7c4 -> prompt/P4.S2, 14 commits, synced tip 47f7b477a (merge of master a834207d4 — disjoint, clean, imported only the S3 layer).
+**Files**: src/Providers/{Sglang,Custom,OpenAI,Bedrock,Vertex}Provider.php + tests/Integration/UsageWiringTest.php + remediation trio (tests/UsageTest.php tripwires, src/Usage.php + src/Util/TokenTracker.php comment-only travel — token-identity PROVEN 929/269 executable elements).
+**The step's first action was evidence, not code**: per-provider cache-field existence established and recorded — Sglang/Custom: NONE (live-probed 2026-09-02, guaranteed radix-cache hit still null prompt_tokens_details; stream carries usage only under stream_options.include_usage which is never sent; zero-choice usage chunk dropped at SglangProvider.php:525 / CustomProvider.php:252); OpenAI: cache-read only (vendored DTO); Bedrock: BOTH sides (vendored TokenUsage; real cacheDetails shape [{ttl,inputTokens}] — re-measured from vendored api-2.json.php); Vertex-Anthropic: both, UNVERIFIED-documented label kept; Gemini: read-only subset proto-proven; legacy arm: no usage object. Nothing invented; every 'none' pinned by test.
+**Ledger (reported-never-edited, still open)**: buckets reach NO consumer until the widen-CompleteResponse seam lands — cache observability NOT shipped by this step; Bedrock/Vertex totals keep the sum formula vs the wire's own total; reasoning_tokens/thoughtsTokenCount/TTL split have no buckets; ClaudeCodeProvider.php:366 is a 6th, total-only usage reader (undeclared in step text); usageInt x5 DRY would want a Concerns/ trait; VertexProvider.php:331-332 docblock cites pre-P4.S2 emit literals.
+**Process**: lead ran 5 cycles, dedicated fix agents only (lead-never-fixes held), escalated at cap with 3 requests — all honored: (1) [EMAIL]-author defect on tip repaired orchestrator-side via commit-tree + rebase --onto — TREE-IDENTICAL rewrite (5136c1838 tree == f7122adfb tree; broken commit rebecame 659edd99f); lesson: verify replay RANGE includes the target. (2) three-file out-of-lane remediation authorized as scope widening (this entry records it). (3) cycle-6 fix agent (orchestrator-owned): F2 real Bedrock shape, F6 Vertex drop-gates armed (4 kill shapes RED), F7 Sglang delta gate pinned (size-3-vs-2 RED) — commits 71adddf1d..5136c1838. Cycle-7 fresh reviewer: 2 findings — F1 MAJOR CustomProvider.php:252 gate unfalsifiable (isset->true left 90/329 green); F2 MINOR phantom-docblock cite. Cycle-8 fix agent: 8442c42d0 twin zero-choice-chunk test (kill reddens exactly 'actual size 3 matches expected size 2' at UsageWiringTest.php:724; 6 asserts pin the full :415-419 docblock claim: request stream:true + NO stream_options, drop count(2), consequence content+billing) + 1eab2e0ed reword citing the MEASURED locator CustomProvider.php:141-142 inside complete() — the finding's ':140-141 buildParams' was wrong twice (no buildParams method).
+**Figures** (cwd checkout root, serial, </dev/null, box-quiet probe 0; MMG dual-arm 198/201 never headline-adjudicated): GATE at synced tip 47f7b477a: 10615 tests / 164754 assertions / 1 skipped / 0 failures at synced tip; prediction 10612 tests, +3 per-class explained (UW 10->43 grew 3 pre-existing cases into the restructure); cmp.py five movers zero remainder: UW +33t/+201a, GlobFigureDrift +64a, StatusLineSegmentTest +14a (S3 fix8 inherited), SymbolCitationDrift +4a, UsageTest +2a. Focused: UW 43/239, triple 91/335, UsageTest 37/193 (both designed tripwire reds cleared, discrimination proven: total-only-regression RED 'two arrays are identical', half-collapse RED '4 is identical to 3'), nine-file census 176/31352, roster 17/1101, derivation 67/83/181/440/0 UNMOVED (testFiles 440 — the '(NEW)->441' claim in the step brief was FALSE, file pre-exists since 738c586c1; master copy corrected), goldens unmoved.
+**Review ledger**: cycles 1-5 lead-owned (4 fix agents) -> cycle-6 orchestrator fix agent -> cycle-7 fresh reviewer (2 findings) -> cycle-8 fix agent -> cycle-9 combined fresh reviewer (S2+S3 fix-8 layers): cycle-9 combined reviewer (fresh, read-only): 2 findings - F-1 BLOCKER process/identity: fix-8 pair authors stored [EMAIL] literally, repaired pre-merge by orchestrator commit-tree rewrite to 10907d74e/1f009e095 + sync replay c8f01cdbe, trees byte-identical, 24/24 objects clean; F-2 minor record: nine-file census figure was pre-sync (31390 at synced tip, +38 derived-guard growth attributed). Claims 2-7/9 all MEASURED-TRUE incl Custom isset->true sole-guard kill, fix8A load-bearing reversion proof, fix8B known-positive, locator dispute resolved in fixer favor (:141-142 in complete()), subtraction reads prose-only..
+
+### P4.S3 - cache health in the STATUS LINE only (rate + age, transcript-free) · 2026-09-02 · 23a36254b + a834207d4
+
+What changed: Renderer.php gained cacheIndicator()/formatCacheAge() + a fourth fitted piece below the spend segment, and renderStatusBar() gained an injectable ?float $now clock seam. Formula (documented at Renderer.php:1717-1734): hitPercent = round(cacheRead/promptTokens()*100), ageSeconds = floor(now - createdAt) clamped at 0, over the NEWEST entry whose promptTokens() is non-null AND > 0; TTL is printed, never coloured (§4.16). Hard constraint held: renders into the status-line pane ONLY - zero-transcript test paints and ticks 12 armed loops asserting no transcript growth, with an in-test known-positive control.
+
+Tests: exact snapshot '98% cache · 42s'; bucket-movement formula test (98->56->'0% cache', unreported -> ''); fitting sweep cols 4..200 no-deepening; age rungs 0s/1h/1d + six boundary legs; direction pin '25% cache · 5s'. Post-cap fix5 (walk direction + boundaries) was later reproduced-killed by the cycle-7 reviewer.
+
+Process: lead five cycles, dedicated fix agents (fixer DIED twice in cycle 1 - fix-1b salvage, and an unrestored 1800-col mutation was caught at handoff; porcelain discipline earned its keep). Cycle-7 fresh reviewer: NO FINDINGS - nine kills incl. reproducing the transcript plant and the needle-in-transcript plant, and the S2-vs-S3 formula-agreement seam check. Fix-8 round (see anomalies) merged as a834207d4: per-tick signature assertion moved INSIDE the loop (the zero-transcript claim now takes its own first red) + post-loop painted-frame needle scan with its own known-positive half.
+
+Anomalies recorded: (1) DETACHED-HEAD INCIDENT - the first P4.S3 merge landed on stray commit 211f4f5b1 because the MAIN checkout was detached (master ref untouched at f2204a7c4); mechanism not pinned; repaired by checkout master + re-merge -> 23a36254b. NEW STANDING RULE: every pre-merge check set asserts branch --show-current = master AND porcelain 0. (2) PTY BRACKET TRAP - grep bracket-class in the same write as heredocs put bash in PS2 and ate the cycle-8 brief file; the fix-8 agent disclosed the premise defect and reconstructed the two gaps from review-7 M3/M9 evidence. NEW LAW: verify target files exist after every multi-heredoc write.
+
+Figures (cwd checkout root, serial, /dev/null, probe 0): lead full suite 10582/164469/1@MMG-198; fix-8 full suite 10582/164483/1/0 EXACT vs prediction (+14 own asserts); belt re-run on master at a834207d4: orchestrator belt re-run on master at a834207d4: 10582 tests / 164483 assertions (MMG-198 arm) / 1 skipped / SUITE-EXIT=0 — cwd /home/sites/sugarcraft, serial, </dev/null, box-quiet probe 0; exact match to prediction. Ten-file set 193/32423; roster 67/83/181/440/0 UNMOVED; goldens unmoved since 405252a41; path-repo gate exit 0; diff --stat 3f5fdc11e master EMPTY (figure provably describes master).
+
+Follow-ups carried: Chat.php:1305-1319 tick arm + :11215 arming only when a statusLine command is configured - age reads stale on command-less idle sessions (wiring = own step). NOTE-1 (cycle-7 seam): the readout lights Anthropic-shaped providers only - promptTokens() requires all three buckets and P4.S2 honestly never invents cacheCreation for OpenAI-shaped protocols, so OpenAI/SGLang cache hits stay invisible to this feedback loop; needs a recorded decision. promptTokens() overflow guard (Usage.php:266-273). transcriptSignature() third control (same-count REPLACED) - docblock claims it, only APPEND is pinned.
+
+### P4.S1 — E17: Usage gains real buckets (input/output/cacheRead/cacheCreation) · 2026-09-02 · f2204a7c4
+
+Status: MERGED (master f2204a7c4, merge of d59ee51ff; base 8c5eba6ec). Worktree removed, branch deleted.
+What changed: src/Usage.php (+tests/UsageTest.php): four ?int buckets with paired bool-set sentinels,
+Style.php mutate() shape; promptTokens() = cacheRead + cacheCreation + input (output EXCLUDED, reason
+pinned); plus/plusBucket/sum carry every bucket; toArray/fromArray cross the fork socket with
+null-vs-zero intact (old 2-key frames decode to UNREPORTED; garbage buckets refuse the frame).
+HARD constraint honored: the 95% threshold was NOT touched.
+Deletion experiments: lead D1-D8 all RED; fixers added polarity pins (reported-zero != unreported,
+per-term, both operand orders of plusBucket — reviewer's M13 KILLED red at :489; the literal mirror
+mutant proven EQUIVALENT/unkillable with reachability argument, disclosed); review-7 mutation table
+M01-M20: 20 killed, M12 ctor-default EQUIVALENT (private ctor, zero direct instantiation,
+allowed_classes:false fork); full src revert -> 18 red.
+Review loop: cycles 1-5 fresh read-only reviewers + DEDICATED fix agents (b31c9ec0c, cca902dc9,
+9d8537ffb, bd86d7658) — lead-never-fixes held at step level for the first full time; cycle 5 dirty
+(MAJOR polarity) at the 5-cycle cap -> lead ESCALATED (honored); orchestrator-owned cycle-6 fix
+agent (06292eb8c MAJOR closed, 981c268c6 NIT comment-only, d59ee51ff sanctioned citation fix);
+cycle-7 fresh reviewer: NO MERGE-BLOCKING FINDINGS, 21 mutants re-driven, 19 checks accounted.
+Measured: full suite at bd86d7658 10574/163964/1 (prediction exact); merge gate at d59ee51ff
+(cwd /home/sites/prompt-step-P4.S1-gate root, serial, </dev/null, probe 0): 10574 tests / 163972
+assertions (MMG-198 arm; 163975 at 201) / 1 skipped / 0 fail, SUITE-EXIT=0 — prediction hit EXACTLY
+(163964+8). UsageTest 19/54 -> 37/191. Nine-file census 176/31255 -> 176/31284 (+29 =
+GlobFigureDrift line-count guard, upward/covered-more, attributed). cmp.py SUM +158/+18 zero
+remainder. Roster derivation 67/83/181/440/0 UNCHANGED. Goldens unmoved. diff --stat d59ee51ff
+master EMPTY => figure describes master. 8/8 commits detain@interserver.net.
+Travel (rule 40, still OPEN): TokenTracker.php:15-31/60-75 + Chat.php:1236-1239/11588-11591
+docblock framing predates the buckets — do NOT delete, update when the seam widens;
+ProviderRequestResponseTest.php:687 Usage-cite fixed IN-STEP (d59ee51ff); step-text hazard-5
+"five docblocks" corrected to three live; brief figure label f958ba8e6-vs-8c5eba6ec recorded.
+
 ### P3.CLOSE-r3 + r3-fix - close-review cycle 3 (FINAL) and its record-side fixes; PHASE 3 CLOSED - 2026-09-02 - 58150a432
 
 Status: MERGED to master as 58150a432 (branch prompt/P3.CLOSE-r3-fix, 7 commits 1fc23d889..dd07b245a). Both cycle-3 worktrees removed; branches deleted. PHASE 3 IS CLOSED by this entry.
