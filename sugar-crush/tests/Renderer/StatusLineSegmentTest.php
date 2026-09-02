@@ -937,12 +937,18 @@ final class StatusLineSegmentTest extends TestCase
      * THE PLANT ACCOUNT, stated plainly rather than left to the evidence
      * packet: this test's mutation plant (the lead's E2b) was made in the TICK
      * ARM — that arm is the only seam on the status path that can add a
-     * message — while the render-path half of the claim (a string reaching
-     * the transcript) is planted and caught by the frame test
+     * message. WHAT THIS SAID (through fix-5): the render-path half of the
+     * claim (a string reaching the transcript) was planted and caught ONLY by
+     * the sibling frame test
      * {@see testTheReadoutAppearsExactlyOnceInTheFrameAndOnlyOnTheBarLine}.
-     * Absence cannot be proved in the render path itself, because painting
-     * has no message to grow; naming that division is the honest version of
-     * "no silent substitution".
+     * WHAT IS TRUE NOW (fix-8 B): the M9-shape plant reddens BOTH — this test
+     * carries its own painted-transcript scan, with the bar line of the same
+     * frame as its known-positive half through the same scanner (rule 16: a
+     * sibling test is a separately deletable unit, and the hard constraint
+     * should not rest solely on one). WHY THE DIVISION STILL EARNS ITS PLACE:
+     * MESSAGE-absence still cannot be proved through painting — a paint has no
+     * message to grow — so the tick-arm plant remains the model-side evidence
+     * and the frame test remains the independent frame-side belt.
      *
      * The control is the half that makes this a test rather than a tautology
      * (§16.8 rule 16, RR4-F2): the SAME signature machinery must notice a
@@ -1004,6 +1010,29 @@ final class StatusLineSegmentTest extends TestCase
         }
 
         self::assertSame($before, $this->transcriptSignature($next), 'twelve ticks and their renders moved the transcript');
+
+        // Fix-8 B (review-7 M9): the STRING half of the hard constraint, guarded
+        // by THIS test's own scanner. At fix-5 the plant that echoed the needle
+        // into painted transcript content reddened EXACTLY the sibling frame
+        // test — and §16.8 rule 16 calls a sibling test a separately deletable
+        // unit, so the named hard-constraint test has to see the tax itself.
+        // The bar line of the SAME frame is the known-positive half through the
+        // SAME scanner: without it, the transcript-side zero could be the
+        // identical silence of a dead scan. MEASURED: the M9-shape plant now
+        // reddens this test AND the frame test (2 reds); with these two lines
+        // deleted it falls back to the frame test alone (1 red).
+        $frameLines = explode("\n", rtrim(Renderer::render($next), "\n"));
+        $barLine = (string) array_pop($frameLines);
+        self::assertStringContainsString(
+            '98% cache',
+            $barLine,
+            'the needle is live on the bar line of this very frame — without it the transcript-side zero below could be the silence of a dead scanner (§16.8 rule 16)',
+        );
+        self::assertStringNotContainsString(
+            '98% cache',
+            implode("\n", $frameLines),
+            'the readout reached painted transcript content — the /context per-call tax, now caught in the zero-transcript test itself, not only in the sibling frame test',
+        );
 
         [$grown] = $next->update(new AssistantMsg(Message::assistant('a settled reply')));
         $grownSignature = $this->transcriptSignature($grown);
