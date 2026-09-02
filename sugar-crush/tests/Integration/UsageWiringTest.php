@@ -671,6 +671,61 @@ JSON;
         $this->assertNull($usage->cacheCreationTokens, 'no cache-creation field exists on this family - Custom must not invent one');
     }
 
+    public function testP4S2CustomStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor(): void
+    {
+        // review-7 finding 1 (MAJOR): the branch's own parseUsage() docblock
+        // (src/Providers/CustomProvider.php:415-419) claims - verbatim in kind
+        // to the sglang claim fix-6 falsified - that "the `choices[0].delta`
+        // gate in {@see completeStream()} drops the zero-choice terminal chunk
+        // such a request would produce". Until this test that claim was
+        // unfalsifiable: mutating the gate at :252 to `if (true)` left all 90
+        // tests of UsageWiringTest + CustomProviderTest +
+        // CustomProviderStreamingTest green. This is the Custom twin of
+        // testP4S2SglangStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor,
+        // fed the identical 2026-09-02 skynet2 LIVE-PROBE lines (the docblock
+        // imports that evidence by family - Custom fronts exactly this class of
+        // server). It pins the whole sentence by test, not prose:
+        //   REQUEST half - `stream` is on the wire and `stream_options` never
+        //     is, so this provider never asks for streamed usage at all; the
+        //     zero-choice line below is a forward-shape pin;
+        //   DROP half - the `choices: []` usage line yields NOTHING; with the
+        //     gate removed, parseChunk's `?? []` tolerance emits a phantom
+        //     empty chunk in wire order (kill measured RED at size 3);
+        //   CONSEQUENCE half - no usage object reaches any parse on the stream
+        //     path: both surviving chunks bill zero.
+        $delta = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"delta":{"content":"%s"},"logprobs":null,"finish_reason":null,"matched_stop":null}]}';
+        $usageChunk = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
+        $sse = sprintf('data: ' . $delta . "\n", 'Hel')
+            . sprintf('data: ' . $delta . "\n", 'lo')
+            . 'data: ' . $usageChunk . "\n"
+            . "data: [DONE]\n";
+
+        // Capturing mock instead of p4s2CustomRespondingWith - the REQUEST half
+        // of the claim lives in what goes OUT, not what comes back.
+        $captured = [];
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturnCallback(
+            static function (string $uri, array $options) use (&$captured, $sse): Response {
+                $captured = ['uri' => $uri, 'options' => $options];
+
+                return new Response(200, [], $sse);
+            }
+        );
+        $provider = new CustomProvider('probe-family', 'https://api.example.com', 'test-model', null, $httpClient, true, true);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertSame('chat/completions', $captured['uri'], 'the stream arm posts to the chat endpoint the request is built for');
+        $this->assertTrue($captured['options']['json']['stream'], 'the request IS a streaming request');
+        $this->assertArrayNotHasKey('stream_options', $captured['options']['json'], 'no stream_options is ever sent - this provider never REQUESTS streamed usage, exactly as the docblock records; the zero-choice chunk below is a forward-shape pin');
+        $this->assertCount(2, $chunks, 'the zero-choice usage chunk and [DONE] yield NOTHING - gate removed, parseChunk emits a third, empty chunk');
+        $this->assertSame(['Hel', 'lo'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the surviving deltas, intact');
+        $this->assertSame([0, 0], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), 'per-chunk deltas bill zero - the usage document on the dropped line never reaches a chunk');
+    }
+
     public function testP4S2OpenAiSplitsPromptTokensDetailsAcrossBuckets(): void
     {
         // VENDORED-SHAPE fixture: every key of this usage object is one the
