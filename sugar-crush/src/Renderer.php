@@ -1556,9 +1556,9 @@ final class Renderer
      * bar unchanged.
      *
      * FITTED LAST, AFTER THE SCROLL READOUT HAS BEEN PLACED, which is the whole
-     * of its priority claim. {@see renderStatusBar()} documents three
+     * of its priority claim. {@see renderStatusBar()} documents four
      * variable-length pieces fitted in priority order with the lowest last;
-     * this is a FOURTH, and it is below all three. Two reasons it has to be:
+     * this is a FIFTH, and it is below all four. Two reasons it has to be:
      * it is the only piece whose content this process did not compute, and
      * dropping it costs a readout the user can also get by other means, while
      * dropping the context percentage or the scroll offset costs information
@@ -1717,6 +1717,15 @@ final class Renderer
      * at construction, so the identity makes `hitPercent` land in [0, 100] by
      * arithmetic alone — there is nothing to clamp here, and a second clamp
      * would only hide a broken sum.
+     *
+     * One measured caveat to that honesty: a bucket trio whose sum passes
+     * `PHP_INT_MAX` DOES break it — {@see Usage::promptTokens()} then returns
+     * a float against its `?int` and the `TypeError` thrown out of
+     * `renderStatusBar()` costs the whole frame (MEASURED at review-1:
+     * 4.6e18 × 3 fatals, 1e18 × 3 does not) — but per-call buckets sit
+     * orders below that and no `plus()` sits on this render path, so the
+     * honest guard belongs inside {@see Usage::promptTokens()} itself;
+     * recorded here, escalated by the lead, deliberately not clamped here.
      *
      * WHY THE NEWEST USABLE REPORT rather than a session aggregate: the two
      * numbers must describe the SAME call (one domain, not a session average
