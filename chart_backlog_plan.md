@@ -229,7 +229,7 @@ Suggested interleave: A runs B1..B4; B runs B5,B6,B7 serially with B8/B9/B10/B11
 | B4 charts failOnWarning | BL-3a | A | ⬜ | ⬜ | ⬜ | — |
 | B5 withAspect guard | BL-5 | B(D) | ✅ | ✅ | ✅ | ea5b7d595 |
 | B6 center text wiring | BL-1 | B(D) | ✅ | ✅ | ✅ | 5a5d9fe98 |
-| B7 angle-math dedupe | BL-9 | B(D) | ⬜ | ⬜ | ⬜ | — |
+| B7 angle-math dedupe | BL-9 | B(D) | ✅ | ✅ | ✅ | f5e3fb9ae |
 | B8 RenderBar ramp | BL-2 | B | ⬜ | ⬜ | ⬜ | — |
 | B9 Bubble semantics | BL-6/7 | B | ⬜ | ⬜ | ⬜ | — |
 | B10 examples+goldens | BL-8 | B | ⬜ | ⬜ | ⬜ | — |

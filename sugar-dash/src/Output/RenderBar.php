@@ -70,10 +70,12 @@ final class RenderBar
     }
 
     /**
-     * Render a segmented progress bar with 8 block characters.
+     * Render a progress bar shaded at eighth-block precision.
      *
-     * Uses the 8 block characters for smoother visual progress:
-     * ▏▎▍▌▋▊▉█
+     * Every cell carries the same shade from a 9-entry ramp: the light
+     * shade ░, the left-flush eighths ▏▎▍▌▋▊▉, and the full block █.
+     * Bars grow left→right, so partial shades are flush-left (a 1/8 fill
+     * leads with ▏, U+258F — never its right-flush mirror).
      *
      * @param float $percentage 0.0 to 1.0
      * @param int $width Total width in cells
@@ -90,7 +92,7 @@ final class RenderBar
         }
 
         $percentage = max(0.0, min(1.0, $percentage));
-        $blocks = ['░', '▕', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+        $blocks = ['░', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
 
         $fullBlocks = (int) floor($percentage * $width * 8);
         $result = '';
