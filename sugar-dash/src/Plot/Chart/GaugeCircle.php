@@ -26,9 +26,6 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Characters for rendering the gauge.
      */
-    private const ARC_CHARS = ['╭', '─', '╮', '│', '╯', '╰'];
-    private const TICK_SMALL = '·';
-    private const TICK_LARGE = '┼';
     private const NEEDLE = '❮';
     private const CENTER = '◆';
 
@@ -71,28 +68,6 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
         $clone->width = $width;
         $clone->sizerHeight = $height;
         return $clone;
-    }
-
-    /**
-     * Calculate position on the arc given an angle and radius.
-     */
-    private function calculateArcPosition(float $angle, int $radius): array
-    {
-        // Angle: 0 = top, increases clockwise
-        // We span from ~225 degrees (bottom-left) to ~315 degrees (bottom-right)
-        // This is a 270-degree arc (3/4 circle)
-        $startAngle = 0.75 * M_PI; // 135 degrees (bottom-left)
-        $endAngle = -0.25 * M_PI;  // -45 degrees (bottom-right) in standard math
-        // But PHP's atan2: 0 = right, PI/2 = bottom, PI = left, -PI/2 = top
-        // We want arc from bottom-left (3*PI/4) to bottom-right (-PI/4)
-        // That spans 270 degrees clockwise
-
-        $currentAngle = $startAngle - ($angle * 1.5 * M_PI); // 270 degrees total span
-
-        $x = $radius + (int) round(cos($currentAngle) * $radius);
-        $y = $radius - (int) round(sin($currentAngle) * $radius); // Invert Y for display
-
-        return [$x, $y];
     }
 
     /**
@@ -175,12 +150,12 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             $ny = $centerY - (int) round(sin($needleAngle) * $needleLength);
 
             if ($nx >= 0 && $nx < $diameter && $ny >= 0 && $ny < $diameter) {
-                $grid[$ny][$nx] = '❮';
+                $grid[$ny][$nx] = self::NEEDLE;
             }
         }
 
         // Draw center point
-        $grid[$centerY][$centerX] = '◆';
+        $grid[$centerY][$centerX] = self::CENTER;
 
         // Convert grid to string
         $result = '';
@@ -192,11 +167,11 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
                         if ($this->arcColor !== null) {
                             $result .= $this->arcColor->toFg(ColorProfile::TrueColor);
                         }
-                    } elseif ($char === '❮' && $this->needleColor !== null) {
+                    } elseif ($char === self::NEEDLE && $this->needleColor !== null) {
                         $result .= $this->needleColor->toFg(ColorProfile::TrueColor);
                     }
                     $result .= $char;
-                    if (in_array($char, ['●', '○', '❮'], true)) {
+                    if (in_array($char, ['●', '○', self::NEEDLE], true)) {
                         $result .= Ansi::reset();
                     }
                 } else {

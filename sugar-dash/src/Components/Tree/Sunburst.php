@@ -88,17 +88,6 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
     private int $maxDepth = 3;
     private string $style = 'rounded';
 
-    /**
-     * Block characters for arc approximation.
-     */
-    private const ARC_CHARS = [
-        'full' => '█',
-        'left' => '▏',
-        'right' => '▎',
-        'top' => '▁',
-        'bottom' => '▔',
-    ];
-
     public function __construct(
         private ?Color $segmentColor = null,
         private ?Color $textColor = null,

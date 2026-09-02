@@ -84,11 +84,6 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     /** @var ChartRenderContext|null Render context for diff-based emission (avoids mutating scattered properties) */
     private ?ChartRenderContext $renderContext = null;
 
-    /**
-     * Block characters for bar chart.
-     */
-    private const BAR_CHARS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-
     public function __construct(
         array $dataPoints = [],
         private readonly ChartType $type = ChartType::Bar,
