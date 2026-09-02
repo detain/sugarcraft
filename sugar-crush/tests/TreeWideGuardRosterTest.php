@@ -1243,6 +1243,13 @@ final class TreeWideGuardRosterTest extends TestCase
             . 'green with the whole arm deleted (F-4R-4, rule 40)',
         );
 
+        $this->assertSame(
+            ['root' => ['Deep\\NS($d)'], 'unresolved' => []],
+            self::classifyWalkSites(self::knownAnswerSources()['viaDqStringClassAlias']),
+            'a double-quoted STRING alias literal drives decodeAliasStringBody\'s `"` branch on the '
+            . 'roster too - every prior roster alias was single-quoted (F-4R-5)',
+        );
+
         // AND THE FIXTURE SET ITSELF IS PINNED, which was the NINTH door in
         // this one check when the set held eight. The coverage half
         // in {@see testTheDerivationDetectsAShrinkInEitherHalfOfTheWalkerAlphabet()}
@@ -1270,7 +1277,7 @@ final class TreeWideGuardRosterTest extends TestCase
             ['direct', 'viaChain', 'temp', 'opaque', 'viaGlobIterator', 'viaReaddir', 'viaFilesystemIterator', 'notAWalk',
                 'viaFunctionAlias', 'viaClassAlias', 'viaRuntimeAlias', 'viaSplFileInfoChildren', 'splFileInfoChained', 'childrenUnanchored',
                 'viaReorderedClassAlias', 'viaNamespacedClassAlias', 'viaWalkerSubclass', 'viaHeredocClassAlias',
-                'viaIndentedNowdocClassAlias', 'viaIndentedHeredocClassAlias', 'viaDqHeredocClassAlias',],
+                'viaIndentedNowdocClassAlias', 'viaIndentedHeredocClassAlias', 'viaDqHeredocClassAlias', 'viaDqStringClassAlias',],
             array_keys(self::knownAnswerSources()),
             'a fixture was added to or removed from knownAnswerSources() without a matching '
             . 'exact-answer row above. That matters in one direction in particular: '
@@ -1368,6 +1375,11 @@ final class TreeWideGuardRosterTest extends TestCase
             // branch was green with the whole arm deleted.
             'viaDqHeredocClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', <<<EOT\nEsc\\\\AP\nEOT);\n"
             . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new \\Esc\\AP(\$d); } }\n",
+            // F-4R-5: a double-quoted STRING alias literal, driving
+            // decodeAliasStringBody's `"` branch on the roster — every prior
+            // roster alias fixture was single-quoted.
+            'viaDqStringClassAlias' => "<?php\nclass_alias('RecursiveDirectoryIterator', \"Deep\\\\NS\");\n"
+            . "class P { private function go(): void { \$d = \\dirname(__DIR__, 2) . '/src'; new \\Deep\\NS(\$d); } }\n",
         ];
     }
 
