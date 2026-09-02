@@ -4,18 +4,30 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests\Integration;
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Response;
+use OpenAI\Contracts\ClientContract;
+use OpenAI\Contracts\Resources\ChatContract;
+use OpenAI\Responses\Chat\CreateResponse as ChatCreateResponse;
+use OpenAI\Responses\Meta\MetaInformation;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Backend\EngineBackend;
 use SugarCraft\Crush\Hooks\HookManager;
 use SugarCraft\Crush\Hooks\HookRegistry;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Messages\UserMessage;
+use SugarCraft\Crush\Providers\BedrockProvider;
 use SugarCraft\Crush\Providers\CompleteRequest;
 use SugarCraft\Crush\Providers\CompleteResponse;
+use SugarCraft\Crush\Providers\CustomProvider;
 use SugarCraft\Crush\Providers\EchoProvider;
 use SugarCraft\Crush\Providers\EmbeddingsRequest;
 use SugarCraft\Crush\Providers\EmbeddingsResponse;
+use SugarCraft\Crush\Providers\OpenAIProvider;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Providers\SglangProvider;
+use SugarCraft\Crush\Providers\VertexProvider;
 use SugarCraft\Crush\Runtime;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
@@ -37,6 +49,14 @@ use SugarCraft\Crush\Usage;
  * Every test here drives the REAL Runtime and the REAL EngineBackend against a
  * provider double. Nothing calls a private method or asserts on a docblock: the
  * question in each case is what a caller can observe on the returned Message.
+ *
+ * DOMAIN OF THE SENTENCE ABOVE: the ten crush_code.md Phase 5 tests. The P4.S2
+ * section appended below answers a different question - the provider's own
+ * parse of its usage object - so it drives the providers through their PUBLIC
+ * parse seams plus their complete()/completeStream() entry points, and asserts
+ * the buckets on the returned Usage; the buckets cannot yet be observed on the
+ * Message (CompleteResponse carries no carrier field - the reported widening
+ * seam), as the section banner and the step's ESCALATION record explain.
  */
 final class UsageWiringTest extends TestCase
 {
@@ -386,6 +406,1212 @@ final class UsageWiringTest extends TestCase
                 return new ToolResult(toolCallId: 'call_1', content: 'noon');
             }
         };
+    }
+
+    // -------------------------------------------------------------------------
+    //  P4.S2 — providers populate the Usage buckets (prompt_plan.md)
+    //
+    //  Each provider's parse of a REAL-SHAPED usage object is asserted bucket
+    //  by bucket, with the payload's provenance named in the test that uses
+    //  it: LIVE-PROBE (byte-copied from the 2026-09-02 skynet2 responses,
+    //  pasted into the P4.S2 worklog entry), VENDORED-SHAPE (field names and
+    //  optionality read out of the SDK this repo itself ships — a locally
+    //  verifiable source), or UNVERIFIED-DOCUMENTED (the published API's
+    //  shape with no local artifact to check it against, labelled as such in
+    //  the docblock per the step brief's source-of-truth ranking).
+    //
+    //  Two layers run in every provider's cases on purpose. The `parse…()`
+    //  seam asserts the BUCKETS - the artifact this step adds. And a
+    //  `complete()`/`completeStream()` driven through the provider's own mock
+    //  transport asserts the provider really routes through that parse:
+    //  tokensUsed/costUsd keep their exact pre-P4.S2 values for legitimate
+    //  payloads, and the negative-clamp cases (which the old inline parses
+    //  passed through) go red if the routing is reverted. The buckets' last
+    //  hop onto CompleteResponse/Message is the reported "widen
+    //  CompleteResponse" seam (Usage.php's class docblock, "a later seam");
+    //  until it lands, no consumer in src/ can observe the bucket fields on a
+    //  LIVE response — which is the honest state of this step, not a gap
+    //  these tests hide.
+    // -------------------------------------------------------------------------
+
+    /**
+     * LIVE-PROBE payload: skynet2 sglang `/v1/chat/completions`, 2026-09-02
+     * 14:43 UTC, curl exit 0 (model deepseek-ai/DeepSeek-V4-Flash-0731).
+     * Byte-copied; the worklog entry carries the same body.
+     */
+    private const SGLANG_PROBE_COLD = <<<'JSON'
+{"id":"8985b0de56a44d82b3fdd6fafa3ec3e8","object":"chat.completion","created":1788360201,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"message":{"role":"assistant","content":"","reasoning_content":"We need to respond to user: \"What fruit am I thinking of?\" Must respond with exactly single word BANANA and","tool_calls":null},"logprobs":null,"finish_reason":"length","matched_stop":null}],"usage":{"prompt_tokens":75,"total_tokens":99,"completion_tokens":24,"prompt_tokens_details":null,"reasoning_tokens":25},"metadata":{"weight_version":"default"}}
+JSON;
+
+    /**
+     * LIVE-PROBE payload: the SAME 1,258-token request body re-sent
+     * immediately (probe 2 of 2, 2026-09-02). sglang's radix cache cannot
+     * miss a byte-identical 1,258-token prefix, and this deployment STILL
+     * reports `prompt_tokens_details: null` - the measured fact behind
+     * "Sglang reports no cache fields here". Byte-copied.
+     */
+    private const SGLANG_PROBE_CACHED = <<<'JSON'
+{"id":"5d6374111a64453ea9e33342baa4bcc5","object":"chat.completion","created":1788360220,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"message":{"role":"assistant","content":"","reasoning_content":"We need respond to user. User says repeated sentence then \"REPLY ONLY:","tool_calls":null},"logprobs":null,"finish_reason":"length","matched_stop":null}],"usage":{"prompt_tokens":1258,"total_tokens":1274,"completion_tokens":16,"prompt_tokens_details":null,"reasoning_tokens":16},"metadata":{"weight_version":"default"}}
+JSON;
+
+    public function testP4S2SglangPopulatesBucketsFromTheLiveProbedResponse(): void
+    {
+        $document = json_decode(self::SGLANG_PROBE_COLD, true, flags: JSON_THROW_ON_ERROR);
+        $provider = $this->p4s2SglangRespondingWith(self::SGLANG_PROBE_COLD);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            messages: [new UserMessage('What fruit am I thinking of?')],
+        ));
+
+        // Production routing: the billable pair leaves the provider exactly as
+        // it always did (99 = the wire's own total_tokens, 0.0 = self-hosted).
+        $this->assertSame(99, $response->tokensUsed);
+        $this->assertSame(0.0, $response->costUsd);
+
+        $usage = $provider->parseUsage($document['usage']);
+        $this->assertSame(99, $usage->totalTokens);
+        $this->assertSame(75, $usage->inputTokens, 'no cache reported, so the whole prompt is fresh input');
+        $this->assertSame(24, $usage->outputTokens);
+        $this->assertNull($usage->cacheReadTokens, 'prompt_tokens_details null = the server said nothing, NOT zero');
+        $this->assertNull($usage->cacheCreationTokens, 'the OpenAI-compatible family has no cache-creation field; parseUsage must not invent one');
+        // The flat `reasoning_tokens: 25` this server sends is NOT a Usage
+        // bucket (qwen.md §P1 records the flat spelling); folding it into
+        // outputTokens would bill 49 completion tokens nobody counted.
+        $this->assertSame(24, $usage->outputTokens, 'reasoning_tokens must not leak into outputTokens');
+        // promptTokens() refuses across the unreported creation bucket - P4.S1
+        // doctrine, now reached by real provider data for the first time.
+        $this->assertNull($usage->promptTokens());
+    }
+
+    public function testP4S2SglangReportsNoCacheOnTheDeploymentThatWasProbed(): void
+    {
+        $document = json_decode(self::SGLANG_PROBE_CACHED, true, flags: JSON_THROW_ON_ERROR);
+        $provider = $this->p4s2SglangRespondingWith(self::SGLANG_PROBE_CACHED);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            messages: [new UserMessage('again')],
+        ));
+        $this->assertSame(1274, $response->tokensUsed);
+
+        // The key's PRESENCE with a null value is the deployment fact (radix
+        // cache cannot miss this prefix; it still reports nothing).
+        $this->assertArrayHasKey('prompt_tokens_details', $document['usage']);
+        $this->assertNull($document['usage']['prompt_tokens_details']);
+
+        $usage = $provider->parseUsage($document['usage']);
+        $this->assertSame(1258, $usage->inputTokens);
+        $this->assertSame(16, $usage->outputTokens);
+        $this->assertNull($usage->cacheReadTokens);
+        $this->assertNull($usage->cacheCreationTokens);
+    }
+
+    public function testP4S2SglangReadsCachedTokensTheMomentAServerReportsThem(): void
+    {
+        // The decide-the-honest-behaviour-and-pin-it half of the brief's
+        // no-cache-field rule: the as-received probe payload, with the
+        // documented member planted where the null key sits. A server that
+        // starts reporting (sglang launched with cache reporting, or a
+        // vLLM front) is READ, not crashed on and not ignored.
+        $provider = SglangProvider::openAiCompatible('https://api.example.com');
+        $usage = $provider->parseUsage([
+            'prompt_tokens' => 1258,
+            'total_tokens' => 1274,
+            'completion_tokens' => 16,
+            'prompt_tokens_details' => ['cached_tokens' => 1152],
+            'reasoning_tokens' => 16,
+        ]);
+
+        $this->assertSame(106, $usage->inputTokens, 'this family\'s prompt_tokens COUNTS the cached prefix; input is the fresh remainder');
+        $this->assertSame(16, $usage->outputTokens);
+        $this->assertSame(1152, $usage->cacheReadTokens);
+        $this->assertNull($usage->cacheCreationTokens);
+        $this->assertSame(1274, $usage->totalTokens, 'the cached split must never move the wire total');
+
+        // Pathological half: a server reporting more cached than prompt is a
+        // provider bug; the fresh remainder floors at 0, it does not go
+        // negative and it does not void the reported cache read.
+        $broken = $provider->parseUsage([
+            'prompt_tokens' => 10,
+            'total_tokens' => 12,
+            'completion_tokens' => 2,
+            'prompt_tokens_details' => ['cached_tokens' => 15],
+        ]);
+        $this->assertSame(0, $broken->inputTokens);
+        $this->assertSame(15, $broken->cacheReadTokens);
+    }
+
+    public function testP4S2SglangStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor(): void
+    {
+        // review-5 finding 7: removing the `isset($data['choices'][0]['delta'])`
+        // guard in completeStream survived everything, because no test fed a
+        // line the guard is about. This is the LIVE-PROBE terminal usage
+        // chunk (2026-09-02 skynet2 stream, worklog §1c - only ever emitted
+        // with stream_options.include_usage, which this provider does not
+        // send, making it a forward-shape pin): `choices: []` beside a full
+        // usage document. Without the gate, parseChunk's `?? []` tolerance
+        // turns that line into an EXTRA empty CompleteResponse - a phantom
+        // chunk in wire order. The guard drops it (and the `data: [DONE]`
+        // line drops at the `$data !== null` guard), so the stream yields
+        // EXACTLY the two delta chunks, content and billing intact.
+        $delta = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"delta":{"content":"%s"},"logprobs":null,"finish_reason":null,"matched_stop":null}]}';
+        $usageChunk = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
+        $sse = sprintf('data: ' . $delta . "\n", 'Hel')
+            . sprintf('data: ' . $delta . "\n", 'lo')
+            . 'data: ' . $usageChunk . "\n"
+            . "data: [DONE]\n";
+
+        $chunks = iterator_to_array($this->p4s2SglangRespondingWith($sse)->completeStream(
+            new CompleteRequest(
+                model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+                messages: [new UserMessage('hi')],
+            ),
+        ));
+
+        $this->assertCount(2, $chunks, 'the zero-choice usage chunk and [DONE] yield NOTHING - gate removed, parseChunk emits a third, empty chunk');
+        $this->assertSame(['Hel', 'lo'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the surviving deltas, intact');
+        $this->assertSame([0, 0], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), 'per-chunk deltas bill zero - the usage document on the dropped line never reaches a chunk');
+    }
+
+    public function testP4S2SglangNegativeWireTotalBillsZeroThroughTheRealParsePath(): void
+    {
+        // The routing-revert RED test: with the old inline
+        // `$data['usage']['total_tokens'] ?? 0` the negative passed through to
+        // CompleteResponse; once every number leaves through the parsed
+        // Usage, Usage::new()'s clamp owns it (provider bug accounted as
+        // zero - the doctrine in Usage's class docblock, first enforced here
+        // on this provider's live path).
+        $body = '{"choices":[{"message":{"content":"ok","reasoning_content":null,"tool_calls":null}}],'
+            . '"usage":{"prompt_tokens":-5,"total_tokens":-9,"completion_tokens":-4,"prompt_tokens_details":null}}';
+        $provider = $this->p4s2SglangRespondingWith($body);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'm',
+            messages: [new UserMessage('x')],
+        ));
+
+        $this->assertSame(0, $response->tokensUsed, 'a negative wire total now routes through the clamp');
+        $this->assertSame(0.0, $response->costUsd);
+    }
+
+    public function testP4S2CustomNegativeWireTotalBillsZeroThroughTheRealParsePath(): void
+    {
+        // Routing falsifier for Custom, the twin of the sglang one: revert
+        // parseResponse to its old inline `?? 0` read and this goes red
+        // (-9 passes through), because once every number leaves through the
+        // parsed Usage, Usage::new()'s clamp owns it.
+        $body = '{"choices":[{"message":{"content":"ok"}}],'
+            . '"usage":{"prompt_tokens":-5,"total_tokens":-9,"completion_tokens":-4}}';
+        $response = $this->p4s2CustomRespondingWith($body)->complete(new CompleteRequest(
+            model: 'm',
+            messages: [new UserMessage('x')],
+        ));
+
+        $this->assertSame(0, $response->tokensUsed);
+        $this->assertSame(0.0, $response->costUsd);
+    }
+
+    public function testP4S2OpenAiNegativeWireTotalsBillZeroThroughTheRealParsePath(): void
+    {
+        // Routing falsifier for OpenAI: the DTO passes signed ints through
+        // untouched, so the old inline read would have billed -9.
+        [$provider, $response] = $this->p4s2OpenAiCompleteWith([
+            'prompt_tokens' => -5,
+            'completion_tokens' => -4,
+            'total_tokens' => -9,
+        ]);
+
+        $this->assertSame(0, $response->tokensUsed, 'negative totals route through Usage::new clamps');
+        $this->assertSame(0.0, $response->costUsd, 'a negative computed price clamps too - a turn is never credited');
+
+        $usage = $provider->parseUsage([
+            'prompt_tokens' => -5,
+            'completion_tokens' => -4,
+            'total_tokens' => -9,
+        ]);
+        $this->assertSame(0, $usage->inputTokens, 'reported negative = reported zero, not unreported null');
+    }
+
+    public function testP4S2CustomMirrorsTheFamilyParseOnTheProbedShape(): void
+    {
+        // LIVE-PROBE payload by family: CustomProvider fronts any
+        // OpenAI-compatible server - frequently, its own inline extra_body
+        // reasoning-flag comment (src/Providers/CustomProvider.php:141-142,
+        // inside complete()) says, exactly the sglang deployment probed
+        // above - so the probed body is the real-shaped fixture for it.
+        $document = json_decode(self::SGLANG_PROBE_COLD, true, flags: JSON_THROW_ON_ERROR);
+        $provider = $this->p4s2CustomRespondingWith(self::SGLANG_PROBE_COLD);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            messages: [new UserMessage('What fruit am I thinking of?')],
+        ));
+        $this->assertSame(99, $response->tokensUsed);
+        $this->assertSame(0.0, $response->costUsd);
+
+        $usage = $provider->parseUsage($document['usage']);
+        $this->assertSame(99, $usage->totalTokens);
+        $this->assertSame(75, $usage->inputTokens);
+        $this->assertSame(24, $usage->outputTokens);
+        $this->assertNull($usage->cacheReadTokens);
+        $this->assertNull($usage->cacheCreationTokens);
+    }
+
+    public function testP4S2CustomParsesCachedTokensWhenTheFrontedServerReportsThem(): void
+    {
+        $document = json_decode(self::SGLANG_PROBE_CACHED, true, flags: JSON_THROW_ON_ERROR);
+        $reported = $document['usage'];
+        $reported['prompt_tokens_details'] = ['cached_tokens' => 1152];
+
+        $usage = $this->p4s2CustomRespondingWith('{"usage":{}}')
+            ->parseUsage($reported);
+
+        $this->assertSame(106, $usage->inputTokens);
+        $this->assertSame(1152, $usage->cacheReadTokens);
+        $this->assertNull($usage->cacheCreationTokens, 'no cache-creation field exists on this family - Custom must not invent one');
+    }
+
+    public function testP4S2CustomStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor(): void
+    {
+        // review-7 finding 1 (MAJOR): the branch's own parseUsage() docblock
+        // (src/Providers/CustomProvider.php:415-419) claims - verbatim in kind
+        // to the sglang claim fix-6 falsified - that "the `choices[0].delta`
+        // gate in {@see completeStream()} drops the zero-choice terminal chunk
+        // such a request would produce". Until this test that claim was
+        // unfalsifiable: mutating the gate at :252 to `if (true)` left all 90
+        // tests of UsageWiringTest + CustomProviderTest +
+        // CustomProviderStreamingTest green. This is the Custom twin of
+        // testP4S2SglangStreamDropsTheZeroChoiceUsageChunkTheDeltaGateExistsFor,
+        // fed the identical 2026-09-02 skynet2 LIVE-PROBE lines (the docblock
+        // imports that evidence by family - Custom fronts exactly this class of
+        // server). It pins the whole sentence by test, not prose:
+        //   REQUEST half - `stream` is on the wire and `stream_options` never
+        //     is, so this provider never asks for streamed usage at all; the
+        //     zero-choice line below is a forward-shape pin;
+        //   DROP half - the `choices: []` usage line yields NOTHING; with the
+        //     gate removed, parseChunk's `?? []` tolerance emits a phantom
+        //     empty chunk in wire order (kill measured RED at size 3);
+        //   CONSEQUENCE half - no usage object reaches any parse on the stream
+        //     path: both surviving chunks bill zero.
+        $delta = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[{"index":0,"delta":{"content":"%s"},"logprobs":null,"finish_reason":null,"matched_stop":null}]}';
+        $usageChunk = '{"id":"c7a59cdb72e24ebd99d9821ebc0e4b8a","object":"chat.completion.chunk","created":1788360234,"model":"deepseek-ai/DeepSeek-V4-Flash-0731","choices":[],"usage":{"prompt_tokens":60,"total_tokens":72,"completion_tokens":12,"prompt_tokens_details":null,"reasoning_tokens":13}}';
+        $sse = sprintf('data: ' . $delta . "\n", 'Hel')
+            . sprintf('data: ' . $delta . "\n", 'lo')
+            . 'data: ' . $usageChunk . "\n"
+            . "data: [DONE]\n";
+
+        // Capturing mock instead of p4s2CustomRespondingWith - the REQUEST half
+        // of the claim lives in what goes OUT, not what comes back.
+        $captured = [];
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturnCallback(
+            static function (string $uri, array $options) use (&$captured, $sse): Response {
+                $captured = ['uri' => $uri, 'options' => $options];
+
+                return new Response(200, [], $sse);
+            }
+        );
+        $provider = new CustomProvider('probe-family', 'https://api.example.com', 'test-model', null, $httpClient, true, true);
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'deepseek-ai/DeepSeek-V4-Flash-0731',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertSame('chat/completions', $captured['uri'], 'the stream arm posts to the chat endpoint the request is built for');
+        $this->assertTrue($captured['options']['json']['stream'], 'the request IS a streaming request');
+        $this->assertArrayNotHasKey('stream_options', $captured['options']['json'], 'no stream_options is ever sent - this provider never REQUESTS streamed usage, exactly as the docblock records; the zero-choice chunk below is a forward-shape pin');
+        $this->assertCount(2, $chunks, 'the zero-choice usage chunk and [DONE] yield NOTHING - gate removed, parseChunk emits a third, empty chunk');
+        $this->assertSame(['Hel', 'lo'], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order and content of the surviving deltas, intact');
+        $this->assertSame([0, 0], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $chunks), 'per-chunk deltas bill zero - the usage document on the dropped line never reaches a chunk');
+    }
+
+    public function testP4S2OpenAiSplitsPromptTokensDetailsAcrossBuckets(): void
+    {
+        // VENDORED-SHAPE fixture: every key of this usage object is one the
+        // repo's own vendored OpenAI SDK types - CreateResponseUsage
+        // documents `prompt_tokens_details?:array{cached_tokens:int}` and
+        // CreateResponse passes it through `CreateResponse::toArray()`
+        // untouched. Values are realistic gpt-4o cached-prompt figures, not
+        // live-captured (no OpenAI credential exists for this plan).
+        $usageArray = [
+            'prompt_tokens' => 2000,
+            'completion_tokens' => 100,
+            'total_tokens' => 2100,
+            'prompt_tokens_details' => ['cached_tokens' => 1536],
+        ];
+        [$provider, $response] = $this->p4s2OpenAiCompleteWith($usageArray);
+
+        $this->assertSame(2100, $response->tokensUsed, 'the wire total, exactly as before P4.S2');
+        $this->assertEqualsWithDelta(0.0115, $response->costUsd, 0.0000001, 'pricing is (2000*0.005 + 100*0.015)/1000, unchanged - cache-aware pricing is a REPORTED follow-up, not this step');
+
+        $usage = $provider->parseUsage($usageArray);
+        $this->assertSame(2100, $usage->totalTokens);
+        $this->assertSame(464, $usage->inputTokens, '2000 prompt - 1536 cached = the fresh remainder');
+        $this->assertSame(100, $usage->outputTokens);
+        $this->assertSame(1536, $usage->cacheReadTokens);
+        $this->assertNull($usage->cacheCreationTokens, 'OpenAI prompt caching has no separately-counted write - the field does not exist and must not be invented');
+        $this->assertEqualsWithDelta(0.0115, $usage->costUsd, 0.0000001, 'the parsed Usage carries the SAME cost the response does - one source, no drift');
+    }
+
+    public function testP4S2OpenAiWithoutPromptTokenDetailsReportsNoCache(): void
+    {
+        // Both polarities of the details key, through the REAL SDK DTO - the
+        // difference between the two rows is the difference between "the
+        // server sent no details" and "the server sent details and said
+        // zero cache reads", and the SDK itself draws it: `toArray()` emits
+        // `prompt_tokens_details` only when the response carried it.
+        $provider = new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o');
+
+        $bare = $provider->parseUsage([
+            'prompt_tokens' => 30,
+            'completion_tokens' => 10,
+            'total_tokens' => 40,
+        ]);
+        $this->assertNull($bare->cacheReadTokens, 'no details key = unreported, not zero');
+        $this->assertSame(30, $bare->inputTokens, 'with no cache reported, the whole prompt is fresh input');
+
+        // Details present but WITHOUT the member: the SDK's own
+        // CreateResponseUsagePromptTokensDetails::from() coerces that to
+        // cached_tokens 0 - a reported measurement, so parseUsage must hand
+        // the zero through as zero. Feeding what THAT class actually emits:
+        $sdkEmitted = \OpenAI\Responses\Chat\CreateResponseUsage::from([
+            'prompt_tokens' => 30,
+            'completion_tokens' => 10,
+            'total_tokens' => 40,
+            'prompt_tokens_details' => [],
+        ])->toArray();
+        $this->assertSame(
+            ['cached_tokens' => 0],
+            $sdkEmitted['prompt_tokens_details'],
+            'fixture: the vendored SDK really coerces an empty details object to a measured zero',
+        );
+
+        $zero = $provider->parseUsage($sdkEmitted);
+        $this->assertSame(0, $zero->cacheReadTokens, 'a measured cache-read zero is NOT the unreported null');
+        $this->assertSame(30, $zero->inputTokens);
+    }
+
+    public function testP4S2OpenAiNullCompletionTokenStaysUnreported(): void
+    {
+        // The vendored DTO's own return shape types `completion_tokens:
+        // int|null` - an explicit null is a real wire possibility and must
+        // decode to UNREPORTED, never to a counted zero. (Absent and null
+        // arrive at the same bucket: both are "not said".)
+        $provider = new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o');
+
+        $usage = $provider->parseUsage([
+            'prompt_tokens' => 2000,
+            'completion_tokens' => null,
+            'total_tokens' => 2000,
+        ]);
+
+        $this->assertNull($usage->outputTokens);
+        $this->assertSame(2000, $usage->inputTokens);
+        $this->assertSame(2000, $usage->totalTokens);
+        // Cost keeps calculateCost()'s exact prior expression: `?? 0` treats
+        // the null as 0 for PRICING while the bucket stays unreported.
+        $this->assertEqualsWithDelta(0.010, $usage->costUsd, 0.0000001);
+    }
+
+    public function testP4S2BedrockMapsBothCacheSidesFromTheVendoredShape(): void
+    {
+        // VENDORED-SHAPE fixture: the five usage keys are MEASURED from this
+        // repo's own vendor/aws/.../bedrock-runtime/2023-09-30/api-2.json.php
+        // shape `TokenUsage` {inputTokens, outputTokens, totalTokens,
+        // cacheReadInputTokens, cacheWriteInputTokens, cacheDetails}. This is
+        // the only provider whose wire reports BOTH cache sides, so it is the
+        // only one whose four-bucket prompt identity becomes computable.
+        // totalTokens is deliberately a THIRD number (2500 != 1200+300):
+        // complete() still bills input+output as it always has, and the
+        // fixture pins that the wire total is NOT silently preferred -
+        // switching the billable total is a pricing-visible change outside
+        // this step and REPORTED as such.
+        $usageArray = [
+            'inputTokens' => 1200,
+            'outputTokens' => 300,
+            'totalTokens' => 2500,
+            'cacheReadInputTokens' => 8000,
+            'cacheWriteInputTokens' => 1234,
+            // The real shape of `cacheDetails`, MEASURED from the same
+            // vendored api-2.json.php: shape `CacheDetailsList` = LIST of
+            // `CacheDetail{ttl, inputTokens}` (ttl is the enum "5m"|"1h", both
+            // members required) - a per-TTL breakdown of the cache-write side,
+            // not a map of field names. (The earlier fixture here spelled the
+            // member `ephemeral5mInputTokens`: review-5 F2 measured that name
+            // exists NOWHERE in the AWS shape file - it is the
+            // Anthropic-direct-API spelling - so the fixture carried an
+            // invented member labelled vendored. Corrected to the list.)
+            // The two cache-WRITE-side numbers stay DELIBERATELY distinct
+            // (99 != 1234): cacheCreationTokens must source ONLY from
+            // cacheWriteInputTokens (parseUsage reads cacheDetails nowhere -
+            // it has no Usage bucket), and an equal value here would let a
+            // future mis-wire to the TTL breakdown pass on coincidence
+            // instead of on the right field.
+            'cacheDetails' => [['ttl' => '5m', 'inputTokens' => 99]],
+        ];
+        $provider = $this->p4s2BedrockUnaryWith($usageArray);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+        ));
+        $this->assertSame(1500, $response->tokensUsed, 'the preserved input+output expression, NOT the wire 2500');
+        $this->assertEqualsWithDelta(0.0081, $response->costUsd, 0.0000001, '(1200*0.003 + 300*0.015)/1000 - pricing left exactly as before');
+
+        $usage = $provider->parseUsage($usageArray, 'anthropic.claude-sonnet-4-6');
+        $this->assertSame(1200, $usage->inputTokens, 'Bedrock follows the Anthropic convention - inputTokens is the fresh side, no subtraction');
+        $this->assertSame(300, $usage->outputTokens);
+        $this->assertSame(8000, $usage->cacheReadTokens);
+        $this->assertSame(1234, $usage->cacheCreationTokens, 'a cache WRITE is what Usage calls cache CREATION');
+        $this->assertSame(10434, $usage->promptTokens(), 'the one provider family here where total = cacheRead + cacheCreation + input has all three sides reported');
+    }
+
+    public function testP4S2BedrockStreamMetadataSharesTheSameParse(): void
+    {
+        // The step brief's named trap: "a bucket wired only in complete()
+        // reads zero on the live streamed path while non-streaming tests stay
+        // green". The vendored API definition binds
+        // `ConverseStreamMetadataEvent.usage` to the SAME `TokenUsage` shape
+        // (measured from api-2.json.php), so this drives the stream arm with
+        // cache fields present and pins they are parsed there too.
+        $usageArray = [
+            'inputTokens' => 1200,
+            'outputTokens' => 300,
+            'totalTokens' => 2500,
+            'cacheReadInputTokens' => 8000,
+            'cacheWriteInputTokens' => 1200,
+        ];
+        $provider = $this->p4s2BedrockStreamWith($usageArray);
+
+        $content = '';
+        $tokens = 0;
+        $cost = 0.0;
+        $usageEvents = 0;
+        foreach ($provider->completeStream(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+        )) as $chunk) {
+            $content .= $chunk->content;
+            $tokens += $chunk->tokensUsed;
+            $cost += $chunk->costUsd;
+            if ($chunk->tokensUsed > 0) {
+                $usageEvents++;
+            }
+        }
+
+        $this->assertSame('Hello', $content);
+        $this->assertSame(1, $usageEvents, 'usage lands exactly once, on the terminal metadata event');
+        $this->assertSame(1500, $tokens, 'the same preserved input+output expression on the stream arm');
+        $this->assertEqualsWithDelta(0.0081, $cost, 0.0000001);
+    }
+
+    public function testP4S2BedrockWithoutCacheMembersDecodesThemUnreported(): void
+    {
+        $provider = new BedrockProvider(
+            $this->p4s2BedrockClient([]),
+            'us-east-1',
+            'anthropic.claude-sonnet-4-6',
+        );
+
+        $usage = $provider->parseUsage(
+            ['inputTokens' => 10, 'outputTokens' => 5],
+            'anthropic.claude-sonnet-4-6',
+        );
+        $this->assertNull($usage->cacheReadTokens, 'no cache members = the provider said nothing about cache');
+        $this->assertNull($usage->cacheCreationTokens);
+        $this->assertSame(15, $usage->totalTokens);
+        $this->assertNull($usage->promptTokens(), 'promptTokens refuses across unreported cache buckets - measured zero and unreported must stay distinguishable end to end');
+    }
+
+    public function testP4S2BedrockNegativeWireSidesBillZeroThroughTheRealParsePath(): void
+    {
+        // Routing falsifier for Bedrock: the old inline parse summed the two
+        // signed ints (-15) and passed the negative through CompleteResponse;
+        // routed through the parsed Usage, the clamp owns it.
+        $provider = $this->p4s2BedrockUnaryWith(['inputTokens' => -10, 'outputTokens' => -5]);
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'anthropic.claude-sonnet-4-6',
+            messages: [new UserMessage('hi')],
+        ));
+
+        $this->assertSame(0, $response->tokensUsed);
+        $this->assertSame(0.0, $response->costUsd, 'the negative computed price clamps too');
+    }
+
+    public function testP4S2VertexAnthropicUnaryMapsBothCacheSides(): void
+    {
+        // UNVERIFIED-DOCUMENTED fixture, labelled per the brief's fallback
+        // rule: `cache_read_input_tokens` / `cache_creation_input_tokens` are
+        // the published Anthropic Messages-API field names (the same pair the
+        // vendored Bedrock shape carries in AWS camelCase), and this repo
+        // vendors no Anthropic SDK to check them against; Vertex rawPredict
+        // passes the native document through verbatim.
+        $usageArray = [
+            'input_tokens' => 10,
+            'output_tokens' => 5,
+            'cache_read_input_tokens' => 7000,
+            'cache_creation_input_tokens' => 900,
+        ];
+        $provider = $this->p4s2VertexWith(
+            ['content' => [['type' => 'text', 'text' => 'Hi']], 'usage' => $usageArray],
+            'claude-3-sonnet@20240229',
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        ));
+        $this->assertSame(15, $response->tokensUsed, 'input+output preserved; whether cache belongs in the billable total is the REPORTED pricing question, not this step');
+
+        $usage = $provider->parseAnthropicUsage($usageArray, 'claude-3-sonnet@20240229');
+        $this->assertSame(10, $usage->inputTokens);
+        $this->assertSame(5, $usage->outputTokens);
+        $this->assertSame(7000, $usage->cacheReadTokens);
+        $this->assertSame(900, $usage->cacheCreationTokens);
+        $this->assertSame(7910, $usage->promptTokens());
+    }
+
+    public function testP4S2VertexAnthropicNegativeWireSidesBillZeroThroughTheRealParsePath(): void
+    {
+        // Routing falsifier for the Vertex Anthropic arm: the old inline
+        // `(int)(...) + (int)(...)` billed -15 straight through.
+        $provider = $this->p4s2VertexWith(
+            ['content' => [['type' => 'text', 'text' => 'Hi']], 'usage' => ['input_tokens' => -10, 'output_tokens' => -5]],
+            'claude-3-sonnet@20240229',
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        ));
+
+        // tokensUsed is the discriminating assertion; cost stays 0.0 either
+        // way because Vertex's rate table is a placeholder 0.0 - said plainly
+        // so no reader grades that line as a falsifier.
+        $this->assertSame(0, $response->tokensUsed);
+        $this->assertSame(0.0, $response->costUsd);
+    }
+
+    public function testP4S2VertexAnthropicStreamParsesCacheOnMessageStartKeepingPerDeltaSplit(): void
+    {
+        // UNVERIFIED-DOCUMENTED fixture (same labelling as the unary case).
+        // P1.S5's streamed-Usage contract is the constraint here: the split
+        // events must stay per-delta - `message_start` bills input only,
+        // `message_delta` output only - because Runtime SUMS them. P4.S2
+        // widens only what each event's usage DOCUMENT feeds the parse.
+        // BOTH-SIDED on purpose (review-2 finding 1): Anthropic's published
+        // streaming docs show a `message_start` usage can carry
+        // `output_tokens` as the stream progresses (UNVERIFIED-documented -
+        // no local SDK), so the start document here does too. The emit must
+        // still bill only the input side on the input event.
+        // The `message_delta` document is BOTH-SIDED too (fix-3 survivor
+        // experiment - named in the commit body): Anthropic's published
+        // streaming docs show a cumulative `message_delta` restating
+        // `input_tokens` (UNVERIFIED-documented, and adversarially good
+        // hygiene regardless - a provider bug reaching our parser is exactly
+        // what a fixture may model), so EACH of the two usage events carries
+        // a both-sided document and EACH per-side emit is independently
+        // falsifiable (§16.8 rule 18, both polarities) - before, the delta
+        // half of the split was pinned only by the coincidence of a
+        // single-sided fixture. The PARSE still keeps whole-document
+        // accounting (input 12 / output 4 / cache fields) - the parse-vs-emit
+        // distinction is unchanged.
+        $startUsage = [
+            'input_tokens' => 12,
+            'output_tokens' => 1,
+            'cache_read_input_tokens' => 6400,
+            'cache_creation_input_tokens' => 500,
+        ];
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => $startUsage]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'Hel']],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'lo']],
+            ['type' => 'message_delta', 'usage' => ['input_tokens' => 12, 'output_tokens' => 4]],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $usageChunks = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed !== 0));
+        $this->assertCount(2, $usageChunks, 'exactly the two split events bill, the text deltas do not');
+        $this->assertSame([12, 4], array_map(static fn (CompleteResponse $c): int => $c->tokensUsed, $usageChunks));
+        $this->assertSame(12, $usageChunks[0]->tokensUsed, 'a message_start carrying a stray output_tokens must not bill both sides on the input event');
+        $this->assertSame(4, $usageChunks[1]->tokensUsed, 'a message_delta restating input_tokens must not bill both sides on the output event');
+
+        // PARSE vs EMIT, visibly distinct: the parse keeps the FULL document
+        // accounting - both sides of $startUsage survive in the returned
+        // Usage - while each emitted event bills only its own side. The
+        // whole-document cost composition belongs to the unary arm; the
+        // stream emit sites re-price per side (see the accounting-ownership
+        // passage in parseAnthropicChunk).
+        $parsed = $provider->parseAnthropicUsage($startUsage, 'claude-3-sonnet@20240229');
+        $this->assertSame(12, $parsed->inputTokens, 'the parse keeps the document\'s input side');
+        $this->assertSame(1, $parsed->outputTokens, 'the parse keeps the document\'s output side too - whole-document accounting is the parse\'s job even though the emit is per-side');
+        $this->assertSame(6400, $parsed->cacheReadTokens, 'the stream arm reports cache too - a bucket wired only on the unary path is the failure mode this case exists to red');
+        $this->assertSame(500, $parsed->cacheCreationTokens);
+    }
+
+    public function testP4S2VertexAnthropicAllCachedMessageStartStillDropsLikeAlways(): void
+    {
+        // Recorded honestly: `message_start` with input_tokens 0 and a
+        // positive cache read - every prompt token served from cache - still
+        // yields NO usage event, exactly as an input-less start did before
+        // this step existed. Changing that gate changes P1.S5-pinned
+        // emission semantics, and with CompleteResponse carrying no Usage
+        // yet, the event would bill zero tokens anyway. The case is pinned
+        // so the day the carrier widens, this test names the gate to revisit.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => [
+                'input_tokens' => 0,
+                'cache_read_input_tokens' => 9000,
+            ]]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'x']],
+            ['type' => 'message_delta', 'usage' => ['output_tokens' => 3]],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        // TOTAL-CHUNK discipline (review-5 finding 6): the filter below cannot
+        // see a start-sourced tokensUsed-0 chunk - inverting the drop-gate to
+        // always-emit leaves the BILLING count at exactly 1 while the stream
+        // carries a phantom. The wire yields exactly TWO chunks: the text
+        // delta, then the message_delta's usage response. Kill experiment
+        // (fix-6, measured): `inputTokens === null || inputTokens === 0` ->
+        // `false` in parseAnthropicChunk reddens the assertCount(2) with a
+        // third chunk.
+        $this->assertCount(2, $chunks, 'the all-cached message_start emits NOTHING at all - not even an invisible zero-bill chunk');
+        $this->assertSame(['x', ''], array_map(static fn (CompleteResponse $c): string => $c->content, $chunks), 'wire order with the phantom excluded: text delta first, then the message_delta response (empty content by construction)');
+
+        $usageChunks = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed !== 0));
+        $this->assertCount(1, $usageChunks);
+        $this->assertSame(3, $usageChunks[0]->tokensUsed, 'only the message_delta bills; the zero-input start is dropped as it always was');
+    }
+
+    public function testP4S2VertexAnthropicDropGatesEmitNoPhantomChunksForZeroSides(): void
+    {
+        // review-5 finding 6, ZERO half of both drop-gates. The branch
+        // rewrote these gates (`=== 0` -> `=== null || === 0`) and the
+        // finding measured that inverting either to always-emit survived
+        // every existing test, because each watched the stream through a
+        // `tokensUsed !== 0` filter - an emitted zero chunk is invisible
+        // there. This stream arms BOTH gates' drop branches with the values
+        // they name (a cache-only start counting input 0; a delta counting
+        // output 0 - provider-bug shapes, which fix-2's doctrine says a
+        // fixture may model). Honest behaviour: BOTH documents are dropped
+        // WHOLE, so the stream yields exactly one chunk, the text delta.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => [
+                'input_tokens' => 0,
+                'cache_read_input_tokens' => 5000,
+            ]]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'x']],
+            ['type' => 'message_delta', 'usage' => ['output_tokens' => 0]],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(1, $chunks, 'a zero-input start and a zero-output delta each drop the WHOLE response; either gate inverted to always-emit lands 2 here');
+        $this->assertSame('x', $chunks[0]->content, 'the only survivor is the text delta');
+        $this->assertSame(0, $chunks[0]->tokensUsed, 'and it bills zero - no usage document reached the stream at all');
+    }
+
+    public function testP4S2VertexAnthropicDropGatesEmitNoPhantomChunksForNullSides(): void
+    {
+        // review-5 finding 6, NULL half of both drop-gates: usage documents
+        // that ABSENT the side each event bills (a start reporting only
+        // cache, a delta with no usage members). Dropping on null is the
+        // `=== null` clause; the twin of the zero-side test above. Here
+        // always-emit cannot even build a chunk - CompleteResponse::$tokensUsed
+        // is a non-nullable int, so the `new` TypeError falls into
+        // completeStream()'s transport catch and resurfaces as an ERROR
+        // chunk: the isError pin below is what reddens that shape (and the
+        // half-gate weakenings `=== 0`-only land the same way; `=== null`-only
+        // is killed by the zero-side test). The three gates' surviving
+        // contract, exact: the stream carries ONLY the text delta.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => [
+                'cache_read_input_tokens' => 5000,
+            ]]],
+            ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => 'x']],
+            ['type' => 'message_delta', 'usage' => []],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(1, $chunks, 'the null-input start and null-output delta both drop whole; an inverted or null-blind gate never leaves 1 intact');
+        $this->assertSame([], array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->isError)), 'a gate regressed to always-emit TypeErrors into the transport catch - an error chunk in this stream IS the regression signal');
+        $this->assertSame('x', $chunks[0]->content, 'the surviving chunk is exactly the text delta');
+        $this->assertSame(0, $chunks[0]->tokensUsed);
+    }
+
+    public function testP4S2VertexAnthropicNegativeMessageStartDropsInsteadOfBillingNegatives(): void
+    {
+        // The negative-on-START companion of the clamp pins above: a
+        // `message_start` with input_tokens -10 clamps to 0 inside Usage, so
+        // the per-delta gate (`inputTokens === null || === 0`) DROPS the
+        // document - the clamp doctrine reaching the gate. The OLD inline
+        // `(int)(...) ?? 0` gate read the wire directly, let -10 through and
+        // EMITTED `tokensUsed: -10` through CompleteResponse's untyped
+        // pass-through; the stray output_tokens on the start document never
+        // billed (per-delta split) and does not now.
+        // Prove-it mutation: reinstate the pre-gate raw read in this branch -
+        // replace the emit's `$usage->inputTokens` (and the gate's) with a
+        // fresh `(int) ($event['message']['usage']['input_tokens'] ?? 0)` -
+        // and -10 !== 0 emits a negative chunk: assertCount(1) redden.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['type' => 'message_start', 'message' => ['usage' => [
+                'input_tokens' => -10,
+                'output_tokens' => 3,
+            ]]],
+            ['type' => 'message_delta', 'usage' => ['output_tokens' => 4]],
+            ['type' => 'message_stop'],
+        ], 'claude-3-sonnet@20240229');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'claude-3-sonnet@20240229',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $usageChunks = array_values(array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed !== 0));
+        $this->assertCount(1, $usageChunks, 'the negative-input start is dropped; only the message_delta bills');
+        $this->assertSame(4, $usageChunks[0]->tokensUsed);
+        $this->assertSame([], array_filter($chunks, static fn (CompleteResponse $c): bool => $c->tokensUsed < 0), 'no chunk anywhere may bill a negative - the pre-P4.S2 pass-through emitted -10 here');
+    }
+
+    public function testP4S2VertexGeminiSubtractsLocallyProvenCacheSubset(): void
+    {
+        // VENDORED-SHAPE fixture: `cachedContentTokenCount` and its SUBSET
+        // semantics are MEASURED from this repo's vendored proto
+        // (GenerateContentResponse/UsageMetadata.php field comment: "Number
+        // of tokens in the cached part in the input"). totalTokenCount 9999
+        // is a deliberate third number - the arm still refuses to read it
+        // (thinking tokens make it disagree with the priced pair;
+        // VertexProviderTest pins that refusal at 99).
+        $usageArray = [
+            'promptTokenCount' => 1000,
+            'candidatesTokenCount' => 50,
+            'totalTokenCount' => 9999,
+            'cachedContentTokenCount' => 750,
+        ];
+        $provider = $this->p4s2VertexWith(
+            ['candidates' => [['content' => ['parts' => [['text' => 'ok']]]]], 'usageMetadata' => $usageArray],
+            'gemini-1.5-pro-002',
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'gemini-1.5-pro-002',
+            messages: [new UserMessage('hi')],
+        ));
+        $this->assertSame(1050, $response->tokensUsed, 'prompt + candidates, totalTokenCount unread - the preserved expression');
+
+        $usage = $provider->parseUsageMetadata($usageArray, 'gemini-1.5-pro-002');
+        $this->assertSame(250, $usage->inputTokens, '1000 - 750: the proto PROVES cached is a part of the prompt, so the Anthropic direct-map would double-count here');
+        $this->assertSame(50, $usage->outputTokens);
+        $this->assertSame(750, $usage->cacheReadTokens);
+        $this->assertNull($usage->cacheCreationTokens, 'the proto has no cache-creation token member (explicit caching bills stored content by time) - recorded, not invented');
+        $this->assertNull($usage->promptTokens());
+    }
+
+    public function testP4S2VertexGeminiWithoutCachedFieldLeavesItUnreported(): void
+    {
+        $provider = $this->p4s2VertexWith([], 'gemini-1.5-pro-002');
+        $usage = $provider->parseUsageMetadata(
+            ['promptTokenCount' => 11, 'candidatesTokenCount' => 5],
+            'gemini-1.5-pro-002',
+        );
+
+        $this->assertSame(16, $usage->totalTokens);
+        $this->assertSame(11, $usage->inputTokens);
+        $this->assertSame(5, $usage->outputTokens);
+        $this->assertNull($usage->cacheReadTokens);
+        $this->assertNull($usage->cacheCreationTokens);
+    }
+
+    public function testP4S2VertexGeminiNegativeWireCountsBillZeroThroughTheRealParsePath(): void
+    {
+        // Routing falsifier for the Gemini arm: the relocated `geminiUsage()`
+        // pair summed signed ints straight into tokensUsed (-15 old); routed
+        // through the parsed Usage the clamp owns it, and cost() receives the
+        // same signed values today's expression would have.
+        $provider = $this->p4s2VertexWith(
+            ['candidates' => [['content' => ['parts' => [['text' => 'ok']]]]],
+             'usageMetadata' => ['promptTokenCount' => -10, 'candidatesTokenCount' => -5]],
+            'gemini-1.5-pro-002',
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'gemini-1.5-pro-002',
+            messages: [new UserMessage('hi')],
+        ));
+
+        $this->assertSame(0, $response->tokensUsed);
+        $this->assertSame(0.0, $response->costUsd);
+    }
+
+    public function testP4S2VertexGeminiFullyCachedPromptStillParksItsUsage(): void
+    {
+        // The park-gate regression pin: prompt 10 of which ALL 10 are cached
+        // (fresh input therefore 0, candidates 0 mid-stream). The OLD gate
+        // parked on the raw wire fields (prompt != 0); a gate re-derived on
+        // the NEW subtracted inputTokens bucket would silently stop parking
+        // - the turn's usage vanishes while every test that never sends an
+        // all-cached prefix stays green. This case exists to red that.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['candidates' => [['content' => ['parts' => [['text' => 'hi']]]]],
+             'usageMetadata' => ['promptTokenCount' => 10, 'cachedContentTokenCount' => 10, 'candidatesTokenCount' => 0]],
+        ], 'gemini-1.5-pro-002');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gemini-1.5-pro-002',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(2, $chunks, 'the text delta AND the parked usage response');
+        $this->assertSame('hi', $chunks[0]->content);
+        $this->assertSame(10, $chunks[1]->tokensUsed, 'the all-cached turn still bills its 10 prompt tokens through the wire-total gate');
+    }
+
+    public function testP4S2VertexGeminiNegativeStreamDocumentParksNothing(): void
+    {
+        // Review-3 finding 3: the falsifier the park-gate comment in
+        // parseGeminiChunk() now claims. PROVE-IT MUTATION: widening the
+        // park gate `if ($usage->totalTokens !== 0) {` to `if (true) {`
+        // yields one extra tokensUsed-0 chunk and reddens the assertCount(0)
+        // below.
+        //
+        // Why ZERO chunks is the honest expectation: the empty text part is
+        // not a delta - that is the arm's text gate - and the negative
+        // usageMetadata clamps to a 0 total, which the `!== 0` gate refuses
+        // to park. Those are two ARM-SPECIFIC gates, not a general law about
+        // negative reports: the unary Gemini arm still bills its clamped
+        // zeros as a usage-carrying response
+        // (testP4S2VertexGeminiNegativeWireCountsBillZeroThroughTheRealParsePath),
+        // so this test overclaims nothing past the stream arm.
+        $provider = $this->p4s2VertexStreamerWith([
+            ['candidates' => [['content' => ['parts' => [['text' => '']]]]],
+             'usageMetadata' => ['promptTokenCount' => -10, 'candidatesTokenCount' => -5]],
+        ], 'gemini-1.5-pro-002');
+
+        $chunks = iterator_to_array($provider->completeStream(new CompleteRequest(
+            model: 'gemini-1.5-pro-002',
+            messages: [new UserMessage('hi')],
+        )));
+
+        $this->assertCount(0, $chunks, 'a blank-text delta yields none per the arm text gate; the negative-usage document must NOT park');
+    }
+
+    public function testP4S2VertexLegacyArmRecordsThatNoUsageObjectArrives(): void
+    {
+        // The third Vertex arm, recorded honestly rather than invented past:
+        // `publishers/google` `:predict` (PaLM-era chat-bison). What is
+        // MEASURED here is the provider side only: this arm's parse reads no
+        // usage anywhere, and its parseResponse hardcodes `tokensUsed: 0` /
+        // `costUsd: 0.0` (src/Providers/VertexProvider.php:1903, parseResponse).
+        // Whether PaLM-era `:predict` response documents ever carried usage
+        // at all could not be probed - no Vertex credentials exist for this
+        // plan - so the API-side absence is UNVERIFIED, and this comment
+        // claims nothing past the provider's non-read. That split does not
+        // change the step's outcome for this arm either way: a provider that
+        // parses no usage object has no cache field, and no bucket, to wire
+        // here. The step rule "a provider whose API reports no cache fields
+        // is a legitimate outcome: record it, do not invent a field" applies
+        // with full force.
+        $provider = $this->p4s2VertexWith(
+            ['predictions' => [['content' => 'sure', 'safetyAttributes' => ['blocked' => false]]]],
+            'chat-bison@002',
+        );
+
+        $response = $provider->complete(new CompleteRequest(
+            model: 'chat-bison@002',
+            messages: [new UserMessage('hi')],
+        ));
+
+        $this->assertSame('sure', $response->content, 'fixture: the legacy arm really parsed');
+        $this->assertSame(0, $response->tokensUsed);
+        $this->assertSame(0.0, $response->costUsd);
+    }
+
+    public function testP4S2EveryParseOfAnEmptyUsageObjectIsAllUnreported(): void
+    {
+        // The null half of every polarity pair, one sweep: an absent/empty
+        // usage object must produce total 0 (the pre-P4.S2 `?? 0` behaviour
+        // CompleteResponse has always carried) beside FOUR unreported
+        // buckets - never four zeroes. A single fabricated zero here would
+        // make "nothing reported" and "measured nothing" indistinguishable
+        // on the very next seam up.
+        $sglang = SglangProvider::openAiCompatible('https://api.example.com')->parseUsage([]);
+        $custom = $this->p4s2CustomRespondingWith('{"usage":{}}')->parseUsage([]);
+        $openai = new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o');
+        $oa = $openai->parseUsage([]);
+        $vx = $this->p4s2VertexWith([], 'claude-3-sonnet@20240229');
+        $anth = $vx->parseAnthropicUsage([], 'claude-3-sonnet@20240229');
+        $gem = $vx->parseUsageMetadata([], 'gemini-1.5-pro-002');
+
+        foreach (['sglang' => $sglang, 'custom' => $custom, 'openai' => $oa, 'bedrock-empty' => (new BedrockProvider($this->p4s2BedrockClient([]), 'us-east-1', 'anthropic.claude-sonnet-4-6'))->parseUsage([], 'anthropic.claude-sonnet-4-6'), 'vertex-anthropic' => $anth, 'vertex-gemini' => $gem] as $name => $usage) {
+            $this->assertSame(0, $usage->totalTokens, "{$name}: empty usage totals zero, the pre-P4.S2 expression");
+            $this->assertSame(0.0, $usage->costUsd, "{$name}: empty usage costs nothing");
+            $this->assertNull($usage->inputTokens, "{$name}: unreported input");
+            $this->assertNull($usage->outputTokens, "{$name}: unreported output");
+            $this->assertNull($usage->cacheReadTokens, "{$name}: unreported cache read - null, never zero");
+            $this->assertNull($usage->cacheCreationTokens, "{$name}: unreported cache creation");
+            $this->assertNull($usage->promptTokens(), "{$name}: the identity refuses across unreported buckets");
+        }
+    }
+
+    public function testP4S2ReportedZeroIsDistinctFromUnreportedAcrossTheCacheReadBucket(): void
+    {
+        // ...and the non-null half of the same pair: a server that REPORTS
+        // zero cache reads is making a measurement, and the bucket must hold
+        // 0 where every fixture above holds null. These two asserts in one
+        // test are the whole point of Usage's null-vs-zero split, first
+        // reachable through real provider parses by this step.
+        $sglang = SglangProvider::openAiCompatible('https://api.example.com')->parseUsage([
+            'prompt_tokens' => 100,
+            'total_tokens' => 110,
+            'completion_tokens' => 10,
+            'prompt_tokens_details' => ['cached_tokens' => 0],
+        ]);
+        $this->assertSame(0, $sglang->cacheReadTokens, 'reported zero stays zero');
+        $this->assertSame(100, $sglang->inputTokens, 'prompt - 0 cached = the whole prompt is genuinely fresh');
+
+        $missing = SglangProvider::openAiCompatible('https://api.example.com')->parseUsage([
+            'prompt_tokens' => 100,
+            'total_tokens' => 110,
+            'completion_tokens' => 10,
+        ]);
+        $this->assertNull($missing->cacheReadTokens, 'and the same parse without the key says NOTHING, which is a different claim');
+    }
+
+    /**
+     * review-2 finding 2: the plain `(int)$value` cast FABRICATED reported
+     * numbers out of non-numeric wire values - measured: 'abc' counted 0, a
+     * nested array counted 1. The helper's own docblock limits counting to
+     * numerics, and Usage's refuse-what-you-cannot-read doctrine
+     * (src/Usage.php:417 refuses frames it did not write) says a bucket that
+     * is neither null nor numeric is UNREPORTED, never a number. One drive
+     * per parse seam, exact values.
+     */
+    public function testP4S2NonNumericWireValuesDecodeUnreportedNotFabricatedNumbers(): void
+    {
+        // OpenAI-family, full junk document: string, nested array, and the
+        // one int wire value that must be UNAFFECTED by its neighbours.
+        $familyJunk = [
+            'prompt_tokens' => 'abc',
+            'total_tokens' => 25,
+            'completion_tokens' => [1],
+            'prompt_tokens_details' => ['cached_tokens' => 'x'],
+        ];
+
+        $sglang = SglangProvider::openAiCompatible('https://api.example.com')->parseUsage($familyJunk);
+        $this->assertNull($sglang->inputTokens, "sglang: a non-numeric 'abc' prompt is UNREPORTED, never the counted zero an (int) cast fabricates");
+        $this->assertNull($sglang->outputTokens, 'sglang: a nested-array completion is UNREPORTED, never the counted 1 casting an array gives');
+        $this->assertNull($sglang->cacheReadTokens, 'sglang: a non-numeric cached_tokens is UNREPORTED, never a counted zero');
+        $this->assertSame(25, $sglang->totalTokens, 'sglang: the int wire value is unaffected by its junk neighbours');
+
+        $custom = $this->p4s2CustomRespondingWith('{"usage":{}}')->parseUsage($familyJunk);
+        $this->assertNull($custom->inputTokens, 'custom: same family, same refusal');
+        $this->assertNull($custom->outputTokens, 'custom: same family, same refusal');
+        $this->assertNull($custom->cacheReadTokens, 'custom: same family, same refusal');
+        $this->assertSame(25, $custom->totalTokens, 'custom: the int total survives the junk neighbours');
+
+        // OpenAIProvider: prompt/completion stay NUMERIC because this arm
+        // prices them with RAW wire arithmetic in calculateCost() - a
+        // non-numeric prompt crashes THERE regardless of usageInt
+        // (pre-existing, outside this seam, reported not touched). The junk
+        // sits where the helper actually reads it: a nested-array
+        // cached_tokens the old cast counted as 1, and a string total.
+        $openai = (new OpenAIProvider($this->createMock(ClientContract::class), 'gpt-4o'))
+            ->parseUsage([
+                'prompt_tokens' => 5,
+                'completion_tokens' => 2,
+                'total_tokens' => 'abc',
+                'prompt_tokens_details' => ['cached_tokens' => [1]],
+            ]);
+        $this->assertNull($openai->cacheReadTokens, 'openai: a nested-array cached_tokens decodes UNREPORTED - the old cast fabricated a counted 1');
+        $this->assertSame(5, $openai->inputTokens, 'openai: a numeric prompt still counts beside the junk');
+        $this->assertSame(2, $openai->outputTokens);
+        $this->assertSame(0, $openai->totalTokens, 'openai: the preserved absent-or-null total expression accounts a non-numeric total as its pre-P4.S2 0 - nothing newly counted');
+
+        $bedrock = (new BedrockProvider(
+            $this->p4s2BedrockClient([]),
+            'us-east-1',
+            'anthropic.claude-sonnet-4-6',
+        ))->parseUsage(
+            ['inputTokens' => true, 'outputTokens' => '12'],
+            'anthropic.claude-sonnet-4-6',
+        );
+        $this->assertNull($bedrock->inputTokens, 'bedrock: a boolean inputTokens is not a number - UNREPORTED, never the counted 1 of (int)true');
+        $this->assertSame(12, $bedrock->outputTokens, "bedrock: a NUMERIC STRING counts as its int - '12' is a measurement the provider really said");
+        $this->assertSame(12, $bedrock->totalTokens, 'bedrock: the null side defaults per the preserved input+output expression');
+        $this->assertEqualsWithDelta(0.00018, $bedrock->costUsd, 0.0000001, 'bedrock: (0*0.003 + 12*0.015)/1000 - priced off the defaulted zero, not a fabricated count');
+
+        // Numeric floats count, flooring - exactly where the old
+        // strict-typed int parameters would have crashed on the same wire.
+        $anth = $this->p4s2VertexWith([], 'claude-3-sonnet@20240229')
+            ->parseAnthropicUsage(
+                ['input_tokens' => '10.9', 'output_tokens' => 2.5],
+                'claude-3-sonnet@20240229',
+            );
+        $this->assertSame(10, $anth->inputTokens, "vertex-anthropic: the numeric string '10.9' counts, floored to its int");
+        $this->assertSame(2, $anth->outputTokens, 'vertex-anthropic: a float count floors - a buggy provider is tolerated, not crashed');
+        $this->assertSame(12, $anth->totalTokens, 'vertex-anthropic: the preserved floored-pair sum');
+
+        $gem = $this->p4s2VertexWith([], 'gemini-1.5-pro-002')
+            ->parseUsageMetadata(
+                [
+                    'promptTokenCount' => 'abc',
+                    'candidatesTokenCount' => 5,
+                    'cachedContentTokenCount' => null,
+                ],
+                'gemini-1.5-pro-002',
+            );
+        $this->assertNull($gem->inputTokens, 'gemini: a non-numeric prompt count is UNREPORTED, not a counted zero');
+        $this->assertSame(5, $gem->outputTokens, 'gemini: the numeric candidate count still counts beside the junk');
+        $this->assertNull($gem->cacheReadTokens, 'gemini: an explicit null cache count stays unreported');
+        $this->assertSame(5, $gem->totalTokens, 'gemini: the unreported prompt side defaults per the preserved prompt+candidates expression');
+    }
+
+    // ---- P4.S2 fixture builders (transport mocks in the shapes the provider's own suites use) ----
+
+    private function p4s2SglangRespondingWith(string $body): SglangProvider
+    {
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $body));
+
+        return new SglangProvider('https://api.example.com', 'deepseek-ai/DeepSeek-V4-Flash-0731', null, $httpClient);
+    }
+
+    private function p4s2CustomRespondingWith(string $body): CustomProvider
+    {
+        $httpClient = $this->createMock(Client::class);
+        $httpClient->method('post')->willReturn(new Response(200, [], $body));
+
+        return new CustomProvider('probe-family', 'https://api.example.com', 'test-model', null, $httpClient, true, true);
+    }
+
+    /**
+     * @param array<string, mixed> $usageArray
+     * @return array{0: OpenAIProvider, 1: CompleteResponse}
+     */
+    private function p4s2OpenAiCompleteWith(array $usageArray): array
+    {
+        $client = $this->createMock(ClientContract::class);
+        $chat = $this->createMock(ChatContract::class);
+        $client->method('chat')->willReturn($chat);
+        $chat->method('create')->willReturn(ChatCreateResponse::from([
+            'id' => 'chatcmpl-p4s2',
+            'object' => 'chat.completion',
+            'created' => 1,
+            'model' => 'gpt-4o',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'ok'],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => $usageArray,
+        ], MetaInformation::from([])));
+
+        $provider = new OpenAIProvider($client, 'gpt-4o');
+
+        return [$provider, $provider->complete(new CompleteRequest(
+            model: 'gpt-4o',
+            messages: [new UserMessage('hi')],
+        ))];
+    }
+
+    /** @param array<string, mixed> $usage */
+    private function p4s2BedrockClient(array $usage): \Aws\BedrockRuntime\BedrockRuntimeClient
+    {
+        $mock = new \Aws\MockHandler();
+        $mock->append(new \Aws\Result([
+            'output' => ['message' => [
+                'role' => 'assistant',
+                'content' => [['text' => 'Hello']],
+            ]],
+            'stopReason' => 'end_turn',
+            'usage' => $usage,
+        ]));
+
+        return new \Aws\BedrockRuntime\BedrockRuntimeClient([
+            'region' => 'us-east-1',
+            'version' => 'latest',
+            'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+            'handler' => $mock,
+        ]);
+    }
+
+    /** @param array<string, mixed> $usage */
+    private function p4s2BedrockUnaryWith(array $usage): BedrockProvider
+    {
+        return new BedrockProvider($this->p4s2BedrockClient($usage), 'us-east-1', 'anthropic.claude-sonnet-4-6');
+    }
+
+    /** @param array<string, mixed> $usage */
+    private function p4s2BedrockStreamWith(array $usage): BedrockProvider
+    {
+        $mock = new \Aws\MockHandler();
+        $mock->append(new \Aws\Result(['stream' => new \ArrayIterator([
+            ['messageStart' => ['role' => 'assistant']],
+            ['contentBlockDelta' => ['delta' => ['text' => 'Hello'], 'contentBlockIndex' => 0]],
+            ['messageStop' => ['stopReason' => 'end_turn']],
+            ['metadata' => ['usage' => $usage]],
+        ])]));
+
+        return new BedrockProvider(
+            new \Aws\BedrockRuntime\BedrockRuntimeClient([
+                'region' => 'us-east-1',
+                'version' => 'latest',
+                'credentials' => ['key' => 'test-key', 'secret' => 'test-secret'],
+                'handler' => $mock,
+            ]),
+            'us-east-1',
+            'anthropic.claude-sonnet-4-6',
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $response the decoded document the seam answers with
+     */
+    private function p4s2VertexWith(array $response, string $model): VertexProvider
+    {
+        return VertexProvider::create(
+            projectId: 'my-project',
+            location: 'us-central1',
+            model: $model,
+            predictor: static fn (): array => $response,
+        );
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function p4s2VertexStreamerWith(array $events, string $model): VertexProvider
+    {
+        return VertexProvider::create(
+            projectId: 'my-project',
+            location: 'us-central1',
+            model: $model,
+            predictor: static fn (): array => [],
+            streamer: static function () use ($events): \Generator {
+                yield from $events;
+            },
+        );
     }
 }
 

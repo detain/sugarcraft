@@ -668,6 +668,16 @@ final class UsageTest extends TestCase
      * stale. The two sets are read off the files; the docblock is then required to
      * name each provider on the correct side of the sentence. A new provider, or
      * an existing one gaining or losing its split, reds this test with the name.
+     *
+     * The guard fired exactly as advertised: prompt_plan.md P4.S2 gave
+     * SglangProvider and CustomProvider real bucket parses, and this test
+     * reddened with those two names the moment the providers landed. The
+     * five-name set below is that new truth, moved by the orchestrator-approved
+     * remediation (escalation option 1) - the guard's own scheduled travel, not
+     * a quiet re-pin. It stays DISCRIMINATING both ways: the expected set reds
+     * if a provider regresses to total-only (deletion experiment in the fix-6
+     * report), and the cross-check below reds if the docblock side drifts from
+     * the sources in either direction.
      */
     public function testTheDocblocksSplitEnumerationMatchesTheProviderSources(): void
     {
@@ -691,14 +701,14 @@ final class UsageTest extends TestCase
         sort($totalOnly);
 
         $this->assertSame(
-            ['BedrockProvider', 'OpenAIProvider', 'VertexProvider'],
+            ['BedrockProvider', 'CustomProvider', 'OpenAIProvider', 'SglangProvider', 'VertexProvider'],
             $split,
             'the set of providers that read a separate input/output usage key changed',
         );
         $this->assertCount(
             7,
             [...$split, ...$totalOnly],
-            'the provider count the docblock quotes ("three of the seven") changed',
+            'the provider count the docblock quotes ("five of the seven") changed',
         );
 
         // The docblock's two sides, read out of it by their own markers rather
@@ -706,11 +716,11 @@ final class UsageTest extends TestCase
         // for either list.
         $docblock = (string) (new \ReflectionClass(Usage::class))->getDocComment();
         $this->assertMatchesRegularExpression(
-            '/THREE of the seven providers know the split(.*?)remaining four \(([^)]*)\)/s',
+            '/FIVE of the seven providers know the split(.*?)remaining two \(([^)]*)\)/s',
             $docblock,
             'the docblock no longer states the two-sided enumeration this test pins',
         );
-        preg_match('/THREE of the seven providers know the split(.*?)remaining four \(([^)]*)\)/s', $docblock, $m);
+        preg_match('/FIVE of the seven providers know the split(.*?)remaining two \(([^)]*)\)/s', $docblock, $m);
         [, $splitSide, $totalOnlySide] = $m;
 
         foreach ($split as $name) {
@@ -744,38 +754,57 @@ final class UsageTest extends TestCase
      * `Usage`'s docblock claimed of all of them and `Runtime`'s docblock
      * contradicted. Runtime was right, and this pins which.
      *
-     * Vertex's unary path sums (`tokensUsed: $inputTokens + $outputTokens`); its
-     * Anthropic STREAM emits the two halves as separate `CompleteResponse`s with
-     * `tokensUsed: $inputTokens` and `tokensUsed: $outputTokens`, which is why
-     * `Runtime` sums across chunks instead of reading the last one.
+     * Vertex's unary path still sums - P4.S2's parse seam moved the sum from
+     * the emit site into `parseAnthropicUsage()`'s total argument
+     * (`$inputTokens + $outputTokens,`), which the emit then reads back as
+     * `tokensUsed: $usage->totalTokens`; its Anthropic STREAM still emits the
+     * two halves as separate `CompleteResponse`s, now
+     * `tokensUsed: $usage->inputTokens` (message_start) and
+     * `tokensUsed: $usage->outputTokens` (message_delta), which is why
+     * `Runtime` sums across chunks instead of reading the last one. The pinned
+     * FACTS survived the step unchanged; only the texts the locators searched
+     * moved - the escalated travel (P4.S2 fix-6, orchestrator-approved), with
+     * each locator upgraded from presence to an exact count of one so a
+     * half-collapse regression ("emit the total on one of the two events")
+     * reddens the count just like a full one would.
      */
     public function testVertexsStreamEmitsTheTwoHalvesSeparatelyUnlikeItsUnaryPath(): void
     {
         $source = (string) file_get_contents(dirname(__DIR__) . '/src/Providers/VertexProvider.php');
 
-        $this->assertStringContainsString(
-            'tokensUsed: $inputTokens + $outputTokens',
-            $source,
-            'the unary path still collapses the split before the response leaves',
+        $this->assertSame(
+            1,
+            preg_match_all('/\$inputTokens \+ \$outputTokens,/', $source),
+            'the split is still summed exactly once before it can leave - in parseAnthropicUsage()\'s total argument',
         );
-        $this->assertMatchesRegularExpression(
-            '/tokensUsed: \$inputTokens,/',
-            $source,
-            'the stream still emits input tokens on their own (message_start)',
+        $this->assertSame(
+            3,
+            preg_match_all('/tokensUsed: \$usage->totalTokens,/', $source),
+            'and every Vertex emit site (Anthropic unary, Gemini unary, Gemini stream) bills the parsed total, never a live split',
         );
-        $this->assertMatchesRegularExpression(
-            '/tokensUsed: \$outputTokens,/',
-            $source,
-            'and output tokens on their own (message_delta)',
+        $this->assertSame(
+            1,
+            preg_match_all('/tokensUsed: \$usage->inputTokens,/', $source),
+            'the stream still emits input tokens on their own, exactly once (message_start)',
+        );
+        $this->assertSame(
+            1,
+            preg_match_all('/tokensUsed: \$usage->outputTokens,/', $source),
+            'and output tokens on their own, exactly once (message_delta)',
         );
 
         // Bedrock, whose docblock Vertex's used to claim equivalence with, really
         // does land its usage once - both of its paths sum.
         $bedrock = (string) file_get_contents(dirname(__DIR__) . '/src/Providers/BedrockProvider.php');
         $this->assertSame(
+            1,
+            preg_match_all('/\$inputTokens \+ \$outputTokens,/', $bedrock),
+            'Bedrock\'s parsed total is still the input+output sum, not the wire totalTokens - the fact the pre-P4.S2 emit-site pins spelled directly',
+        );
+        $this->assertSame(
             2,
-            preg_match_all('/tokensUsed: \$inputTokens \+ \$outputTokens/', $bedrock),
-            'Bedrock sums on both its unary and its streaming path, which is the contract Vertex does NOT share',
+            preg_match_all('/tokensUsed: \$usage->totalTokens,/', $bedrock),
+            'Bedrock bills that parsed total on both its unary and its streaming path, which is the contract Vertex does NOT share',
         );
     }
 

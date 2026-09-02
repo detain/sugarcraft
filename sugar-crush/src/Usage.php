@@ -20,7 +20,7 @@ namespace SugarCraft\Crush;
  * versus a count of what was BILLED. They must never be summed, compared, or
  * shown as one figure.
  *
- * ## The split now lives here — and why every instance still arrives without it
+ * ## The split now lives here — parsed at the providers, still uncrossed at the carrier
  *
  * CORRECTED IN PLACE, prompt_plan.md P4.S1 (backlog E17), in the three parts
  * §16.8 rule 42 demands. WHAT IT SAID: this section was titled "Why there is no
@@ -29,38 +29,48 @@ namespace SugarCraft\Crush;
  * class — `inputTokens`, `outputTokens`, `cacheReadTokens`,
  * `cacheCreationTokens`, with {@see promptTokens()} carrying the prompt-side
  * identity `total = cacheRead + cacheCreation + input`. The claim it was built
- * on is still exactly right about the wire, though: `CompleteResponse` carries
- * a single `$tokensUsed` and nothing else, so every live construction path in
- * `src/` still leaves the buckets null. Filling them means widening
- * `CompleteResponse` and the three providers that already read the split — a
- * later seam, and it is why the enumeration below is kept verbatim: it is the
- * work-list for that wiring, naming which provider reads which usage key.
+ * on was half right, and the half that held has now moved: `CompleteResponse`
+ * still carries a single `$tokensUsed` and nothing else — that stays true —
+ * but "every live construction path in `src/` leaves the buckets null" was
+ * P4.S1's truth and is no longer this branch's: prompt_plan.md P4.S2 routed
+ * all five split-reading providers' usage documents through these buckets at
+ * their `parseUsage` seams. Each parsed instance now ends its life at the
+ * provider's own `tokensUsed`/`costUsd` projection, so no Usage that REACHES
+ * `Runtime` or `Chat` from a live call carries buckets yet. What remains is
+ * widening `CompleteResponse` alone — a later seam, and it is why the
+ * enumeration below is kept: it is the record of which provider reads which
+ * usage key, the work-list the carrier change plugs into.
  * WHY IT EARNS ITS PLACE: delete the reasoning and the next reader deletes the
  * buckets as vestigial; the reasoning is what marks them load-bearing-ahead.
  *
  * {@see Util\TokenTracker::addUsage()} wants input and output separately, and
- * until the wiring lands this class cannot honestly SUPPLY them from any live
- * call: `CompleteResponse` carries a single `$tokensUsed` and nothing else.
+ * until the carrier lands this class still cannot honestly SUPPLY them to a
+ * live TURN: providers parse the buckets, but `CompleteResponse` carries a
+ * single `$tokensUsed` and nothing else, so what arrives across it is a total.
  *
- * THREE of the seven providers know the split and throw it away — read the
- * count with its domain, because a fourth literal of it is what drifted last
- * time. {@see Providers\BedrockProvider} reads `usage.inputTokens` /
+ * FIVE of the seven providers know the split — read the count with its
+ * domain, because stale literals of it are what drifted before.
+ * {@see Providers\BedrockProvider} reads `usage.inputTokens` /
  * `usage.outputTokens`, {@see Providers\VertexProvider} reads
- * `usage.input_tokens` / `usage.output_tokens`, and
+ * `usage.input_tokens` / `usage.output_tokens`,
  * {@see Providers\OpenAIProvider} reads `usage.prompt_tokens` /
  * `usage.completion_tokens` and prices each side at its own rate in
- * `calculateCost()` — then all three report `tokensUsed` as one number. The
- * remaining four ({@see Providers\ClaudeCodeProvider},
- * {@see Providers\CustomProvider}, {@see Providers\SglangProvider},
+ * `calculateCost()`, and — since prompt_plan.md P4.S2 routed its family read
+ * through the parse seam — {@see Providers\SglangProvider} reads
+ * `usage.prompt_tokens` / `usage.completion_tokens`, the same pair
+ * {@see Providers\CustomProvider} reads. All five now PARSE the split into
+ * the buckets above; none yet CARRIES it, because every one still reports
+ * `tokensUsed` as one number. The
+ * remaining two ({@see Providers\ClaudeCodeProvider},
  * {@see Providers\EchoProvider}) never had a split to lose: they read
  * `usage.total_tokens` or report 0.
  *
- * That collapse happens BEFORE the response leaves the provider on every UNARY
- * path — and on Bedrock's and OpenAI's streaming paths too. Vertex's stream is
- * the one exception and it matters: it emits input tokens on `message_start` and
- * output tokens on the terminal `message_delta`, as two separate
- * `CompleteResponse`s with `tokensUsed: $inputTokens` and
- * `tokensUsed: $outputTokens` ({@see Providers\VertexProvider::parseAnthropicChunk()}).
+ * That collapse happens at the provider's `CompleteResponse` boundary on every
+ * UNARY path — and on Bedrock's and OpenAI's streaming paths too. Vertex's
+ * Anthropic stream is the one exception and it matters: it emits input tokens
+ * on `message_start` and output tokens on the terminal `message_delta`, as two
+ * separate `CompleteResponse`s with `tokensUsed: $usage->inputTokens` and
+ * `tokensUsed: $usage->outputTokens` ({@see Providers\VertexProvider::parseAnthropicChunk()}).
  * {@see Runtime}'s streaming path documents that and SUMS them, which is why the
  * figure arriving here is still a total. So the split survives one layer lower
  * than this seam in exactly one case, and is recoverable there without touching
@@ -70,9 +80,11 @@ namespace SugarCraft\Crush;
  * `outputTokens()` reporting 0 for a real completion — so the tracker gained
  * {@see Util\TokenTracker::addTotalUsage()} for exactly this shape instead, and
  * it still earns its keep: what crosses that seam today is still a total with
- * null buckets beside it, not a split. Recovering the real split means widening
- * `CompleteResponse` and the three providers that already know it; that is a
- * separate change and is not pretended to here.
+ * null buckets beside it, not a split — the buckets are filled INSIDE each
+ * split-reading provider and stop at its carrier. Recovering the real split
+ * for callers now means only widening `CompleteResponse`; prompt_plan.md
+ * P4.S2 already routed the five providers that know the split through these
+ * buckets, and the carrier change is a separate step, not pretended to here.
  *
  * ## Zero is not the same as unknown
  *

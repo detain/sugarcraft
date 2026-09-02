@@ -16,14 +16,19 @@ namespace SugarCraft\Crush\Util;
  *
  * ## Three buckets, because providers report two different shapes
  *
- * {@see addUsage()} takes input and output SEPARATELY, which only THREE of the
- * seven providers could ever supply and none of them does by the time a
- * response leaves them: {@see \SugarCraft\Crush\Providers\CompleteResponse}
- * carries one `$tokensUsed` total, and Bedrock, Vertex and OpenAI each collapse
- * their split into it — OpenAI's is easy to miss because it reads
- * `prompt_tokens`/`completion_tokens` and prices the two sides separately before
- * reporting only `total_tokens`. {@see \SugarCraft\Crush\Usage} carries the
- * full enumeration with the array keys each one reads, and
+ * {@see addUsage()} takes input and output SEPARATELY, which FIVE of the seven
+ * providers know the split for — and none of them SUPPLIES it across the seam:
+ * {@see \SugarCraft\Crush\Providers\CompleteResponse} carries one
+ * `$tokensUsed` total, and every split-reading provider collapses its parsed
+ * buckets into it before the response leaves. "Could ever supply" was this
+ * file's pre-P4.S2 framing and is obsolete: prompt_plan.md P4.S2 routed the
+ * parses through {@see \SugarCraft\Crush\Usage}'s buckets, so the collapse
+ * moved from the provider's parse to its carrier boundary — Bedrock, Vertex
+ * and OpenAI always had a split to collapse, Sglang and Custom gained theirs
+ * at that seam — and OpenAI's remains the easy one to miss because it reads
+ * `prompt_tokens`/`completion_tokens` and prices the two sides separately
+ * before reporting only `total_tokens`. {@see \SugarCraft\Crush\Usage} carries
+ * the full enumeration with the array keys each one reads, and
  * {@see \SugarCraft\Crush\Tests\UsageTest} derives the count from the
  * provider sources rather than trusting either docblock. Calling
  * `addUsage($total, 0, $cost)` to work around that would report a real
