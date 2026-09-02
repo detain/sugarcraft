@@ -1309,8 +1309,9 @@ final class Renderer
      *
      * @param float|null $now the epoch the cache-age piece counts from
      *        ({@see cacheIndicator()}); null means "now" and is what every
-     *        live path passes — the seam exists because an age readout that
-     *        reads the wall clock cannot be pinned byte-for-byte otherwise.
+     *        live path gets by default — the seam exists because an age
+     *        readout that reads the wall clock cannot be pinned byte-for-byte
+     *        otherwise.
      */
     private static function renderStatusBar(Chat $chat, ?float $now = null): string
     {
@@ -1439,7 +1440,8 @@ final class Renderer
         //   2. the context readout — always emits something, down to a bare
         //      percentage, because a session with no context signal at all is
         //      worse than a narrow one.
-        //   3. the spend readout — the only one that may vanish entirely.
+        //   3. the spend readout — an optional piece; like the cache readout
+        //      below it, it may vanish entirely.
         //   4. the cache readout — fitted below spend, and it may vanish too:
         //      both figures describe the provider's cache, which a session
         //      without a usage split simply does not have.
@@ -1458,8 +1460,9 @@ final class Renderer
         $bar = $context . $separator . $processing;
 
         // The spend readout goes in third, against whatever the two mandatory
-        // pieces and the scroll reservation have left. Third because it is the
-        // only one of the three that may be dropped ENTIRELY: the context
+        // pieces and the scroll reservation have left. Third because it was the
+        // only one of the three that may be dropped ENTIRELY, and the cache
+        // readout fitted below it now shares that property: the context
         // percentage always prints something (see contextIndicator()) and the
         // processing hint is the bar's reason for existing, while a session with
         // no cap and nothing reported has no spend to say anything about and
