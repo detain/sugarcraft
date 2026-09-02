@@ -159,7 +159,7 @@ Confirm with `ListAgents`; `git worktree list` must show exactly TWO worktrees w
 | goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — **unmoved since `405252a41`**, zero-byte fixtures diff across the whole audit-fix-3 window | `99227d29c` |
 | nine-file census subset | `OK (176 tests, 31255 assertions)` at `cf41aacd6`, over exactly the nine `HAND_MAINTAINED_CENSUS_SET` files (`tests/TreeWideGuardRosterTest.php:407-417`), cwd `sugar-crush/`, serial, `</dev/null`. Same nine at `470e43569`: `OK (176, 31245)` — audit-fix-3's new guard arms are +10 assertions, no test added. **IT SAID `OK (320, 29926)` until 2026-09-02**; that figure was never the nine — see the corrections list | `cf41aacd6` (orchestrator; cycle-3 reviewer agrees) |
 | **derived** guard roster | roster **67**, candidates 83, walkerFiles 181, testFiles 440, **unaccounted 0** — UNCHANGED by audit-fix-3; the added alias arms are MEASURED-LATENT (`class_alias` count in `src/` = 0). Roster test itself now 17 tests / 1,101 assertions | `60c037932` |
-| audit-fix-3 scope purity | the 17-commit window `3634aa1cb..60c037932` touches EXACTLY the 9 declared files; pickup+cycle-4 fix touched only the 2 instrument test files | `60c037932` |
+| audit-fix-3 scope purity | the 17-commit window `3634aa1cb..60c037932` touches the EIGHT declared files (`WorkflowEngine.php` among them, declared conditionally) **plus one disclosed widening**: `src/Cli/Bootstrap.php`, +1 line `environmentRoot: $root` at :1240, required to carry the unified root to the Agent assembler by the F5 fix. Nine paths total — re-derived here. IT SAID "EXACTLY the 9 declared files", which was right about the count and wrong about which list: Bootstrap is not in the step brief's list, and that brief now carries a SCOPE AMENDMENT section. Real work on F5, not a §1.10 violation — no dormant code removed. pickup+cycle-4 fix touched only the 2 instrument test files | `cf41aacd6` |
 | audit-fix-2 src/ purity | **elementwise token-stream identity** (strip comments/whitespace): `Runtime.php` 4366 tokens, `Agent.php` 1270, identical both sides of `980670c0b`. Do NOT quote md5s of re-serialized streams — see corrections | re-confirmed by cycle-2 reviewer |
 | path-repo gate, **from the repo root** | `php tools/check-path-repos.php --no-lib-path-repos` exit 0 | `980670c0b` |
 
@@ -558,8 +558,12 @@ In-flight batch:  P3.audit-fix-3 — MERGED 99227d29c (see the closure story bel
                   RUN of the new PROCESS RULE (leads never apply findings; a dedicated fix
                   agent did, 6 commits; the lead verified every one with own measurements) —
                   and cycle 5 returned NO findings and all nineteen §1.4 checks accounted.
-                  17 commits, ALL detain@interserver.net (the standing identity check now also
-                  covers INCOMING commit authors). Scope purity: exactly the 9 declared files.
+                   17 commits, ALL detain@interserver.net (the standing identity check now also
+                   covers INCOMING commit authors). Scope purity: the EIGHT declared files plus ONE
+                   disclosed widening — `src/Cli/Bootstrap.php`, +1 line `environmentRoot: $root`
+                   for the F5 seam — amended into the step brief post-merge by close-review cycle 3
+                   (it previously read "exactly the 9 declared files", which mis-named which list was
+                   declared). No dormant code removed.
                   Goldens unmoved; roster derivation UNCHANGED (67/83/181/440/0) — the added
                   alias arms are MEASURED-LATENT, zero live population. F-4R-3: a value-
                   redundant but PINNED scanner hop left in place (removal = orchestrator
