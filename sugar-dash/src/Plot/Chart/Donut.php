@@ -305,23 +305,11 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
 
                 // Check if point is in the donut ring
                 if ($dist >= $innerRadius && $dist <= $radius) {
-                    // Aspect-normalized so sector boundaries follow the same
-                    // ellipse the distance test draws, not the raw cell grid.
-                    $angle = atan2($dy, $dx);
-                    // Convert to degrees, normalize to 0-360
-                    $angleDeg = $angle * 180 / M_PI;
-                    if ($angleDeg < 0) {
-                        $angleDeg += 360;
-                    }
-
-                    // Adjust for start angle
-                    $adjustedAngle = $angleDeg - $this->startAngle;
-                    if ($adjustedAngle < 0) {
-                        $adjustedAngle += 360;
-                    }
-
-                    // Find which segment this angle belongs to
-                    $segmentIndex = $this->findSegment($adjustedAngle, $total);
+                    // $dy is already aspect-scaled above, so sector boundaries
+                    // keep following the same ellipse the distance test draws,
+                    // not the raw cell grid — segmentAt() owns that shared
+                    // angle math (BL-9 dedupe of this former inline copy).
+                    $segmentIndex = $this->segmentAt($dx, $dy, $total);
                     if ($segmentIndex !== null) {
                         $grid[$y][$x] = [
                             'char' => '█',
@@ -454,9 +442,18 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Segment owning an aspect-scaled offset from the donut centre, using the
-     * same angle normalisation as the cell-centre test in render() so a
-     * quadrant sample lands in the sector its cell would have.
+     * Segment owning an aspect-scaled offset from the donut centre — the single
+     * source of the sector-boundary angle math (the legacy cell-centre test in
+     * render(), the smooth-rim tie-break, and the wireframe rim/corner samples
+     * all route through here so a quadrant sample lands in the sector its cell
+     * would have).
+     *
+     * The start-angle wrap is a single conditional +360, not fmod(): for a
+     * startAngle outside 0..360 the adjusted angle can still land below 0
+     * (startAngle > 360) or at/above 360 (startAngle < 0), leaving findSegment()
+     * to decide those cells — the source of the blank "legacy CCW gap" cells
+     * the wireframe rim comment describes. That quirk is pre-existing and
+     * byte-pinned (BL-9 is a dedupe, not a fix); do not "tidy" it into fmod().
      */
     private function segmentAt(float $dx, float $dyScaled, float $total): ?int
     {
@@ -709,7 +706,10 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
         // Quadrant corners: the diagonals get the rounded arc runes; when the
         // corner cell collapses onto a cardinal axis (small radii where the
         // ellipse effectively turns a box corner) the sharper ARC_CHARS corner
-        // is the honest glyph instead.
+        // is the honest glyph instead. (The atan2 below is forward math —
+        // direction→point, like $ellipseCell and the divider sweep's fmod —
+        // not the inverse sector lookup segmentAt() owns, which the colour
+        // pick underneath still uses.)
         foreach (self::WIRE_CORNERS as $corner) {
             [$ux, $uy, $roundRune, $arcIndex] = $corner;
             $t = atan2($aspect * $uy, $ux);
