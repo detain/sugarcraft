@@ -245,6 +245,13 @@ f958ba8e6  10526 / 162447 / 1   + P3.S6           (test count predicted exactly;
   quoted md5 prefixes of stripped `token_get_all()` streams; they did not reproduce under another
   (equally honest) serialization even though the underlying claim was TRUE. State token-stream
   identities **elementwise** (token count + array-equality of `[id,text]` pairs).
+- **THE 320 / 29,926 NINE-FILE CENSUS FIGURE WAS AN ORCHESTRATOR ERROR.** It was propagated from a
+  pickup verification note that carried NO FILE LIST, and the set it described was never the nine.
+  Corrected 2026-09-02 by direct measurement: the nine `HAND_MAINTAINED_CENSUS_SET` files measure
+  **OK (176 tests, 31255 assertions)** at `cf41aacd6` (176 / 31245 at `470e43569`) — cwd
+  `sugar-crush/`, serial, `</dev/null`. **THE LESSON:** a census figure must always be accompanied
+  by the file list it was measured over; without its domain a number is not a measurement, and this
+  one survived into a brief, a worklog entry and this table before anyone re-derived it (rule 1).
 
 ### If the tree HAS moved, or you distrust any of the above
 
