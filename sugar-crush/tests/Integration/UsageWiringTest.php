@@ -746,12 +746,22 @@ JSON;
             'totalTokens' => 2500,
             'cacheReadInputTokens' => 8000,
             'cacheWriteInputTokens' => 1234,
-            // The two cache-WRITE-side numbers are DELIBERATELY distinct:
-            // cacheCreationTokens must source ONLY from cacheWriteInputTokens
-            // (parseUsage reads cacheDetails nowhere - it has no Usage bucket),
-            // and equal values here would let a future mis-wire to the TTL
-            // split pass on coincidence instead of on the right field.
-            'cacheDetails' => ['ephemeral5mInputTokens' => 99],
+            // The real shape of `cacheDetails`, MEASURED from the same
+            // vendored api-2.json.php: shape `CacheDetailsList` = LIST of
+            // `CacheDetail{ttl, inputTokens}` (ttl is the enum "5m"|"1h", both
+            // members required) - a per-TTL breakdown of the cache-write side,
+            // not a map of field names. (The earlier fixture here spelled the
+            // member `ephemeral5mInputTokens`: review-5 F2 measured that name
+            // exists NOWHERE in the AWS shape file - it is the
+            // Anthropic-direct-API spelling - so the fixture carried an
+            // invented member labelled vendored. Corrected to the list.)
+            // The two cache-WRITE-side numbers stay DELIBERATELY distinct
+            // (99 != 1234): cacheCreationTokens must source ONLY from
+            // cacheWriteInputTokens (parseUsage reads cacheDetails nowhere -
+            // it has no Usage bucket), and an equal value here would let a
+            // future mis-wire to the TTL breakdown pass on coincidence
+            // instead of on the right field.
+            'cacheDetails' => [['ttl' => '5m', 'inputTokens' => 99]],
         ];
         $provider = $this->p4s2BedrockUnaryWith($usageArray);
 
