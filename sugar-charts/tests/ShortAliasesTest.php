@@ -57,6 +57,18 @@ final class ShortAliasesTest extends TestCase
         );
     }
 
+    public function testLineChartUnicodeConnectorsAlias(): void
+    {
+        $long  = LineChart::new([1, 5, 5, 1])->size(7, 4)->withUnicodeConnectors()->view();
+        $short = LineChart::new([1, 5, 5, 1])->size(7, 4)->unicodeConnectors()->view();
+        $this->assertSame($long, $short);
+        $this->assertStringContainsString(
+            '╱',
+            $short,
+            'alias must reach the Unicode connector path, not a silent no-op',
+        );
+    }
+
     public function testSparklineAliases(): void
     {
         $long  = Sparkline::new([1.0, 2.0, 3.0])->withWidth(10)->withMin(0.0)->withMax(5.0)->view();

@@ -49,7 +49,7 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 > Every `with*()` fluent setter on the chart classes also has a short-form alias, so
 > `data` / `size` / `min` / `max` / `point` / `xRange` / `yRange` / `xyRange` / `colors` /
 > `palette` / `bars` / `barWidth` / `showLabels` / `showAxis` / `title` / `canvas` /
-> `theme` / `dataset` / `markLines` / `style` / `protocol` / `items` / `position` … are all available.
+> `theme` / `dataset` / `markLines` / `unicodeConnectors` / `style` / `protocol` / `items` / `position` … are all available.
 > The convention is `withFoo()` → `foo()` (drop `with`, lcfirst). A few names deviate to
 > read better: `withLegendPosition()` → `legendPos()`, `withTitlePosition()` → `titlePos()`
 > (Position shortens to `Pos`), `withDataLabelFormatter()` → `dataLabelFormat()`,

@@ -397,4 +397,55 @@ final class LineChartTest extends TestCase
         // Assert that legend label 'a' appears in output
         $this->assertStringContainsString('a', $out);
     }
+
+    // ─── withUnicodeConnectors() Tests ─────────────────────────────────
+
+    public function testUnicodeConnectorsMatchAsciiLayoutOnEveryBranch(): void
+    {
+        // Horizontal runs (dy=0) and both diagonal slopes in one fixture; the
+        // Unicode view must be the ASCII view with connector runes swapped and
+        // NOTHING else — same cells, same geometry, same data points. (The
+        // same-column vertical branch stays unreachable behind the `x2 <= x1`
+        // guard, exactly as before this step — behavior preserved verbatim.)
+        $fixtures = [
+            LineChart::new([1, 5, 5, 1], 7, 4), // diagonals + horizontal
+            LineChart::new([3, 3, 3, 3], 7, 2), // pure horizontal run
+        ];
+        foreach ($fixtures as $chart) {
+            $ascii = $chart->view();
+            $uni   = $chart->withUnicodeConnectors()->view();
+            $this->assertSame(
+                strtr($ascii, ['|' => '│', '-' => '─', '/' => '╱', '\\' => '╲']),
+                $uni,
+                'Unicode mode must swap connector runes only, never cells or geometry',
+            );
+        }
+    }
+
+    public function testUnicodeConnectorsExactRows(): void
+    {
+        // Byte-pinned snapshot of the diagonal/horizontal chart.
+        $rows = explode("\n", LineChart::new([1, 5, 5, 1], 7, 4)->withUnicodeConnectors()->view());
+        $this->assertSame('  *─*', rtrim($rows[0], ' '));
+        $this->assertSame(' ╱   ╲', rtrim($rows[2], ' '));
+        // Byte-pinned snapshot of the flat chart (horizontal run only).
+        $flat = explode("\n", LineChart::new([3, 3, 3, 3], 7, 2)->withUnicodeConnectors()->view());
+        $this->assertSame('*─*─*─*', rtrim($flat[1], ' '));
+    }
+
+    public function testUnicodeConnectorsDefaultOffAndImmutable(): void
+    {
+        $chart = LineChart::new([1, 5, 5, 1], 7, 4);
+        $this->assertFalse($chart->unicodeConnectors, 'flag must default OFF (GR-7)');
+
+        $with = $chart->withUnicodeConnectors();
+        $this->assertNotSame($chart, $with, 'wither must return a new instance');
+        $this->assertTrue($with->unicodeConnectors);
+
+        // Explicit false === default: the ASCII path never moved.
+        $this->assertSame($chart->view(), $chart->withUnicodeConnectors(false)->view());
+        $this->assertStringContainsString('\\', $chart->view(), 'default path stays ASCII');
+        $this->assertStringNotContainsString('\\', $with->view());
+        $this->assertStringContainsString('╲', $with->view());
+    }
 }

@@ -20,6 +20,8 @@ use SugarCraft\Sprinkles\Theme;
  * a `*` (configurable) is plotted at the rounded row. Adjacent points
  * are connected with `|`, `/`, or `\` strokes when their rows differ,
  * giving an at-a-glance trend without requiring sub-cell rasterisation.
+ * `withUnicodeConnectors()` swaps those strokes for the `│ ─ ╱ ╲` runes
+ * used by {@see Waveline}; ASCII remains the default.
  *
  * ```php
  * echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view();
@@ -37,6 +39,7 @@ final class LineChart extends Chart
      * @param list<string>               $yLabels
      * @param ?array<string,string>      $lineStyle  axis runeset override (a Graph::LINE_* preset); null = LINE_THIN
      * @param list<MarkLine>             $markLines  horizontal reference-line annotations; [] (default) draws nothing
+     * @param bool                       $unicodeConnectors  draw connectors with `│ ─ ╱ ╲` instead of ASCII `| - / \`
      */
     public function __construct(
         public readonly array $data,
@@ -71,6 +74,7 @@ final class LineChart extends Chart
         public readonly bool $fill = false,
         public readonly ?array $lineStyle = null,
         public readonly array $markLines = [],
+        public readonly bool $unicodeConnectors = false,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ) {
@@ -262,6 +266,20 @@ final class LineChart extends Chart
     }
 
     /**
+     * Draw inter-point connectors with the Unicode box/slope runes `│ ─ ╱ ╲`
+     * — the exact slope mapping already used by {@see Waveline::connectorRune()}
+     * — instead of the ASCII `| - \ /` strokes. WHY: ASCII connectors read as
+     * noise next to the Unicode axis frame; auto-detecting terminal charset
+     * capability is not available (T::detect is language-only), so the richer
+     * palette ships opt-in. ASCII stays the default (no silent visual change
+     * for existing consumers).
+     */
+    public function withUnicodeConnectors(bool $on = true): self
+    {
+        return $this->lineChartCopy(unicodeConnectors: $on);
+    }
+
+    /**
      * X-axis labels (rendered under the axis when `withAxes(true)` is set).
      * @param list<string> $labels
      */
@@ -309,6 +327,8 @@ final class LineChart extends Chart
     public function datasetPoint(string $name, string $rune): self { return $this->withDatasetPoint($name, $rune); }
     /** Short-form alias for {@see withMarkLines()}. */
     public function markLines(array $marks): self { return $this->withMarkLines($marks); }
+    /** Short-form alias for {@see withUnicodeConnectors()}. */
+    public function unicodeConnectors(bool $on = true): self { return $this->withUnicodeConnectors($on); }
 
     // ─── Chart Property Overrides ───────────────────────────────────────
     // Override Chart's methods to use lineChartCopy() so LineChart properties are preserved
@@ -530,7 +550,7 @@ final class LineChart extends Chart
                 // Draw connector to next point if within animation bounds
                 if ($i + 1 < $maxPointIndex) {
                     [$x2, $y2] = $coords[$i + 1];
-                    self::drawConnector($canvas, $x, $y, $x2, $y2, $rune);
+                    self::drawConnector($canvas, $x, $y, $x2, $y2, $this->unicodeConnectors);
                 }
                 // Area fill: paint from baseline up to the point row.
                 if ($this->fill) {
@@ -713,6 +733,7 @@ final class LineChart extends Chart
         ?array $lineStyle = null,
         bool $lineStyleSet = false,
         ?array $markLines = null,
+        ?bool $unicodeConnectors = null,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ): self {
@@ -749,6 +770,7 @@ final class LineChart extends Chart
             fill:              $fill              ?? $this->fill,
             lineStyle:         $lineStyleSet ? $lineStyle : $this->lineStyle,
             markLines:         $markLines        ?? $this->markLines,
+            unicodeConnectors: $unicodeConnectors ?? $this->unicodeConnectors,
             brailleCanvas:     $brailleCanvas     ?? $this->brailleCanvas,
             theme:             $theme             ?? $this->theme,
         );
@@ -759,8 +781,13 @@ final class LineChart extends Chart
         return $this->view();
     }
 
-    /** Draw a coarse connector between two points using line-art glyphs. */
-    private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, string $point): void
+    /**
+     * Draw a coarse connector between two points using line-art glyphs —
+     * ASCII `| - \ /` by default, or the Unicode `│ ─ ╱ ╲` set when the
+     * `unicodeConnectors` flag is on (slope mapping identical to
+     * {@see Waveline::connectorRune()}).
+     */
+    private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, bool $unicode): void
     {
         if ($x2 <= $x1) {
             return;
@@ -768,26 +795,28 @@ final class LineChart extends Chart
         // Vertical column between two adjacent samples (same x): step
         // through the rows.
         if ($x2 === $x1) {
+            $vertical = $unicode ? '│' : '|';
             $step = $y2 > $y1 ? 1 : -1;
             for ($y = $y1 + $step; $y !== $y2; $y += $step) {
-                $c->setCell($x1, $y, '|');
+                $c->setCell($x1, $y, $vertical);
             }
             return;
         }
         $dx = $x2 - $x1;
         $dy = $y2 - $y1;
         if ($dy === 0) {
+            $horizontal = $unicode ? '─' : '-';
             for ($x = $x1 + 1; $x < $x2; $x++) {
-                $c->setCell($x, $y1, '-');
+                $c->setCell($x, $y1, $horizontal);
             }
             return;
         }
         // Sample one row per intermediate column.
+        $slope = $dy > 0 ? ($unicode ? '╲' : '\\') : ($unicode ? '╱' : '/');
         for ($x = $x1 + 1; $x < $x2; $x++) {
             $t   = ($x - $x1) / $dx;
             $row = (int) round($y1 + $t * $dy);
-            $rune = $dy > 0 ? '\\' : '/';
-            $c->setCell($x, $row, $rune);
+            $c->setCell($x, $row, $slope);
         }
     }
 }
