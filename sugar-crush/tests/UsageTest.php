@@ -13,7 +13,11 @@ use SugarCraft\Crush\Usage;
  *
  * The whole class exists to keep two claims apart: "the provider said this call
  * was free" and "no provider said anything". Every test here is about one of the
- * two, because collapsing them is what turns a status bar into a liar.
+ * two, because collapsing them is what turns a status bar into a liar — since
+ * P4.S1 (E17) the same test applies one level down, per bucket: "reported zero
+ * cache reads" and "said nothing about cache reads" are two objects, and the
+ * arithmetic (the `promptTokens` identity, `plus`, `sum`, and the fork wire)
+ * must stay honest across all three of null, 0, and a positive number.
  */
 final class UsageTest extends TestCase
 {
@@ -124,13 +128,27 @@ final class UsageTest extends TestCase
      * runs the turn in a child and the parent unserializes with
      * `allowed_classes => false`, so the object cannot cross — only this array
      * can.
+     *
+     * CORRECTED BY P4.S1 rather than weakened: the exact-shape assertion stood
+     * when the wire had two keys, and the wire now has six because the buckets
+     * had to cross it (a bucket missing from EITHER half of the pair works in
+     * sync mode and silently reads zero in async — the one bug this test file
+     * exists to make impossible). It still asserts the COMPLETE array: an
+     * added, renamed, or dropped key fails it by diff, as before.
      */
     public function testItRoundTripsThroughThePlainArrayTheForkBoundaryAllows(): void
     {
         $usage = Usage::new(4321, 0.1234);
         $wire = $usage->toArray();
 
-        $this->assertSame(['totalTokens' => 4321, 'costUsd' => 0.1234], $wire);
+        $this->assertSame([
+            'totalTokens' => 4321,
+            'costUsd' => 0.1234,
+            'inputTokens' => null,
+            'outputTokens' => null,
+            'cacheReadTokens' => null,
+            'cacheCreationTokens' => null,
+        ], $wire);
 
         $back = Usage::fromArray($wire);
         $this->assertNotNull($back);
@@ -172,6 +190,349 @@ final class UsageTest extends TestCase
 
         $this->assertNotNull($back);
         $this->assertSame(1.0, $back->costUsd);
+    }
+    // =====================================================================
+    // P4.S1 / E17 — the real buckets
+    // =====================================================================
+
+    /**
+     * Done-when clause 1, as behaviour: the four buckets exist, and the
+     * constructor defaults are UNREPORTED — `new()` with no buckets must read
+     * null on all four, not 0. If a default ever flips to 0, every unsplit
+     * provider instantly "reports" a zero cache and the status bar starts
+     * asserting facts nobody measured.
+     */
+    public function testNewCarriesEachBucketExactlyAndDefaultsThemToUnreported(): void
+    {
+        $full = Usage::new(65000, 0.5, 5000, 20000, 30000, 10000);
+        $this->assertSame(5000, $full->inputTokens);
+        $this->assertSame(20000, $full->outputTokens);
+        $this->assertSame(30000, $full->cacheReadTokens);
+        $this->assertSame(10000, $full->cacheCreationTokens);
+
+        $bare = Usage::new();
+        $this->assertSame(null, $bare->inputTokens);
+        $this->assertSame(null, $bare->outputTokens);
+        $this->assertSame(null, $bare->cacheReadTokens);
+        $this->assertSame(null, $bare->cacheCreationTokens);
+    }
+
+    /**
+     * Done-when clause 3 — the three-bucket identity `total = cacheRead +
+     * cacheCreation + input` — with its two deliberate omissions pinned, each
+     * by a VALUE that changes only if the omission is "fixed".
+     *
+     * WHY `outputTokens` IS DELIBERATELY NOT IN THE IDENTITY (hazard 4 — pin
+     * it or a later reader will "fix" it): `promptTokens()` counts what was
+     * SENT, which is what fills the context window and what the 95% tier must
+     * stop estimating with chars/4. What the model wrote is not part of what
+     * was sent. If anyone adds `$this->outputTokens` to the sum, the
+     * `assertSame(45000, ...)` and the withOutputTokens(1) re-assert below go
+     * red TOGETHER — the second is the one that catches a sum that quietly
+     * grew, since 45000 alone could also be read as "output just happens to
+     * be excluded by the fixture values".
+     *
+     * `totalTokens` (99999 here, deliberately NOT the bucket sum 65000) is the
+     * provider's own billable figure over both directions: `new()` derives it
+     * from no bucket and `promptTokens()` derives nothing from it. If either
+     * ever starts deriving, one of the two assertions fails by value.
+     */
+    public function testPromptTokensSumsTheThreeInputBucketsAndDeliberatelyExcludesOutput(): void
+    {
+        $usage = Usage::new(99999, 0.5, inputTokens: 5000, outputTokens: 20000, cacheReadTokens: 30000, cacheCreationTokens: 10000);
+
+        $this->assertSame(45000, $usage->promptTokens(), 'the identity: 30000 cacheRead + 10000 cacheCreation + 5000 input');
+        $this->assertSame(99999, $usage->totalTokens, 'totalTokens is the provider\'s own figure, not the bucket sum');
+
+        // Output excluded: only outputTokens moves, promptTokens must not.
+        $this->assertSame(45000, $usage->withOutputTokens(1)->promptTokens(), 'outputTokens is NOT in the identity — see docblock');
+
+        // Each member bucket IS in it — sensitivity per term, so the identity
+        // is live and not a constant dressed as a sum.
+        $this->assertSame(45001, $usage->withInputTokens(5001)->promptTokens());
+        $this->assertSame(45001, $usage->withCacheReadTokens(30001)->promptTokens());
+        $this->assertSame(45001, $usage->withCacheCreationTokens(10001)->promptTokens());
+    }
+
+    /**
+     * Done-when clause 4 as behaviour — the null-vs-zero distinction on the
+     * accessor that does the arithmetic. "The provider reported zero cache
+     * reads" and "the provider reported nothing about cache reads" are
+     * different objects here and produce different answers: an explicit 0
+     * still totals, a missing bucket voids the total rather than feeding it a
+     * fabricated zero. If `promptTokens()` ever treats null as 0 (`?? 0` or a
+     * non-strict check), the `null` assertions go red with the exact number
+     * they would have wrongly produced.
+     */
+    public function testPromptTokensRefusesToTotalAcrossAnUnreportedBucket(): void
+    {
+        $reportedZero = Usage::new(100, 0.1, inputTokens: 60, cacheReadTokens: 40, cacheCreationTokens: 0);
+        $this->assertSame(100, $reportedZero->promptTokens(), 'an EXPLICIT zero cacheCreation still totals — zero is a measurement');
+
+        $unreported = $reportedZero->withCacheCreationTokens(null);
+        $this->assertNull($unreported->promptTokens(), 'a MISSING bucket must not silently become 0 where null is the truth');
+
+        // Both polarities for the other two terms as well.
+        $this->assertNull(Usage::new(100, 0.1, cacheReadTokens: 40, cacheCreationTokens: 0)->promptTokens(), 'inputTokens missing');
+        $this->assertNull(Usage::new(100, 0.1, inputTokens: 60, cacheCreationTokens: 0)->promptTokens(), 'cacheReadTokens missing');
+        $this->assertNull(Usage::new(100, 0.1, inputTokens: 60, cacheReadTokens: 40)->promptTokens(), 'cacheCreationTokens missing');
+    }
+
+    /**
+     * Done-when clause 2: `with*()` returns a NEW instance via the private
+     * mutate() and only ever touches its own bucket — the sentinel behaviour.
+     * The ride-along assertion (`cacheRead` still 4 after clearing input)
+     * reds if mutate() loses its `bool $xSet` sentinels and defaults start
+     * clobbering untouched fields.
+     */
+    public function testWithersAreFluentImmutableAndOnlyTouchTheirOwnBucket(): void
+    {
+        $base = Usage::new(10, 0.1);
+        $built = $base
+            ->withInputTokens(1)
+            ->withOutputTokens(2)
+            ->withCacheReadTokens(3)
+            ->withCacheCreationTokens(4);
+
+        $this->assertNotSame($base, $built);
+        $this->assertSame(10, $base->totalTokens);
+        $this->assertSame(0.1, $base->costUsd);
+        $this->assertSame(null, $base->inputTokens);
+        $this->assertSame(null, $base->cacheReadTokens);
+
+        $this->assertSame(1, $built->inputTokens);
+        $this->assertSame(2, $built->outputTokens);
+        $this->assertSame(3, $built->cacheReadTokens);
+        $this->assertSame(4, $built->cacheCreationTokens);
+        $this->assertSame(8, $built->promptTokens());
+
+        $cleared = $built->withInputTokens(null);
+        $this->assertNull($cleared->inputTokens);
+        $this->assertSame(2, $cleared->outputTokens, 'untouched buckets ride along — that is what the sentinels are for');
+        $this->assertSame(3, $cleared->cacheReadTokens);
+        $this->assertSame(4, $cleared->cacheCreationTokens);
+        $this->assertNull($cleared->promptTokens(), 'a cleared bucket voids the identity rather than feeding it 1');
+    }
+
+    /**
+     * `withCacheReadTokens(0)` and `withCacheReadTokens(null)` are DIFFERENT
+     * operations — report-zero versus clear-to-unreported — and both are
+     * distinct from never having called the wither at all. This is clause 4's
+     * third face: if null-means-set and null-means-unchanged ever collapse
+     * into one behaviour, either the (0) or the (null) leg goes red.
+     */
+    public function testSettingABucketToZeroReportsItAndSettingItToNullClearsIt(): void
+    {
+        $base = Usage::new(10, 0.1);
+
+        $zeroed = $base->withCacheReadTokens(0);
+        $this->assertSame(0, $zeroed->cacheReadTokens);
+
+        $cleared = $zeroed->withCacheReadTokens(null);
+        $this->assertNull($cleared->cacheReadTokens);
+
+        $withAll = $base->withInputTokens(60)->withCacheReadTokens(40)->withCacheCreationTokens(0);
+        $this->assertSame(100, $withAll->promptTokens());
+        $this->assertNull($withAll->withCacheCreationTokens(null)->promptTokens());
+    }
+
+    /**
+     * Same policy as the existing `testNegativeFiguresClampRatherThanThrow`
+     * for totals: a negative bucket is a provider bug accounted as zero, but
+     * "unreported" is NOT a negative number and survives as null through the
+     * very same code path.
+     */
+    public function testNegativeBucketsClampToZeroWhileUnreportedSurvivesAsNull(): void
+    {
+        $clamped = Usage::new(5, 0.0, -7, -1, -3, -2);
+        $this->assertSame(0, $clamped->inputTokens);
+        $this->assertSame(0, $clamped->outputTokens);
+        $this->assertSame(0, $clamped->cacheReadTokens);
+        $this->assertSame(0, $clamped->cacheCreationTokens);
+        $this->assertSame(5, $clamped->totalTokens);
+
+        $mixed = Usage::new(5, 0.0)->withInputTokens(7)->withOutputTokens(-1);
+        $this->assertSame(7, $mixed->inputTokens, 'the untouched neighbour must survive the clamp of the touched one');
+        $this->assertSame(0, $mixed->outputTokens);
+    }
+
+    /**
+     * HAZARD 2, the common path: `plus()` adds every bucket, with DISTINCT
+     * per-bucket sums (110/220/330/44) so dropping any single bucket from the
+     * addition reds exactly one assertion with the dropped field's name — a
+     * two-field hand-add (the pre-P4.S1 body) fails the first bucket assert.
+     * The operands must also come out untouched (immutability of both sides).
+     */
+    public function testPlusSumsEveryBucketWithExactValues(): void
+    {
+        $a = Usage::new(60, 0.25, 10, 20, 300, 4);
+        $b = Usage::new(600, 0.50, 100, 200, 30, 40);
+        $sum = $a->plus($b);
+
+        $this->assertSame(660, $sum->totalTokens);
+        $this->assertSame(0.75, $sum->costUsd);
+        $this->assertSame(110, $sum->inputTokens);
+        $this->assertSame(220, $sum->outputTokens);
+        $this->assertSame(330, $sum->cacheReadTokens);
+        $this->assertSame(44, $sum->cacheCreationTokens);
+        $this->assertSame(484, $sum->promptTokens(), 'the identity survives the addition, not just the construction');
+
+        $this->assertSame(10, $a->inputTokens);
+        $this->assertSame(300, $a->cacheReadTokens);
+        $this->assertSame(100, $b->inputTokens);
+        $this->assertSame(40, $b->cacheCreationTokens);
+    }
+
+    /**
+     * The merge's null policy, both polarities: a bucket reported by EITHER
+     * side survives the addition (the measured number is not thrown away
+     * because the other step said nothing); a bucket reported by NEITHER side
+     * stays unreported rather than becoming a fabricated turn zero. If
+     * `plusBucket()` flips its null carry-through to a zero (the shape that
+     * pretends the unreported half was measured), the all-null leg goes red.
+     */
+    public function testPlusCarriesABucketReportedByEitherOperandAndKeepsUnreportedOnesUnreported(): void
+    {
+        $a = Usage::new(10, 0.1, inputTokens: 10, cacheReadTokens: 5);
+        $b = Usage::new(20, 0.2, inputTokens: 5, outputTokens: 7);
+        $sum = $a->plus($b);
+
+        $this->assertSame(15, $sum->inputTokens);
+        $this->assertSame(7, $sum->outputTokens, 'reported by one side only — carried, not nulled, not zero-added');
+        $this->assertSame(5, $sum->cacheReadTokens, 'reported by one side only — carried');
+        $this->assertNull($sum->cacheCreationTokens, 'reported by neither side — stays unreported');
+
+        $bare = Usage::new(1, 0.0)->plus(Usage::new(2, 0.0));
+        $this->assertNull($bare->inputTokens);
+        $this->assertNull($bare->outputTokens);
+        $this->assertNull($bare->cacheReadTokens);
+        $this->assertNull($bare->cacheCreationTokens);
+    }
+
+    /**
+     * `sum()` is built on `plus()` and must inherit every bucket — a turn of
+     * steps where only SOME steps reported the split keeps the reported
+     * figures (the EngineBackend loop this class exists for runs exactly that
+     * mix once the wiring lands). Exact values per bucket, including the
+     * explicit zero staying zero and the never-reported staying null.
+     */
+    public function testSumAccumulatesBucketsAcrossStepsIncludingStepsThatReportedNone(): void
+    {
+        $sum = Usage::sum([
+            Usage::new(100, 0.1, 10, 20, 70, 0),
+            null,
+            Usage::new(50, 0.05),
+            Usage::new(30, 0.02, 7, 13, 5, 2),
+        ]);
+
+        $this->assertNotNull($sum);
+        $this->assertSame(180, $sum->totalTokens);
+        $this->assertSame(17, $sum->inputTokens);
+        $this->assertSame(33, $sum->outputTokens);
+        $this->assertSame(75, $sum->cacheReadTokens);
+        $this->assertSame(2, $sum->cacheCreationTokens);
+        $this->assertSame(94, $sum->promptTokens());
+    }
+
+    /**
+     * A bucket is itself a report: total 0 and cost $0 WITH a measured cache
+     * read is the per-bucket face of "free is not unknown" (the existing
+     * `testRealTokensAtZeroCost...` for totals), so `reported()` must not drop
+     * it — and the all-null mirror case must still drop to null.
+     */
+    public function testBucketsCountAsReportsEvenWhenTotalAndCostAreZero(): void
+    {
+        $freeButMeasured = Usage::reported(0, 0.0, cacheReadTokens: 40);
+        $this->assertNotNull($freeButMeasured, 'a measured cache read beside a zero bill is still a measurement');
+        $this->assertSame(40, $freeButMeasured->cacheReadTokens);
+        $this->assertSame(null, $freeButMeasured->inputTokens);
+
+        $this->assertNull(Usage::reported(0, 0.0), 'mirror polarity: nothing at all is still nothing reported');
+    }
+
+    /**
+     * Done-when, the null-vs-zero contract CROSSING THE SOCKET (hazard 1):
+     * bucket-by-bucket object equality through `fromArray($x->toArray())`, for
+     * a full report AND a mixed one where some buckets are 0, some null, some
+     * absent-by-default. Asserting the VALUES, so a bucket dropped from
+     * either half of the pair — sync-mode-green, async-mode-zero — reds here.
+     */
+    public function testEveryBucketRoundTripsAcrossTheForkWireByValue(): void
+    {
+        $full = Usage::new(4321, 0.1234, 1000, 2000, 30000, 400);
+        $back = Usage::fromArray($full->toArray());
+        $this->assertEquals($full, $back);
+        $this->assertSame(1000, $back->inputTokens);
+        $this->assertSame(2000, $back->outputTokens);
+        $this->assertSame(30000, $back->cacheReadTokens);
+        $this->assertSame(400, $back->cacheCreationTokens);
+
+        $mixed = Usage::new(11, 0.5, inputTokens: 1, cacheReadTokens: 0);
+        $backMixed = Usage::fromArray($mixed->toArray());
+        $this->assertEquals($mixed, $backMixed);
+        $this->assertSame(1, $backMixed->inputTokens);
+        $this->assertSame(0, $backMixed->cacheReadTokens, 'an explicit zero survives the wire as zero...');
+        $this->assertNull($backMixed->outputTokens, '...and an unreported bucket survives it as null');
+    }
+
+    /**
+     * The pre-P4.S1 frame: `fromArray()` must stay tolerant of a shape it did
+     * not write, and the shape it tolerates is one WITHOUT the bucket keys —
+     * it decodes to four UNREPORTED buckets. The brief's exact trap: "A frame
+     * missing the new keys entirely must not become four zeroes." Asserted by
+     * `null`, not `assertSame(0, ...)`-compatible behaviour.
+     */
+    public function testAnOldFrameWithoutBucketKeysDecodesToUnreportedBuckets(): void
+    {
+        $back = Usage::fromArray(['totalTokens' => 10, 'costUsd' => 0.1]);
+
+        $this->assertNotNull($back, 'a pre-bucket frame still carries its accounting — tolerance, not rejection');
+        $this->assertSame(10, $back->totalTokens);
+        $this->assertSame(null, $back->inputTokens);
+        $this->assertSame(null, $back->outputTokens);
+        $this->assertSame(null, $back->cacheReadTokens);
+        $this->assertSame(null, $back->cacheCreationTokens);
+    }
+
+    /**
+     * A bucket value that is neither int nor null is a frame `toArray()` did
+     * not write — the WHOLE frame is refused, per the existing
+     * refuse-anything-it-did-not-write doctrine for the two original fields.
+     * Without the whole-frame refusal, a garbled `'0'` string would decode to
+     * unreported and a garbled field would silently impersonate the clean
+     * absence of data.
+     *
+     * @dataProvider malformedBucketValues
+     */
+    public function testFromArrayRefusesAFullFrameWithGarbageInAnyBucket(array $frame): void
+    {
+        $this->assertNull(Usage::fromArray($frame));
+    }
+
+    /** @return iterable<string, array{array<string,mixed>}> */
+    public static function malformedBucketValues(): iterable
+    {
+        yield 'input as a string' => [['totalTokens' => 10, 'costUsd' => 0.1, 'inputTokens' => '5']];
+        yield 'output as a float' => [['totalTokens' => 10, 'costUsd' => 0.1, 'outputTokens' => 1.5]];
+        yield 'cacheRead as a bool' => [['totalTokens' => 10, 'costUsd' => 0.1, 'cacheReadTokens' => true]];
+        yield 'cacheCreation as an array' => [['totalTokens' => 10, 'costUsd' => 0.1, 'cacheCreationTokens' => [0]]];
+        yield 'cacheRead as a zero float' => [['totalTokens' => 10, 'costUsd' => 0.1, 'cacheReadTokens' => 0.0]];
+    }
+
+    /**
+     * A negative bucket on the wire is the same provider-bug case as a
+     * negative total on the wire: the existing doctrine clamps rather than
+     * rejects (see `testNegativeFiguresClampRatherThanThrow` and the int-cost
+     * tolerance beside it), so it clamps to a REPORTED zero — which is still
+     * materially different from the unreported null an absent key decodes to.
+     */
+    public function testANegativeBucketOnTheWireClampsRatherThanBeingRefused(): void
+    {
+        $back = Usage::fromArray(['totalTokens' => 10, 'costUsd' => 0.1, 'cacheReadTokens' => -3]);
+
+        $this->assertNotNull($back);
+        $this->assertSame(0, $back->cacheReadTokens);
+        $this->assertSame(null, $back->inputTokens);
     }
     // =====================================================================
     // The provider enumeration the class docblock rests on
