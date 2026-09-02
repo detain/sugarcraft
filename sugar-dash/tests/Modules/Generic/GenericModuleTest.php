@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Modules\Generic;
 
+use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Modules\Generic\GenericModule;
@@ -101,6 +102,16 @@ final class GenericModuleTest extends TestCase
         $this->assertSame('Command failed', $view);
     }
 
+    /**
+     * This test deliberately drives the proc_open-FAILURE path: PHP itself emits
+     * `proc_open(): posix_spawn() failed` at GenericModule.php:98, and the code
+     * under test is expected to swallow it and return 'Command failed'. The
+     * warning is the input to the contract, not a defect — so PHPUnit's error
+     * handler must not capture it as a suite issue (standing W1). Opting out via
+     * #[WithoutErrorHandler] silences only the capture; the graceful-handling
+     * assertion below still runs fully.
+     */
+    #[WithoutErrorHandler]
     public function testFailedProcOpenFailsGracefully(): void
     {
         // Use a command that's unlikely to exist

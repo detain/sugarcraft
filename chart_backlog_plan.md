@@ -249,7 +249,7 @@ Suggested interleave: A runs B1..B4; B runs B5,B6,B7 serially with B8/B9/B10a∥
 | B10a donut/bubble examples + donut goldens | BL-8a | B | ✅ | ✅ | ✅ | cba81fd68 |
 | B10b chart example fix + chart goldens | BL-8b | B | ✅ | ✅ | ✅ | 733b12a92 |
 | B11 bufferFromOutput mb (Chart.php+ChartTest only) | Chart.php | B | ✅ | ✅ | ✅ | df9dfa08e |
-| B12 dead-tables sweep | dead tables | B | ⬜ | ⬜ | ⬜ | — |
+| B12 dead-tables sweep | dead tables | B | ✅ | ✅ | ✅ | 4b27b4ff9 |
 | B13 W1 legitimize + dash flip | BL-3b | B | ⬜ | ⬜ | ⬜ | — |
 
 (Legend: B(D) = Donut-serial. Only commit agents tick this board.)
