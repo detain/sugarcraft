@@ -138,6 +138,18 @@ final class Streamline
         return $this->withRange($this->min, $this->max, $r);
     }
 
+    // Short-form aliases.
+    /** Short-form alias for {@see withSize()}. */
+    public function size(int $w, int $h): self    { return $this->withSize($w, $h); }
+    /** Short-form alias for {@see withMin()}. */
+    public function min(?float $m): self          { return $this->withMin($m); }
+    /** Short-form alias for {@see withMax()}. */
+    public function max(?float $m): self          { return $this->withMax($m); }
+    /** Short-form alias for {@see withYRange()}. */
+    public function yRange(?float $min, ?float $max): self { return $this->withYRange($min, $max); }
+    /** Short-form alias for {@see withPoint()}. */
+    public function point(string $r): self        { return $this->withPoint($r); }
+
     public function view(): string
     {
         // Reuse the configured chart; only the data changes per frame.

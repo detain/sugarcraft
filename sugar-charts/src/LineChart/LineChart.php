@@ -269,6 +269,14 @@ final class LineChart extends Chart
     public function xLabels(array $labels): self     { return $this->withXLabels($labels); }
     /** @param list<string> $labels */
     public function yLabels(array $labels): self     { return $this->withYLabels($labels); }
+    /** Short-form alias for {@see withXLabelFormatter()}. */
+    public function xLabelFormatter(\Closure $fn, int $ticks = 0): self { return $this->withXLabelFormatter($fn, $ticks); }
+    /** Short-form alias for {@see withYLabelFormatter()}. */
+    public function yLabelFormatter(\Closure $fn, int $ticks = 0): self { return $this->withYLabelFormatter($fn, $ticks); }
+    /** Short-form alias for {@see withDataset()}. */
+    public function dataset(string $name, array $values): self { return $this->withDataset($name, $values); }
+    /** Short-form alias for {@see withDatasetPoint()}. */
+    public function datasetPoint(string $name, string $rune): self { return $this->withDatasetPoint($name, $rune); }
 
     // ─── Chart Property Overrides ───────────────────────────────────────
     // Override Chart's methods to use lineChartCopy() so LineChart properties are preserved

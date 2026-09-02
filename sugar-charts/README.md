@@ -46,11 +46,16 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 ```
 
-> Charts also expose short-form aliases on the most-used setters:
-> `data` / `size` / `min` / `max` / `point` / `xRange` / `yRange` /
-> `colors` / `palette` / `bars` / `barWidth` / `showLabels` / `showAxis`,
-> etc. The upstream-mirroring `with*` long forms still work; pick the
-> form that reads best at the call site.
+> Every `with*()` fluent setter on the chart classes also has a short-form alias, so
+> `data` / `size` / `min` / `max` / `point` / `xRange` / `yRange` / `xyRange` / `colors` /
+> `palette` / `bars` / `barWidth` / `showLabels` / `showAxis` / `title` / `canvas` /
+> `theme` / `dataset` / `style` / `protocol` / `items` / `position` … are all available.
+> The convention is `withFoo()` → `foo()` (drop `with`, lcfirst). A few names deviate to
+> read better: `withLegendPosition()` → `legendPos()`, `withTitlePosition()` → `titlePos()`
+> (Position shortens to `Pos`), `withDataLabelFormatter()` → `dataLabelFormat()`,
+> `withFractionalHeights()` → `fractional()`, and `withXYRange()` → `xyRange()`. These
+> deviations are pinned by `tests/AliasCompletenessTest.php`. The upstream-mirroring
+> `with*` long forms always still work; pick the form that reads best at the call site.
 
 ## Components
 

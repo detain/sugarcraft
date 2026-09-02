@@ -120,6 +120,22 @@ final class Waveline
         return new self($this->points, $this->width, $this->height, $this->xMin, $this->xMax, $this->yMin, $this->yMax, $r);
     }
 
+    // Short-form aliases.
+    /** @param list<array{0:int|float,1:int|float}> $points */
+    public function points(array $points): self   { return $this->withPoints($points); }
+    /** Short-form alias for {@see withXYRange()} — `xyRange` mirrors LineChart. */
+    public function xyRange(?float $xMin, ?float $xMax, ?float $yMin, ?float $yMax): self {
+        return $this->withXYRange($xMin, $xMax, $yMin, $yMax);
+    }
+    /** Short-form alias for {@see withSize()}. */
+    public function size(int $w, int $h): self    { return $this->withSize($w, $h); }
+    /** Short-form alias for {@see withXRange()}. */
+    public function xRange(?float $min, ?float $max): self { return $this->withXRange($min, $max); }
+    /** Short-form alias for {@see withYRange()}. */
+    public function yRange(?float $min, ?float $max): self { return $this->withYRange($min, $max); }
+    /** Short-form alias for {@see withPoint()}. */
+    public function point(string $r): self        { return $this->withPoint($r); }
+
     public function view(): string
     {
         if ($this->width === 0 || $this->height === 0 || $this->points === []) {

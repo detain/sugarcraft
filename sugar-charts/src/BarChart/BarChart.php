@@ -271,10 +271,14 @@ final class BarChart
     public function fractional(bool $on = true): self { return $this->withFractionalHeights($on); }
     public function barWidth(?int $width): self       { return $this->withBarWidth($width); }
     public function barGap(?int $gap): self           { return $this->withBarGap($gap); }
+    /** Short-form alias for {@see withNoAutoBarWidth()}. */
+    public function noAutoBarWidth(bool $on = true): self { return $this->withNoAutoBarWidth($on); }
     public function legend(bool $on = true): self     { return $this->withLegend($on); }
     public function legendPos(Position $pos): self    { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self  { return $this->withLegendStyle($char); }
     public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
+    /** Short-form alias for {@see withTitlePosition()} — Position-suffix deviates to `Pos`, mirroring `legendPos`. */
+    public function titlePos(Position $pos): self     { return $this->withTitlePosition($pos); }
     public function xLabel(string $label): self       { return $this->withXLabel($label); }
     public function yLabel(string $label): self       { return $this->withYLabel($label); }
     /** @param list<array{label: string, color: string}> $items */
