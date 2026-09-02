@@ -109,9 +109,11 @@ use SugarCraft\Crush\Tests\Support\TokenFunctionRanges;
  *    `namespace\` relative spelling the write scanner had already paid for)
  *    while {@see classifyGetChildrenSite()} reads the SPL shape and fails
  *    CLOSED on receivers it cannot place. The remaining silence in that
- *    family - a computed `class_alias`, an alias to a NAMESPACED user class
- *    that walks - is carried as rows in the blind-spot table, per F4's
- *    "detect or declare-with-pin", not faked.
+ *    family - a walker subclass reached through a `self`/`static`/`parent`
+ *    keyword, a `class_alias` named by a same-file constant, a computed
+ *    `class_alias`, and an alias to a NAMESPACED user class that walks - is
+ *    carried as rows in the blind-spot table, per F4's "detect or
+ *    declare-with-pin", not faked.
  *
  * WHY THE ROOT MUST BE IN THE WALKER'S OWN ARGUMENT and not merely somewhere in
  * the file: at file-level co-occurrence resolution - "this file calls `glob()`
