@@ -1299,13 +1299,21 @@ final class Renderer
      * a hung app rather than as an open modal.
      *
      * The `statusLine` settings key's output is appended last, by
-     * {@see withStatusLineCommand()} — a FOURTH variable-length piece, below
-     * all three of the ones this method fits itself. It is absent from every
-     * bar unless the user's own settings named a command, so every width
-     * measured in the comments below still holds unqualified for a session that
-     * did not.
+     * {@see withStatusLineCommand()} — a FIFTH variable-length piece, below
+     * all four of the ones this method fits itself (see the fitting order
+     * below). It is absent from every bar unless the user's own settings named
+     * a command, and the cache readout {@see cacheIndicator()} is absent
+     * unless a provider reported the buckets it divides, so every width
+     * measured in the comments below still holds unqualified for a session
+     * that did neither.
+     *
+     * @param float|null $now the epoch the cache-age piece counts from
+     *        ({@see cacheIndicator()}); null means "now" and is what every
+     *        live path gets by default — the seam exists because an age
+     *        readout that reads the wall clock cannot be pinned byte-for-byte
+     *        otherwise.
      */
-    private static function renderStatusBar(Chat $chat): string
+    private static function renderStatusBar(Chat $chat, ?float $now = null): string
     {
         // Shorter than the bar it replaces, so a narrow terminal cannot be
         // made to overflow by MORE than it already does — the bar is the one
@@ -1422,7 +1430,7 @@ final class Renderer
         // the widest variable-length piece of the bar, and the bar is the one
         // line that must never wrap (see below).
         //
-        // Three variable-length pieces compete for the row, and the order they
+        // Four variable-length pieces compete for the row, and the order they
         // are FITTED in is their priority order, lowest priority last:
         //
         //   1. the scroll readout — its WIDEST form is reserved up front even
@@ -1432,11 +1440,15 @@ final class Renderer
         //   2. the context readout — always emits something, down to a bare
         //      percentage, because a session with no context signal at all is
         //      worse than a narrow one.
-        //   3. the spend readout — the only one that may vanish entirely.
+        //   3. the spend readout — an optional piece; like the cache readout
+        //      below it, it may vanish entirely.
+        //   4. the cache readout — fitted below spend, and it may vanish too:
+        //      both figures describe the provider's cache, which a session
+        //      without a usage split simply does not have.
         //
-        // Reserving (1) before sizing (2) and (3) is what stops a later piece
-        // crowding an earlier one off the row: each one is measured against what
-        // its seniors have already claimed, never the reverse.
+        // Reserving (1) before sizing (2), (3) and (4) is what stops a later
+        // piece crowding an earlier one off the row: each one is measured
+        // against what its seniors have already claimed, never the reverse.
         $separator = ' · ';
         $indicators = self::scrollIndicators($chat);
         $scrollReserve = $indicators === [] ? 0 : Width::of($indicators[0]);
@@ -1448,8 +1460,9 @@ final class Renderer
         $bar = $context . $separator . $processing;
 
         // The spend readout goes in third, against whatever the two mandatory
-        // pieces and the scroll reservation have left. Third because it is the
-        // only one of the three that may be dropped ENTIRELY: the context
+        // pieces and the scroll reservation have left. Third because it was the
+        // only one of the three that may be dropped ENTIRELY, and the cache
+        // readout fitted below it now shares that property: the context
         // percentage always prints something (see contextIndicator()) and the
         // processing hint is the bar's reason for existing, while a session with
         // no cap and nothing reported has no spend to say anything about and
@@ -1461,6 +1474,25 @@ final class Renderer
         );
         if ($spend !== '') {
             $bar = $context . $separator . $spend . $separator . $processing;
+        }
+
+        // The cache readout is fitted against whatever the spend piece left,
+        // below it and above the `statusLine` command like every other
+        // optional piece (prompt_plan.md P4.S3). Like spend it may vanish
+        // entirely — here for lack of a reported cache split rather than for
+        // lack of spend — so a session on a provider that names no buckets,
+        // which is every session until a provider fills them, paints a
+        // byte-identical bar to the one every width test in
+        // `tests/Renderer/StatusBarSpendTest.php` measures today.
+        $cache = self::cacheIndicator(
+            $chat,
+            $chat->cols() - Width::of(self::stripZoneMarkers($bar)) - $scrollReserve - Width::of($separator),
+            $now,
+        );
+        if ($cache !== '') {
+            $bar = $spend !== ''
+                ? $context . $separator . $spend . $separator . $cache . $separator . $processing
+                : $context . $separator . $cache . $separator . $processing;
         }
 
         // The bar is the frame's LAST line, so it is the one line that must
@@ -1527,9 +1559,9 @@ final class Renderer
      * bar unchanged.
      *
      * FITTED LAST, AFTER THE SCROLL READOUT HAS BEEN PLACED, which is the whole
-     * of its priority claim. {@see renderStatusBar()} documents three
+     * of its priority claim. {@see renderStatusBar()} documents four
      * variable-length pieces fitted in priority order with the lowest last;
-     * this is a FOURTH, and it is below all three. Two reasons it has to be:
+     * this is a FIFTH, and it is below all four. Two reasons it has to be:
      * it is the only piece whose content this process did not compute, and
      * dropping it costs a readout the user can also get by other means, while
      * dropping the context percentage or the scroll offset costs information
@@ -1662,6 +1694,146 @@ final class Renderer
         }
 
         return '';
+    }
+
+    /**
+     * The status bar's cache-health readout: the share of the last reported
+     * prompt that the provider served from its prompt cache, and the age of
+     * that report (prompt_plan.md P4.S3; prompt_expand.md §9.14 — the idea is
+     * `leeguooooo/claude-code-usage-bar`'s prompt-cache-age status line, §7.9).
+     *
+     * ## THE FORMULA, derived from the merged {@see Usage} bucket semantics
+     *
+     * Over the NEWEST history entry whose usage carries a computable,
+     * non-degenerate prompt-side split — that is, the newest one with
+     * {@see Usage::promptTokens()} non-null and positive, which by P4.S1's
+     * shipped semantics means all three prompt buckets
+     * (`inputTokens`, `cacheReadTokens`, `cacheCreationTokens`) were
+     * reported:
+     *
+     *     hitPercent = round(cacheReadTokens / promptTokens() * 100)
+     *     ageSeconds = floor(now - entry.createdAt)          (clamped at 0)
+     *
+     * with `promptTokens() = cacheRead + cacheCreation + input` (§9.14's
+     * "total = cache_read + cache_creation + input", `input_tokens` counting
+     * only what follows the last breakpoint). `Usage` clamps negatives to zero
+     * at construction, so the identity makes `hitPercent` land in [0, 100] by
+     * arithmetic alone — there is nothing to clamp here, and a second clamp
+     * would only hide a broken sum.
+     *
+     * One measured caveat to that honesty: a bucket trio whose sum passes
+     * `PHP_INT_MAX` DOES break it — {@see Usage::promptTokens()} then returns
+     * a float against its `?int` and the `TypeError` thrown out of
+     * `renderStatusBar()` costs the whole frame (MEASURED at review-1:
+     * 4.6e18 × 3 fatals, 1e18 × 3 does not) — but per-call buckets — and
+     * even the turn-merged ones this path actually reads (`Usage::sum()` at
+     * `EngineBackend::complete()`, `Runtime`'s stream) — sit orders below
+     * that, so the honest guard belongs inside
+     * {@see Usage::promptTokens()} itself; recorded here, escalated by the
+     * lead, deliberately not clamped here.
+     *
+     * WHY THE NEWEST USABLE REPORT rather than a session aggregate: the two
+     * numbers must describe the SAME call (one domain, not a session average
+     * quoted beside one call's timestamp), and a session mean blends the cold
+     * first write in forever while a mid-session invalidator hides underneath
+     * it — the exact regression this readout exists to notice. An older entry
+     * is only used because the newer ones said nothing yet.
+     *
+     * WHY EACH GUARD, each one pinned by a test:
+     *  - `promptTokens()` null: an unreported bucket is not a zero —
+     *    {@see Usage}'s "Zero is not the same as unknown" — so the entry
+     *    carries no honest rate and the walk moves to the next older one.
+     *    Every pre-split provider answer arrives this way, which is why the
+     *    segment is absent, not zero, on today's live paths.
+     *  - `promptTokens() === 0`: a prompt of exactly zero measured tokens has
+     *    no cache share; displaying 0% would assert a miss the provider never
+     *    counted. Skip, as for unreported.
+     *  - age clamped at 0: a clock that steps backwards (NTP) must not paint a
+     *    negative age; zero is the truthful floor.
+     *  - `hitPercent === 0` from REPORTED buckets renders: a measured total
+     *    miss is the Phase-3/Phase-10 regression signal — suppressing it
+     *    would hide exactly what the step set out to surface.
+     *
+     * The age is printed, never compared against a TTL: prompt_expand.md
+     * §4.16's 5-minute/1-hour windows are Claude Code's product configuration
+     * for Anthropic's cache, not a bound this deployment's provider promises
+     * (an SGLang radix cache expires differently again), so colouring the
+     * readout by an assumed window would assert an expiry nobody reported.
+     *
+     * Like {@see spendIndicator()} this may vanish entirely — down to no
+     * segment at all — rather than overflow the one line the bar must never
+     * wrap; unlike it, nothing here prints on an UNREPORTED figure. $room is
+     * the columns the seniors on the row have left; forms are tried
+     * widest-first.
+     */
+    private static function cacheIndicator(Chat $chat, int $room, ?float $now = null): string
+    {
+        $read = null;
+        $age = null;
+
+        // Reverse walk, first carrier wins — see the docblock's "newest
+        // usable report" reasoning. array_reverse copies the list; a history
+        // long enough to make that cost columns the terminal does not have is
+        // a history that has already compacted (see Chat's context tiers).
+        foreach (array_reverse($chat->history) as $message) {
+            $usage = $message->usage;
+            if ($usage === null) {
+                continue;
+            }
+
+            $prompt = $usage->promptTokens();
+            if ($prompt === null || $prompt <= 0) {
+                continue;
+            }
+
+            // promptTokens() being non-null is exactly the guard that says all
+            // three buckets — cacheReadTokens included — were reported.
+            $read = (int) round($usage->cacheReadTokens / $prompt * 100);
+            $age = max(0, (int) floor(($now ?? microtime(true)) - $message->createdAt));
+
+            break;
+        }
+
+        if ($read === null || $age === null) {
+            return '';
+        }
+
+        $ageText = self::formatCacheAge($age);
+        $forms = [
+            $read . '% cache · ' . $ageText,
+            $read . '% cache',
+        ];
+
+        foreach ($forms as $form) {
+            if (Width::of($form) <= $room) {
+                return $form;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * A cache age in the coarse one-word form the bar has room for: seconds
+     * while the readout is fresh enough to say them, then minutes, hours,
+     * days. Flooring is deliberate — an age rounded UP would announce an
+     * expiry a second early, and the number reads as an age, not a countdown.
+     */
+    private static function formatCacheAge(int $seconds): string
+    {
+        if ($seconds < 60) {
+            return $seconds . 's';
+        }
+
+        if ($seconds < 3600) {
+            return intdiv($seconds, 60) . 'm';
+        }
+
+        if ($seconds < 86400) {
+            return intdiv($seconds, 3600) . 'h';
+        }
+
+        return intdiv($seconds, 86400) . 'd';
     }
 
     /**
