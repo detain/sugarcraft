@@ -684,7 +684,7 @@ final class ProviderRequestResponseTest extends TestCase
     public function testVertexStreamedUsageIsSplitAcrossDisjointBucketEvents(): void
     {
         // Anthropic-on-Vertex SSE events (VertexProvider.php:904-919;
-        // Usage.php:39-48): input tokens on message_start, output tokens on the
+        // Usage.php:58-67): input tokens on message_start, output tokens on the
         // terminal message_delta — two usage-bearing chunks, disjoint buckets,
         // nothing repeated on every chunk.
         $events = [
