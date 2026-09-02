@@ -131,10 +131,17 @@ final class UsageTest extends TestCase
      *
      * CORRECTED BY P4.S1 rather than weakened: the exact-shape assertion stood
      * when the wire had two keys, and the wire now has six because the buckets
-     * had to cross it (a bucket missing from EITHER half of the pair works in
-     * sync mode and silently reads zero in async — the one bug this test file
-     * exists to make impossible). It still asserts the COMPLETE array: an
-     * added, renamed, or dropped key fails it by diff, as before.
+     * had to cross it. A bucket missing from EITHER half of the pair is silent
+     * and async-only — but the two halves fail differently, as the class
+     * docblock (src/Usage.php "Zero is not the same as unknown") now states:
+     * dropped from `toArray()`, async loses the bucket as UNREPORTED with sync
+     * mode staying green (accounting lost on one side only); coercing
+     * `fromArray()` turns the absent key into a FABRICATED measured zero. Both
+     * errors are the one bug this test file exists to make impossible; this
+     * exact-shape assert catches the first, and the value-by-value round trip
+     * plus the old-frame test below catch the second. The assert still checks
+     * the COMPLETE array: an added, renamed, or dropped key fails it by diff,
+     * as before.
      */
     public function testItRoundTripsThroughThePlainArrayTheForkBoundaryAllows(): void
     {
@@ -277,10 +284,38 @@ final class UsageTest extends TestCase
         $unreported = $reportedZero->withCacheCreationTokens(null);
         $this->assertNull($unreported->promptTokens(), 'a MISSING bucket must not silently become 0 where null is the truth');
 
-        // Both polarities for the other two terms as well.
+        // The missing polarity for every identity term: an unreported bucket
+        // voids the total rather than feeding it a fabricated zero. (The
+        // reported-zero polarity — the other half of "both polarities" — is
+        // pinned per term by the loop below; the three asserts above cover
+        // only the missing side, as measured by review cycle 4.)
         $this->assertNull(Usage::new(100, 0.1, cacheReadTokens: 40, cacheCreationTokens: 0)->promptTokens(), 'inputTokens missing');
         $this->assertNull(Usage::new(100, 0.1, inputTokens: 60, cacheCreationTokens: 0)->promptTokens(), 'cacheReadTokens missing');
         $this->assertNull(Usage::new(100, 0.1, inputTokens: 60, cacheReadTokens: 40)->promptTokens(), 'cacheCreationTokens missing');
+
+        // The reported-zero polarity, pinned PER TERM rather than for
+        // cacheCreationTokens alone. The guard in promptTokens() is a strict
+        // `=== null` with one condition per term; relax ANY of the three to
+        // `== null` and PHP's 0 == null makes a measured zero look missing —
+        // exactly the Anthropic full-cache-hit shape (input_tokens: 0) — and
+        // the sum voids to null. Each row zeroes ONE term and holds the other
+        // two at distinct positives, so a loosened guard reds on its OWN row
+        // with its OWN expected figure, never on a neighbour's value.
+        $zeroRows = [
+            'inputTokens' => 45,           // 0 + 40 + 5
+            'cacheReadTokens' => 65,       // 60 + 0 + 5
+            'cacheCreationTokens' => 100,  // 60 + 40 + 0
+        ];
+        foreach ($zeroRows as $zeroBucket => $expected) {
+            $row = Usage::new(
+                100,
+                0.1,
+                inputTokens: $zeroBucket === 'inputTokens' ? 0 : 60,
+                cacheReadTokens: $zeroBucket === 'cacheReadTokens' ? 0 : 40,
+                cacheCreationTokens: $zeroBucket === 'cacheCreationTokens' ? 0 : 5,
+            );
+            $this->assertSame($expected, $row->promptTokens(), "a $zeroBucket reported as EXACTLY zero still totals — zero is a measurement");
+        }
     }
 
     /**
@@ -359,6 +394,34 @@ final class UsageTest extends TestCase
         $mixed = Usage::new(5, 0.0)->withInputTokens(7)->withOutputTokens(-1);
         $this->assertSame(7, $mixed->inputTokens, 'the untouched neighbour must survive the clamp of the touched one');
         $this->assertSame(0, $mixed->outputTokens);
+
+        // mutate()'s docblock promises its clamps run "exactly as new()
+        // clamps" — that promise is PER BRANCH, and before this extension
+        // only the outputTokens branch above was pinned. A leg per remaining
+        // wither: chain distinct positives onto $mixed, then drive ONE bucket
+        // negative through its own setter. Each clamp pin (assertSame(0, ...))
+        // kills the deletion of that branch's clampBucket() — an unclamped
+        // negative would ride through verbatim — and each neighbour pin keeps
+        // the sentinels honest while a different branch does the clamping.
+        $withReads = $mixed->withCacheReadTokens(9)->withCacheCreationTokens(6);
+
+        $negInput = $withReads->withInputTokens(-7);
+        $this->assertSame(0, $negInput->inputTokens, 'mutate() clamps a negative input to a reported zero');
+        $this->assertSame(0, $negInput->outputTokens);
+        $this->assertSame(9, $negInput->cacheReadTokens, 'positive neighbour survives the input clamp');
+        $this->assertSame(6, $negInput->cacheCreationTokens, 'positive neighbour survives the input clamp');
+
+        $negCacheRead = $withReads->withCacheReadTokens(-4);
+        $this->assertSame(0, $negCacheRead->cacheReadTokens, 'mutate() clamps a negative cacheRead to a reported zero');
+        $this->assertSame(7, $negCacheRead->inputTokens, 'positive neighbour survives the cacheRead clamp');
+        $this->assertSame(0, $negCacheRead->outputTokens);
+        $this->assertSame(6, $negCacheRead->cacheCreationTokens, 'positive neighbour survives the cacheRead clamp');
+
+        $negCacheCreation = $withReads->withCacheCreationTokens(-2);
+        $this->assertSame(0, $negCacheCreation->cacheCreationTokens, 'mutate() clamps a negative cacheCreation to a reported zero');
+        $this->assertSame(7, $negCacheCreation->inputTokens, 'positive neighbour survives the cacheCreation clamp');
+        $this->assertSame(0, $negCacheCreation->outputTokens);
+        $this->assertSame(9, $negCacheCreation->cacheReadTokens, 'positive neighbour survives the cacheCreation clamp');
     }
 
     /**
