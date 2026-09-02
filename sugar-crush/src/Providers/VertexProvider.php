@@ -13,6 +13,7 @@ use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Crush\Providers\Concerns\ToolSchema;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
+use SugarCraft\Crush\Usage;
 
 /**
  * Google Vertex AI provider.
@@ -855,16 +856,85 @@ final readonly class VertexProvider implements ProviderInterface
             }
         }
 
-        $inputTokens = (int) ($data['usage']['input_tokens'] ?? 0);
-        $outputTokens = (int) ($data['usage']['output_tokens'] ?? 0);
+        // P4.S2: one parsed Usage is the source of every usage number leaving
+        // this method; tokensUsed/costUsd keep their exact prior expressions
+        // for legitimate wire values (a negative count clamps to 0 per
+        // Usage's doctrine, as in SglangProvider::parseResponse()).
+        $usage = $this->parseAnthropicUsage(
+            is_array($data['usage'] ?? null) ? $data['usage'] : [],
+            $model,
+        );
 
         return new CompleteResponse(
             content: $text,
             reasoning: $reasoning !== '' ? $reasoning : null,
             toolCalls: $toolCalls === [] ? null : $toolCalls,
-            tokensUsed: $inputTokens + $outputTokens,
-            costUsd: $this->cost($model, $inputTokens, $outputTokens),
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
         );
+    }
+
+    /**
+     * Parses a native Anthropic Messages-API `usage` object into the
+     * provider-counted token BUCKETS (prompt_plan.md P4.S2). Used by the
+     * unary `:rawPredict` reply AND by both usage-bearing events of
+     * {@see parseAnthropicChunk()} — one document shape, one parse, so the
+     * streaming arm cannot drift from the non-streaming one.
+     *
+     * CACHE-FIELD FINDING — UNVERIFIED-DOCUMENTED, the honest label the
+     * fallback source requires: `cache_read_input_tokens` and
+     * `cache_creation_input_tokens` are Anthropic's published Messages-API
+     * field names (and the same pair Bedrock's vendored `TokenUsage` shape
+     * carries, modulo AWS's camelCase spelling — see
+     * {@see BedrockProvider::parseUsage()}). This repo vendors no Anthropic
+     * SDK, and Vertex's `rawPredict` passes the native document through
+     * verbatim, so these names could not be pinned against a local artifact
+     * or a live probe (no Vertex credentials exist for this plan); they are
+     * NOT invented, they are the documented ones, and the UNVERIFIED label
+     * travels with every fixture built on them.
+     *
+     * The two-bucket cache story is complete here, matching the §4.15 model:
+     * `input_tokens` already counts only what FOLLOWS the last breakpoint
+     * (Anthropic-shape semantics, same convention note as Bedrock's parse),
+     * so no subtraction — `total = cacheRead + cacheCreation + input` is a
+     * partition on this wire. No cache fields on an uncached response decode
+     * to UNREPORTED (null), never to a measured zero: Anthropic omits the
+     * cache members entirely when no cache breakpoint was used, which is
+     * exactly what "said nothing" means to Usage.
+     *
+     * The unary `tokensUsed` stays `input + output`, exactly as before:
+     * whether Anthropic's own view of a turn's billable total includes cache
+     * tokens is a pricing-visible question outside this step's Goal,
+     * REPORTED, not changed.
+     *
+     * @param array<string, mixed> $usage the native usage document; non-array
+     *                                    arrives as `[]` via the call sites
+     */
+    public function parseAnthropicUsage(array $usage, string $model): Usage
+    {
+        $inputTokens = self::usageInt($usage['input_tokens'] ?? null) ?? 0;
+        $outputTokens = self::usageInt($usage['output_tokens'] ?? null) ?? 0;
+
+        return Usage::new(
+            // The exact expression this replaces: the sum of the two sides
+            // each defaulted to 0 (see the tokensUsed paragraph above).
+            $inputTokens + $outputTokens,
+            $this->cost($model, $inputTokens, $outputTokens),
+            self::usageInt($usage['input_tokens'] ?? null),
+            self::usageInt($usage['output_tokens'] ?? null),
+            self::usageInt($usage['cache_read_input_tokens'] ?? null),
+            self::usageInt($usage['cache_creation_input_tokens'] ?? null),
+        );
+    }
+
+    /**
+     * One usage number as reported: absent OR JSON null stays `null`
+     * (unreported — never coerced to a measured zero); anything numeric
+     * counts as its int.
+     */
+    private static function usageInt(mixed $value): ?int
+    {
+        return $value === null ? null : (int) $value;
     }
 
     /**
@@ -1004,27 +1074,50 @@ final readonly class VertexProvider implements ProviderInterface
 
         // Usage arrives split across the stream: input tokens on
         // `message_start`, output tokens on the terminal `message_delta`.
+        // P4.S2 reads both events' usage documents through the SAME
+        // {@see parseAnthropicUsage()} the unary arm uses - `message_start`
+        // is where Anthropic-shape caches report `cache_read_input_tokens`
+        // and `cache_creation_input_tokens`, and a bucket wired only on the
+        // non-streaming arm would read zero on every live stream (the
+        // step-brief's named failure mode). The PER-DELTA shape these two
+        // returns emit is P1.S5's contract and is untouched: each event
+        // still bills exactly its own side, the 0-gates still hold, and the
+        // buckets ride the parse, not the wire - CompleteResponse has no
+        // field for them until the reported "widen CompleteResponse" seam
+        // lands. One consequence of keeping that gate, recorded honestly
+        // because it is subtle: a `message_start` whose EVERYTHING was a
+        // cache hit (input_tokens 0 with a positive cache_read) still drops
+        // here exactly as it dropped before this method read cache at all;
+        // changing the gate would change P1.S5-pinned emission semantics
+        // under this step's no-behaviour-change boundary and is part of the
+        // same reported follow-up.
         if ($type === 'message_start') {
-            $inputTokens = (int) ($event['message']['usage']['input_tokens'] ?? 0);
+            $usage = $this->parseAnthropicUsage(
+                is_array($event['message']['usage'] ?? null) ? $event['message']['usage'] : [],
+                $model,
+            );
 
-            return $inputTokens === 0
+            return $usage->inputTokens === null || $usage->inputTokens === 0
                 ? null
                 : new CompleteResponse(
                     content: '',
-                    tokensUsed: $inputTokens,
-                    costUsd: $this->cost($model, $inputTokens, 0),
+                    tokensUsed: $usage->inputTokens,
+                    costUsd: $usage->costUsd,
                 );
         }
 
         if ($type === 'message_delta') {
-            $outputTokens = (int) ($event['usage']['output_tokens'] ?? 0);
+            $usage = $this->parseAnthropicUsage(
+                is_array($event['usage'] ?? null) ? $event['usage'] : [],
+                $model,
+            );
 
-            return $outputTokens === 0
+            return $usage->outputTokens === null || $usage->outputTokens === 0
                 ? null
                 : new CompleteResponse(
                     content: '',
-                    tokensUsed: $outputTokens,
-                    costUsd: $this->cost($model, 0, $outputTokens),
+                    tokensUsed: $usage->outputTokens,
+                    costUsd: $usage->costUsd,
                 );
         }
 
@@ -1336,14 +1429,21 @@ final readonly class VertexProvider implements ProviderInterface
             );
         }
 
-        [$inputTokens, $outputTokens] = $this->geminiUsage($data);
+        // P4.S2: one parsed Usage is the source of every usage number
+        // leaving this method; tokensUsed/costUsd keep their exact prior
+        // expressions for legitimate wire values (a negative count clamps
+        // to 0 per Usage's doctrine, as in SglangProvider::parseResponse()).
+        $usage = $this->parseUsageMetadata(
+            is_array($data['usageMetadata'] ?? null) ? $data['usageMetadata'] : [],
+            $model,
+        );
 
         return new CompleteResponse(
             content: $this->geminiText($candidates[0] ?? null),
             reasoning: null,
             toolCalls: null,
-            tokensUsed: $inputTokens + $outputTokens,
-            costUsd: $this->cost($model, $inputTokens, $outputTokens),
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
         );
     }
 
@@ -1380,13 +1480,28 @@ final readonly class VertexProvider implements ProviderInterface
             );
         }
 
-        [$inputTokens, $outputTokens] = $this->geminiUsage($event);
+        // P4.S2: same parse as the unary Gemini arm (see
+        // {@see parseGeminiResponse()}'s comment) - cache buckets cannot be
+        // wired on one arm and missed on the other. The PARK-THEN-EMIT-ONCE
+        // semantics are P1.S5-pinned and untouched: cumulative
+        // `usageMetadata` still lands as ONE trailing response, and the
+        // gate parks on the same condition - a non-zero wire total. It is
+        // totalTokens and NOT inputTokens that must drive it: an all-cached
+        // prompt (promptTokenCount == cachedContentTokenCount, e.g. 10/10
+        // with candidates 0) parks a 10-token bill today, and gating on the
+        // DERIVED fresh-input bucket would silently drop exactly that turn's
+        // usage. (Negative wire values now park as zero instead of parking
+        // negatives - Usage's clamp doctrine, same as every other arm.)
+        $usage = $this->parseUsageMetadata(
+            is_array($event['usageMetadata'] ?? null) ? $event['usageMetadata'] : [],
+            $model,
+        );
 
-        if ($inputTokens !== 0 || $outputTokens !== 0) {
+        if ($usage->totalTokens !== 0) {
             $pendingUsage = new CompleteResponse(
                 content: '',
-                tokensUsed: $inputTokens + $outputTokens,
-                costUsd: $this->cost($model, $inputTokens, $outputTokens),
+                tokensUsed: $usage->totalTokens,
+                costUsd: $usage->costUsd,
             );
         }
 
@@ -1426,22 +1541,74 @@ final readonly class VertexProvider implements ProviderInterface
     }
 
     /**
-     * `usageMetadata.promptTokenCount` / `.candidatesTokenCount`, which are
-     * Gemini's spellings of the Anthropic arm's `input_tokens` /
-     * `output_tokens`. `totalTokenCount` is deliberately NOT read: it also
-     * counts thinking tokens the two fields above exclude, so summing the two
-     * and reading the third would disagree, and only the two-field form can be
-     * priced per direction.
+     * Parses one Gemini `usageMetadata` document into the provider-counted
+     * token BUCKETS (prompt_plan.md P4.S2).
      *
-     * @param array<string, mixed> $data
-     * @return array{0: int, 1: int}
+     * RELOCATION, not removal (§1.10's move exception, stated per that
+     * section's own rule): this is the private `geminiUsage()` the unary and
+     * streaming Gemini arms destructured, same fields, same per-direction
+     * pricing inputs, new home returning a Usage, all callers updated in the
+     * same commit. The warning its docblock carried stays load-bearing and
+     * travels verbatim: `usageMetadata.promptTokenCount` /
+     * `.candidatesTokenCount` are Gemini's spellings of the Anthropic arm's
+     * `input_tokens` / `output_tokens`. `totalTokenCount` is deliberately NOT
+     * read: it also counts thinking tokens the two fields above exclude, so
+     * summing the two and reading the third would disagree, and only the
+     * two-field form can be priced per direction. The existing
+     * `VertexProviderTest` pins that omission with a fixture whose
+     * `totalTokenCount` is 99.
+     *
+     * CACHE-FIELD FINDING, LOCALLY PROVEN (the strongest class the brief
+     * allows short of a live call): the vendored protobuf class
+     * `Google\Cloud\AIPlatform\V1\GenerateContentResponse\UsageMetadata`
+     * defines `cachedContentTokenCount`, and its own field comment -
+     * MEASURED at vendor/google/cloud-ai-platform/src/V1/
+     * GenerateContentResponse/UsageMetadata.php:234-245 - reads "Number of
+     * tokens in the cached part in the input (the cached content)". That
+     * makes it a SUBSET of `promptTokenCount`, not a third disjoint side, so
+     * this arm takes the subtraction path the OpenAI-family parses use
+     * (fresh input = prompt - cached, floored at 0) and NOT the direct map
+     * the Anthropic arm of this very class uses. Getting those two
+     * conventions backwards is the quiet way every cache readout lies, so
+     * each arm's parse names its convention where it is applied.
+     *
+     * NO cache-creation token field exists in this document - Gemini's
+     * explicit caching bills stored content by time, and the same proto
+     * class carries no such member (MEASURED from it: its fields are
+     * prompt/candidates/total/cached counts, per-modality detail lists,
+     * traffic type, and thoughts) - so `cacheCreationTokens` is null on
+     * every parse, the recorded "API reports none" outcome, never invented.
+     * `thoughtsTokenCount` is real on this wire but is NOT one of Usage's
+     * four buckets; folding it into `outputTokens` would corrupt the
+     * per-direction price `complete()` has always applied. Reported.
+     *
+     * @param array<string, mixed> $usageMetadata the decoded `usageMetadata`
+     *                                            document; non-array arrives
+     *                                            as `[]` via the call sites
      */
-    private function geminiUsage(array $data): array
+    public function parseUsageMetadata(array $usageMetadata, string $model): Usage
     {
-        return [
-            (int) ($data['usageMetadata']['promptTokenCount'] ?? 0),
-            (int) ($data['usageMetadata']['candidatesTokenCount'] ?? 0),
-        ];
+        $promptRaw = self::usageInt($usageMetadata['promptTokenCount'] ?? null);
+        $candidatesRaw = self::usageInt($usageMetadata['candidatesTokenCount'] ?? null);
+        $cached = self::usageInt($usageMetadata['cachedContentTokenCount'] ?? null);
+
+        // The exact pair geminiUsage()'s callers built: absent-or-null
+        // counts as 0 for the sum and the per-direction price.
+        $prompt = $promptRaw ?? 0;
+        $candidates = $candidatesRaw ?? 0;
+
+        return Usage::new(
+            $prompt + $candidates,
+            $this->cost($model, $prompt, $candidates),
+            // Unreported prompt stays unreported even when cached is known -
+            // the difference would be a guess, and Usage's contract is that
+            // a bucket holds only what the provider said or derived from
+            // what it said.
+            $promptRaw === null ? null : ($cached === null ? $promptRaw : max(0, $promptRaw - $cached)),
+            $candidatesRaw,
+            $cached,
+            null, // no cache-creation field on this protocol - never invented
+        );
     }
 
     // -------------------------------------------------------------------------

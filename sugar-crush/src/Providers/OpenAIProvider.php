@@ -14,6 +14,7 @@ use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Providers\Concerns\ToolSchema;
+use SugarCraft\Crush\Usage;
 
 final readonly class OpenAIProvider implements ProviderInterface
 {
@@ -226,13 +227,104 @@ final readonly class OpenAIProvider implements ProviderInterface
         // it would mean bypassing ClientContract entirely, out of scope here.
         [$reasoning, $content] = $this->extractReasoning($message);
 
+        // P4.S2: one parsed Usage is the source of every usage number leaving
+        // this method; tokensUsed/costUsd keep their exact prior expressions
+        // for legitimate wire values (a negative count clamps to 0 per Usage's
+        // doctrine, as in SglangProvider::parseResponse()).
+        // The is_array() guard widens tolerance by one step the old code had
+        // anyway - a non-array `usage` once crashed calculateCost()'s typed
+        // array parameter AFTER parseResponse had built everything else;
+        // it now decodes to an all-unreported Usage, the same doctrine
+        // Usage::fromArray() applies at the fork boundary ("a corrupt frame
+        // costs the turn its accounting, not the turn itself").
+        $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
+
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
             toolCalls: $toolCalls,
-            tokensUsed: $data['usage']['total_tokens'] ?? 0,
-            costUsd: $this->calculateCost($data['usage'] ?? []),
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
         );
+    }
+
+    /**
+     * Parses OpenAI's `usage` object into the provider-counted token BUCKETS
+     * (prompt_plan.md P4.S2).
+     *
+     * CACHE-FIELD FINDING, measured from the SDK THIS REPO VENDORS:
+     * `OpenAI\Responses\Chat\CreateResponseUsage` documents
+     * `prompt_tokens_details?:array{cached_tokens:int}` and materialises it as
+     * `CreateResponseUsagePromptTokensDetails::$cachedTokens` - so the cache
+     * READ bucket exists on the real API and is read here when present. The
+     * SDK's `toArray()` emits `prompt_tokens_details` ONLY when the server
+     * sent details at all, and its member constructor coerces
+     * details-present-but-`cached_tokens`-absent to 0 - a measured zero, not
+     * a claim, because a response carrying prompt-token-details without that
+     * member IS OpenAI reporting no cache reads.
+     *
+     * The protocol has NO cache-creation field (OpenAI's prompt caching is
+     * implicit and bills no separately-counted write), so
+     * `cacheCreationTokens` is null on every parse - recorded as the
+     * legitimate "API reports none" outcome the step text demands, never
+     * invented.
+     *
+     * `prompt_tokens` COUNTS the cached prefix (OpenAI's published API docs
+     * describe `cached_tokens` as the cached PART of `prompt_tokens`; the
+     * vendored DTO pins only the key's shape), and Usage's `inputTokens`
+     * means "what follows the last cache breakpoint", so when both are
+     * reported the fresh-input bucket is the difference, floored at 0.
+     *
+     * `completion_tokens` is NULLABLE in the vendored DTO's own return shape
+     * (`completion_tokens: int|null`), and an explicit null is UNREPORTED,
+     * not a measured zero - the distinction {@see Usage} exists to keep.
+     *
+     * Cost: `costUsd` on the returned Usage is exactly
+     * {@see calculateCost()}'s figure — the pricing table is deliberately NOT
+     * cache-aware yet (a cache read bills ~0.1x and a 5m write 1.25x the base
+     * input price per the §4.16 economics; repricing on the new buckets would
+     * silently change every paid turn's figure and is outside this step's
+     * Goal) — reported as the follow-up it is.
+     *
+     * Stream arm: `completeStream()` never receives a usage object as coded —
+     * no `stream_options.include_usage` is ever sent, and this provider's
+     * `parseChunk()` yields hardcoded zeros. The vendored
+     * `CreateStreamedResponse` CAN carry `?CreateResponseUsage` on a final
+     * chunk when the flag IS set, so the carrier exists; the request and the
+     * read do not. Wiring it is reported, out of this seam.
+     *
+     * @param array<string, mixed> $usage the decoded usage object, straight
+     *                                    from `CreateResponse::toArray()`
+     */
+    public function parseUsage(array $usage): Usage
+    {
+        $prompt = self::usageInt($usage['prompt_tokens'] ?? null);
+        $cached = null;
+        $details = $usage['prompt_tokens_details'] ?? null;
+
+        if (is_array($details)) {
+            $cached = self::usageInt($details['cached_tokens'] ?? null);
+        }
+
+        return Usage::new(
+            // The exact expression this replaces: absent-or-null total is 0.
+            self::usageInt($usage['total_tokens'] ?? null) ?? 0,
+            $this->calculateCost($usage),
+            $prompt !== null && $cached !== null ? max(0, $prompt - $cached) : $prompt,
+            self::usageInt($usage['completion_tokens'] ?? null),
+            $cached,
+            null, // OpenAI has no cache-creation field - never invented
+        );
+    }
+
+    /**
+     * One usage number as reported: absent OR JSON null stays `null`
+     * (unreported — the DTO emits explicit nulls, and one must not coerce to
+     * a measured zero); anything numeric counts as its int.
+     */
+    private static function usageInt(mixed $value): ?int
+    {
+        return $value === null ? null : (int) $value;
     }
 
     /**

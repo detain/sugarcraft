@@ -12,6 +12,7 @@ use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\SystemMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\Concerns\HttpClientDefaults;
+use SugarCraft\Crush\Usage;
 
 /**
  * Amazon Bedrock provider, speaking the Converse API.
@@ -381,16 +382,91 @@ final readonly class BedrockProvider implements ProviderInterface
             }
         }
 
-        $inputTokens = (int) ($data['usage']['inputTokens'] ?? 0);
-        $outputTokens = (int) ($data['usage']['outputTokens'] ?? 0);
+        // P4.S2: one parsed Usage is the source of every usage number leaving
+        // this method; tokensUsed/costUsd keep their exact prior expressions
+        // for legitimate wire values (a negative count clamps to 0 per Usage's
+        // doctrine, as in SglangProvider::parseResponse()).
+        $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : [], $model);
 
         return new CompleteResponse(
             content: $text,
             reasoning: $reasoning !== '' ? $reasoning : null,
             toolCalls: null,
-            tokensUsed: $inputTokens + $outputTokens,
-            costUsd: $this->cost($model, $inputTokens, $outputTokens),
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
         );
+    }
+
+    /**
+     * Parses a Converse `TokenUsage` object into the provider-counted token
+     * BUCKETS (prompt_plan.md P4.S2).
+     *
+     * CACHE-FIELD FINDING, from the API definition THIS REPO VENDORS: the
+     * `bedrock-runtime` 2023-09-30 model defines shape `TokenUsage` with
+     * members `inputTokens`, `outputTokens`, `totalTokens`,
+     * `cacheReadInputTokens`, `cacheWriteInputTokens`, `cacheDetails`
+     * (MEASURED: php-require of
+     * vendor/aws/aws-sdk-php/src/data/bedrock-runtime/2023-09-30/api-2.json.php,
+     * and `ConverseStreamMetadataEvent.usage` binds the SAME shape — so the
+     * unary reply and the terminal stream metadata carry one usage document,
+     * parsed here once). This is the provider with the fullest cache story:
+     * BOTH sides of the cache are real wire fields, mapping to
+     * `cacheReadTokens` and `cacheCreationTokens` (a cache WRITE is what
+     * Anthropic-shape calls cache CREATION; the naming difference is the
+     * only difference).
+     *
+     * `inputTokens` maps straight to Usage's `inputTokens` WITHOUT the
+     * cache-read subtraction the OpenAI-family parse applies: Bedrock follows
+     * the Anthropic-side convention where `inputTokens` already counts only
+     * tokens after the last cache breakpoint, so `total = cacheRead +
+     * cacheCreation + input` partitions rather than overlaps. The field NAMES
+     * and membership are vendored-verified above; that NON-overlap SEMANTICS
+     * is Anthropic/Bedrock published-API documentation, not restated in the
+     * shape file — labelled UNVERIFIED-locally here so a future reader
+     * re-checks it against a live cached response before trusting
+     * `Usage::promptTokens()` on this provider.
+     *
+     * `totalTokens` exists on the wire but the figure `complete()` has always
+     * reported is `inputTokens + outputTokens`, and that expression is kept
+     * byte-identical: whether Bedrock's own total counts cache is exactly the
+     * unverified semantics above, and silently switching what every turn
+     * reports as its billable total is a pricing-visible change outside this
+     * step's Goal — REPORTED, not done.
+     *
+     * `cacheDetails` (the 5-minute/1-hour write split) has no Usage bucket to
+     * land in — Usage carries two cache sides, not TTL-shaped ones.
+     *
+     * @param array<string, mixed> $usage the `usage`/`metadata.usage` document
+     *                                    from the decoded response; non-array
+     *                                    arrives as `[]` via the call sites,
+     *                                    keeping the `?? 0` tolerance the
+     *                                    inline parse replaced
+     */
+    public function parseUsage(array $usage, string $model): Usage
+    {
+        $inputTokens = self::usageInt($usage['inputTokens'] ?? null) ?? 0;
+        $outputTokens = self::usageInt($usage['outputTokens'] ?? null) ?? 0;
+
+        return Usage::new(
+            // The exact expression this replaces: the sum of the two sides
+            // each defaulted to 0 — see the totalTokens paragraph above.
+            $inputTokens + $outputTokens,
+            $this->cost($model, $inputTokens, $outputTokens),
+            self::usageInt($usage['inputTokens'] ?? null),
+            self::usageInt($usage['outputTokens'] ?? null),
+            self::usageInt($usage['cacheReadInputTokens'] ?? null),
+            self::usageInt($usage['cacheWriteInputTokens'] ?? null),
+        );
+    }
+
+    /**
+     * One usage number as reported: absent OR JSON null stays `null`
+     * (unreported — never coerced to a measured zero); anything numeric
+     * counts as its int.
+     */
+    private static function usageInt(mixed $value): ?int
+    {
+        return $value === null ? null : (int) $value;
     }
 
     /**
@@ -410,16 +486,24 @@ final readonly class BedrockProvider implements ProviderInterface
         $thought = $delta['reasoningContent']['text'] ?? null;
 
         // Usage lands once, on the terminal metadata event; every earlier
-        // event genuinely has none to report.
-        $inputTokens = (int) ($data['metadata']['usage']['inputTokens'] ?? 0);
-        $outputTokens = (int) ($data['metadata']['usage']['outputTokens'] ?? 0);
+        // event genuinely has none to report. P4.S2: the SAME
+        // {@see parseUsage()} reads it here as on the unary path - the
+        // vendored API definition binds `ConverseStreamMetadataEvent.usage`
+        // to the identical `TokenUsage` shape, so the cache buckets cannot be
+        // wired on one arm and missed on the other. An event with no usage
+        // parses to an all-unreported Usage whose total is 0 - exactly the
+        // zeros this method hardcoded before.
+        $usage = $this->parseUsage(
+            is_array($data['metadata']['usage'] ?? null) ? $data['metadata']['usage'] : [],
+            $model,
+        );
 
         return new CompleteResponse(
             content: $text,
             reasoning: is_string($thought) && $thought !== '' ? $thought : null,
             toolCalls: null,
-            tokensUsed: $inputTokens + $outputTokens,
-            costUsd: $this->cost($model, $inputTokens, $outputTokens),
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
         );
     }
 

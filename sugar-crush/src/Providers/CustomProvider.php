@@ -16,6 +16,7 @@ use SugarCraft\Crush\Providers\Concerns\ReasoningExtractor;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Providers\Concerns\ToolSchema;
+use SugarCraft\Crush\Usage;
 
 final readonly class CustomProvider implements ProviderInterface
 {
@@ -370,13 +371,87 @@ final readonly class CustomProvider implements ProviderInterface
 
         [$reasoning, $content] = $this->extractReasoning($message);
 
+        // P4.S2: one parsed Usage is the source of every usage number leaving
+        // this method; tokensUsed/costUsd keep their exact prior expressions
+        // for legitimate wire values (a negative count clamps to 0 per Usage's
+        // doctrine, as in SglangProvider::parseResponse()).
+        $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
+
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
             toolCalls: $toolCalls,
-            tokensUsed: $data['usage']['total_tokens'] ?? 0,
-            costUsd: 0.0,
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
         );
+    }
+
+    /**
+     * Parses the OpenAI-compatible `usage` object into the provider-counted
+     * token BUCKETS (prompt_plan.md P4.S2). This provider speaks the same
+     * family as {@see SglangProvider::parseUsage()}, whose docblock carries
+     * the live-deployment evidence (2026-09-02 skynet2 probes) and the three
+     * decisions it pins, all of which apply here with the same force:
+     *
+     * - `prompt_tokens_details.cached_tokens` is read ONLY when the upstream
+     *   server populates it (the key's shape is this repo's own vendored
+     *   OpenAI DTO; the probed deployment sends the key with a null value and
+     *   reports no cache fields at all). Absent-or-null decodes to UNREPORTED,
+     *   never to a fabricated zero.
+     * - `inputTokens` is `prompt_tokens - cached_tokens` when both are
+     *   reported — this family's `prompt_tokens` COUNTS the cached prefix,
+     *   and Usage's `inputTokens` means "what follows the last cache
+     *   breakpoint".
+     * - the protocol has no cache-creation field; `cacheCreationTokens` is
+     *   null on every parse and nothing is invented for it.
+     *
+     * What differs by deployment is the point: CustomProvider fronts any
+     * self-hosted OpenAI-compatible server (vLLM and SGLang both populate
+     * `prompt_tokens_details.cached_tokens` when their prefix caching is
+     * launched with reporting on), so parse-if-reported is the honest
+     * behavior, and the as-received no-cache shape is pinned by test.
+     *
+     * Stream arms: like Sglang, this provider never REQUESTS streamed usage
+     * (no `stream_options` on the wire, and the `choices[0].delta` gate in
+     * {@see completeStream()} drops the zero-choice terminal chunk such a
+     * request would produce), so NO usage object reaches any parse on the
+     * stream path today — recorded, not papered over; wiring it is a reported
+     * follow-up outside this seam.
+     *
+     * @param array<string, mixed> $usage the decoded `usage` object; non-array
+     *                                    arrives as `[]` via the call site,
+     *                                    keeping the tolerance of the inline
+     *                                    `?? 0` this replaces.
+     */
+    public function parseUsage(array $usage): Usage
+    {
+        $prompt = self::usageInt($usage['prompt_tokens'] ?? null);
+        $cached = null;
+        $details = $usage['prompt_tokens_details'] ?? null;
+
+        if (is_array($details)) {
+            $cached = self::usageInt($details['cached_tokens'] ?? null);
+        }
+
+        return Usage::new(
+            // The exact expression this replaces: absent-or-null total is 0.
+            self::usageInt($usage['total_tokens'] ?? null) ?? 0,
+            0.0, // self-hosted, no cost - costPer1kTokens() is a real 0.0 here
+            $prompt !== null && $cached !== null ? max(0, $prompt - $cached) : $prompt,
+            self::usageInt($usage['completion_tokens'] ?? null),
+            $cached,
+            null, // no cache-creation field exists on this protocol - never invented
+        );
+    }
+
+    /**
+     * One usage number as reported: absent OR JSON null stays `null`
+     * (unreported — an explicit null must not coerce to a measured zero);
+     * anything numeric counts as its int.
+     */
+    private static function usageInt(mixed $value): ?int
+    {
+        return $value === null ? null : (int) $value;
     }
 
     /**

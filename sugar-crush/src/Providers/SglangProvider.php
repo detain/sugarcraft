@@ -19,6 +19,7 @@ use SugarCraft\Crush\Providers\ToolCallParser\ToolCallParserInterface;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolCall;
 use SugarCraft\Crush\Providers\Concerns\ToolSchema;
+use SugarCraft\Crush\Usage;
 
 final readonly class SglangProvider implements ProviderInterface
 {
@@ -1033,13 +1034,111 @@ final readonly class SglangProvider implements ProviderInterface
 
         [$reasoning, $content] = $this->extractReasoning($message);
 
+        // P4.S2: every usage number on the way out comes from ONE parsed Usage,
+        // so this site and any future carrier cannot disagree about what the
+        // server said. tokensUsed/costUsd keep their exact prior expressions
+        // for every wire value a provider legitimately sends; a NEGATIVE wire
+        // count now clamps to 0 (Usage's stated doctrine for provider bugs)
+        // where it used to pass through — no test pinned the pass-through, and
+        // UsageWiringTest pins the clamp.
+        $usage = $this->parseUsage(is_array($data['usage'] ?? null) ? $data['usage'] : []);
+
         return new CompleteResponse(
             content: $content,
             reasoning: $reasoning,
             toolCalls: $toolCalls,
-            tokensUsed: $data['usage']['total_tokens'] ?? 0,
-            costUsd: 0.0,
+            tokensUsed: $usage->totalTokens,
+            costUsd: $usage->costUsd,
         );
+    }
+
+    /**
+     * Parses this endpoint's `usage` object into the provider-counted token
+     * BUCKETS (prompt_plan.md P4.S2). The single place this provider reads
+     * usage fields, so {@see parseResponse()} and any later carrier agree by
+     * construction about what the server actually said.
+     *
+     * THE SHAPE, MEASURED ON THE LIVE DEPLOYMENT (skynet2 sglang, 2026-09-02):
+     * `{"prompt_tokens":N,"total_tokens":N,"completion_tokens":N,`
+     * `"prompt_tokens_details":null,"reasoning_tokens":N}` — the
+     * `prompt_tokens_details` KEY is on the wire, its VALUE has been null on
+     * every response, including a re-sent 1,258-token prefix the server's
+     * radix cache cannot miss: this deployment is not launched with cache
+     * reporting, so it reports NO cache fields. This parse therefore invents
+     * nothing: `cached_tokens` is read only if a server populates it, and the
+     * member's shape is this repo's own vendored OpenAI-compatible DTO
+     * (`OpenAI\Responses\Chat\CreateResponseUsagePromptTokensDetails`).
+     * Absent-or-null details decodes to UNREPORTED (`null`), never to a
+     * fabricated zero — the distinction {@see Usage}'s "Zero is not the same
+     * as unknown" exists to keep.
+     *
+     * `prompt_tokens` on this family COUNTS the cached prefix — OpenAI's
+     * published API docs describe `cached_tokens` as the cached PART of
+     * `prompt_tokens`; the vendored DTO pins the key's shape but says nothing
+     * about subset semantics, so this subtraction is DOCUMENTED, not
+     * locally-proven (the Gemini arm's identical subset rule at
+     * {@see VertexProvider::parseUsageMetadata()} IS locally-proven from the
+     * vendored proto) — and
+     * `inputTokens` in Usage means "what FOLLOWS the last cache breakpoint",
+     * so when both are reported the fresh-input bucket is the difference,
+     * floored at 0. That keeps `prompt + completion = total` consistent with
+     * Usage's prompt-side identity on the fields this wire does report; the
+     * identity accessor itself stays refused while `cacheCreationTokens` is
+     * unreported, exactly as Usage intends.
+     *
+     * There is NO cache-creation field anywhere in this protocol, so
+     * `cacheCreationTokens` is null on every parse — an API that reports no
+     * cache fields is the legitimate outcome the step text records, not a gap
+     * to paper over. `reasoning_tokens` is flat here (NOT under
+     * `completion_tokens_details`) and is not one of Usage's four buckets;
+     * carrying it is a separate seam, reported, deliberately not done here.
+     *
+     * NOTE FOR THE STREAM ARMS: this provider NEVER receives a usage object on
+     * `completeStream()` — it sends no `stream_options.include_usage` (MEASURED:
+     * zero `stream_options` in src/ as of P4.S2), and the terminal usage chunk
+     * that flag produces carries `choices: []`, which the `delta` gate in
+     * {@see completeStream()} drops before any parse runs (the same gate
+     * qwen.md §P1 found). Live probe (2026-09-02) confirms: without the option
+     * the SSE stream contains no `usage` key at all; with it, exactly one
+     * zero-choice chunk. Wiring streamed usage is out of this parse seam and
+     * is REPORTED as its own follow-up.
+     *
+     * @param array<string, mixed> $usage the decoded `usage` object. A non-array
+     *                                    is handed over as `[]` by the call
+     *                                    site, keeping the `?? 0` tolerance the
+     *                                    inline parse this method replaces had.
+     */
+    public function parseUsage(array $usage): Usage
+    {
+        $prompt = self::usageInt($usage['prompt_tokens'] ?? null);
+        $cached = null;
+        $details = $usage['prompt_tokens_details'] ?? null;
+
+        if (is_array($details)) {
+            $cached = self::usageInt($details['cached_tokens'] ?? null);
+        }
+
+        return Usage::new(
+            // The exact expression this replaces: absent-or-null total is 0.
+            self::usageInt($usage['total_tokens'] ?? null) ?? 0,
+            0.0, // self-hosted, no cost - complete() always reported literal 0.0
+            $prompt !== null && $cached !== null ? max(0, $prompt - $cached) : $prompt,
+            self::usageInt($usage['completion_tokens'] ?? null),
+            $cached,
+            null, // no cache-creation field exists on this protocol - never invented
+        );
+    }
+
+    /**
+     * One usage number as the provider reported it: absent OR JSON null stays
+     * `null` (unreported - the OpenAI-compatible DTOs this family copies do
+     * emit explicit nulls, e.g. `completion_tokens`, and coercing one to a
+     * measured zero is the exact lie Usage forbids); anything numeric counts
+     * as its int.
+     */
+    private static function usageInt(mixed $value): ?int
+    {
+        return $value === null ? null : (int) $value;
     }
 
     /**
