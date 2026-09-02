@@ -6802,7 +6802,7 @@ final class RuntimeTest extends TestCase
             NowdocWriter
             EOT);
 
-            final class Extends
+            final class ExtendsProbe
             {
                 public function run(string $p): void
                 {
@@ -6882,13 +6882,27 @@ final class RuntimeTest extends TestCase
             . '(review cycle 3 F-4: the enumeration row that waved ALL trait `self` away as '
             . 'binding "in another file" was false of this shape, and the pre-pass now pairs '
             . 'same-file trait users; the cross-file user is what the corrected row actually '
-            . 'declares). Lines 135 (`ArrayObject` - nobody rostered), 137 (`new self` inside '
-            . 'a class that extends nothing), the `new self` inside the ANON that extends nothing '
-            . '(118/121 - the anon fixpoint leaves the scope name null, so the arm has no target) '
-            . 'and the declared-but-never-constructed class at '
-            . '21-23 must NOT appear: both polarities or this arm reports everything.',
+             . 'declares). Lines 135 (`ArrayObject` - nobody rostered), 137 (`new self` inside '
+             . 'a class that extends nothing), the `new self` inside the ANON that extends nothing '
+             . '(118/121 - the anon fixpoint leaves the scope name null, so the arm has no target) '
+             . 'and the declared-but-never-constructed class at '
+             . '21-23 must NOT appear: both polarities or this arm reports everything.',
         );
+
+        // THE FIXTURE LINTS, mechanically. This file's own doctrine - repeated at
+        // :3921, :4931, :4967, :5156 - is that every row is "php -l clean and RUN
+        // for real", yet review cycle 4, F-4R-2 measured THIS oracle (the file that
+        // asserts it loudest) was the one invalid fixture: `final class Extends`
+        // used a reserved keyword and `php -l` rejected it ("unexpected token
+        // extends"), so a future verifier re-deriving the runtime claim by executing
+        // it hit a fatal at compile and could misread that as the shapes being inert.
+        // The hold below binds the fixture to the doctrine it preaches.
+        $lintOutput = [];
+        $lintCode = 0;
+        exec('php -l ' . escapeshellarg($file) . ' 2>&1', $lintOutput, $lintCode);
+        $this->assertSame(0, $lintCode, 'the extends-channel fixture must be valid PHP (F-4R-2): ' . implode("\n", $lintOutput));
     }
+
 
     /**
      * THE UNREADABLE-HEADER ARM, REACHED DIRECTLY, because no valid PHP file
