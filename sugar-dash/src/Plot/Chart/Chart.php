@@ -776,6 +776,14 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
      * All cells are created with null style — the diff algorithm will
      * still work correctly for detecting changed character positions.
      *
+     * Columns address cells, not bytes: every line is split into codepoints
+     * (house idiom, see DrawingOps::drawText) so rows containing multi-byte
+     * UTF-8 runes — CJK labels, or the '─'/'█' chart glyphs — map each cell
+     * to the exact glyph the first render painted. A byte-indexed guard
+     * (isset($line[$col]) + mb_substr) mis-maps such rows: past the last
+     * codepoint, still-unset bytes make isset() true while mb_substr returns
+     * '', so padding columns became empty-rune cells instead of blanks.
+     *
      * @param string $output Multi-line string from render()
      * @param int    $width  Buffer width in cells
      * @param int    $height Buffer height in rows
@@ -786,10 +794,9 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         $lines = \explode("\n", $output);
 
         for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
+            $runes = \mb_str_split($lines[$row] ?? '');
             for ($col = 0; $col < $width; $col++) {
-                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
-                $cell = Cell::new($char, null, null, 1);
+                $cell = Cell::new($runes[$col] ?? ' ', null, null, 1);
                 $buffer = $buffer->withCellAt($col, $row, $cell);
             }
         }
