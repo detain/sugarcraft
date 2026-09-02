@@ -526,7 +526,7 @@ final class StatusLineSegmentTest extends TestCase
     // =====================================================================
 
     /**
-     * A fixed epoch anchor for the fixtures below (2025-10-09T09:33:20Z, a
+     * A fixed epoch anchor for the fixtures below (2025-10-09T08:53:20Z, a
      * date comfortably in the past). Every age assertion passes an explicit
      * clock to {@see Renderer::cacheIndicator()} through the reflection seam
      * so the byte-exact strings cannot drift with the wall; the anchor keeps
@@ -693,7 +693,7 @@ final class StatusLineSegmentTest extends TestCase
         );
 
         // Hour rung: 3630 s → intdiv 3630/3600 = 1. Flooring, not rounding:
-        // an age rounded UP would announce an expiry a full 57 minutes early.
+        // an age rounded UP would announce an expiry a full 59.5 minutes early.
         self::assertSame(
             '98% cache · 1h',
             $this->cacheSegment($this->cacheChat(replyAt: self::ANCHOR - 3600 - 30), 60, (float) self::ANCHOR),
@@ -785,7 +785,7 @@ final class StatusLineSegmentTest extends TestCase
 
         // Age 100 s from the reporting call — NOT 1 s from the newest message.
         // An implementation that took the timestamp from the wrong end of the
-        // walk lands on '0s' and fails this exact string.
+        // walk lands on '1s' and fails this exact string.
         self::assertSame('50% cache · 1m', $this->cacheSegment($chat, 60, (float) self::ANCHOR));
     }
 
@@ -873,7 +873,7 @@ final class StatusLineSegmentTest extends TestCase
      * null Cmd`) is pinned per tick as well.
      *
      * THE PLANT ACCOUNT, stated plainly rather than left to the evidence
-     * packet: this test's mutation plant (the lead's E2) was made in the TICK
+     * packet: this test's mutation plant (the lead's E2b) was made in the TICK
      * ARM — that arm is the only seam on the status path that can add a
      * message — while the render-path half of the claim (a string reaching
      * the transcript) is planted and caught by the frame test

@@ -1725,10 +1725,12 @@ final class Renderer
      * `PHP_INT_MAX` DOES break it — {@see Usage::promptTokens()} then returns
      * a float against its `?int` and the `TypeError` thrown out of
      * `renderStatusBar()` costs the whole frame (MEASURED at review-1:
-     * 4.6e18 × 3 fatals, 1e18 × 3 does not) — but per-call buckets sit
-     * orders below that and no `plus()` sits on this render path, so the
-     * honest guard belongs inside {@see Usage::promptTokens()} itself;
-     * recorded here, escalated by the lead, deliberately not clamped here.
+     * 4.6e18 × 3 fatals, 1e18 × 3 does not) — but per-call buckets — and
+     * even the turn-merged ones this path actually reads (`Usage::sum()` at
+     * `EngineBackend::complete()`, `Runtime`'s stream) — sit orders below
+     * that, so the honest guard belongs inside
+     * {@see Usage::promptTokens()} itself; recorded here, escalated by the
+     * lead, deliberately not clamped here.
      *
      * WHY THE NEWEST USABLE REPORT rather than a session aggregate: the two
      * numbers must describe the SAME call (one domain, not a session average
