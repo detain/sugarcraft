@@ -58,5 +58,4 @@ Every backlog item is: committed (B-step with CLEAN-closed review), explicitly P
 
 ## Resume state
 
-- 2026-09-02T03:45Z: v3 ISSUED by the completing v2 orchestrator. Backlog made canonical: BL-6/BL-7 (S1-reviewer findings, previously only in memory) + BL-10 (record-hygiene lesson) APPENDED to chart_plan.md this pass. No B-work started.
-- Next actions: Phase 0 intake (premise re-derivation → chart_backlog_plan.md B1..Bn + B-board → RULINGS BUNDLE to human — await answers before any build spawn) → R13 pre-flight → spawn Lane A first B-step + Lane B first Donut step (BL-5 likely) → per-step protocol → close reports.
+- 2026-09-02T10:45Z: BACKLOG ROUND COMPLETE — B1..B13 all committed (chain ea5b7d595, 980001aa4, 9065a2784, 5a5d9fe98, b1705726f, f5e3fb9ae, 4c8c16cc2, c8331364f, 81551a975, cba81fd68, 733b12a92, df9dfa08e, 4b27b4ff9, 5e0c36c66); floors charts 568/1400/0Sk rc0 (hard-W) | dash 5e0c36c66: 5912/9565/3Sk/0W rc0; both libs failOnWarning-gated; parked→v4 items in chart_backlog_plan.md ## Parked; NEVER push (20+ unpushed)
