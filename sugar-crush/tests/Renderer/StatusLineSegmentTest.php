@@ -900,17 +900,24 @@ final class StatusLineSegmentTest extends TestCase
     /**
      * DONE-WHEN HALF B, its own test: twelve ticks and their renders add
      * EXACTLY ZERO messages to the session transcript. The instruments are
-     * layered, not interchangeable: the per-tick pins on the arm's contract
-     * — null `Cmd`, same Chat instance — are the FIRST reds, and the lead's
-     * E2b artifact shows exactly that (the plant fell to "tick #0 returned
-     * a different Chat instance", never to the closing signature line).
-     * That line can only trail: while the arm returns the same Chat and
-     * `Chat::$history` is readonly, its equality is forced. It is the
-     * second instrument — the one that would additionally notice a
-     * model-level replace or reorder should the arm ever return a
-     * rewritten Chat — and the AssistantMsg control below is what fires
-     * the signature machinery itself, the known-positive half
-     * (§16.8 rule 16 / RR4-F2).
+     * layered, not interchangeable.
+     *
+     * WHAT THIS SAID (through fix-5): the per-tick pins on the arm's
+     * contract — null `Cmd`, same Chat instance — were the FIRST reds, and
+     * the lead's E2b artifact showed exactly that (the plant fell to
+     * "tick #0 returned a different Chat instance", never to the closing
+     * signature line); the signature comparison "can only trail". WHAT IS
+     * TRUE NOW (fix-8 A): a per-tick signature comparison runs INSIDE the
+     * loop, ahead of both arm-contract pins, so the named zero-transcript
+     * claim takes its own first red — MEASURED at fix-8, the same E2b-shape
+     * plant now falls to "tick #0 moved the transcript", and deleting the
+     * new comparison restores the old fall-to-identity behaviour. WHY THE
+     * LAYERING STILL EARNS ITS PLACE: the closing comparison remains the
+     * whole-loop belt, the per-tick pins remain the arm-contract claims a
+     * same-transcript instance swap (the plant the identity pin alone
+     * catches) still reddens, and the AssistantMsg control below is still
+     * what fires the signature machinery's positive half (§16.8 rule 16 /
+     * RR4-F2).
      *
      * THE LOOP IS THE REAL IDLE LOOP, not a synthetic stand-in for one:
      * `Chat::subscriptions()` arms the status tick only while a `statusLine`
@@ -930,12 +937,18 @@ final class StatusLineSegmentTest extends TestCase
      * THE PLANT ACCOUNT, stated plainly rather than left to the evidence
      * packet: this test's mutation plant (the lead's E2b) was made in the TICK
      * ARM — that arm is the only seam on the status path that can add a
-     * message — while the render-path half of the claim (a string reaching
-     * the transcript) is planted and caught by the frame test
+     * message. WHAT THIS SAID (through fix-5): the render-path half of the
+     * claim (a string reaching the transcript) was planted and caught ONLY by
+     * the sibling frame test
      * {@see testTheReadoutAppearsExactlyOnceInTheFrameAndOnlyOnTheBarLine}.
-     * Absence cannot be proved in the render path itself, because painting
-     * has no message to grow; naming that division is the honest version of
-     * "no silent substitution".
+     * WHAT IS TRUE NOW (fix-8 B): the M9-shape plant reddens BOTH — this test
+     * carries its own painted-transcript scan, with the bar line of the same
+     * frame as its known-positive half through the same scanner (rule 16: a
+     * sibling test is a separately deletable unit, and the hard constraint
+     * should not rest solely on one). WHY THE DIVISION STILL EARNS ITS PLACE:
+     * MESSAGE-absence still cannot be proved through painting — a paint has no
+     * message to grow — so the tick-arm plant remains the model-side evidence
+     * and the frame test remains the independent frame-side belt.
      *
      * The control is the half that makes this a test rather than a tautology
      * (§16.8 rule 16, RR4-F2): the SAME signature machinery must notice a
@@ -969,6 +982,22 @@ final class StatusLineSegmentTest extends TestCase
             Renderer::render($next);
             $tickTarget = $next;
             [$next, $cmd] = $next->update(new StatusLineTickMsg());
+            // Fix-8 A (review-7 M3): the NAMED claim gets its own first red.
+            // Before this, a transcript-growing plant fell to the identity pin
+            // — "tick #0 returned a different Chat instance" — because the
+            // closing signature line sat behind the loop and PHPUnit aborts at
+            // the first failure; the zero-transcript assertion itself never
+            // reddened. Checking the signature per tick, BEFORE the
+            // arm-contract pins, makes the plant fall to the claim it violates.
+            // MEASURED: with this line the plant's first red is
+            // 'tick #0 moved the transcript'; with it deleted, the plant falls
+            // back to the identity pin. The closing comparison below stays as
+            // the whole-loop belt — never weaken, layer.
+            self::assertSame(
+                $before,
+                $this->transcriptSignature($next),
+                'tick #' . $i . ' moved the transcript — the zero-transcript claim itself, ahead of the arm-contract pins',
+            );
             self::assertNull(
                 $cmd,
                 'tick #' . $i . ' returned a Cmd — the status path\'s normal route into the transcript',
@@ -981,6 +1010,29 @@ final class StatusLineSegmentTest extends TestCase
         }
 
         self::assertSame($before, $this->transcriptSignature($next), 'twelve ticks and their renders moved the transcript');
+
+        // Fix-8 B (review-7 M9): the STRING half of the hard constraint, guarded
+        // by THIS test's own scanner. At fix-5 the plant that echoed the needle
+        // into painted transcript content reddened EXACTLY the sibling frame
+        // test — and §16.8 rule 16 calls a sibling test a separately deletable
+        // unit, so the named hard-constraint test has to see the tax itself.
+        // The bar line of the SAME frame is the known-positive half through the
+        // SAME scanner: without it, the transcript-side zero could be the
+        // identical silence of a dead scan. MEASURED: the M9-shape plant now
+        // reddens this test AND the frame test (2 reds); with these two lines
+        // deleted it falls back to the frame test alone (1 red).
+        $frameLines = explode("\n", rtrim(Renderer::render($next), "\n"));
+        $barLine = (string) array_pop($frameLines);
+        self::assertStringContainsString(
+            '98% cache',
+            $barLine,
+            'the needle is live on the bar line of this very frame — without it the transcript-side zero below could be the silence of a dead scanner (§16.8 rule 16)',
+        );
+        self::assertStringNotContainsString(
+            '98% cache',
+            implode("\n", $frameLines),
+            'the readout reached painted transcript content — the /context per-call tax, now caught in the zero-transcript test itself, not only in the sibling frame test',
+        );
 
         [$grown] = $next->update(new AssistantMsg(Message::assistant('a settled reply')));
         $grownSignature = $this->transcriptSignature($grown);
