@@ -545,4 +545,37 @@ final class BubbleTest extends TestCase
         $arcs = [$table['top-left'], $table['top-right'], $table['bottom-left'], $table['bottom-right']];
         $this->assertSame([], array_values(array_intersect(mb_str_split(implode('', $lines)), $arcs)));
     }
+
+    public function testDegenerateSizeRangePinsEveryPointToLargestBin(): void
+    {
+        // B9/Q4 contract: withSizeRange(x, x) collapses mapSize's span to zero.
+        // Pre-guard that division threw DivisionByZeroError (PHP 8 float divide
+        // by zero is fatal) and render() produced nothing; post-guard the ratio
+        // is pinned to 1, so EVERY point takes the largest bin regardless of
+        // its raw size — both the size-3 and the size-9 point below render the
+        // r=2 solid 5x5 box. Grid math at default 50x20: mapX(25)=col 10,
+        // mapY(75)=row 4; mapX(75)=col 30, mapY(25)=row 12.
+        $table = $this->circleCharsTable();
+        $lines = $this->strippedRenderLines(Bubble::new([
+            new BubblePoint('Low', 25, 75, 3),
+            new BubblePoint('High', 75, 25, 9),
+        ])->withSizeRange(5, 5));
+
+        $arcs = [$table['top-left'], $table['top-right'], $table['bottom-left'], $table['bottom-right']];
+        foreach ([[4, 10], [12, 30]] as [$row, $col]) {
+            for ($dy = -2; $dy <= 2; $dy++) {
+                for ($dx = -2; $dx <= 2; $dx++) {
+                    $cell = $this->cellAt($lines, $row + $dy, $col + $dx);
+                    $isCorner = abs($dx) === 2 && abs($dy) === 2;
+
+                    $this->assertNotSame(' ', $cell, "gap at center ($row,$col) + (dx=$dx, dy=$dy)");
+                    if ($isCorner) {
+                        $this->assertContains($cell, $arcs);
+                    } else {
+                        $this->assertSame($table['full'], $cell, "non-corner at center ($row,$col) + (dx=$dx, dy=$dy)");
+                    }
+                }
+            }
+        }
+    }
 }

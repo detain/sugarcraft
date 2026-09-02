@@ -365,7 +365,9 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
 
         $color = $point->color ?? $this->color;
 
-        // Draw filled circle using ASCII characters
+        // Draw the size-binned glyph cluster (mapSize bins 1..4). The shapes are
+        // a plus and a solid box built from Unicode arcs/dots — never true
+        // circles, and never ASCII.
         if ($size <= 1) {
             // Single cell
             if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
@@ -376,10 +378,11 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
                 }
             }
         } elseif ($size === 2) {
-            // 3x3 bubble
+            // r=1: five-cell plus within a 3x3 extent — the disk test drops the
+            // diagonals, so this cluster carries no corner arcs.
             $this->drawBubbleOnGrid($grid, $x, $y, 1, $color, $chartWidth, $chartHeight);
         } else {
-            // 5x5 bubble
+            // r=2: solid 5x5 box with CIRCLE_CHARS quadrant arcs at the corners.
             $this->drawBubbleOnGrid($grid, $x, $y, 2, $color, $chartWidth, $chartHeight);
         }
     }
@@ -465,11 +468,19 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Map size value to pixel radius.
+     * Map a raw size value to a glyph bin: 1 = single cell, 2 = r=1 plus,
+     * 3-4 = r=2 solid box.
+     *
+     * A degenerate size range (withSizeRange(x, x)) collapses the span to
+     * zero; PHP 8 makes that division fatal, so the contract pins ratio to 1
+     * and every point bins to the largest glyph instead of crashing render().
      */
     private function mapSize(float $size): int
     {
-        $ratio = ($size - $this->minSize) / ($this->maxSize - $this->minSize);
+        $ratio = $this->maxSize === $this->minSize
+            ? 1.0
+            : ($size - $this->minSize) / ($this->maxSize - $this->minSize);
+
         return max(1, intval(1 + $ratio * 3));
     }
 
