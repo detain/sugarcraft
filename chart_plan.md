@@ -204,6 +204,10 @@ Scheduling rule: a step starts only when (a) its intra-lane predecessor is commi
 - `GaugeCircle` arc could reuse S4 aspect math + S5 quadrant sampling for rounder gauges.
 - `sugar-charts/src/MarkLine.php` solid/dashed/dotted are name-strings only, rendering unwired.
 - sugar-charts `LineChart` ASCII connectors (`| - / \`, `LineChart.php:643-672`) could upgrade to `│─╱╲` like Waveline when UTF-8 locale detected.
+- **BL-6** `Bubble::plotBubble` size===2 branch comment claims "3x3 bubble" but r=1 renders a 5-cell plus within a 3x3 extent (stale wording vs S1-amended shapes; measured S1 review 2026-09-01). Doc/comment-accuracy fix candidate, Bubble.php symbol `plotBubble`.
+- **BL-7** `Bubble` r=2 rounded box fills ALL 25 cells with `●` interior (S1 amended design). Open question for human: is a solid 5x5 box the desired bubble semantics (vs ring-only), and should r=1 plus stay? If shape change wanted it is a declared default-output change (bubble example is golden-SKIPPED, safe). (measured S1 review 2026-09-01)
+- **BL-10** Run-overrun record hygiene: v2 orchestrator once recorded a reviewer verdict whose delegation artifact was empty (S6, 23:04:59Z row voided 23:26Z by correction row). Mitigation now in v3 protocol: NEVER log verdict before artifact received; inputs pre-exported BEFORE reviewer spawn.
+
 
 ## Known caveats
 
