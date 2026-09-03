@@ -96,9 +96,10 @@ final class Donut implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Axis-aligned arc pieces for the wireframe rim: corner, horizontal,
      * corner, vertical, corner, horizontal... order is TL, ─, TR, │, BR, BL.
-     * Copied verbatim from GaugeCircle::ARC_CHARS (private there — rewiring
-     * the original is Backlog work); used for the flat/steep runs the tangent
-     * buckets emit and as the cardinal-box-aligned corner fallback.
+     * Formerly mirrored from GaugeCircle::ARC_CHARS, a private table B12
+     * deleted — this class is now its only home (v5 D3 provenance fix); used
+     * for the flat/steep runs the tangent buckets emit and as the
+     * cardinal-box-aligned corner fallback.
      */
     private const ARC_CHARS = ['╭', '─', '╮', '│', '╯', '╰'];
 

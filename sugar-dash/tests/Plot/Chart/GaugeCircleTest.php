@@ -409,16 +409,124 @@ final class GaugeCircleTest extends TestCase
     // setSize geometry activation (v5 D2)
     // ═══════════════════════════════════════════════════════════════
 
-    public function testNoAllocationPathStaysByteIdenticalToHead(): void
+    public function testWithAspectOneLegacyEscapeIsByteIdenticalToD2(): void
     {
-        // CONTRACT: setSize never called ⇒ render() byte-IDENTICAL to the
-        // pre-D2 radius-driven path. sha pinned from reconD @d549c0d48
-        // (re-derived live 2026-09-03): 2186ff67… strlen 1063, inner [13,14].
-        $gauge = GaugeCircle::new(0.8);
+        // R2 moved the default-freeze role: the DEFAULT now renders at
+        // aspect 2.0 (visually round). The byte-identity gate lives on
+        // withAspect(1.0) instead — geometry at 1.0 equals the D2-shipped
+        // bytes exactly (division by 1.0 is bit-exact IEEE). Shas re-derived
+        // live 2026-09-03 against the HEAD (D2) class; the last two are the
+        // golden bodies themselves (example chain == replay harness output).
+        $escape = GaugeCircle::new(0.8)->withAspect(1.0);
 
-        $this->assertSame('2186ff670a87f0500b70148b0356b504108f1d7a', sha1($gauge->render()));
-        $this->assertSame(1063, strlen($gauge->render()));
-        $this->assertSame([13, 14], $gauge->getInnerSize());
+        $this->assertSame('2186ff670a87f0500b70148b0356b504108f1d7a', sha1($escape->render()));
+        $this->assertSame(1063, strlen($escape->render()));
+        $this->assertSame([13, 14], $escape->getInnerSize());
+
+        $sized = GaugeCircle::new(0.8)->setSize(40, 10)->withAspect(1.0);
+        $this->assertSame('347aeae53763671ddcfdb2b55a285058f03e83db', sha1($sized->render()));
+        $this->assertSame(731, strlen($sized->render()));
+
+        $uncolored = (new GaugeCircle(0.3, 6, false, false, false))->withAspect(1.0);
+        $this->assertSame('c369548d338735f2d29c08781706f453dfb9d9be', sha1($uncolored->render()));
+
+        $example80 = GaugeCircle::new(80)->setSize(80, 24)->withAspect(1.0);
+        $this->assertSame('4b780628c8e5ecfa66c89f0fc8b9c43077d981c3', sha1($example80->render()));
+        $this->assertSame(2158, strlen($example80->render()));
+
+        $example120 = GaugeCircle::new(80)->setSize(120, 40)->withAspect(1.0);
+        $this->assertSame('dfa434e2099f830b7a688521ff190544d7b54e93', sha1($example120->render()));
+        $this->assertSame(4318, strlen($example120->render()));
+    }
+
+    public function testAspectDefaultsToTwoRoundDial(): void
+    {
+        // DECLARED-OUTPUT-CHANGE (R2): gauges ship visually round — null
+        // aspect resolves to DEFAULT_ASPECT 2.0, matching Donut, and the
+        // default render MOVES away from the legacy raw-cell bytes.
+        $gauge = GaugeCircle::new(0.8);
+        $aspect = (new \ReflectionMethod($gauge, 'aspect'))->invoke($gauge);
+
+        $this->assertSame(2.0, $aspect);
+        $this->assertSame(2.0, (new \ReflectionMethod($gauge, 'aspect'))->invoke($gauge->withAspect()));
+        $this->assertNotSame(
+            $gauge->withAspect(1.0)->render(),
+            $gauge->render(),
+            'default aspect 2.0 must re-render the dial (R2 declared change)'
+        );
+        $this->assertSame($gauge->render(), $gauge->withAspect(2.0)->render(), 'explicit 2.0 == null default');
+    }
+
+    public function testWithAspectRejectsNonPositiveAndNonFinite(): void
+    {
+        // B5 guard parity with Donut::withAspect — silent NaN/zero would
+        // poison every stamped offset, so bad ratios fail loud at the gate.
+        foreach ([0.0, -2.0, NAN, INF, -INF] as $bad) {
+            try {
+                GaugeCircle::new(0.5)->withAspect($bad);
+                $this->fail(sprintf('aspect ratio %s must be rejected', var_export($bad, true)));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertMatchesRegularExpression('/^Invalid gauge aspect ratio ".*"; expected a finite positive float\.$/', $e->getMessage());
+            }
+        }
+
+        // Tiny positive survives (no clamp — the guard only rejects illegal).
+        $this->assertSame(0.01, (new \ReflectionProperty(GaugeCircle::class, 'aspect'))->getValue(GaugeCircle::new(0.5)->withAspect(0.01)));
+    }
+
+    public function testSmoothRimEmitsQuadrantRunesAndNoBinaryRim(): void
+    {
+        $render = GaugeCircle::new(0.5)->withSmoothRim()->render();
+        $strip = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $render);
+
+        $this->assertStringNotContainsString('●', $strip, 'quadrant mode must not leak the binary filled rune');
+        $this->assertStringNotContainsString('○', $strip, 'quadrant mode must not leak the binary remainder rune');
+        $this->assertMatchesRegularExpression('/[▘▝▀▖▌▞▛▗▚▐▜▄▙▟█]/u', $strip, 'opt-in rim emits quadrant runes');
+        // Every non-legacy grid rune is a declared quadrant mask.
+        $legacy = [' ', '┬', '│', '┴', '❮', '◆', "\n"];
+        foreach (mb_str_split($strip) as $rune) {
+            if (in_array($rune, $legacy, true) || preg_match('/[0-9%]/', $rune)) {
+                continue;
+            }
+            $this->assertContains($rune, array_values((new \ReflectionClass(GaugeCircle::class))->getConstant('QUADRANT_RUNES')), "rune {$rune} must belong to the declared quadrant set");
+        }
+        $this->assertStringContainsString('❮', $render, 'needle survives the rim rework');
+        $this->assertStringContainsString('◆', $render, 'hub survives the rim rework');
+        $this->assertMatchesRegularExpression('/[┬┴│]/u', $render, 'ticks survive the rim rework');
+        $this->assertStringContainsString('50%', $render);
+    }
+
+    public function testSmoothRimDefaultsOffForByteIdentity(): void
+    {
+        // Donut precedent: the rim path is byte-identical while un-opted.
+        $this->assertSame(
+            GaugeCircle::new(0.5)->render(),
+            GaugeCircle::new(0.5)->withSmoothRim(false)->render()
+        );
+        $this->assertFalse((new \ReflectionProperty(GaugeCircle::class, 'smoothRim'))->getValue(GaugeCircle::new(0.5)));
+    }
+
+    public function testAspectAndSmoothRimSurviveWitherChain(): void
+    {
+        // New fields must propagate through every wither AND the setSize
+        // allocation must keep rendering through withAspect (D2 chain test
+        // extended, not replaced).
+        $base = GaugeCircle::new(0.4)->withAspect(1.5)->withSmoothRim()->setSize(40, 10);
+        $chained = $base
+            ->withRatio(0.4)
+            ->withShowNeedle(true)
+            ->withShowTicks(true)
+            ->withShowLabel(true)
+            ->withPercentage(true)
+            ->withRadius(6)
+            ->withArcColor(Color::hex('#874BFD'))
+            ->withNeedleColor(Color::hex('#FF6B6B'))
+            ->withLabelColor(Color::hex('#FFFFFF'));
+
+        $this->assertNotSame($base, $chained);
+        $this->assertSame($base->render(), $chained->render(), 'aspect/smoothRim/allocation must all survive the chain');
+        $this->assertSame([9, 10], $chained->getInnerSize());
+        $this->assertSame(1.5, (new \ReflectionProperty(GaugeCircle::class, 'aspect'))->getValue($chained));
     }
 
     public function testAllocationSurvivesFullWitherChain(): void
