@@ -146,7 +146,7 @@ Baselines for ALL steps: charts@f2c7b9822: 568/1400/0Sk rc0 (failOnWarning live)
 | C2 drawConnector guard reorder [R2] | drawConnector | A | ✅ | ✅ | ✅ | c8b40f667 |
 | C3 Sunburst encoding integrity [R5] | Sunburst | B | ✅ | ✅ | ✅ | 47e740a9f |
 | C4 bufferFromOutput SGR-strip + @return [R4] | bufferFromOutput | B | ✅ | ✅ | ✅ | 5daa9c893 |
-| C5 Bubble bin collapse + header [R1] | Bubble bins | B | ⬜ | ⬜ | ⬜ | — |
+| C5 Bubble bin collapse + header [R1] | Bubble bins | B | ✅ | ✅ | ✅ | b4c22e815 |
 | C6′ plot-braille assign + goldens re-record | BL-8 residue | B | ⬜ | ⬜ | ⬜ | — |
 | C7 donut-wireframe goldens ×2 | missing goldens | B | ⬜ | ⬜ | ⬜ | — |
 | C8a GaugeCircle ring-bug [Q3 — b/c PARKED-v5] | GaugeCircle | B | ⬜ | ⬜ | ⬜ | — |
