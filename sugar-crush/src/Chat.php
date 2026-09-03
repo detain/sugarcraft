@@ -12259,17 +12259,22 @@ final class Chat implements Model
         }
 
         $history = $this->messagesFromWire($truncated, $baseHistory);
-        $truncatedCount = 0;
+        // The count's domain is wire ENTRIES whose content changed - MESSAGES, not
+        // exchanges. ContextCompactor::truncateOversizedExchange() decides per
+        // message and exposes no exchange-pair arithmetic, and one exchange whose
+        // two halves are both oversized legitimately truncates TWO of them, so
+        // naming this number "exchanges" would ship a figure with the wrong unit.
+        $truncatedMessages = 0;
         foreach ($wire as $index => $entry) {
             if (($truncated[$index]['content'] ?? null) !== ($entry['content'] ?? null)) {
-                $truncatedCount++;
+                $truncatedMessages++;
             }
         }
 
         return [
             'history' => $history,
             'notice' => $this->contextTruncatedMessage(
-                $truncatedCount,
+                $truncatedMessages,
                 $this->estimateTokenCount($history),
                 $tokenLimit,
             ),
@@ -12277,8 +12282,8 @@ final class Chat implements Model
     }
 
     /**
-     * The notice the intra-exchange rescue writes when truncating an oversized
-     * exchange lets a turn through (prompt_plan.md P4.S4, backlog §12.2 E18).
+     * The notice the intra-exchange rescue writes when truncating oversized
+     * messages lets a turn through (prompt_plan.md P4.S4, backlog §12.2 E18).
      *
      * Role::System like the compaction and reminder notices — the app reporting on
      * its own action — and it rides BEFORE the user's line for the same reason
@@ -12288,19 +12293,31 @@ final class Chat implements Model
      * Integration\ContextWindowWiringTest pins against the label beside it rather
      * than against the sentence, so swapping the two reds a test.
      *
+     * The counted unit is MESSAGES, not exchanges: {@see intraExchangeTruncation()}
+     * counts wire entries whose content changed, and a single exchange whose user
+     * AND assistant halves each reach the blocking tier truncates two of them. The
+     * count and its noun must therefore agree with each other, and every agreement
+     * — noun, verb, possessive, demonstrative — flips together on the one
+     * $truncatedMessages === 1 branch below, so the sentence can never pair one
+     * message with "messages" or two with "it was".
+     *
      * It says plainly that content was dropped and that the drop is marked inline,
      * so the user is never left believing the whole oversized exchange reached the
      * model.
      */
-    private function contextTruncatedMessage(int $truncatedCount, int $tokenCount, int $tokenLimit): Message
+    private function contextTruncatedMessage(int $truncatedMessages, int $tokenCount, int $tokenLimit): Message
     {
-        $noun = $truncatedCount === 1 ? 'exchange was' : 'exchanges were';
+        $singular = $truncatedMessages === 1;
+        $unit = $singular ? 'message' : 'messages';
+        $own = $singular ? 'its' : 'their';
+        $subject = $singular ? 'it was' : 'they were';
+        $where = $singular ? 'that message' : 'those messages';
 
         return Message::system(
-            "A single exchange reached the 95% blocking tier on its own, so {$truncatedCount} "
-            . "{$noun} truncated to fit the context window rather than the turn being refused: "
+            "{$truncatedMessages} {$unit} reached the 95% blocking tier on {$own} own, so {$subject} "
+            . "truncated to fit the context window rather than the turn being refused: "
             . "~{$tokenCount} estimated tokens now, against a {$tokenLimit}-token context "
-            . 'window. The dropped text is marked inline in that exchange.'
+            . "window. The dropped text is marked inline in {$where}."
         );
     }
 

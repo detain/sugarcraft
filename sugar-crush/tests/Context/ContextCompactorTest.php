@@ -16,6 +16,7 @@ use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Message;
+use SugarCraft\Crush\Role;
 
 final class ContextCompactorTest extends TestCase
 {
@@ -1525,6 +1526,178 @@ final class ContextCompactorTest extends TestCase
             $next->history[count($next->history) - 1]->content,
             'with the ordinary blocking-tier refusal, not a silent dispatch',
         );
+    }
+
+    // ─── The E18 truncation NOTICE, pinned verbatim ───────────────
+    //
+    // The rescue notice is committed into history, so the user reads it AND the
+    // next provider prompt replays it. §16.8 rule 25: a guard path's message is
+    // the one part of a green suite that never runs unless a test pins it, and
+    // until now no test asserted this sentence at all - only the inline marker
+    // substring. The wording defect it now pins: the old sentence counted changed
+    // wire ENTRIES (messages) but labelled them "exchanges" behind a "A single
+    // exchange" lead-in, so the one-exchange-both-halves-oversized fixture read
+    // "A single exchange ... so 2 exchanges were truncated" - self-contradictory
+    // in its first eight words. Each test below asserts the WHOLE sentence
+    // verbatim plus the number of messages physically carrying the inline marker,
+    // so the quoted count, its noun, and the bytes all have to agree.
+
+    /**
+     * The rescue notice for the classic E18 shape - one oversized user message,
+     * the assistant half small enough to survive - in full, singular agreement
+     * throughout, Role::System, riding immediately before the user's line.
+     */
+    public function testTheTruncationNoticeForOneOversizedMessageReadsExactly(): void
+    {
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(
+            history: [
+                Message::user(str_repeat('x', 800_000)),
+                Message::assistant(str_repeat('y', 2_000)),
+            ],
+            backend: $backend,
+        );
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: this history must reach the rescue');
+
+        $notice = $this->truncationNotice($next);
+        $this->assertSame(Role::System, $notice->role, 'the app reporting on its own action stays a system line');
+        $this->assertSame(
+            '1 message reached the 95% blocking tier on its own, so it was truncated to fit '
+            . 'the context window rather than the turn being refused: ~92977 estimated tokens '
+            . 'now, against a 100000-token context window. The dropped text is marked inline '
+            . 'in that message.',
+            $notice->content,
+            'the whole sentence verbatim: the 92,977 chars/4 ESTIMATE rides beside "estimated '
+            . 'tokens" and the 100,000 advertised window beside "context window", never swapped',
+        );
+        $this->assertStringNotContainsString(
+            'exchange',
+            $notice->content,
+            'the rescue counts messages - naming exchanges it never counted was the defect',
+        );
+        $this->assertSame(
+            1,
+            $this->markedTruncations($next),
+            'the figure in the sentence equals the number of messages physically carrying the inline marker',
+        );
+
+        $index = array_search($notice, $next->history, true);
+        $this->assertIsInt($index);
+        $this->assertSame(
+            'go',
+            $next->history[$index + 1]->content,
+            'the notice still rides immediately before the user line on submit()\'s synchronous route',
+        );
+    }
+
+    /**
+     * The case that exposed the contradiction: ONE exchange whose user AND
+     * assistant halves each reach the blocking tier, so the truncator shortens
+     * TWO messages. The old notice paired "A single exchange" with "2 exchanges
+     * were truncated"; the sentence now counts messages, which is the domain the
+     * code actually measures - ContextCompactor::truncateOversizedExchange()
+     * decides per message and exposes no exchange-pair arithmetic.
+     */
+    public function testTheTruncationNoticeStaysTruthfulForTwoOversizedMessagesInOneExchange(): void
+    {
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(
+            history: [
+                Message::user(str_repeat('x', 800_000)),
+                Message::assistant(str_repeat('z', 600_000)),
+            ],
+            backend: $backend,
+        );
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: this history must reach the rescue');
+
+        $notice = $this->truncationNotice($next);
+        $this->assertSame(
+            '2 messages reached the 95% blocking tier on their own, so they were truncated to '
+            . 'fit the context window rather than the turn being refused: ~92954 estimated '
+            . 'tokens now, against a 100000-token context window. The dropped text is marked '
+            . 'inline in those messages.',
+            $notice->content,
+            'and 92,954 is the same two-giant figure testEveryOversizedExchangeSharesTheRemainingBudget '
+            . 'pins at the truncator level - notice and wire agree',
+        );
+        $this->assertSame(
+            2,
+            $this->markedTruncations($next),
+            'two MESSAGES were shortened - which is ONE exchange; the count must track the former',
+        );
+    }
+
+    /**
+     * Count and noun must agree at every size: here THREE messages carry the
+     * marker while only TWO exchanges exist at all, so any exchange-labelled
+     * count - "2 exchanges" - would contradict the bytes, and "3 exchanges"
+     * would contradict the conversation. Only "3 messages" is true of both.
+     */
+    public function testTheTruncationNoticeTracksMessagesEvenWhenTheySpanTwoExchanges(): void
+    {
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(
+            history: [
+                Message::user(str_repeat('x', 800_000)),
+                Message::assistant(str_repeat('z', 600_000)),
+                Message::user(str_repeat('w', 700_000)),
+                Message::assistant(str_repeat('t', 2_000)),
+            ],
+            backend: $backend,
+        );
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: this history must reach the rescue');
+
+        $notice = $this->truncationNotice($next);
+        $this->assertSame(
+            '3 messages reached the 95% blocking tier on their own, so they were truncated to '
+            . 'fit the context window rather than the turn being refused: ~92931 estimated '
+            . 'tokens now, against a 100000-token context window. The dropped text is marked '
+            . 'inline in those messages.',
+            $notice->content,
+        );
+        $this->assertSame(
+            3,
+            $this->markedTruncations($next),
+            'three marker-carrying messages, two exchanges - the sentence quotes the messages',
+        );
+    }
+
+    /**
+     * The single truncation notice a rescued history carries. The blocking-tier
+     * refusal and the compaction notice use different wording, so this filter
+     * cannot capture them by accident.
+     */
+    private function truncationNotice(Chat $chat): Message
+    {
+        $hits = array_values(array_filter(
+            $chat->history,
+            static fn (Message $m): bool => $m->role === Role::System
+                && str_contains($m->content, 'reached the 95% blocking tier'),
+        ));
+        $this->assertCount(1, $hits, 'the rescue writes exactly one truncation notice into history');
+
+        return $hits[0];
+    }
+
+    /** How many messages in the rescued history carry the inline truncation marker. */
+    private function markedTruncations(Chat $chat): int
+    {
+        return count(array_filter(
+            $chat->history,
+            static fn (Message $m): bool => str_contains(
+                $m->content,
+                'characters truncated to fit the context window',
+            ),
+        ));
     }
 
     /**
