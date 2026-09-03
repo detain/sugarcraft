@@ -16,6 +16,22 @@ parameters:
         -
             identifier: trait.unused
             path: src/Concerns/Mutable.php
+        # FFI::scope()/FFI::cdef() synthesise the declared C functions as
+        # METHODS on the \FFI object at runtime, so the compiled ext/ffi
+        # class the analyser reflects carries no open()/close(). PosixBackend's
+        # controlling-terminal arm calls exactly those two on candy-pty's
+        # Libc::lib() handle, whose cdef declares `int open(const char*, int)`
+        # and `int close(int)` -- a genuine false positive, not a typing defect.
+        # A stubFile was tried first and is a no-op here: with ext-ffi LOADED
+        # (every CI lane, and any host that can run this code at all), PHPStan
+        # 2.2.12 resolves members from the runtime class, not the stub --
+        # MEASURED. Narrowed to these two symbol names so any NEW method this
+        # file reaches for without a runtime guarantee still reds.
+        -
+            identifier: method.notFound
+            path: src/Util/Tty/PosixBackend.php
+            messages:
+                - '#^Call to an undefined method FFI::(open|close)\(\)\.$#'
         # Width::isEmoji() lost its only two callers when E73 removed
         # compute()'s ZWJ state machine. It is kept as a documented seam
         # (rule: dormant code is wired or documented, never deleted) and

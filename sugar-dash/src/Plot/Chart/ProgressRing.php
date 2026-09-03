@@ -22,12 +22,6 @@ final class ProgressRing implements \SugarCraft\Dash\Foundation\Sizer
     private ?int $width = null;
     private ?int $sizerHeight = null;
 
-    /**
-     * Box-drawing characters for the ring.
-     */
-    private const CHARS_FULL = ['█', '▉', '▊', '▋', '▍', '▎', '▏', '▐', '▔'];
-    private const CHARS_EMPTY = [' ', '̱', '̔', '̕', '̭', '̮', '̯', '̰', '̱'];
-
     public function __construct(
         private readonly float $ratio,
         private readonly int $radius = 4,

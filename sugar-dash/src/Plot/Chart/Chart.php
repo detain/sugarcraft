@@ -84,11 +84,6 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     /** @var ChartRenderContext|null Render context for diff-based emission (avoids mutating scattered properties) */
     private ?ChartRenderContext $renderContext = null;
 
-    /**
-     * Block characters for bar chart.
-     */
-    private const BAR_CHARS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-
     public function __construct(
         array $dataPoints = [],
         private readonly ChartType $type = ChartType::Bar,
@@ -189,10 +184,27 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
             $output = $this->renderLineChart($chartWidth, $chartHeight, $minValue, $maxValue, $gridLines);
         }
 
+        // Diff-state rows cover the FULL emitted frame, not just the chart
+        // area: renderBarChart appends the x-axis row (showGrid) and the labels
+        // row (showLabels); renderLineChart only the labels row (its border grid
+        // lives inside the chart area). Storing only $chartHeight rows clipped
+        // those rows out of the buffer, so an axis/label-only mutation diffed to
+        // ZERO bytes and a delta-tracking terminal kept painting stale labels.
+        // The height is structural, not count(explode($output)): the renderers
+        // trim() their frames, so an emitted-line count can vary between frames
+        // of identical parameters (all-blank top rows vanish), and Buffer::diff()
+        // throws on dimension mismatch — the readonly flags make this expression
+        // constant for an instance. Resize detection stays keyed on the chart
+        // area ($chartWidth/$chartHeight above); the width clip is untouched
+        // (parked separately).
+        $diffHeight = $chartHeight
+            + ($this->type === ChartType::Bar && $this->showGrid ? 1 : 0)
+            + ($this->showLabels ? 1 : 0);
+
         // First frame or resize: emit full output and store as previousFrame.
         if ($this->renderContext === null) {
             $this->renderContext = new ChartRenderContext(
-                previousFrame: $this->bufferFromOutput($output, $chartWidth, $chartHeight),
+                previousFrame: $this->bufferFromOutput($output, $chartWidth, $diffHeight),
                 prevWidth: $chartWidth,
                 prevHeight: $chartHeight
             );
@@ -200,7 +212,7 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         // Subsequent frames with same dimensions: compute diff and emit delta.
-        $currentFrame = $this->bufferFromOutput($output, $chartWidth, $chartHeight);
+        $currentFrame = $this->bufferFromOutput($output, $chartWidth, $diffHeight);
         $ops = $currentFrame->diff($this->renderContext->previousFrame);
         $this->renderContext = new ChartRenderContext(
             previousFrame: $currentFrame,
@@ -215,7 +227,7 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Render a bar chart.
      *
-     * @return list<string>
+     * @return string Multi-line frame (rows joined with \n, trailing newline trimmed)
      */
     private function renderBarChart(
         int $chartWidth,
@@ -307,7 +319,7 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Render a line chart.
      *
-     * @return list<string>
+     * @return string Multi-line frame (rows joined with \n, trailing newline trimmed)
      */
     private function renderLineChart(
         int $chartWidth,
@@ -776,20 +788,40 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
      * All cells are created with null style — the diff algorithm will
      * still work correctly for detecting changed character positions.
      *
+     * Columns address cells, not bytes: every line is split into codepoints
+     * (house idiom, see DrawingOps::drawText) so rows containing multi-byte
+     * UTF-8 runes — CJK labels, or the '─'/'█' chart glyphs — map each cell
+     * to the exact glyph the first render painted. A byte-indexed guard
+     * (isset($line[$col]) + mb_substr) mis-maps such rows: past the last
+     * codepoint, still-unset bytes make isset() true while mb_substr returns
+     * '', so padding columns became empty-rune cells instead of blanks.
+     *
+     * SGR sequences are stripped before the split (house regex, see
+     * BubbleTest::strippedRenderLines): color is presentation, not content,
+     * and the cells carry null style anyway — leaving the escapes in would
+     * store ESC/'['/digit fragments as runes, so any SGR length change on a
+     * row shifted every later rune right and produced phantom whole-row
+     * diffs on re-render. This is the diff-state buffer ONLY: render()
+     * returns the untouched full frame (SGR included) to stdout, so the
+     * first-frame bytes and every golden are unaffected by the strip.
+     *
      * @param string $output Multi-line string from render()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
+     * @param int    $width  Buffer width in cells (clip status quo)
+     * @param int    $height Rows to store — callers pass the full emitted-frame
+     *                       height (chart area + x-axis + labels) so the axis
+     *                       and label rows participate in the diff; rows past
+     *                       the end of $output store as blanks.
      */
     private function bufferFromOutput(string $output, int $width, int $height): Buffer
     {
         $buffer = Buffer::new($width, $height);
-        $lines = \explode("\n", $output);
+        $display = (string) \preg_replace('/\x1b\[[0-9;]*m/', '', $output);
+        $lines = \explode("\n", $display);
 
         for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
+            $runes = \mb_str_split($lines[$row] ?? '');
             for ($col = 0; $col < $width; $col++) {
-                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
-                $cell = Cell::new($char, null, null, 1);
+                $cell = Cell::new($runes[$col] ?? ' ', null, null, 1);
                 $buffer = $buffer->withCellAt($col, $row, $cell);
             }
         }

@@ -74,6 +74,18 @@ final class TimeSeries
         return new self($this->points, $this->width, $this->height, $this->timeFormat, $this->xLabelCount, $start, $end);
     }
 
+    // Short-form aliases.
+    /** @param list<array{0:\DateTimeImmutable,1:int|float}> $points */
+    public function points(array $points): self   { return $this->withPoints($points); }
+    /** Short-form alias for {@see withTimeFormat()}. */
+    public function timeFormat(string $fmt): self { return $this->withTimeFormat($fmt); }
+    /** Short-form alias for {@see withXLabelCount()}. */
+    public function xLabelCount(int $n): self     { return $this->withXLabelCount($n); }
+    /** Short-form alias for {@see withTimeRange()}. */
+    public function timeRange(?\DateTimeImmutable $start, ?\DateTimeImmutable $end): self {
+        return $this->withTimeRange($start, $end);
+    }
+
     public function getTimeRange(): array
     {
         return [$this->rangeStart, $this->rangeEnd];

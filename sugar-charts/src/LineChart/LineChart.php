@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\LineChart;
 use SugarCraft\Charts\Chart\Chart;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
@@ -19,6 +20,8 @@ use SugarCraft\Sprinkles\Theme;
  * a `*` (configurable) is plotted at the rounded row. Adjacent points
  * are connected with `|`, `/`, or `\` strokes when their rows differ,
  * giving an at-a-glance trend without requiring sub-cell rasterisation.
+ * `withUnicodeConnectors()` swaps those strokes for the `│ ─ ╱ ╲` runes
+ * used by {@see Waveline}; ASCII remains the default.
  *
  * ```php
  * echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view();
@@ -34,6 +37,9 @@ final class LineChart extends Chart
      * @param array<string,string>       $datasetPoints  per-series rune override
      * @param list<string>               $xLabels
      * @param list<string>               $yLabels
+     * @param ?array<string,string>      $lineStyle  axis runeset override (a Graph::LINE_* preset); null = LINE_THIN
+     * @param list<MarkLine>             $markLines  horizontal reference-line annotations; [] (default) draws nothing
+     * @param bool                       $unicodeConnectors  draw connectors with `│ ─ ╱ ╲` instead of ASCII `| - / \`
      */
     public function __construct(
         public readonly array $data,
@@ -66,6 +72,9 @@ final class LineChart extends Chart
         float $animationProgress = 1.0,
         int $animationDuration = 0,
         public readonly bool $fill = false,
+        public readonly ?array $lineStyle = null,
+        public readonly array $markLines = [],
+        public readonly bool $unicodeConnectors = false,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ) {
@@ -215,6 +224,63 @@ final class LineChart extends Chart
     }
 
     /**
+     * Choose the line-art preset used for the axis frame drawn by
+     * {@see withAxes()} — e.g. `Graph::LINE_ROUNDED` for arc corners
+     * (`╰`) instead of the default sharp thin ones (`└`). Passing null
+     * restores the LINE_THIN default. WHY: ntcharts has no rune-style
+     * setter; this closes the org-wide rounded-box gap sugar-dash
+     * already defaults to.
+     *
+     * @param ?array<string,string> $runes  a Graph::LINE_* preset
+     */
+    public function withLineStyle(?array $runes): self
+    {
+        return $this->lineChartCopy(lineStyle: $runes, lineStyleSet: true);
+    }
+
+    /**
+     * Horizontal reference-line annotations drawn across the plot at fixed
+     * Y values (see {@see MarkLine}). Each mark whose value falls inside the
+     * resolved `[min, max]` range paints its style glyph — solid `─`, dashed
+     * `╌`, dotted `┄` — over the full plot-width run of the mapped row,
+     * replacing any point/connector cells it crosses (marks are annotations
+     * ON TOP), with an optional label right-aligned over the run when it
+     * fits. WHY: this is the "consumed by LineChart" render pass that
+     * {@see MarkLine}'s class docblock documents; Mirrors ntcharts'
+     * `MarkLine` overlay concept.
+     *
+     * @param list<MarkLine> $marks  default [] renders nothing (byte-identical)
+     * @throws \InvalidArgumentException if the list contains a non-MarkLine element
+     */
+    public function withMarkLines(array $marks): self
+    {
+        // Boundary parse: trust the list internals after this point.
+        foreach ($marks as $mark) {
+            if (!$mark instanceof MarkLine) {
+                throw new \InvalidArgumentException(sprintf(
+                    'MarkLine list must contain only MarkLine instances, %s given',
+                    get_debug_type($mark),
+                ));
+            }
+        }
+        return $this->lineChartCopy(markLines: array_values($marks));
+    }
+
+    /**
+     * Draw inter-point connectors with the Unicode box/slope runes `│ ─ ╱ ╲`
+     * — the exact slope mapping already used by {@see Waveline::connectorRune()}
+     * — instead of the ASCII `| - \ /` strokes. WHY: ASCII connectors read as
+     * noise next to the Unicode axis frame; auto-detecting terminal charset
+     * capability is not available (T::detect is language-only), so the richer
+     * palette ships opt-in. ASCII stays the default (no silent visual change
+     * for existing consumers).
+     */
+    public function withUnicodeConnectors(bool $on = true): self
+    {
+        return $this->lineChartCopy(unicodeConnectors: $on);
+    }
+
+    /**
      * X-axis labels (rendered under the axis when `withAxes(true)` is set).
      * @param list<string> $labels
      */
@@ -246,10 +312,24 @@ final class LineChart extends Chart
         return $this->withXYRange($xMin, $xMax, $yMin, $yMax);
     }
     public function axes(bool $on = true): self      { return $this->withAxes($on); }
+    /** Short-form alias for {@see withLineStyle()}. */
+    public function lineStyle(?array $runes): self   { return $this->withLineStyle($runes); }
     /** @param list<string> $labels */
     public function xLabels(array $labels): self     { return $this->withXLabels($labels); }
     /** @param list<string> $labels */
     public function yLabels(array $labels): self     { return $this->withYLabels($labels); }
+    /** Short-form alias for {@see withXLabelFormatter()}. */
+    public function xLabelFormatter(\Closure $fn, int $ticks = 0): self { return $this->withXLabelFormatter($fn, $ticks); }
+    /** Short-form alias for {@see withYLabelFormatter()}. */
+    public function yLabelFormatter(\Closure $fn, int $ticks = 0): self { return $this->withYLabelFormatter($fn, $ticks); }
+    /** Short-form alias for {@see withDataset()}. */
+    public function dataset(string $name, array $values): self { return $this->withDataset($name, $values); }
+    /** Short-form alias for {@see withDatasetPoint()}. */
+    public function datasetPoint(string $name, string $rune): self { return $this->withDatasetPoint($name, $rune); }
+    /** Short-form alias for {@see withMarkLines()}. */
+    public function markLines(array $marks): self { return $this->withMarkLines($marks); }
+    /** Short-form alias for {@see withUnicodeConnectors()}. */
+    public function unicodeConnectors(bool $on = true): self { return $this->withUnicodeConnectors($on); }
 
     // ─── Chart Property Overrides ───────────────────────────────────────
     // Override Chart's methods to use lineChartCopy() so LineChart properties are preserved
@@ -458,9 +538,7 @@ final class LineChart extends Chart
                 $col = $gutterLeft + ($count <= 1
                     ? 0
                     : (int) round($i * ($plotW - 1) / ($count - 1)));
-                $norm = ((float) $v - $min) / ($max - $min);
-                $norm = max(0.0, min(1.0, $norm));
-                $row = (int) round((1.0 - $norm) * ($plotH - 1));
+                $row = self::rowForValue((float) $v, (float) $min, (float) $max, $plotH);
                 $coords[] = [$col, $row];
             }
             // Only render up to maxPointIndex points (and connectors between them)
@@ -473,7 +551,7 @@ final class LineChart extends Chart
                 // Draw connector to next point if within animation bounds
                 if ($i + 1 < $maxPointIndex) {
                     [$x2, $y2] = $coords[$i + 1];
-                    self::drawConnector($canvas, $x, $y, $x2, $y2, $rune);
+                    self::drawConnector($canvas, $x, $y, $x2, $y2, $this->unicodeConnectors);
                 }
                 // Area fill: paint from baseline up to the point row.
                 if ($this->fill) {
@@ -487,17 +565,75 @@ final class LineChart extends Chart
             }
         }
 
+        // Reference-line annotations paint ON TOP of the series (their row
+        // wins over point/connector cells) but UNDER the axis frame. The
+        // default [] skips the pass entirely → byte-identical output.
+        if ($this->markLines !== []) {
+            $this->drawMarkLines($canvas, (float) $min, (float) $max, $gutterLeft, $plotW, $plotH);
+        }
+
         if ($this->showAxes) {
             // Origin = bottom-left of the plot region.
             $xOrigin = $gutterLeft;
             $yOrigin = $plotH; // axis row sits one row below the topmost data
-            Graph::drawXYAxis($canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1);
+            Graph::drawXYAxis(
+                $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
+                null, $this->lineStyle ?? Graph::LINE_THIN,
+            );
             Graph::drawXYAxisLabel(
                 $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
                 $xLabels, $yLabels,
             );
         }
         return $canvas->view();
+    }
+
+    /**
+     * Map a Y value to its plot row: normalise into the resolved
+     * `[min, max]` range (clamped to it), topmost row = 0. Shared by the
+     * series loop and the MarkLine overlay so the two mappings can never
+     * drift apart. Callers guarantee `$max > $min` (degenerate ranges are
+     * widened by +1.0 before plotting).
+     */
+    private static function rowForValue(float $value, float $min, float $max, int $plotHeight): int
+    {
+        $norm = ($value - $min) / ($max - $min);
+        $norm = max(0.0, min(1.0, $norm));
+        return (int) round((1.0 - $norm) * ($plotHeight - 1));
+    }
+
+    /**
+     * Paint the {@see MarkLine} annotations. One horizontal glyph run per
+     * mark spanning the full plot width at the row its value maps to;
+     * marks outside the resolved range are skipped. A non-empty label
+     * overwrites the rightmost label-width cells of its own row when the
+     * plot is wider than the label plus a 2-cell breathing margin (mb-safe:
+     * cells are codepoints, not bytes).
+     */
+    private function drawMarkLines(Canvas $canvas, float $min, float $max, int $gutterLeft, int $plotW, int $plotH): void
+    {
+        foreach ($this->markLines as $mark) {
+            if ($mark->value < $min || $mark->value > $max) {
+                continue;
+            }
+            $glyph = match ($mark->style) {
+                MarkLine::STYLE_SOLID  => '─',  // U+2500
+                MarkLine::STYLE_DASHED => '╌',  // U+254C
+                MarkLine::STYLE_DOTTED => '┄',  // U+2504
+                default => throw new \InvalidArgumentException("Invalid MarkLine style: {$mark->style}"),
+            };
+            $row = self::rowForValue($mark->value, $min, $max, $plotH);
+            for ($col = $gutterLeft; $col < $gutterLeft + $plotW; $col++) {
+                $canvas->setCell($col, $row, $glyph);
+            }
+            $labelWidth = mb_strlen($mark->label, 'UTF-8');
+            if ($mark->label !== '' && $plotW > $labelWidth + 2) {
+                $start = $gutterLeft + $plotW - $labelWidth;
+                foreach (mb_str_split($mark->label, 1, 'UTF-8') as $offset => $char) {
+                    $canvas->setCell($start + $offset, $row, $char);
+                }
+            }
+        }
     }
 
     /**
@@ -595,6 +731,10 @@ final class LineChart extends Chart
         ?float $animationProgress = null,
         ?int $animationDuration = null,
         ?bool $fill = null,
+        ?array $lineStyle = null,
+        bool $lineStyleSet = false,
+        ?array $markLines = null,
+        ?bool $unicodeConnectors = null,
         ?BrailleCanvas $brailleCanvas = null,
         ?Theme $theme = null,
     ): self {
@@ -629,6 +769,9 @@ final class LineChart extends Chart
             animationProgress:  $animationProgress  ?? $this->getAnimationProgress(),
             animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
             fill:              $fill              ?? $this->fill,
+            lineStyle:         $lineStyleSet ? $lineStyle : $this->lineStyle,
+            markLines:         $markLines        ?? $this->markLines,
+            unicodeConnectors: $unicodeConnectors ?? $this->unicodeConnectors,
             brailleCanvas:     $brailleCanvas     ?? $this->brailleCanvas,
             theme:             $theme             ?? $this->theme,
         );
@@ -639,35 +782,45 @@ final class LineChart extends Chart
         return $this->view();
     }
 
-    /** Draw a coarse connector between two points using line-art glyphs. */
-    private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, string $point): void
+    /**
+     * Draw a coarse connector between two points using line-art glyphs —
+     * ASCII `| - \ /` by default, or the Unicode `│ ─ ╱ ╲` set when the
+     * `unicodeConnectors` flag is on (slope mapping identical to
+     * {@see Waveline::connectorRune()}).
+     */
+    private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, bool $unicode): void
     {
-        if ($x2 <= $x1) {
+        if ($x2 < $x1) {
             return;
         }
         // Vertical column between two adjacent samples (same x): step
         // through the rows.
         if ($x2 === $x1) {
+            if ($y2 === $y1) {
+                return; // identical points share a cell: no run to paint
+            }
+            $vertical = $unicode ? '│' : '|';
             $step = $y2 > $y1 ? 1 : -1;
             for ($y = $y1 + $step; $y !== $y2; $y += $step) {
-                $c->setCell($x1, $y, '|');
+                $c->setCell($x1, $y, $vertical);
             }
             return;
         }
         $dx = $x2 - $x1;
         $dy = $y2 - $y1;
         if ($dy === 0) {
+            $horizontal = $unicode ? '─' : '-';
             for ($x = $x1 + 1; $x < $x2; $x++) {
-                $c->setCell($x, $y1, '-');
+                $c->setCell($x, $y1, $horizontal);
             }
             return;
         }
         // Sample one row per intermediate column.
+        $slope = $dy > 0 ? ($unicode ? '╲' : '\\') : ($unicode ? '╱' : '/');
         for ($x = $x1 + 1; $x < $x2; $x++) {
             $t   = ($x - $x1) / $dx;
             $row = (int) round($y1 + $t * $dy);
-            $rune = $dy > 0 ? '\\' : '/';
-            $c->setCell($x, $row, $rune);
+            $c->setCell($x, $row, $slope);
         }
     }
 }

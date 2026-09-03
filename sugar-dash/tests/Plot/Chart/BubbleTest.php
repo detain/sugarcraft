@@ -10,6 +10,8 @@ use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use ReflectionMethod;
 
 final class BubbleTest extends TestCase
 {
@@ -98,7 +100,7 @@ final class BubbleTest extends TestCase
         $rendered = $bubble->render();
 
         // Should contain circle characters
-        $this->assertMatchesRegularExpression('/[●◜◝◟◠]/', $rendered);
+        $this->assertMatchesRegularExpression('/[●◜◝◟◞]/', $rendered);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -429,5 +431,205 @@ final class BubbleTest extends TestCase
         $rendered = $bubble->render();
 
         $this->assertNotSame('', $rendered);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Ringed bubble geometry (S1 amendment: ROUNDED_BOX_GLYPHS drives render)
+    //
+    // render() binning via mapSize (default size range 1..10):
+    //   raw size 1..3  -> single cell
+    //   raw size 4..6  -> radius 1 (legacy plus, no diagonals exist)
+    //   raw size 7..10 -> radius 2 (rounded box with quadrant arcs)
+    // At the default 50x20 the single point (50,50) centers at grid cell
+    // (row 8, col 20); each row is a 6-char label + space, so the visible
+    // char for grid col x sits at mb offset 7 + x of the ANSI-stripped line.
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Read Bubble's private ROUNDED_BOX_GLYPHS table through reflection so the
+     * assertions below track the source of truth: mutating a table entry
+     * in src changes what these tests expect (proving the table drives
+     * render), instead of restating the glyphs as test-local literals.
+     *
+     * @return array<string,string>
+     */
+    private function circleCharsTable(): array
+    {
+        foreach ((new ReflectionClass(Bubble::class))->getReflectionConstants() as $constant) {
+            if ($constant->getName() === 'ROUNDED_BOX_GLYPHS') {
+                /** @var array<string,string> $value */
+                $value = $constant->getValue();
+
+                return $value;
+            }
+        }
+
+        $this->fail('Bubble::ROUNDED_BOX_GLYPHS no longer exists; the geometry contract has moved.');
+    }
+
+    /**
+     * @return list<string> ANSI-stripped render lines (row y = index y).
+     */
+    private function strippedRenderLines(Bubble $bubble): array
+    {
+        return explode("\n", (string) preg_replace('/\x1b\[[0-9;]*m/', '', $bubble->render()));
+    }
+
+    private function cellAt(array $lines, int $row, int $col): string
+    {
+        return mb_substr($lines[$row], 7 + $col, 1);
+    }
+
+    public function testMediumBubbleEmitsQuadrantArcsFromTableAtDiagonals(): void
+    {
+        $table = $this->circleCharsTable();
+        // size 10 -> radius 2; center (row 8, col 20); corners at (+-2, +-2).
+        $lines = $this->strippedRenderLines(Bubble::new([
+            new BubblePoint('Big', 50, 50, 10),
+        ]));
+
+        $this->assertSame($table['top-left'], $this->cellAt($lines, 6, 18));
+        $this->assertSame($table['top-right'], $this->cellAt($lines, 6, 22));
+        $this->assertSame($table['bottom-left'], $this->cellAt($lines, 10, 18));
+        // Binding criterion (a): bottom-right corner comes from the table
+        // lookup at its exact diagonal offset - never a hardcoded glyph.
+        $this->assertSame($table['bottom-right'], $this->cellAt($lines, 10, 22));
+        // The table entry itself must carry U+25DE LOWER RIGHT ARC.
+        $this->assertSame("\u{25DE}", $table['bottom-right']);
+    }
+
+    public function testMediumBubbleRendersConnectedBoxWithFullDotFill(): void
+    {
+        $table = $this->circleCharsTable();
+        $lines = $this->strippedRenderLines(Bubble::new([
+            new BubblePoint('Big', 50, 50, 10),
+        ]));
+
+        $arcs = [$table['top-left'], $table['top-right'], $table['bottom-left'], $table['bottom-right']];
+        for ($dy = -2; $dy <= 2; $dy++) {
+            for ($dx = -2; $dx <= 2; $dx++) {
+                $cell = $this->cellAt($lines, 8 + $dy, 20 + $dx);
+                $isCorner = abs($dx) === 2 && abs($dy) === 2;
+
+                // Connected: the 5x5 window holds no gaps (full box => 4-connected).
+                $this->assertNotSame(' ', $cell, "gap at (dx=$dx, dy=$dy)");
+
+                if ($isCorner) {
+                    $this->assertContains($cell, $arcs);
+                } else {
+                    // Cardinal extremes and interior fill stay the full dot.
+                    $this->assertSame($table['full'], $cell, "non-corner at (dx=$dx, dy=$dy)");
+                }
+            }
+        }
+    }
+
+    public function testSmallBubbleKeepsPlusShapeWithoutCornerArcs(): void
+    {
+        $table = $this->circleCharsTable();
+        // size 5 -> radius 1: legacy 5-cell plus; its diagonals are outside
+        // the disk, and the arc clause of the contract is scoped to r >= 2.
+        $bubble = Bubble::new([
+            new BubblePoint('Small', 50, 50, 5),
+        ]);
+        $lines = $this->strippedRenderLines($bubble);
+
+        $this->assertSame($table['full'], $this->cellAt($lines, 8, 20));
+        $this->assertSame($table['full'], $this->cellAt($lines, 7, 20));
+        $this->assertSame($table['full'], $this->cellAt($lines, 9, 20));
+        $this->assertSame($table['full'], $this->cellAt($lines, 8, 19));
+        $this->assertSame($table['full'], $this->cellAt($lines, 8, 21));
+        foreach ([[-1, -1], [-1, 1], [1, -1], [1, 1]] as [$dy, $dx]) {
+            $this->assertSame(' ', $this->cellAt($lines, 8 + $dy, 20 + $dx));
+        }
+
+        $arcs = [$table['top-left'], $table['top-right'], $table['bottom-left'], $table['bottom-right']];
+        $this->assertSame([], array_values(array_intersect(mb_str_split(implode('', $lines)), $arcs)));
+    }
+
+    public function testDegenerateSizeRangePinsEveryPointToLargestBin(): void
+    {
+        // B9/Q4 contract: withSizeRange(x, x) collapses mapSize's span to zero.
+        // Pre-guard that division threw DivisionByZeroError (PHP 8 float divide
+        // by zero is fatal) and render() produced nothing; post-guard the ratio
+        // is pinned to 1, so EVERY point takes the largest bin regardless of
+        // its raw size — both the size-3 and the size-9 point below render the
+        // r=2 solid 5x5 box. Grid math at default 50x20: mapX(25)=col 10,
+        // mapY(75)=row 4; mapX(75)=col 30, mapY(25)=row 12.
+        $table = $this->circleCharsTable();
+        $lines = $this->strippedRenderLines(Bubble::new([
+            new BubblePoint('Low', 25, 75, 3),
+            new BubblePoint('High', 75, 25, 9),
+        ])->withSizeRange(5, 5));
+
+        $arcs = [$table['top-left'], $table['top-right'], $table['bottom-left'], $table['bottom-right']];
+        foreach ([[4, 10], [12, 30]] as [$row, $col]) {
+            for ($dy = -2; $dy <= 2; $dy++) {
+                for ($dx = -2; $dx <= 2; $dx++) {
+                    $cell = $this->cellAt($lines, $row + $dy, $col + $dx);
+                    $isCorner = abs($dx) === 2 && abs($dy) === 2;
+
+                    $this->assertNotSame(' ', $cell, "gap at center ($row,$col) + (dx=$dx, dy=$dy)");
+                    if ($isCorner) {
+                        $this->assertContains($cell, $arcs);
+                    } else {
+                        $this->assertSame($table['full'], $cell, "non-corner at center ($row,$col) + (dx=$dx, dy=$dy)");
+                    }
+                }
+            }
+        }
+    }
+
+    public function testMapSizeLadderCapsTopBinSoSevenThroughTenShareTheBox(): void
+    {
+        // v4/Q1 collapse: plotBubble dispatches three shapes, and the former
+        // bin 4 (raw 10 at the default 1..10 range) landed in the same r=2 arm
+        // as bin 3 (raw 7..9) — byte-identical output. The ladder is capped at
+        // 3 so the dead rung is gone; this pin fails if a fourth distinct bin
+        // ever reappears without the dispatch gaining a matching arm.
+        $mapSize = new ReflectionMethod(Bubble::class, 'mapSize');
+        $bubble = Bubble::new([]);
+
+        $bins = [];
+        for ($raw = 1; $raw <= 10; $raw++) {
+            $bins[$raw] = $mapSize->invoke($bubble, (float) $raw);
+        }
+
+        $this->assertSame([1, 1, 1, 2, 2, 2, 3, 3, 3, 3], array_values($bins));
+        // Equivalence pin: the collapsed top band keeps old bin3 ≡ bin4 on one
+        // shape — raw 7 and raw 10 must never disagree.
+        $this->assertSame($bins[7], $bins[10]);
+        // Out-of-range sizes saturate into an existing rung, never invent one.
+        $this->assertSame(1, $mapSize->invoke($bubble, 0.0));
+        $this->assertSame(3, $mapSize->invoke($bubble, 20.0));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Render purity across the v5 D5 [R3 Set-3] identifier sweep
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * ANSI-stripped sha1 of the fixed three-bin dataset below, captured from
+     * the pristine pre-rename tree at HEAD (all three shape bins exercised:
+     * single dot, r=1 plus, r=2 rounded box).
+     */
+    private const RENDER_PURITY_SHA1 = '8db2a161d5fabab39393f50cf221b0a21cef0102';
+
+    public function testSetThreeRenameLeavesRenderBytesUntouched(): void
+    {
+        // v5 D5 renamed the private glyph table, glyph resolver, and cluster
+        // drawer per the R3 Set-3 ruling. Private identifiers must move zero
+        // output bytes: this pin fails the moment the sweep (or any later
+        // refactor claiming to be cosmetic) alters what a bubble renders.
+        $rendered = Bubble::new([
+            new BubblePoint('Tiny', 20, 80, 2),
+            new BubblePoint('Plus', 50, 50, 5),
+            new BubblePoint('Box', 80, 25, 10),
+        ])->render();
+
+        $stripped = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $rendered);
+
+        $this->assertNotSame('', $stripped);
+        $this->assertSame(self::RENDER_PURITY_SHA1, sha1($stripped));
     }
 }

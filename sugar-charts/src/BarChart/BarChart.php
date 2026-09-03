@@ -46,6 +46,7 @@ final class BarChart
         public readonly bool $showLabels,
         public readonly bool $horizontal = false,
         public readonly bool $showAxis   = false,
+        public readonly bool $fractionalHeights = false,
         public readonly ?int $barWidth   = null,
         public readonly ?int $barGap     = null,
         public readonly bool $showLegend = false,
@@ -141,12 +142,31 @@ final class BarChart
 
     /**
      * Draw an axis line along the chart edge: vertical (┤) on the
-     * left in vertical mode, horizontal (┴) along the top in
-     * horizontal mode. Mirrors ntcharts' `SetShowAxis`.
+     * left in vertical mode, vertical (├) on the left of each bar row
+     * in horizontal mode. Mirrors ntcharts' `SetShowAxis`.
      */
     public function withShowAxis(bool $on = true): self
     {
         return $this->copy(showAxis: $on);
+    }
+
+    /**
+     * Render the sub-cell remainder of each bar as an eighth-block cap
+     * instead of snapping the whole bar to full `█` cells. Low-height
+     * charts otherwise make 0.9 and 0.51 indistinguishable once they
+     * round to the same cell count; the ramp keeps the residual visible
+     * while whole cells stay `█` byte-for-byte as before. Vertical bars
+     * get a bottom-eighths cap (`▁`…`▇`) on the partial top row; horizontal
+     * bars get a left-flush cap (`▏`…`▉`) so the fill stays contiguous with
+     * the `█` body — a right-flush glyph would open a gap at the cap.
+     * Residuals rounding to 0/8 eighths render blank/full respectively
+     * (no `▁` ghost from float noise). Default off — legacy output is
+     * preserved for existing consumers. Concept ported from the
+     * eighth-block ramp used by sugar-dash `RenderBar`.
+     */
+    public function withFractionalHeights(bool $on = true): self
+    {
+        return $this->copy(fractionalHeights: $on);
     }
 
     /**
@@ -247,12 +267,18 @@ final class BarChart
     public function showLabels(bool $on = true): self { return $this->withShowLabels($on); }
     public function horizontal(bool $on = true): self { return $this->withHorizontal($on); }
     public function showAxis(bool $on = true): self   { return $this->withShowAxis($on); }
+    /** Short-form alias for {@see withFractionalHeights()}. */
+    public function fractional(bool $on = true): self { return $this->withFractionalHeights($on); }
     public function barWidth(?int $width): self       { return $this->withBarWidth($width); }
     public function barGap(?int $gap): self           { return $this->withBarGap($gap); }
+    /** Short-form alias for {@see withNoAutoBarWidth()}. */
+    public function noAutoBarWidth(bool $on = true): self { return $this->withNoAutoBarWidth($on); }
     public function legend(bool $on = true): self     { return $this->withLegend($on); }
     public function legendPos(Position $pos): self    { return $this->withLegendPosition($pos); }
     public function legendStyle(?string $char): self  { return $this->withLegendStyle($char); }
     public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
+    /** Short-form alias for {@see withTitlePosition()} — Position-suffix deviates to `Pos`, mirroring `legendPos`. */
+    public function titlePos(Position $pos): self     { return $this->withTitlePosition($pos); }
     public function xLabel(string $label): self       { return $this->withXLabel($label); }
     public function yLabel(string $label): self       { return $this->withYLabel($label); }
     /** @param list<array{label: string, color: string}> $items */
@@ -343,17 +369,31 @@ final class BarChart
         $renderLabels = $this->showLabels && $this->height >= 2;
         $bodyHeight   = $renderLabels ? $this->height - 1 : $this->height;
         $heights = [];
+        $caps    = [];
         foreach ($values as $v) {
             $norm = ($v - $min) / ($max - $min);
             $norm = max(0.0, min(1.0, $norm));
-            $heights[] = (int) round($norm * $bodyHeight);
+            if (!$this->fractionalHeights) {
+                $heights[] = (int) round($norm * $bodyHeight);
+                $caps[]    = '';
+                continue;
+            }
+            $exact     = $norm * $bodyHeight;
+            $whole     = (int) floor($exact);
+            $heights[] = $whole;
+            $caps[]    = self::topCapRune($exact - $whole);
         }
 
         $rows = [];
         for ($row = $bodyHeight; $row >= 1; $row--) {
             $line = $this->showAxis ? '┤' : '';
             foreach ($heights as $i => $h) {
-                $line .= str_repeat($h >= $row ? '█' : ' ', $colW);
+                $cell = match (true) {
+                    $h >= $row => '█',
+                    $caps[$i] !== '' && $h + 1 === $row => $caps[$i],
+                    default => ' ',
+                };
+                $line .= str_repeat($cell, $colW);
                 if ($i !== $count - 1 && $gap > 0) {
                     $line .= str_repeat(' ', $gap);
                 }
@@ -413,7 +453,14 @@ final class BarChart
         foreach ($bars as $i => $bar) {
             $norm = ($bar->value - $min) / ($max - $min);
             $norm = max(0.0, min(1.0, $norm));
-            $filled = (int) round($norm * $barWidth);
+            $cap  = '';
+            if ($this->fractionalHeights) {
+                $exact  = $norm * $barWidth;
+                $filled = (int) floor($exact);
+                $cap    = self::rightCapRune($exact - $filled);
+            } else {
+                $filled = (int) round($norm * $barWidth);
+            }
             $row = '';
             if ($this->showLabels) {
                 $label = self::truncate($bar->label, $labelGutter);
@@ -423,6 +470,9 @@ final class BarChart
                 $row .= '├';
             }
             $row .= str_repeat('█', $filled);
+            if ($cap !== '') {
+                $row .= $cap;
+            }
             $rows[] = rtrim($row);
         }
         return implode("\n", $rows);
@@ -467,6 +517,40 @@ final class BarChart
     }
 
     /**
+     * Eighth-block cap for the partial top cell of a vertical bar: the
+     * bottom-eighths ramp U+2581…U+2587 so the fill hugs the bottom edge
+     * against the `█` body. `$frac` is the fractional cell (0 ≤ frac < 1);
+     * a residual under half an eighth yields '' (blank) to keep float
+     * noise from drawing `▁` ghosts, and a residual rounding up to 8/8
+     * falls out of the codepoint math as U+2588 (`█`) — a promoted full
+     * row.
+     */
+    private static function topCapRune(float $frac): string
+    {
+        $eighths = (int) round($frac * 8);
+        if ($eighths < 1) {
+            return '';
+        }
+        return mb_chr(0x2581 + min($eighths, 8) - 1, 'UTF-8');
+    }
+
+    /**
+     * Eighth-block cap for the partial right cell of a horizontal bar:
+     * the LEFT-flush ramp U+258F…U+2589 (fill hugging the left edge) so
+     * the cap stays contiguous with the `█` body — the right-flush
+     * U+2590 family would open a gap. Same blank/promote rules as
+     * {@see topCapRune()}.
+     */
+    private static function rightCapRune(float $frac): string
+    {
+        $eighths = (int) round($frac * 8);
+        if ($eighths < 1) {
+            return '';
+        }
+        return mb_chr(0x2590 - min($eighths, 8), 'UTF-8');
+    }
+
+    /**
      * Internal copy-with-overrides helper.
      * Uses flag parameters to distinguish "not passed" from "passed as null".
      *
@@ -484,6 +568,7 @@ final class BarChart
         ?bool $showLabels = null,
         ?bool $horizontal = null,
         ?bool $showAxis = null,
+        ?bool $fractionalHeights = null,
         ?int $barWidth = null,
         bool $barWidthSet = false,
         ?int $barGap = null,
@@ -505,6 +590,7 @@ final class BarChart
             showLabels:         $showLabels         ?? $this->showLabels,
             horizontal:         $horizontal         ?? $this->horizontal,
             showAxis:           $showAxis           ?? $this->showAxis,
+            fractionalHeights:  $fractionalHeights  ?? $this->fractionalHeights,
             barWidth:           $barWidthSet ? $barWidth : ($barWidth ?? $this->barWidth),
             barGap:             $barGap             ?? $this->barGap,
             showLegend:         $showLegend         ?? $this->showLegend,
@@ -532,6 +618,7 @@ final class BarChart
             showLabels:         $this->showLabels,
             horizontal:         $this->horizontal,
             showAxis:           $this->showAxis,
+            fractionalHeights:  $this->fractionalHeights,
             barWidth:           $barWidthSet ? $barWidth : ($barWidth ?? $this->barWidth),
             barGap:             $this->barGap,
             showLegend:         $this->showLegend,

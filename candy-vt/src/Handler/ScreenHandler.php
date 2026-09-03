@@ -288,15 +288,15 @@ final class ScreenHandler implements Handler
 
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
     {
-        // No-op — DCS dispatch is scoped to later slices.
-        $prefix; // unused - reserved for future DCS handling
+        // No-op — DCS dispatch is scoped to later slices; the parser
+        // params are part of the Handler contract, reserved for that
+        // future DCS handling.
     }
 
     public function sosPmApcDispatch(string $kind, string $data): void
     {
-        // No-op.
-        $kind; // unused - reserved for future SOS/PM/APC handling
-        $data; // unused - reserved for future SOS/PM/APC handling
+        // No-op — SOS/PM/APC strings are consumed and discarded until
+        // there is a consumer for them.
     }
 
     private function backspace(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine\Tests;
 
+use PHPUnit\Framework\Attributes\WithoutErrorHandler;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Shine\Renderer;
 use SugarCraft\Shine\Theme;
@@ -180,10 +181,17 @@ final class CoverageBoostTest extends TestCase
 
     // ---- Theme::fromJson error paths --------------------------------------
 
+    #[WithoutErrorHandler]
     public function testFromJsonThrowsRuntimeOnFileGetContentsFailure(): void
     {
-        // Create a special file that exists but is unreadable.
-        // Since we're root, we can make a file unreadable.
+        // chmod(0) only revokes read permission on POSIX; on Windows the mode
+        // bits are advisory and file_get_contents() still succeeds, so the
+        // unreadable-file branch under test cannot be reached there.
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('chmod(0) does not make files unreadable on Windows.');
+        }
+
+        // Create a special file that exists but is unreadable (CI runs non-root).
         $tmp = tempnam(sys_get_temp_dir(), 'shine_unreadable');
         chmod($tmp, 0);
         try {

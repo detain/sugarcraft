@@ -278,6 +278,12 @@ abstract class Chart
     public function yLabel(string $label): self     { return $this->withYLabel($label); }
     public function dataLabels(bool $on = true): self { return $this->withDataLabels($on); }
     public function dataLabelFormat(\Closure $fn): self { return $this->withDataLabelFormatter($fn); }
+    /** Short-form alias for {@see withTitle()}. */
+    public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
+    /** Short-form alias for {@see withCanvas()}. */
+    public function canvas(BrailleCanvas $canvas): self { return $this->withCanvas($canvas); }
+    /** Short-form alias for {@see withTheme()}. */
+    public function theme(Theme $theme): self { return $this->withTheme($theme); }
 
     // ─── Animation Support ──────────────────────────────────────────────
 
@@ -307,6 +313,11 @@ abstract class Chart
     {
         return $this->animationDuration;
     }
+
+    /** Short-form alias for {@see withAnimationProgress()}. */
+    public function animationProgress(float $progress): self { return $this->withAnimationProgress($progress); }
+    /** Short-form alias for {@see withAnimationDuration()}. */
+    public function animationDuration(int $durationMs): self { return $this->withAnimationDuration($durationMs); }
 
     /**
      * Internal copy-with-overrides helper.

@@ -261,6 +261,26 @@ silently widened; the orchestrator approved the widening before the fix agent pr
 - INCIDENT (orchestration-side): BEFORE the real round, a CONFABULATED "completed F6b round" (fake commits/cycles/30-site ledger) reached the orchestrator through a compression summary and was nearly acted on - a bg gate command was even launched on it (its semicolon-after-guarded-cd ran the suite on MASTER: bonus 4th belt 10644/165013/1/0 at `0fdfd9033`, MMG-201 arm, /tmp/f6b-gate.out). A fresh cycle-4 reviewer's disk-check returned the correct BLOCKER (no shas, no branch, empty scratchpad; findings: /home/sites/prompt-scratch/F6b/review-4/findings-cycle-4.md; fiction brief quarantined as *.CONFABULATION-DISCARD). Nothing false reached master. LAW adopted: verify SHAs on disk before narrating or merging - own summaries included; never ';' after guarded cd in bg chains.
 - NEXT-SESSION RECIPE: (1) byte-scan incoming objects (already done - clean); (2) merge-gate full suite at 3bea55552: cwd /home/sites/prompt-step-F6b checkout root, serial, </dev/null, probe ps -eo cmd | /usr/bin/grep -c '^php .*phpunit' = 0; PREDICTION 10644 tests / 165010-or-165013 (MMG dual-arm) / 1 skip / 0 fail; cmp.py (/home/sites/prompt_kit/tools/cmp.py, branch junit first) vs /home/sites/prompt-scratch/P4.S5/orchestrator/gate-junit.xml - content-walking guards (SymbolCitationDrift, GlobFigureDrift, nine-file census) can move on comment text: attribute per-class before adjudicating; (3) finalize+cat merge msg, merge --no-ff prompt/F6b -F msg (assert branch=master + porcelain FULL first); (4) diff --stat 3bea55552 master: sugar-crush/ EMPTY, plan-file diff = 6 lines the measured citation pairs; (5) belt; (6) fill THIS entry w/ merge sha + belt figure; (7) commit prompt_kit/briefs/F6b-step-brief.md (currently untracked) + resume rewrite #6 + worklog; (8) §1.12 + worktree remove + branch -d. THEN the GENUINE STOP-AND-ASK: supervisor section-5 re-check before Phase 5. Gap-fillers left: transcriptSignature same-count-REPLACE third control; NOTE-1 Anthropic-only-readout decision; F6b-reported residual sweep (PRR :44-50/:537/:574/:635/:655 + plan L1604-1605).
 
+
+**MERGED (same day, 2026-09-03):** the next-session recipe in this entry was executed immediately,
+not deferred. Prescan green (branch=master, porcelain 0, EMAILHITS=0 on all five objects, master
+29269d3d4). Merge-gate full suite at 3bea55552 (cwd /home/sites/prompt-step-F6b checkout root,
+serial, </dev/null, box-quiet probe 0): **Tests: 10644 / Assertions: 165013 / Skipped: 1 /
+Failures: 0 / SUITE-EXIT=0**, Time 07:00.574 — prediction (prediction-gate2.md, written first) hit
+exactly; 165013 = MMG-201 arm (165010 at 198, dual-arm rule applied). cmp.py gate2-junit.xml vs
+P4.S5 gate-junit.xml: sole mover MouseModalGuardTest 198->201 (+3 assertions, dTests 0), SUM
+DELTAS +3/+0, zero unexplained movement. Merge msg finalized (31 lines, <GATELINE> sed-filled,
+cat-eyeballed, placeholder count 0) and `git merge --no-ff prompt/F6b -F
+/home/sites/prompt-scratch/F6b/orchestrator/msg-merge-f6b.txt` -> MERGE-EXIT=0, ort, 4 files
++10/-10 -> master tip **bcf419855** (identity both fields literal Joe Huss <detain@interserver.net>).
+`git diff --stat 3bea55552 master -- sugar-crush/` EMPTY; tree-wide diff = only the three
+bookkeeping record files of 29269d3d4 (read by no test) — the gate figure provably describes
+master. §1.12 green, worktree removed, branch deleted. Belt on master at bcf419855:
+belt at bcf419855 (cwd /home/sites/sugarcraft root, serial, </dev/null, box-quiet probe 0): Tests: 10644 / Assertions: 165013 (MMG-201 arm) / Skipped: 1 / 0 failures / SUITE-EXIT=0, Time 07:01.858 - IDENTICAL to the merge gate; sixth belt-level confirmation of the dual-arm figures. F6b CLOSED. The reported residual sweep became step **F6c**, launched same day
+(brief prompt_kit/briefs/F6c-step-brief.md, sandbox /home/sites/prompt-step-F6c @ bcf419855,
+three targets: PRR residual emit cites, plan L1604-1605 Bootstrap/Chat cites, and the
+transcriptSignature same-count-REPLACE third control).
+
 ### P4.S5 — E23 exchangeKey() collapses byte-identical exchanges: CLOSED AS MEASURED (outcome b) · 2026-09-03 · 142cef6ce
 
 **Status:** MERGED as 142cef6ce (merge of `prompt/P4.S5`, 2 commits over base `1500ad32b`: d3e4def25 measurement+dossier+tests, e2554332a fix-1 docblock narrowing; 2 files +251/−2; production SEMANTICS unchanged — every changed src line is a comment).

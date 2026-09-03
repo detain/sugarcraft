@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A segment in a Sunburst chart.
@@ -87,17 +88,6 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
     private bool $showValues = false;
     private int $maxDepth = 3;
     private string $style = 'rounded';
-
-    /**
-     * Block characters for arc approximation.
-     */
-    private const ARC_CHARS = [
-        'full' => '█',
-        'left' => '▏',
-        'right' => '▎',
-        'top' => '▁',
-        'bottom' => '▔',
-    ];
 
     public function __construct(
         private ?Color $segmentColor = null,
@@ -271,6 +261,46 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
             $centerDiameter = 3;
         }
 
+        // Codepoint view of the center label, split ONCE before the row loop:
+        // byte indexing ($label[$i]) slices through multi-byte UTF-8 sequences
+        // and emits stray continuation bytes (and mid-codepoint garbage on a
+        // straddling offset) into the render; indexing this array keeps the
+        // content whole. The WINDOW itself is measured in DISPLAY CELLS via
+        // SugarCraft\Core\Util\Width: a double-width glyph occupies the two
+        // cells it spans — its trailing cell paints nothing, so later glyphs
+        // keep their columns — and a glyph is never split across the budget.
+        // For BMP-narrow runs (ASCII) one codepoint is one cell, so those
+        // renders stay byte-for-byte unchanged.
+        $centerLabelChars = mb_str_split($this->centerLabel);
+        $centerHalfWindow = intval($centerDiameter / 4);
+        $centerWindowCells = 2 * $centerHalfWindow + 1;
+
+        /** @var array<int, string> $centerGlyphAtCell window-cell offset => glyph (zero-width marks fold onto their base cell) */
+        $centerGlyphAtCell = [];
+        /** @var array<int, true> $centerWideTrailing cells already consumed by the second column of a wide glyph */
+        $centerWideTrailing = [];
+        $cellCursor = 0;
+        $lastPlacedCell = -1;
+        foreach ($centerLabelChars as $glyph) {
+            $glyphCells = Width::of($glyph);
+            if ($glyphCells === 0) {
+                if ($lastPlacedCell >= 0) {
+                    $centerGlyphAtCell[$lastPlacedCell] .= $glyph;
+                }
+                continue;
+            }
+            if ($cellCursor + $glyphCells > $centerWindowCells) {
+                // Never split a glyph across the budget: stop placing.
+                break;
+            }
+            $centerGlyphAtCell[$cellCursor] = $glyph;
+            if ($glyphCells > 1) {
+                $centerWideTrailing[$cellCursor + 1] = true;
+            }
+            $lastPlacedCell = $cellCursor;
+            $cellCursor += $glyphCells;
+        }
+
         for ($row = $centerY - intval($centerDiameter / 2); $row <= $centerY + intval($centerDiameter / 2); $row++) {
             if ($row < 1 || $row >= $height - 1) {
                 continue;
@@ -286,14 +316,15 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
 
                 if ($distance <= intval($centerDiameter / 2)) {
                     // Inside center circle
-                    if ($isCenterRow && abs($dx) <= intval($centerDiameter / 4)) {
-                        // Show label in center row
-                        $labelIndex = intval($dx + intval($centerDiameter / 4));
-                        if ($labelIndex >= 0 && $labelIndex < strlen($this->centerLabel)) {
-                            $char = $this->centerLabel[$labelIndex];
-                        } else {
-                            $char = ' ';
+                    if ($isCenterRow && abs($dx) <= $centerHalfWindow) {
+                        // Show label in center row (window counted in cells)
+                        $cell = $dx + $centerHalfWindow;
+                        if (isset($centerWideTrailing[$cell])) {
+                            // Second cell of a wide glyph: the terminal already
+                            // consumed it — emit nothing so the columns stay put.
+                            continue;
                         }
+                        $char = $centerGlyphAtCell[$cell] ?? ' ';
                     } else {
                         $char = '●';
                     }
@@ -353,7 +384,28 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
             foreach ($this->segments as $segment) {
                 $color = $segment->color ?? $segmentColor;
                 $visible = '▪ ' . $segment->label;
-                $visibleWidth = mb_strlen($visible);
+                $visibleWidth = Width::string($visible);
+
+                // Same budget the former fit predicate used ($legendX +
+                // $visibleWidth < $width - 2), expressed as the widest entry
+                // that still lands inside the border — in display cells.
+                $available = $width - 3 - $legendX;
+                if ($available < 1) {
+                    // Degenerate guard: not even one cell of room left, so
+                    // nothing (not a truncated stub) can render from here on —
+                    // later segments cannot fit either, stop honestly.
+                    break;
+                }
+                if ($visibleWidth > $available) {
+                    // Over-long entries truncate to the remaining CELL budget
+                    // instead of the whole entry being silently dropped
+                    // (chart_v4 C3, ruling R5(ii)); a wide glyph straddling
+                    // the cut is dropped whole, never split. Hard cut,
+                    // ellipsis-free — matches the plain-cell box style.
+                    $visible = Width::truncate($visible, $available);
+                    $visibleWidth = Width::string($visible);
+                }
+
                 $entry = '';
                 if ($color !== null) {
                     $entry .= $color->toFg(ColorProfile::TrueColor);
@@ -363,15 +415,21 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
                     $entry .= Ansi::reset();
                 }
 
-                if ($legendX + $visibleWidth < $width - 2) {
-                    $legendLine .= $entry . '  ';
-                    $legendX += $visibleWidth + 2;
-                }
+                $legendLine .= $entry . '  ';
+                $legendX += $visibleWidth + 2;
             }
 
             if ($legendLine !== '') {
+                // str_pad() counts BYTES, but $legendLine embeds truecolor SGR
+                // sequences, so padding to a byte target lands the right border
+                // inside the box (reconA CASE 1c). Pad by DISPLAY CELLS instead:
+                // SugarCraft\Core\Util\Width strips the SGR itself and scores a
+                // double-width glyph its two columns, so the border stays
+                // column-aligned for wide entries; for SGR-free BMP-narrow
+                // (ASCII) lines this equals the old str_pad math exactly.
+                $visibleLegendWidth = Width::string($legendLine);
                 $result .= $bl . str_pad('', $width - 2) . $br . "\n";
-                $result .= $v . str_pad($legendLine, $width - 2) . $v . "\n";
+                $result .= $v . $legendLine . str_repeat(' ', max(0, $width - 2 - $visibleLegendWidth)) . $v . "\n";
             }
         }
 

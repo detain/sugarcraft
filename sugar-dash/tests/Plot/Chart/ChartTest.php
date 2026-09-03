@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Plot\Chart;
 
+use SugarCraft\Buffer\Buffer;
 use SugarCraft\Dash\Plot\Chart\Chart;
 use SugarCraft\Dash\Plot\Chart\ChartDataPoint;
 use SugarCraft\Dash\Plot\Chart\ChartType;
@@ -675,5 +676,372 @@ final class ChartTest extends TestCase
         // The 30-byte threshold was a placeholder; real goal is delta < full 80x24 re-emit (≥1920 bytes)
         $this->assertLessThan($bytes1, $bytes2, 'Frame 2 delta should be smaller than full re-render');
         $this->assertLessThan($bytes1, $bytes3, 'Frame 3 delta should be smaller than full re-render');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Diff-path buffer rebuild (B11: codepoint-exact cell mapping)
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * ChartDataPoint/ChartType are declared inside Chart.php (no PSR-4 file
+     * of their own). PSR-4 cannot resolve them when a --filter run touches
+     * them as arguments before any Chart reference, so warm the defining
+     * file once for the class.
+     */
+    public static function setUpBeforeClass(): void
+    {
+        class_exists(Chart::class);
+    }
+
+    /**
+     * Plain-content factory: no colors (zero ANSI), no grid — every byte
+     * reaching bufferFromOutput is renderable text, so the rebuilt grid is
+     * fully predictable (CJK labels + 3-byte '█' bar runes).
+     *
+     * @param list<ChartDataPoint> $dataPoints
+     */
+    private function plainBarChart(array $dataPoints): Chart
+    {
+        return new Chart(
+            dataPoints: $dataPoints,
+            type: ChartType::Bar,
+            widthConstraint: null,
+            heightConstraint: 10,
+            showGrid: false,
+            showValues: false,
+            showLabels: true,
+            color: null,
+            gridColor: null,
+            labelColor: null,
+        );
+    }
+
+    /**
+     * Ground-truth cell grid: codepoints per line, right-padded to $width.
+     *
+     * @return list<list<string>>
+     */
+    private function codepointGrid(string $text, int $width, int $height): array
+    {
+        $grid = [];
+        $lines = explode("\n", $text);
+        for ($row = 0; $row < $height; $row++) {
+            $runes = mb_str_split($lines[$row] ?? '');
+            $grid[] = array_pad($runes, $width, ' ');
+        }
+
+        return $grid;
+    }
+
+    /**
+     * Strict cell-rune check. assertSame on raw strings compares numeric
+     * strings loosely (byte slice "\xE6" == codepoint "日"), so wrap in a
+     * one-element array — multibyte mismatches must fail loudly.
+     */
+    private function assertSameRune(string $expected, Buffer $buffer, int $col, int $row): void
+    {
+        $this->assertSame(
+            [$expected],
+            [$buffer->cellAt($col, $row)->rune],
+            sprintf('cell (%d,%d) rune', $col, $row)
+        );
+    }
+
+    /**
+     * Core B11 pin: on a reused chart the second render must store the
+     * same cell grid a fresh full render of that state would store. With
+     * multibyte content the old byte-indexed guard emitted '' cells instead
+     * of space padding for every column past the last codepoint but within
+     * the byte length — both stored frames diverged from what was painted,
+     * so the diff churned phantom cells and repainted stale glyphs.
+     */
+    public function testDiffReRenderBufferMatchesFreshRender(): void
+    {
+        $chart = $this->plainBarChart([
+            new ChartDataPoint('日本', 5),
+            new ChartDataPoint('B', 10),
+        ]);
+        $firstFrame = $chart->render();
+        $this->assertStringContainsString('日本', $firstFrame, 'precondition: CJK label painted on first frame');
+
+        // Mutate the SAME instance → next render() takes the diff path
+        // (value shift grows the first bar by two rows; label keeps CJK).
+        $points = new \ReflectionProperty(Chart::class, 'dataPoints');
+        $points->setAccessible(true);
+        $points->setValue($chart, [
+            new ChartDataPoint('東京', 7),
+            new ChartDataPoint('B', 10),
+        ]);
+
+        $delta = $chart->render();
+        $this->assertNotSame('', $delta, 'precondition: changed cells must emit ops');
+        $this->assertLessThan(strlen($firstFrame), strlen($delta), 'precondition: same-size re-render must emit a delta, not a full frame');
+
+        $stored = new \ReflectionProperty(Chart::class, 'renderContext');
+        $stored->setAccessible(true);
+        /** @var Buffer $diffBuffer */
+        $diffBuffer = $stored->getValue($chart)->previousFrame;
+
+        $fresh = $this->plainBarChart([
+            new ChartDataPoint('東京', 7),
+            new ChartDataPoint('B', 10),
+        ]);
+        $freshFrame = $fresh->render();
+        /** @var Buffer $freshBuffer */
+        $freshBuffer = $stored->getValue($fresh)->previousFrame;
+
+        $this->assertNotSame($diffBuffer, $freshBuffer, 'sanity: distinct instances');
+
+        // Full-grid parity: stored diff-state buffer == codepoint grid of
+        // the fresh full render. Since D1 the diff height covers the full
+        // 40x11 emitted frame (10 chart rows + labels row), so the label
+        // row is inside the diff geometry.
+        $this->assertSame($this->codepointGrid($freshFrame, 40, 11), self::readableGrid($diffBuffer, 40, 11));
+        $this->assertSame(self::readableGrid($freshBuffer, 40, 11), self::readableGrid($diffBuffer, 40, 11));
+
+        // Exact ground truth on the CJK label row: 8-space gutter,
+        // 日本/東京 pair, space after — pinned directly on the stored
+        // buffer (D1 replaced the old direct-rebuild-at-40x11 workaround,
+        // which only existed because the label row was clipped away).
+        $this->assertSameRune('東', $diffBuffer, 8, 10);
+        $this->assertSameRune('京', $diffBuffer, 9, 10);
+        $this->assertSameRune(' ', $diffBuffer, 10, 10);
+    }
+
+    /**
+     * Read a buffer back into a plain codepoint grid for comparison.
+     *
+     * @return list<list<string>>
+     */
+    private static function readableGrid(Buffer $buffer, int $width, int $height): array
+    {
+        $grid = [];
+        for ($row = 0; $row < $height; $row++) {
+            $line = [];
+            for ($col = 0; $col < $width; $col++) {
+                $line[] = $buffer->cellAt($col, $row)->rune;
+            }
+            $grid[] = $line;
+        }
+
+        return $grid;
+    }
+
+    /**
+     * ASCII rows must map byte-identically (codepoints == bytes): the fix
+     * may not shift anything on the pure-ASCII path.
+     */
+    public function testBufferFromOutputPureAsciiUnchanged(): void
+    {
+        $output = "Hello World\nabc123";
+        $method = new \ReflectionMethod(Chart::class, 'bufferFromOutput');
+        $method->setAccessible(true);
+        /** @var Buffer $buffer */
+        $buffer = $method->invoke(new Chart(), $output, 12, 2);
+
+        $this->assertSame('H', $buffer->cellAt(0, 0)->rune);
+        $this->assertSame('World', implode('', array_map(
+            static fn (int $i): string => $buffer->cellAt(6 + $i, 0)->rune,
+            range(0, 4)
+        )));
+        $this->assertSame($this->codepointGrid($output, 12, 2), self::readableGrid($buffer, 12, 2));
+    }
+
+    /**
+     * Wide/multibyte boundary: one line mixing ASCII, 3-byte CJK, and the
+     * 3-byte '─' box glyph — each rune must land in exactly one cell with
+     * space padding after the codepoint end (the old guard emitted '' there).
+     */
+    public function testBufferFromOutputMultibyteBoundary(): void
+    {
+        $output = 'A日B─';
+        $method = new \ReflectionMethod(Chart::class, 'bufferFromOutput');
+        $method->setAccessible(true);
+        /** @var Buffer $buffer */
+        $buffer = $method->invoke(new Chart(), $output, 6, 1);
+
+        $this->assertSameRune('A', $buffer, 0, 0);
+        $this->assertSameRune('日', $buffer, 1, 0);
+        $this->assertSameRune('B', $buffer, 2, 0);
+        $this->assertSameRune('─', $buffer, 3, 0);
+        $this->assertSameRune(' ', $buffer, 4, 0);
+        $this->assertSameRune(' ', $buffer, 5, 0);
+        $this->assertSame($this->codepointGrid($output, 6, 1), self::readableGrid($buffer, 6, 1));
+    }
+
+    /**
+     * C4 core pin (Q4/R5-iii): the colored default path (Chart::new sets
+     * color/gridColor/labelColor) must store DISPLAY runes in the diff-state
+     * buffer, not SGR fragments. Before the strip, ESC/'['/'3'/'8'/… landed
+     * as individual cells, so any escape-length change on a row shifted all
+     * later runes right and re-renders diffed phantom whole rows. Ground
+     * truth = house-regex-stripped fresh frame (BubbleTest::strippedRenderLines
+     * precedent); strip happens inside bufferFromOutput only — the full
+     * frame render() returns keeps every SGR byte (pinned below).
+     */
+    public function testColoredChartDiffBufferMatchesFreshRenderStrippedGrid(): void
+    {
+        $chart = Chart::new([
+            new ChartDataPoint('日本', 5),
+            new ChartDataPoint('B', 10),
+        ]);
+        $firstFrame = $chart->render();
+        $this->assertStringContainsString("\x1b[38;2;137;180;250m", $firstFrame, 'precondition: default Chart::new path embeds truecolor SGR');
+
+        // Mutate the SAME instance → second render takes the diff path.
+        $points = new \ReflectionProperty(Chart::class, 'dataPoints');
+        $points->setAccessible(true);
+        $points->setValue($chart, [
+            new ChartDataPoint('東京', 7),
+            new ChartDataPoint('B', 10),
+        ]);
+
+        $delta = $chart->render();
+        $this->assertNotSame('', $delta, 'precondition: changed cells must emit ops');
+        $this->assertLessThan(strlen($firstFrame), strlen($delta), 'precondition: same-size colored re-render must emit a delta, not a full frame');
+
+        $stored = new \ReflectionProperty(Chart::class, 'renderContext');
+        $stored->setAccessible(true);
+        /** @var Buffer $diffBuffer */
+        $diffBuffer = $stored->getValue($chart)->previousFrame;
+
+        $fresh = Chart::new([
+            new ChartDataPoint('東京', 7),
+            new ChartDataPoint('B', 10),
+        ]);
+        $freshFrame = $fresh->render();
+        /** @var Buffer $freshBuffer */
+        $freshBuffer = $stored->getValue($fresh)->previousFrame;
+
+        $this->assertNotSame($diffBuffer, $freshBuffer, 'sanity: distinct instances');
+
+        // Full-frame stdout bytes still carry the styling (strip is internal):
+        $this->assertStringContainsString("\x1b[38;2;", $freshFrame, 'colored stdout frame must keep SGR bytes');
+
+        // Parity: stored diff-state grid == codepoint grid of the DISPLAY
+        // runes of the fresh render, width-clipped to 40 exactly as the cell
+        // loop does (runes past the last buffer column are status quo); since
+        // D1 the rows cover the full 12-row frame — chart area 40x10 plus the
+        // x-axis and labels rows inside the diff geometry.
+        $stripped = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $freshFrame);
+        $expected = array_map(
+            static fn (array $r): array => array_slice($r, 0, 40),
+            $this->codepointGrid($stripped, 40, 12)
+        );
+        $this->assertSame($expected, self::readableGrid($diffBuffer, 40, 12));
+        $this->assertSame(self::readableGrid($freshBuffer, 40, 12), self::readableGrid($diffBuffer, 40, 12));
+    }
+
+    /**
+     * Direct cell pin: on the colored frame, bufferFromOutput cells hold the
+     * painted runes ('█' bar fill, '─' axis, CJK labels) with zero ESC cells
+     * anywhere. Pre-strip each bar/axis/label color sequence began at its
+     * own cell (ESC was the rune at col 9 of every bar row, col 0 of the
+     * labels row) — reverting the strip fails these pins loudly.
+     */
+    public function testBufferFromOutputColoredCellsAreDisplayRunesNotSgrFragments(): void
+    {
+        $chart = Chart::new([
+            new ChartDataPoint('日本', 5),
+            new ChartDataPoint('B', 10),
+        ]);
+        $frame = $chart->render();
+        $this->assertStringContainsString("\x1b[", $frame, 'precondition: frame carries SGR');
+
+        $rebuilt = new \ReflectionMethod(Chart::class, 'bufferFromOutput');
+        $rebuilt->setAccessible(true);
+        // Full emitted height 12 = 10 chart rows + x-axis + labels row.
+        /** @var Buffer $buffer */
+        $buffer = $rebuilt->invoke($chart, $frame, 40, 12);
+
+        // Bar area: gutter is str_pad(yLabel, 8).' ' (9 cells), bar 1 fills
+        // the bottom rows, bar 2 (value 10 = max) fills every row.
+        $this->assertSameRune('█', $buffer, 9, 9);
+        $this->assertSameRune('█', $buffer, 29, 0);
+        // X-axis row: 8 spaces then the grid '─' run.
+        $this->assertSameRune('─', $buffer, 8, 10);
+        $this->assertSameRune('─', $buffer, 39, 10);
+        // Labels row: labelColor wrapper stripped, label starts at col 8.
+        $this->assertSameRune('日', $buffer, 8, 11);
+        $this->assertSameRune('本', $buffer, 9, 11);
+
+        // Escape census: not one cell may hold an ESC fragment.
+        $escapes = [];
+        for ($row = 0; $row < 12; $row++) {
+            for ($col = 0; $col < 40; $col++) {
+                if ($buffer->cellAt($col, $row)->rune === "\x1b") {
+                    $escapes[] = sprintf('(%d,%d)', $col, $row);
+                }
+            }
+        }
+        $this->assertSame([], $escapes, 'diff-state cells must never hold ESC fragments');
+    }
+
+    /**
+     * Q5 byte-identity pin: the strip is INERT on escape-free input — pure
+     * ASCII rows (and an SGR-look-alike that lacks the ESC introducer) must
+     * map exactly as before: cell grid == raw codepoint grid, byte for byte.
+     */
+    public function testSgrStripInertOnEscapeFreeOutput(): void
+    {
+        $output = "plain 42\nrow two\n[38;2;1;2;3m no-esc look-alike";
+        $method = new \ReflectionMethod(Chart::class, 'bufferFromOutput');
+        $method->setAccessible(true);
+        /** @var Buffer $buffer */
+        $buffer = $method->invoke(new Chart(), $output, 28, 3);
+
+        // Same width-clip as the cell loop applies (rows longer than the
+        // buffer keep only their first $width runes — status quo).
+        $expected = array_map(
+            static fn (array $r): array => array_slice($r, 0, 28),
+            $this->codepointGrid($output, 28, 3)
+        );
+        $this->assertSame($expected, self::readableGrid($buffer, 28, 3));
+        $this->assertSameRune('[', $buffer, 0, 2);
+        $this->assertSameRune('3', $buffer, 1, 2);
+
+        // The no-color plain frame (zero SGR by construction) also rebuilds
+        // identically to its raw codepoint grid — display path == stored path.
+        $plain = $this->plainBarChart([
+            new ChartDataPoint('日本', 5),
+            new ChartDataPoint('B', 10),
+        ])->render();
+        $this->assertStringNotContainsString("\x1b", $plain, 'precondition: plainBarChart emits zero SGR');
+        /** @var Buffer $plainBuffer */
+        $plainBuffer = $method->invoke(new Chart(), $plain, 40, 11);
+        $this->assertSame($this->codepointGrid($plain, 40, 11), self::readableGrid($plainBuffer, 40, 11));
+    }
+
+    /**
+     * D1 regression (reconE proof as a repo test): a label-only mutation on a
+     * reused chart must emit a NON-empty delta carrying the new runes. Before
+     * D1 the diff buffer was clipped to the chart area, so the labels row never
+     * entered it — the 日本→東京 mutation below (values identical → every chart
+     * row identical) diffed to 0 BYTES, and a delta-tracking terminal kept
+     * painting the stale label forever.
+     */
+    public function testLabelOnlyMutationEmitsDeltaRepaintingNewRunes(): void
+    {
+        $chart = $this->plainBarChart([
+            new ChartDataPoint('日本', 5),
+            new ChartDataPoint('B', 10),
+        ]);
+        $firstFrame = $chart->render();
+        $this->assertStringContainsString('日本', $firstFrame, 'precondition: CJK label painted on first frame');
+
+        // Mutate the SAME instance with IDENTICAL values — only the label text
+        // changes, and it lands exclusively on the labels row.
+        $points = new \ReflectionProperty(Chart::class, 'dataPoints');
+        $points->setAccessible(true);
+        $points->setValue($chart, [
+            new ChartDataPoint('東京', 5),
+            new ChartDataPoint('B', 10),
+        ]);
+
+        $delta = $chart->render();
+        $this->assertNotSame('', $delta, 'label-only mutation must not diff to zero bytes');
+        $this->assertStringContainsString('東', $delta, 'delta must repaint the new label');
+        $this->assertStringContainsString('京', $delta, 'delta must repaint the new label');
+        $this->assertLessThan(strlen($firstFrame), strlen($delta), 'same-size re-render stays a delta, not a full frame');
     }
 }

@@ -27,13 +27,23 @@ final class GlyphsTest extends TestCase
 
     public function testAccessors(): void
     {
-        $g = $this->createGlyphs();
+        $theme = Theme::tokyoNight();
+        $g = new Glyphs(
+            cellW: 8,
+            cellH: 16,
+            fonts: new \SugarCraft\Vcr\Raster\FontLoader(),
+            fontFamily: 'JetBrainsMono',
+            fontSize: 14,
+            theme: $theme,
+        );
 
         $this->assertSame(8, $g->cellWidth());
         $this->assertSame(16, $g->cellHeight());
         $this->assertSame('JetBrainsMono', $g->fontFamily());
         $this->assertSame(14, $g->fontSize());
-        $this->assertInstanceOf(Theme::class, $g->theme());
+        // Identity with the constructor argument: theme() must hand back the
+        // very instance it was given (assertInstanceOf here would be tautology).
+        $this->assertSame($theme, $g->theme());
     }
 
     public function testCacheStatsInitial(): void

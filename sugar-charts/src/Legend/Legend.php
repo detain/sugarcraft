@@ -67,6 +67,16 @@ final class Legend
         return new self($this->items, $this->position, $this->indicatorChar, $show);
     }
 
+    // Short-form aliases.
+    /** @param list<array{label: string, color: string}> $items */
+    public function items(array $items): self       { return $this->withItems($items); }
+    /** Short-form alias for {@see withPosition()}. */
+    public function position(Position $position): self { return $this->withPosition($position); }
+    /** Short-form alias for {@see withIndicatorChar()}. */
+    public function indicatorChar(string $char): self { return $this->withIndicatorChar($char); }
+    /** Short-form alias for {@see withShowBorder()}. */
+    public function showBorder(bool $show): self    { return $this->withShowBorder($show); }
+
     public function view(): string
     {
         if ($this->items === []) {

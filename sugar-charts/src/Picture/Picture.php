@@ -74,6 +74,12 @@ final class Picture
         return new self($this->pixels, $this->png, $this->protocol, max(2, min(256, $n)));
     }
 
+    // Short-form aliases.
+    /** Short-form alias for {@see withProtocol()}. */
+    public function protocol(?Protocol $p): self { return $this->withProtocol($p); }
+    /** Short-form alias for {@see withPaletteSize()}. */
+    public function paletteSize(int $n): self    { return $this->withPaletteSize($n); }
+
     /**
      * Pick a protocol based on the running terminal's capabilities.
      * Honours `$TERM_PROGRAM` (iTerm2) and a few common terminals

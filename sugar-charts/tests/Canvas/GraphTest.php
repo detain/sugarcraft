@@ -61,6 +61,44 @@ final class GraphTest extends TestCase
         $this->assertSame('0', $c->getCell(2, 2)->rune);
     }
 
+    /**
+     * Every LINE_* preset must expose exactly the same key set — a
+     * consumer indexing one preset's keys (e.g. drawXYAxis reading
+     * h/v/bl) must be able to swap in any other without a missing-key
+     * warning. Also pins LINE_ROUNDED's exact glyphs: arcs at the four
+     * corners, thin runs + junctions elsewhere (drawXYAxis itself only
+     * reads h/v/bl, so the corner swap is the whole visual difference).
+     */
+    public function testLinePresetsShareIdenticalKeySets(): void
+    {
+        // Sorted for stable comparison against sorted array_keys().
+        $expected = ['bl', 'br', 'cross', 'h', 'tee_down', 'tee_left', 'tee_right', 'tee_up', 'tl', 'tr', 'v'];
+        $presets = [
+            'LINE_THIN' => Graph::LINE_THIN,
+            'LINE_THICK' => Graph::LINE_THICK,
+            'LINE_DOUBLE' => Graph::LINE_DOUBLE,
+            'LINE_ROUNDED' => Graph::LINE_ROUNDED,
+        ];
+        foreach ($presets as $name => $preset) {
+            $keys = array_keys($preset);
+            sort($keys);
+            $this->assertSame($expected, $keys, "{$name} key set drifted from the shared LINE_* contract");
+        }
+        $this->assertSame('╭', Graph::LINE_ROUNDED['tl']);
+        $this->assertSame('╮', Graph::LINE_ROUNDED['tr']);
+        $this->assertSame('╰', Graph::LINE_ROUNDED['bl']);
+        $this->assertSame('╯', Graph::LINE_ROUNDED['br']);
+        $this->assertSame(Graph::LINE_THIN['h'], Graph::LINE_ROUNDED['h']);
+        $this->assertSame(Graph::LINE_THIN['v'], Graph::LINE_ROUNDED['v']);
+
+        // drawXYAxis honours any preset: intersection takes its own bl.
+        $c = new Canvas(8, 6);
+        Graph::drawXYAxis($c, 1, 4, 5, 3, null, Graph::LINE_ROUNDED);
+        $this->assertSame('╰', $c->getCell(1, 4)->rune);
+        $this->assertSame('─', $c->getCell(2, 4)->rune);
+        $this->assertSame('│', $c->getCell(1, 1)->rune);
+    }
+
     public function testDrawString(): void
     {
         $c = new Canvas(10, 1);

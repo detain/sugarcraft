@@ -9,8 +9,10 @@ use SugarCraft\Pty\SizeIoctl;
 
 /**
  * Unit tests for SizeIoctl - pack() negative value guard,
- * emptyBuffer(), unpack(), Darwin stty fallback (when ioctl fails),
- * and the constants.
+ * emptyBuffer(), unpack(), the Darwin stty(1) fallbacks for SET and
+ * GET (each when the ioctl fails), the Linux ioctl fast path of
+ * getSizeViaLibc(), the BSD stty-reading parser pin, and the
+ * constants.
  */
 final class SizeIoctlExtendedTest extends TestCase
 {
@@ -198,6 +200,125 @@ final class SizeIoctlExtendedTest extends TestCase
             $this->assertSame(40, $size['rows']);
         } finally {
             $master->close();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // getSizeViaLibc() — Linux ioctl fast path (the Darwin stty(1)
+    // fallback must NEVER engage there; run 33796495350 / job
+    // 100785492531 measured TIOCGWINSZ rc=-1 straight through the
+    // fixed-arg cdef on arm64, which is why the fallback exists — see
+    // the SizeIoctl::getSizeViaLibc() doc-block)
+    // ─────────────────────────────────────────────────────────────
+
+    public function testGetSizeViaLibcReadsBackTheAppliedGeometryThroughIoctl(): void
+    {
+        $this->requirePtySyscalls();
+        if (PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('Pins the Linux fast path: the ioctl alone must answer, no fallback.');
+        }
+
+        $system = new \SugarCraft\Pty\Posix\PosixPtySystem();
+        $pair = $system->open();
+        $master = $pair->master();
+
+        try {
+            $master->resize(100, 40);
+
+            $libc = \SugarCraft\Pty\Libc::lib();
+            $ws = SizeIoctl::emptyBuffer();
+            $rc = SizeIoctl::getSizeViaLibc($libc, $master->fd(), $ws);
+
+            $this->assertSame(0, $rc, 'the Linux ioctl must answer directly');
+            $size = SizeIoctl::unpack($ws);
+            $this->assertSame(100, $size['cols']);
+            $this->assertSame(40, $size['rows']);
+        } finally {
+            $master->close();
+        }
+    }
+
+    public function testGetSizeViaLibcSurfacesTheIoctlRcForANonTtyWithoutTouchingTheBuffer(): void
+    {
+        $this->requirePtySyscalls();
+        if (PHP_OS_FAMILY !== 'Linux') {
+            $this->markTestSkipped('Pins the Linux failure path: non-tty returns the ioctl rc, no fabricated 0.');
+        }
+
+        $libc = \SugarCraft\Pty\Libc::lib();
+        $fd = $libc->open('/dev/null', 0x0002);
+        if ($fd < 0) {
+            $this->markTestSkipped('Could not open /dev/null');
+        }
+
+        try {
+            $ws = SizeIoctl::emptyBuffer();
+            $rc = SizeIoctl::getSizeViaLibc($libc, $fd, $ws);
+
+            $this->assertNotSame(0, $rc, 'TIOCGWINSZ on /dev/null must fail, not be laundered into a success');
+            $size = SizeIoctl::unpack($ws);
+            $this->assertSame(['rows' => 0, 'cols' => 0, 'xpix' => 0, 'ypix' => 0], $size);
+        } finally {
+            $libc->close($fd);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // parseSttySize() — the Darwin fallback's reader, pinned on any
+    // host so the next macos-15 run cannot be the first execution of
+    // the parser.
+    // ─────────────────────────────────────────────────────────────
+
+    public function testParseSttySizeReadsTheBsdTranscriptShape(): void
+    {
+        // Shape MEASURED from macOS/BSD stty -a: geometry first, BSD
+        // word order ("<n> rows" / "<n> columns" — GNU prints the
+        // reverse, and a GNU reading must NOT parse; see the sibling
+        // test). A pre-filled buffer proves the parser overwrites
+        // rows/cols and forces the pixels stty cannot report to 0.
+        $reading = "speed 9600 baud; 43 rows;\n137 columns;\n"
+            . 'lflags: icanon echo echoe echok -echonl pendin';
+
+        $ws = SizeIoctl::pack(1, 2, 3, 4);
+
+        $parse = new \ReflectionMethod(SizeIoctl::class, 'parseSttySize');
+        $parse->setAccessible(true);
+
+        $this->assertTrue($parse->invoke(null, $reading, $ws));
+        $this->assertSame(
+            ['rows' => 43, 'cols' => 137, 'xpix' => 0, 'ypix' => 0],
+            SizeIoctl::unpack($ws),
+        );
+    }
+
+    public function testParseSttySizeRejectsGnuWordOrderAndIncompleteReadings(): void
+    {
+        $parse = new \ReflectionMethod(SizeIoctl::class, 'parseSttySize');
+        $parse->setAccessible(true);
+
+        $rejects = [
+            // GNU coreutils shape — the Darwin lane must never be
+            // satisfied by a GNU stty that word order differs from.
+            'speed 38400 baud; rows 24; columns 80; line = 0;',
+            // No geometry at all (proc_open failure residue, usage banner).
+            'stty: Inappropriate ioctl for device',
+            '',
+            // One half of the geometry only.
+            'speed 9600 baud; 43 rows;',
+            '137 columns;',
+        ];
+
+        foreach ($rejects as $reading) {
+            $ws = SizeIoctl::emptyBuffer();
+            $this->assertFalse(
+                $parse->invoke(null, $reading, $ws),
+                'a reading that carries no BSD-shaped geometry must be rejected: ' . $reading,
+            );
+            $this->assertSame(
+                ['rows' => 0, 'cols' => 0, 'xpix' => 0, 'ypix' => 0],
+                SizeIoctl::unpack($ws),
+                'a rejected reading must leave the buffer untouched',
+            );
         }
     }
 }

@@ -392,4 +392,119 @@ final class BarChartTest extends TestCase
         $this->assertStringNotContainsString('Y Axis', $out);
         $this->assertStringNotContainsString('Title', $out);
     }
+
+    // ─── Fractional Eighth-Block Caps (withFractionalHeights) ───────────
+
+    /** Rune set the fractional caps may emit; nothing else is allowed in a cap cell. */
+    private const EIGHTHS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
+
+    public function testFractionalVerticalHalfCellRoundsToHalfBlockCap(): void
+    {
+        // bodyHeight 5 (no label row), norm 0.7 → exact 3.5 cells:
+        // three whole `█` rows plus a 4/8 (=`▄`, U+2584) cap row above them.
+        $out  = BarChart::new([['a', 0.7]], 1, 5)
+            ->withShowLabels(false)
+            ->withMin(0.0)
+            ->withMax(1.0)
+            ->withFractionalHeights()
+            ->view();
+        $rows = explode("\n", $out);
+        $this->assertCount(5, $rows);
+        $this->assertSame('', $rows[0], 'row above the cap must stay blank');
+        $this->assertSame('▄', $rows[1], '4/8 residual renders as U+2584 ▄');
+        $this->assertSame('█', $rows[2]);
+        $this->assertSame('█', $rows[3]);
+        $this->assertSame('█', $rows[4]);
+    }
+
+    public function testFractionalResidualUnderOneEighthRoundsToBlankNoGhost(): void
+    {
+        // exact 2.06 cells (bodyHeight 5, norm 0.412): floor 2, residual
+        // 0.06 < 1/8 → round(0.48) = 0 → blank cap, so fractional output
+        // equals legacy and no `▁` ghost is drawn.
+        $args = static fn(BarChart $c): BarChart => $c
+            ->withShowLabels(false)->withMin(0.0)->withMax(1.0);
+        $legacy = $args(BarChart::new([['a', 0.412]], 1, 5))->view();
+        $frac   = $args(BarChart::new([['a', 0.412]], 1, 5))->withFractionalHeights()->view();
+        $this->assertStringNotContainsString('▁', $frac, 'sub-eighth residual must not draw a ghost');
+        foreach (self::EIGHTHS as $rune) {
+            $this->assertStringNotContainsString($rune, $frac);
+        }
+        $this->assertSame($legacy, $frac, 'blank cap equals legacy whole-cell output');
+    }
+
+    public function testFractionalResidualOverSevenEighthsPromotesToFullCell(): void
+    {
+        // exact 4.95: floor 4 whole, round(0.95*8) = 8 → promoted to a
+        // full `█` row, so the bar tops out at 5 whole cells with no ramp.
+        $out  = BarChart::new([['a', 0.99]], 1, 5)
+            ->withShowLabels(false)
+            ->withMin(0.0)
+            ->withMax(1.0)
+            ->withFractionalHeights()
+            ->view();
+        $rows = explode("\n", $out);
+        foreach ($rows as $row) {
+            $this->assertSame('█', $row, 'promoted residual renders as a full █ row');
+        }
+        $this->assertCount(5, $rows);
+    }
+
+    public function testFractionalHeightsDefaultsOffAndIsImmutable(): void
+    {
+        $plain  = BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5);
+        $optOut = $plain->withFractionalHeights(false);
+        $this->assertFalse($plain->fractionalHeights);
+        $this->assertSame($plain->view(), $optOut->view());
+        foreach (self::EIGHTHS as $rune) {
+            $this->assertStringNotContainsString($rune, $plain->view(), 'default-off keeps legacy whole-cell bars');
+        }
+        $on = $plain->withFractionalHeights();
+        $this->assertTrue($on->fractionalHeights);
+        $this->assertFalse($plain->fractionalHeights, 'wither must not mutate the receiver');
+        $this->assertNotSame($plain, $on);
+    }
+
+    public function testFractionalHorizontalHalfCellCapsWithHalfBlock(): void
+    {
+        // width 9, label gutter 1 → barWidth 7; norm 9/14 → exact 4.5:
+        // four whole `█` plus a 4/8 cap `▌` (U+258C).
+        $out = BarChart::new([['x', 9.0]], 9, 1)
+            ->withHorizontal()
+            ->withMin(0.0)
+            ->withMax(14.0)
+            ->withFractionalHeights()
+            ->view();
+        $this->assertSame('x ████▌', $out);
+    }
+
+    public function testFractionalHorizontalOneEighthCapSitsFlushAgainstBody(): void
+    {
+        // norm 33/56 → exact 4.125: whole 4, round(1/8*8) = 1 → `▏`
+        // (U+258F, left-flush). The cap must touch the `█` body — no
+        // space and no right-flush `▕` gap between them.
+        $out = BarChart::new([['x', 33.0]], 9, 1)
+            ->withHorizontal()
+            ->withMin(0.0)
+            ->withMax(56.0)
+            ->withFractionalHeights()
+            ->view();
+        $this->assertSame('x ████▏', $out);
+        $this->assertStringContainsString('█▏', $out, 'cap must be flush against the body run');
+        $this->assertStringNotContainsString('▕', $out, 'right-flush U+2595 would open a gap (dash BL-2 bug)');
+        $this->assertStringNotContainsString('█ ', $out);
+    }
+
+    public function testFractionalVerticalFullHeightBarGetsNoGhostCap(): void
+    {
+        // norm 1.0 → exact = bodyHeight, zero residual: no cap row, bar
+        // tops out exactly at the body height.
+        $out  = BarChart::new([['a', 1.0]], 1, 5)
+            ->withShowLabels(false)
+            ->withMin(0.0)
+            ->withMax(1.0)
+            ->withFractionalHeights()
+            ->view();
+        $this->assertSame("█\n█\n█\n█\n█", $out);
+    }
 }

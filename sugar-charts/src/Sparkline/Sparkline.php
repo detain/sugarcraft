@@ -103,6 +103,10 @@ final class Sparkline
     public function width(int $w): self         { return $this->withWidth($w); }
     public function min(?float $m): self        { return $this->withMin($m); }
     public function max(?float $m): self        { return $this->withMax($m); }
+    /** Short-form alias for {@see withStyle()}. */
+    public function style(?Style $style): self   { return $this->withStyle($style); }
+    /** Short-form alias for {@see withNoAutoMaxValue()}. */
+    public function noAutoMaxValue(bool $disable = true): self { return $this->withNoAutoMaxValue($disable); }
 
     /**
      * Append a single sample. Mirrors ntcharts'
