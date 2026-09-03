@@ -48,9 +48,11 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Bubble glyph table: quadrant arcs for the box corners plus the full
      * dot everywhere else — approximations of round shapes, never true
-     * circles (the CIRCLE_CHARS identifier stays per the v4 Q1 ruling).
+     * circles. Renamed from the old circle-named identifier in v5 D5 per
+     * the R3 Set-3 ruling: the table drives shape-family glyphs, never
+     * true circles.
      */
-    private const CIRCLE_CHARS = [
+    private const ROUNDED_BOX_GLYPHS = [
         'top-left' => '◜',
         'top-right' => '◝',
         'bottom-left' => '◟',
@@ -384,26 +386,27 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
         } elseif ($size === 2) {
             // r=1: five-cell plus within a 3x3 extent — the disk test drops the
             // diagonals, so this cluster carries no corner arcs.
-            $this->drawBubbleOnGrid($grid, $x, $y, 1, $color, $chartWidth, $chartHeight);
+            $this->drawShapeCluster($grid, $x, $y, 1, $color, $chartWidth, $chartHeight);
         } else {
-            // r=2: solid 5x5 box with CIRCLE_CHARS quadrant arcs at the corners.
-            $this->drawBubbleOnGrid($grid, $x, $y, 2, $color, $chartWidth, $chartHeight);
+            // r=2: solid 5x5 box with ROUNDED_BOX_GLYPHS quadrant arcs at the corners.
+            $this->drawShapeCluster($grid, $x, $y, 2, $color, $chartWidth, $chartHeight);
         }
     }
 
     /**
-     * Draw a bubble on the grid.
+     * Draw a size-binned shape cluster on the grid.
      *
-     * r >= 2 fills the whole (2r+1)-cell box so the CIRCLE_CHARS quadrant arcs
-     * land on the diagonal extremes — a pure disk never admits |dx|=|dy|=r,
-     * leaving those glyphs unreachable (chart_plan.md S1 amendment). The full
-     * box is trivially 4-fold symmetric and 4-connected. r == 1 keeps the disk
-     * test: its diagonals fall outside dx²+dy²≤1, so it renders the legacy
-     * 5-cell plus with no corner arcs, per the r >= 2 contract clause.
+     * r >= 2 fills the whole (2r+1)-cell box so the ROUNDED_BOX_GLYPHS quadrant
+     * arcs land on the diagonal extremes — a pure disk never admits
+     * |dx|=|dy|=r, leaving those glyphs unreachable (chart_plan.md S1
+     * amendment). The full box is trivially 4-fold symmetric and 4-connected.
+     * r == 1 keeps the disk test: its diagonals fall outside dx²+dy²≤1, so it
+     * renders the legacy 5-cell plus with no corner arcs, per the r >= 2
+     * contract clause.
      *
      * @param array<array<string>> $grid
      */
-    private function drawBubbleOnGrid(array &$grid, int $cx, int $cy, int $radius, ?Color $color, int $chartWidth, int $chartHeight): void
+    private function drawShapeCluster(array &$grid, int $cx, int $cy, int $radius, ?Color $color, int $chartWidth, int $chartHeight): void
     {
         for ($dy = -$radius; $dy <= $radius; $dy++) {
             for ($dx = -$radius; $dx <= $radius; $dx++) {
@@ -416,8 +419,8 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
                 $y = $cy + $dy;
 
                 if ($x >= 0 && $x < $chartWidth && $y >= 0 && $y < $chartHeight) {
-                    // Determine which shape character to use based on position
-                    $char = $this->getCircleChar($dx, $dy, $radius);
+                    // Determine which shape glyph to use based on position
+                    $char = $this->glyphAtOffset($dx, $dy, $radius);
                     if ($color !== null) {
                         $grid[$y][$x] = $color->toFg(ColorProfile::TrueColor) . $char . Ansi::reset();
                     } else {
@@ -429,28 +432,29 @@ final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Get circle character for position.
+     * Resolve the cluster glyph sitting at a (dx, dy) grid offset.
      *
-     * Resolved through CIRCLE_CHARS so the table (not per-branch literals)
-     * drives render: quadrant arcs at the diagonal extremes, the full glyph
-     * everywhere else — cardinals, interior fill, and the r == 1 plus.
+     * Resolved through ROUNDED_BOX_GLYPHS so the table (not per-branch
+     * literals) drives render: quadrant arcs at the diagonal extremes, the
+     * full glyph everywhere else — cardinals, interior fill, and the r == 1
+     * plus.
      */
-    private function getCircleChar(int $dx, int $dy, int $radius): string
+    private function glyphAtOffset(int $dx, int $dy, int $radius): string
     {
         if ($dx === -$radius && $dy === -$radius) {
-            return self::CIRCLE_CHARS['top-left'];
+            return self::ROUNDED_BOX_GLYPHS['top-left'];
         }
         if ($dx === $radius && $dy === -$radius) {
-            return self::CIRCLE_CHARS['top-right'];
+            return self::ROUNDED_BOX_GLYPHS['top-right'];
         }
         if ($dx === -$radius && $dy === $radius) {
-            return self::CIRCLE_CHARS['bottom-left'];
+            return self::ROUNDED_BOX_GLYPHS['bottom-left'];
         }
         if ($dx === $radius && $dy === $radius) {
-            return self::CIRCLE_CHARS['bottom-right'];
+            return self::ROUNDED_BOX_GLYPHS['bottom-right'];
         }
 
-        return self::CIRCLE_CHARS['full'];
+        return self::ROUNDED_BOX_GLYPHS['full'];
     }
 
     /**

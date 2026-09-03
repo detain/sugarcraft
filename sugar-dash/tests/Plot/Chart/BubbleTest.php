@@ -434,7 +434,7 @@ final class BubbleTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Ringed bubble geometry (S1 amendment: CIRCLE_CHARS drives render)
+    // Ringed bubble geometry (S1 amendment: ROUNDED_BOX_GLYPHS drives render)
     //
     // render() binning via mapSize (default size range 1..10):
     //   raw size 1..3  -> single cell
@@ -446,7 +446,7 @@ final class BubbleTest extends TestCase
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * Read Bubble's private CIRCLE_CHARS table through reflection so the
+     * Read Bubble's private ROUNDED_BOX_GLYPHS table through reflection so the
      * assertions below track the source of truth: mutating a table entry
      * in src changes what these tests expect (proving the table drives
      * render), instead of restating the glyphs as test-local literals.
@@ -456,7 +456,7 @@ final class BubbleTest extends TestCase
     private function circleCharsTable(): array
     {
         foreach ((new ReflectionClass(Bubble::class))->getReflectionConstants() as $constant) {
-            if ($constant->getName() === 'CIRCLE_CHARS') {
+            if ($constant->getName() === 'ROUNDED_BOX_GLYPHS') {
                 /** @var array<string,string> $value */
                 $value = $constant->getValue();
 
@@ -464,7 +464,7 @@ final class BubbleTest extends TestCase
             }
         }
 
-        $this->fail('Bubble::CIRCLE_CHARS no longer exists; the geometry contract has moved.');
+        $this->fail('Bubble::ROUNDED_BOX_GLYPHS no longer exists; the geometry contract has moved.');
     }
 
     /**
@@ -602,5 +602,34 @@ final class BubbleTest extends TestCase
         // Out-of-range sizes saturate into an existing rung, never invent one.
         $this->assertSame(1, $mapSize->invoke($bubble, 0.0));
         $this->assertSame(3, $mapSize->invoke($bubble, 20.0));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Render purity across the v5 D5 [R3 Set-3] identifier sweep
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * ANSI-stripped sha1 of the fixed three-bin dataset below, captured from
+     * the pristine pre-rename tree at HEAD (all three shape bins exercised:
+     * single dot, r=1 plus, r=2 rounded box).
+     */
+    private const RENDER_PURITY_SHA1 = '8db2a161d5fabab39393f50cf221b0a21cef0102';
+
+    public function testSetThreeRenameLeavesRenderBytesUntouched(): void
+    {
+        // v5 D5 renamed the private glyph table, glyph resolver, and cluster
+        // drawer per the R3 Set-3 ruling. Private identifiers must move zero
+        // output bytes: this pin fails the moment the sweep (or any later
+        // refactor claiming to be cosmetic) alters what a bubble renders.
+        $rendered = Bubble::new([
+            new BubblePoint('Tiny', 20, 80, 2),
+            new BubblePoint('Plus', 50, 50, 5),
+            new BubblePoint('Box', 80, 25, 10),
+        ])->render();
+
+        $stripped = (string) preg_replace('/\x1b\[[0-9;]*m/', '', $rendered);
+
+        $this->assertNotSame('', $stripped);
+        $this->assertSame(self::RENDER_PURITY_SHA1, sha1($stripped));
     }
 }
