@@ -1048,4 +1048,68 @@ final class StatusLineSegmentTest extends TestCase
             'the control grew the transcript by APPENDING, not by rewriting what was already there',
         );
     }
+
+    /**
+     * THE SAME-COUNT REPLACE SHAPE, which {@see transcriptSignature()}'s
+     * docblock claims moves the signature but no test had ever shown. The
+     * zero-transcript test's own known-positive control ({@see
+     * testPaintingAndTickingTheCacheReadoutAddZeroTranscriptMessages()})
+     * exercises APPEND only: a signature that keyed on NOTHING BUT COUNT
+     * would sail through every assertion in the file while a future status-
+     * path arm rewrote an entry in place — e.g. a tick arm that refreshed a
+     * settled reply's Message object — and the absence assertion would
+     * measure its own blindness. This is the REPLACE half of rule 16's
+     * known-positive bar for that claim.
+     *
+     * The plant replaces history[1] with a DIFFERENT Message instance at an
+     * unchanged count — constructed the way {@see cacheChat()} constructs it
+     * (a fresh assistant Message), through the same public Chat constructor,
+     * so no private seam is needed: what matters to an identity signature is
+     * the instance, and a replace-by-construction is exactly the shape the
+     * claim names. PREPEND and DROP stay WITHOUT a control (measured: no
+     * plant exists for them anywhere in the file) — a known gap, recorded in
+     * the travel ledger; this step adds the REPLACE half only.
+     *
+     * LOAD-BEARING, measured: under a planted count-only signature
+     * (transcriptSignature returning `array_fill(0, count($chat->history), 1)`)
+     * and under a planted position-keyed one (`array_keys($chat->history)` —
+     * length-sensitive, instance-blind), THIS method is the ONLY test in the
+     * file that reddens, both times via the assertNotSame below; the
+     * zero-transcript test stayed green under both plants (its ticks never
+     * move the transcript, and its append control only checks the COUNT).
+     * Deleting this method while keeping the count-only plant reverted the
+     * red entirely (22/4113 green — the blindness had no other witness).
+     */
+    public function testAReplacedTranscriptEntryMovesTheSignatureAtAnUnchangedCount(): void
+    {
+        $chat = $this->cacheChat();
+        $before = $this->transcriptSignature($chat);
+
+        // SAME-COUNT REPLACE plant: history[1] becomes a different Message
+        // instance (the entry identity changes; the count does not).
+        $replaced = (new Chat(
+            history: [
+                $chat->history[0],
+                Message::assistant('Replaced.', self::ANCHOR - 42),
+            ],
+            backend: new EchoBackend(),
+        ))->withSize(100, 30);
+        $after = $this->transcriptSignature($replaced);
+
+        self::assertCount(
+            2,
+            $after,
+            'the plant must be SAME-COUNT or this stops being a REPLACE control',
+        );
+        self::assertNotSame(
+            $before,
+            $after,
+            'the KNOWN-POSITIVE REPLACE CONTROL failed: swapping one transcript entry for a different instance at an unchanged count did not move this signature, so the zero-transcript test could not notice a status-path arm that rewrote an entry either',
+        );
+        self::assertSame(
+            $before[0],
+            $after[0],
+            'the untouched first entry must read the same in both signatures — a difference here means the plant disturbed more than the replaced slot',
+        );
+    }
 }
