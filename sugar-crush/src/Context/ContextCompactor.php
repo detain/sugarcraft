@@ -153,11 +153,27 @@ final class ContextCompactor
     }
 
     /**
-     * Estimated tokens reserved, on top of the blocking tier, so a turn an
-     * intra-exchange truncation just enabled still fits once {@see
+     * Estimated tokens {@see truncateOversizedExchange()} reserves against the
+     * blocking tier when it sizes each oversized message's share — the share is
+     * a quotient of (threshold − preserved exchanges − this) — so a rescued
+     * wire with any share left to keep lands at least this far UNDER the tier
+     * the caller re-checks. That is the whole of this constant's guarantee: it
+     * bounds only the $messages array handed to the truncator.
+     *
+     * It does NOT guarantee the dispatched turn fits. {@see
      * \SugarCraft\Crush\Chat::dispatchTurn()} appends the echoed prompt, the
-     * 70% reminder, and this compaction's own notice — none of which are in the
-     * $messages handed here.
+     * 70% reminder, and this compaction's own notice AFTER that re-check, and
+     * none of them is in $messages; 2,000 tokens absorbs a short draft with
+     * room to spare, but a draft that is itself enormous rides a sub-tier
+     * rescued wire over the window anyway. Measured (review cycle 5, finding
+     * 3): an 800,000-char history giant plus a 60,000-char draft dispatched at
+     * ~108,113 estimated tokens against a 100,000-token window — and then
+     * refused persistently at essentially that flat estimate (attempts 2-6:
+     * 108,124→108,252), because the giant is already truncated, nothing is
+     * individually oversized any more, and the aggregate is over. Making the
+     * bound a function of the draft (mb_strlen($text)), or declining the
+     * rescue when the draft alone outgrows the reserve, is recorded as a
+     * FOLLOW-UP; changing behaviour here is outside this step's scope.
      */
     private const INTRA_EXCHANGE_HEADROOM_TOKENS = 2000;
 
