@@ -43,7 +43,7 @@ final class ProviderRequestResponseTest extends TestCase
      * Three families: Bedrock (terminal metadata event's inputTokens +
      * outputTokens, BedrockProvider.php:364-367) and Vertex (disjoint
      * message_start input_tokens + message_delta output_tokens buckets,
-     * VertexProvider.php:904-919) carry usage the implementation MUST read:
+     * VertexProvider.php:1116-1144) carry usage the implementation MUST read:
      * their tests assertSame() this total, and a provider that stops reading
      * the wire reds. Sglang/Custom/OpenAI currently hardcode tokensUsed: 0
      * (SglangProvider.php:1152, CustomProvider.php:389, OpenAIProvider.php:257).
@@ -683,7 +683,7 @@ final class ProviderRequestResponseTest extends TestCase
 
     public function testVertexStreamedUsageIsSplitAcrossDisjointBucketEvents(): void
     {
-        // Anthropic-on-Vertex SSE events (VertexProvider.php:904-919;
+        // Anthropic-on-Vertex SSE events (VertexProvider.php:1116-1144;
         // Usage.php:58-67): input tokens on message_start, output tokens on the
         // terminal message_delta — two usage-bearing chunks, disjoint buckets,
         // nothing repeated on every chunk.
