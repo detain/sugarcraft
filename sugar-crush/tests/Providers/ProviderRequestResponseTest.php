@@ -498,7 +498,7 @@ final class ProviderRequestResponseTest extends TestCase
             . 'contract fixture. EchoProvider is exempted WITH A NAMED REASON: it is a test '
             . 'double with no usage concept — it echoes a blockquote in PHP and its '
             . 'completeStream() yields CompleteResponse objects carrying no tokensUsed/costUsd '
-             . 'at all (EchoProvider.php:109-124, 84-91), mirroring the P1.S7 precedent for '
+            . 'at all (EchoProvider.php:109-124, 84-91), mirroring the P1.S7 precedent for '
             . 'exempting a stub. A NEW provider must add a STREAMED_USAGE_CONTRACT entry AND a '
             . 'per-provider contract test.',
         );

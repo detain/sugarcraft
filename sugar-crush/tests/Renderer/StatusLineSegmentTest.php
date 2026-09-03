@@ -1075,10 +1075,10 @@ final class StatusLineSegmentTest extends TestCase
      * and under a planted position-keyed one (`array_keys($chat->history)` —
      * length-sensitive, instance-blind), THIS method is the ONLY test in the
      * file that reddens, both times via the assertNotSame below; the
-     * zero-transcript test stayed green under both plants (its ticks never
-     * move the transcript, and its append control only checks the COUNT).
-     * Deleting this method while keeping the count-only plant reverted the
-     * red entirely (22/4113 green — the blindness had no other witness).
+      * zero-transcript test stayed green under both plants (its ticks never move the transcript, and its append
+      * control checks the count plus a strict prefix, both of which a count-only signature passes vacuously).
+      * Deleting this method while keeping the count-only plant reverted the red entirely (22/4113 green — the
+      * blindness had no other witness).
      */
     public function testAReplacedTranscriptEntryMovesTheSignatureAtAnUnchangedCount(): void
     {
