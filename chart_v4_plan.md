@@ -143,7 +143,7 @@ Baselines for ALL steps: charts@f2c7b9822: 568/1400/0Sk rc0 (failOnWarning live)
 | Step | Item | Lane | Build | Review loop | Commit | SHA |
 |---|---|---|---|---|---|---|
 | C1 MarkLine docblock truth | MarkLine | A | ✅ | ✅ | ✅ | e67a8bd89 |
-| C2 drawConnector guard reorder [R2] | drawConnector | A | ⬜ | ⬜ | ⬜ | — |
+| C2 drawConnector guard reorder [R2] | drawConnector | A | ✅ | ✅ | ✅ | c8b40f667 |
 | C3 Sunburst encoding integrity [R5] | Sunburst | B | ✅ | ✅ | ✅ | 47e740a9f |
 | C4 bufferFromOutput SGR-strip + @return [R4] | bufferFromOutput | B | ⬜ | ⬜ | ⬜ | — |
 | C5 Bubble bin collapse + header [R1] | Bubble bins | B | ⬜ | ⬜ | ⬜ | — |

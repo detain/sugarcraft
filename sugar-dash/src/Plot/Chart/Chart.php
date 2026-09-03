@@ -210,7 +210,7 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Render a bar chart.
      *
-     * @return list<string>
+     * @return string Multi-line frame (rows joined with \n, trailing newline trimmed)
      */
     private function renderBarChart(
         int $chartWidth,
@@ -302,7 +302,7 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Render a line chart.
      *
-     * @return list<string>
+     * @return string Multi-line frame (rows joined with \n, trailing newline trimmed)
      */
     private function renderLineChart(
         int $chartWidth,
@@ -779,6 +779,15 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
      * codepoint, still-unset bytes make isset() true while mb_substr returns
      * '', so padding columns became empty-rune cells instead of blanks.
      *
+     * SGR sequences are stripped before the split (house regex, see
+     * BubbleTest::strippedRenderLines): color is presentation, not content,
+     * and the cells carry null style anyway — leaving the escapes in would
+     * store ESC/'['/digit fragments as runes, so any SGR length change on a
+     * row shifted every later rune right and produced phantom whole-row
+     * diffs on re-render. This is the diff-state buffer ONLY: render()
+     * returns the untouched full frame (SGR included) to stdout, so the
+     * first-frame bytes and every golden are unaffected by the strip.
+     *
      * @param string $output Multi-line string from render()
      * @param int    $width  Buffer width in cells
      * @param int    $height Buffer height in rows
@@ -786,7 +795,8 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
     private function bufferFromOutput(string $output, int $width, int $height): Buffer
     {
         $buffer = Buffer::new($width, $height);
-        $lines = \explode("\n", $output);
+        $display = (string) \preg_replace('/\x1b\[[0-9;]*m/', '', $output);
+        $lines = \explode("\n", $display);
 
         for ($row = 0; $row < $height; $row++) {
             $runes = \mb_str_split($lines[$row] ?? '');
