@@ -328,8 +328,8 @@ final readonly class VertexProvider implements ProviderInterface
      * {@see BedrockProvider::completeStream()} has: Anthropic-on-Vertex reports
      * input tokens on `message_start` and output tokens on the terminal
      * `message_delta`, so {@see parseAnthropicChunk()} emits two usage-bearing
-     * responses per turn — `tokensUsed: $inputTokens` on the first and
-     * `tokensUsed: $outputTokens` on the last, each priced on its own side of
+     * responses per turn — `tokensUsed: $usage->inputTokens` on the first and
+     * `tokensUsed: $usage->outputTokens` on the last, each priced on its own side of
      * the rate table. A consumer that read only the final chunk would bill the
      * turn for its output and none of its input; {@see \SugarCraft\Crush\Runtime}
      * therefore SUMS across chunks rather than taking the last, and says so.

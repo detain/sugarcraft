@@ -6926,7 +6926,7 @@ final class RuntimeTest extends TestCase
              . 'declares), and 145 the `parent` of a TRAIT used by a same-file class that '
              . 'extends an ALIAS (`HandleParent`) of a primitive - the direct `parent`-half '
              . 'sibling of the 58 `self` case (review cycle 4 F-4R-3: this drives the class-kind '
-             . 'trait-user branch of the candidate producer at :4001-4003 for real. Nulling that '
+             . 'trait-user branch of the candidate producer at :4017-4019 for real. Nulling that '
              . 'candidate drops row 145 (the arm is live); collapsing the whole ternary to the '
              . 'class name keeps it, because the `roots` fixpoint already maps the class name to '
              . 'the same primitive - so the two spellings are value-redundant for a NAMED user, '
@@ -6939,7 +6939,7 @@ final class RuntimeTest extends TestCase
         );
 
         // THE FIXTURE LINTS, mechanically. This file's own doctrine - repeated at
-        // :3921, :4931, :4967, :5156 - is that every row is "php -l clean and RUN
+        // :3937, :4974, :5002, :5038, :5227 - is that every row is "php -l clean and RUN
         // for real", yet review cycle 4, F-4R-2 measured THIS oracle (the file that
         // asserts it loudest) was the one invalid fixture: `final class Extends`
         // used a reserved keyword and `php -l` rejected it ("unexpected token
