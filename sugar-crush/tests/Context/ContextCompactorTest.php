@@ -1528,6 +1528,96 @@ final class ContextCompactorTest extends TestCase
         );
     }
 
+    /**
+     * The FIRST guard of intraExchangeTruncation() — the `$truncated === $wire`
+     * null return — is the helper's own contract: an echo from the truncator
+     * must never become a rescue, never a rebuilt history plus a notice
+     * claiming "0 messages reached the 95% blocking tier" off bytes nobody
+     * trimmed.
+     *
+     * It cannot be exercised through the turn pipeline: both Chat blocking
+     * sites call the helper only from inside shouldCompactForeground($wire)
+     * === true, so for every input THEY hand it the tier re-check directly
+     * below the guard answers the echo identically — measured: deleting the
+     * guard left the call-site-driven suite green (329 tests, 1286
+     * assertions). So the private helper is driven DIRECTLY via reflection,
+     * the established route in this repo (ChatTest does the same for
+     * executionFailure and applyRewrite), with the one input for which the
+     * guard is the ONLY thing returning null: an under-tier $wire, which the
+     * truncator echoes byte-for-byte (first fixture assertion) and which the
+     * tier re-check therefore lets through (second fixture assertion). Delete
+     * the guard and the helper returns a rescue built on an untouched wire
+     * instead of null, and the assertNull reddens.
+     *
+     * The lower half drives the SAME reflection route on the genuine E18
+     * giant — over-tier through one oversized message — so the null above is
+     * proven to be the contract, not a dead harness.
+     */
+    public function testTheRescueDeclinesAnUnderTierWireTheTruncatorEchoes(): void
+    {
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $history = [
+            Message::user('hello'),
+            Message::assistant('hi'),
+        ];
+        $chat = new Chat(history: $history, backend: $backend);
+        $wire = array_map(static fn (Message $m): array => $m->toWire(), $history);
+
+        $compactor = (new \ReflectionProperty(Chat::class, 'compactor'))->getValue($chat);
+        $this->assertSame(
+            $wire,
+            $compactor->truncateOversizedExchange($wire, 100_000),
+            'fixture: the truncator echoes this wire byte-identically, so only the first guard can decline it',
+        );
+        $this->assertFalse(
+            $compactor->shouldCompactForeground($wire, 100_000),
+            'fixture: the tier re-check below that guard would NOT stop this input either',
+        );
+
+        $truncation = new \ReflectionMethod(Chat::class, 'intraExchangeTruncation');
+
+        $this->assertNull(
+            $truncation->invoke($chat, $wire, $history, 100_000),
+            'a truncation that changed nothing must decline outright — never a rescue whose notice says 0 messages were truncated',
+        );
+
+        $giant = [
+            Message::user(str_repeat('x', 800_000)),
+            Message::assistant(str_repeat('y', 2_000)),
+        ];
+        $rescued = $truncation->invoke(
+            $chat,
+            array_map(static fn (Message $m): array => $m->toWire(), $giant),
+            $giant,
+            100_000,
+        );
+
+        $this->assertIsArray(
+            $rescued,
+            'the same direct route must still RESCUE the oversized case — otherwise the null above proves nothing',
+        );
+        $this->assertSame(
+            ['history', 'notice'],
+            array_keys($rescued),
+            'and a rescue is exactly the pair the blocking sites consume: a rebuilt history plus a notice',
+        );
+        $this->assertStringStartsWith(
+            '1 message reached the 95% blocking tier on its own, so it was truncated',
+            $rescued['notice']->content,
+            'the notice counts 1 message, never 0 — the figure the guard above exists to keep honest',
+        );
+        $this->assertStringContainsString(
+            'characters truncated to fit the context window',
+            $rescued['history'][0]->content,
+            'the giant really was shortened inline in the rebuilt history',
+        );
+        $this->assertLessThan(
+            95_000,
+            $this->countTokens(array_map(static fn (Message $m): array => $m->toWire(), $rescued['history'])),
+            'and the rescue hands back a wire under the blocking tier — the rescue is real, not nominal',
+        );
+    }
+
     // ─── The E18 truncation NOTICE, pinned verbatim ───────────────
     //
     // The rescue notice is committed into history, so the user reads it AND the

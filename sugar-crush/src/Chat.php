@@ -12244,10 +12244,23 @@ final class Chat implements Model
     {
         $truncated = $this->compactor->truncateOversizedExchange($wire, $tokenLimit);
 
-        // The compactor echoes its input unchanged when no single message reaches
-        // the blocking tier — the between-exchanges overflow. Refuse it exactly as
-        // before rather than rewrite exchanges the inter-exchange tiers chose to
-        // preserve.
+        // The helper's OWN contract, independent of whether the caller already
+        // gated on the tier: a truncation that changed nothing must never fall
+        // through to build a notice claiming "0 messages reached the 95%
+        // blocking tier" off a byte-identical wire and dispatch on it. The
+        // compactor echoes its input for anything no single message lifts to
+        // the blocking tier — the between-exchanges overflow, and a history
+        // under the tier to begin with.
+        //
+        // HONEST SCOPE, measured at 2495fb4a2 (review cycle 2): both present
+        // call sites reach this method only from inside
+        // shouldCompactForeground($wire) === true, so for every input THEY
+        // pass the tier re-check below answers the echo identically — deleting
+        // this guard left every call-site-driven test green (329 tests, 1286
+        // assertions). This guard is therefore deliberate defence-in-depth
+        // (§1.10), not live logic through those paths, and it is exercised
+        // only by driving the helper directly:
+        // `ContextCompactorTest::testTheRescueDeclinesAnUnderTierWireTheTruncatorEchoes()`.
         if ($truncated === $wire) {
             return null;
         }
@@ -12289,9 +12302,27 @@ final class Chat implements Model
      * its own action — and it rides BEFORE the user's line for the same reason
      * {@see contextCompactedMessage()} does: it describes history that already
      * existed. Each figure names its own unit (a chars/4 ESTIMATE against the
-     * provider-advertised window), the convention
-     * Integration\ContextWindowWiringTest pins against the label beside it rather
-     * than against the sentence, so swapping the two reds a test.
+     * provider-advertised window).
+     *
+     * WHAT THIS PARAGRAPH SAID: that the pairing of each figure with its own
+     * label is what Integration\ContextWindowWiringTest pins "against the
+     * label beside it rather than against the sentence, so swapping the two
+     * reds a test". WHAT IS TRUE NOW, MEASURED at 2495fb4a2: swapping the two
+     * figures in the emitted string leaves that file entirely green — OK (15
+     * tests, 48 assertions) — because it carries zero references to this
+     * notice; what reddens is the three verbatim-sentence tests in
+     * tests/Context/ContextCompactorTest.php —
+     * `ContextCompactorTest::testTheTruncationNoticeForOneOversizedMessageReadsExactly()`,
+     * `ContextCompactorTest::testTheTruncationNoticeStaysTruthfulForTwoOversizedMessagesInOneExchange()`,
+     * `ContextCompactorTest::testTheTruncationNoticeTracksMessagesEvenWhenTheySpanTwoExchanges()`
+     * — at Tests: 75, Failures: 3. The guarantee is the WHOLE SENTENCE: each
+     * of those assertions quotes the emitted notice down to its exact
+     * per-fixture figures, estimate and advertised window included, so the
+     * two numbers can only trade places by breaking the sentence that names
+     * them. WHY IT EARNS ITS PLACE: the old claim was the dangerous
+     * direction — a refactorer trusting it would have deleted those three
+     * assertSames as duplicating a label-guard, and the label-guard does
+     * not exist. This paragraph is now the record that says so.
      *
      * The counted unit is MESSAGES, not exchanges: {@see intraExchangeTruncation()}
      * counts wire entries whose content changed, and a single exchange whose user
