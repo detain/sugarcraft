@@ -1591,6 +1591,103 @@ final class ContextCompactorTest extends TestCase
     }
 
     /**
+     * THE STATE THE ALIGNMENT RE-DERIVATION EXISTS FOR, pinned through the real
+     * path (review cycle 5, finding 1). When compaction SHORTENS the wire but its
+     * savings round to zero — eleven tiny exchanges and one dominant 800,000-char
+     * giant: 24 wire entries compact to 22, and condensing two ~15-char exchanges
+     * into summaries is 0% of 200,520 estimated tokens — submit() does NOT adopt
+     * the rewrite, so $baseHistory is still $this->history: 24 entries, off by the
+     * two dropped summaries against the 22-entry $compactedWire the rescue
+     * truncates and splices. The re-derivation at Chat.php:5982-5984
+     * (messagesFromWire on the else arm of the ternary) is the ONLY thing that
+     * re-aligns them, and until now NOTHING covered it: replacing the whole
+     * ternary with `$rescueBase = $baseHistory;` left ContextCompactorTest
+     * (78/254), the five-file set (282/1185) and the compact-neighbours (130/26421)
+     * ALL green (measured, review cycle 5, mutant M5b). What the mutant does in
+     * THIS state is silently corrupt the dispatched history: the giant's truncated
+     * content lands on q10's message, the real giant and tail vanish, and the two
+     * [summary] lines are replaced by the q0/a0 they were condensed from
+     * (observed: dispatched [20]=truncated-giant, [21]=a10, tail absent). The
+     * assertions below are exactly those casualties: summaries survive at the
+     * positions the compacted wire puts them, every untouched exchange is THE
+     * ORIGINAL OBJECT at its aligned index, and the TAILMARK keeps its value.
+     */
+    public function testTheRescueReAlignsWithTheCompactedWireWhenCompactionSavedNothing(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 11; $i++) {
+            $history[] = Message::user('q' . $i);
+            $history[] = Message::assistant('a' . $i);
+        }
+        $history[] = Message::user(str_repeat('x', 800_000));
+        $history[] = Message::assistant('tail');
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(history: $history, backend: $backend);
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: the giant still blocks the tier after the round-to-zero compaction, so the rescue runs');
+        $cmd();
+        $this->assertStringNotContainsString(
+            'older exchanges were summarized',
+            implode("\n", array_map(static fn(Message $m): string => $m->content, $next->history)),
+            'fixture: savings rounded to 0, so the rewrite was NOT adopted and $baseHistory stayed the 24-message original — this is the else arm of the alignment ternary, not the adopted path',
+        );
+
+        $dispatched = $backend->historyAt(0);
+        $this->assertIsArray($dispatched, 'the turn actually reached the provider');
+
+        // The compacted wire rode the dispatch: stage 2 condensed the two oldest
+        // exchanges into [summary] lines, and the re-derived list puts them where
+        // THE WIRE has them, not where $this->history has q0/a0 (the mutant's
+        // dispatched [0]/[1] — zero summaries anywhere).
+        $this->assertSame(
+            '[summary] q0 → a0',
+            $dispatched[0]->content,
+            'dispatched entry 0 is the FIRST exchange summary from the compacted wire',
+        );
+        $this->assertSame(
+            '[summary] q1 → a1',
+            $dispatched[1]->content,
+            'and entry 1 the second — the mutant lands q0 and a0 here and carries zero summaries',
+        );
+        $this->assertSame(2, count(array_filter(
+            $dispatched,
+            static fn(Message $m): bool => str_starts_with($m->content, '[summary]'),
+        )), 'exactly the two summaries the 24-to-22 compaction wrote, no more, no fewer');
+
+        // Alignment below the summaries: entry i of the 22-entry wire is entry i of
+        // the re-derived list, so the preserved exchanges are THE SAME OBJECTS at
+        // the shifted indices. The mutant's off-by-two splice hands dispatched[2]
+        // the q1 object and dispatched[19] the a9.
+        $this->assertSame($history[4], $dispatched[2], 'the first preserved exchange is the original q2 object, at the compacted wire’s index — not q1');
+        $this->assertSame($history[21], $dispatched[19], 'and the last tiny exchange the original a10 object at wire index 19 — not a9');
+
+        // The giant itself: truncated in place (role and position intact) and the
+        // TAILMARK retaining its value. The mutant overwrites [21] with a10 and
+        // drops the real tail and the real giant entirely.
+        $this->assertStringContainsString(
+            'characters truncated to fit the context window',
+            $dispatched[20]->content,
+            'the giant sits at wire index 20 and really was truncated there',
+        );
+        $this->assertSame(Role::User, $dispatched[20]->role, 'the truncated giant keeps the user role — the copy inherits it from the aligned original, here the giant itself');
+        $this->assertNotSame($history[22], $dispatched[20], 'the truncated giant is a copy — the splice never mutates the original');
+        $this->assertSame($history[23], $dispatched[21], 'the TAILMARK survives as the very same object at the last base position — the mutant lands a10 here');
+        $this->assertSame('tail', $dispatched[21]->content, 'and keeps its value — under the mutant this message is absent from the wire entirely');
+
+        // The turn’s own messages ride behind the aligned history, in the order
+        // submit() commits them: truncation notice, then the user’s line.
+        $this->assertStringStartsWith(
+            '1 message reached the 95% blocking tier on its own',
+            $dispatched[22]->content,
+            'the rescue notice rides at index 22, immediately after the 22-entry aligned history',
+        );
+        $this->assertSame('go', $dispatched[23]->content, 'and the user prompt follows it — every one of these positions is index 2 lower than the un-aligned 24-message history would put it');
+    }
+
+    /**
      * The parked landing — the route a session WITH a summary backend takes,
      * which is what production actually does. Measured on this branch before
      * `applyModelCompaction()` was wired
