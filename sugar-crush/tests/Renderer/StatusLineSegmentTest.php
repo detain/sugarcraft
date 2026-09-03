@@ -1080,11 +1080,20 @@ final class StatusLineSegmentTest extends TestCase
      * prefix, both of which a count-only signature passes vacuously). Deleting
      * this method while keeping the count-only plant reverted the red entirely
      * (22/4113 green — the blindness had no other witness).
+     * Fix-3 pinned the before side too: the fixture assertCount lands on
+     * $before and the SAME-COUNT guard reads \count($before), so a grown
+     * cacheChat() reddens the control instead of degrading it to
+     * REPLACE+DROP behind a literal-2 expectation.
      */
     public function testAReplacedTranscriptEntryMovesTheSignatureAtAnUnchangedCount(): void
     {
         $chat = $this->cacheChat();
         $before = $this->transcriptSignature($chat);
+        self::assertCount(
+            2,
+            $before,
+            'the fixture is two messages; the plant swaps exactly one of them',
+        );
 
         // SAME-COUNT REPLACE plant: history[1] becomes a different Message
         // instance (the entry identity changes; the count does not).
@@ -1098,7 +1107,7 @@ final class StatusLineSegmentTest extends TestCase
         $after = $this->transcriptSignature($replaced);
 
         self::assertCount(
-            2,
+            \count($before),
             $after,
             'the plant must be SAME-COUNT or this stops being a REPLACE control',
         );
