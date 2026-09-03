@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Tests\LineChart;
 
+use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\LineChart\LineChart;
@@ -405,8 +406,10 @@ final class LineChartTest extends TestCase
         // Horizontal runs (dy=0) and both diagonal slopes in one fixture; the
         // Unicode view must be the ASCII view with connector runes swapped and
         // NOTHING else — same cells, same geometry, same data points. (The
-        // same-column vertical branch stays unreachable behind the `x2 <= x1`
-        // guard, exactly as before this step — behavior preserved verbatim.)
+        // same-column vertical branch went LIVE behind the `x2 < x1` guard in
+        // v4-C2, but the public path never presents equal-x (recon census:
+        // 35,990 adjacent pairs, 0 collisions) — pinned directly by the
+        // reflection tests below.)
         $fixtures = [
             LineChart::new([1, 5, 5, 1], 7, 4), // diagonals + horizontal
             LineChart::new([3, 3, 3, 3], 7, 2), // pure horizontal run
@@ -447,5 +450,72 @@ final class LineChartTest extends TestCase
         $this->assertStringContainsString('\\', $chart->view(), 'default path stays ASCII');
         $this->assertStringNotContainsString('\\', $with->view());
         $this->assertStringContainsString('╲', $with->view());
+    }
+
+    // ─── drawConnector() vertical branch — reflection-pinned (v4-C2) ───
+
+    public function testDrawConnectorVerticalPaintsAsciiColumnBothDirections(): void
+    {
+        // [v4-C2] The guard reorder (`x2 <= x1` → `x2 < x1`) makes the
+        // documented same-column branch live; the public path still never
+        // presents equal-x, so reach it directly (house precedent: B5 /
+        // BufferHelperTest reflection reach-ins).
+        $draw = new \ReflectionMethod(LineChart::class, 'drawConnector');
+        $draw->setAccessible(true);
+
+        $down = new Canvas(3, 7);
+        $draw->invoke(null, $down, 1, 1, 1, 5, false); // y1 < y2
+        $this->assertSame(
+            [' ', ' ', '|', '|', '|', ' ', ' '],
+            self::columnRunes($down, 1),
+            'ASCII vertical must paint | strictly between the endpoint rows',
+        );
+
+        $up = new Canvas(3, 7);
+        $draw->invoke(null, $up, 1, 5, 1, 1, false); // y1 > y2
+        $this->assertSame(
+            self::columnRunes($down, 1),
+            self::columnRunes($up, 1),
+            'step direction must not shift the painted cells',
+        );
+    }
+
+    public function testDrawConnectorVerticalPaintsUnicodeColumnBothDirections(): void
+    {
+        // Unicode arm: same cells, '│' rune (Waveline::connectorRune sibling
+        // mapping). Both step directions, mirroring the ASCII pin above.
+        $draw = new \ReflectionMethod(LineChart::class, 'drawConnector');
+        $draw->setAccessible(true);
+
+        $down = new Canvas(3, 7);
+        $draw->invoke(null, $down, 1, 1, 1, 5, true); // y1 < y2
+        $this->assertSame(
+            [' ', ' ', '│', '│', '│', ' ', ' '],
+            self::columnRunes($down, 1),
+            'Unicode vertical must paint │ strictly between the endpoint rows',
+        );
+
+        $up = new Canvas(3, 7);
+        $draw->invoke(null, $up, 1, 5, 1, 1, true); // y1 > y2
+        $this->assertSame(
+            self::columnRunes($down, 1),
+            self::columnRunes($up, 1),
+            'step direction must not shift the painted cells',
+        );
+    }
+
+    /**
+     * Read column $x of a canvas top-to-bottom as a rune list — canonical
+     * cell order regardless of paint/step direction.
+     *
+     * @return list<string>
+     */
+    private static function columnRunes(Canvas $canvas, int $x): array
+    {
+        $runes = [];
+        for ($y = 0; $y < $canvas->height; $y++) {
+            $runes[] = $canvas->getCell($x, $y)->rune;
+        }
+        return $runes;
     }
 }

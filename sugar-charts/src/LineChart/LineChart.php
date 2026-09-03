@@ -245,8 +245,9 @@ final class LineChart extends Chart
      * `╌`, dotted `┄` — over the full plot-width run of the mapped row,
      * replacing any point/connector cells it crosses (marks are annotations
      * ON TOP), with an optional label right-aligned over the run when it
-     * fits. WHY: closes the docblock's "rendering integration not yet
-     * wired" gap; Mirrors ntcharts' `MarkLine` overlay concept.
+     * fits. WHY: this is the "consumed by LineChart" render pass that
+     * {@see MarkLine}'s class docblock documents; Mirrors ntcharts'
+     * `MarkLine` overlay concept.
      *
      * @param list<MarkLine> $marks  default [] renders nothing (byte-identical)
      * @throws \InvalidArgumentException if the list contains a non-MarkLine element
@@ -789,12 +790,15 @@ final class LineChart extends Chart
      */
     private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, bool $unicode): void
     {
-        if ($x2 <= $x1) {
+        if ($x2 < $x1) {
             return;
         }
         // Vertical column between two adjacent samples (same x): step
         // through the rows.
         if ($x2 === $x1) {
+            if ($y2 === $y1) {
+                return; // identical points share a cell: no run to paint
+            }
             $vertical = $unicode ? '│' : '|';
             $step = $y2 > $y1 ? 1 : -1;
             for ($y = $y1 + $step; $y !== $y2; $y += $step) {

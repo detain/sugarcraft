@@ -86,17 +86,17 @@ Baselines for ALL steps: charts@f2c7b9822: 568/1400/0Sk rc0 (failOnWarning live)
 
 **Declared-output-change flag**: NO (collapse variant — byte-identical; DIFFERENTIATE outcome would re-flag YES — gated on R1).
 
-### C6 (Lane B) sugar-dash: plot-braille setSize assign ×2 (output byte-identical)
+### C6′ (rescoped @2026-09-03T16:10Z after c6-build plan-drift STOP) sugar-dash: plot-braille setSize-assign + plot-braille goldens ×2 targeted re-record [BL-8, Q5-extend]
 
-**Why**: examples/plot-braille.php :21 `$dotPlot->setSize(35, 14);` and :27 `$braillePlot->setSize(35, 14);` DISCARD the immutable clone (BL-8 class; reconB ITEM 3). Harm is LATENT, not visible: args (35,14) == ctor dims (Plot::new($data, 35, 14)) so current output already equals intended output — which is why this fix ships with a NO flag. patchExample's setSize rewrite (GoldenSnapshotTest :146-151, limit=1) lands on the inert discarded call for both dims — proof of inertia: plot-braille.golden 80x24 vs 120x40 bodies byte-IDENTICAL below the `---` header (reconB cmp).
+**Why**: as originally planned — examples/plot-braille.php :21 `$dotPlot->setSize(35, 14);` and :27 `$braillePlot->setSize(35, 14);` DISCARD the immutable clones (BL-8 class; reconB ITEM 3) — PLUS measured drift: c6-build PROVED the discarding call MASKED the golden harness patchExample resize (GoldenSnapshotTest :146-151, limit=1 — `->setSize(35, 14)` rewritten to canvas dims only once the return is ASSIGNED): post-edit targeted run FAILURES 2/2 (`/tmp/c6-targeted-post.txt`); the goldens captured the 35x14 discarded-args output (bodies byte-identical CROSS-DIM AND == raw example output — the old pair's sameness was the mask's fingerprint, not proof of inertia). plot-braille is NOT in SKIPPED (original parenthetical wrong; no key :45-76). Assign-only ships red goldens = unsatisfiable Verify ⇒ re-record is mandatory-in-step. Orchestrator Q5-extends (2026-09-03, same precedent B10a/B10b/Q4): bug-class default-output change APPROVED with ASCII/default byte-identity pins — here the re-recorded goldens ARE the new default; raw example surface UNCHANGED (c6-build cmp /tmp/c6-pre.txt /tmp/c6-run.txt byte-identical, rc0).
 
-**Design**: assign both clones: `$dotPlot = $dotPlot->setSize(35, 14);` / `$braillePlot = $braillePlot->setSize(35, 14);` (BL-8 house discipline, examples/donut-wireframe.php:71 precedent). Nothing else. Out-of-scope note for the record: header :37 + docblock :8-12 claim a MarkerDot-vs-MarkerBraille contrast that B12's dead-table sweep voided — PARKED prose item (## Parked), not this step.
+**Design**: two assigns `$dotPlot = $dotPlot->setSize(35, 14);` / `$braillePlot = $braillePlot->setSize(35, 14);` (BL-8 house discipline, examples/donut-wireframe.php:71 precedent) + targeted reflection-replay re-record (B10a recipe /tmp/b10a-replay.php pattern — NEVER blanket tools/generate-goldens.php; headers cosmetic above `---`) for tests/golden/80x24/plot-braille.golden + 120x40/plot-braille.golden; NEW bodies genuinely dimensioned (expect DIFFERENT cross-dim — the smoke-proof the old pair's sameness was the mask). Out-of-scope note for the record: MarkerDot-vs-MarkerBraille contrast claims (header :37 + docblock :8-12) voided by B12's dead-table sweep — STAY Parked (## Parked), do not touch.
 
-**Write-set ceiling**: sugar-dash/examples/plot-braille.php [SYMBOLS: :21, :27] ONLY.
+**Write-set ceiling**: sugar-dash/examples/plot-braille.php [SYMBOLS: :21, :27] + sugar-dash/tests/golden/80x24/plot-braille.golden + sugar-dash/tests/golden/120x40/plot-braille.golden (was: example-only — widened by this amendment).
 
-**Verify**: full dash rc0 counts UNCHANGED (example is data-driven under GoldenSnapshotTest; tests count may move +0 — it is the same test cases); AFTER re-running GoldenSnapshotTest, goldens plot-braille ×2 (tests/golden/80x24/plot-braille.golden + 120x40) porcelain EMPTY — byte-identical expected (args==ctor dims ⇒ no observable change); zero other-golden churn.
+**Verify**: cwd sugar-dash — `php examples/plot-braille.php` rc0 AND stdout cmp-identical to /tmp/c6-pre.txt capture (raw-surface pin); `--filter plot-braille` targeted rc0 on NEW goldens; FULL floor at spawn time (see ## C-board live — currently 5921/9607 pending C2/C4/C5 commits; committer attributes siblings) band +0 tests; goldens porcelain EXACTLY the 2 plot-braille files, zero other-golden churn; census pin UNTOUCHED.
 
-**Declared-output-change flag**: NO.
+**Declared-output-change flag**: YES — plot-braille.golden ×2 first TRUE-dimensioned render (BL-8 family, Q5-extended).
 
 ### C7 (Lane B) sugar-dash: record donut-wireframe goldens ×2 [targeted replay ONLY]
 
@@ -147,10 +147,10 @@ Baselines for ALL steps: charts@f2c7b9822: 568/1400/0Sk rc0 (failOnWarning live)
 | C3 Sunburst encoding integrity [R5] | Sunburst | B | ✅ | ✅ | ✅ | 47e740a9f |
 | C4 bufferFromOutput SGR-strip + @return [R4] | bufferFromOutput | B | ⬜ | ⬜ | ⬜ | — |
 | C5 Bubble bin collapse + header [R1] | Bubble bins | B | ⬜ | ⬜ | ⬜ | — |
-| C6 plot-braille setSize assign | BL-8 residue | B | ⬜ | ⬜ | ⬜ | — |
+| C6′ plot-braille assign + goldens re-record | BL-8 residue | B | ⬜ | ⬜ | ⬜ | — |
 | C7 donut-wireframe goldens ×2 | missing goldens | B | ⬜ | ⬜ | ⬜ | — |
 | C8a GaugeCircle ring-bug [Q3 — b/c PARKED-v5] | GaugeCircle | B | ⬜ | ⬜ | ⬜ | — |
-| C9 candy-core T::charset | v4-Q6 | A | ⬜ | ⬜ | ⬜ | — |
+| C9 candy-core T::charset | v4-Q6 | A | ✅ | ✅ | ✅ | 15a9900ed |
 
 (Only commit agents tick this board.)
 
