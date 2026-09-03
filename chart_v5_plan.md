@@ -105,7 +105,7 @@ Baselines for ALL steps: charts 570/1404/0Sk rc0; dash 5924/9621/1Sk/0W rc0 (bot
 | D3 GaugeCircle aspect+quadrant [R2] | GaugeCircle/Donut:99 | A | ✅ | ✅ | ✅ | 234ca4141 |
 | D4 Sunburst Width wiring [CHANGED premise] | Sunburst/Width | B | ✅ | ✅ | ✅ | 9c52350ec |
 | D5 Bubble identifier rename [R3] | Bubble | B | ✅ | ✅ | ✅ | ce72d30ba |
-| D6 plot-braille honesty [R4] | example+goldens | A | ⬜ | ⬜ | ⬜ | — |
+| D6 plot-braille honesty [R4] | example+goldens | A | ✅ | ✅ | ✅ | 6dbe0343c |
 
 (Only commit agents tick this board.)
 
