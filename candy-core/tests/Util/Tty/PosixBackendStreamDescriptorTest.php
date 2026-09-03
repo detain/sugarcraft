@@ -187,14 +187,25 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         $memory = $this->openHandle('php://memory', 'r+');
         self::assertNull(PosixBackend::descriptorForStream($memory));
 
-        $file = $this->openTempFile();
+        // THE POSITIVE, per host. The claim is "a live stream the resolver is
+        // meant to know resolves", and WHICH streams arm 2 can know is a
+        // kernel property: MEASURED on CI (macos-15-arm64, PHP 8.3.33, run
+        // 33796495350, job 100785492531) a live REGULAR-FILE handle resolves
+        // to null through both passes there -- fdesc synthesises the entry
+        // identity and the readlink targets match nothing -- while a pty
+        // slave (character device) resolves directly (the injected-stream
+        // test above is green in that same run). Darwin therefore holds the
+        // pty up as the positive; Linux keeps the plain temp file, where the
+        // direct procfs pass answers for regular files too.
+        $live  = \PHP_OS_FAMILY === 'Darwin' ? $this->openPtySlave() : $this->openTempFile();
+        $label = \PHP_OS_FAMILY === 'Darwin' ? 'pty slave' : 'file';
         self::assertIsInt(
-            PosixBackend::descriptorForStream($file),
-            'a live file handle resolved to nothing, so the nulls above are not evidence',
+            PosixBackend::descriptorForStream($live),
+            'a live ' . $label . ' handle resolved to nothing, so the nulls above are not evidence',
         );
 
-        fclose($file);
-        self::assertNull(PosixBackend::descriptorForStream($file), 'a closed handle resolved to a descriptor');
+        fclose($live);
+        self::assertNull(PosixBackend::descriptorForStream($live), 'a closed handle resolved to a descriptor');
         self::assertNull(PosixBackend::descriptorForStream(null), 'null resolved to a descriptor');
         self::assertNull(PosixBackend::descriptorForStream('0'), 'a string resolved to a descriptor');
     }
@@ -296,9 +307,43 @@ final class PosixBackendStreamDescriptorTest extends TestCase
      * reported the FIRST file's inode. MEASURED (mutation m7) before this
      * test existed: `clearstatcache()` deleted, whole candy-core suite,
      * 824 / 7422 / rc 0 -- SURVIVED.
+     *
+     * WHAT TWO CI HOSTS HAVE SINCE TAKEN OFF THAT TABLE, EACH MEASURED on
+     * run 33796495350:
+     *  - macOS (macos-15-arm64, PHP 8.3.33, job 100785492531): a live
+     *    regular-file handle resolves to null through BOTH passes of arm 2,
+     *    so the resolver call this test opens with cannot answer there --
+     *    and on Darwin fdesc never passes the warm stat through to the file
+     *    behind the entry anyway (macos-14 synthesises the entry identity).
+     *    A host without /proc/self/fd therefore skips at the top.
+     *  - Linux (ubuntu-latest, PHP 8.3.33 and 8.4.25, jobs 100785494933 /
+     *    100785499301 / 100787015704): stat() cached through the symlinked
+     *    entry is REVALIDATED once the descriptor is reused -- the warmed
+     *    staleness does not survive the window on those builds (it does on
+     *    this box's 8.3.6, 200/200 takes) -- so an eviction and no eviction
+     *    answer identically there and the test says so, rather than going
+     *    red for a property of the PHP build.
      */
     public function testADescriptorReusedByAnotherStreamIsNotResolvedFromACachedStat(): void
     {
+        // WHY THE KERNEL INTERFACE IS THE GATE AND NOT AN OS NAME: the whole
+        // fixture needs stat() to travel from a descriptor-table entry to the
+        // file behind it. procfs does; Darwin's fdesc measures not to, twice
+        // over -- macos-14 synthesises the entry's own identity for regular
+        // files, and macos-15 (run 33796495350, job 100785492531) refuses to
+        // resolve a regular-file stream through EITHER pass, so this test's
+        // very first resolver call would red on a host property rather than
+        // on the defect it hunts. A Linux without /proc mounted loses the
+        // same premise for the same kind of reason, so the gate is the
+        // premise itself; on Linux the assertions below all stay hard.
+        if (!\is_dir('/proc/self/fd')) {
+            self::markTestSkipped(
+                'this host exposes no procfs descriptor table, and the fdesc equivalent measured on CI '
+                    . 'does not pass a stat() through the entry to the file behind it, so neither the '
+                    . 'stale-cache state this fixture warms nor the resolution it guards can arise here',
+            );
+        }
+
         $table = $this->descriptorTable();
 
         $firstPath  = $this->tempPath();
@@ -310,8 +355,8 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         $descriptor = PosixBackend::descriptorForStream($first);
         self::assertIsInt($descriptor, 'the first handle resolved to nothing');
 
-        // A descriptor table of our own, holding ONE entry that points at the
-        // real one. Two reasons, and the second is the whole test:
+        // A descriptor table of our own, holding ONE entry that reaches the
+        // real one. Two reasons for the table, and the second is the whole test:
         //
         //  - the walk is then one stat instead of a dozen, so nothing between
         //    the warming read and the assertion can be attributed elsewhere;
@@ -320,32 +365,51 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         //    because MEASURED, PHP 8.3.6, `unlink()` and `rename()` both
         //    flush the stat cache outright -- repointing a symlink the
         //    ordinary way would destroy the state being tested.
+        //
+        // WHY THE ENTRY CHAINS THROUGH EIGHT MORE SYMLINKS BEFORE it names
+        // the table -- one hop longer than PosixBackend::MAX_LINK_HOPS: so
+        // pass 2 gives up on the entry ("a chain that does not terminate")
+        // and the DIRECT pass's per-entry eviction is again the only road to
+        // a right answer. WHAT THAT FIXES: MEASURED on this box, PHP 8.3.6,
+        // the day after the readlink pass shipped (45975dcc5) -- deleting the
+        // direct eviction line survived this test whole (17 assertions, rc 0),
+        // because pass 2 answered through the stale cache via the entry's
+        // honest one-hop readlink. m7, the mutation this test exists for,
+        // was back alive. The chain kills it again -- measured both ways,
+        // eviction deleted or both evictions deleted, the final assertion
+        // below goes red -- while stat() still resolves the entry's target
+        // through all nine layers, so every other fixture property holds.
+        // The chain names are not digits, so the resolver's table walk never
+        // mistakes them for descriptor entries.
         $fixture = $this->emptyDirectory();
-        self::assertTrue(symlink($table . '/' . $descriptor, $fixture . '/' . $descriptor));
+        self::assertTrue(symlink($table . '/' . $descriptor, $fixture . '/r54a_chain8'));
+        $this->artifacts[] = $fixture . '/r54a_chain8';
+        for ($link = 7; $link >= 1; $link--) {
+            self::assertTrue(symlink($fixture . '/r54a_chain' . ($link + 1), $fixture . '/r54a_chain' . $link));
+            $this->artifacts[] = $fixture . '/r54a_chain' . $link;
+        }
+
+        self::assertTrue(symlink($fixture . '/r54a_chain1', $fixture . '/' . $descriptor));
         $this->artifacts[] = $fixture . '/' . $descriptor;
 
         // WARM. The cache now describes the FIRST file.
         clearstatcache();
         $warm = stat($fixture . '/' . $descriptor);
 
-        // This whole arrangement needs a stat THROUGH the table entry to
-        // reach the file behind it -- and that pass-through is a property of
-        // the OS's table, not of the resolver. MEASURED on CI (macos-14,
-        // PHP 8.3): Darwin's fdesc synthesises its own identity for entries
-        // over regular files (character devices pass through, which is why
-        // the pty tests in this file are green there), so on that host the
-        // stale entry this fixture warms cannot be created at all, and the
-        // resolver's own walk -- which is guarded through pass 2 by the live
-        // temp-file assertions in testAStreamWithNoDescriptorAndADeadHandle
-        // BothAnswerNull -- never consults the fixture table. Skip with a
-        // reason rather than red a fixture the kernel cannot offer.
-        if (!\is_array($warm) || $warm['ino'] !== $firstStat['ino']) {
-            self::markTestSkipped(
-                'this host does not pass a stat() through the descriptor-table entry to the file '
-                    . 'behind it (Darwin fdesc synthesises the entry identity for regular files), '
-                    . 'so the stale-cache state this fixture warms cannot arise here',
-            );
-        }
+        // The pass-through premise, ASSERTED and not skipped. The host that
+        // cannot offer it -- Darwin's fdesc, measured in both directions --
+        // is gated at the top of the test by the kernel interface it was
+        // measured against, so arriving here means the host can hold the
+        // premise and a miss is a broken fixture (handle died early, table
+        // entry evicted), which has to stay red for the same reason a
+        // regression does.
+        self::assertIsArray($warm, 'stat() through the descriptor-table entry answered nothing');
+        self::assertSame(
+            $firstStat['ino'],
+            $warm['ino'],
+            'the warmed stat does not describe the first file, so the handle behind the entry is not '
+                . 'the one under test',
+        );
 
         // THE REUSE. fclose() and fopen() stat no path, so the cache entry
         // above survives them -- which is precisely the production hazard:
@@ -378,17 +442,34 @@ final class PosixBackendStreamDescriptorTest extends TestCase
                 . 'this fixture cannot discriminate',
         );
 
-        // DISCRIMINATOR 2 -- and the cache really was still describing the
-        // first file at the moment the resolver ran. Without this, a host
-        // that never caches would satisfy the assertion below for the wrong
-        // reason.
-        self::assertIsArray($cached);
-        self::assertSame(
-            $firstStat['ino'],
-            $cached['ino'],
-            'the stat cache was not stale at the moment of the call, so nothing here '
-                . 'distinguishes a resolver that clears it from one that does not',
-        );
+        // DISCRIMINATOR 2 -- the cache must really still be describing the
+        // first file at the moment the resolver ran, or the assertion below
+        // proves nothing. Where it is not, the reason is measured, not
+        // guessed (run 33796495350, every ubuntu lane): PHP 8.3.33 and 8.4.25
+        // revalidate a stat cached through a symlinked path, so once the
+        // descriptor is reused the entry already describes the SECOND file --
+        // the hazard this resolver guard answers is fixed in that build, an
+        // evicting and a non-evicting resolver answer identically there, and
+        // no red could name a culprit. On a build that does cache -- this
+        // box's 8.3.6, 200/200 takes -- the comparison stays hard, which is
+        // where the mutation dies.
+        self::assertIsArray($cached, 'stat() through the descriptor-table entry answered nothing');
+        if ($cached['ino'] !== $firstStat['ino']) {
+            // The kernel reuse itself was just proven by readlink above, so
+            // an entry describing NEITHER file is not a build property and
+            // must red.
+            self::assertSame(
+                $secondStat['ino'],
+                $cached['ino'],
+                'the entry describes neither the first nor the second file, which contradicts the '
+                    . 'kernel reuse read above',
+            );
+            self::markTestSkipped(
+                'this PHP build revalidates stat() through the descriptor-table link, so the stale '
+                    . 'entry this fixture warms does not survive the window and there is nothing '
+                    . 'left here for the resolver to clear',
+            );
+        }
 
         self::assertSame(
             $descriptor,

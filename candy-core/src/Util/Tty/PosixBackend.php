@@ -374,10 +374,26 @@ final class PosixBackend implements Backend
      *     matched NO `/dev/fd` entry directly, while a pty slave (character
      *     device) matched. So the walk has a second pass, run only when the
      *     first found nothing: follow each entry's `readlink()` chain to the
-     *     path it names and match that stat instead. Linux never pays for it
-     *     (the direct stat answers first), and pipe/socket targets — whose
-     *     fdesc names carry no path PHP could stat — are skipped there
-     *     exactly as the direct pass skips them.
+     *     path it names and match that stat instead. WHAT THAT COSTS ON
+     *     LINUX, PRECISELY: the direct pass answers first for every stream
+     *     that HAS a descriptor, but "only when the first found nothing" is
+     *     not "never" -- a stream with no descriptor at all (`php://memory`
+     *     and friends, whose `fstat` reports dev+ino 0/0) and a stream whose
+     *     target was unlinked DO take the second pass there too: one bounded
+     *     scandir/readlink walk over the table's numeric entries, every
+     *     target matching nothing, and the same `null` the first pass would
+     *     have returned. Bounded cost, unchanged outcome. Pipe and socket
+     *     targets -- whose fdesc names carry no path PHP could stat -- are
+     *     skipped there exactly as the direct pass skips them. AND WHAT PASS
+     *     2 HAS NOT SINCE PROVEN ON DARWIN: it was written for the macos-14
+     *     miss above, but MEASURED on CI (macos-15-arm64, PHP 8.3.33, run
+     *     33796495350, job 100785492531) a regular-file stream still resolves
+     *     to null through BOTH passes there. No guard relies on it recovering
+     *     regular files on Darwin -- the fixtures pin the character-device
+     *     path and skip what those hosts cannot offer -- and it is kept
+     *     because it cannot change a Linux answer, costs only the bounded
+     *     walk above, and remains the only route the macos-14 evidence leaves
+     *     for an fdesc whose readlink names a statable path.
      *
      * Arm 1 answering first is also what keeps the cost out of the hot path:
      * `size()` runs on every SIGWINCH, and `$this->stream` defaults to
@@ -509,10 +525,18 @@ final class PosixBackend implements Backend
      * matched nothing in pass 1 while a pty slave (character device) passed
      * through fine. `readlink()` is served by the same table and reports the
      * path PHP can actually stat, so the second walk follows it. Linux
-     * reaches this only when pass 1 found nothing -- and there the target
-     * `stat()`s identically to the entry (procfs links are resolved by the
-     * direct stat already), so the answer can only go from `null` to a
-     * match, never change one, or stay `null` for genuinely pathless targets.
+     * reaches this whenever pass 1 found nothing, and real Linux calls DO
+     * arrive: a stream with no descriptor (`php://memory` and friends, whose
+     * `fstat` reports dev+ino 0/0) and a stream whose target was unlinked
+     * walk every numeric entry here and return the same `null` they would
+     * have returned without this pass -- bounded cost, unchanged outcome.
+     * For a target that does match, the entry and the target `stat()`
+     * identically on procfs (links are resolved by the direct stat already),
+     * so the answer can only go from `null` to a match, never change one.
+     * On Darwin, regular-file recovery through this pass is UNPROVEN:
+     * MEASURED on CI (macos-15-arm64, PHP 8.3.33, run 33796495350, job
+     * 100785492531), both passes left a live regular-file stream unresolved,
+     * which is why the Darwin fixtures assert the character-device path only.
      *
      * @param  array<int|string, int> $target the fstat() of the stream
      * @return list<int>            matching descriptor numbers, unsorted

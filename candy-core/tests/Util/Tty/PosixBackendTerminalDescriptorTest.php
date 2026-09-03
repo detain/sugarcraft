@@ -102,13 +102,20 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
         // Darwin. WHY THEY DIFFER: opening /dev/ptmx hands back the pty
         // MASTER, and MEASURED on CI (macos-14, PHP 8.3) a BSD master is a tty
         // to isatty() — the assertion below passes — but REJECTS TIOCGWINSZ,
-        // so the SizeIoctl::query() at the end of this test threw for a reason
+        // so the size consequence at the end of this test threw for a reason
         // that has nothing to do with the resource-id defect this test pins.
-        // (candy-pty's SizeIoctl records the same split empirically: the GET
-        // works on macOS against the slave, and its SET is broken there by the
-        // variadic-ioctl ABI.) The SLAVE is the real terminal on every POSIX
-        // host, and Linux's master accepts the ioctl, so Linux keeps the
-        // simpler spelling and only Darwin allocates.
+        // The SLAVE is the real terminal on every POSIX host, and Linux's
+        // master accepts the ioctl, so Linux keeps the simpler spelling and
+        // only Darwin allocates. WHAT THAT REASONING ALSO USED TO CLAIM, AND
+        // WHAT WAS MEASURED SINCE (macos-15-arm64, PHP 8.3.33, run
+        // 33796495350, job 100785492531): that the GET works on macOS against
+        // the slave, on candy-pty's strength -- it does not, not through that
+        // binding: TIOCGWINSZ on a libc-opened, posix_isatty-accepted slave
+        // descriptor returned rc=-1, the same arm64 variadic-ioctl ABI
+        // breakage candy-pty's SizeIoctl::setSizeViaLibc documents for the
+        // SET direction. The descriptor was fine; candy-pty's fixed-arg FFI
+        // cdef is the gap, and the size consequence below reads the slave
+        // through stty(1) on Darwin until that cdef lands upstream.
         $device = self::TERMINAL_DEVICE;
         $pair   = null;
         if (\PHP_OS_FAMILY === 'Darwin') {
@@ -147,13 +154,39 @@ final class PosixBackendTerminalDescriptorTest extends TestCase
                 );
 
                 // And the consequence that the production arm actually depends
-                // on: the number is one SizeIoctl::query() will accept. This is
+                // on: the number is one a terminal sink will accept. This is
                 // the positive component — an assertion that the helper "does not
                 // return a resource id" would also pass against a helper that
-                // returned null forever.
-                $size = SizeIoctl::query($fd);
-                self::assertArrayHasKey('rows', $size);
-                self::assertArrayHasKey('cols', $size);
+                // returned null forever. WHY THE SINK SPLITS BY OS: candy-pty's
+                // FFI cannot carry a winsize pointer through the arm64 variadic
+                // ioctl ABI even reading -- MEASURED on CI (macos-15-arm64,
+                // PHP 8.3.33, run 33796495350, job 100785492531),
+                // "TIOCGWINSZ ioctl failed on fd 8 with rc=-1" on exactly such
+                // a descriptor -- which is candy-pty's to fix (its LibcAccess
+                // cdef) and not evidence about THIS number. On Darwin the claim
+                // is therefore made through BSD's own stty(1), reading the
+                // terminal through the same /dev/fd path candy-pty itself uses
+                // for its SET fallback, and SizeIoctl::query() keeps the
+                // assertion directly on every host where it demonstrably works.
+                if (\PHP_OS_FAMILY === 'Darwin') {
+                    $reading = SttyReading::of('/dev/fd/' . $fd);
+                    self::assertNotSame(
+                        '',
+                        $reading,
+                        'stty could not read the terminal through the resolved descriptor ' . $fd
+                            . ' -- the number names no addressable terminal',
+                    );
+                    self::assertMatchesRegularExpression(
+                        '/rows/',
+                        $reading,
+                        'the stty reading through the resolved descriptor carries no size line, so it '
+                            . 'proves nothing about the number being usable',
+                    );
+                } else {
+                    $size = SizeIoctl::query($fd);
+                    self::assertArrayHasKey('rows', $size);
+                    self::assertArrayHasKey('cols', $size);
+                }
             } finally {
                 fclose($handle);
                 PosixBackend::closeDeviceDescriptor($fd);
