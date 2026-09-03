@@ -489,6 +489,23 @@ final class PosixBackendStreamDescriptorTest extends TestCase
      * resource id, so the first arm threw and the env answer was returned.
      * Pinning the env to a known wrong value makes the failure deterministic
      * rather than "some other number".
+     *
+     * WHY THE SETUP CARRIES TWO DEVICE FLAGS, AND WHY THIS RAN ON LINUX
+     * ONLY UNTIL NOW: BSD's stty takes the device flag lowercase and GNU's
+     * uppercase -- the same split {@see SttyReading::of()} and candy-pty's
+     * own stty(1) fallbacks use. The GNU-only `-F` spelling is what kept
+     * this on Linux by its rc guard, and until recently the guard was doing
+     * double duty: the first arm's {@see SizeIoctl::query()} -- the very
+     * thing under test -- could not answer on arm64 Darwin at all (the
+     * fixed-arg FFI cdef and the variadic ioctl ABI; MEASURED on CI,
+     * macos-15-arm64, PHP 8.3.33, run 33796495350, job 100785492531:
+     * "TIOCGWINSZ ioctl failed on fd 8 with rc=-1"), so the arm fell
+     * through to the pinned env and the test could only red there, never
+     * discriminate. candy-pty has since fixed the read path with a Darwin
+     * stty(1) fallback inside SizeIoctl, which is what lets the BSD flag
+     * through: the residual rc skip is now a pure capability gate (no stty
+     * binary, hung-up pty), not an OS exemption. The Darwin leg itself is
+     * only re-proven by the next macos-15 run.
      */
     public function testSizeReadsTheInjectedTerminalRatherThanTheEnvironment(): void
     {
@@ -500,8 +517,12 @@ final class PosixBackendStreamDescriptorTest extends TestCase
         $path  = $this->slavePath;
 
         // 137x43 is not a size anything on a host would choose by accident,
-        // and it is not the env answer below.
-        exec('stty -F ' . escapeshellarg($path) . ' rows 43 cols 137 2>/dev/null', $ignored, $rc);
+        // and it is not the env answer below. The device flag splits by
+        // convention (GNU `-F`, BSD `-f`); the `rows R cols C` word order
+        // both spellings accept is the one candy-pty's own Darwin stty(1)
+        // fallback uses.
+        $deviceFlag = \PHP_OS_FAMILY === 'Darwin' ? '-f' : '-F';
+        exec('stty ' . $deviceFlag . ' ' . escapeshellarg($path) . ' rows 43 cols 137 2>/dev/null', $ignored, $rc);
         if ($rc !== 0) {
             self::markTestSkipped('stty could not set the slave pty size on this host.');
         }
