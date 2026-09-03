@@ -93,13 +93,15 @@ final class ContextCompactor
      * the conversation. Two byte-identical exchanges collide onto one key, and the
      * harmlessness of that collapse was MEASURED (backlog §12.2 E23) rather than
      * assumed: stage 2 emits one summary line per pair, never per key, so both
-     * duplicates stay represented; a model-written summary is a function of exactly
-     * the two texts the key hashes, so one entry summarises either exchange
+     * duplicates stay represented; the model is offered nothing of an exchange beyond
+     * the two texts the key hashes (its ordinal label is presentational), so
+     * whichever paraphrase the positional parse keeps describes either twin
      * truthfully; per-pair riders (`_Request cancelled._`) and `tool_calls`
      * payloads are not keyed and are therefore not carried by the collapse.
      * Adjacent duplicates then fold into stage 3's counted `[2x]` line — with or
      * without a summary map, since that stage keys on identical rendered text.
-     * Pinned by the E23 tests in {@see \SugarCraft\Crush\Tests\Context\ExchangeSummaryTest}.
+     * Pinned by the E23 tests in {@see \SugarCraft\Crush\Tests\Context\ExchangeSummaryTest} —
+     * the six tests under the "E23 (backlog §12.2)" banner in that file.
      */
     public static function exchangeKey(string $userMsg, string $assistantMsg): string
     {
