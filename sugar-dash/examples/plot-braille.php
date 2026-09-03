@@ -18,13 +18,13 @@ $data = [15.0, 25.0, 38.0, 42.0, 31.0, 55.0, 48.0, 62.0, 54.0, 71.0, 68.0, 85.0]
 // ── MarkerDot plot (left) ──────────────────────────────────────────
 $dotPlot = Plot::new($data, 35, 14)
     ->withShowAxes(true);
-$dotPlot->setSize(35, 14);
+$dotPlot = $dotPlot->setSize(35, 14);
 $dotOutput = $dotPlot->render();
 
 // ── MarkerBraille plot (right) ───────────────────────────────────
 $braillePlot = Plot::new($data, 35, 14)
     ->withShowAxes(true);
-$braillePlot->setSize(35, 14);
+$braillePlot = $braillePlot->setSize(35, 14);
 $brailleOutput = $braillePlot->render();
 
 // ── Combine side-by-side with headers ───────────────────────────

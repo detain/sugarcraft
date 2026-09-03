@@ -148,7 +148,7 @@ Baselines for ALL steps: charts@f2c7b9822: 568/1400/0Sk rc0 (failOnWarning live)
 | C4 bufferFromOutput SGR-strip + @return [R4] | bufferFromOutput | B | ✅ | ✅ | ✅ | 5daa9c893 |
 | C5 Bubble bin collapse + header [R1] | Bubble bins | B | ✅ | ✅ | ✅ | b4c22e815 |
 | C6′ plot-braille assign + goldens re-record | BL-8 residue | B | ⬜ | ⬜ | ⬜ | — |
-| C7 donut-wireframe goldens ×2 | missing goldens | B | ⬜ | ⬜ | ⬜ | — |
+| C7 donut-wireframe goldens ×2 | missing goldens | B | ✅ | ✅ | ✅ | 9dd7ba25a |
 | C8a GaugeCircle ring-bug [Q3 — b/c PARKED-v5] | GaugeCircle | B | ⬜ | ⬜ | ⬜ | — |
 | C9 candy-core T::charset | v4-Q6 | A | ✅ | ✅ | ✅ | 15a9900ed |
 
