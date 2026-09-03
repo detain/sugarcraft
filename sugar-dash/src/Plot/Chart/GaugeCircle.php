@@ -61,6 +61,9 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
 
     /**
      * Set the allocated dimensions for this gauge.
+     *
+     * Once set, render() and getInnerSize() fit the dial to the allocation
+     * instead of the constructor radius (v5 D2 geometry activation).
      */
     public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
@@ -71,12 +74,36 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
+     * Effective dial radius: allocation-fitted when setSize() has run,
+     * otherwise the constructor radius — the no-allocation path stays
+     * byte-identical to the pre-D2 radius-driven render.
+     *
+     * Raw-cell geometry (aspect-neutral): the plan sketch in
+     * chart_v5_plan.md D2, tightened so the frame ALWAYS fits the
+     * allocation at odd heights — usable = min(width, height − labelRow),
+     * diameter = 2·floor((usable−1)/2)+1 ≤ usable. Floor 3 mirrors the
+     * withRadius() clamp. The 2:1 terminal-cell aspect correction is
+     * deliberately NOT applied here (arrives in v5 D3).
+     */
+    private function effectiveRadius(): int
+    {
+        if ($this->width === null || $this->sizerHeight === null) {
+            return $this->radius;
+        }
+
+        $labelRows = $this->showLabel ? 1 : 0;
+        $usable = min($this->width, $this->sizerHeight - $labelRows);
+
+        return max(3, intdiv(max(0, $usable - 1), 2));
+    }
+
+    /**
      * Render the circular gauge.
      */
     public function render(): string
     {
         $ratio = max(0.0, min(1.0, $this->ratio));
-        $radius = $this->radius;
+        $radius = $this->effectiveRadius();
         $diameter = ($radius * 2) + 1;
         $centerX = $radius;
         $centerY = $radius;
@@ -203,19 +230,23 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function getInnerSize(): array
     {
-        $diameter = ($this->radius * 2) + 1;
+        $diameter = ($this->effectiveRadius() * 2) + 1;
         $labelHeight = $this->showLabel ? 1 : 0;
         return [$diameter, $diameter + $labelHeight];
     }
 
     // ─── Withers ──────────────────────────────────────────────────
+    //
+    // Allocation-preserving pattern (GaugeWithDetail::withValue precedent):
+    // build the new self, then re-apply setSize() when both dimensions are
+    // stored — otherwise a wither silently drops the layout allocation.
 
     /**
-     * Set the radius of the gauge.
+     * Set the radius of the gauge (the no-allocation fallback size).
      */
     public function withRadius(int $radius): self
     {
-        return new self(
+        $clone = new self(
             ratio: $this->ratio,
             radius: max(3, $radius),
             showNeedle: $this->showNeedle,
@@ -225,6 +256,8 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $this->needleColor,
             labelColor: $this->labelColor,
         );
+
+        return $this->preserveAllocation($clone);
     }
 
     /**
@@ -232,7 +265,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withShowNeedle(bool $show): self
     {
-        return new self(
+        $clone = new self(
             ratio: $this->ratio,
             radius: $this->radius,
             showNeedle: $show,
@@ -242,6 +275,8 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $this->needleColor,
             labelColor: $this->labelColor,
         );
+
+        return $this->preserveAllocation($clone);
     }
 
     /**
@@ -249,7 +284,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withShowTicks(bool $show): self
     {
-        return new self(
+        $clone = new self(
             ratio: $this->ratio,
             radius: $this->radius,
             showNeedle: $this->showNeedle,
@@ -259,6 +294,8 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $this->needleColor,
             labelColor: $this->labelColor,
         );
+
+        return $this->preserveAllocation($clone);
     }
 
     /**
@@ -266,7 +303,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withShowLabel(bool $show): self
     {
-        return new self(
+        $clone = new self(
             ratio: $this->ratio,
             radius: $this->radius,
             showNeedle: $this->showNeedle,
@@ -276,6 +313,8 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $this->needleColor,
             labelColor: $this->labelColor,
         );
+
+        return $this->preserveAllocation($clone);
     }
 
     /**
@@ -291,7 +330,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withRatio(float $ratio): self
     {
-        return new self(
+        $clone = new self(
             ratio: max(0.0, min(1.0, $ratio)),
             radius: $this->radius,
             showNeedle: $this->showNeedle,
@@ -301,6 +340,8 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $this->needleColor,
             labelColor: $this->labelColor,
         );
+
+        return $this->preserveAllocation($clone);
     }
 
     /**
@@ -308,7 +349,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withArcColor(?Color $color): self
     {
-        return new self(
+        $clone = new self(
             ratio: $this->ratio,
             radius: $this->radius,
             showNeedle: $this->showNeedle,
@@ -318,6 +359,8 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $this->needleColor,
             labelColor: $this->labelColor,
         );
+
+        return $this->preserveAllocation($clone);
     }
 
     /**
@@ -325,7 +368,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withNeedleColor(?Color $color): self
     {
-        return new self(
+        $clone = new self(
             ratio: $this->ratio,
             radius: $this->radius,
             showNeedle: $this->showNeedle,
@@ -335,6 +378,8 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $color,
             labelColor: $this->labelColor,
         );
+
+        return $this->preserveAllocation($clone);
     }
 
     /**
@@ -342,7 +387,7 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withLabelColor(?Color $color): self
     {
-        return new self(
+        $clone = new self(
             ratio: $this->ratio,
             radius: $this->radius,
             showNeedle: $this->showNeedle,
@@ -352,5 +397,22 @@ final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
             needleColor: $this->needleColor,
             labelColor: $color,
         );
+
+        return $this->preserveAllocation($clone);
+    }
+
+    /**
+     * Re-apply this gauge's layout allocation onto a wither clone so
+     * setSize() survives the fluent chain (StackedGrid consumes
+     * setSize(...)->render(); a dropped allocation silently reverts the
+     * dial to ctor-radius geometry).
+     */
+    private function preserveAllocation(self $clone): self
+    {
+        if ($this->width !== null && $this->sizerHeight !== null) {
+            return $clone->setSize($this->width, $this->sizerHeight);
+        }
+
+        return $clone;
     }
 }

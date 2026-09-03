@@ -404,4 +404,68 @@ final class GaugeCircleTest extends TestCase
         $high = substr_count((new GaugeCircle(0.75, 6, false, false, false))->render(), '●');
         $this->assertGreaterThan($low, $high, '● count grows with ratio');
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // setSize geometry activation (v5 D2)
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testNoAllocationPathStaysByteIdenticalToHead(): void
+    {
+        // CONTRACT: setSize never called ⇒ render() byte-IDENTICAL to the
+        // pre-D2 radius-driven path. sha pinned from reconD @d549c0d48
+        // (re-derived live 2026-09-03): 2186ff67… strlen 1063, inner [13,14].
+        $gauge = GaugeCircle::new(0.8);
+
+        $this->assertSame('2186ff670a87f0500b70148b0356b504108f1d7a', sha1($gauge->render()));
+        $this->assertSame(1063, strlen($gauge->render()));
+        $this->assertSame([13, 14], $gauge->getInnerSize());
+    }
+
+    public function testAllocationSurvivesFullWitherChain(): void
+    {
+        // All 9 withers must re-apply the allocation (GaugeWithDetail
+        // allocation-preserving pattern) — StackedGrid:201-202 depends on
+        // setSize(...)->render() geometry surviving fluent chains.
+        $sized = GaugeCircle::new(0.8)->setSize(40, 10);
+        $chained = $sized
+            ->withRatio(0.8)
+            ->withShowNeedle(true)
+            ->withShowTicks(true)
+            ->withShowLabel(true)
+            ->withPercentage(true)
+            ->withRadius(6)
+            ->withArcColor(Color::hex('#874BFD'))
+            ->withNeedleColor(Color::hex('#FF6B6B'))
+            ->withLabelColor(Color::hex('#FFFFFF'));
+
+        $this->assertSame($sized->render(), $chained->render(), 'wither chain must not drop the allocation');
+        $this->assertNotSame(GaugeCircle::new(0.8)->render(), $chained->render(), 'sized render must differ from radius-6 default');
+        $this->assertSame([9, 10], $chained->getInnerSize());
+    }
+
+    public function testCrossDimensionAllocationsRenderDifferently(): void
+    {
+        $small = GaugeCircle::new(0.5)->setSize(40, 10);
+        $large = GaugeCircle::new(0.5)->setSize(60, 20);
+
+        $smallLines = substr_count($small->render(), "\n") + 1;
+        $largeLines = substr_count($large->render(), "\n") + 1;
+
+        $this->assertNotSame($small->render(), $large->render(), 'cross-dim allocations must render differently');
+        $this->assertSame([9, 10], $small->getInnerSize());
+        $this->assertSame([19, 20], $large->getInnerSize());
+        $this->assertSame(10, $smallLines, '40x10 → radius 4 → 9 grid rows + label');
+        $this->assertSame(20, $largeLines, '60x20 → radius 9 → 19 grid rows + label');
+    }
+
+    public function testAllocationClampsToMinRadiusFloor(): void
+    {
+        // Allocation smaller than the clamp floor renders the floor dial
+        // (radius 3, mirroring withRadius's max(3, …)), never a broken grid.
+        $tiny = GaugeCircle::new(0.5)->setSize(4, 4);
+
+        $this->assertSame([7, 8], $tiny->getInnerSize());
+        $this->assertNotSame('', $tiny->render());
+        $this->assertSame([7, 8], $tiny->withRatio(0.9)->getInnerSize(), 'floor survives withers');
+    }
 }
