@@ -5,8 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Context;
 
 use PHPUnit\Framework\TestCase;
+use React\Promise\PromiseInterface;
+use SugarCraft\Core\AsyncCmd;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Backend;
+use SugarCraft\Crush\Backend\CancellationToken;
+use SugarCraft\Crush\Backend\ReportsContextWindow;
+use SugarCraft\Crush\Chat;
 use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
+use SugarCraft\Crush\Message;
 
 final class ContextCompactorTest extends TestCase
 {
@@ -954,4 +963,688 @@ final class ContextCompactorTest extends TestCase
         return $total;
     }
 
+    // ─── truncateOversizedExchange() — intra-exchange E18 ─────────
+    //
+    // Backlog §12.2 E18: one exchange LARGER THAN THE TIER is a permanent
+    // refusal, because every other tier on this class frees space BETWEEN whole
+    // exchanges and cannot shrink one that is itself oversized. These tests pin
+    // the intra-exchange rescue and, just as loudly, the boundary that keeps it
+    // OUT of the between-exchanges case the tests above already pin.
+
+    /**
+     * The E18 fixture: a single 800,000-char exchange is 200,010 estimated
+     * tokens, over the 95,000 blocking tier of a 100,000-token window all by
+     * itself, so whole-exchange compaction can never free enough.
+     *
+     * The two properties are asserted together because either alone is
+     * satisfiable by a broken fix. Under the tier is the point of truncating at
+     * all; still large is what proves the tier was cleared by REMOVING TEXT
+     * rather than by under-counting it. A result near zero would clear the tier
+     * just as well and would be the exact lie §12.2 forbids.
+     */
+    public function testASingleExchangeLargerThanTheTierIsTruncatedUnderIt(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', str_repeat('x', 800_000)),
+            $this->msg('assistant', str_repeat('y', 2_000)),
+        ];
+        $this->assertSame(200_520, $this->countTokens($messages), 'fixture: 200,520 is 111% of the 95,000 tier');
+
+        $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
+
+        $tokens = $this->countTokens($truncated);
+        $this->assertLessThan(95_000, $tokens, 'the truncated history must clear the blocking tier, or the turn is still refused');
+        $this->assertGreaterThan(90_000, $tokens, 'and it must still weigh most of the window - it was shortened, not emptied');
+        $this->assertSame(92_977, $tokens, 'the exact figure this truncation produces');
+
+        // The oversized message really was rewritten...
+        $this->assertSame(369_825, mb_strlen($truncated[0]['content']), '800,000 chars became this');
+        // ...and the message that was never oversized was not touched at all.
+        $this->assertSame($messages[1], $truncated[1], 'a message under the tier must survive byte-for-byte');
+        $this->assertSame('assistant', $truncated[1]['role']);
+    }
+
+    /**
+     * The marker is an ACCOUNTING claim, so it is checked as arithmetic rather
+     * than as prose: head kept plus characters reported dropped must equal the
+     * original length exactly. An off-by-anywhere marker would let the
+     * "estimate fell because the bytes fell" argument pass while the bytes had
+     * not in fact fallen by that much.
+     */
+    public function testTheTruncationMarkerNamesTheExactNumberOfCharactersDropped(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $content = str_repeat('x', 800_000);
+        $messages = [$this->msg('user', $content)];
+
+        $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
+        $newContent = $truncated[0]['content'];
+
+        $this->assertSame(1, preg_match('/\n\n\[\.\.\. (\d+) characters truncated to fit the context window \.\.\.\]$/', $newContent, $m), 'exactly one marker, at the very end');
+        $dropped = (int) $m[1];
+        // Everything before the marker's two-newline separator is the kept head.
+        $head = mb_substr($newContent, 0, mb_strlen($newContent) - (mb_strlen($m[0])));
+
+        $this->assertSame(800_000, mb_strlen($head) + $dropped, 'kept + reported-dropped must equal the original exactly');
+        $this->assertSame(str_repeat('x', mb_strlen($head)), $head, 'and what it claims to have kept really is the unmodified head');
+        $this->assertGreaterThan(0, $dropped, 'the marker must never report a zero drop next to a real truncation');
+    }
+
+    /**
+     * The other polarity, and the one that keeps this step inside its lane: a
+     * history over the tier only IN AGGREGATE - 13 exchanges of 50,003 chars,
+     * 325,286 estimated tokens, largest single message 12,511 - must be returned
+     * UNCHANGED. That is the between-exchanges case, which Chat refuses and
+     * {@see self::testCompactSummarizesOlderMessages()} and ChatTest already pin.
+     *
+     * Asserted with `assertSame` on the whole array, not a length or a
+     * "nothing got bigger" check: a truncation pass that quietly shortened one
+     * of these would still satisfy any bound assertion while rewriting exchanges
+     * the inter-exchange tiers chose to preserve.
+     */
+    public function testAHistoryOversizedOnlyInAggregateIsReturnedUnchanged(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [];
+        for ($i = 0; $i < 13; $i++) {
+            $messages[] = $this->msg('user', "u{$i} " . str_repeat('x', 50_000));
+            $messages[] = $this->msg('assistant', "a{$i} " . str_repeat('y', 50_000));
+        }
+        $this->assertSame(325_286, $this->countTokens($messages), 'fixture: far over the tier in total');
+        $this->assertSame(12_511, max(array_map(
+            fn(array $m): int => $this->countTokens([$m]),
+            $messages,
+        )), 'fixture: and no single message reaches it');
+
+        $this->assertSame(
+            $messages,
+            $compactor->truncateOversizedExchange($messages, 100_000),
+            'not one byte of an aggregate-only overflow may be rewritten',
+        );
+    }
+
+    /**
+     * The threshold comparison is `>=`, so a message worth EXACTLY the blocking
+     * tier is oversized and one character-shorter of a budget is not. Pinning
+     * both sides of `>=` is what stops a later `<` flip from silently turning
+     * the rescue off at the boundary.
+     *
+     * 379,960 chars is exactly 95,000 estimated tokens; 379,956 is 94,999.
+     */
+    public function testTheBlockingThresholdBoundaryIsInclusiveOnOneSideAndNotTheOther(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+
+        $at = [$this->msg('user', str_repeat('x', 379_960))];
+        $this->assertSame(95_000, $this->countTokens($at), 'fixture: exactly at the 95,000 tier');
+        $this->assertNotSame($at, $compactor->truncateOversizedExchange($at, 100_000), 'at the tier is oversized');
+
+        $under = [$this->msg('user', str_repeat('x', 379_956))];
+        $this->assertSame(94_999, $this->countTokens($under), 'fixture: one token below it');
+        $this->assertSame($under, $compactor->truncateOversizedExchange($under, 100_000), 'below it is not - and is not rewritten');
+    }
+
+    /**
+     * Two oversized exchanges split the budget equally rather than the first
+     * taking everything and the second staying oversized - which would leave the
+     * history over the tier and the turn refused anyway.
+     */
+    public function testEveryOversizedExchangeSharesTheRemainingBudget(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', str_repeat('x', 800_000)),
+            $this->msg('assistant', str_repeat('z', 600_000)),
+        ];
+        $this->assertSame(350_020, $this->countTokens($messages));
+
+        $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
+
+        $this->assertSame(92_954, $this->countTokens($truncated), 'the exact two-giant figure');
+        $this->assertLessThan(95_000, $this->countTokens($truncated));
+        $this->assertSame(
+            mb_strlen($truncated[0]['content']),
+            mb_strlen($truncated[1]['content']),
+            'an equal share of the space left under the tier',
+        );
+        foreach ($truncated as $i => $message) {
+            $this->assertLessThan(
+                95_000,
+                $this->countTokens([$message]),
+                "neither message may still be over the tier on its own (message {$i})",
+            );
+        }
+    }
+
+    /**
+     * Determinism, because the truncated text reaches a prompt and goldens pin
+     * bytes. Two calls on the same input must be byte-identical; a clock, a
+     * random salt or an mb_str_split difference would show up here first.
+     */
+    public function testTheTruncationIsByteIdenticalAcrossRepeatedCalls(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', str_repeat('x', 800_000)),
+            $this->msg('assistant', str_repeat('y', 2_000)),
+        ];
+
+        $first = $compactor->truncateOversizedExchange($messages, 100_000);
+        $second = $compactor->truncateOversizedExchange($messages, 100_000);
+
+        $this->assertSame($first, $second, 'the same oversized exchange must truncate to the same bytes every time');
+        $this->assertSame($first, $compactor->truncateOversizedExchange($first, 100_000), 'and re-truncating an already-truncated history must be a no-op');
+    }
+
+    /**
+     * Truncating multibyte text must not cut a codepoint in half: a split UTF-8
+     * sequence reaches the provider as invalid bytes and the whole request can
+     * be rejected for it. 'x' repeated cannot demonstrate this at all - only a
+     * multibyte payload can.
+     */
+    public function testTruncatingMultibyteContentLeavesValidUtf8(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [$this->msg('user', str_repeat('é', 800_000))];
+
+        $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
+
+        $this->assertTrue(
+            mb_check_encoding($truncated[0]['content'], 'UTF-8'),
+            'a head cut mid-codepoint would produce invalid UTF-8 on the wire',
+        );
+        $this->assertLessThan(95_000, $this->countTokens($truncated));
+        $this->assertStringEndsWith(
+            'characters truncated to fit the context window ...]',
+            $truncated[0]['content'],
+            'and the marker must still close the string',
+        );
+    }
+
+    /**
+     * {@see \SugarCraft\Crush\Message::toWire()} carries attachments and tool
+     * calls beside the content. Truncation rewrites `content` only - dropping a
+     * sibling key would silently delete a tool call the exchange still needs,
+     * and content size has nothing to do with either.
+     */
+    public function testTruncationLeavesTheNonContentWireKeysAlone(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [[
+            'role' => 'assistant',
+            'content' => str_repeat('x', 800_000),
+            'attachments' => [['type' => 'IMAGE', 'path' => '/tmp/a.png']],
+            'tool_calls' => [['id' => 'tc1', 'name' => 'bash', 'arguments' => ['command' => 'ls']]],
+        ]];
+
+        $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
+
+        $this->assertSame($messages[0]['attachments'], $truncated[0]['attachments'], 'attachments ride through');
+        $this->assertSame($messages[0]['tool_calls'], $truncated[0]['tool_calls'], 'and so do tool calls');
+        $this->assertSame('assistant', $truncated[0]['role'], 'and the role');
+        $this->assertNotSame($messages[0]['content'], $truncated[0]['content'], 'while the content does change');
+    }
+
+    /**
+     * The guards on the three sibling tier predicates, re-pinned here: a
+     * non-positive window disables every tier, and a history already under the
+     * tier must be returned untouched rather than shortened "while we're here".
+     */
+    public function testANonPositiveWindowAndAnUnderTierHistoryAreBothReturnedUntouched(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $huge = [$this->msg('user', str_repeat('x', 800_000))];
+
+        $this->assertSame($huge, $compactor->truncateOversizedExchange($huge, 0), 'a zero window disables the tier, as it does the other three');
+        $this->assertSame($huge, $compactor->truncateOversizedExchange($huge, -100), 'and so does a negative one');
+
+        $small = [$this->msg('user', 'hello')];
+        $this->assertSame($small, $compactor->truncateOversizedExchange($small, 100_000), 'under the tier: nothing to rescue, nothing rewritten');
+        $this->assertSame([], $compactor->truncateOversizedExchange([], 100_000), 'an empty history stays empty');
+    }
+
+    /**
+     * The truncation is bounded, not omnipotent. One oversized exchange plus ten
+     * exchanges of 379,956 chars (94,999 estimated tokens each, every one just
+     * under the 95,000 threshold so none is individually oversized) is 1,150,000
+     * estimated tokens: truncating the giant to nothing still leaves 950,000, so
+     * the rescue CANNOT clear the tier here.
+     *
+     * This is the pathological shape, and the answer must be "no change is
+     * offered", not "half a rescue sent". Chat's blocking sites both re-check
+     * {@see ContextCompactor::shouldCompactForeground()} on the truncated wire
+     * and fall back to the ordinary refusal when it is still over — without that
+     * re-check a turn the provider is entitled to reject would be sent on the
+     * strength of a truncation that truncated nowhere near enough.
+     */
+    public function testTruncationDoesNotClaimToRescueAnOverflowItCannotClear(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [];
+        for ($i = 0; $i < 10; $i++) {
+            $messages[] = $this->msg('user', str_repeat('p', 379_956));
+        }
+        $messages[] = $this->msg('user', str_repeat('x', 800_000));
+
+        $this->assertSame(1_150_000, $this->countTokens($messages), 'fixture: far over the tier');
+        $this->assertSame(
+            94_999,
+            $this->countTokens([$messages[0]]),
+            'fixture: each preserved exchange is one token SHORT of being individually oversized',
+        );
+
+        $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
+
+        // The oversized message is still truncated (the method reports what it
+        // did honestly) — it is the CALLER's re-check that must refuse to send.
+        $this->assertNotSame($messages, $truncated, 'the one oversized message is still shortened');
+        $this->assertSame(
+            950_000,
+            $this->countTokens($truncated),
+            'and the history is still enormously over the tier afterwards',
+        );
+        $this->assertTrue(
+            $compactor->shouldCompactForeground($truncated, 100_000),
+            'so the blocking tier must still fire on the truncated wire — this is what Chat re-tests',
+        );
+        $this->assertSame(
+            $messages[0],
+            $truncated[0],
+            'and the ten not-individually-oversized exchanges were still left alone',
+        );
+    }
+
+    /**
+     * The guard's own deletion experiment lives here: with only a giant and
+     * nothing else, the same call DOES clear the tier. Without this second half
+     * the assertion above could be satisfied by a truncator that simply never
+     * worked, and the "cannot clear" case would prove nothing.
+     */
+    public function testTheSameTruncatorDoesClearTheTierWhenTheOverflowIsGenuinelyIntraExchange(): void
+    {
+        $compactor = new ContextCompactor($this->cfg());
+        $messages = [
+            $this->msg('user', str_repeat('x', 800_000)),
+            $this->msg('assistant', str_repeat('y', 2_000)),
+        ];
+
+        $truncated = $compactor->truncateOversizedExchange($messages, 100_000);
+
+        $this->assertFalse(
+            $compactor->shouldCompactForeground($truncated, 100_000),
+            'a genuinely intra-exchange overflow IS cleared, so the failure above is about the aggregate, not about a truncator that does nothing',
+        );
+    }
+
+    // ─── E18 through the real Chat tier path ──────────────────────
+    //
+    // The assertions above prove the truncation in isolation; these drive the
+    // exact reproduction the step names — one oversized exchange, repeated
+    // attempts — through Chat::submit()'s blocking tier and through the parked
+    // landing in applyModelCompaction(), because the runaway was a property of
+    // the refusal LOOP, not of the truncator, and only the loop can show it is
+    // gone. Both routes are covered: a real session with a summary backend takes
+    // the parked one, and fixing only the synchronous tier would have left E18
+    // live in production.
+
+    /**
+     * The reproduction, before the fix, measured on this branch by reverting
+     * `src/` to its base state and driving five attempts
+     * (`/home/sites/prompt-scratch/P4.S4/lead/BEFORE_sync.txt`):
+     *
+     *     estimate sequence: [200520, 200648, 200776, 200904, 201032]
+     *     refusal sequence:  [R, R, R, R, R]      backend calls: 0
+     *
+     * Strictly rising, and every attempt refused: that is §12.2 E18.
+     *
+     * After the fix the same drive must (a) dispatch every attempt, and (b) never
+     * read an estimate ABOVE the first attempt's. (b) is the literal non-rising
+     * claim, and it is the shape that discriminates: the bug's maximum estimate is
+     * its LAST reading, the fix's is its FIRST, because the oversized exchange is
+     * truncated once and then stays truncated. It deliberately does NOT claim the
+     * estimate is flat forever — a turn that proceeds appends a real user line and
+     * a real reply, and honest conversation growth of ~23 tokens a turn is not the
+     * defect and must not be suppressed to make an assertion read prettily.
+     *
+     * The third claim is the one that makes (b) unfakeable: what the provider
+     * ACTUALLY RECEIVED is asserted to be under the tier and to carry the
+     * truncated bytes. An undercounting "fix" — report fewer tokens, send the same
+     * 800,000 characters — satisfies (a) and (b) and dies here.
+     */
+    public function testAnOversizedExchangeStopsBeingRefusedAndTheWireReallyGetsShorter(): void
+    {
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(
+            history: [
+                Message::user(str_repeat('x', 800_000)),
+                Message::assistant(str_repeat('y', 2_000)),
+            ],
+            backend: $backend,
+        );
+
+        $estimates = [];
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $estimates[] = $chat->contextTokens();
+            $chat = $this->withDraft($chat, "retry{$attempt}");
+
+            [$chat, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+            $this->assertNotNull(
+                $cmd,
+                "attempt {$attempt} was refused: an exchange that cannot fit must be truncated, not re-refused (E18)",
+            );
+            $this->assertStringNotContainsString(
+                'This turn was NOT sent',
+                $chat->history[count($chat->history) - 1]->content,
+                "and attempt {$attempt} must not have written a blocking-tier refusal",
+            );
+
+            $chat = $this->settle($chat, $cmd);
+        }
+
+        $this->assertSame(200_520, $estimates[0], 'fixture: the first attempt reads the untruncated giant, the same figure the bug started from');
+        $this->assertSame(
+            $estimates[0],
+            max($estimates),
+            'the estimate must never rise above its first reading — the bug peaked on its LAST attempt, 201,032',
+        );
+        $this->assertLessThan($estimates[0], $estimates[4], 'and the last attempt must read strictly lower: the exchange was truncated once and stays truncated');
+        $this->assertSame(5, $backend->calls(), 'every one of the five attempts reached the provider');
+
+        // The unfakeable half: the estimate is of the bytes actually handed over.
+        $dispatched = $backend->historyAt(0);
+        $this->assertNotNull($dispatched, 'fixture: the backend must have recorded the first dispatch');
+        $longest = max(array_map(static fn(Message $m): int => mb_strlen($m->content), $dispatched));
+        $this->assertSame(
+            369_825,
+            $longest,
+            'the oversized exchange reached the provider at its TRUNCATED length - fewer tokens counted because fewer characters sent',
+        );
+        $this->assertLessThan(95_000, $this->countTokens(array_map(
+            static fn(Message $m): array => $m->toWire(),
+            $dispatched,
+        )), 'the wire the provider was handed is itself under the blocking tier');
+    }
+
+    /**
+     * The rescue must be silent and history must be untouched when nothing is
+     * individually oversized. This is the same history
+     * ChatTest::testSubmitRefusesTheTurnAtTheBlockingTierWhenActiveAndPastTheWindow
+     * asserts is REFUSED — 13 exchanges of 50,003 chars, over the tier only in
+     * aggregate — driven through the tier Chat itself enforces.
+     *
+     * Without this the truncation would be un-bounded in the other direction: a
+     * rescue that also shortened ordinary exchanges would quietly delete the
+     * between-exchanges refusal (and this user's history) while keeping every
+     * E18 assertion above green.
+     */
+    public function testAnAggregateOverflowIsStillRefusedAndNotRewrittenByTheRescue(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 13; $i++) {
+            $history[] = Message::user("u{$i} " . str_repeat('x', 50_000));
+            $history[] = Message::assistant("a{$i} " . str_repeat('y', 50_000));
+        }
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(history: $history, backend: $backend);
+        $chat = $this->withDraft($chat, 'hello');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd, 'an aggregate overflow is still the between-exchanges refusal');
+        $this->assertSame(0, $backend->calls(), 'and nothing is sent to the provider');
+        $this->assertStringContainsString(
+            'This turn was NOT sent',
+            $next->history[count($next->history) - 1]->content,
+            'with the refusal message intact',
+        );
+
+        // Whole-exchange compaction condensed the three OLDEST pairs — six
+        // messages — into summaries; the twenty messages after them are the
+        // preserved ten exchanges, and they must still be the very same Message
+        // objects handed in. That is `messagesFromWire()`'s tail match doing its
+        // job, and it is the rescue proven absent where it has nothing to do: a
+        // truncator that also shortened ordinary exchanges would satisfy every
+        // E18 assertion above while silently rewriting a history nobody asked it
+        // to touch.
+        $preserved = array_slice($next->history, 3, 20);
+        $this->assertSame(
+            array_slice($history, 6, 20),
+            $preserved,
+            'every exchange whole-exchange compaction chose to preserve must survive the rescue untouched',
+        );
+        $this->assertSame(
+            50_004,
+            max(array_map(static fn(Message $m): int => mb_strlen($m->content), $preserved)),
+            'including their full two-digit-prefix bodies (u10..a12 are 50,004 chars)',
+        );
+    }
+
+    /**
+     * The parked landing — the route a session WITH a summary backend takes,
+     * which is what production actually does. Measured on this branch before
+     * `applyModelCompaction()` was wired
+     * (`/home/sites/prompt-scratch/P4.S4/lead/parked_probe.php`): estimate
+     * 200,287 -> 200,518 -> 200,771, three refusals, the summariser called three
+     * times and the conversation backend never once.
+     *
+     * The oversized exchange here is the NEWEST pair, so the model summarisation
+     * condenses the twelve older ones and preserves this one verbatim — which is
+     * exactly why the parked route needs its own rescue rather than inheriting
+     * submit()'s.
+     */
+    public function testTheParkedLandingRescuesAnOversizedNewestExchangeToo(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 12; $i++) {
+            $history[] = Message::user("q{$i}");
+            $history[] = Message::assistant("r{$i}");
+        }
+        $history[] = Message::user('BIGGEST ' . str_repeat('x', 800_000));
+        $history[] = Message::assistant('tail');
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $summariser = new IntraExchangeSummariser();
+        $chat = new Chat(
+            history: $history,
+            inputBuf: 'go',
+            backend: $backend,
+            summaryBackend: $summariser,
+        );
+
+        $firstEstimate = $chat->contextTokens();
+        $this->assertGreaterThan(95_000, $firstEstimate, 'fixture: this history starts over the blocking tier');
+
+        [$parked, $summaryCmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($summaryCmd, 'fixture: the 85% tier parks this behind a summarisation round-trip');
+
+        [$landed, $turnCmd] = $parked->update($this->resolve($summaryCmd));
+
+        $this->assertNotNull(
+            $turnCmd,
+            'the parked landing must truncate the oversized exchange, not refuse it (E18 on the parked route)',
+        );
+        $this->assertStringNotContainsString(
+            'This turn was NOT sent',
+            $landed->history[count($landed->history) - 1]->content,
+        );
+
+        $turnCmd();
+        $this->assertSame(1, $backend->calls(), 'and the turn the user pressed Enter for actually reaches the provider');
+
+        $dispatched = $backend->historyAt(0);
+        $this->assertLessThan(
+            95_000,
+            $this->countTokens(array_map(static fn(Message $m): array => $m->toWire(), $dispatched)),
+            'the parked dispatch is under the tier on the wire, not merely in the number quoted',
+        );
+        $this->assertStringContainsString(
+            'characters truncated to fit the context window',
+            implode("\n", array_map(static fn(Message $m): string => $m->content, $landed->history)),
+            'and the truncation is marked inline where the text used to be',
+        );
+    }
+
+    /**
+     * The rescue declines, and the refusal stands. 1.15 million estimated tokens
+     * — ten exchanges of 94,999 tokens each (one token short of being
+     * individually oversized, so the truncator correctly leaves them alone) plus
+     * one 200,010-token giant. Truncating the giant to nothing still leaves the
+     * aggregate over the tier, so both blocking sites must re-check and refuse.
+     *
+     * This is the test that makes Chat's `shouldCompactForeground()` re-check on
+     * the truncated wire load-bearing rather than decorative: with the re-check
+     * removed, this turn is DISPATCHED at over 950,000 estimated tokens into a
+     * 100,000-token window — a provider rejection paid for with the user's
+     * context — and every E18 assertion above stays green, because none of them
+     * feeds a history the rescue cannot clear.
+     */
+    public function testTheRescueDeclinesAndTheRefusalStandsWhenTruncationCannotClearTheTier(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 10; $i++) {
+            $history[] = Message::user(str_repeat('p', 379_956));
+            $history[] = Message::assistant('r');
+        }
+        $history[] = Message::user(str_repeat('x', 800_000));
+        $history[] = Message::assistant('bigtail');
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(history: $history, backend: $backend);
+        $this->assertSame(1_150_122, $chat->contextTokens(), 'fixture: 1,150% of a 100,000-token window');
+
+        $chat = $this->withDraft($chat, 'go');
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNull($cmd, 'a rescue that cannot clear the tier must not send the turn');
+        $this->assertSame(0, $backend->calls(), 'and the provider must never be handed an over-window request');
+        $this->assertStringContainsString(
+            'This turn was NOT sent',
+            $next->history[count($next->history) - 1]->content,
+            'with the ordinary blocking-tier refusal, not a silent dispatch',
+        );
+    }
+
+    /**
+     * Load a draft without typing 800,000 characters one keystroke at a time.
+     * `inputBuf` is a promoted readonly property, so `mutate()` is the only
+     * route — the same one AutomaticCompactionModelSummaryTest uses.
+     */
+    private function withDraft(Chat $chat, string $draft): Chat
+    {
+        return (new \ReflectionMethod(Chat::class, 'mutate'))->invoke($chat, ['inputBuf' => $draft]);
+    }
+
+    /** Run a dispatch Cmd and feed the reply back so the turn actually settles. */
+    private function settle(Chat $chat, \Closure $cmd): Chat
+    {
+        $reply = $this->resolve($cmd);
+        if ($reply === null) {
+            return $chat;
+        }
+        // Chat is immutable: the settled state is the RETURNED chat, and dropping
+        // it would leave every attempt in the loop starting from a turn that never
+        // ended, which is not the sequence the bug produced.
+        [$settled] = $chat->update($reply);
+
+        return $settled;
+    }
+
+    /** Drive a Cmd built by Cmd::promise() and hand back the Msg it resolves to. */
+    private function resolve(\Closure $cmd): mixed
+    {
+        $async = $cmd();
+        if (!$async instanceof AsyncCmd) {
+            return null;
+        }
+        $resolved = null;
+        $async->promise->then(function ($msg) use (&$resolved): void {
+            $resolved = $msg;
+        });
+
+        return $resolved;
+    }
+}
+
+/**
+ * A conversation backend for the E18 Chat tests: reports a fixed window, answers
+ * two characters, and records every history it was handed so the test can assert
+ * on the BYTES THAT WERE ACTUALLY SENT rather than on a figure the app quotes.
+ *
+ * The reply is two characters on purpose — echoing the last user message the way
+ * `EchoBackend` does would re-add 800,000 characters every turn and walk the
+ * drive loop straight back over the tier.
+ *
+ * Named distinctly from `ReminderWireRecorder` and `RecordingTurnBackend`, which
+ * live in the `Tests\Chat` namespace; a second declaration in a full-suite run is
+ * a fatal error.
+ */
+final class IntraExchangeTurnBackend implements Backend, ReportsContextWindow
+{
+    /** @var list<list<Message>> */
+    private array $seen = [];
+
+    public function __construct(private readonly int $window) {}
+
+    public function contextWindow(): int
+    {
+        return $this->window;
+    }
+
+    public function calls(): int
+    {
+        return count($this->seen);
+    }
+
+    /** @return list<Message>|null */
+    public function historyAt(int $index): ?array
+    {
+        return $this->seen[$index] ?? null;
+    }
+
+    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+    {
+        $this->seen[] = $history;
+
+        return Message::assistant('ok');
+    }
+
+    public function completeAsync(
+        array $history,
+        callable $onToken = null,
+        ?CancellationToken $cancellation = null,
+        ?callable $onEvent = null,
+    ): PromiseInterface {
+        $this->seen[] = $history;
+
+        return \React\Promise\resolve(Message::assistant('ok'));
+    }
+}
+
+/**
+ * A summarisation backend answering with enough numbered lines that every
+ * offered exchange gets one, so the parked route lands instead of failing.
+ */
+final class IntraExchangeSummariser implements Backend
+{
+    public function complete(array $history, callable $onToken = null, ?callable $onEvent = null): Message
+    {
+        $lines = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $lines[] = "{$i}. condensed exchange {$i}";
+        }
+
+        return Message::assistant(implode("\n", $lines));
+    }
+
+    public function completeAsync(
+        array $history,
+        callable $onToken = null,
+        ?CancellationToken $cancellation = null,
+        ?callable $onEvent = null,
+    ): PromiseInterface {
+        return \React\Promise\resolve($this->complete($history));
+    }
 }

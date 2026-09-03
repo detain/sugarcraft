@@ -153,6 +153,170 @@ final class ContextCompactor
     }
 
     /**
+     * Estimated tokens reserved, on top of the blocking tier, so a turn an
+     * intra-exchange truncation just enabled still fits once {@see
+     * \SugarCraft\Crush\Chat::dispatchTurn()} appends the echoed prompt, the
+     * 70% reminder, and this compaction's own notice — none of which are in the
+     * $messages handed here.
+     */
+    private const INTRA_EXCHANGE_HEADROOM_TOKENS = 2000;
+
+    /**
+     * Upper bound on the bytes the truncation marker itself can occupy, counted
+     * INSIDE each truncated message's budget so the marker never re-inflates a
+     * message past its share. Sized for a character count up to ten digits; the
+     * message keeps whatever head remains after this reserve.
+     */
+    private const INTRA_EXCHANGE_MARKER_MAX_CHARS = 160;
+
+    /**
+     * Shrink a SINGLE exchange that is larger than the context window, in place,
+     * so it stops being un-sendable (prompt_plan.md P4.S4, backlog §12.2 E18).
+     *
+     * This is the INTRA-exchange case and deliberately nothing else. Every other
+     * tier on this class frees space BETWEEN exchanges — stage 2 condenses whole
+     * older user/assistant pairs into one-line summaries, and stage 1 preserves
+     * the most recent {@see CompactorConfig::$recentPreserveCount} of them in
+     * full. That machinery cannot help a conversation whose overflow lives inside
+     * ONE exchange: it is recent, so stage 1 preserves it verbatim, and it is a
+     * single pair, so there is nothing older to condense. The caller then reaches
+     * {@see shouldCompactForeground()}, refuses, and — because a refusal echoes
+     * the prompt and appends a notice into history — the very next attempt is
+     * refused against a LARGER estimate. Measured on the branch before this
+     * method existed: one 800,000-char exchange in history refused five times
+     * running with the estimate rising 200,520 -> 201,032, +128 per attempt,
+     * because 200,520 is far over the 95,000-token blocking tier of the
+     * 100,000-token fallback window and no whole exchange could be dropped.
+     *
+     * The honest fix is to shorten the oversized exchange itself. Truncation
+     * reduces what actually goes on the wire, so {@see countTokens()} of the
+     * result is a truthful count of the smaller prompt — the estimate becomes
+     * bounded not by lying about its size but by genuinely having less to count.
+     * That is the whole distinction §12.2 E18's "must NOT be achieved by silently
+     * reporting FEWER input tokens than are there" turns on: the number falls
+     * because the bytes fell.
+     *
+     * Only a message whose OWN estimated count reaches the blocking threshold is
+     * touched. A history over the tier purely in aggregate — every exchange
+     * individually fits, there are simply too many — is the between-exchanges
+     * case: it is returned byte-for-byte unchanged so the caller's refusal
+     * stands, exactly as before this method. Passing a message through that is
+     * already under the threshold would be a silent rewrite of exchange content
+     * the inter-exchange tiers chose to preserve, which is out of this method's
+     * scope and would move the goldens.
+     *
+     * Determinism: the truncation keeps the leading head of each oversized
+     * message and drops the tail, then writes a marker naming the exact character
+     * count removed. No clock, no randomness, no provider call — the same input
+     * yields byte-identical output, so a truncated turn is reproducible and a
+     * golden that never crosses the blocking tier is never rewritten by this path.
+     *
+     * @param array<array{role:string,content:string}> $messages Wire-format messages.
+     * @param int $tokenLimit The context window every tier is a percentage of.
+     * @return array<array{role:string,content:string}> $messages unchanged when
+     *         the limit is non-positive, the history is under the blocking tier,
+     *         or nothing individually reaches it; otherwise with every oversized
+     *         message truncated to an equal share of the space left under it.
+     */
+    public function truncateOversizedExchange(array $messages, int $tokenLimit): array
+    {
+        if ($tokenLimit <= 0) {
+            return $messages;
+        }
+
+        $threshold = (int) ($tokenLimit * $this->config->foregroundBlockingThreshold / 100);
+        $total = $this->countTokens($messages);
+        if ($total < $threshold) {
+            return $messages;
+        }
+
+        // Split the history into the individual exchanges that alone reach the
+        // blocking tier and everything else. The else-part is preserved whole:
+        // shrinking a message that already fits is inter-exchange compaction's
+        // job, not this method's, and it is exactly what "leave the
+        // between-exchanges case untouched" means at the byte level.
+        $oversized = [];
+        $preservedTokens = 0;
+        foreach ($messages as $index => $message) {
+            $own = $this->countTokens([$message]);
+            if ($own >= $threshold) {
+                $oversized[$index] = $own;
+            } else {
+                $preservedTokens += $own;
+            }
+        }
+
+        if ($oversized === []) {
+            // Over the tier only in aggregate: no single exchange is bigger than
+            // the window, so this is the between-exchanges refusal the caller
+            // already handles. Nothing here is oversized; nothing here changes.
+            return $messages;
+        }
+
+        // Every oversized message gets an equal share of the estimate left under
+        // the blocking tier after the preserved exchanges and the dispatch
+        // headroom. Integer division can only undershoot, so the sum stays under
+        // the threshold; the marker is counted inside each message's own budget.
+        $share = intdiv(
+            max(0, $threshold - $preservedTokens - self::INTRA_EXCHANGE_HEADROOM_TOKENS),
+            count($oversized),
+        );
+        $charBudget = max(0, ($share - 10) * 4);
+
+        $truncated = $messages;
+        foreach (array_keys($oversized) as $index) {
+            $truncated[$index] = $this->truncateMessageHead($messages[$index], $charBudget);
+        }
+
+        return $truncated;
+    }
+
+    /**
+     * Truncate one wire message's `content` to $charBudget, keeping the head and
+     * writing a marker that names the exact number of dropped characters.
+     *
+     * Non-content keys (`attachments`, `tool_calls`) ride through untouched —
+     * {@see \SugarCraft\Crush\Message::toWire()} carries them and dropping one
+     * would lose a tool result the exchange still needs. A message already
+     * within the budget is returned unchanged, which is what keeps a
+     * not-actually-oversized entry from being rewritten.
+     *
+     * The bound is absolute: whatever the head/marker split, the result is
+     * hard-clamped to exactly $charBudget at the end. So at a budget too small to
+     * carry the whole marker the marker is itself truncated rather than allowed to
+     * re-inflate the message — the count then reads clipped, but the message never
+     * exceeds its share and the caller's under-threshold guarantee holds. That
+     * regime only arises when the non-oversized exchanges already fill the tier
+     * (so this is between-exchanges-dominated), and E18's own case has a budget in
+     * the hundreds of thousands of characters, nowhere near it.
+     *
+     * @param array<string,mixed> $message
+     * @return array<string,mixed>
+     */
+    private function truncateMessageHead(array $message, int $charBudget): array
+    {
+        $content = (string) ($message['content'] ?? '');
+        if (mb_strlen($content) <= $charBudget) {
+            return $message;
+        }
+
+        $length = mb_strlen($content);
+        $markerReserve = min($charBudget, self::INTRA_EXCHANGE_MARKER_MAX_CHARS);
+        $head = $charBudget - $markerReserve;
+        $dropped = $length - $head;
+        $truncated = mb_substr($content, 0, $head)
+            . "\n\n[... {$dropped} characters truncated to fit the context window ...]";
+
+        if (mb_strlen($truncated) > $charBudget) {
+            $truncated = mb_substr($truncated, 0, $charBudget);
+        }
+
+        $message['content'] = $truncated;
+
+        return $message;
+    }
+
+    /**
      * Determine whether a soft reminder should be sent to the lead agent.
      *
      * Returns true when context usage reaches or exceeds the reminder

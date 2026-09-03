@@ -5948,13 +5948,30 @@ final class Chat implements Model
             // compaction that freed nothing is exactly the answer "there was
             // none to free".
             if ($this->compactor->shouldCompactForeground($compactedWire, $tokenLimit)) {
-                return $this->foregroundBlockedResponse(
-                    $text,
-                    $baseHistory,
-                    $tokenCount,
-                    $tokenLimit,
-                    $compactionNotice,
-                );
+                // The blocking tier fired. Before refusing, try the INTRA-exchange
+                // rescue (prompt_plan.md P4.S4, backlog §12.2 E18): if a single
+                // exchange is itself larger than the window, whole-exchange
+                // compaction can never free enough — it preserves that exchange
+                // verbatim as one of the recent ten — so the refusal would repeat
+                // forever with a LARGER estimate each time (a refusal appends an
+                // echo and a notice). Truncating that one oversized exchange is
+                // the honest exit: the estimate falls because genuinely fewer
+                // characters go out. When nothing is individually oversized this
+                // returns null and the between-exchanges refusal stands unchanged.
+                $rescued = $this->intraExchangeTruncation($compactedWire, $baseHistory, $tokenLimit);
+                if ($rescued !== null) {
+                    $baseHistory = $rescued['history'];
+                    $tokenCount = $this->estimateTokenCount($baseHistory);
+                    $compactionNotice = $rescued['notice'];
+                } else {
+                    return $this->foregroundBlockedResponse(
+                        $text,
+                        $baseHistory,
+                        $tokenCount,
+                        $tokenLimit,
+                        $compactionNotice,
+                    );
+                }
             }
         }
 
@@ -9166,6 +9183,26 @@ final class Chat implements Model
             $compacted->history
         );
         if ($compacted->compactor->shouldCompactForeground($compactedWire, $tokenLimit)) {
+            // The same intra-exchange rescue submit()'s synchronous tier runs
+            // (prompt_plan.md P4.S4, backlog §12.2 E18), and this route NEEDS it:
+            // the model summarisation that just landed condensed the OLDER
+            // exchanges and preserved the recent ten verbatim, so an oversized
+            // newest exchange survives it untouched. Measured on this branch
+            // before the rescue was wired here: 12 trivial pairs plus one
+            // 800,000-char exchange, three parked attempts, estimate
+            // 200,287 -> 200,518 -> 200,771, every one refused, the summariser
+            // called three times, and the conversation backend never reached -
+            // each refusal leaving its notice in history for the next attempt to
+            // count. Null here means the overflow is only aggregate, and the
+            // between-exchanges refusal below stands exactly as before.
+            $rescued = $compacted->intraExchangeTruncation($compactedWire, $compacted->history, $tokenLimit);
+            if ($rescued !== null) {
+                // No new user message: the echo went in at park time. The
+                // truncation notice rides last, Role::System like every other
+                // post-prompt message on this route.
+                return $compacted->dispatchTurn($rescued['history'], [$rescued['notice']], $tokenLimit);
+            }
+
             // '' rather than the prompt: the echo is already in history, and the
             // refusal must not put a second copy of it there. $compactionNotice
             // is left null for the same reason - the rewrite this refusal has to
@@ -12161,6 +12198,109 @@ final class Chat implements Model
             . "~{$savedPercentage}% of the estimated token count freed "
             . "(~{$tokenCount} estimated tokens now, against a "
             . "{$tokenLimit}-token context window)."
+        );
+    }
+
+    /**
+     * The INTRA-exchange rescue of the 95% blocking tier (prompt_plan.md P4.S4,
+     * backlog §12.2 E18).
+     *
+     * Both blocking sites — {@see submit()}'s synchronous tier and the parked
+     * landing in {@see applyModelCompaction()} — reach it only after
+     * whole-exchange compaction has run and failed to free enough. That is
+     * precisely when the overflow lives INSIDE one exchange: stage 1 preserves
+     * the recent exchanges verbatim, so an oversized one survives every pass, and
+     * a refusal appends its own echo plus a notice into history — which is why
+     * retrying makes the estimate LARGER rather than smaller. Measured on this
+     * branch before this method existed: one 800,000-char exchange, five attempts,
+     * estimate 200,520 → 200,648 → 200,776 → 200,904 → 201,032 (+128 per attempt),
+     * zero dispatches.
+     *
+     * {@see Context\ContextCompactor::truncateOversizedExchange()} shortens only a
+     * message that ALONE reaches the blocking threshold, so the estimate falls
+     * because genuinely fewer characters go out — not because anything is counted
+     * short. That distinction is the whole of §12.2 E18's "must NOT be achieved by
+     * silently reporting FEWER input tokens than are there": the number drops
+     * because the bytes dropped.
+     *
+     * Null is returned whenever there is nothing to rescue, which is every case
+     * except the oversized single exchange: still over the tier after truncation,
+     * or over it only IN AGGREGATE (every exchange individually fits — the
+     * between-exchanges case the other tiers own, left byte-for-byte alone). A
+     * null therefore means "refuse exactly as before", so this can only ever turn
+     * a runaway into a dispatch, never a legitimate refusal into a wrong send.
+     *
+     * The truncated history is rebuilt with {@see messagesFromWire()} against
+     * $baseHistory — the SAME round-trip the compaction above uses, so the
+     * exchanges this rescue did not touch keep their original Message objects and
+     * everything {@see Renderer} needs from them.
+     *
+     * @param array<array{role:string,content:string}> $wire        The wire the
+     *        blocking tier just rejected.
+     * @param list<Message> $baseHistory The Message list that produced $wire.
+     * @return array{history: list<Message>, notice: Message}|null
+     */
+    private function intraExchangeTruncation(array $wire, array $baseHistory, int $tokenLimit): ?array
+    {
+        $truncated = $this->compactor->truncateOversizedExchange($wire, $tokenLimit);
+
+        // The compactor echoes its input unchanged when no single message reaches
+        // the blocking tier — the between-exchanges overflow. Refuse it exactly as
+        // before rather than rewrite exchanges the inter-exchange tiers chose to
+        // preserve.
+        if ($truncated === $wire) {
+            return null;
+        }
+
+        // Belt-and-braces: a truncation that did not clear the tier must not send
+        // an over-window turn on the strength of a rescue that failed to rescue.
+        if ($this->compactor->shouldCompactForeground($truncated, $tokenLimit)) {
+            return null;
+        }
+
+        $history = $this->messagesFromWire($truncated, $baseHistory);
+        $truncatedCount = 0;
+        foreach ($wire as $index => $entry) {
+            if (($truncated[$index]['content'] ?? null) !== ($entry['content'] ?? null)) {
+                $truncatedCount++;
+            }
+        }
+
+        return [
+            'history' => $history,
+            'notice' => $this->contextTruncatedMessage(
+                $truncatedCount,
+                $this->estimateTokenCount($history),
+                $tokenLimit,
+            ),
+        ];
+    }
+
+    /**
+     * The notice the intra-exchange rescue writes when truncating an oversized
+     * exchange lets a turn through (prompt_plan.md P4.S4, backlog §12.2 E18).
+     *
+     * Role::System like the compaction and reminder notices — the app reporting on
+     * its own action — and it rides BEFORE the user's line for the same reason
+     * {@see contextCompactedMessage()} does: it describes history that already
+     * existed. Each figure names its own unit (a chars/4 ESTIMATE against the
+     * provider-advertised window), the convention
+     * Integration\ContextWindowWiringTest pins against the label beside it rather
+     * than against the sentence, so swapping the two reds a test.
+     *
+     * It says plainly that content was dropped and that the drop is marked inline,
+     * so the user is never left believing the whole oversized exchange reached the
+     * model.
+     */
+    private function contextTruncatedMessage(int $truncatedCount, int $tokenCount, int $tokenLimit): Message
+    {
+        $noun = $truncatedCount === 1 ? 'exchange was' : 'exchanges were';
+
+        return Message::system(
+            "A single exchange reached the 95% blocking tier on its own, so {$truncatedCount} "
+            . "{$noun} truncated to fit the context window rather than the turn being refused: "
+            . "~{$tokenCount} estimated tokens now, against a {$tokenLimit}-token context "
+            . 'window. The dropped text is marked inline in that exchange.'
         );
     }
 
