@@ -113,13 +113,31 @@ final class SimpleCellTest extends TestCase
         $this->assertFalse($a->equals($b));
     }
 
-    public function testAttributeConstants(): void
+    /**
+     * Pins the public bit-flag values — renumbering a flag would silently
+     * corrupt every consumer's combined attrs mask. Values travel through
+     * a provider typed as plain `int` so static analysis cannot constant
+     * -fold both sides into the same literal.
+     *
+     * @return list<array{int, int}>
+     */
+    public static function attributeConstants(): array
     {
-        $this->assertSame(1 << 0, Cell::ATTR_BOLD);
-        $this->assertSame(1 << 1, Cell::ATTR_ITALIC);
-        $this->assertSame(1 << 2, Cell::ATTR_UNDERLINE);
-        $this->assertSame(1 << 3, Cell::ATTR_INVERSE);
-        $this->assertSame(1 << 4, Cell::ATTR_STRIKETHROUGH);
+        return [
+            [1 << 0, Cell::ATTR_BOLD],
+            [1 << 1, Cell::ATTR_ITALIC],
+            [1 << 2, Cell::ATTR_UNDERLINE],
+            [1 << 3, Cell::ATTR_INVERSE],
+            [1 << 4, Cell::ATTR_STRIKETHROUGH],
+        ];
+    }
+
+    /**
+     * @dataProvider attributeConstants
+     */
+    public function testAttributeConstants(int $expected, int $actual): void
+    {
+        $this->assertSame($expected, $actual);
     }
 
     public function testMultipleAttributeFlags(): void

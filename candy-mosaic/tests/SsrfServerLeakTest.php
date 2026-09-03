@@ -98,21 +98,34 @@ final class SsrfServerLeakTest extends TestCase
                 $this->markTestSkipped('Could not start a local php -S server.');
             }
 
-            $ours = self::descriptorTargets(getmypid());
-            $its  = self::descriptorTargets($server->pid());
+            $ours = self::descriptorIdentities(getmypid());
+            $its  = self::descriptorIdentities($server->pid());
             $server->stop();
 
             $this->assertNotSame([], $its, 'Could not read the server descriptor table.');
 
             // Every descriptor phpunit holds — its script handle, its stdout
             // (a pipe when the caller pipes the run), its sockets — must be
-            // absent from the child. The child's own opcache memfd and listen
-            // socket are its business and are not in the parent's table.
-            $leaked = array_intersect($its, $ours);
+            // absent from the child. Identity is the (dev, ino) pair, NOT the
+            // readlink label: anonymous objects carry no instance id in their
+            // label, so the child's freshly opened /memfd:opcache_lock and the
+            // parent's readlink identically, and anon_inode:[eventfd] collides
+            // the same way (both measured — the CI red was this collision, the
+            // pair held distinct inodes). Only a shared file description —
+            // real inheritance across fork — shares an inode. The child's own
+            // memfds and listen socket are its business and match nothing in
+            // the parent's table.
+            $leaked = [];
+            foreach ($its as $identity => $label) {
+                if (isset($ours[$identity])) {
+                    $leaked[$label] = true;
+                }
+            }
+
             $this->assertSame(
                 [],
-                array_values(array_unique($leaked)),
-                'Server inherited phpunit descriptors: ' . implode(', ', array_unique($leaked)),
+                array_keys($leaked),
+                'Server inherited phpunit descriptors: ' . implode(', ', array_keys($leaked)),
             );
         } finally {
             LoopbackHttpServer::removeTempDir($dir);
@@ -120,30 +133,46 @@ final class SsrfServerLeakTest extends TestCase
     }
 
     /**
-     * Readlink target of every descriptor a process holds above fd 2.
+     * Identity of every descriptor a process holds above fd 2: its
+     * (st_dev, st_ino) pair mapped to the human-readable readlink label.
+     *
+     * stat() on /proc/<pid>/fd/<n> follows the symlink to the underlying
+     * file object, so two descriptors name the same object exactly when both
+     * pairs match — the only comparison that survives anonymous inodes, whose
+     * labels ("/memfd:opcache_lock (deleted)", "anon_inode:[eventfd]") repeat
+     * verbatim across independently created instances.
      *
      * /dev/null is excluded: that is precisely what the spawner points the
      * child's inherited slots at, and the parent may legitimately hold it too.
      *
-     * @return list<string>
+     * @return array<string, string> "dev:ino" => readlink label
      */
-    private static function descriptorTargets(int $pid): array
+    private static function descriptorIdentities(int $pid): array
     {
-        $targets = [];
+        $identities = [];
         $entries = @scandir('/proc/' . $pid . '/fd');
         foreach (is_array($entries) ? $entries : [] as $entry) {
             if (!ctype_digit((string) $entry) || (int) $entry <= 2) {
                 continue;
             }
 
-            $target = @readlink('/proc/' . $pid . '/fd/' . $entry);
+            $path   = '/proc/' . $pid . '/fd/' . $entry;
+            $target = @readlink($path);
             if (!is_string($target) || $target === '' || $target === '/dev/null') {
                 continue;
             }
 
-            $targets[] = $target;
+            // A descriptor closed between the readdir and the stat fails here;
+            // unreadable is not inherited, and the census cannot assert about
+            // an object that no longer exists.
+            $stat = @stat($path);
+            if ($stat === false) {
+                continue;
+            }
+
+            $identities[$stat['dev'] . ':' . $stat['ino']] = $target;
         }
 
-        return $targets;
+        return $identities;
     }
 }
