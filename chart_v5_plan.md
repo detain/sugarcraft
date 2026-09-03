@@ -102,7 +102,7 @@ Baselines for ALL steps: charts 570/1404/0Sk rc0; dash 5924/9621/1Sk/0W rc0 (bot
 |---|---|---|---|---|---|---|
 | D1 bufferFromOutput row-clip [R1] | Chart.php diff geometry | B | ✅ | ✅ | ✅ | a7d1cffc2 |
 | D2 GaugeCircle setSize activation | GaugeCircle | A | ✅ | ✅ | ✅ | 69f6d3450 |
-| D3 GaugeCircle aspect+quadrant [R2] | GaugeCircle/Donut:99 | A | ⬜ | ⬜ | ⬜ | — |
+| D3 GaugeCircle aspect+quadrant [R2] | GaugeCircle/Donut:99 | A | ✅ | ✅ | ✅ | 234ca4141 |
 | D4 Sunburst Width wiring [CHANGED premise] | Sunburst/Width | B | ⬜ | ⬜ | ⬜ | — |
 | D5 Bubble identifier rename [R3] | Bubble | B | ✅ | ✅ | ✅ | ce72d30ba |
 | D6 plot-braille honesty [R4] | example+goldens | A | ⬜ | ⬜ | ⬜ | — |

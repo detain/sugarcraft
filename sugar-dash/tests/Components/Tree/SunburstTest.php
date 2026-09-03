@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Components\Tree;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Components\Tree\Sunburst;
 use SugarCraft\Dash\Components\Tree\SunburstSegment;
 
@@ -225,27 +226,51 @@ final class SunburstTest extends TestCase
         $this->assertStringNotContainsString('D', self::stripSgr($rendered));
     }
 
-    /** C3 CASE 1: a CJK center label fills the 3-cell window with whole codepoints (was: only '日', mid-codepoint bytes). */
-    public function testCjkCenterLabelRendersCodepointWindow(): void
+    /** D4 (ex C3 CASE 1): a CJK center label fills the 3-cell window by DISPLAY CELLS — '日' (2 cells) leads, '本' would straddle the budget so it is dropped whole, never split. */
+    public function testCjkCenterLabelFitsCellWindow(): void
     {
         $rendered = self::asciiBase()->withCenterLabel('日本語テスト')->render();
 
         $this->assertTrue(mb_check_encoding($rendered, 'UTF-8'));
         $stripped = self::stripSgr($rendered);
-        $this->assertStringContainsString('日本語', $stripped);
-        // Window is exactly 3 cells: the 4th+ codepoints do not render.
-        $this->assertStringNotContainsString('テ', $stripped);
-        $this->assertSame(3, preg_match_all('/[日本語]/u', $stripped));
+        // Window is 2*intval(5/4)+1 = 3 cells: '日' occupies cells 0-1 (its
+        // trailing cell paints nothing), cell 2 blanks — the rim box stays aligned.
+        $this->assertStringContainsString('●日 ●', $stripped);
+        $this->assertStringNotContainsString('本', $stripped);
+        $this->assertSame(1, preg_match_all('/[日本語]/u', $stripped));
     }
 
-    /** C3 CASE 3: 'X'-offset label used to slice through a codepoint (invalid UTF-8); now whole runes. */
+    /** D4: the cell budget is honored exactly — 'ab日' fits 'ab' (2 cells) but drops whole-width '日' (would need cells 2-3 of a 3-cell window). */
+    public function testCenterWindowBudgetNeverSplitsWideGlyph(): void
+    {
+        $rendered = self::asciiBase()->withCenterLabel('ab日')->render();
+
+        $stripped = self::stripSgr($rendered);
+        $this->assertStringContainsString('ab', $stripped);
+        $this->assertStringNotContainsString('日', $stripped);
+        $this->assertTrue(mb_check_encoding($rendered, 'UTF-8'));
+    }
+
+    /** D4: zero-width combining marks fold onto their base cell instead of eating window budget; content stays whole. */
+    public function testCombiningMarkCenterLabelFoldsOntoBaseCell(): void
+    {
+        $rendered = self::asciiBase()->withCenterLabel("e\u{0301}xY")->render();
+
+        $this->assertTrue(mb_check_encoding($rendered, 'UTF-8'));
+        $stripped = self::stripSgr($rendered);
+        // 3-cell window: 'é' (base+mark, 1 cell) then 'x' then 'Y'.
+        $this->assertStringContainsString("\u{0301}xY", $stripped);
+    }
+
+    /** C3 CASE 3: 'X'-offset label used to slice through a codepoint (invalid UTF-8); now whole runes. D4: the cell window renders 'X日' (1+2 cells) and drops '本' whole. */
     public function testStraddlingCenterLabelStaysValidUtf8(): void
     {
         $rendered = self::asciiBase()->withCenterLabel('X日本語テスト')->render();
 
         $this->assertTrue(mb_check_encoding($rendered, 'UTF-8'));
         $stripped = self::stripSgr($rendered);
-        $this->assertStringContainsString('X日本', $stripped);
+        $this->assertStringContainsString('X日', $stripped);
+        $this->assertStringNotContainsString('本', $stripped);
         $this->assertStringNotContainsString("\xEF\xBF\xBD", $rendered);
     }
 
@@ -260,17 +285,53 @@ final class SunburstTest extends TestCase
             ->render();
 
         $stripped = self::stripSgr($rendered);
-        // Budget: legendX=2, width=60 → 60-3-2 = 55 codepoints; '▪ ' + 59 a's (61) → hard cut to '▪ ' + 53 a's.
+        // Budget: legendX=2, width=60 → 60-3-2 = 55 CELLS (= codepoints here,
+        // pure ASCII); '▪ ' + 59 a's (61 cells) → hard cut to '▪ ' + 53 a's.
         $this->assertStringContainsString('▪ ' . str_repeat('a', 53), $stripped);
         $this->assertStringNotContainsString('▪ a' . str_repeat('a', 53), $stripped);
         // Budget exhausted by the truncated entry — the degenerate guard stops the loop.
         $this->assertSame(1, substr_count($stripped, '▪'));
     }
 
-    /** C3: legend right border aligns by VISIBLE codepoints — embedded SGR must not count (CASE 1c). */
+    /** D4: a wide-legend entry truncates to the remaining CELL budget — the 35-cell cut lands at 16×日 (34 cells; the 17th would straddle), and the cell advance then trips the degenerate guard. */
+    public function testWideLegendEntryTruncatesToCells(): void
+    {
+        $stripped = self::stripSgr(Sunburst::new()
+            ->setSize(40, 14)
+            ->addSegment('a', str_repeat('日', 20), 30)
+            ->addSegment('b', 'Beta', 20)
+            ->render());
+
+        // '▪ ' (2 cells) + 16×日 (32) = 34 of the 35-cell budget; a codepoint
+        // cut would have kept 17 日 + one spare cell — the difference is pinned.
+        $this->assertSame(16, preg_match_all('/日/u', $stripped));
+        // Advance counted cells (34+2 → legendX=38; available=40-3-38 < 1) so
+        // '▪ Beta' never renders — guard, not silence.
+        $this->assertSame(1, substr_count($stripped, '▪'));
+        $this->assertTrue(mb_check_encoding($stripped, 'UTF-8'));
+    }
+
+    /** D4: '日本' ADVANCES 4 cells, not 2 codepoints — the next entry's budget shrinks accordingly. */
+    public function testWideEntryAdvancesCellsNotCodepoints(): void
+    {
+        $stripped = self::stripSgr(Sunburst::new()
+            ->setSize(60, 25)
+            ->addSegment('a', '日本', 10)
+            ->addSegment('b', str_repeat('y', 48), 10)
+            ->render());
+
+        // Entry '▪ 日本' = 6 CELLS (4 codepoints). Cell advance: legendX=2+6+2=10
+        // → available=60-3-10=47 → '▪ ' cut to 45 y's. The old codepoint advance
+        // (legendX=8 → available 49) would have kept 47 y's — 45 pins cells won.
+        $this->assertStringContainsString('▪ 日本  ▪ ' . str_repeat('y', 45), $stripped);
+        $this->assertStringNotContainsString(str_repeat('y', 46), $stripped);
+        $this->assertSame(2, substr_count($stripped, '▪'));
+    }
+
+    /** C3/D4: legend right border aligns by VISIBLE CELLS — embedded SGR must not count (CASE 1c), and wide glyphs count their columns. */
     public function testLegendPaddingAlignsByVisibleWidth(): void
     {
-        // ASCII fitting legend.
+        // ASCII fitting legend (cells == codepoints — byte-identical to the old math).
         $ascii = self::stripSgr(self::asciiBase()->render());
         $asciiLegendRow = self::rowContaining($ascii, '▪ Alpha');
         $this->assertSame(60, mb_strlen($asciiLegendRow));
@@ -278,15 +339,47 @@ final class SunburstTest extends TestCase
         $this->assertStringEndsWith('│', $asciiLegendRow);
         $this->assertStringContainsString('▪ Alpha  ▪ Beta', $asciiLegendRow);
 
-        // CJK + truecolor legend: padded by codepoint count (double-width columns are a documented limit, Parked (c)).
+        // CJK + truecolor legend: padded by DISPLAY CELLS (Core\Util\Width) —
+        // the row measures exactly its width in cells while carrying fewer codepoints.
         $cjk = Sunburst::new()->setSize(60, 25)
             ->addSegment('a', '日本語', 50)
             ->addSegment('b', 'テスト', 50)
             ->render();
         $this->assertStringContainsString("\x1b[38;2;", $cjk);
         $cjkLegendRow = self::rowContaining(self::stripSgr($cjk), '▪ 日本語');
-        $this->assertSame(60, mb_strlen($cjkLegendRow));
+        $this->assertSame(60, Width::string($cjkLegendRow));
+        $this->assertSame(54, mb_strlen($cjkLegendRow));
         $this->assertStringEndsWith('│', $cjkLegendRow);
+    }
+
+    /**
+     * D4 ASCII byte-identity pins (Q5 discipline): legend ON with the '▪'
+     * swatch (U+25AA — live-probed Width 1), advance, truncation, and
+     * degenerate-guard paths rendered at HEAD 69f6d3450 BEFORE the
+     * Core\Util\Width wiring, captured via /tmp/d4-capture.php
+     * (double-replay sha1-identical). Width::string ≡ mb_strlen for
+     * BMP-narrow runs, so these renders must not move a single byte.
+     */
+    public function testAsciiLegendPathsByteIdentityPins(): void
+    {
+        // A: two ASCII segments — swatch + advance + pad.
+        $this->assertSame('8e8a03fce50b6efbd4efe02395fff8ff84ffc7f7', sha1(self::asciiBase()->render()));
+
+        // B: over-long entry → truncate branch to the last cell, then guard break.
+        $this->assertSame('bca109d896088ca029c831c57e51d85e190e7cc9', sha1(Sunburst::new()
+            ->setSize(40, 14)
+            ->addSegment('a', str_repeat('x', 60), 30)
+            ->addSegment('b', 'Beta', 20)
+            ->render()));
+
+        // C: tight 24-col box, 4 segments → partial truncation + guard.
+        $this->assertSame('e304f4d900c5f003ef4faf2386967092f4f57d68', sha1(Sunburst::new()
+            ->setSize(24, 14)
+            ->addSegment('a', 'Alpha', 10)
+            ->addSegment('b', 'Beta', 10)
+            ->addSegment('c', 'Gamma', 10)
+            ->addSegment('d', 'Delta', 10)
+            ->render()));
     }
 
     private static function asciiBase(): Sunburst
