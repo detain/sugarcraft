@@ -201,4 +201,116 @@ final class SunburstTest extends TestCase
         $rendered = $sunburst->render();
         $this->assertNotEmpty($rendered);
     }
+
+    /**
+     * C3 byte-identity pin: the pure-ASCII center path rendered at HEAD
+     * (f2c7b9822, pre codepoint-window fix) — same component, same bytes.
+     * sha1 captured via /tmp/c3-capture.php BEFORE the fix was applied.
+     */
+    public function testCenterLabelAsciiDefaultByteIdentity(): void
+    {
+        $rendered = self::asciiBase()->withShowLabels(false)->render();
+
+        $this->assertSame('2543b593a01417702c4b06d2de11c2cf821021ce', sha1($rendered));
+        $this->assertTrue(mb_check_encoding($rendered, 'UTF-8'));
+    }
+
+    /** C3 CASE 2 anchor: 16-char ASCII label in a 3-codepoint window renders 'ABC' byte-identically. */
+    public function testCenterLabelAsciiLongLabelWindowByteIdentity(): void
+    {
+        $rendered = self::asciiBase()->withCenterLabel('ABCDEFGHIJKLMNOP')->withShowLabels(false)->render();
+
+        $this->assertSame('85d10f7ac0de19a575e5d2f1d8ab5cf48354bd5a', sha1($rendered));
+        $this->assertStringContainsString('ABC', self::stripSgr($rendered));
+        $this->assertStringNotContainsString('D', self::stripSgr($rendered));
+    }
+
+    /** C3 CASE 1: a CJK center label fills the 3-cell window with whole codepoints (was: only '日', mid-codepoint bytes). */
+    public function testCjkCenterLabelRendersCodepointWindow(): void
+    {
+        $rendered = self::asciiBase()->withCenterLabel('日本語テスト')->render();
+
+        $this->assertTrue(mb_check_encoding($rendered, 'UTF-8'));
+        $stripped = self::stripSgr($rendered);
+        $this->assertStringContainsString('日本語', $stripped);
+        // Window is exactly 3 cells: the 4th+ codepoints do not render.
+        $this->assertStringNotContainsString('テ', $stripped);
+        $this->assertSame(3, preg_match_all('/[日本語]/u', $stripped));
+    }
+
+    /** C3 CASE 3: 'X'-offset label used to slice through a codepoint (invalid UTF-8); now whole runes. */
+    public function testStraddlingCenterLabelStaysValidUtf8(): void
+    {
+        $rendered = self::asciiBase()->withCenterLabel('X日本語テスト')->render();
+
+        $this->assertTrue(mb_check_encoding($rendered, 'UTF-8'));
+        $stripped = self::stripSgr($rendered);
+        $this->assertStringContainsString('X日本', $stripped);
+        $this->assertStringNotContainsString("\xEF\xBF\xBD", $rendered);
+    }
+
+    /** C3/R5(ii): an over-long legend entry truncates to the budget instead of vanishing whole (CASE 1 legend). */
+    public function testLegendOverlongEntryTruncatedNotDropped(): void
+    {
+        $rendered = Sunburst::new()
+            ->setSize(60, 25)
+            ->withCenterLabel('日本語テスト')
+            ->addSegment('a', str_repeat('a', 59), 40)
+            ->addSegment('b', 'b', 10)
+            ->render();
+
+        $stripped = self::stripSgr($rendered);
+        // Budget: legendX=2, width=60 → 60-3-2 = 55 codepoints; '▪ ' + 59 a's (61) → hard cut to '▪ ' + 53 a's.
+        $this->assertStringContainsString('▪ ' . str_repeat('a', 53), $stripped);
+        $this->assertStringNotContainsString('▪ a' . str_repeat('a', 53), $stripped);
+        // Budget exhausted by the truncated entry — the degenerate guard stops the loop.
+        $this->assertSame(1, substr_count($stripped, '▪'));
+    }
+
+    /** C3: legend right border aligns by VISIBLE codepoints — embedded SGR must not count (CASE 1c). */
+    public function testLegendPaddingAlignsByVisibleWidth(): void
+    {
+        // ASCII fitting legend.
+        $ascii = self::stripSgr(self::asciiBase()->render());
+        $asciiLegendRow = self::rowContaining($ascii, '▪ Alpha');
+        $this->assertSame(60, mb_strlen($asciiLegendRow));
+        $this->assertStringStartsWith('│', $asciiLegendRow);
+        $this->assertStringEndsWith('│', $asciiLegendRow);
+        $this->assertStringContainsString('▪ Alpha  ▪ Beta', $asciiLegendRow);
+
+        // CJK + truecolor legend: padded by codepoint count (double-width columns are a documented limit, Parked (c)).
+        $cjk = Sunburst::new()->setSize(60, 25)
+            ->addSegment('a', '日本語', 50)
+            ->addSegment('b', 'テスト', 50)
+            ->render();
+        $this->assertStringContainsString("\x1b[38;2;", $cjk);
+        $cjkLegendRow = self::rowContaining(self::stripSgr($cjk), '▪ 日本語');
+        $this->assertSame(60, mb_strlen($cjkLegendRow));
+        $this->assertStringEndsWith('│', $cjkLegendRow);
+    }
+
+    private static function asciiBase(): Sunburst
+    {
+        return Sunburst::new()
+            ->setSize(60, 25)
+            ->addSegment('a', 'Alpha', 30)
+            ->addSegment('b', 'Beta', 20);
+    }
+
+    /** Strip truecolor/SGR sequences so rows can be measured/pinned by visible content (house regex). */
+    private static function stripSgr(string $rendered): string
+    {
+        return (string) preg_replace('/\x1b\[[0-9;]*m/', '', $rendered);
+    }
+
+    private static function rowContaining(string $strippedRender, string $needle): string
+    {
+        foreach (explode("\n", $strippedRender) as $row) {
+            if (str_contains($row, $needle)) {
+                return $row;
+            }
+        }
+
+        self::fail("No row containing '{$needle}' in stripped render.");
+    }
 }

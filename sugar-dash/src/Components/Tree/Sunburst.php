@@ -260,6 +260,17 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
             $centerDiameter = 3;
         }
 
+        // Codepoint view of the center label, split ONCE before the row loop:
+        // byte indexing ($label[$i]) slices through multi-byte UTF-8 sequences
+        // and emits stray continuation bytes (and mid-codepoint garbage on a
+        // straddling offset) into the render. Indexing this array keeps the
+        // exact same window arithmetic in codepoints instead; for pure-ASCII
+        // labels mb_str_split is the identity on bytes, so those renders stay
+        // byte-for-byte unchanged. Known cosmetic limit: double-width CJK
+        // glyphs count as one cell here — no wcwidth machinery exists
+        // repo-wide (chart_v4 Parked (c)).
+        $centerLabelChars = mb_str_split($this->centerLabel);
+
         for ($row = $centerY - intval($centerDiameter / 2); $row <= $centerY + intval($centerDiameter / 2); $row++) {
             if ($row < 1 || $row >= $height - 1) {
                 continue;
@@ -278,8 +289,8 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
                     if ($isCenterRow && abs($dx) <= intval($centerDiameter / 4)) {
                         // Show label in center row
                         $labelIndex = intval($dx + intval($centerDiameter / 4));
-                        if ($labelIndex >= 0 && $labelIndex < strlen($this->centerLabel)) {
-                            $char = $this->centerLabel[$labelIndex];
+                        if ($labelIndex >= 0 && $labelIndex < count($centerLabelChars)) {
+                            $char = $centerLabelChars[$labelIndex];
                         } else {
                             $char = ' ';
                         }
@@ -343,6 +354,26 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
                 $color = $segment->color ?? $segmentColor;
                 $visible = '▪ ' . $segment->label;
                 $visibleWidth = mb_strlen($visible);
+
+                // Same budget the former fit predicate used ($legendX +
+                // $visibleWidth < $width - 2), expressed as the widest entry
+                // that still lands inside the border.
+                $available = $width - 3 - $legendX;
+                if ($available < 1) {
+                    // Degenerate guard: not even one codepoint of room left, so
+                    // nothing (not a truncated stub) can render from here on —
+                    // later segments cannot fit either, stop honestly.
+                    break;
+                }
+                if ($visibleWidth > $available) {
+                    // Over-long entries truncate to the remaining budget instead
+                    // of the whole entry being silently dropped (chart_v4 C3,
+                    // ruling R5(ii)). Hard cut, ellipsis-free — matches the
+                    // plain-cell box style.
+                    $visible = mb_substr($visible, 0, $available);
+                    $visibleWidth = $available;
+                }
+
                 $entry = '';
                 if ($color !== null) {
                     $entry .= $color->toFg(ColorProfile::TrueColor);
@@ -352,15 +383,21 @@ final class Sunburst implements \SugarCraft\Dash\Foundation\Sizer
                     $entry .= Ansi::reset();
                 }
 
-                if ($legendX + $visibleWidth < $width - 2) {
-                    $legendLine .= $entry . '  ';
-                    $legendX += $visibleWidth + 2;
-                }
+                $legendLine .= $entry . '  ';
+                $legendX += $visibleWidth + 2;
             }
 
             if ($legendLine !== '') {
+                // str_pad() counts BYTES, but $legendLine embeds truecolor SGR
+                // sequences, so padding to a byte target lands the right border
+                // inside the box (reconA CASE 1c). Pad by VISIBLE codepoints
+                // instead, excluding SGR via the house sequence regex; for
+                // SGR-free ASCII lines this equals the old str_pad math exactly.
+                // Known cosmetic limit: double-width CJK counts one codepoint,
+                // not one column (no wcwidth repo-wide — chart_v4 Parked (c)).
+                $visibleLegendWidth = mb_strlen((string) preg_replace('/\x1b\[[0-9;]*m/', '', $legendLine));
                 $result .= $bl . str_pad('', $width - 2) . $br . "\n";
-                $result .= $v . str_pad($legendLine, $width - 2) . $v . "\n";
+                $result .= $v . $legendLine . str_repeat(' ', max(0, $width - 2 - $visibleLegendWidth)) . $v . "\n";
             }
         }
 
