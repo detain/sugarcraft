@@ -234,6 +234,48 @@ final class T
     }
 
     /**
+     * Probe the environment for the terminal's character encoding.
+     *
+     * WHY: {@see detect()} is language-only — normalize() discards the
+     * encoding suffix (`fr_FR.UTF-8` → `fr`), so no charset information
+     * survives the locale lookup. Consumers that gate charset-dependent
+     * features (e.g. Unicode glyph palettes vs. pure-ASCII fallbacks)
+     * need that capability separately. This is a pure read — it never
+     * calls setlocale() and shares no state with the translation
+     * registry; locale auto-detection for output remains opt-in.
+     *
+     * Reads the same `LC_ALL` → `LC_MESSAGES` → `LANG` chain as
+     * {@see detect()}; for the first raw value that passes detect()'s
+     * validity screen (non-empty, not `C`/`POSIX`) it returns the
+     * encoding after the last `.` — e.g. `fr_FR.UTF-8` → `UTF-8`,
+     * `en_US.ISO-8859-1` → `ISO-8859-1` — upper-cased. SugarCraft
+     * addition; no upstream (charmbracelet) parity.
+     *
+     * @return ?string the charset name, or null when no usable encoding
+     *                 is declared (C/POSIX locale, unset chain, or a
+     *                 locale value carrying no `.`-separated encoding)
+     */
+    public static function charset(): ?string
+    {
+        foreach (['LC_ALL', 'LC_MESSAGES', 'LANG'] as $var) {
+            $raw = $_SERVER[$var] ?? getenv($var) ?: null;
+            if (!is_string($raw) || in_array($raw, ['', 'C', 'POSIX'], true)) {
+                continue;
+            }
+
+            // First valid locale value decides — mirroring detect().
+            $dot = strrpos($raw, '.');
+            if ($dot === false) {
+                return null;
+            }
+            $charset = substr($raw, $dot + 1);
+
+            return $charset === '' ? null : mb_strtoupper($charset);
+        }
+        return null;
+    }
+
+    /**
      * Reset all internal state — registered namespaces, cached files, and
      * the active locale.
      *
