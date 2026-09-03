@@ -12,7 +12,7 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: PHASES 0-3 ARE CLOSED. PHASE 4 BATCHES 1+2 ARE MERGED — P4.S1 (Usage buckets) `f2204a7c4`, P4.S3 (status-line cache readout) `23a36254b` + `a834207d4`, P4.S2 (providers populate the buckets) `80db1b27d`. NOTHING IS IN FLIGHT except the orchestrator's belt re-run of the master suite (the §4 tree-identity argument already makes it provably redundant — recorded either way). The queue is STOP-AND-ASK: Batch 3 (P4.S4 -> P4.S5, both own Chat.php + ContextCompactor.php) needs the supervisor's answer on the §5 collision before any spawn. Full state and the exact next action are in §8.**
+**Current state: PHASES 0-3 ARE CLOSED. PHASE 4 IS 4-OF-5 MERGED — P4.S1 (Usage buckets) `f2204a7c4`, P4.S3 (status-line cache readout) `23a36254b` + fix8 `a834207d4`, P4.S2 (providers fill the buckets) `80db1b27d`, P4.S4 (E18 oversized-exchange truncation) `1500ad32b`. Batch 3 is open on the supervisor's answer ("Go — Batch 3 now", 2026-09-02); P4.S5 (E23 exchangeKey audit, MEASURE-FIRST) is the LAST step of Phase 4. Do not re-verify closed work — §4 lists what was measured where.**
 
 ---
 
@@ -155,6 +155,15 @@ its six record-side findings were fixed and merged as `58150a432`. Ten things a 
 10. **Buckets have NO response-path consumer yet** — the widen-CompleteResponse seam is recorded-open
     in §8's travel ledger: parse + total/cost routing is live, end-to-end cache observability ships
     when that seam lands. The status line is the one shipped consumer.
+ 11. **E18: one oversized exchange no longer starves the queue.** `ContextCompactor::truncateOversizedExchange()`
+     (:229-305) truncates ONLY a message whose own estimate reaches the blocking tier — aggregate overflow still
+     returns byte-identical; `Chat::intraExchangeTruncation()` rescues BOTH blocking sites (`submit()` and
+     `applyModelCompaction()`), rebuilding via `messageWithContent()` — an 11-field splice-copy pinned by a
+     known-answer test (a gutted copy re-stamping `createdAt` reddens it). Measured before/after on a real
+     800,040-char exchange: rising refusals [200520..201032] became [200520, 93126, 93149, 93172, 93195] with
+     every turn dispatched; the +23/turn honest growth is disclosed, asserted as never-above-first-reading. The
+     95% tier constant untouched; goldens unmoved. Residual recorded in the docblock: a drafted (not sent) giant
+     can still rescue ~108,113 estimated tokens into a 100,000 window — draft-aware bound is a follow-up.
 
 ## 4. How to resume
 
@@ -162,19 +171,22 @@ its six record-side findings were fixed and merged as `58150a432`. Ten things a 
 was measured at. Re-run a check ONLY if the sha it names has moved. Do not spend seven minutes
 re-measuring a suite this file already gives you the answer to.**
 
-**IN FLIGHT: only the belt re-run of the full suite on master `80db1b27d`** (`/tmp/p4s2-master.out`)
-— a verification nicety: the tree-identity row below already PROVES the master figure. Phase 4
-Batches 1+2 are MERGED: P4.S1 `f2204a7c4`, P4.S3 `23a36254b` + fix8 `a834207d4`, P4.S2 `80db1b27d`.
-Next: STOP — the supervisor answer is needed before Batch 3 (§8 `Next step`).
+**IN FLIGHT: nothing running.** Batch 3 is HALF DONE: P4.S4 merged `1500ad32b` (E18 truncation;
+gate + belt figures above). P4.S5 (E23 exchangeKey audit — MEASURE FIRST) has its brief corrected
+and its step text extracted, but the lead is NOT yet spawned — see §8 `Next step`. Phase 4
+Batches 1+2 remain merged: P4.S1 `f2204a7c4`, P4.S3 `23a36254b` + fix8 `a834207d4`, P4.S2
+`80db1b27d`.
 
-**If the tree moved** (new commits, a worktree you did not create): re-derive EVERY
+**If the tree moved** (new commits, a worktree you did not create): re-derive EVERY figure in this section from the CURRENT tree before trusting it - the intro's don't-re-measure rule holds only while the cited shas are unmoved. Check porcelain and `git worktree list` for strangers, and inspect the identity of every INCOMING commit (`git log --format='%an <%ae> %cn <%ce>' old-tip..new-tip`) before building on the new base - lane merges and remote pushes have twice moved master mid-flight. If the movement is bookkeeping-only (`git diff --stat old new -- sugar-crush/` is EMPTY), the sugar-crush figures still describe the tree and need no re-run.
 ### Verified this session — do NOT redo unless the sha moved
 
 | Check | Result | Measured at |
 |---|---|---|
+| **MASTER full suite (CURRENT, post-P4.S4)**, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10638, Assertions: 164995, Skipped: 1`**, 0 failures (EXIT 0) — MMG-201 arm; 164992 at the 198 arm. Gate at branch tip `0ca4c088d` + belt re-run on master `/tmp/p4s4-belt.out` printed the IDENTICAL figure; `git diff --stat 0ca4c088d master` EMPTY | `1500ad32b` |
+| P4.S4 scope + cycle record | merged 3 files +1848/−7 (`src/Context/ContextCompactor.php`, `src/Chat.php`, `tests/Context/ContextCompactorTest.php`); the declared `tests/CompactorTest.php` proved UNRELATED (different class) — reported not edited; lead cycles 1-5 (dedicated fixers; one fixer death ladder-handled), orchestrator cycle-6 fixer closed 3 MAJORs (alignment pin, 11-field copy pin, comment-only headroom narrowing — 2938/2938 token-identity proven), cycle-7 fresh reviewer NO FINDINGS incl revert-experiment; identity 8/8 literal, 0 EMAIL bytes | `1500ad32b` |
 | cwd, branch, clean tree | `/home/sites/sugarcraft`, `master`, porcelain empty | every commit |
 | commit identity | `Joe Huss` / `detain@interserver.net` — 24/24 objects author+committer clean across the whole P4.S2 window AFTER the metadata repair; 8 gmail commits remain in P3.audit-fix-2 history (un-rewritable, recorded). NEW ROOT CAUSE of the recurring `[EMAIL]` defect: agents SEE the sanitized token in injected context and ECHO it — briefs must command the literal address; orchestrator object-byte-scans incoming commits before every merge | `80db1b27d` |
-| **MASTER full suite**, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10615, Assertions: 164754, Skipped: 1`**, 0 failures (EXIT 0) — MMG-198 arm; 164757 at the 201 arm | synced `47f7b477a` / replay `c8f01cdbe` (orchestrator gate) |
+| (SUPERSEDED by P4.S4) **MASTER full suite** at the P4.S2-era tree, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10615, Assertions: 164754, Skipped: 1`**, 0 failures (EXIT 0) — MMG-198 arm; 164757 at the 201 arm | synced `47f7b477a` / replay `c8f01cdbe` (orchestrator gate) |
 | master tree == the tree that figure was measured on | `git diff --stat c8f01cdbe master` EMPTY — c8f01cdbe is the identity-repaired replay of 47f7b477a (`diff --stat 47f7b477a c8f01cdbe` also EMPTY, trees byte-identical), so the figure describes master and re-running is provably redundant; belt `/tmp/p4s2-master.out` the belt re-run on master at `80db1b27d` CONFIRMED it verbatim: 10615 / 164754 / 1 skip / 0 fail, SUITE-EXIT=0 (`/tmp/p4s2-master.out`) | `80db1b27d` |
 | goldens | `32ea749d…` (system) · `ef0326dd…` (agent) — **unmoved since `405252a41`**, zero-byte fixtures diff re-confirmed across the WHOLE Phase-4 window (cycle-9 reviewer measured `f2204a7c4..HEAD`) | `80db1b27d` |
 | nine-file census subset | `OK (176 tests, 31390 assertions)` at the SYNCED tip `47f7b477a`, over exactly the nine `HAND_MAINTAINED_CENSUS_SET` files (`tests/TreeWideGuardRosterTest.php:407-417`), cwd `sugar-crush/`, serial, `</dev/null`. Pre-sync `1eab2e0ed` the same nine read 176/31352 — the +38 is GlobFigure/SymbolCitation derived growth over the synced S3 layer. **A census figure names its file list AND its tree** | `47f7b477a` |
@@ -206,7 +218,9 @@ a834207d4  10582 / 164483 / 1   + P4.S3-fix8   (164486 at 201 arm; test-only Sta
                   +68/-16; fix-8 agent suite prediction 164469+14 EXACT; orchestrator belt exact)
 80db1b27d  10615 / 164754 / 1   + P4.S2   (164757 at 201 arm; prediction 10612 tests, the +3
                   adjudicated per-class: UW restructure folded 3 pre-existing cases in; cmp.py
-                  five movers zero remainder; belt2 on master /tmp/p4s2-master.out exact)
+ 5a87ce80a  10615 / 164754 / 1   + bookkeeping (resume rewrite #3, three worklog entries, S2 brief roster correction)
+ 1500ad32b  10638 / 164995 / 1   + P4.S4   (MMG-201 arm; 164992 at 198; gate at 0ca4c088d + belt on master
+                   IDENTICAL; ContextCompactorTest 57->80 tests; +241/+23 attributed per-class zero remainder)
 ```
 
 ### FOUR METHOD CHANGES THAT ARE NOW PART OF THE PLAN — use them
@@ -494,27 +508,38 @@ never write a dead agent's missing report yourself.
 ## 8. Where you are right now
 
 ```
-Phase:            4 — BATCHES 1 + 2 MERGED (2026-09-02). P4.S1 f2204a7c4 (Usage real buckets),
-                  P4.S3 23a36254b + fix8 a834207d4 (status-line cache readout), P4.S2 80db1b27d
-                  (providers populate the buckets with per-provider cache-field evidence, nothing
-                  invented). Remaining: Batch 3 = P4.S4 -> P4.S5, gated on the supervisor answer.
+Phase:            4 — BATCHES 1+2 MERGED; BATCH 3: P4.S4 MERGED, P4.S5 NEXT AND LAST. Supervisor
+                  answer received 2026-09-02: "Go — Batch 3 now". P4.S1 f2204a7c4 (Usage real
+                  buckets), P4.S3 23a36254b + fix8 a834207d4 (status-line cache readout), P4.S2
+                  80db1b27d (providers populate the buckets with per-provider cache-field evidence,
+                  nothing invented), P4.S4 1500ad32b (E18 oversized-exchange truncation).
 
-Next step:        **STOP AND ASK THE SUPERVISOR — PHASE 4 BATCH 3 GATE.** P4.S4 (E18: one exchange
-                  larger than the tier refused five times with a RISING estimate, 200,148 -> 200,660)
-                  and P4.S5 (E23: exchangeKey() collapses byte-identical exchanges — MEASURE FIRST,
-                  then fix or close as measured) run SERIAL (both own Context/ContextCompactor.php)
-                  and both ALSO touch Chat.php — the other plan's long-standing backlog per the §5
-                  collision table. Their briefs are NOT yet written. ASK: is the lane free, or when
-                  should these interleave? DO NOT spawn either until the answer. Everything else in
-                  this plan continues without asking (§0).
+Next step:        **SPAWN THE P4.S5 LEAD — the last step of Phase 4** (E23: audit exchangeKey()'s
+                  "byte-identical exchanges collide — harmless" judgement. MEASURE FIRST: fix (a test
+                  reproduces the collapse and the fix stops it) OR close-as-measured with the exact
+                  measuring command in the report. Same files as S4: src/Context/ContextCompactor.php
+                  + tests/Context/ExchangeSummaryTest.php — lane already cleared by the supervisor.)
+                  Brief PREP: prompt_kit/briefs/P4.S5-step-brief.md (270 lines) carries MY post-S4
+                  measurements in its MEASURE-FIRST section — pointers: exchangeKey def :96-99 =
+                  hash('sha256', user . chr(0) . assistant); call sites :625 + :1200; serializeExchange
+                  does not exist; docblock :90-93 is the judgement to audit; toolCalls/toolResults NOT
+                  in the hash; cite by function name PLUS line number. At spawn: build sandbox
+                  worktree prompt-step-P4.S5 + cp -al vendor; sed WORKTREE_PATH_PLACEHOLDER and
+                  SCRATCH_PLACEHOLDER into the spawn copy (master copy stays generic); point the
+                  step-text file /home/sites/prompt-scratch/P4.S5/step-text.md at it; IDENTITY LAW +
+                  lead-never-fixes + cap-5 clauses are already in the brief.
+                  After S5 merges: Batch-3 + PHASE-4 CLOSE bookkeeping (steps 30 of 63), THEN the
+                  next genuine STOP-AND-ASK is the Phase-5 pre-read + §5 collision re-check with the
+                  supervisor before opening Phase 5 (PromptSection architecture, plan anchors
+                  re-derive — Phase 5 header was 1872 at last check). Everything else runs to
+                  completion without asking (§0).
 
-                  Gap-fillers that need NO answer and NO lane file (each its own small step, in
-                  preference order): (1) F6b citation-refresh + the two S2 stale-cite items
-                  (RuntimeTest self-cites incl the one inside an assertSame MESSAGE STRING;
-                  prompt_plan.md:1606 + §18-row loop lines; VertexProvider.php:331-332;
-                  ProviderRequestResponseTest.php:46/:686) — src-free record work; (2) the
-                  transcriptSignature same-count-REPLACE third control; (3) NOTE-1 decision
-                  (Anthropic-only readout) — user or supervisor.
+                  Gap-fillers needing no answer, still queued (in preference order): (1) F6b
+                  citation-refresh + the two S2 stale-cite items (RuntimeTest self-cites incl the one
+                  inside an assertSame MESSAGE STRING; prompt_plan.md:1606 + §18-row loop lines;
+                  VertexProvider.php:331-332; ProviderRequestResponseTest.php:46/:686) — src-free
+                  record work; (2) the transcriptSignature same-count-REPLACE third control;
+                  (3) NOTE-1 decision (Anthropic-only readout) — user or supervisor.
 
                   Standing spawn recipe: ONE step lead via task() subagent_type=coder — LEAN prompt
                   pointing at the brief FILE by path (never paste it), the sandbox worktree, its
@@ -534,33 +559,39 @@ Next step:        **STOP AND ASK THE SUPERVISOR — PHASE 4 BATCH 3 GATE.** P4.S
                   sequence or attribute it). cmp.py per-class before adjudicating any moved total.
                   FINALIZE the message file and cat it once (placeholder check). Merge via
                   git merge --no-ff prompt/<ID> -F msg-file. Verify `git diff --stat <tip> master`
-                  EMPTY. Byte-scan INCOMING objects for author emails. §1.12 checks, worktree remove,
-                  branch -d. Worklog entry + resume rewrite are PART OF the step.
+                  EMPTY. Byte-scan INCOMING objects for author emails. §1.12 checks (porcelain FULL
+                  output), worktree remove, branch -d. Worklog entry + resume rewrite are PART OF
+                  the step.
 
-Steps done:       28 of 63 MERGED. Phase 4: P4.S1 = 26th, P4.S2 = 27th, P4.S3 = 28th (S3 merged
-                  earlier by sha, S2 last; the worklog entries are the ledger).
-Phases done:      3 of 12 (P0-P3 CLOSED). Phase 4 open: 3 of 5 steps merged, Batch 3 gated.
-Last commit:      **80db1b27d** — sugar-crush: P4.S2 (providers populate the Usage buckets).
+Steps done:       29 of 63 MERGED. Phase 4: P4.S1 = 26th, P4.S2 = 27th, P4.S3 = 28th, P4.S4 =
+                  29th (the worklog entries are the ledger).
+Phases done:      3 of 12 (P0-P3 CLOSED). Phase 4 open: 4 of 5 steps merged; P4.S5 last.
+Last commit:      **1500ad32b** — sugar-crush: P4.S4 (E18 an exchange larger than the tier is
+                  truncated, not re-refused forever).
                   Re-derive: git -C /home/sites/sugarcraft log --oneline -1
 Baseline:         Tests: 10351, Assertions: 160648, Skipped: 1  (from P0.S1, NEVER edited)
 
 Latest suite:     **EVERY FIGURE NAMES ITS CWD, ITS TREE, AND SERIALITY.**
-                  **MASTER — GREEN. ORCHESTRATOR GATE at the synced/identity-repaired tip c8f01cdbe
-                  (tree == master), checkout root, stdin </dev/null, serial, box-quiet probe 0:
-                    Tests: 10615, Assertions: 164754, Skipped: 1, 0 failures**   (MMG-198 arm)
-                  164757 is the SAME tree's MMG-201 arm — NEVER adjudicate the ±3 by headline;
-                  cmp.py per-class first. Prediction discipline: test count predicted 10612,
-                  measured 10615, the +3 adjudicated per-class to the UW restructure folding
-                  pre-existing cases in (five movers, zero remainder). Belt re-run on master at
-                  80db1b27d CONFIRMS the figure verbatim (/tmp/p4s2-master.out).
-                  Nine-file census at this tree: 176 / 31390. Roster derivation UNMOVED.
+                  **MASTER — GREEN. ORCHESTRATOR GATE at branch tip 0ca4c088d (tree == master
+                  post-merge; `git diff --stat 0ca4c088d master` EMPTY), checkout root, serial,
+                  </dev/null, box-quiet probe 0:
+                    Tests: 10638, Assertions: 164995, Skipped: 1, 0 failures, EXIT 0**  (MMG-201 arm)
+                  164992 is the SAME tree's MMG-198 arm — NEVER adjudicate the ±3 by headline;
+                  cmp.py per-class first (test count 10638 predicted exactly; +241/+23 movers
+                  ContextCompactorTest +167a/+23t, GlobFigureDrift +55, SymbolCitationDrift +16,
+                  MMG +3 arm — zero remainder). Belt re-run on master at 1500ad32b printed the
+                  IDENTICAL figure (/tmp/p4s4-belt.out).
+                  Nine-file census at this tree: 176 / 31460 (cwd sugar-crush/, serial, </dev/null).
+                  Roster derivation UNMOVED (67/83/181/440/0).
                   **CI/local assertion counts are NOT comparable.** TEST counts agree exactly.
                   Path-repo gates: RUN THEM FROM THE REPO ROOT (misread happened twice).
                   php-cs-fixer is NOT installed on this box; the style gate cannot run locally.
 
-In-flight batch:  NOTHING — all batch 1+2 agents are finished and merged; the belt re-run is a
-                  verification, not work. Batch 3 is BLOCKED ON THE SUPERVISOR ANSWER above.
-Live worktrees:   ONLY /home/sites/sugarcraft (master 80db1b27d). crush-lane-{a,b,c} belong to the
+In-flight batch:  Batch 3: P4.S4 MERGED 1500ad32b (cycles 1-5 lead + orchestrator cycle-6 fixer
+                  closing 3 MAJORs + cycle-7 fresh reviewer NO FINDINGS; one lead fixer death
+                  ladder-handled by commit verification). P4.S5 NOT yet spawned — sandbox + brief
+                  sed are the immediate actions.
+Live worktrees:   ONLY /home/sites/sugarcraft (master 1500ad32b). crush-lane-{a,b,c} belong to the
                   OTHER plan — never touch. /home/sites/prompt-step-* and /home/sites/prompt-scratch
                   are mine.
 
@@ -634,6 +665,26 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                     `git log --format='%an <%ae>' <base>..<tip> | sort | uniq -c` — the gmail-
                     address incident (8 commits) proved identity drift can survive a green
                     suite. Un-rewritable history; recorded in §4.
+                  **NEW from Phase 4 batch 3 (P4.S4 merged 1500ad32b) — deferred items:**
+                  - **draft-echo over-window refusal**: a DRAFTED (not yet sent) giant rescued by
+                    intraExchangeTruncation can still dispatch ~108,113 estimated tokens into a
+                    100,000 window (the echoed prompt outruns INTRA_EXCHANGE_HEADROOM_TOKENS);
+                    produces a flat ~108k persistent refusal loop. The constant's docblock now
+                    states this honestly; a draft-aware bound is a follow-up step.
+                  - **countTokens() tool_calls-blindness**: it inspects `content` only, so an entry
+                    oversized purely via tool_calls bytes is invisible to both the tier and the E18
+                    rescue — adjacent to the P4.S5 collision question (the key also ignores tool
+                    payloads).
+                  - **Message::withContent()** — the natural home for the 11-field splice-copy now
+                    inlined in Chat::messageWithContent(); moving it is its own refactor step.
+                  - **Chat.php ~:5989 dead `$tokenCount`** (read only on a mutually-exclusive else
+                    branch) and **:995 test message "111%" should read "211%"; fix-3 guard-note
+                    "282 tests" claim half unverified; `phpunit.xml` lacks `failOnDeprecation`, so
+                    the 8.4 implicit-nullable spelling stays invisible in tests.
+                  - **Rule-44 record drift**: the P4.S4 step text said the rising refusal ran
+                    200,148 -> 200,660; measured on this tree 200,520 -> 201,032 (+128/attempt,
+                    same defect/slope); `tests/CompactorTest.php` was in the step's declared file
+                    list but tests an UNRELATED class — reported never edited.
                   **NEW from Phase 4 batches 1-2 — travel ledger:**
                   - **widen-CompleteResponse seam**: buckets reach NO consumer on the response path
                     until CompleteResponse carries them — cache observability is NOT shipped
@@ -768,7 +819,7 @@ Open follow-ups:  **PROCESS RULES ADOPTED — already in every brief:**
                   reds), deliberately NOT fixed, per the standing functionality-before-hardening
                   rule: the FIX is deferred, the FINDING is recorded as a step.
 
-Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-09-02. Phase 3 ran serial S1->S6 and is
+Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-09-03 (P4.S4 merged; Batch 3 cleared by the supervisor answer "Go — Batch 3 now", 2026-09-02). Phase 3 ran serial S1->S6 and is
                   done. The src/ file-count census is RESOLVED — it never applied to this plan
                   (§5) — so Phases 5/6/10 are NOT serialised by it.
                   Still live before Phase 5/6: EngineBackend.php held by a lane and also edited
@@ -798,14 +849,11 @@ Sequencing gate:  CHECKED 2026-08-29, re-confirmed 2026-09-02. Phase 3 ran seria
                   or build it out, NEVER delete).
 ```
 
-**Phase 4 status (updated 2026-09-02, post batches 1-2).** P4.S1/S2/S3 are MERGED — the step texts
-are history; their outcomes are §3 items 8-10 and the 2026-09-02 worklog entries. REMAINING:
-P4.S4 (E18 rising-estimate refusal; files Context/ContextCompactor.php + Chat.php + tests) THEN
-P4.S5 (E23 exchangeKey() byte-identical collapse — MEASURE FIRST, fix or close-as-measured; same
-two files) SERIAL, **BLOCKED ON THE SUPERVISOR ANSWER** (§5: Chat.php + ContextCompactor.php are
-the other plan's long backlog). Their briefs are NOT yet written; write them from the prompt_plan.md
-step texts only after the answer (anchors re-derived 2026-09-02: Phase-4 header 1701, P4.S4 1832,
-P4.S5 1849 — re-derive again at write time).
+**Phase 4 status (updated 2026-09-03, Batch 3 in flight).** P4.S1/S2/S3/S4 are MERGED — their
+outcomes are §3 items 8-11 and the worklog entries. REMAINING: P4.S5 (E23 exchangeKey()
+byte-identical collapse — MEASURE FIRST, fix or close-as-measured; src/Context/ContextCompactor.php
++ tests/Context/ExchangeSummaryTest.php; brief prompt_kit/briefs/P4.S5-step-brief.md corrected with
+post-S4 pointers and base figures filled). After S5 merges: Phase-4 close bookkeeping (30 of 63).
 Phase 5 (PromptSection architecture) pre-read is NOT yet done. Before opening Phase 5: re-check the
 §5 collision table with the supervisor, re-derive plan anchors, and read its step texts.
 
