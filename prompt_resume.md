@@ -12,13 +12,14 @@
 > The rewrite instructions are in §R at the bottom. They are part of the file on purpose — whoever
 > rewrites it is reading it.
 
-**Current state: PHASES 0-4 CLOSED (30 of 63). ONE STEP UNCOMPLETED: the F6b gap-filler
-  (citation sweep) is COMPLETE-AT-CAP on branch `prompt/F6b` tip `3bea55552` (base `0fdfd9033`) -
-  disk-verified by the orchestrator, NOT yet merged. Next session: byte-scan + merge-gate + merge
-  per the newest worklog entry, then bookkeeping #6. AFTER that: ASK SUPERVISOR the section-5
-  collision re-check BEFORE Phase 5 - the one outstanding question. (Full phase-4 chain: S1
-  `f2204a7c4` S2 `80db1b27d` S3 `23a36254b`+`a834207d4` S4 `1500ad32b` S5 `142cef6ce`, bookkeeping
-  `0fdfd9033` = master tip; figures in section 4.)
+**Current state: PHASES 0-4 CLOSED (30 of 63) AND the F6b gap-filler citation sweep is MERGED
+  (merge commit `bcf419855` = master tip). One gap-filler remains: **F6c** (residual citation sweep +
+  the transcriptSignature REPLACE third control) - brief `prompt_kit/briefs/F6c-step-brief.md`,
+  sandbox `/home/sites/prompt-step-F6c` @ `bcf419855`, lead running (3-cycle cap). After F6c merges
+  + belt: FINAL handoff staging (worklog + resume #8) and **STOP AT THE PHASE 5 BOUNDARY** per user
+  instruction - the supervisor section-5 collision re-check is required before P5.S1. Phase-5
+  pre-read + step texts live in prompt_plan.md ~L1872; travel ledger + TWO awaiting-user items +
+  NOTE-1 ride in section 8 below.
 
 ---
 
@@ -177,11 +178,10 @@ its six record-side findings were fixed and merged as `58150a432`. Ten things a 
 was measured at. Re-run a check ONLY if the sha it names has moved. Do not spend seven minutes
 re-measuring a suite this file already gives you the answer to.**
 
-**IN FLIGHT: F6b branch ready, UNMERGED.** Gap-filler complete-at-cap on `prompt/F6b` @ `3bea55552`
-(5 commits over `0fdfd9033`; comment/string-only, 4 files +10/-10; orchestrator disk-verified:
-porcelain 0, identity 20/20 literal). Merge recipe + gate prediction: newest prompt_worklog.md
-entry. A confabulated F6b round PRECEDED the real one and was caught by a fresh read-only
-reviewer's disk check - incident + new standing law in that entry, memory block, and section 8.
+**IN FLIGHT: F6c lead (gap-filler sweep).** F6b merged at `bcf419855` (gate 10644/165013/1/0,
+cmp sole mover MMG arm; sugar-crush diff vs branch tip EMPTY; worktree+branch torn down).
+F6c: branch `prompt/F6c` over `bcf419855`, targets = PRR residual emit cites + plan L1604-1605
+Bootstrap/Chat cites + transcriptSignature REPLACE third control; cap 3 fresh reviewers.
 
 ### Verified this session — do NOT redo unless the sha moved
 
@@ -191,7 +191,7 @@ reviewer's disk check - incident + new standing law in that entry, memory block,
 | (SUPERSEDED by P4.S5) **MASTER full suite at the post-P4.S4 tree**, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10638, Assertions: 164995, Skipped: 1`**, 0 failures (EXIT 0) — MMG-201 arm; 164992 at the 198 arm. Gate at branch tip `0ca4c088d` + belt re-run on master `/tmp/p4s4-belt.out` printed the IDENTICAL figure; `git diff --stat 0ca4c088d master` EMPTY | `1500ad32b` |
 | P4.S4 scope + cycle record | merged 3 files +1848/−7 (`src/Context/ContextCompactor.php`, `src/Chat.php`, `tests/Context/ContextCompactorTest.php`); the declared `tests/CompactorTest.php` proved UNRELATED (different class) — reported not edited; lead cycles 1-5 (dedicated fixers; one fixer death ladder-handled), orchestrator cycle-6 fixer closed 3 MAJORs (alignment pin, 11-field copy pin, comment-only headroom narrowing — 2938/2938 token-identity proven), cycle-7 fresh reviewer NO FINDINGS incl revert-experiment; identity 8/8 literal, 0 EMAIL bytes | `1500ad32b` |
 | P4.S5 scope + outcome | CLOSED AS MEASURED (outcome b): E23 collapse REAL+reachable (text-only sha256 key `src/Context/ContextCompactor.php:96-99`; both twins offered `:625`; one shared summary lookup `:1200`; tool_calls payloads key-blind) but LOSS measured FALSE - `summarizeExchanges` emits one row per PAIR, each twin keeps its line; the only collapse-attributable effect is the `Chat::parseExchangeSummaries` isset-guard dropping a second paraphrase of byte-identical text (benign by content identity); the `[2x]` fold is stage-3 documented design and fires with no map. 2 files +251/-2, src COMMENT-ONLY (elementwise token identity, lead + reviewer); 6 pins in the PRE-EXISTING ExchangeSummaryTest 16/36->22/54, each mutation-isolated; lead 2/5 cycles with dedicated fixer + cycle-2 fresh reviewer PASS; identity 2/2 literal, 0 EMAIL bytes; merge commit amended once for the message fill (parents preserved) | `142cef6ce` |
-| F6b branch (UNMERGED) | disk-verified by orchestrator: prompt/F6b tip 3bea55552 real, 5 commits 98aeffbb6..3bea55552, 20/20 author+committer fields literal detain@interserver.net, worktree porcelain 0, diff 4 files +10/-10 (line-count-preserving pairs); focused figures per lead; merge-gate suite OWED | `3bea55552` |
+| F6b gap-filler MERGED | merge commit bcf419855: 5 commits 98aeffbb6..3bea55552, 4 files +10/-10 comment/string-only, line counts preserved; gate cwd F6b worktree root serial </dev/null probe 0 = Tests 10644 / Assertions 165013 (MMG-201 arm; 165010 at 198) / 1 skip / 0 fail / EXIT 0, prediction exact, cmp.py sole mover MouseModalGuardTest 198->201 (+3, dTests 0) - zero unexplained; sugar-crush diff 3bea55552 vs master EMPTY (tree-wide diff = the 3 bookkeeping record files only, read by no test); identity 20/20 literal + 0 EMAIL bytes; C1 5 / C2 2 / C3 NO FINDINGS, cap-3 held; belt figure appended in worklog-6 entry | `bcf419855` |
 | cwd, branch, clean tree | `/home/sites/sugarcraft`, `master`, porcelain empty | every commit |
 | commit identity | `Joe Huss` / `detain@interserver.net` — 24/24 objects author+committer clean across the whole P4.S2 window AFTER the metadata repair; 8 gmail commits remain in P3.audit-fix-2 history (un-rewritable, recorded). NEW ROOT CAUSE of the recurring `[EMAIL]` defect: agents SEE the sanitized token in injected context and ECHO it — briefs must command the literal address; orchestrator object-byte-scans incoming commits before every merge | `80db1b27d` |
 | (SUPERSEDED by P4.S4) **MASTER full suite** at the P4.S2-era tree, checkout root, `</dev/null`, serial, box quiet | **`Tests: 10615, Assertions: 164754, Skipped: 1`**, 0 failures (EXIT 0) — MMG-198 arm; 164757 at the 201 arm | synced `47f7b477a` / replay `c8f01cdbe` (orchestrator gate) |
@@ -527,33 +527,19 @@ Phase:            4 - CLOSED (5 of 5). P4.S1 f2204a7c4 (Usage real buckets), P4.
                   P4.S5 142cef6ce (E23 exchangeKey audit - CLOSED AS MEASURED: collapse real, loss false,
                   six mutation-isolated pins, src comment-only).
 
-Next step:        (1) FINISH F6b: cat-file EMAIL byte-scan of the 5 incoming objects; merge-gate
-                  full suite at 3bea55552 (cwd /home/sites/prompt-step-F6b root, serial,
-                  </dev/null, box-quiet probe 0) - PREDICTION: 10644 tests / 165010-or-165013
-                  (MMG dual-arm) / 1 skip / 0 fail; cmp.py per-class vs
-                  /home/sites/prompt-scratch/P4.S5/orchestrator/gate-junit.xml (content-walking
-                  guards can move on comment text - attribute any delta per-class BEFORE
-                  adjudicating); merge --no-ff prompt/F6b -F msg per the standing recipe below;
-                  then fill the newest worklog entry with merge sha + belt figure, commit
-                  prompt_kit/briefs/F6b-step-brief.md, and rewrite this resume (bookkeeping #6).
-                  (2) GENUINE STOP-AND-ASK - SUPERVISOR SECTION-5 COLLISION RE-CHECK BEFORE
-                  PHASE 5 (outstanding; Phase 5 = PromptSection architecture, plan header ~L1872
-                  re-derive on fresh read; its steps add most of the ~11 new src files + rewrite
-                  Runtime.php assembly + P5.S4/S5/S6 regenerate goldens + every new test file can
-                  red a tree-wide census guard; section 5 forbids starting while the other plan
-                  (crush-lane-{a,b,c}, docs/plans/crush_code_*) has a round in flight - ASK the
-                  supervisor, do not inspect lane worktrees).
-                  (3) Gap-fillers while awaiting: transcriptSignature same-count-REPLACE third
-                  control; NOTE-1 decision (status-line readout lights only Anthropic-shaped
-                  providers); F6b's REPORTED residual sweep - ProviderRequestResponseTest
-                  :44-50/:537/:574/:635/:655 emit cites + prompt_plan.md L1604-1605
-                  Bootstrap/Chat cites all rotted (future sweep step).
-                  Phase 5 pre-read: P5.S1 assembler behind buildSystemPrompt - golden
-                  byte-identical is THE acceptance test; P5.S2 snapshot migration; P5.S3 fence
-                  escaping - fold in ONE diff the EnvironmentBlock.php:288 branch cap + BOTH
-                  fence-escape vectors (i) diff-bodies (ii) branch-name; P5.S4 verify-before-done;
-                  P5.S5 core.maxims; P5.S6 provenance fences. Almost fully serial.
-                  Phase 6 (rules tiers) starts ~L2057.
+Next step:        (1) F6c lead finishes (or escalates at cap 3): orchestrator verifies by own
+                  measurement, runs the merge-gate full suite at the branch tip (prediction:
+                  10644 tests EXACT; assertions 165010-or-165013 + whatever target-3 adds - the
+                  lead states its focused deltas; cmp.py vs
+                  /home/sites/prompt-scratch/F6b/orchestrator/gate2-junit.xml), merges per the
+                  standing recipe below, belts, tears down.
+                  (2) BOOKKEEPING #8 + REPORT TO USER, then STOP: per user instruction the next
+                  session drives Phase 5 - supervisor section-5 collision re-check before P5.S1
+                  (Phase 5 adds ~11 new src files, rewrites Runtime.php assembly, regenerates
+                  goldens at P5.S4/S5/S6; other plan = crush-lane-{a,b,c} + docs/plans/crush_code_*
+                  must be free of rounds in flight).
+                  (3) Remaining queued after Phase 5 starts: NOTE-1 decision (Anthropic-only
+                  readout) rides to the user; travel ledger in section 8 unchanged otherwise.
 
                   Standing spawn recipe: ONE step lead via task() subagent_type=coder — LEAN prompt
                   pointing at the brief FILE by path (never paste it), the sandbox worktree, its
@@ -604,22 +590,18 @@ Latest suite:     **EVERY FIGURE NAMES ITS CWD, ITS TREE, AND SERIALITY.**
                   Path-repo gates: RUN THEM FROM THE REPO ROOT (misread happened twice).
                   php-cs-fixer is NOT installed on this box; the style gate cannot run locally.
 
-In-flight batch:  F6b gap-filler (post-Phase-4): lead ran 3/3 cycles - C1 FINDINGS(5, commit-msg
-                  misattribution + co-cites + nits; fix agents, lead never fixed), C2 FINDINGS(2
-                  incl one true rot the lead had earlier kept), C3 NO FINDINGS w/ all 19 checks
-                  evidenced. Tip 3bea55552 READY TO MERGE. Brief claims the lead measured FALSE are
-                  in the worklog entry (blind-spot-table mislabel, stale ~:1006-1019 pointer, 4-vs-5
-                  doctrine sites).
-In-flight batch 2026-09-03 note: a CONFABULATED round for this same step preceded the real one
-                  (fake commits/cycles/ledger delivered via a compression summary); the fresh
-                  cycle-4 reviewer's disk-check returned the correct BLOCKER before any damage.
-                  LAW: verify SHAs on disk before narrating or merging - including your own
-                  summaries. Quarantine + evidence paths in the worklog entry.
+In-flight batch:  F6b gap-filler MERGED `bcf419855` (cycle ledger + proofs in the merge message
+                  and the worklog-6 entry; that entry's NEXT-SESSION RECIPE was executed in full
+                  on 2026-09-03). F6c gap-filler NOW RUNNING: lead session on
+                  `/home/sites/prompt-step-F6c` (branch `prompt/F6c` @ `bcf419855`), brief
+                  `prompt_kit/briefs/F6c-step-brief.md` (three targets; comment/string-only for 1
+                  and 2, test-only third control; cap 3; lead-never-fixes).
 
-Live worktrees:   /home/sites/sugarcraft (master `0fdfd9033`) and /home/sites/prompt-step-F6b
-                  (branch prompt/F6b @ `3bea55552` - step DONE, merge-pending; after merge run
-                  section-1.12 porcelain-FULL check, worktree remove, branch -d). crush-lane-{a,b,c}
-                  belong to the OTHER plan - never touch.
+Live worktrees:   /home/sites/sugarcraft (master `bcf419855`) and /home/sites/prompt-step-F6c
+                  (branch prompt/F6c - gap-filler in flight). After F6c closes: run section-1.12
+                  porcelain-FULL, worktree remove, branch -d - then NOTHING of mine is live and
+                  the session ends at the Phase 5 boundary. crush-lane-{a,b,c} belong to the
+                  OTHER plan - never touch.
 
 Awaiting user decision: TWO. **NEITHER BLOCKS THE QUEUE.** Carry both forward on every rewrite
                   until the user answers, and do not decide either yourself.
