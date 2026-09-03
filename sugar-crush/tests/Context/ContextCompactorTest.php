@@ -17,6 +17,8 @@ use SugarCraft\Crush\Context\CompactorConfig;
 use SugarCraft\Crush\Context\ContextCompactor;
 use SugarCraft\Crush\Message;
 use SugarCraft\Crush\Role;
+use SugarCraft\Crush\ToolCall;
+use SugarCraft\Crush\ToolResult;
 
 final class ContextCompactorTest extends TestCase
 {
@@ -1342,7 +1344,34 @@ final class ContextCompactorTest extends TestCase
             );
 
             $chat = $this->settle($chat, $cmd);
+
+            // Positive controls against a VACUOUS harness: settle() feeds back
+            // whatever resolve() got, and resolve() returns null for a Cmd that
+            // is not an AsyncCmd — a drive loop whose turns never actually
+            // settled would still pass every estimate assert below. So each
+            // attempt must PROVE it dispatched AND that its reply landed.
+            $this->assertSame(
+                $attempt,
+                $backend->calls(),
+                "positive control: attempt {$attempt} actually reached the backend — a skipped settle could not",
+            );
+            $this->assertSame(
+                'ok',
+                $chat->history[count($chat->history) - 1]->content,
+                "positive control: attempt {$attempt}'s reply was applied to history, so the turn SETTLED and the next estimate reads a finished exchange, not a half-run one",
+            );
         }
+
+        // The per-attempt figures are PINNED, not merely bounded: the +23/turn
+        // growth of attempts 2-5 is one user line + one two-character reply per
+        // settled turn (honest conversation growth, disclosed in the docblock),
+        // and only pinning the exact sequence keeps "bounded above by the first
+        // reading" from quietly absorbing a regression that adds less per turn.
+        $this->assertSame(
+            [200_520, 93_126, 93_149, 93_172, 93_195],
+            $estimates,
+            'the whole measured sequence: attempt 1 reads the untruncated giant, every later attempt the once-truncated exchange plus one settled turn more',
+        );
 
         $this->assertSame(200_520, $estimates[0], 'fixture: the first attempt reads the untruncated giant, the same figure the bug started from');
         $this->assertSame(
@@ -1420,6 +1449,144 @@ final class ContextCompactorTest extends TestCase
             50_004,
             max(array_map(static fn(Message $m): int => mb_strlen($m->content), $preserved)),
             'including their full two-digit-prefix bodies (u10..a12 are 50,004 chars)',
+        );
+    }
+
+    /**
+     * The shape NO test covered until review cycle 4: the SYNCHRONOUS route
+     * where whole-exchange compaction freed something AND a giant still blocked
+     * the 95% tier, so the rescue dispatched. The committed history then carries
+     * `[summary]` lines — a rewrite under the user's feet — yet submit() held
+     * one notice slot and the rescue OVERWROTE the compaction notice with the
+     * truncation one, announcing only the second rewrite. The parked route never
+     * had this defect: compactionChanges() writes that rewrite report into
+     * history when it lands, and a parked probe on this very fixture shows both
+     * notices riding. This is the sync sibling of
+     * ChatTest::testTheBlockingTierReportsTheRewriteItCommitted, which enforces
+     * the same doctrine on the REFUSING arm of the same tier.
+     */
+    public function testARescuedSyncDispatchAnnouncesBothTheRewriteAndTheTruncation(): void
+    {
+        $history = [];
+        for ($i = 0; $i < 3; $i++) {
+            $history[] = Message::user("u{$i} " . str_repeat('x', 60_000));
+            $history[] = Message::assistant("a{$i} " . str_repeat('y', 60_000));
+        }
+        $history[] = Message::user('GIANT ' . str_repeat('z', 800_000));
+        $history[] = Message::assistant('gianttail');
+        for ($i = 0; $i < 8; $i++) {
+            $history[] = Message::user("q{$i}");
+            $history[] = Message::assistant("r{$i}");
+        }
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(history: $history, backend: $backend);
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: twelve exchanges — compaction condenses the two oldest, the giant still blocks the tier');
+
+        $summaries = array_values(array_filter(
+            $next->history,
+            static fn(Message $m): bool => str_starts_with($m->content, '[summary]'),
+        ));
+        $this->assertCount(2, $summaries, 'fixture: the dispatched history really carries the between-exchanges rewrite');
+
+        $compactionHits = array_values(array_filter(
+            $next->history,
+            static fn(Message $m): bool => $m->role === Role::System
+                && str_contains($m->content, 'older exchanges were summarized'),
+        ));
+        $this->assertCount(1, $compactionHits, 'the rescued dispatch announces the rewrite exactly once — zero times was the cycle-4 defect');
+        $compaction = $compactionHits[0];
+        $truncation = $this->truncationNotice($next);
+
+        $this->assertSame(Role::System, $truncation->role, 'both notices are the app reporting on itself');
+
+        $rewriteIndex = array_search($compaction, $next->history, true);
+        $truncationIndex = array_search($truncation, $next->history, true);
+        $this->assertIsInt($rewriteIndex);
+        $this->assertIsInt($truncationIndex);
+        $this->assertSame($rewriteIndex + 1, $truncationIndex, 'the rewrite report rides immediately before the truncation report — both in commit order');
+        $this->assertSame(
+            'go',
+            $next->history[$truncationIndex + 1]->content,
+            'both ride BEFORE the user prompt, the ordering contextCompactedMessage() established for every rewrite report',
+        );
+
+        $this->assertStringContainsString(
+            '24 messages -> 22 messages',
+            $compaction->content,
+            'the rewrite reports its OWN counts: 24 in, the two oldest exchanges condensed to two summary lines, 22 out',
+        );
+        $this->assertMatchesRegularExpression(
+            '/~[1-9]\d*% of the estimated token count freed/',
+            $compaction->content,
+            'and a strictly non-zero saving — this notice exists precisely because compaction freed something',
+        );
+        $this->assertStringStartsWith(
+            '1 message reached the 95% blocking tier on its own',
+            $truncation->content,
+            'the truncation notice still counts its own unit truthfully beside it',
+        );
+    }
+
+    /**
+     * THE LOSING PLACEMENT, which every earlier rescue test hid: the giant as
+     * the NEWEST message. Until review cycle 4 this call site rebuilt history
+     * with messagesFromWire(), which preserves original objects only for a
+     * matching SUFFIX — with the changed entry AT the tail, preserved was 0 and
+     * every untouched earlier exchange came back as a bare
+     * `Message::user`/`Message::assistant($content)`: object identity lost,
+     * createdAt re-stamped to now, toolCalls, toolResults and reasoning dropped,
+     * and `toWire()` no longer emitting the tool_calls that history was built
+     * with — so every SUBSEQUENT turn sent a structurally different history
+     * than the one already sent. The passing placements are the ones that hid
+     * it: testAnOversizedExchangeStopsBeingRefusedAndTheWireReallyGetsShorter
+     * and all three verbatim-notice tests put the giant FIRST, where the tail
+     * match preserved everything behind it.
+     */
+    public function testTheRescueKeepsEveryUntouchedMessageTheSameObjectWhenTheGiantIsNewest(): void
+    {
+        $first = Message::user('question number 3');
+        $rich = new Message(
+            Role::Assistant,
+            'earlier rich answer',
+            1_234_567_890,
+            toolCalls: [new ToolCall('bash', ['command' => 'ls'], 'tc1')],
+            toolResults: [new ToolResult('bash', 'listing', null, 'tc1')],
+            reasoning: 'I thought hard',
+        );
+        $giant = Message::user(str_repeat('x', 800_000));
+
+        $backend = new IntraExchangeTurnBackend(100_000);
+        $chat = new Chat(history: [$first, $rich, $giant], backend: $backend);
+        $chat = $this->withDraft($chat, 'go');
+
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertNotNull($cmd, 'fixture: an over-tier newest message reaches the rescue on the sync route');
+
+        // The giant itself MUST show the truncation — otherwise "everything else
+        // survived" would prove nothing about a rescue that never fired.
+        $this->assertStringContainsString(
+            'characters truncated to fit the context window',
+            $next->history[2]->content,
+            'positive control: the giant really was truncated in place',
+        );
+        $this->assertNotSame($giant, $next->history[2], 'the truncated entry is a copy — the only entry the splice may replace');
+
+        // And the exchanges the truncator NEVER touched: the very same objects,
+        // every field, whatever their placement.
+        $this->assertSame($first, $next->history[0], 'an untouched user turn survives as the object it came in as');
+        $this->assertSame($rich, $next->history[1], 'an untouched rich assistant turn survives as the object it came in as — a splice guarantee, not a suffix-match accident');
+        $this->assertSame(1_234_567_890, $next->history[1]->createdAt, 'createdAt survives (the rebuild re-stamped it to now)');
+        $this->assertCount(1, $next->history[1]->toolCalls, 'toolCalls survive (the rebuild dropped them)');
+        $this->assertCount(1, $next->history[1]->toolResults, 'toolResults survive (the rebuild dropped them)');
+        $this->assertSame('I thought hard', $next->history[1]->reasoning, 'reasoning survives (the rebuild dropped it)');
+        $this->assertArrayHasKey(
+            'tool_calls',
+            $next->history[1]->toWire(),
+            'and the wire the NEXT turn builds from this history still carries the tool_calls this history was built with',
         );
     }
 
@@ -1538,9 +1705,13 @@ final class ContextCompactorTest extends TestCase
      * It cannot be exercised through the turn pipeline: both Chat blocking
      * sites call the helper only from inside shouldCompactForeground($wire)
      * === true, so for every input THEY hand it the tier re-check directly
-     * below the guard answers the echo identically — measured: deleting the
-     * guard left the call-site-driven suite green (329 tests, 1286
-     * assertions). So the private helper is driven DIRECTLY via reflection,
+     * below the guard answers the echo identically — measured (fix-4): deleting
+     * the guard left the call-site-driven set green — `vendor/bin/phpunit
+     * tests/ChatTest.php tests/Chat/AutomaticCompactionModelSummaryTest.php
+     * tests/Chat/ContextReminderDedupTest.php
+     * tests/Integration/ContextWindowWiringTest.php
+     * tests/Context/ContextWindowTest.php` → OK (282 tests, 1185 assertions).
+     * So the private helper is driven DIRECTLY via reflection,
      * the established route in this repo (ChatTest does the same for
      * executionFailure and applyRewrite), with the one input for which the
      * guard is the ONLY thing returning null: an under-tier $wire, which the

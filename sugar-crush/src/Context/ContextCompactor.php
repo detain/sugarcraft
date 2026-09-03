@@ -170,8 +170,15 @@ final class ContextCompactor
     private const INTRA_EXCHANGE_MARKER_MAX_CHARS = 160;
 
     /**
-     * Shrink a SINGLE exchange that is larger than the context window, in place,
-     * so it stops being un-sendable (prompt_plan.md P4.S4, backlog §12.2 E18).
+     * Truncate every individual MESSAGE that alone reaches the blocking tier, in
+     * place, so a conversation carrying one stops being un-sendable
+     * (prompt_plan.md P4.S4, backlog §12.2 E18). The unit is the message, not
+     * the exchange: both halves of one oversized exchange are truncated when
+     * each alone reaches the tier, and several exchanges can each contribute an
+     * oversized message sharing the remaining budget. The METHOD NAME says
+     * "exchange" because the overflow this tier exists for — §12.2 E18's single
+     * un-sendable exchange — usually contributes exactly one; what it counts
+     * and trims is messages, and the notice the caller writes says so.
      *
      * This is the INTRA-exchange case and deliberately nothing else. Every other
      * tier on this class frees space BETWEEN exchanges — stage 2 condenses whole

@@ -5898,6 +5898,14 @@ final class Chat implements Model
 
         $baseHistory = $this->history;
         $compactionNotice = null;
+        // Distinct from $compactionNotice because BOTH can ride the same rescued
+        // dispatch: the compaction notice reports the between-exchanges rewrite
+        // that was just adopted, the truncation notice reports the intra-exchange
+        // truncation layered on top of it. Sharing one variable meant a rescued
+        // sync dispatch that had ALSO compacted committed its [summary] lines
+        // announced only as "N messages reached the 95% blocking tier" — the
+        // rewrite adopted in silence (review cycle 4, finding 1).
+        $truncationNotice = null;
 
         if ($this->compactor->shouldCompact($wireHistory, $tokenLimit)) {
             // Ask the model to write the summaries first, when there is one to
@@ -5958,11 +5966,28 @@ final class Chat implements Model
                 // the honest exit: the estimate falls because genuinely fewer
                 // characters go out. When nothing is individually oversized this
                 // returns null and the between-exchanges refusal stands unchanged.
-                $rescued = $this->intraExchangeTruncation($compactedWire, $baseHistory, $tokenLimit);
+                // The rescue splices truncated contents onto the Message list
+                // that is INDEX-ALIGNED with $compactedWire, and when compaction
+                // was adopted $baseHistory IS exactly that — messagesFromWire()
+                // built it entry-for-entry from this very wire. When compaction
+                // freed NOTHING, $baseHistory is still $this->history, which
+                // produced $wireHistory and NOT $compactedWire: compact()'s
+                // no-op path returns removeToolResults($wireHistory), which can
+                // DROP wire entries and shift every index after them. Re-derive
+                // the aligned list the same way the adoption above derives its —
+                // messagesFromWire() aligns from the END, so entries after any
+                // removal point map back to their originals and only entries
+                // before a (hypothetical) removal are rebuilt (review cycle 4,
+                // finding 2b).
+                $rescueBase = $savedPercentage > 0
+                    ? $baseHistory
+                    : $this->messagesFromWire($compactedWire, $this->history);
+
+                $rescued = $this->intraExchangeTruncation($compactedWire, $rescueBase, $tokenLimit);
                 if ($rescued !== null) {
                     $baseHistory = $rescued['history'];
                     $tokenCount = $this->estimateTokenCount($baseHistory);
-                    $compactionNotice = $rescued['notice'];
+                    $truncationNotice = $rescued['notice'];
                 } else {
                     return $this->foregroundBlockedResponse(
                         $text,
@@ -5976,8 +6001,18 @@ final class Chat implements Model
         }
 
         $newTurnMessages = [];
+        // Report-then-prompt, in rewrite order: every history rewrite committed
+        // below is announced BEFORE the user's line — the ordering
+        // contextCompactedMessage() established — and a rescued dispatch reports
+        // BOTH rewrites it commits: the between-exchanges compaction first, the
+        // intra-exchange truncation second. The parked route has always carried
+        // both (compactionChanges() writes that rewrite report into history when
+        // it lands); silence here was this route's own doing.
         if ($compactionNotice !== null) {
             $newTurnMessages[] = $compactionNotice;
+        }
+        if ($truncationNotice !== null) {
+            $newTurnMessages[] = $truncationNotice;
         }
         $newTurnMessages[] = Message::user($text);
 
@@ -12006,6 +12041,13 @@ final class Chat implements Model
      * reused in place of a fresh one, which is why that is a curiosity rather
      * than a hazard.
      *
+     * THIS ROUND-TRIP BELONGS TO THE COMPACTION PATH ALONE, where the rewrite
+     * genuinely replaces a PREFIX with new text and everything it preserved sits
+     * in the matching tail. The intra-exchange rescue must NOT route through it
+     * — the giant it trims usually sits AT the end, so the tail match preserved
+     * ≈0 there and rebuilt untouched exchanges lossily; the rescue splices
+     * instead. See {@see intraExchangeTruncation()}.
+     *
      * @param array<array{role:string,content:string}> $wire
      * @param list<Message> $original The history `$wire` was compacted from.
      * @return list<Message>
@@ -12230,14 +12272,28 @@ final class Chat implements Model
      * null therefore means "refuse exactly as before", so this can only ever turn
      * a runaway into a dispatch, never a legitimate refusal into a wrong send.
      *
-     * The truncated history is rebuilt with {@see messagesFromWire()} against
-     * $baseHistory — the SAME round-trip the compaction above uses, so the
-     * exchanges this rescue did not touch keep their original Message objects and
-     * everything {@see Renderer} needs from them.
+     * The truncated history is rebuilt by splicing the truncated CONTENT onto
+     * the index-aligned $baseHistory entries — deliberately NOT through
+     * {@see messagesFromWire()}, whose longest-common-SUFFIX match preserves
+     * original objects only for a matching tail. A rescued giant usually sits AT
+     * the end of the history, so there the tail mismatched immediately, every
+     * earlier UNTOUCHED exchange came back as a bare
+     * `Message::user`/`Message::assistant($content)`, and its createdAt,
+     * toolCalls, toolResults, reasoning, images and usage were silently dropped
+     * (measured at 34748b312, review cycle 4, finding 2). What the splice now
+     * guarantees: an entry whose content the truncator did not change is handed
+     * back as THE SAME OBJECT it came in as, and a truncated entry comes back as
+     * a copy in which {@see messageWithContent()} changed nothing but content.
      *
      * @param array<array{role:string,content:string}> $wire        The wire the
      *        blocking tier just rejected.
-     * @param list<Message> $baseHistory The Message list that produced $wire.
+     * @param list<Message> $baseHistory Must be INDEX-ALIGNED with $wire: entry i
+     *        is the Message $wire[i] was produced from — same role, same content.
+     *        Both call sites guarantee it: {@see applyModelCompaction()} maps
+     *        toWire() over the very list it passes, and {@see submit()} adopts
+     *        {@see messagesFromWire()}'s output when compaction freed something
+     *        and re-derives that output from the compacted wire when it freed
+     *        nothing.
      * @return array{history: list<Message>, notice: Message}|null
      */
     private function intraExchangeTruncation(array $wire, array $baseHistory, int $tokenLimit): ?array
@@ -12252,14 +12308,22 @@ final class Chat implements Model
         // the blocking tier — the between-exchanges overflow, and a history
         // under the tier to begin with.
         //
-        // HONEST SCOPE, measured at 2495fb4a2 (review cycle 2): both present
-        // call sites reach this method only from inside
-        // shouldCompactForeground($wire) === true, so for every input THEY
-        // pass the tier re-check below answers the echo identically — deleting
-        // this guard left every call-site-driven test green (329 tests, 1286
-        // assertions). This guard is therefore deliberate defence-in-depth
-        // (§1.10), not live logic through those paths, and it is exercised
-        // only by driving the helper directly:
+        // HONEST SCOPE, re-measured this cycle (fix-4): both present call sites
+        // reach this method only from inside shouldCompactForeground($wire)
+        // === true, so for every input THEY pass the tier re-check below answers
+        // the echo identically. Deleting this guard leaves the call-site-driven
+        // set green — cwd sugar-crush, `vendor/bin/phpunit tests/ChatTest.php
+        // tests/Chat/AutomaticCompactionModelSummaryTest.php
+        // tests/Chat/ContextReminderDedupTest.php
+        // tests/Integration/ContextWindowWiringTest.php
+        // tests/Context/ContextWindowTest.php` → OK (282 tests, 1185
+        // assertions) — and reddens exactly one test outside that set: the
+        // direct-drive contract test named below. (An earlier revision of this
+        // note quoted a larger union for the same experiment but never named
+        // its files, so no reviewer could reproduce it; the figure and the
+        // selection were re-derived together here.) This guard is therefore
+        // deliberate defence-in-depth (§1.10), not live logic through those
+        // paths, and it is exercised only by driving the helper directly:
         // `ContextCompactorTest::testTheRescueDeclinesAnUnderTierWireTheTruncatorEchoes()`.
         if ($truncated === $wire) {
             return null;
@@ -12271,17 +12335,43 @@ final class Chat implements Model
             return null;
         }
 
-        $history = $this->messagesFromWire($truncated, $baseHistory);
+        // Splice, don't rebuild: see the docblock above for why the
+        // messagesFromWire() round-trip this call site used destroys exactly
+        // the metadata it promised to preserve whenever the rescued giant sits
+        // at or near the END of the history. Content unchanged ⇒ the very same
+        // object; content truncated ⇒ a copy changing nothing but content.
+        //
         // The count's domain is wire ENTRIES whose content changed - MESSAGES, not
         // exchanges. ContextCompactor::truncateOversizedExchange() decides per
         // message and exposes no exchange-pair arithmetic, and one exchange whose
         // two halves are both oversized legitimately truncates TWO of them, so
         // naming this number "exchanges" would ship a figure with the wrong unit.
+        $history = [];
         $truncatedMessages = 0;
         foreach ($wire as $index => $entry) {
-            if (($truncated[$index]['content'] ?? null) !== ($entry['content'] ?? null)) {
+            $newContent = $truncated[$index]['content'] ?? null;
+            $changed = $newContent !== ($entry['content'] ?? null);
+            if ($changed) {
                 $truncatedMessages++;
             }
+
+            $original = $baseHistory[$index] ?? null;
+            if ($original === null) {
+                // Unreachable while this method's @param alignment contract holds.
+                // A wire-only rebuild for a future misaligned caller is merely
+                // lossy — never off-by-one, never fatal.
+                $role = Role::from($truncated[$index]['role'] ?? 'assistant');
+                $history[] = match ($role) {
+                    Role::User => Message::user((string) $newContent),
+                    Role::Assistant => Message::assistant((string) $newContent),
+                    default => new Message($role, (string) $newContent, time()),
+                };
+                continue;
+            }
+
+            $history[] = $changed
+                ? self::messageWithContent($original, (string) $newContent)
+                : $original;
         }
 
         return [
@@ -12292,6 +12382,37 @@ final class Chat implements Model
                 $tokenLimit,
             ),
         ];
+    }
+
+    /**
+     * A copy of $message with $content swapped in and EVERY other field carried
+     * across verbatim.
+     *
+     * {@see Message} is immutable and exposes no withContent() — adding one
+     * would touch Message.php, which is outside this step's scope — so the
+     * intra-exchange rescue's field-preserving copy lives here, mirroring the
+     * withReasoning()/withImage()/withUsage() copies in {@see Message} itself.
+     * THE FIELD LIST IS SPOKEN OUT IN FULL ON PURPOSE AND IS A MAINTENANCE
+     * CONTRACT: if Message ever gains a field, this method must gain it in the
+     * same change, or the rescue silently drops that field — the exact class of
+     * metadata loss (review cycle 4, finding 2) this helper exists to prevent,
+     * just one field at a time.
+     */
+    private static function messageWithContent(Message $message, string $content): Message
+    {
+        return new Message(
+            role: $message->role,
+            content: $content,
+            createdAt: $message->createdAt,
+            attachments: $message->attachments,
+            toolCalls: $message->toolCalls,
+            toolResults: $message->toolResults,
+            pendingToolCallId: $message->pendingToolCallId,
+            reasoning: $message->reasoning,
+            imageBytes: $message->imageBytes,
+            imageProtocol: $message->imageProtocol,
+            usage: $message->usage,
+        );
     }
 
     /**
